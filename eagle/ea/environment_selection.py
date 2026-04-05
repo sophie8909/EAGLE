@@ -5,10 +5,12 @@ from .individual import Individual
 from .fitness_utils import fitness_key
 
 class EnvironmentSelection:
+    @staticmethod
     def sort_by_fitness(population: list[Individual]) -> list[Individual]:
         # Sort the population based on fitness values in descending order
         sorted_population = sorted(population, key=lambda ind: fitness_key(ind.fitness), reverse=True)
         return sorted_population
+
     @staticmethod
     def elitism_selection(current_population: list[Individual], new_population: list[Individual], population_size: int) -> list[Individual]:
         # Combine current and new populations, sort by fitness, and select the top individuals

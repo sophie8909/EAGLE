@@ -384,7 +384,7 @@ def test_game_round_surrogate_keeps_parent_first_two_scores():
 
     class DummyRecorder:
         records = []
-        def find_history(self, prompt, opponent):
+        def find_matching_history(self, prompt, opponent):
             return []
         def record_fitness(self, record):
             return None
@@ -392,7 +392,7 @@ def test_game_round_surrogate_keeps_parent_first_two_scores():
     try:
         evaluator.evaluate(
             individual,
-            real_eva=False,
+            use_real_evaluation=False,
             opponent=None,
             fitness_recorder=DummyRecorder(),
         )

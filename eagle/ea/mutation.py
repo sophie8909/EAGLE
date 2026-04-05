@@ -29,7 +29,7 @@ class Mutation:
         return mutated_individual
     
     @staticmethod
-    def rewrite_component_with_LLM(component: str, rewrite_instruction: str) -> tuple[str, float]:
+    def rewrite_component_with_llm(component: str, rewrite_instruction: str) -> tuple[str, float]:
         start = time.perf_counter()
         rewritten_role_component = LLM.ollama_rewrite_component(
             original_text=component,
@@ -42,7 +42,7 @@ class Mutation:
 
 
     @staticmethod
-    def mutate_component_LLM(individual: Individual, component_pool: ComponentPool, mutation_rate: float) -> Individual:
+    def mutate_component_with_llm(individual: Individual, component_pool: ComponentPool, mutation_rate: float) -> Individual:
         # using LLM rewrite
 
         import random
@@ -65,7 +65,7 @@ class Mutation:
                     original_strategy_component_str = "\n".join(
                         component_pool.get_strategy_component(strategy_key, base_strategy[strategy_key])
                     )
-                    rewritten_strategy_component_str, elapsed = Mutation.rewrite_component_with_LLM(original_strategy_component_str, rewrite_instruction)
+                    rewritten_strategy_component_str, elapsed = Mutation.rewrite_component_with_llm(original_strategy_component_str, rewrite_instruction)
                     mutated_individual.ea_llm_call_time += elapsed
                     rewritten_strategy_component = component_pool.parse_component_str(rewritten_strategy_component_str)
                     new_strategy_index = component_pool.add_strategy_component(strategy_key, rewritten_strategy_component)

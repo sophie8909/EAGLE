@@ -44,6 +44,8 @@ class NSGA2(EA):
         return fronts
 
     def _sort_by_game_round_score(self, population: List[Individual]) -> List[Individual]:
+        # Before real evaluation, game_round surrogate information lives mainly in
+        # the third objective, so we rank offspring directly by that signal first.
         return sorted(
             population,
             key=lambda ind: (
@@ -303,7 +305,7 @@ class NSGA2(EA):
         Returns:
             The final population.
         """
-        log_dir = self.log_folder()
+        log_dir = self.create_log_folder()
 
 
         # Evaluate the initial population before evolution starts.
@@ -387,8 +389,8 @@ class NSGA2(EA):
             write_jsonl(generation_record, self.get_generation_profile_log_path())
 
             # Log the current generation's Pareto fronts.
-            self.log_mo_generation(log_dir, generation, pareto_fronts)
-            self.save_components(log_dir)
+            self.log_multi_objective_generation(log_dir, generation, pareto_fronts)
+            self.save_component_pool(log_dir)
             self.current_generation = generation
             # Simple convergence check:
             # stop if the first Pareto front stays identical for 5 generations.

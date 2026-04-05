@@ -78,6 +78,8 @@ class Evaluator:
         return [adjusted_power, uncertainty, simplicity, clarity]
 
     def _combine_prompt_with_dynamic(self, prompt: str, dynamic_prompt_text: str) -> str:
+        # Match the real in-game prompt layout so the surrogate LLM sees the same
+        # structure it would receive during a live MicroRTS call.
         return (
             f"{prompt}\n\n"
             "=== Dynamic Prompt ===\n"
@@ -97,6 +99,9 @@ class Evaluator:
         move: dict[str, Any],
         state: dict[str, Any],
     ) -> tuple[bool, str]:
+        # This is intentionally a lightweight legality/relevance check, not a full
+        # MicroRTS simulator. The goal is to estimate whether the sampled response
+        # is grounded in the shown round.
         if not isinstance(move, dict):
             return False, "invalid_move"
 
@@ -207,6 +212,8 @@ class Evaluator:
             unit_position = move.get("unit_position")
             if isinstance(unit_position, list) and len(unit_position) == 2 and all(isinstance(v, int) for v in unit_position):
                 unit_position_tuple = (unit_position[0], unit_position[1])
+                # Duplicate commands for the same unit in one round are treated the
+                # same way as the real parser: only the first one should count.
                 if unit_position_tuple in seen_positions:
                     duplicate_skipped_count += 1
                     continue
@@ -231,7 +238,7 @@ class Evaluator:
     def evaluate(
         self,
         individual: Individual,
-        real_eva: bool,
+        use_real_evaluation: bool,
         opponent: str | None,
         profile_output_path: str | Path | None = None,
         generation: int | None = None,
@@ -253,16 +260,16 @@ class Evaluator:
             self.save_prompt(prompt)
 
         if fitness_recorder is not None:
-            similar_records = fitness_recorder.find_history(prompt, opponent)
+            similar_records = fitness_recorder.find_matching_history(prompt, opponent)
             if similar_records:
                 print(f"Found {len(similar_records)} similar records in history for the current prompt.")
                 for rec in similar_records:
                     print(f"Similar record fitness score: {rec.get('fitness_score')}")
-                real_eva = False  # Skip real evaluation if we found similar prompts in history to save time.
+                use_real_evaluation = False  # Skip real evaluation if we found similar prompts in history to save time.
                 fitness = similar_records[random.randint(0, len(similar_records) - 1)].get("fitness_score", [0.0, 0.0, 0.0])  # Use the fitness score from a random similar record as a reference.
             else:
                 print("No similar records found in history for the current prompt.")
-        if real_eva:
+        if use_real_evaluation:
             fitness, simulation_meta = self.simulate_games(opponent, stats)
             parsed_log = simulation_meta.get("parsed_log")
             winner = simulation_meta.get("winner")
@@ -276,6 +283,8 @@ class Evaluator:
                                                                 fitness_recorder=fitness_recorder)
                     primary_score = surrogate_score[0] if surrogate_score else 0.0
                     if str(getattr(self.config, "surrogate_version", "llm")).strip().lower() == "game_round":
+                        # In game_round mode the surrogate only refreshes the third
+                        # objective; the first two stay inherited from the parents.
                         if individual.fitness:
                             fitness = [individual.fitness[0], individual.fitness[1], primary_score]
                         else:
@@ -288,21 +297,22 @@ class Evaluator:
         fitness = normalize_fitness(fitness)
         print(fitness)
 
-        fitness_recorder.record_fitness(
-            {
-                "individual_id": getattr(individual, "id", None),
-                "generation": generation,
-                "prompt": prompt,          # add for surrogate examples
-                "fitness": fitness,        # compatibility key
-                "fitness_score": fitness,  # current key
-                "opponent": opponent,
-                "evaluation_time": stats.get("total_eval_time", 0.0),
-                "components": {
-                    "game_rule": individual.game_rule,
-                    "strategy": individual.strategy,
+        if fitness_recorder is not None:
+            fitness_recorder.record_fitness(
+                {
+                    "individual_id": getattr(individual, "id", None),
+                    "generation": generation,
+                    "prompt": prompt,          # add for surrogate examples
+                    "fitness": fitness,        # compatibility key
+                    "fitness_score": fitness,  # current key
+                    "opponent": opponent,
+                    "evaluation_time": stats.get("total_eval_time", 0.0),
+                    "components": {
+                        "game_rule": individual.game_rule,
+                        "strategy": individual.strategy,
+                    }
                 }
-            }
-        )
+            )
         individual.fitness = fitness
         summarize_total_eval_time(stats)
 
@@ -313,7 +323,7 @@ class Evaluator:
             summarize_total_eval_time(stats)
 
         #  only record real evaluation results to avoid contamination from surrogate evaluation.
-        if profile_output_path is not None and real_eva:
+        if profile_output_path is not None and use_real_evaluation:
             record = build_base_record(
                 generation=generation,
                 individual_id=getattr(individual, "id", None),
@@ -321,7 +331,7 @@ class Evaluator:
             )
             record.update(
                 {
-                    "evaluation_mode": "real" if real_eva else "surrogate",
+                    "evaluation_mode": "real" if use_real_evaluation else "surrogate",
                     "opponent": opponent,
                     "prompt_length": len(prompt),
                     "winner": winner,
@@ -332,7 +342,7 @@ class Evaluator:
                     "game_llm_call_time": None,
                     "ea_llm_call_time": stats.get("surrogate_time", 0.0) + (operator_profile.get("ea_llm_call_time", 0.0) if isinstance(operator_profile, dict) else 0.0),
                     "fitness": fitness,
-                    "surrogate_score": surrogate_score if not real_eva else None,
+                    "surrogate_score": surrogate_score if not use_real_evaluation else None,
                     "log_path": log_path,
                 }
             )
@@ -386,7 +396,7 @@ class Evaluator:
         prompt = "\n".join(prompt_lines + strategy_components)
         return prompt
 
-    def game_round_available_evaluation(self, log_content: str) -> float:
+    def game_round_execution_score(self, log_content: str) -> float:
         # An alternative evaluation method that analyzes the log content from a MicroRTS game to compute a fitness score based on the game rounds and available actions. This can provide a more granular assessment of the agent's performance throughout the game, rather than just the final outcome.
 
         # Parse the log content to extract move results and compute fitness based on the number of successful moves, available actions, and game rounds.
@@ -400,7 +410,7 @@ class Evaluator:
         applied_failure_count = summary["applied_failure_count"]
         applied_success_count = summary["applied_success_count"]
 
-        # fitness for game_round_available_evaluation
+        # fitness for game_round_execution_score
         # fitness: [0, 1]
         if llm_moves == 0:
             return 0.0
@@ -419,7 +429,7 @@ class Evaluator:
             winning_score = 1.0 if str(winner) == str(target_side) else 0.0
         return winning_score
 
-    def number_of_turns_evaluation(self, log_content: str) -> int:
+    def turn_count_score(self, log_content: str) -> int:
         # parse the log content to get the number of turns in the game
         number_of_turns = 0
         for line in log_content.splitlines():
@@ -466,7 +476,7 @@ class Evaluator:
         winner_info = parsed_log or self._parse_winner_info(log_content)["parsed_log"]
         winning_score = self.win_loss_evaluation(log_content, parsed_log=winner_info)
         resource_advantage_score = self.resource_advantage_evaluation(winner_info)
-        game_round_score = self.game_round_available_evaluation(log_content)  # This can be used as an additional metric if desired
+        game_round_score = self.game_round_execution_score(log_content)  # This can be used as an additional metric if desired
 
         print(
             "Parsed fitness: "
@@ -532,7 +542,7 @@ class Evaluator:
         latest_log_file = sorted(log_files)[-1]
         return Path(latest_log_file)
 
-    def extract_winner(self, log_content: str) -> str | None:
+    def extract_winner_from_log(self, log_content: str) -> str | None:
         return self._parse_winner_info(log_content)["winner"]
 
     def detect_timeout(self, log_content: str) -> bool:
@@ -623,9 +633,13 @@ class Evaluator:
                 f"log={sampled_log_path}, turn={sampled_time}"
             )
             combined_prompt = self._combine_prompt_with_dynamic(prompt, dynamic_text)
+            # Unlike the old llm-version surrogate, this path actually asks the
+            # model for moves on a sampled real round and then scores that output.
             llm_response = LLM.ollama_generate_json_response(combined_prompt)
             round_scores.append(self._score_game_round_response(llm_response, dynamic_text))
 
+        # Averaging across several sampled rounds reduces the variance from any
+        # single lucky or unlucky dynamic prompt.
         average_game_round = sum(round_scores) / len(round_scores) if round_scores else 0.0
         average_game_round = max(-1.0, min(1.0, average_game_round))
         print(f"Average surrogate game_round score from {len(round_scores)} sampled rounds: {average_game_round}")

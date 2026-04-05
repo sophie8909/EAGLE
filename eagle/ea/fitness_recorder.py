@@ -48,7 +48,7 @@ class FitnessRecorder:
         with Path(self.history_records_path).open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    def turn_record_to_history(self, record: dict[str, Any]):
+    def record_to_history_entry(self, record: dict[str, Any]):
         # only keep prompt hash and fitness score for history record to save space.
         prompt_hash = hash(json.dumps(record["prompt"], sort_keys=True))
         history_record = {
@@ -59,7 +59,7 @@ class FitnessRecorder:
         }
         return history_record
 
-    def find_history(self, prompt: dict[str, Any], opponent: str | None) -> list[dict[str, Any]]:
+    def find_matching_history(self, prompt: dict[str, Any], opponent: str | None) -> list[dict[str, Any]]:
         # find similar prompt in history based on prompt hash. return the fitness score if found.
         prompt_hash = hash(json.dumps(prompt, sort_keys=True))
         similar_records = []
@@ -107,5 +107,5 @@ class FitnessRecorder:
         with self.log_path.open("w", encoding="utf-8") as f:
             f.write("\n".join([json.dumps(r) for r in self.records]))
 
-        self.add_history_record(self.turn_record_to_history(record))
+        self.add_history_record(self.record_to_history_entry(record))
 

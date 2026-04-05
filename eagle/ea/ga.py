@@ -31,7 +31,7 @@ class GA(EA):
         )
 
     def run(self):
-        log_dir = self.log_folder()
+        log_dir = self.create_log_folder()
 
         last_5_fitness = []
 
@@ -101,7 +101,7 @@ class GA(EA):
             # Save the best solution of the current generation
             best_individual = max(self.population, key=lambda ind: fitness_key(ind.fitness))
 
-            self.log_so_generation(log_dir, generation, best_individual)
+            self.log_single_objective_generation(log_dir, generation, best_individual)
 
             last_5_fitness.append(best_individual.fitness)
             if len(last_5_fitness) > 5:
@@ -111,4 +111,4 @@ class GA(EA):
                 break
 
         # Store the components_pool in a file for later analysis
-        self.save_components(log_dir)
+        self.save_component_pool(log_dir)

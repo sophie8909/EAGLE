@@ -379,6 +379,8 @@ def collect_recent_dynamic_prompts(
     if not log_dir_path.exists():
         return []
 
+    # We only look at a sliding window of the most recent logs so surrogate
+    # sampling stays close to the states currently being generated in runs.
     candidate_logs = sorted(
         log_dir_path.glob("run_*.log"),
         key=lambda path: (path.stat().st_mtime, path.name),
@@ -432,6 +434,8 @@ def sample_recent_dynamic_prompts(
     dynamic_prompts = collect_recent_dynamic_prompts(logs_dir, recent_count=recent_count)
     if not dynamic_prompts:
         return []
+    # Returning the whole window when it is already small avoids introducing
+    # duplicate samples and keeps each sampled round unique.
     if len(dynamic_prompts) <= sample_count:
         return [dict(item) for item in dynamic_prompts]
     return [dict(item) for item in rng.sample(dynamic_prompts, sample_count)]
@@ -495,6 +499,8 @@ def parse_dynamic_prompt_state(dynamic_prompt_text: str) -> dict[str, Any]:
             unit_info["resources"] = int(resource_match.group("value")) if resource_match else 0
 
         if team == "Ally":
+            # The surrogate validator only needs ownership, type, and base/resource
+            # anchors, so we keep this state intentionally lightweight.
             state["ally_units"][position] = unit_info
             if normalized_unit == "base":
                 state["ally_bases"][position] = unit_info

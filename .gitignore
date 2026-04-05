@@ -20,6 +20,9 @@ sources.list
 
 # Python
 __pycache__/
+*.pyc
+/eagle/ea/_tmp_recent_logs_test/
+/eagle/ea/tmpf5cvr_e9/
 *.pyctournament/traces/*.json
 tournament/traces/*.xml
 tournament/traces/*.json

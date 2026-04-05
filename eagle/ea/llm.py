@@ -16,6 +16,8 @@ class LLM:
         model: str = "llama3.1:8b",
         temperature: float = 0.2,
     ) -> dict | None:
+        # The surrogate game-round path needs the raw move JSON, so this helper
+        # keeps parsing intentionally permissive and returns None on any failure.
         try:
             response = requests.post(
                 "http://localhost:11434/api/generate",
@@ -41,6 +43,8 @@ class LLM:
             except json.JSONDecodeError:
                 pass
 
+            # Some models wrap the JSON with extra text, so we salvage the first
+            # top-level object instead of failing immediately.
             match = re.search(r"\{.*\}", raw_output, re.DOTALL)
             if not match:
                 return None

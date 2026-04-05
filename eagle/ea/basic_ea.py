@@ -18,7 +18,7 @@ from .mutation import Mutation
 from .environment_selection import EnvironmentSelection
 from .fitness_recorder import FitnessRecorder
 from .fitness_utils import normalize_fitness
-from .test import final_test
+from .final_evaluation import run_final_test_suite
 
 class EA:
     def __init__(self, config: EAConfig, component_pool: ComponentPool, opponent_list: List[str]):
@@ -46,7 +46,12 @@ class EA:
             individuals.append(individual)
         return individuals
     
-    def log_folder(self) -> str:
+    def create_log_folder(self) -> str:
+        # Reuse the existing run directory when initialization has already happened
+        # before `run()`, so config and generation logs stay under the same folder.
+        if self.current_log_dir is not None:
+            return str(self.current_log_dir)
+
         import datetime
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         log_dir = f"logs/{timestamp}"
@@ -67,7 +72,7 @@ class EA:
         return self.current_log_dir / "generation_profiles.jsonl"
     
     
-    def log_so_generation(self, log_dir: str, generation: int, best_individual: Individual):
+    def log_single_objective_generation(self, log_dir: str, generation: int, best_individual: Individual):
         # Log the population and their fitnesses for the current generation
         log_path = f"{log_dir}/generation_{generation+1}.txt"
         with open(log_path, "w") as f:
@@ -79,7 +84,7 @@ class EA:
                 for ind in self.population:
                     f.write(f"{ind} - Fitness: {ind.fitness}\n")
 
-    def log_mo_generation(self, log_dir: str, generation: int, pareto_fronts: List[List[Individual]]):
+    def log_multi_objective_generation(self, log_dir: str, generation: int, pareto_fronts: List[List[Individual]]):
         # Log the Pareto fronts and their fitnesses for the current generation
         log_path = f"{log_dir}/generation_{generation+1}_mo.txt"
         with open(log_path, "w") as f:
@@ -90,7 +95,7 @@ class EA:
                     f.write(f"{ind} - Fitness: {ind.fitness}\n")
                     f.write(f"Prompt:\n{Evaluator(self.component_pool, self.config).construct_prompt(ind)}\n")
             
-    def save_components(self, log_dir: str):
+    def save_component_pool(self, log_dir: str):
         import json
         components_file = f"{log_dir}/component_pool.json"
         with open(components_file, "w") as f:
@@ -140,7 +145,7 @@ class EA:
             if random.random() < 0.5:
                 mutated_individual = Mutation.mutate_component_from_pool(individual, self.component_pool, self.config.mutation_rate)
             else:
-                mutated_individual = Mutation.mutate_component_LLM(individual, self.component_pool, self.config.mutation_rate)
+                mutated_individual = Mutation.mutate_component_with_llm(individual, self.component_pool, self.config.mutation_rate)
     
             return mutated_individual
         return individual   
@@ -150,7 +155,7 @@ class EA:
         evaluator = Evaluator(self.component_pool, self.config)
         evaluator.evaluate(
             individual,
-            real_eva=True,
+            use_real_evaluation=True,
             opponent=opponent,
             profile_output_path=self.get_profile_log_path(),
             generation=generation,
@@ -162,7 +167,7 @@ class EA:
         evaluator = Evaluator(self.component_pool, self.config)
         evaluator.evaluate(
             individual,
-            real_eva=False,
+            use_real_evaluation=False,
             opponent=None,
             profile_output_path=self.get_profile_log_path(),
             generation=generation,
@@ -170,7 +175,7 @@ class EA:
         )
 
     
-    def test_results(self):
+    def run_final_test(self):
         # get the last generation log file
         # Test the best evolved solution against a set of opponents and log the results
-        final_test(self.current_log_dir, self.current_generation)
+        run_final_test_suite(self.current_log_dir, self.current_generation)
