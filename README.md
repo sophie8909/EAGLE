@@ -1,219 +1,350 @@
-<p align="center">
-    <img src="microrts-text.png" width="500px"/>
-</p>
+﻿![EAGLE header](docs/assets/eagle-header.svg)
 
-# MicroRTS with LLM Game AI Agents
+# EAGLE on MicroRTS
 
-This repository serves **three purposes**:
+This repository is centered on **EAGLE**, an evolutionary prompt optimization pipeline built on top of **MicroRTS**.
 
-1. **MicroRTS Game Engine** - A complete fork of the original [MicroRTS](https://github.com/santiontanon/microrts) real-time strategy game, designed for AI research
-2. **LLM Game AI Competition Platform** - A template and framework for the [2026 IEEE WCCI MicroRTS LLM Game AI Competition](https://attend.ieee.org/wcci-2026/competitions/)
-3. **LLM Benchmark Suite** - Tools to measure and compare how well different LLMs perform as game-playing agents
+EAGLE evolves prompt components for an LLM-based MicroRTS agent, evaluates them with both real game outcomes and surrogate estimators, and logs each generation for later replay and analysis.
 
 ---
 
-## Quick Navigation
+## What EAGLE Does
 
-| Purpose | Documentation |
-|---------|---------------|
-| Run the competition | [COMPETITION.md](COMPETITION.md) |
-| Benchmark LLMs | [BENCHMARKING.md](BENCHMARKING.md) |
-| Original MicroRTS | [MICRORTS_ORIGINAL.md](MICRORTS_ORIGINAL.md) |
-| Technical prompt format | [LLM_PROMPTS.md](LLM_PROMPTS.md) |
-| Codebase structure | [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) |
+EAGLE treats an agent prompt as a structured combination of:
 
----
+- one stable `game_rule` component
+- multiple evolvable `strategy` components
 
-## 1. MicroRTS Game Engine
+These components are recombined and mutated through evolutionary search, then scored with a multi-objective fitness function:
 
-MicroRTS is a lightweight RTS game designed for AI research by [Santiago Ontanon](https://sites.google.com/site/santiagoontanonvillar/Home). It provides:
+1. `win_score`
+2. `resource_advantage_score`
+3. `game_round_score`
 
-- Deterministic, real-time gameplay with simultaneous actions
-- Configurable partial observability and non-determinism
-- Multiple built-in AI implementations (minimax, MCTS, rule-based strategies)
-- Tournament framework for AI competitions
+The system supports both:
 
-**Why MicroRTS for LLM research?**
-- Simpler than StarCraft/Warcraft, enabling faster experimentation
-- Well-defined action space and game state representation
-- Established research community and competition history
-
-For full original documentation, see [MICRORTS_ORIGINAL.md](MICRORTS_ORIGINAL.md).
+- real evaluation by launching actual MicroRTS games
+- surrogate evaluation using either:
+  - prompt-only LLM scoring (`llm`)
+  - sampled historical Dynamic Prompt replay (`game_round`)
 
 ---
 
-## 2. LLM Game AI Competition
+## Repository Focus
 
-This repository is the official platform for the **2026 IEEE WCCI MicroRTS LLM Game AI Competition**.
+If you are working on EAGLE, the main code lives in:
 
-**Competition Goal:** Build an LLM-powered agent that can play MicroRTS competitively by:
-- Understanding game state descriptions
-- Generating valid action commands
-- Developing winning strategies through prompts
+- `eagle/ea`
 
-### Quick Start for Competitors
+The Java MicroRTS engine and LLM agents remain in the repository as the execution backend, but this README is organized around the EAGLE workflow first.
+
+---
+
+## Quick Start
+
+### 1. Prepare the backend
+
+EAGLE depends on the local MicroRTS runtime and your local LLM endpoint.
+
+You should have:
+
+- Java / MicroRTS build ready
+- Ollama available at `http://localhost:11434`
+- a model such as `llama3.1:8b` already pulled
+
+Typical Ollama startup:
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/drchangliu/MicroRTS
-cd MicroRTS
-
-# 2. Install Ollama and download a model
-ollama run llama3.1:8b   # Leave running in terminal
-
-# 3. Compile and run
-chmod +x RunLoop.sh
-./RunLoop.sh
+ollama serve
 ```
 
-**Key files for competition:**
-- `src/ai/abstraction/ollama.java` - Main LLM agent (modify the PROMPT here)
-- `resources/config.properties` - Game configuration
-- `RunLoop.sh` - Run multiple games automatically
+If you use the Java side LLM game agent directly, make sure the MicroRTS runner scripts and `resources/config.properties` are configured correctly.
 
-See [COMPETITION.md](COMPETITION.md) for complete competition rules and setup instructions.
+### 2. Configure EAGLE
 
----
+Main configuration lives in:
 
-## 3. LLM Benchmark Suite
+- `eagle/ea/config.py`
 
-Use this repository to measure how well different LLMs perform as game-playing agents.
+Important settings:
 
-### Supported LLM Backends
+- `algorithm`
+- `population_size`
+- `num_generations`
+- `real_eval_rate`
+- `surrogate_version`
+- `resource_advantage_alpha`
+- `resource_advantage_weights`
 
-| Backend | Implementation | Status |
-|---------|---------------|--------|
-| Ollama (local) | `ollama.java` | Recommended |
-| Google Gemini | `LLM_Gemini.java` | Working |
-| Mistral | `mistral.java` | Working |
-| Deepseek R1 | `LLM_DeepseekR1.java` | Working |
+### 3. Start an evolutionary run
 
-### Running Benchmarks
+From the repository root:
 
 ```bash
-# Start Ollama (on GPU for reasonable speed)
-srun --gres=gpu:1 --pty bash  # If on HPC cluster
-ollama serve &
-
-# Run benchmark suite
-./benchmark.sh
+py -3 -m eagle.ea.main
 ```
 
-### Benchmark Metrics
+This will:
 
-Each game records:
-- **Winner** - Which AI won (LLM or opponent)
-- **Game length** - Number of ticks to completion
-- **Model name** - Which LLM was tested
-- **Crashes/errors** - Any invalid actions or failures
-
-See [BENCHMARKING.md](BENCHMARKING.md) for detailed benchmarking instructions.
+1. load prompt components from `prompts/components.json`
+2. initialize a population
+3. evolve prompts with GA or NSGA-II
+4. run real and surrogate evaluations
+5. log generation results under `logs/<timestamp>`
 
 ---
 
-## Repository Structure
+## Core Workflow
 
-```
-MicroRTS/
-├── src/                          # Java source code
-│   ├── ai/                       # AI implementations
-│   │   ├── abstraction/
-│   │   │   ├── ollama.java       # Ollama LLM agent
-│   │   │   ├── LLM_Gemini.java   # Gemini API agent
-│   │   │   └── ...               # Other LLM backends
-│   │   ├── RandomBiasedAI.java   # Baseline opponent
-│   │   └── mcts/, minimax/       # Traditional game AI
-│   ├── rts/                      # Game engine core
-│   └── gui/                      # GUI components
-├── maps/                         # Game maps (8x8 to 24x24)
-├── resources/config.properties   # Game configuration
-├── benchmark.sh                  # Benchmark runner
-├── RunLoop.sh                    # Multi-game runner
-└── lib/                          # Dependencies
-```
+### Prompt Representation
+
+Each individual is represented by:
+
+- `game_rule`
+- `strategy: dict[str, int]`
+
+The indices point into the component pool loaded from:
+
+- `prompts/components.json`
+
+Rendering happens in:
+
+- `eagle/ea/evaluate.py`
+
+### Evolutionary Algorithms
+
+Supported algorithms:
+
+- `GA`
+- `NSGA2`
+
+Implemented in:
+
+- `eagle/ea/ga.py`
+- `eagle/ea/nsga2.py`
+
+### Operators
+
+- parent selection: `eagle/ea/parent_selection.py`
+- crossover: `eagle/ea/crossover.py`
+- mutation: `eagle/ea/mutation.py`
+
+### Evaluation
+
+Evaluation orchestration:
+
+- `eagle/ea/evaluate.py`
+
+Supporting modules:
+
+- real game launch and log retrieval: `eagle/ea/simulation_runner.py`
+- fitness computation: `eagle/ea/fitness_calculator.py`
+- single-round move validation: `eagle/ea/move_validator.py`
+- surrogate logic: `eagle/ea/surrogate_evaluator.py`
 
 ---
 
-## Building and Running
+## Fitness Design
 
-### Prerequisites
+EAGLE uses a three-objective fitness vector:
 
-- JDK 17+ (`javac -version`, `java -version`)
-- Ollama (for local LLM inference)
-- GPU recommended for real-time gameplay
+```python
+[win_score, resource_advantage_score, game_round_score]
+```
 
-### Compile
+### 1. Win Score
+
+Derived from the final winner in the game log.
+
+### 2. Resource Advantage Score
+
+Computed from the `Feature locations` section inside Dynamic Prompt blocks.
+
+Per turn, EAGLE summarizes:
+
+- `base`
+- `worker`
+- `light`
+- `heavy`
+- `ranged`
+- `resource`
+
+Then it applies a late-game-weighted normalized difference, keeping the score in `[-1, 1]`.
+
+### 3. Game Round Score
+
+Measures how valid and executable the LLM's per-round move outputs are.
+
+This is used both:
+
+- in real game log analysis
+- in the `game_round` surrogate mode
+
+---
+
+## Surrogate Modes
+
+Configure with:
+
+```python
+surrogate_version = "llm"
+```
+
+or
+
+```python
+surrogate_version = "game_round"
+```
+
+### `llm`
+
+Prompt-only surrogate scoring using the local LLM.
+
+### `game_round`
+
+Samples Dynamic Prompt blocks from recent logs, combines them with the candidate prompt, asks the LLM for moves, validates those moves against the sampled round state, and uses the resulting score as the surrogate signal.
+
+Relevant settings in `eagle/ea/config.py`:
+
+- `surrogate_recent_log_window`
+- `surrogate_game_round_samples`
+- `surrogate_log_dir`
+
+---
+
+## Logs and Outputs
+
+Each run creates a log directory under:
+
+- `logs/<timestamp>`
+
+Typical contents:
+
+- `config.json`
+- `component_pool.json`
+- `generation_<n>_mo.txt`
+- `profiles.jsonl`
+- `generation_profiles.jsonl`
+
+### Parsing and Reuse
+
+Game log parsing:
+
+- `eagle/ea/log_parse.py`
+
+EA generation log parsing:
+
+- `eagle/ea/ea_log_parse.py`
+
+---
+
+## Final Evaluation
+
+To replay a saved final generation against the configured benchmark opponents, EAGLE uses:
+
+- `eagle/ea/final_evaluation.py`
+
+The `NSGA2` main flow already calls final test at the end of a run.
+
+---
+
+## Result Test for One Generation
+
+For ad hoc replay of a specific saved generation, use:
+
+- `eagle/ea/result_test.py`
+
+Example:
 
 ```bash
-# Using the build script
-find src -name '*.java' > sources.list
-javac -cp "lib/*:bin" -d bin @sources.list
-
-# Or using Ant
-ant build
+py -3 -m eagle.ea.result_test --log-dir logs/20260405_123456 --generation 10
 ```
 
-### Run
+Default behavior:
+
+- replays only `Pareto Front 1`
+- writes results to:
+
+```text
+generation_10_front_1_result_test.json
+```
+
+Useful options:
 
 ```bash
-# GUI mode
-java -cp "lib/*:bin" gui.frontend.FrontEnd
-
-# Headless mode with config
-java -cp "lib/*:bin" rts.MicroRTS -f resources/config.properties
-
-# Tournament mode
-java -cp "lib/*:bin" gui.frontend.FrontEnd  # Use Tournaments tab
+--individual-id ind-42
+--opponent ai.RandomAI
+--all-fronts
+--only-winning-individuals
+--output custom_result.json
 ```
 
 ---
 
-## Configuration
+## Project Structure
 
-Edit `resources/config.properties`:
+### EAGLE Python pipeline
 
-```properties
-# Game settings
-map_location=maps/8x8/basesWorkers8x8.xml
-max_cycles=5000
-headless=true
-
-# AI players
-AI1=ai.abstraction.ollama        # Your LLM agent
-AI2=ai.RandomBiasedAI            # Opponent
-
-# Available opponents:
-# ai.RandomBiasedAI, ai.RandomAI, ai.PassiveAI
-# ai.abstraction.HeavyRush, ai.abstraction.LightRush
+```text
+eagle/ea/
+|- main.py                  # entry point for EA runs
+|- config.py                # EA, fitness, and surrogate settings
+|- basic_ea.py              # shared EA runtime scaffold
+|- ga.py                    # single-objective GA
+|- nsga2.py                 # multi-objective NSGA-II
+|- individual.py            # candidate prompt representation
+|- component_pool.py        # prompt component storage
+|- crossover.py             # crossover operators
+|- mutation.py              # mutation operators
+|- parent_selection.py      # parent selection
+|- environment_selection.py # survivor selection helpers
+|- evaluate.py              # evaluation orchestrator
+|- simulation_runner.py     # launches MicroRTS and collects logs
+|- fitness_calculator.py    # fitness computation
+|- move_validator.py        # round-level move legality checks
+|- surrogate_evaluator.py   # surrogate evaluation logic
+|- log_parse.py             # MicroRTS game log parsing
+|- ea_log_parse.py          # EA generation log parsing
+|- final_evaluation.py      # final replay evaluation
+|- result_test.py           # replay a specific generation on demand
+|- fitness_recorder.py      # history and record management
+|- profiler.py              # JSONL profiling helpers
+`- test_parse_fitness.py    # regression-style parser/fitness tests
 ```
 
----
+### MicroRTS backend
 
-## Citation
+Relevant backend locations:
 
-If you use MicroRTS in your research, please cite:
-
-> Santiago Ontanon (2013) *The Combinatorial Multi-Armed Bandit Problem and its Application to Real-Time Strategy Games*, AIIDE 2013. pp. 58-64.
-
-For LLM agent work using this repository, please also cite this repository.
-
----
-
-## Related Resources
-
-- [Original MicroRTS](https://github.com/santiontanon/microrts) - Upstream repository
-- [MicroRTS-Py](https://github.com/Farama-Foundation/MicroRTS-Py) - Python/RL interface
-- [microRTS Competition](https://sites.google.com/site/micrortsaicompetition/home) - Annual AI competition
-- [2026 IEEE WCCI](https://attend.ieee.org/wcci-2026/competitions/) - LLM competition venue
+- `src`
+- `resources/config.properties`
+- `RunLoop.sh`
+- `RunLoop_5000.sh`
+- `maps`
 
 ---
 
-## Contributing
+## Typical Research Loop
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on submitting pull requests.
+1. define or update prompt components in `prompts/components.json`
+2. configure EA settings in `eagle/ea/config.py`
+3. run `py -3 -m eagle.ea.main`
+4. inspect generation logs and JSONL profiles
+5. replay strong generations with `eagle/ea/result_test.py`
+6. compare Pareto-front prompts and final replay outcomes
 
 ---
 
-## License
+## Notes
 
-MicroRTS is open source. See the original repository for license details.
+- `llm_crossover` in `eagle/ea/crossover.py` is currently a documented placeholder and falls back to uniform crossover.
+- `test.py` in `eagle/ea` is kept as a compatibility shim.
+- The current pipeline is organized so that `Evaluator` stays mostly orchestration, while parsing, surrogate scoring, and simulation launching live in separate modules.
+
+---
+
+## MicroRTS Attribution
+
+MicroRTS originates from the research environment created by Santiago Ontanon.
+
+If you use this repository in research, please cite the original MicroRTS work as well as your EAGLE-specific work or repository snapshot.
