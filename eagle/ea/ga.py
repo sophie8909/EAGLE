@@ -36,19 +36,59 @@ class GA(EA):
     def run(self):
         """Run the standard GA loop from initialization through early stopping."""
         log_dir = self.create_log_folder()
+        checkpoint = self.load_checkpoint()
 
         last_5_fitness = []
 
-        with timer("initial_population_evaluation_time", {}):
-            for individual in self.population:
-                self.real_evaluation(individual, random.choice(self.opponent_list), generation=0)
+        if checkpoint:
+            self.population = self.deserialize_population(checkpoint.get("population"))
+            self.current_generation = checkpoint.get("generation", 0)
+            if checkpoint.get("phase") == "initial_population":
+                start_initial = checkpoint.get("meta", {}).get("evaluated_initial_count", 0)
+                with timer("initial_population_evaluation_time", {}):
+                    for index in range(start_initial, len(self.population)):
+                        individual = self.population[index]
+                        self.real_evaluation(individual, random.choice(self.opponent_list), generation=0)
+                        self.save_checkpoint(
+                            self.build_checkpoint_state(
+                                phase="initial_population",
+                                generation=-1,
+                                meta={"evaluated_initial_count": index + 1},
+                            )
+                        )
+                checkpoint = self.build_checkpoint_state(
+                    phase="generation_complete",
+                    generation=-1,
+                    meta={"completed_generation": -1},
+                )
+                self.save_checkpoint(checkpoint)
+        else:
+            with timer("initial_population_evaluation_time", {}):
+                for index, individual in enumerate(self.population):
+                    self.real_evaluation(individual, random.choice(self.opponent_list), generation=0)
+                    self.save_checkpoint(
+                        self.build_checkpoint_state(
+                            phase="initial_population",
+                            generation=-1,
+                            meta={"evaluated_initial_count": index + 1},
+                        )
+                    )
 
-        for generation in range(self.config.num_generations):
+            checkpoint = self.build_checkpoint_state(
+                phase="generation_complete",
+                generation=-1,
+                meta={"completed_generation": -1},
+            )
+            self.save_checkpoint(checkpoint)
+
+        start_generation = checkpoint.get("generation", 0) + (1 if checkpoint.get("phase") == "generation_complete" else 0)
+
+        for generation in range(start_generation, self.config.num_generations):
             generation_stats: dict[str, float] = {}
-            new_population = []
+            new_population = self.deserialize_population(checkpoint.get("offspring")) if checkpoint.get("generation") == generation else []
 
             with timer("offspring_generation_time", generation_stats):
-                for _ in range(self.config.population_size):
+                for _ in range(len(new_population), self.config.population_size):
                     with timer("parent_selection_time", generation_stats):
                         parent1, parent2 = self.select_parents()
 
@@ -65,14 +105,32 @@ class GA(EA):
                         "ea_llm_call_time": getattr(mutated_offspring, "ea_llm_call_time", 0.0),
                     }
                     new_population.append(mutated_offspring)
+                    self.save_checkpoint(
+                        self.build_checkpoint_state(
+                            phase="generation_generation",
+                            generation=generation,
+                            offspring=new_population,
+                            meta={"generated_offspring_count": len(new_population)},
+                        )
+                    )
 
             with timer("offspring_evaluation_time", generation_stats):
-                for individual in new_population:
+                start_idx = checkpoint.get("meta", {}).get("evaluated_offspring_count", 0) if checkpoint.get("generation") == generation else 0
+                for index in range(start_idx, len(new_population)):
+                    individual = new_population[index]
                     if random.random() < 0.5:
                         random_opponent = random.choice(self.opponent_list)
                         self.real_evaluation(individual, random_opponent, generation=generation)
                     else:
                         self.surrogate_evaluation(individual, generation=generation)
+                    self.save_checkpoint(
+                        self.build_checkpoint_state(
+                            phase="generation_evaluation",
+                            generation=generation,
+                            offspring=new_population,
+                            meta={"evaluated_offspring_count": index + 1},
+                        )
+                    )
 
             with timer("survivor_selection_time", generation_stats):
                 self.population = self.environment_selection(self.population, new_population)
@@ -106,6 +164,14 @@ class GA(EA):
             best_individual = max(self.population, key=lambda ind: fitness_key(ind.fitness))
 
             self.log_single_objective_generation(log_dir, generation, best_individual)
+            self.current_generation = generation
+            self.save_checkpoint(
+                self.build_checkpoint_state(
+                    phase="generation_complete",
+                    generation=generation,
+                    meta={"best_individual_id": getattr(best_individual, "id", None)},
+                )
+            )
 
             last_5_fitness.append(best_individual.fitness)
             if len(last_5_fitness) > 5:
@@ -113,6 +179,12 @@ class GA(EA):
             if len(last_5_fitness) == 5 and all(fitness == last_5_fitness[0] for fitness in last_5_fitness):
                 print(f"Early stopping at generation {generation+1} due to no improvement in fitness.")
                 break
+
+            checkpoint = self.build_checkpoint_state(
+                phase="generation_complete",
+                generation=generation,
+                meta={"best_individual_id": getattr(best_individual, "id", None)},
+            )
 
         # Store the components_pool in a file for later analysis
         self.save_component_pool(log_dir)

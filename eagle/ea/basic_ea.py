@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
+from .checkpoint import CheckpointManager, deserialize_individual, serialize_individual
 from .config import EAConfig
 from .component_pool import ComponentPool
 from .individual import Individual
@@ -37,6 +38,7 @@ class EA:
         self.population = self.initialize_population()
         self.current_log_dir: Path | None = None
         self.fitness_recorder: FitnessRecorder | None = None
+        self.checkpoint_manager: CheckpointManager | None = None
         self.current_generation = 0
 
 
@@ -70,7 +72,16 @@ class EA:
         os.makedirs(log_dir, exist_ok=True)
         self.current_log_dir = Path(log_dir)
         self.fitness_recorder = FitnessRecorder(self.current_log_dir, self.config)
+        self.checkpoint_manager = CheckpointManager(self.current_log_dir)
         return log_dir
+
+    def attach_log_dir(self, log_dir: str | Path) -> str:
+        """Bind this EA instance to an existing log directory for resuming."""
+        self.current_log_dir = Path(log_dir)
+        self.current_log_dir.mkdir(parents=True, exist_ok=True)
+        self.fitness_recorder = FitnessRecorder(self.current_log_dir, self.config)
+        self.checkpoint_manager = CheckpointManager(self.current_log_dir)
+        return str(self.current_log_dir)
 
     def get_profile_log_path(self) -> Path:
         """Return the JSONL path used for per-individual evaluation profiles."""
@@ -83,6 +94,49 @@ class EA:
         if self.current_log_dir is None:
             raise ValueError("Log directory has not been initialized yet.")
         return self.current_log_dir / "generation_profiles.jsonl"
+
+    def serialize_population(self, population: List[Individual]) -> list[dict[str, Any]]:
+        """Serialize a population into checkpoint-safe dictionaries."""
+        return [serialize_individual(ind) for ind in population]
+
+    def deserialize_population(self, payload: list[dict[str, Any]] | None) -> list[Individual]:
+        """Restore checkpointed population entries back into runtime objects."""
+        return [deserialize_individual(ind) for ind in (payload or [])]
+
+    def save_checkpoint(self, state: dict[str, Any]) -> None:
+        """Persist one checkpoint snapshot under the current run directory."""
+        if self.checkpoint_manager is None:
+            raise ValueError("Checkpoint manager has not been initialized yet.")
+        self.checkpoint_manager.save_state(state)
+
+    def load_checkpoint(self) -> dict[str, Any] | None:
+        """Load the most recent checkpoint snapshot for this run, if present."""
+        if self.checkpoint_manager is None:
+            raise ValueError("Checkpoint manager has not been initialized yet.")
+        return self.checkpoint_manager.load_state()
+
+    def build_checkpoint_state(
+        self,
+        *,
+        phase: str,
+        generation: int,
+        population: List[Individual] | None = None,
+        offspring: List[Individual] | None = None,
+        meta: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create a JSON-serializable snapshot of the EA's current runtime state."""
+        if self.current_log_dir is None:
+            raise ValueError("Log directory has not been initialized yet.")
+
+        return {
+            "algorithm": self.config.algorithm,
+            "phase": phase,
+            "generation": generation,
+            "log_dir": str(self.current_log_dir),
+            "population": self.serialize_population(population if population is not None else self.population),
+            "offspring": self.serialize_population(offspring or []),
+            "meta": meta or {},
+        }
     
     
     def log_single_objective_generation(self, log_dir: str, generation: int, best_individual: Individual):

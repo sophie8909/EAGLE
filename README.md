@@ -223,8 +223,24 @@ Typical contents:
 - `config.json`
 - `component_pool.json`
 - `generation_<n>_mo.txt`
+- `run_state.json`
+- `checkpoints.jsonl`
 - `profiles.jsonl`
 - `generation_profiles.jsonl`
+
+`run_state.json` keeps the latest resumable snapshot. `checkpoints.jsonl` appends one full checkpoint after each individual evaluation, so an interrupted run can continue from the middle of a generation instead of restarting that generation.
+
+Resume commands:
+
+```bash
+py -3 -m eagle.ea.main --resume-latest
+```
+
+or
+
+```bash
+py -3 -m eagle.ea.main --resume-log-dir logs/20260405_123456
+```
 
 ### Parsing and Reuse
 

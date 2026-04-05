@@ -19,7 +19,25 @@ class FitnessRecorder:
         self.history_records_path =  "fitness_history.jsonl"
         self.history = []  
         self.config = config
+        self._load_existing_run_records()
         self.init_from_history()
+
+    def _load_existing_run_records(self) -> None:
+        """Load existing per-run records so resumed runs keep recent context."""
+        if not self.log_path.exists():
+            return
+
+        with self.log_path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                self.records.append(record)
+        self.records = self.records[-50:]
     
     def init_from_history(self) -> None:
         """Load previously seen prompt hashes so surrogate lookup can reuse them."""
@@ -108,8 +126,8 @@ class FitnessRecorder:
         
         self.records = self.records[-50:]  # Keep only the most recent rows for local examples.
         
-        with self.log_path.open("w", encoding="utf-8") as f:
-            f.write("\n".join([json.dumps(r) for r in self.records]))
+        with self.log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
         self.add_history_record(self.record_to_history_entry(record))
 

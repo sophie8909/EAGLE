@@ -27,12 +27,15 @@ class Individual:
 
     def __init__(
         self,
+        id: str | None = None,
         game_rule: int = 0,
         strategy: dict[str, int] | None = None,
         **legacy_components: int,
     ):
         """Create an individual with one game-rule index and a strategy-index map."""
-        self.id = f"ind-{next(self._id_counter)}"
+        self.id = id or f"ind-{next(self._id_counter)}"
+        if id is not None:
+            self._sync_id_counter(id)
         self.game_rule = game_rule
         self.strategy = self._normalize_strategy(strategy)
         self.legacy_components = dict(legacy_components)
@@ -78,6 +81,21 @@ class Individual:
         raise TypeError(
             f"strategy must be a dict, stringified dict, or None; got {type(strategy).__name__}"
         )
+
+    @classmethod
+    def _sync_id_counter(cls, individual_id: str) -> None:
+        """Keep generated IDs ahead of any checkpoint-restored explicit ID."""
+        if not isinstance(individual_id, str) or not individual_id.startswith("ind-"):
+            return
+        suffix = individual_id.removeprefix("ind-")
+        if not suffix.isdigit():
+            return
+        target = int(suffix) + 1
+        while True:
+            current = next(cls._id_counter)
+            if current >= target:
+                cls._id_counter = itertools.count(current + 1)
+                return
 
     def initialize_randomly(self, component_pool: ComponentPool):
         """Fill the strategy map with random valid indices from the component pool."""
