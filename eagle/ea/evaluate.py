@@ -237,21 +237,55 @@ class Evaluator:
         score = number_of_turns / 1000.0  # Normalize the score (assuming 1000 turns is a reasonable upper bound)
         return score
 
+    def _material_total(self, snapshot: dict[str, Any]) -> float:
+        return sum(
+            float(self.config.resource_advantage_weights.get(key, 0.0)) * float(snapshot.get(key, 0.0))
+            for key in self.config.resource_advantage_weights
+        )
+
+    def resource_advantage_evaluation(
+        self,
+        parsed_log: dict[str, Any],
+        eps: float = 1e-9,
+    ) -> float:
+        feature_history = parsed_log.get("feature_history", [])
+        if not feature_history:
+            return 0.0
+
+        n = len(feature_history)
+        numerator = 0.0
+        denominator = 0.0
+
+        for i, row in enumerate(feature_history):
+            ally_total = self._material_total(row.get("ally", {}))
+            enemy_total = self._material_total(row.get("enemy", {}))
+            weight = ((i + 1) / n) ** float(self.config.resource_advantage_alpha)
+
+            numerator += weight * (ally_total - enemy_total)
+            denominator += weight * (ally_total + enemy_total + eps)
+
+        return numerator / denominator if denominator > 0 else 0.0
+
     def calculate_fitness_score(self, log_content: str, parsed_log: dict[str, Any] | None = None) -> list[float]:
         winner_info = parsed_log or self._parse_winner_info(log_content)["parsed_log"]
         winning_score = self.win_loss_evaluation(log_content, parsed_log=winner_info)
-        number_of_turns_score = self.number_of_turns_evaluation(log_content)
+        resource_advantage_score = self.resource_advantage_evaluation(winner_info)
         game_round_score = self.game_round_available_evaluation(log_content)  # This can be used as an additional metric if desired
 
-        print(f"Parsed fitness: winning_score={winning_score}, number_of_turns={number_of_turns_score}, game_round_fitness={game_round_score}")
+        print(
+            "Parsed fitness: "
+            f"winning_score={winning_score}, "
+            f"resource_advantage={resource_advantage_score}, "
+            f"game_round_fitness={game_round_score}"
+        )
 
         # fitness
         # v1: winning_score
-        # v2: winning_score + number_of_turns (the more turns, the better when tie)
-        # v3: winning_score + number_of_turns + game_round_fitness (consider both final outcome and in-game performance)
+        # v2: winning_score + weighted resource advantage
+        # v3: winning_score + weighted resource advantage + game_round_fitness
         # fitness = winning_score * 0.6 + game_round_score * 0.4
 
-        return normalize_fitness([winning_score, number_of_turns_score, game_round_score])
+        return normalize_fitness([winning_score, resource_advantage_score, game_round_score])
 
     def set_opponent(self, opponent: str):
         # Set the opponent strategy for the next simulation runs (this can be used to evaluate the evolved prompts against different baseline strategies in MicroRTS)

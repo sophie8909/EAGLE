@@ -41,7 +41,7 @@ class Individual:
         self.stable_components = [self.game_rule]
         self.evolving_components: list[int] = []
 
-        # fitness = [win_score, number_of_turns_score, game_round_score]
+        # fitness = [win_score, resource_advantage_score, game_round_score]
         self.fitness = DEFAULT_FITNESS.copy()
 
     @property

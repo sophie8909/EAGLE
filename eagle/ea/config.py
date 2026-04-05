@@ -5,6 +5,7 @@ This module defines the EAConfig class, which encapsulates the configuration par
 
 
 from dataclasses import dataclass
+from dataclasses import field
 
 @dataclass
 class EAConfig:
@@ -18,4 +19,15 @@ class EAConfig:
     selection_method: str = "random"  # Options: "random", "tournament"
     crossover_method: str = "uniform"  # Options: "uniform", "one_point", "two_point"
     environment_selection_method: str = "elitism"
+    resource_advantage_alpha: float = 2.0
+    resource_advantage_weights: dict[str, float] = field(
+        default_factory=lambda: {
+            "base": 10.0,
+            "worker": 1.0,
+            "light": 2.0,
+            "heavy": 2.0,
+            "ranged": 2.0,
+            "resource": 1.0,
+        }
+    )
     

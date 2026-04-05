@@ -147,7 +147,7 @@ def final_test(current_log_dir: str, last_gen: int):
                     results[individual.id].append({
                         "opponent": opponent,
                         "result": result,
-                        "round": fitness_score[1],
+                        "resource_advantage": fitness_score[1],
                     })
                 # save results to json file
                 with open(f"{experiment_log_folder}/final_test_results.json", "w") as f:

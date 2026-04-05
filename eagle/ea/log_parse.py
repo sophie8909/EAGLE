@@ -16,6 +16,8 @@ GETACTION_START_RE = re.compile(r"^\s*\[(?P<agent>[^\]]+)\.getAction\]\s+start\s
 
 RAW_RESPONSE_HEADER_RE = re.compile(r"^\s*=== Raw LLM Response ===\s*$", re.MULTILINE)
 RAW_RESPONSE_FOOTER_RE = re.compile(r"^\s*=+\s*$", re.MULTILINE)
+DYNAMIC_PROMPT_HEADER_RE = re.compile(r"^\s*=== Dynamic Prompt ===\s*$", re.MULTILINE)
+DYNAMIC_PROMPT_FOOTER_RE = re.compile(r"^\s*=+\s*$", re.MULTILINE)
 
 RUNNING_GETACTION_RE = re.compile(r"^\s*Running getAction for Player:\s*(?P<player>\d+)\s*$", re.MULTILINE)
 CURRENT_TIME_RE = re.compile(
@@ -54,6 +56,15 @@ SKIP_RE = re.compile(
     r"^\s*(?:⚠️\s*)?Skipping\s+.+$",
     re.IGNORECASE,
 )
+
+TURN_PROMPT_RE = re.compile(r"^\s*Turn:\s*(?P<time>\d+)\s*/\s*\d+\s*$", re.MULTILINE)
+FEATURE_LINE_RE = re.compile(
+    r"^\s*\((?P<x>-?\d+),\s*(?P<y>-?\d+)\)\s+"
+    r"(?P<team>Neutral|Ally|Enemy)\s+"
+    r"(?P<unit>Resource Node|Base Unit|Barracks Unit|Worker Unit|Light Unit|Heavy Unit|Ranged Unit)"
+    r"(?:\s+(?P<stats>\{.*\}))?\s*$"
+)
+RESOURCE_VALUE_RE = re.compile(r"resources\s*=\s*(?P<value>\d+)", re.IGNORECASE)
 
 
 # =========================================================
@@ -190,6 +201,140 @@ def parse_post_fields(post_text: str) -> dict[str, Any]:
         }
 
     return result
+
+
+def extract_resource_history(log_text: str) -> list[dict[str, int]]:
+    """
+    Extract per-turn player resources from the full log.
+
+    The Java logger prints lines like:
+        current time 42 p0 player 0(5) p1 player 1(3)
+
+    We collapse repeated observations for the same turn and keep one record
+    per game time in log order.
+    """
+    by_time: dict[int, dict[str, int]] = {}
+    ordered_times: list[int] = []
+
+    for match in CURRENT_TIME_RE.finditer(log_text):
+        current_time = int(match.group("time"))
+        record = {
+            "time": current_time,
+            "p0_resources": int(match.group("p0_value")),
+            "p1_resources": int(match.group("p1_value")),
+        }
+
+        if current_time not in by_time:
+            ordered_times.append(current_time)
+        by_time[current_time] = record
+
+    return [by_time[current_time] for current_time in ordered_times]
+
+
+def _empty_force_snapshot() -> dict[str, int]:
+    return {
+        "base": 0,
+        "worker": 0,
+        "light": 0,
+        "heavy": 0,
+        "ranged": 0,
+        "resource": 0,
+    }
+
+
+def _normalize_feature_unit(unit_label: str) -> str | None:
+    mapping = {
+        "Base Unit": "base",
+        "Worker Unit": "worker",
+        "Light Unit": "light",
+        "Heavy Unit": "heavy",
+        "Ranged Unit": "ranged",
+    }
+    return mapping.get(unit_label)
+
+
+def extract_feature_history(log_text: str) -> list[dict[str, Any]]:
+    """
+    Extract per-turn unit totals from the Dynamic Prompt feature list.
+
+    The returned rows summarize:
+    - ally/enemy counts of base/worker/light/heavy/ranged
+    - ally/enemy stored resources inferred from Base Unit {resources=...}
+    - neutral_resource total remaining on map from Resource Node {resources=...}
+    """
+    history: list[dict[str, Any]] = []
+    header_matches = list(DYNAMIC_PROMPT_HEADER_RE.finditer(log_text))
+
+    for header in header_matches:
+        after_header = log_text[header.end():]
+        footer = DYNAMIC_PROMPT_FOOTER_RE.search(after_header)
+        block = after_header[:footer.start()].strip() if footer else after_header.strip()
+        if not block:
+            continue
+
+        turn_match = TURN_PROMPT_RE.search(block)
+        if not turn_match:
+            continue
+        current_time = int(turn_match.group("time"))
+
+        feature_idx = block.find("Feature locations:")
+        if feature_idx == -1:
+            continue
+
+        feature_lines = block[feature_idx:].splitlines()[1:]
+        ally = _empty_force_snapshot()
+        enemy = _empty_force_snapshot()
+        neutral_resource = 0
+
+        for raw_line in feature_lines:
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            feature_match = FEATURE_LINE_RE.match(line)
+            if not feature_match:
+                continue
+
+            team = feature_match.group("team")
+            unit_label = feature_match.group("unit")
+            stats = feature_match.group("stats") or ""
+
+            if team == "Neutral" and unit_label == "Resource Node":
+                resource_match = RESOURCE_VALUE_RE.search(stats)
+                if resource_match:
+                    neutral_resource += int(resource_match.group("value"))
+                continue
+
+            normalized_unit = _normalize_feature_unit(unit_label)
+            if normalized_unit is None:
+                continue
+
+            target = ally if team == "Ally" else enemy
+            target[normalized_unit] += 1
+
+            if unit_label == "Base Unit":
+                resource_match = RESOURCE_VALUE_RE.search(stats)
+                if resource_match:
+                    target["resource"] += int(resource_match.group("value"))
+
+        history.append(
+            {
+                "time": current_time,
+                "ally": ally,
+                "enemy": enemy,
+                "neutral_resource": neutral_resource,
+            }
+        )
+
+    by_time: dict[int, dict[str, Any]] = {}
+    ordered_times: list[int] = []
+    for row in history:
+        current_time = row["time"]
+        if current_time not in by_time:
+            ordered_times.append(current_time)
+        by_time[current_time] = row
+
+    return [by_time[current_time] for current_time in ordered_times]
 
 
 def parse_gameover(pre_text: str) -> bool | None:
@@ -506,6 +651,8 @@ def parse_log(log_text: str, target_agent: str = "EAGLE") -> dict[str, Any]:
     all_moves: list[dict[str, Any]] = []
     for segment in parsed_segments:
         all_moves.extend(segment["move_results"])
+    resource_history = extract_resource_history(log_text)
+    feature_history = extract_feature_history(log_text)
 
     summary = {
         "target_agent": target_agent,
@@ -515,6 +662,8 @@ def parse_log(log_text: str, target_agent: str = "EAGLE") -> dict[str, Any]:
         "duplicate_skipped_count": sum(s["duplicate_skipped_count"] for s in parsed_segments),
         "applied_failure_count": sum(s["applied_failure_count"] for s in parsed_segments),
         "applied_success_count": sum(s["applied_success_count"] for s in parsed_segments),
+        "resource_history": resource_history,
+        "feature_history": feature_history,
     }
     outcome = infer_winner(log_text, target_agent=target_agent)
     summary.update(
@@ -530,6 +679,8 @@ def parse_log(log_text: str, target_agent: str = "EAGLE") -> dict[str, Any]:
     return {
         "summary": summary,
         "game_settings": outcome["game_settings"],
+        "resource_history": resource_history,
+        "feature_history": feature_history,
         "segments": parsed_segments,
         "all_move_results": all_moves,
     }

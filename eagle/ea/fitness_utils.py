@@ -30,8 +30,8 @@ def normalize_fitness(fitness) -> list[float]:
         for value in fitness[:FITNESS_DIMENSIONS]:
             try:
                 value = float(value)
-                if value < 0:
-                    value = 0.0
+                if value < -1:
+                    value = -1.0
                 elif value > 1:
                     value = 1.0
                 values.append(value)
@@ -49,7 +49,7 @@ def fitness_key(fitness) -> tuple[float, float, float]:
     Comparable key for legacy single-objective operators.
 
     We keep lexicographic ordering so win score remains the primary signal,
-    then turn score, then in-game execution score.
+    then weighted resource advantage, then in-game execution score.
     """
     normalized = normalize_fitness(fitness)
     return tuple(normalized)
