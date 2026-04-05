@@ -88,7 +88,7 @@ This will:
 
 1. load prompt components from `prompts/components.json`
 2. initialize a population
-3. evolve prompts with GA or NSGA-II
+3. evolve prompts with GA, NSGA-II, or Steady-State NSGA-II
 4. run real and surrogate evaluations
 5. log generation results under `logs/<timestamp>`
 
@@ -117,11 +117,19 @@ Supported algorithms:
 
 - `GA`
 - `NSGA2`
+- `SteadyStateNSGA2`
 
 Implemented in:
 
 - `eagle/ea/ga.py`
 - `eagle/ea/nsga2.py`
+- `eagle/ea/steady_state_nsga2.py`
+
+### NSGA-II vs Steady-State NSGA-II
+
+- `NSGA2` uses generational replacement: it builds a full offspring population, then performs one environmental selection step over parents plus offspring.
+- `SteadyStateNSGA2` keeps the same NSGA-II ranking logic, tournament policy, and crowding-based survivor selection, but inserts offspring back into the population one at a time.
+- Both variants still use the same three-objective fitness vector and the same real/surrogate evaluation pipeline.
 
 ### Operators
 
@@ -260,7 +268,7 @@ To replay a saved final generation against the configured benchmark opponents, E
 
 - `eagle/ea/final_evaluation.py`
 
-The `NSGA2` main flow already calls final test at the end of a run.
+The `NSGA2` and `SteadyStateNSGA2` main flows already call final test at the end of a run.
 
 ---
 
@@ -308,6 +316,7 @@ eagle/ea/
 |- basic_ea.py              # shared EA runtime scaffold
 |- ga.py                    # single-objective GA
 |- nsga2.py                 # multi-objective NSGA-II
+|- steady_state_nsga2.py    # steady-state multi-objective NSGA-II
 |- individual.py            # candidate prompt representation
 |- component_pool.py        # prompt component storage
 |- crossover.py             # crossover operators

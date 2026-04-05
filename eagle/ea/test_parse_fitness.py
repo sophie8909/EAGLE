@@ -5,6 +5,7 @@ import shutil
 from .config import EAConfig
 from .evaluate import Evaluator
 from .nsga2 import NSGA2
+from .steady_state_nsga2 import SteadyStateNSGA2
 from .individual import Individual
 from . import evaluate as evaluate_module
 from . import llm as llm_module
@@ -443,3 +444,23 @@ def test_nsga2_pre_real_eval_sort_only_uses_offspring():
 
     assert parent not in ordered
     assert ordered == [child_high, child_low]
+
+
+def test_steady_state_nsga2_replaces_one_individual_immediately():
+    """Verify steady-state NSGA-II inserts one child and trims immediately."""
+    nsga = SteadyStateNSGA2.__new__(SteadyStateNSGA2)
+    nsga.config = EAConfig(population_size=2)
+
+    parent_a = Individual()
+    parent_b = Individual()
+    child = Individual()
+
+    parent_a.fitness = [0.1, 0.1, 0.1]
+    parent_b.fitness = [0.2, 0.2, 0.2]
+    child.fitness = [0.9, 0.9, 0.9]
+
+    next_population = nsga._select_steady_state_survivors([parent_a, parent_b], child)
+
+    assert len(next_population) == 2
+    assert child in next_population
+    assert parent_a not in next_population

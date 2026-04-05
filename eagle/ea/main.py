@@ -66,6 +66,15 @@ if __name__ == "__main__":
         nsga2.run()
         print("Running final test for NSGA2...")
         nsga2.run_final_test()
+    elif config.algorithm == "steady_state_nsga2":
+        from .steady_state_nsga2 import SteadyStateNSGA2
+        steady_state_nsga2 = SteadyStateNSGA2(config, component_pool, opponent_list=OPPONENT_LIST)
+        if resume_log_dir:
+            steady_state_nsga2.attach_log_dir(resume_log_dir)
+        steady_state_nsga2.save_config(steady_state_nsga2.create_log_folder())
+        steady_state_nsga2.run()
+        print("Running final test for Steady-State NSGA2...")
+        steady_state_nsga2.run_final_test()
     # elif config.algorithm == "moead":
     #     from .moead import MOEAD
     #     moead = MOEAD(config, component_pool)

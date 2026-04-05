@@ -8,5 +8,6 @@ This package contains:
 - Surrogate evaluator
 - Real Java game runner
 - NSGA-II
+- Steady-State NSGA-II
 - Simplified MOEA/D
 """
