@@ -33,9 +33,11 @@ class NSGA2(EA):
         component_pool: ComponentPool,
         opponent_list: List[str],
     ):
+        """Initialize NSGA-II using the shared EA base implementation."""
         super().__init__(config, component_pool, opponent_list)
 
     def _assign_rank_and_crowding(self, population: List[Individual]) -> List[List[Individual]]:
+        """Compute Pareto fronts and annotate individuals with rank/crowding."""
         fronts = self.fast_non_dominated_sort(population)
         for rank, front in enumerate(fronts):
             self.calculate_crowding_distance(front)
@@ -44,6 +46,7 @@ class NSGA2(EA):
         return fronts
 
     def _sort_by_game_round_score(self, population: List[Individual]) -> List[Individual]:
+        """Order offspring by the surrogate game-round objective before real evaluation."""
         # Before real evaluation, game_round surrogate information lives mainly in
         # the third objective, so we rank offspring directly by that signal first.
         return sorted(
@@ -57,6 +60,7 @@ class NSGA2(EA):
         )
 
     def _better_parent(self, ind1: Individual, ind2: Individual) -> Individual:
+        """Break tournament ties using rank, crowding distance, then dominance."""
         rank1 = getattr(ind1, "pareto_rank", float("inf"))
         rank2 = getattr(ind2, "pareto_rank", float("inf"))
         if rank1 != rank2:
@@ -74,12 +78,14 @@ class NSGA2(EA):
         return random.choice([ind1, ind2])
 
     def select_parents(self) -> List[Individual]:
+        """Sample two parents with NSGA-II's tournament selection policy."""
         if len(self.population) < 2:
             raise ValueError("NSGA-II requires at least two individuals for parent selection.")
 
         self._assign_rank_and_crowding(self.population)
 
         def _pick_one() -> Individual:
+            """Run one binary tournament under the current NSGA-II ranking state."""
             a, b = random.sample(self.population, 2)
             return self._better_parent(a, b)
 
@@ -290,6 +296,131 @@ class NSGA2(EA):
         signature.sort()
         return signature
 
+    def _evaluate_initial_population(self) -> None:
+        """Run full evaluation on the initial population before evolutionary steps."""
+        with timer("initial_population_evaluation_time", {}):
+            for individual in self.population:
+                self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
+
+    def _generate_offspring(self, generation: int, generation_stats: dict[str, float]) -> List[Individual]:
+        """Create and surrogate-evaluate one full offspring population."""
+        offspring: List[Individual] = []
+
+        while len(offspring) < self.config.population_size:
+            with timer("parent_selection_time", generation_stats):
+                parent1, parent2 = self.select_parents()
+
+            child_stats: dict[str, float] = {}
+            with timer("offspring_generation_time", generation_stats):
+                with timer("crossover_time", child_stats):
+                    child = self.crossover(parent1, parent2)
+                with timer("mutation_time", child_stats):
+                    child = self.mutate(child)
+
+            child.operator_profile = {
+                "crossover_time": child_stats.get("crossover_time", 0.0),
+                "mutation_time": child_stats.get("mutation_time", 0.0),
+                "EA_operator_time": child_stats.get("crossover_time", 0.0) + child_stats.get("mutation_time", 0.0),
+                "ea_llm_call_time": getattr(child, "ea_llm_call_time", 0.0),
+            }
+
+            with timer("offspring_evaluation_time", generation_stats):
+                self.surrogate_evaluation(child, generation=generation)
+            offspring.append(child)
+
+        return offspring[: self.config.population_size]
+
+    def _rank_offspring_for_real_evaluation(self, offspring: List[Individual]) -> List[Individual]:
+        """Rank offspring by surrogate game-round score for the real-eval budget."""
+        return self._sort_by_game_round_score(offspring)
+
+    def _real_evaluate_ranked_offspring(
+        self,
+        candidate_order: List[Individual],
+        generation: int,
+        generation_stats: dict[str, float],
+    ) -> None:
+        """Spend the configured real-evaluation budget on the best-ranked offspring."""
+        with timer("offspring_evaluation_time", generation_stats):
+            real_eval_budget = self.config.real_eval_count(self.config.population_size)
+
+            for index, child in enumerate(candidate_order):
+                if index >= real_eval_budget:
+                    break
+                self.real_evaluation(child, random.choice(self.opponent_list), generation=generation)
+
+    def _build_generation_record(
+        self,
+        generation: int,
+        generation_stats: dict[str, float],
+        offspring: List[Individual],
+        log_dir: str,
+    ) -> dict:
+        """Build one generation-level profiling record for JSONL logging."""
+        generation_record = build_base_record(
+            generation=generation,
+            individual_id=None,
+            record_type="generation",
+        )
+        generation_record.update(
+            {
+                "generation_time": (
+                    generation_stats.get("parent_selection_time", 0.0)
+                    + generation_stats.get("offspring_generation_time", 0.0)
+                    + generation_stats.get("offspring_evaluation_time", 0.0)
+                    + generation_stats.get("survivor_selection_time", 0.0)
+                ),
+                "parent_selection_time": generation_stats.get("parent_selection_time", 0.0),
+                "offspring_generation_time": generation_stats.get("offspring_generation_time", 0.0),
+                "offspring_evaluation_time": generation_stats.get("offspring_evaluation_time", 0.0),
+                "survivor_selection_time": generation_stats.get("survivor_selection_time", 0.0),
+                "population_size": len(self.population),
+                "offspring_count": len(offspring),
+                "log_dir": log_dir,
+            }
+        )
+        return generation_record
+
+    def _log_generation(
+        self,
+        generation: int,
+        generation_stats: dict[str, float],
+        offspring: List[Individual],
+        pareto_fronts: List[List[Individual]],
+        log_dir: str,
+    ) -> None:
+        """Write generation profiles, Pareto-front snapshots, and the component pool."""
+        generation_record = self._build_generation_record(
+            generation=generation,
+            generation_stats=generation_stats,
+            offspring=offspring,
+            log_dir=log_dir,
+        )
+        write_jsonl(generation_record, self.get_generation_profile_log_path())
+        self.log_multi_objective_generation(log_dir, generation, pareto_fronts)
+        self.save_component_pool(log_dir)
+        self.current_generation = generation
+
+    def _has_converged(
+        self,
+        pareto_fronts: List[List[Individual]],
+        last_5_front_signatures: List[List[Tuple]],
+    ) -> bool:
+        """Detect simple convergence by checking whether the first front has stabilized."""
+        if not pareto_fronts:
+            return False
+
+        current_signature = self._front_signature(pareto_fronts[0])
+        last_5_front_signatures.append(current_signature)
+
+        if len(last_5_front_signatures) > 5:
+            last_5_front_signatures.pop(0)
+
+        return (
+            len(last_5_front_signatures) == 5
+            and all(sig == last_5_front_signatures[0] for sig in last_5_front_signatures)
+        )
+
     def run(self) -> list:
         """
         Main NSGA-II optimization loop.
@@ -306,55 +437,15 @@ class NSGA2(EA):
             The final population.
         """
         log_dir = self.create_log_folder()
-
-
-        # Evaluate the initial population before evolution starts.
-        with timer("initial_population_evaluation_time", {}):
-            for individual in self.population:
-                self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
+        self._evaluate_initial_population()
 
         last_5_front_signatures: List[List[Tuple]] = []
 
         for generation in range(self.config.num_generations):
             generation_stats: dict[str, float] = {}
-            offspring: List[Individual] = []
-
-            while len(offspring) < self.config.population_size:
-                with timer("parent_selection_time", generation_stats):
-                    parent1, parent2 = self.select_parents()
-
-                child_stats: dict[str, float] = {}
-                with timer("offspring_generation_time", generation_stats):
-                    with timer("crossover_time", child_stats):
-                        child = self.crossover(parent1, parent2)
-                    with timer("mutation_time", child_stats):
-                        child = self.mutate(child)
-
-                child.operator_profile = {
-                    "crossover_time": child_stats.get("crossover_time", 0.0),
-                    "mutation_time": child_stats.get("mutation_time", 0.0),
-                    "EA_operator_time": child_stats.get("crossover_time", 0.0) + child_stats.get("mutation_time", 0.0),
-                    "ea_llm_call_time": getattr(child, "ea_llm_call_time", 0.0),
-                }
-                # surrogate evaluation for the child before adding it to the offspring list
-                with timer("offspring_evaluation_time", generation_stats):
-                    self.surrogate_evaluation(child, generation=generation)
-                offspring.extend([child])
-
-            # Trim offspring in case we produced one extra pair.
-            offspring = offspring[: self.config.population_size]
-
-            # Rank offspring only before real evaluation.
-            candidate_order = self._sort_by_game_round_score(offspring)
-
-            # Real evaluation for the highest ranked offspring only, to save time.
-            with timer("offspring_evaluation_time", generation_stats):
-                cnt = 0
-                for child in candidate_order:
-                    self.real_evaluation(child, random.choice(self.opponent_list), generation=generation)
-                    cnt += 1
-                    if cnt >= self.config.population_size * self.config.real_eval_rate:
-                        break
+            offspring = self._generate_offspring(generation, generation_stats)
+            candidate_order = self._rank_offspring_for_real_evaluation(offspring)
+            self._real_evaluate_ranked_offspring(candidate_order, generation, generation_stats)
 
             # Combine parents and offspring after real evaluation, then compute fronts.
             combined_population = self.population + offspring
@@ -364,47 +455,9 @@ class NSGA2(EA):
             with timer("survivor_selection_time", generation_stats):
                 self.population = self.select_next_generation(self.population, offspring)
 
-            generation_record = build_base_record(
-                generation=generation,
-                individual_id=None,
-                record_type="generation",
-            )
-            generation_record.update(
-                {
-                    "generation_time": (
-                        generation_stats.get("parent_selection_time", 0.0)
-                        + generation_stats.get("offspring_generation_time", 0.0)
-                        + generation_stats.get("offspring_evaluation_time", 0.0)
-                        + generation_stats.get("survivor_selection_time", 0.0)
-                    ),
-                    "parent_selection_time": generation_stats.get("parent_selection_time", 0.0),
-                    "offspring_generation_time": generation_stats.get("offspring_generation_time", 0.0),
-                    "offspring_evaluation_time": generation_stats.get("offspring_evaluation_time", 0.0),
-                    "survivor_selection_time": generation_stats.get("survivor_selection_time", 0.0),
-                    "population_size": len(self.population),
-                    "offspring_count": len(offspring),
-                    "log_dir": log_dir,
-                }
-            )
-            write_jsonl(generation_record, self.get_generation_profile_log_path())
+            self._log_generation(generation, generation_stats, offspring, pareto_fronts, log_dir)
 
-            # Log the current generation's Pareto fronts.
-            self.log_multi_objective_generation(log_dir, generation, pareto_fronts)
-            self.save_component_pool(log_dir)
-            self.current_generation = generation
-            # Simple convergence check:
-            # stop if the first Pareto front stays identical for 5 generations.
-            if pareto_fronts:
-                current_signature = self._front_signature(pareto_fronts[0])
-                last_5_front_signatures.append(current_signature)
-
-                if len(last_5_front_signatures) > 5:
-                    last_5_front_signatures.pop(0)
-
-                if (
-                    len(last_5_front_signatures) == 5
-                    and all(sig == last_5_front_signatures[0] for sig in last_5_front_signatures)
-                ):
-                    break
+            if self._has_converged(pareto_fronts, last_5_front_signatures):
+                break
 
         return self.population

@@ -1,111 +1,14 @@
-import ast
 import json
 
-from .component_pool import ComponentPool
 from .config import EAConfig
+from .component_pool import ComponentPool
+from .ea_log_parse import parse_individuals_from_ea_log
 from .evaluate import Evaluator
-from .individual import Individual
 from .main import OPPONENT_LIST
 
 
-def extract_prompts_from_ea_log(log_file: str):
-    with open(log_file, "r") as f:
-        lines = f.readlines()
-
-    prompts = []
-    prompt = []
-    in_prompt_section = False
-
-    # Split the log into sections for each individual prompt.
-    for line in lines:
-        line = line.strip()
-        if line.startswith("Prompt:"):
-            in_prompt_section = True
-        elif line.startswith("Individual") or line.startswith("Pareto Front"):
-            if prompt:
-                prompts.append("\n".join(prompt))
-                prompt = []
-        elif in_prompt_section and line:
-            prompt.append(line)
-
-    return prompts
-
-
-def _split_top_level_fields(individual_str: str) -> list[str]:
-    fields = []
-    start = 0
-    depth = 0
-    in_string = False
-    string_quote = ""
-    escaped = False
-
-    for i, char in enumerate(individual_str):
-        if in_string:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == string_quote:
-                in_string = False
-            continue
-
-        if char in ("'", '"'):
-            in_string = True
-            string_quote = char
-        elif char in "([{":
-            depth += 1
-        elif char in ")]}":
-            depth -= 1
-        elif char == "," and depth == 0:
-            fields.append(individual_str[start:i].strip())
-            start = i + 1
-
-    tail = individual_str[start:].strip()
-    if tail:
-        fields.append(tail)
-    return fields
-
-
-def _parse_literal(value: str):
-    try:
-        return ast.literal_eval(value)
-    except (ValueError, SyntaxError):
-        return value
-
-
-def parse_individuals_from_ea_log(log_file: str):
-    with open(log_file, "r") as f:
-        lines = f.readlines()
-
-    individuals = []
-    for line in lines:
-        if not line.startswith("Individual"):
-            continue
-
-        start_idx = line.find("Individual(") + len("Individual(")
-        end_idx = line.rfind(")")
-        if start_idx == -1 or end_idx == -1:
-            continue
-
-        individual_str = line[start_idx:end_idx]
-        components = _split_top_level_fields(individual_str)
-        individual_data = {}
-        for component in components:
-            if "=" in component:
-                key, value = component.split("=", 1)
-                individual_data[key.strip()] = _parse_literal(value.strip())
-
-        individual = Individual(**individual_data)
-        fitness_str = line[line.find("Fitness:") + len("Fitness:"):].strip()
-        if fitness_str.startswith("[") and fitness_str.endswith("]"):
-            individual.fitness = _parse_literal(fitness_str)
-
-        individuals.append(individual)
-
-    return individuals
-
-
 def run_final_test_suite(current_log_dir: str, last_gen: int):
+    """Replay winning final-generation individuals against the benchmark opponents."""
     experiment_log_dir = f"{current_log_dir}"
     evaluator = Evaluator(
         ComponentPool.from_json(f"{experiment_log_dir}/component_pool.json"),

@@ -234,6 +234,7 @@ def extract_resource_history(log_text: str) -> list[dict[str, int]]:
 
 
 def _empty_force_snapshot() -> dict[str, int]:
+    """Create an empty ally/enemy force summary bucket."""
     return {
         "base": 0,
         "worker": 0,
@@ -245,6 +246,7 @@ def _empty_force_snapshot() -> dict[str, int]:
 
 
 def _normalize_feature_unit(unit_label: str) -> str | None:
+    """Map Dynamic Prompt unit labels onto the normalized summary keys."""
     mapping = {
         "Base Unit": "base",
         "Worker Unit": "worker",
@@ -533,6 +535,7 @@ def parse_game_settings(log_text: str) -> dict[str, str]:
 
 
 def extract_declared_winner(log_text: str) -> str | None:
+    """Extract the declared winner from an explicit WINNER line when present."""
     match = WINNER_RE.search(log_text)
     if not match:
         return None
@@ -540,6 +543,7 @@ def extract_declared_winner(log_text: str) -> str | None:
 
 
 def _class_name_variants(name: str) -> set[str]:
+    """Generate plausible Java class-name variants for one configured agent name."""
     variants = {name.strip()}
     short_name = name.strip().split(".")[-1]
     variants.add(short_name)

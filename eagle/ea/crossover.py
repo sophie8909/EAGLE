@@ -7,8 +7,11 @@ from .individual import Individual
 
 
 class Crossover:
+    """Crossover operators that recombine parent strategy indices into children."""
+
     @staticmethod
     def uniform_crossover(component_pool: ComponentPool, parent1: Individual, parent2: Individual) -> Individual:
+        """Pick each strategy slot independently from either parent."""
         import random
         child = Individual()
         p1_strategy = parent1.strategy or {}
@@ -31,6 +34,7 @@ class Crossover:
     
     @staticmethod
     def llm_crossover(component_pool: ComponentPool, parent1: Individual, parent2: Individual) -> Individual:
+        """Temporary placeholder that falls back to uniform crossover until implemented."""
         # TODO: Implement an LLM-based crossover that writes merged strategy
         # components back into the component pool and stores valid component
         # indices on the child. For now we explicitly fall back to the stable

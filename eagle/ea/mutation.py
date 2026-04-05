@@ -8,9 +8,11 @@ from .component_pool import ComponentPool
 from .llm import LLM
 
 class Mutation:
+    """Mutation operators for both pool-sampled and LLM-rewritten strategies."""
     
     @staticmethod
     def mutate_component_from_pool(individual: Individual, component_pool: ComponentPool, mutation_rate: float) -> Individual:
+        """Randomly replace or drop strategy slots using existing pool entries."""
         import random
         base_strategy = dict(individual.strategy or {})
         mutated_individual = individual.copy()
@@ -30,6 +32,7 @@ class Mutation:
     
     @staticmethod
     def rewrite_component_with_llm(component: str, rewrite_instruction: str) -> tuple[str, float]:
+        """Rewrite one strategy component through the LLM and time the call."""
         start = time.perf_counter()
         rewritten_role_component = LLM.ollama_rewrite_component(
             original_text=component,
@@ -43,8 +46,7 @@ class Mutation:
 
     @staticmethod
     def mutate_component_with_llm(individual: Individual, component_pool: ComponentPool, mutation_rate: float) -> Individual:
-        # using LLM rewrite
-
+        """Rewrite selected strategy components and append the new text to the pool."""
         import random
         base_strategy = dict(individual.strategy or {})
         mutated_individual = individual.copy()

@@ -9,7 +9,10 @@ from typing import Any
 from .config import EAConfig
 
 class FitnessRecorder:
+    """Keep recent evaluation records on disk and a compact prompt-hash history."""
+
     def __init__(self, log_folder: Path, config: EAConfig):
+        """Initialize per-run and cross-run history storage."""
         self.log_path = log_folder / "fitness_records.jsonl"
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.records = []
@@ -19,6 +22,7 @@ class FitnessRecorder:
         self.init_from_history()
     
     def init_from_history(self) -> None:
+        """Load previously seen prompt hashes so surrogate lookup can reuse them."""
         path = Path(self.history_records_path)
         self.history: list[dict[str, Any]] = []
 
@@ -44,12 +48,14 @@ class FitnessRecorder:
                 self.history.append(record)
     
     def add_history_record(self, record: dict[str, Any]):
+        """Append a compact history entry to the cross-run history file."""
         self.history.append(record)
         with Path(self.history_records_path).open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def record_to_history_entry(self, record: dict[str, Any]):
-        # only keep prompt hash and fitness score for history record to save space.
+        """Reduce a full evaluation record to a compact deduplication entry."""
+        # Only keep prompt hash and fitness score for the history file to save space.
         prompt_hash = hash(json.dumps(record["prompt"], sort_keys=True))
         history_record = {
             "prompt_hash": prompt_hash,
@@ -60,7 +66,7 @@ class FitnessRecorder:
         return history_record
 
     def find_matching_history(self, prompt: dict[str, Any], opponent: str | None) -> list[dict[str, Any]]:
-        # find similar prompt in history based on prompt hash. return the fitness score if found.
+        """Return prior history rows for the same prompt/opponent combination."""
         prompt_hash = hash(json.dumps(prompt, sort_keys=True))
         similar_records = []
         for record in self.history:
@@ -74,9 +80,7 @@ class FitnessRecorder:
         return similar_records
 
     def record_fitness(self, record: dict[str, Any]):
-        # Append the fitness evaluation record to a JSONL file for later analysis
-        # Each record should include the individual's component configuration, fitness score, and any relevant metadata (
-        # e.g., opponent faced, generation number, evaluation time)
+        """Persist one evaluation record and update the compact history cache."""
         """Example record structure:
         {
             "individual_id": "ind-0",
@@ -102,7 +106,7 @@ class FitnessRecorder:
         """
         self.records.append(record)
         
-        self.records = self.records[-50:]  # Keep only the last 50 records
+        self.records = self.records[-50:]  # Keep only the most recent rows for local examples.
         
         with self.log_path.open("w", encoding="utf-8") as f:
             f.write("\n".join([json.dumps(r) for r in self.records]))

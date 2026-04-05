@@ -35,6 +35,7 @@ class ComponentPool:
     
 
     def __init__(self, components: Dict[str, Any]):
+        """Normalize the raw JSON component structure into convenient lookup lists."""
         self.components = components
         self.component_keys = list(self.components.keys())
         self.strategy_keys = list(self.components.get("strategy", {}).keys())
@@ -78,16 +79,19 @@ class ComponentPool:
 
     @classmethod
     def from_json(cls, filepath: str) -> ComponentPool:
+        """Load a component pool definition from disk."""
         with open(filepath, "r") as f:
             data = json.load(f)
         return cls(data)
 
     def has_category(self, category: str) -> bool:
+        """Return whether a component category exists and contains candidates."""
         if category == "game_rule":
             return bool(self.game_rule_components)
         return category in self.components and bool(self.components[category])
     
     def get_component(self, category: str, index: int) -> List[str]:
+        """Fetch one non-strategy component by category and index."""
         if category == "game_rule":
             candidates = self.game_rule_components
         else:
@@ -103,6 +107,7 @@ class ComponentPool:
         return candidates[index]
     
     def get_strategy_component(self, strategy: str, index: int) -> List[str]:
+        """Fetch one strategy component from a named strategy bucket."""
         candidates = self.components["strategy"][strategy]
         if not candidates:
             raise ValueError(f"No candidates found for strategy category: {strategy}")
@@ -113,6 +118,7 @@ class ComponentPool:
         return candidates[index]
 
     def get_random_strategy_component_index(self, strategy: str) -> int:
+        """Sample a valid random index for one strategy category."""
         import random
         candidates = self.components["strategy"][strategy]
         if not candidates:
@@ -120,6 +126,7 @@ class ComponentPool:
         return random.randint(0, len(candidates) - 1)
     
     def get_random_component_index(self, category: str) -> int:
+        """Sample a valid random index for a non-strategy category."""
         import random
         if category == "game_rule":
             candidates = self.game_rule_components
@@ -132,6 +139,7 @@ class ComponentPool:
         return random.randint(0, len(candidates) - 1)
     
     def add_component(self, category: str, component: List[str]) -> int:
+        """Append a newly generated component and return its stored index."""
         if category == "game_rule":
             self.game_rule_components.append(component)
             return len(self.game_rule_components) - 1
@@ -141,11 +149,13 @@ class ComponentPool:
         return len(self.components[category]) - 1  # Return the index of the newly added component
 
     def add_strategy_component(self, strategy: str, component: List[str]) -> int:
+        """Append a newly generated strategy component and return its stored index."""
         if strategy not in self.components["strategy"]:
             raise KeyError(f"Strategy category not found: {strategy}")
         self.components["strategy"][strategy].append(component)
         return len(self.components["strategy"][strategy]) - 1  # Return the index of the newly added component     
     def get_component_str(self, category: str, index: int) -> str:
+        """Return a non-strategy component as a single newline-joined string."""
         if category == "strategy":
             raise ValueError(
                 "Use get_strategy_component(strategy_key, index) for strategy components."
@@ -154,4 +164,5 @@ class ComponentPool:
         return "\n".join(component_lines)
     
     def parse_component_str(self, component_str: str) -> List[str]:
+        """Convert a text block back into the line-based storage format."""
         return component_str.splitlines()

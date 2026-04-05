@@ -15,11 +15,14 @@ from .fitness_utils import DEFAULT_FITNESS
 
 @dataclass(frozen=True)
 class ComponentEntry:
+    """Stable name/value pair used when serializing an individual's components."""
     name: str
     value: Any
 
 
 class Individual:
+    """One candidate prompt configuration in the evolutionary search space."""
+
     _id_counter = itertools.count()
 
     def __init__(
@@ -28,6 +31,7 @@ class Individual:
         strategy: dict[str, int] | None = None,
         **legacy_components: int,
     ):
+        """Create an individual with one game-rule index and a strategy-index map."""
         self.id = f"ind-{next(self._id_counter)}"
         self.game_rule = game_rule
         self.strategy = self._normalize_strategy(strategy)
@@ -46,6 +50,7 @@ class Individual:
 
     @property
     def components(self) -> list[ComponentEntry]:
+        """Return a deterministic representation used by some legacy code paths."""
         strategy_items = tuple(sorted((self.strategy or {}).items()))
         return [
             ComponentEntry("game_rule", self.game_rule),
@@ -53,10 +58,12 @@ class Individual:
         ]
 
     def __repr__(self):
+        """Return a compact representation suitable for logs and generation dumps."""
         return f"Individual(game_rule={self.game_rule}, strategy={self.strategy})"
 
     @staticmethod
     def _normalize_strategy(strategy: dict[str, int] | str | None) -> dict[str, int]:
+        """Accept dict or stringified-dict strategies and normalize them to dicts."""
         if strategy is None:
             return {}
         if isinstance(strategy, dict):
@@ -73,6 +80,7 @@ class Individual:
         )
 
     def initialize_randomly(self, component_pool: ComponentPool):
+        """Fill the strategy map with random valid indices from the component pool."""
         self.game_rule = 0
         self.strategy = {
             strategy_key: component_pool.get_random_strategy_component_index(strategy_key)
@@ -80,6 +88,7 @@ class Individual:
         }
 
     def get_component_index(self, category: str) -> int:
+        """Read one component index using either the new or legacy storage layout."""
         if category == "game_rule":
             return self.game_rule
         if category in self.legacy_components:
@@ -87,6 +96,7 @@ class Individual:
         return getattr(self, category)
 
     def set_component_index(self, category: str, value: int) -> None:
+        """Write one component index while preserving backward compatibility."""
         if category == "game_rule":
             self.game_rule = value
             return
@@ -94,6 +104,7 @@ class Individual:
         setattr(self, category, value)
 
     def copy(self) -> "Individual":
+        """Create a mutable shallow clone suitable for crossover or mutation."""
         clone = Individual(
             game_rule=self.game_rule,
             strategy=dict(self.strategy or {}),

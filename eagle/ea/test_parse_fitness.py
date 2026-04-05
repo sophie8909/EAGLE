@@ -16,6 +16,7 @@ from .log_parse import (
 )
 
 def test_parse_fitness():
+    """Smoke-test parsing on the newest locally available game log."""
     evaluator = Evaluator(None)  # We won't use the component pool for this test
 
     import glob
@@ -36,6 +37,7 @@ if __name__ == "__main__":
 
 
 def test_parse_resource_history():
+    """Verify that repeated turn logs collapse into one resource record per turn."""
     log_content = """
     initLogsIfNeeded
     [EAGLE.getAction] start
@@ -74,6 +76,7 @@ def test_parse_resource_history():
 
 
 def test_parse_feature_history():
+    """Verify that Dynamic Prompt feature blocks become normalized force summaries."""
     log_content = """
     initLogsIfNeeded
     [EAGLE.getAction] start
@@ -124,6 +127,7 @@ def test_parse_feature_history():
 
 
 def test_extract_dynamic_prompt_blocks():
+    """Verify extraction of raw Dynamic Prompt blocks and their turn numbers."""
     log_content = """
     initLogsIfNeeded
     [EAGLE.getAction] start
@@ -145,6 +149,7 @@ def test_extract_dynamic_prompt_blocks():
 
 
 def test_parse_dynamic_prompt_state():
+    """Verify lightweight state parsing for sampled Dynamic Prompt blocks."""
     dynamic_prompt = """
     Map size: 8x8
     Turn: 12/5000
@@ -169,6 +174,7 @@ def test_parse_dynamic_prompt_state():
 
 
 def test_sample_recent_dynamic_prompt():
+    """Verify random sampling over the recent-log window for Dynamic Prompt blocks."""
     tmp_path = Path(__file__).resolve().parent / "_tmp_recent_logs_test"
     shutil.rmtree(tmp_path, ignore_errors=True)
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -214,6 +220,7 @@ def test_sample_recent_dynamic_prompt():
 
 
 def test_resource_advantage_evaluation():
+    """Verify that the weighted resource/material score stays bounded and directional."""
     evaluator = Evaluator(None)
     parsed_log = {
         "feature_history": [
@@ -245,6 +252,7 @@ def test_resource_advantage_evaluation():
 
 
 def test_resource_advantage_uses_config_weights():
+    """Verify that custom config weights change the resource-advantage objective."""
     config = EAConfig(
         resource_advantage_alpha=1.0,
         resource_advantage_weights={
@@ -274,6 +282,7 @@ def test_resource_advantage_uses_config_weights():
 
 
 def test_surrogate_version_dispatch_game_round():
+    """Verify game-round surrogate dispatch when the config selects that mode."""
     config = EAConfig(surrogate_version="game_round")
     evaluator = Evaluator(None, config=config)
 
@@ -321,6 +330,7 @@ def test_surrogate_version_dispatch_game_round():
 
 
 def test_surrogate_game_round_falls_back_to_llm_when_no_logs():
+    """Verify fallback to the prompt-only surrogate when no sampled logs exist."""
     config = EAConfig(surrogate_version="game_round")
     evaluator = Evaluator(None, config=config)
 
@@ -342,6 +352,7 @@ def test_surrogate_game_round_falls_back_to_llm_when_no_logs():
 
 
 def test_game_round_score_from_llm_response():
+    """Verify legality-based scoring for one mocked round-level LLM response."""
     evaluator = Evaluator(None)
     dynamic_prompt = """
     Map size: 8x8
@@ -372,6 +383,7 @@ def test_game_round_score_from_llm_response():
 
 
 def test_game_round_surrogate_keeps_parent_first_two_scores():
+    """Verify that game-round surrogate updates only the third fitness objective."""
     config = EAConfig(surrogate_version="game_round")
     evaluator = Evaluator(None, config=config)
     individual = Individual()
@@ -385,8 +397,10 @@ def test_game_round_surrogate_keeps_parent_first_two_scores():
     class DummyRecorder:
         records = []
         def find_matching_history(self, prompt, opponent):
+            """Return no matches so the test exercises surrogate evaluation."""
             return []
         def record_fitness(self, record):
+            """Ignore writes because this recorder is only a lightweight stub."""
             return None
 
     try:
@@ -402,6 +416,7 @@ def test_game_round_surrogate_keeps_parent_first_two_scores():
 
 
 def test_nsga2_pre_real_eval_sort_uses_game_round():
+    """Verify pre-real-eval ordering prioritizes the third fitness objective."""
     nsga = NSGA2.__new__(NSGA2)
     a = Individual()
     b = Individual()
@@ -414,6 +429,7 @@ def test_nsga2_pre_real_eval_sort_uses_game_round():
 
 
 def test_nsga2_pre_real_eval_sort_only_uses_offspring():
+    """Verify that pre-real-eval ordering is applied only to offspring candidates."""
     nsga = NSGA2.__new__(NSGA2)
     parent = Individual()
     child_low = Individual()

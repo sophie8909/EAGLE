@@ -18,11 +18,14 @@ from .profiler import build_base_record, summarize_total_eval_time, timer, write
 
 
 class GA(EA):
+    """Single-objective evolutionary loop using lexicographic fitness ordering."""
+
     def __init__(self, config: EAConfig, component_pool: ComponentPool, opponent_list: List[str]):
+        """Initialize the GA with the shared EA base state."""
         super().__init__(config, component_pool, opponent_list)
 
     def environment_selection(self, current_population: List[Individual], new_population: List[Individual]) -> List[Individual]:
-        # Select the next generation population from the current and new populations (e.g., elitism)
+        """Choose survivors for the next generation using the configured policy."""
         if self.config.environment_selection_method == "elitism":
             selected_population = EnvironmentSelection.elitism_selection(current_population, new_population, self.config.population_size)
             return selected_population
@@ -31,6 +34,7 @@ class GA(EA):
         )
 
     def run(self):
+        """Run the standard GA loop from initialization through early stopping."""
         log_dir = self.create_log_folder()
 
         last_5_fitness = []

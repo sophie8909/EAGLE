@@ -9,6 +9,7 @@ import json
 from .fitness_utils import normalize_fitness
 
 class LLM:
+    """Thin wrappers around the local Ollama endpoints used by the EA pipeline."""
 
     @staticmethod
     def ollama_generate_json_response(
@@ -16,6 +17,7 @@ class LLM:
         model: str = "llama3.1:8b",
         temperature: float = 0.2,
     ) -> dict | None:
+        """Ask Ollama for a JSON move response and parse it permissively."""
         # The surrogate game-round path needs the raw move JSON, so this helper
         # keeps parsing intentionally permissive and returns None on any failure.
         try:
@@ -61,6 +63,7 @@ class LLM:
             model: str = "llama3.1:8b",
             temperature: float = 0.7,
         ) -> str:
+        """Rewrite one prompt component using an instruction-guided LLM call."""
         prompt = f"""
         You are rewriting one component of a prompt for an RTS game-playing agent.
 
@@ -99,6 +102,7 @@ class LLM:
             model: str = "llama3.1:8b",
             temperature: float = 0.7,
         ) -> str:
+        """Merge two component texts into one combined component suggestion."""
         prompt = f"""
         You are combining two components of a prompt for an RTS game-playing agent.
 
@@ -140,6 +144,7 @@ class LLM:
         example=None,
         model: str = "llama3.1:8b",
     ) -> list[float]:
+        """Score a prompt with the prompt-only surrogate evaluator."""
         if example is None:
             example = []
 
@@ -192,13 +197,11 @@ class LLM:
         fallback_score = [0.0, 1.0, 0.0, 0.0]
 
         def clamp01(x: float) -> float:
+            """Clamp one parsed surrogate score into the valid [0, 1] range."""
             return max(0.0, min(1.0, float(x)))
 
         def normalize_fitness(values) -> list[float]:
-            """
-            Normalize the surrogate output to:
-            [estimated_power, uncertainty, simplicity, clarity]
-            """
+            """Normalize parsed surrogate outputs to four bounded dimensions."""
             if not isinstance(values, (list, tuple)):
                 return fallback_score
 
@@ -265,6 +268,7 @@ class LLM:
         example=None,
         model: str = "llama3.1:8b",
     ) -> list[float]:
+        """Score a prompt against one sampled Dynamic Prompt using the LLM surrogate."""
         if example is None:
             example = []
 
@@ -319,9 +323,11 @@ class LLM:
         fallback_score = [0.0, 1.0, 0.0, 0.0]
 
         def clamp01(x: float) -> float:
+            """Clamp one parsed surrogate score into the valid [0, 1] range."""
             return max(0.0, min(1.0, float(x)))
 
         def normalize_scores(values) -> list[float]:
+            """Normalize parsed game-round surrogate outputs into four bounded values."""
             if not isinstance(values, (list, tuple)):
                 return fallback_score
 
