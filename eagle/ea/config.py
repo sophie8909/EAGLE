@@ -30,4 +30,8 @@ class EAConfig:
             "resource": 1.0,
         }
     )
+    surrogate_version: str = "llm"  # Options: "llm", "game_round"
+    surrogate_recent_log_window: int = 10
+    surrogate_game_round_samples: int = 10
+    surrogate_log_dir: str = "logs"
     

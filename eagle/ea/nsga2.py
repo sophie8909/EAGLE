@@ -43,6 +43,17 @@ class NSGA2(EA):
                 setattr(ind, "pareto_rank", rank)
         return fronts
 
+    def _sort_by_game_round_score(self, population: List[Individual]) -> List[Individual]:
+        return sorted(
+            population,
+            key=lambda ind: (
+                ind.fitness[2] if ind.fitness and len(ind.fitness) > 2 else float("-inf"),
+                ind.fitness[0] if ind.fitness and len(ind.fitness) > 0 else float("-inf"),
+                ind.fitness[1] if ind.fitness and len(ind.fitness) > 1 else float("-inf"),
+            ),
+            reverse=True,
+        )
+
     def _better_parent(self, ind1: Individual, ind2: Individual) -> Individual:
         rank1 = getattr(ind1, "pareto_rank", float("inf"))
         rank2 = getattr(ind2, "pareto_rank", float("inf"))
@@ -331,22 +342,20 @@ class NSGA2(EA):
             # Trim offspring in case we produced one extra pair.
             offspring = offspring[: self.config.population_size]
 
-            # Combine parents and offspring, then compute fronts for logging.
-            combined_population = self.population + offspring
-            pareto_fronts = self._assign_rank_and_crowding(combined_population)
+            # Rank offspring only before real evaluation.
+            candidate_order = self._sort_by_game_round_score(offspring)
 
-            # real evaluation for the offspring after assign Pareto fronts. only real evaluate the offspring in the first Pareto front to save time.
+            # Real evaluation for the highest ranked offspring only, to save time.
             with timer("offspring_evaluation_time", generation_stats):
                 cnt = 0
-                for front in pareto_fronts:
-                    for child in front:  # Only evaluate the best front to save time
-                        if child in offspring:
-                            self.real_evaluation(child, random.choice(self.opponent_list), generation=generation)
-                            cnt += 1
-                        if cnt >= self.config.population_size * self.config.real_eval_rate:  # We have evaluated enough offspring
-                            break
+                for child in candidate_order:
+                    self.real_evaluation(child, random.choice(self.opponent_list), generation=generation)
+                    cnt += 1
+                    if cnt >= self.config.population_size * self.config.real_eval_rate:
+                        break
 
-            # resort after real evaluation to update the fronts based on real fitness.
+            # Combine parents and offspring after real evaluation, then compute fronts.
+            combined_population = self.population + offspring
             pareto_fronts = self._assign_rank_and_crowding(combined_population)
 
             # Environmental selection for the next generation.

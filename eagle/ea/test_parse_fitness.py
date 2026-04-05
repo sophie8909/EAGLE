@@ -1,6 +1,19 @@
+import tempfile
+from pathlib import Path
+import shutil
+
 from .config import EAConfig
 from .evaluate import Evaluator
-from .log_parse import parse_log
+from .nsga2 import NSGA2
+from .individual import Individual
+from . import evaluate as evaluate_module
+from . import llm as llm_module
+from .log_parse import (
+    parse_log,
+    extract_dynamic_prompt_blocks,
+    sample_recent_dynamic_prompt,
+    parse_dynamic_prompt_state,
+)
 
 def test_parse_fitness():
     evaluator = Evaluator(None)  # We won't use the component pool for this test
@@ -110,6 +123,96 @@ def test_parse_feature_history():
     assert parsed["summary"]["feature_history"] == parsed["feature_history"]
 
 
+def test_extract_dynamic_prompt_blocks():
+    log_content = """
+    initLogsIfNeeded
+    [EAGLE.getAction] start
+    === Dynamic Prompt ===
+    Map size: 8x8
+    Turn: 12/5000
+    Max actions: 2
+
+    Feature locations:
+    (0, 0) Neutral Resource Node {resources=20}
+    ========================
+    """
+
+    blocks = extract_dynamic_prompt_blocks(log_content)
+
+    assert len(blocks) == 1
+    assert blocks[0]["time"] == 12
+    assert "Feature locations:" in blocks[0]["text"]
+
+
+def test_parse_dynamic_prompt_state():
+    dynamic_prompt = """
+    Map size: 8x8
+    Turn: 12/5000
+    Max actions: 2
+
+    Feature locations:
+    (0, 0) Neutral Resource Node {resources=20}
+    (2, 1) Ally Base Unit {resources=4, HP=10}
+    (1, 1) Ally Worker Unit {HP=1}
+    (5, 6) Enemy Base Unit {resources=3, HP=10}
+    (6, 6) Enemy Worker Unit {HP=1}
+    """
+
+    state = parse_dynamic_prompt_state(dynamic_prompt)
+
+    assert state["map_width"] == 8
+    assert state["map_height"] == 8
+    assert (1, 1) in state["ally_units"]
+    assert state["ally_units"][(1, 1)]["type"] == "worker"
+    assert (5, 6) in state["enemy_bases"]
+    assert (0, 0) in state["neutral_resources"]
+
+
+def test_sample_recent_dynamic_prompt():
+    tmp_path = Path(__file__).resolve().parent / "_tmp_recent_logs_test"
+    shutil.rmtree(tmp_path, ignore_errors=True)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    try:
+        old_log = tmp_path / "run_2026-04-01_00-00-00.log"
+        new_log = tmp_path / "run_2026-04-02_00-00-00.log"
+
+        old_log.write_text(
+            """
+            === Dynamic Prompt ===
+            Map size: 8x8
+            Turn: 3/5000
+            Max actions: 2
+
+            Feature locations:
+            (0, 0) Neutral Resource Node {resources=20}
+            ========================
+            """,
+            encoding="utf-8",
+        )
+        new_log.write_text(
+            """
+            === Dynamic Prompt ===
+            Map size: 8x8
+            Turn: 7/5000
+            Max actions: 2
+
+            Feature locations:
+            (1, 1) Ally Worker Unit {HP=1}
+            ========================
+            """,
+            encoding="utf-8",
+        )
+
+        sampled = sample_recent_dynamic_prompt(tmp_path, recent_count=2)
+
+        assert sampled is not None
+        assert sampled["log_path"] in {str(old_log), str(new_log)}
+        assert sampled["time"] in {3, 7}
+        assert "Feature locations:" in sampled["text"]
+    finally:
+        shutil.rmtree(tmp_path, ignore_errors=True)
+
+
 def test_resource_advantage_evaluation():
     evaluator = Evaluator(None)
     parsed_log = {
@@ -168,3 +271,159 @@ def test_resource_advantage_uses_config_weights():
     score = evaluator.resource_advantage_evaluation(parsed_log)
 
     assert score < 0.0
+
+
+def test_surrogate_version_dispatch_game_round():
+    config = EAConfig(surrogate_version="game_round")
+    evaluator = Evaluator(None, config=config)
+
+    original_sampler = evaluate_module.sample_recent_dynamic_prompts
+    original_json = llm_module.LLM.ollama_generate_json_response
+    original_llm = llm_module.LLM.ollama_evaluate_fitness
+
+    try:
+        evaluate_module.sample_recent_dynamic_prompts = lambda *args, **kwargs: [{
+            "time": 42,
+            "text": (
+                "Map size: 8x8\nTurn: 42/5000\nMax actions: 2\n\n"
+                "Feature locations:\n"
+                "(0, 0) Neutral Resource Node {resources=20}\n"
+                "(2, 1) Ally Base Unit {resources=4, HP=10}\n"
+                "(1, 1) Ally Worker Unit {HP=1}\n"
+                "(5, 6) Enemy Base Unit {resources=4, HP=10}\n"
+            ),
+            "log_path": "fake.log",
+        }]
+        llm_module.LLM.ollama_generate_json_response = staticmethod(
+            lambda prompt, model="llama3.1:8b", temperature=0.2: {
+                "thinking": "test",
+                "moves": [
+                    {
+                        "raw_move": "(1, 1): worker harvest((0, 0), (2, 1))",
+                        "unit_position": [1, 1],
+                        "unit_type": "worker",
+                        "action_type": "harvest",
+                    }
+                ],
+            }
+        )
+        llm_module.LLM.ollama_evaluate_fitness = staticmethod(
+            lambda prompt, example=None, model="llama3.1:8b": [0.1, 0.9, 0.1, 0.1]
+        )
+
+        scores = evaluator.surrogate_evaluation("test prompt")
+
+        assert scores[0] > 0.0
+    finally:
+        evaluate_module.sample_recent_dynamic_prompts = original_sampler
+        llm_module.LLM.ollama_generate_json_response = original_json
+        llm_module.LLM.ollama_evaluate_fitness = original_llm
+
+
+def test_surrogate_game_round_falls_back_to_llm_when_no_logs():
+    config = EAConfig(surrogate_version="game_round")
+    evaluator = Evaluator(None, config=config)
+
+    original_sampler = evaluate_module.sample_recent_dynamic_prompts
+    original_llm = llm_module.LLM.ollama_evaluate_fitness
+
+    try:
+        evaluate_module.sample_recent_dynamic_prompts = lambda *args, **kwargs: []
+        llm_module.LLM.ollama_evaluate_fitness = staticmethod(
+            lambda prompt, example=None, model="llama3.1:8b": [0.5, 0.2, 0.7, 0.7]
+        )
+
+        scores = evaluator.surrogate_evaluation("test prompt")
+
+        assert scores[0] > 0.0
+    finally:
+        evaluate_module.sample_recent_dynamic_prompts = original_sampler
+        llm_module.LLM.ollama_evaluate_fitness = original_llm
+
+
+def test_game_round_score_from_llm_response():
+    evaluator = Evaluator(None)
+    dynamic_prompt = """
+    Map size: 8x8
+    Turn: 12/5000
+    Max actions: 2
+
+    Feature locations:
+    (0, 0) Neutral Resource Node {resources=20}
+    (2, 1) Ally Base Unit {resources=4, HP=10}
+    (1, 1) Ally Worker Unit {HP=1}
+    (5, 6) Enemy Base Unit {resources=4, HP=10}
+    """
+    llm_response = {
+        "thinking": "test",
+        "moves": [
+            {
+                "raw_move": "(1, 1): worker harvest((0, 0), (2, 1))",
+                "unit_position": [1, 1],
+                "unit_type": "worker",
+                "action_type": "harvest",
+            }
+        ],
+    }
+
+    score = evaluator._score_game_round_response(llm_response, dynamic_prompt)
+
+    assert score > 0.0
+
+
+def test_game_round_surrogate_keeps_parent_first_two_scores():
+    config = EAConfig(surrogate_version="game_round")
+    evaluator = Evaluator(None, config=config)
+    individual = Individual()
+    individual.fitness = [0.7, 0.3, 0.1]
+
+    original_method = evaluator.surrogate_evaluation
+    evaluator.surrogate_evaluation = lambda prompt, fitness_recorder=None: [0.8, 0.0, 0.0, 0.0]
+    evaluator.construct_prompt = lambda individual: "test prompt"
+    evaluator.save_prompt = lambda prompt: None
+
+    class DummyRecorder:
+        records = []
+        def find_history(self, prompt, opponent):
+            return []
+        def record_fitness(self, record):
+            return None
+
+    try:
+        evaluator.evaluate(
+            individual,
+            real_eva=False,
+            opponent=None,
+            fitness_recorder=DummyRecorder(),
+        )
+        assert individual.fitness == [0.7, 0.3, 0.8]
+    finally:
+        evaluator.surrogate_evaluation = original_method
+
+
+def test_nsga2_pre_real_eval_sort_uses_game_round():
+    nsga = NSGA2.__new__(NSGA2)
+    a = Individual()
+    b = Individual()
+    a.fitness = [0.9, 0.9, 0.2]
+    b.fitness = [0.1, 0.1, 0.8]
+
+    ordered = nsga._sort_by_game_round_score([a, b])
+
+    assert ordered[0] is b
+
+
+def test_nsga2_pre_real_eval_sort_only_uses_offspring():
+    nsga = NSGA2.__new__(NSGA2)
+    parent = Individual()
+    child_low = Individual()
+    child_high = Individual()
+
+    parent.fitness = [1.0, 1.0, 1.0]
+    child_low.fitness = [0.0, 0.0, 0.2]
+    child_high.fitness = [0.0, 0.0, 0.9]
+
+    ordered = nsga._sort_by_game_round_score([child_low, child_high])
+
+    assert parent not in ordered
+    assert ordered == [child_high, child_low]

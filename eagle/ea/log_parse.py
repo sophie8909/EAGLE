@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 import re
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -18,6 +19,7 @@ RAW_RESPONSE_HEADER_RE = re.compile(r"^\s*=== Raw LLM Response ===\s*$", re.MULT
 RAW_RESPONSE_FOOTER_RE = re.compile(r"^\s*=+\s*$", re.MULTILINE)
 DYNAMIC_PROMPT_HEADER_RE = re.compile(r"^\s*=== Dynamic Prompt ===\s*$", re.MULTILINE)
 DYNAMIC_PROMPT_FOOTER_RE = re.compile(r"^\s*=+\s*$", re.MULTILINE)
+MAP_SIZE_RE = re.compile(r"^\s*Map size:\s*(?P<width>\d+)x(?P<height>\d+)\s*$", re.MULTILINE)
 
 RUNNING_GETACTION_RE = re.compile(r"^\s*Running getAction for Player:\s*(?P<player>\d+)\s*$", re.MULTILINE)
 CURRENT_TIME_RE = re.compile(
@@ -335,6 +337,173 @@ def extract_feature_history(log_text: str) -> list[dict[str, Any]]:
         by_time[current_time] = row
 
     return [by_time[current_time] for current_time in ordered_times]
+
+
+def extract_dynamic_prompt_blocks(log_text: str) -> list[dict[str, Any]]:
+    """
+    Extract full Dynamic Prompt blocks from a log.
+
+    Each returned item preserves the original prompt text and, when available,
+    the parsed turn number so downstream surrogate evaluators can reuse a real
+    game snapshot without replaying the game.
+    """
+    blocks: list[dict[str, Any]] = []
+    header_matches = list(DYNAMIC_PROMPT_HEADER_RE.finditer(log_text))
+
+    for header in header_matches:
+        after_header = log_text[header.end():]
+        footer = DYNAMIC_PROMPT_FOOTER_RE.search(after_header)
+        block = after_header[:footer.start()].strip() if footer else after_header.strip()
+        if not block:
+            continue
+
+        turn_match = TURN_PROMPT_RE.search(block)
+        blocks.append(
+            {
+                "time": int(turn_match.group("time")) if turn_match else None,
+                "text": block,
+            }
+        )
+
+    return blocks
+
+
+def collect_recent_dynamic_prompts(
+    logs_dir: str | Path,
+    recent_count: int = 10,
+) -> list[dict[str, Any]]:
+    """
+    Collect every Dynamic Prompt block found in the most recent log window.
+    """
+    log_dir_path = Path(logs_dir)
+    if not log_dir_path.exists():
+        return []
+
+    candidate_logs = sorted(
+        log_dir_path.glob("run_*.log"),
+        key=lambda path: (path.stat().st_mtime, path.name),
+        reverse=True,
+    )[: max(0, recent_count)]
+
+    collected: list[dict[str, Any]] = []
+    for log_path in candidate_logs:
+        log_text = log_path.read_text(encoding="utf-8", errors="replace")
+        for block in extract_dynamic_prompt_blocks(log_text):
+            item = dict(block)
+            item["log_path"] = str(log_path)
+            collected.append(item)
+    return collected
+
+
+def sample_recent_dynamic_prompt(
+    logs_dir: str | Path,
+    recent_count: int = 10,
+    rng: random.Random | None = None,
+) -> dict[str, Any] | None:
+    """
+    Randomly sample one Dynamic Prompt block from the most recent log files.
+
+    Selection policy:
+    1. sort available `run_*.log` files by modified time descending
+    2. keep the most recent `recent_count` files
+    3. randomly choose one file from that window
+    4. randomly choose one Dynamic Prompt block from that file
+
+    Returns None when the directory is missing, no candidate logs exist, or the
+    selected window contains no Dynamic Prompt blocks.
+    """
+    rng = rng or random
+    dynamic_prompts = collect_recent_dynamic_prompts(logs_dir, recent_count=recent_count)
+    if not dynamic_prompts:
+        return None
+    return dict(rng.choice(dynamic_prompts))
+
+
+def sample_recent_dynamic_prompts(
+    logs_dir: str | Path,
+    recent_count: int = 10,
+    sample_count: int = 10,
+    rng: random.Random | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Sample up to `sample_count` Dynamic Prompt blocks from the recent log window.
+    """
+    rng = rng or random
+    dynamic_prompts = collect_recent_dynamic_prompts(logs_dir, recent_count=recent_count)
+    if not dynamic_prompts:
+        return []
+    if len(dynamic_prompts) <= sample_count:
+        return [dict(item) for item in dynamic_prompts]
+    return [dict(item) for item in rng.sample(dynamic_prompts, sample_count)]
+
+
+def parse_dynamic_prompt_state(dynamic_prompt_text: str) -> dict[str, Any]:
+    """
+    Parse one sampled Dynamic Prompt block into a lightweight game state.
+    """
+    map_match = MAP_SIZE_RE.search(dynamic_prompt_text)
+    width = int(map_match.group("width")) if map_match else None
+    height = int(map_match.group("height")) if map_match else None
+
+    state = {
+        "map_width": width,
+        "map_height": height,
+        "ally_units": {},
+        "enemy_units": {},
+        "neutral_resources": {},
+        "ally_bases": {},
+        "enemy_bases": {},
+    }
+
+    for raw_line in dynamic_prompt_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        feature_match = FEATURE_LINE_RE.match(line)
+        if not feature_match:
+            continue
+
+        x = int(feature_match.group("x"))
+        y = int(feature_match.group("y"))
+        team = feature_match.group("team")
+        unit_label = feature_match.group("unit")
+        stats = feature_match.group("stats") or ""
+        position = (x, y)
+
+        if team == "Neutral" and unit_label == "Resource Node":
+            resource_match = RESOURCE_VALUE_RE.search(stats)
+            state["neutral_resources"][position] = {
+                "type": "resource",
+                "resources": int(resource_match.group("value")) if resource_match else 0,
+            }
+            continue
+
+        normalized_unit = _normalize_feature_unit(unit_label)
+        if normalized_unit is None and unit_label == "Barracks Unit":
+            normalized_unit = "barracks"
+        if normalized_unit is None:
+            continue
+
+        unit_info = {
+            "type": normalized_unit,
+            "team": team.lower(),
+            "stats": stats,
+        }
+        if normalized_unit == "base":
+            resource_match = RESOURCE_VALUE_RE.search(stats)
+            unit_info["resources"] = int(resource_match.group("value")) if resource_match else 0
+
+        if team == "Ally":
+            state["ally_units"][position] = unit_info
+            if normalized_unit == "base":
+                state["ally_bases"][position] = unit_info
+        elif team == "Enemy":
+            state["enemy_units"][position] = unit_info
+            if normalized_unit == "base":
+                state["enemy_bases"][position] = unit_info
+
+    return state
 
 
 def parse_gameover(pre_text: str) -> bool | None:
