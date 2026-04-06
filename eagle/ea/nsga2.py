@@ -301,6 +301,11 @@ class NSGA2(EA):
         with timer("initial_population_evaluation_time", {}):
             for index, individual in enumerate(self.population):
                 self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
+                # Checkpoint meaning:
+                # - phase="initial_population" means generation -1 is still
+                #   being evaluated
+                # - evaluated_initial_count tells resume() how many individuals
+                #   were already fully real-evaluated
                 self.save_checkpoint(
                     self.build_checkpoint_state(
                         phase="initial_population",
@@ -313,11 +318,13 @@ class NSGA2(EA):
         """Create and surrogate-evaluate one full offspring population."""
         offspring: List[Individual] = []
 
+        # Generational phase A: build the entire offspring population first.
         while len(offspring) < self.config.population_size:
             with timer("parent_selection_time", generation_stats):
                 parent1, parent2 = self.select_parents()
 
             child_stats: dict[str, float] = {}
+            # Step A1: create one child from the current parent population.
             with timer("offspring_generation_time", generation_stats):
                 with timer("crossover_time", child_stats):
                     child = self.crossover(parent1, parent2)
@@ -331,9 +338,15 @@ class NSGA2(EA):
                 "ea_llm_call_time": getattr(child, "ea_llm_call_time", 0.0),
             }
 
+            # Step A2: every child gets surrogate evaluation before any real eval.
             with timer("offspring_evaluation_time", generation_stats):
                 self.surrogate_evaluation(child, generation=generation)
             offspring.append(child)
+
+            # Checkpoint meaning:
+            # - phase="generation_surrogate" means this generation is still in
+            #   the batch-offspring construction stage
+            # - offspring stores the children already surrogate-evaluated
             self.save_checkpoint(
                 self.build_checkpoint_state(
                     phase="generation_surrogate",
@@ -352,6 +365,7 @@ class NSGA2(EA):
         offspring: List[Individual],
     ) -> List[Individual]:
         """Continue offspring generation from a partially completed checkpoint."""
+        # Resume point for phase="generation_surrogate".
         while len(offspring) < self.config.population_size:
             with timer("parent_selection_time", generation_stats):
                 parent1, parent2 = self.select_parents()
@@ -373,6 +387,8 @@ class NSGA2(EA):
             with timer("offspring_evaluation_time", generation_stats):
                 self.surrogate_evaluation(child, generation=generation)
             offspring.append(child)
+
+            # Keep the same checkpoint contract as _generate_offspring().
             self.save_checkpoint(
                 self.build_checkpoint_state(
                     phase="generation_surrogate",
@@ -398,12 +414,20 @@ class NSGA2(EA):
         with timer("offspring_evaluation_time", generation_stats):
             real_eval_budget = self.config.real_eval_count(self.config.population_size)
 
+            # Generational phase B: after all offspring exist, real-evaluate only
+            # the top-ranked children under the configured budget.
             for index, child in enumerate(candidate_order):
                 if index < start_index:
                     continue
                 if index >= real_eval_budget:
                     break
                 self.real_evaluation(child, random.choice(self.opponent_list), generation=generation)
+
+                # Checkpoint meaning:
+                # - phase="generation_real_eval" means offspring generation is
+                #   done, but budgeted real evaluation is still in progress
+                # - candidate_order_ids freezes the ranking order for resume()
+                # - next_real_eval_index tells resume() which ranked child is next
                 self.save_checkpoint(
                     self.build_checkpoint_state(
                         phase="generation_real_eval",
@@ -507,9 +531,12 @@ class NSGA2(EA):
         log_dir = self.create_log_folder()
         checkpoint = self.load_checkpoint()
 
+        # Phase 0: restore runtime state if a checkpoint exists.
         if checkpoint:
             self.population = self.deserialize_population(checkpoint.get("population"))
             self.current_generation = checkpoint.get("generation", 0)
+
+            # Phase 0a: recover an interrupted initial-population evaluation.
             if checkpoint.get("phase") == "initial_population":
                 start_initial = checkpoint.get("meta", {}).get("evaluated_initial_count", 0)
                 with timer("initial_population_evaluation_time", {}):
@@ -530,6 +557,7 @@ class NSGA2(EA):
                 )
                 self.save_checkpoint(checkpoint)
         else:
+            # Phase 0b: fresh run; fully evaluate generation -1 before evolution starts.
             self._evaluate_initial_population()
             checkpoint = self.build_checkpoint_state(
                 phase="generation_complete",
@@ -543,6 +571,7 @@ class NSGA2(EA):
         start_generation = checkpoint.get("generation", 0) + (1 if checkpoint.get("phase") == "generation_complete" else 0)
 
         for generation in range(start_generation, self.config.num_generations):
+            # Phase 1: build or resume the full surrogate-evaluated offspring batch.
             generation_stats: dict[str, float] = {}
             if checkpoint.get("generation") == generation and checkpoint.get("phase") in {"generation_surrogate", "generation_real_eval"}:
                 offspring = self.deserialize_population(checkpoint.get("offspring"))
@@ -550,6 +579,7 @@ class NSGA2(EA):
             else:
                 offspring = self._generate_offspring(generation, generation_stats)
 
+            # Phase 2: rank offspring for budgeted real evaluation.
             candidate_order = self._rank_offspring_for_real_evaluation(offspring)
             checkpoint_candidate_ids = checkpoint.get("meta", {}).get("candidate_order_ids", []) if checkpoint.get("generation") == generation else []
             if checkpoint_candidate_ids:
@@ -558,18 +588,22 @@ class NSGA2(EA):
                 remaining_children = [child for child in offspring if child.id not in checkpoint_candidate_ids]
                 candidate_order.extend(remaining_children)
 
+            # Phase 3: resume or execute the budgeted real-evaluation pass.
             start_real_eval_index = checkpoint.get("meta", {}).get("next_real_eval_index", 0) if checkpoint.get("generation") == generation else 0
             self._real_evaluate_ranked_offspring(candidate_order, generation, generation_stats, start_index=start_real_eval_index)
 
-            # Combine parents and offspring after real evaluation, then compute fronts.
+            # Phase 4: combine parent population and completed offspring batch.
+            # Pareto fronts here are computed on the union, before survivor truncation.
             combined_population = self.population + offspring
             pareto_fronts = self._assign_rank_and_crowding(combined_population)
 
-            # Environmental selection for the next generation.
+            # Phase 5: one environmental-selection step creates the next generation.
             with timer("survivor_selection_time", generation_stats):
                 self.population = self.select_next_generation(self.population, offspring)
 
             self._log_generation(generation, generation_stats, offspring, pareto_fronts, log_dir)
+
+            # Phase 6: mark the full generation as completed.
             self.save_checkpoint(
                 self.build_checkpoint_state(
                     phase="generation_complete",
@@ -578,6 +612,7 @@ class NSGA2(EA):
                 )
             )
 
+            # Phase 7: simple convergence check on the current first Pareto front.
             if self._has_converged(pareto_fronts, last_5_front_signatures):
                 break
 
