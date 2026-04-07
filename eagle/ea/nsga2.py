@@ -246,10 +246,26 @@ class NSGA2(EA):
         Returns:
             The next generation with size `self.config.population_size`.
         """
+        next_generation, _ = self._select_next_generation_with_fronts(population, offspring)
+        return next_generation
+
+    def _select_next_generation_with_fronts(
+        self,
+        population: List[Individual],
+        offspring: List[Individual],
+    ) -> tuple[List[Individual], List[List[Individual]]]:
+        """
+        Select the next generation and also return the resulting selected fronts.
+
+        The returned fronts are already aligned with the survivor population, so
+        callers that need fronts for logging or convergence checks can reuse them
+        instead of sorting the survivor population again.
+        """
         combined_population = population + offspring
         fronts = self.fast_non_dominated_sort(combined_population)
 
         next_generation: List[Individual] = []
+        selected_fronts: List[List[Individual]] = []
         target_size = self.config.population_size
 
         for front in fronts:
@@ -258,6 +274,7 @@ class NSGA2(EA):
             # If the whole front fits, add all of it.
             if len(next_generation) + len(front) <= target_size:
                 next_generation.extend(front)
+                selected_fronts.append(list(front))
                 continue
 
             # Otherwise, sort the front by crowding distance descending
@@ -268,10 +285,13 @@ class NSGA2(EA):
                 key=lambda ind: getattr(ind, "crowding_distance", 0.0),
                 reverse=True,
             )
-            next_generation.extend(sorted_front[:remaining_slots])
+            truncated_front = sorted_front[:remaining_slots]
+            next_generation.extend(truncated_front)
+            if truncated_front:
+                selected_fronts.append(truncated_front)
             break
 
-        return next_generation
+        return next_generation, selected_fronts
 
     def _front_signature(self, front: List[Individual]) -> List[Tuple]:
         """

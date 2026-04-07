@@ -30,14 +30,6 @@ class SteadyStateNSGA2(NSGA2):
     ):
         super().__init__(config, component_pool, opponent_list)
 
-    def _select_steady_state_survivors(
-        self,
-        population: List[Individual],
-        child: Individual,
-    ) -> List[Individual]:
-        """Insert one child and immediately trim back to population size."""
-        return self.select_next_generation(population, [child])
-
     def _generate_single_offspring(
         self,
         generation: int,
@@ -70,8 +62,7 @@ class SteadyStateNSGA2(NSGA2):
         """
         Main steady-state NSGA-II optimization loop.
 
-        One outer generation is treated as a block of steady-state updates.
-        Inside that block, the algorithm repeatedly:
+        In steady-state mode, one generation means exactly one update:
         1. selects parents,
         2. generates one child,
         3. runs real evaluation on that child,
@@ -121,21 +112,18 @@ class SteadyStateNSGA2(NSGA2):
         )
 
         for generation in range(start_generation, self.config.num_generations):
-            # Phase 1: one outer "generation" in steady-state mode is a block of
-            # repeated single-child birth/evaluation/replacement updates.
+            # Phase 1: one steady-state generation = one single-child update.
             generation_stats: dict[str, float] = {}
-            offspring: List[Individual] = []
-            start_birth_index = 0
+            same_generation_checkpoint = checkpoint.get("generation") == generation
+            checkpoint_phase = checkpoint.get("phase")
 
-            # Phase 1a: resume from the middle of the steady-state birth loop.
-            if checkpoint.get("generation") == generation and checkpoint.get("phase") == "generation_step":
+            if same_generation_checkpoint and checkpoint_phase == "generation_step":
+                # Resume point: the child for this generation was already
+                # generated, evaluated, and inserted into the population.
                 offspring = self.deserialize_population(checkpoint.get("offspring"))
-                start_birth_index = checkpoint.get("meta", {}).get(
-                    "completed_births",
-                    len(offspring),
-                )
+            else:
+                offspring = []
 
-            for birth_index in range(start_birth_index, self.config.population_size):
                 # Step 1: generate exactly one offspring from the current population.
                 child = self._generate_single_offspring(generation, generation_stats)
 
@@ -150,29 +138,34 @@ class SteadyStateNSGA2(NSGA2):
                 offspring.append(child)
 
                 # Step 3: immediate steady-state replacement.
-                # Unlike generational NSGA-II, this happens after every child.
+                combined_population = self.population + offspring
+
+                # Run NSGA-II environmental selection over parents + one child,
+                # then keep only the survivor population.
                 with timer("survivor_selection_time", generation_stats):
-                    self.population = self._select_steady_state_survivors(self.population, child)
+                    self.population = self.select_next_generation(self.population, offspring)
 
                 # Checkpoint meaning:
-                # - phase="generation_step" means we are inside the current
-                #   steady-state birth loop
-                # - offspring stores all children already created in this block
-                # - completed_births tells us which birth index to resume from
+                # - phase="generation_step" means the child for this generation
+                #   was already generated/evaluated/inserted
+                # - population is already the post-replacement survivor set
+                # - offspring contains exactly that one generated child
                 self.save_checkpoint(
                     self.build_checkpoint_state(
                         phase="generation_step",
                         generation=generation,
+                        population=self.population,
                         offspring=offspring,
-                        meta={
-                            "completed_births": birth_index + 1,
-                        },
+                        meta={"completed_births": 1},
                     )
                 )
 
-            # Phase 2: after all steady-state updates in this outer generation,
-            # rebuild Pareto fronts only for logging / convergence checking.
+            # Phase 2: build survivor fronts from the current population for
+            # logging and convergence checks. On resume from generation_step,
+            # this finishes the remainder of the generation without replaying
+            # the same child update.
             pareto_fronts = self._assign_rank_and_crowding(self.population)
+
             self._log_generation(generation, generation_stats, offspring, pareto_fronts, log_dir)
 
             # Phase 3: mark this outer generation as fully completed.
