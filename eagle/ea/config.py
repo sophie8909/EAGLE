@@ -33,6 +33,8 @@ class EAConfig:
     tournament_size: int = 3
     crossover_method: str = "uniform"  # Options: "uniform", "one_point", "two_point"
     environment_selection_method: str = "elitism"
+    steady_state_surrogate_offspring_count: int = 4
+    steady_state_surrogate_selection_metric: str = "game_round_score"
 
     # Evaluation runtime settings
     run_time_per_game_sec: int = 500
@@ -61,6 +63,8 @@ class EAConfig:
             "tournament_size": self.tournament_size,
             "crossover_method": self.crossover_method,
             "environment_selection_method": self.environment_selection_method,
+            "steady_state_surrogate_offspring_count": self.steady_state_surrogate_offspring_count,
+            "steady_state_surrogate_selection_metric": self.steady_state_surrogate_selection_metric,
         }
 
     def fitness_settings(self) -> dict[str, object]:

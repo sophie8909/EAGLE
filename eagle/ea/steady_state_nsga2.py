@@ -32,7 +32,6 @@ class SteadyStateNSGA2(NSGA2):
 
     def _generate_single_offspring(
         self,
-        generation: int,
         generation_stats: dict[str, float],
     ) -> Individual:
         """Generate exactly one offspring."""
@@ -58,15 +57,68 @@ class SteadyStateNSGA2(NSGA2):
 
         return child
 
+    def _generate_candidate_offspring_batch(
+        self,
+        generation: int,
+        generation_stats: dict[str, float],
+        candidates: List[Individual] | None = None,
+    ) -> List[Individual]:
+        """
+        Generate and surrogate-evaluate the candidate child batch for one
+        steady-state generation.
+
+        Checkpoint contract:
+        - phase="generation_surrogate" means candidate generation is in progress
+        - offspring stores all surrogate-evaluated candidate children so far
+        """
+        candidates = list(candidates or [])
+        target_count = max(1, self.config.steady_state_surrogate_offspring_count)
+
+        while len(candidates) < target_count:
+            child = self._generate_single_offspring(generation_stats)
+            with timer("offspring_evaluation_time", generation_stats):
+                self.surrogate_evaluation(child, generation=generation)
+            candidates.append(child)
+            self.save_checkpoint(
+                self.build_checkpoint_state(
+                    phase="generation_surrogate",
+                    generation=generation,
+                    offspring=candidates,
+                    meta={"evaluated_candidate_count": len(candidates)},
+                )
+            )
+
+        return candidates
+
+    def _select_best_candidate_by_game_round(self, candidates: List[Individual]) -> Individual:
+        """Pick the candidate with the highest surrogate game-round score."""
+        if not candidates:
+            raise ValueError("steady-state candidate batch cannot be empty")
+
+        selection_metric = str(
+            getattr(self.config, "steady_state_surrogate_selection_metric", "game_round_score")
+        ).strip().lower()
+        if selection_metric != "game_round_score":
+            raise ValueError(
+                "steady_state_surrogate_selection_metric currently only supports "
+                "'game_round_score'"
+            )
+
+        return max(
+            candidates,
+            key=lambda ind: ind.fitness[2] if ind.fitness and len(ind.fitness) > 2 else float("-inf"),
+        )
+
     def run(self) -> list[Individual]:
         """
         Main steady-state NSGA-II optimization loop.
 
         In steady-state mode, one generation means exactly one update:
-        1. selects parents,
-        2. generates one child,
-        3. runs real evaluation on that child,
-        4. immediately inserts it into the population.
+        1. generates multiple candidate children,
+        2. surrogate-evaluates them,
+        3. picks the highest game-round-score candidate,
+        4. runs real evaluation on that chosen child,
+        5. immediately inserts it into the population.
         """
         log_dir = self.create_log_folder()
         checkpoint = self.load_checkpoint()
@@ -122,20 +174,28 @@ class SteadyStateNSGA2(NSGA2):
                 # generated, evaluated, and inserted into the population.
                 offspring = self.deserialize_population(checkpoint.get("offspring"))
             else:
-                offspring = []
+                if same_generation_checkpoint and checkpoint_phase == "generation_surrogate":
+                    candidate_offspring = self.deserialize_population(checkpoint.get("offspring"))
+                else:
+                    candidate_offspring = []
 
-                # Step 1: generate exactly one offspring from the current population.
-                child = self._generate_single_offspring(generation, generation_stats)
+                # Step 1: generate multiple candidates and use surrogate evaluation
+                # to rank them by game_round_score.
+                candidate_offspring = self._generate_candidate_offspring_batch(
+                    generation,
+                    generation_stats,
+                    candidates=candidate_offspring,
+                )
+                child = self._select_best_candidate_by_game_round(candidate_offspring)
+                offspring = [child]
 
-                # Step 2: steady-state mode uses full real evaluation for every child.
+                # Step 2: only the best surrogate candidate receives real evaluation.
                 with timer("offspring_evaluation_time", generation_stats):
                     self.real_evaluation(
                         child,
                         random.choice(self.opponent_list),
                         generation=generation,
                     )
-
-                offspring.append(child)
 
                 # Step 3: immediate steady-state replacement.
                 combined_population = self.population + offspring
@@ -149,14 +209,18 @@ class SteadyStateNSGA2(NSGA2):
                 # - phase="generation_step" means the child for this generation
                 #   was already generated/evaluated/inserted
                 # - population is already the post-replacement survivor set
-                # - offspring contains exactly that one generated child
+                # - offspring contains exactly the chosen child that survived
+                #   the surrogate-candidate selection stage
                 self.save_checkpoint(
                     self.build_checkpoint_state(
                         phase="generation_step",
                         generation=generation,
                         population=self.population,
                         offspring=offspring,
-                        meta={"completed_births": 1},
+                        meta={
+                            "completed_births": 1,
+                            "candidate_count": len(candidate_offspring),
+                        },
                     )
                 )
 

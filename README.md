@@ -71,6 +71,8 @@ Important settings:
 - `algorithm`
 - `population_size`
 - `num_generations`
+- `steady_state_surrogate_offspring_count`
+- `steady_state_surrogate_selection_metric`
 - `real_eval_rate`
 - `surrogate_version`
 - `resource_advantage_alpha`
@@ -128,7 +130,7 @@ Implemented in:
 ### NSGA-II vs Steady-State NSGA-II
 
 - `NSGA2` uses generational replacement: it builds a full offspring population, then performs one environmental selection step over parents plus offspring.
-- `SteadyStateNSGA2` keeps the same NSGA-II ranking logic, tournament policy, and crowding-based survivor selection, but each generation performs exactly one steady-state update: select parents, generate one child, run full real evaluation on it, and insert it back into the population immediately.
+- `SteadyStateNSGA2` keeps the same NSGA-II ranking logic, tournament policy, and crowding-based survivor selection, but each generation first generates multiple candidate children, surrogate-ranks them by `game_round_score`, then sends only the best candidate to full real evaluation and immediate replacement.
 - Both variants still use the same three-objective fitness vector and the same real/surrogate evaluation pipeline.
 
 ### Operators
