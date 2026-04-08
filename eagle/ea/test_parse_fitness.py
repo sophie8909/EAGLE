@@ -4,6 +4,7 @@ import shutil
 
 from .config import EAConfig
 from .evaluate import Evaluator
+from .fitness_recorder import FitnessRecorder
 from .nsga2 import NSGA2
 from .steady_state_nsga2 import SteadyStateNSGA2
 from .individual import Individual
@@ -414,6 +415,99 @@ def test_game_round_surrogate_keeps_parent_first_two_scores():
         assert individual.fitness == [0.7, 0.3, 0.8]
     finally:
         evaluator.surrogate_evaluation = original_method
+
+
+def test_real_evaluation_does_not_use_history_shortcut():
+    """Verify real-evaluation requests ignore prompt-history cache hits."""
+    config = EAConfig()
+    evaluator = Evaluator(None, config=config)
+    individual = Individual()
+    individual.fitness = [0.2, 0.2, 0.2]
+
+    evaluator.construct_prompt = lambda individual: "test prompt"
+    evaluator.save_prompt = lambda prompt: None
+    evaluator.simulate_games = lambda opponent, stats: ([1.0, 0.1, 0.2], {
+        "parsed_log": {},
+        "winner": "0",
+        "timeout": False,
+        "log_path": "fake.log",
+        "llm_calls": 1,
+    })
+
+    class DummyRecorder:
+        records = []
+
+        def find_matching_history(self, prompt, opponent):
+            return [{"fitness_score": [0.8, 0.8, 0.8]}]
+
+        def record_fitness(self, record):
+            self.records.append(record)
+
+    recorder = DummyRecorder()
+    evaluator.evaluate(
+        individual,
+        use_real_evaluation=True,
+        opponent="ai.RandomAI",
+        fitness_recorder=recorder,
+    )
+
+    assert individual.fitness == [1.0, 0.1, 0.2]
+    assert recorder.records[0]["evaluation_mode"] == "real"
+
+
+def test_fitness_history_key_uses_stable_digest_and_runtime_context(tmp_path):
+    """Verify cache keys are stable and include runtime settings that affect performance."""
+    recorder = FitnessRecorder(tmp_path, EAConfig(run_time_per_game_sec=500))
+    original_repo_root = recorder.repo_root
+    try:
+        recorder.repo_root = tmp_path
+        resources_dir = tmp_path / "resources"
+        resources_dir.mkdir()
+        (resources_dir / "config.properties").write_text(
+            "map_location=maps/test.xml\n"
+            "max_cycles=5000\n"
+            "update_interval=50\n",
+            encoding="utf-8",
+        )
+        eagle_dir = tmp_path / "src" / "ai" / "abstraction"
+        eagle_dir.mkdir(parents=True)
+        (eagle_dir / "EAGLE.java").write_text(
+            "public class EAGLE { static final Integer LLM_INTERVAL = 7; }\n",
+            encoding="utf-8",
+        )
+
+        key = recorder.build_history_key("same prompt", "ai.RandomBiasedAI")
+
+        assert len(key["prompt_digest"]) == 64
+        assert key["context"]["run_time_per_game_sec"] == 500
+        assert key["context"]["update_interval"] == "50"
+        assert key["context"]["eagle_llm_interval"] == 7
+    finally:
+        recorder.repo_root = original_repo_root
+
+
+def test_history_only_records_real_evaluations(tmp_path):
+    """Verify surrogate/history-reuse records stay out of cross-run history."""
+    recorder = FitnessRecorder(tmp_path, EAConfig())
+    recorder.record_fitness(
+        {
+            "prompt": "surrogate prompt",
+            "fitness_score": [0.9, 0.1, 0.1],
+            "opponent": "ai.RandomAI",
+            "evaluation_mode": "surrogate",
+        }
+    )
+    recorder.record_fitness(
+        {
+            "prompt": "real prompt",
+            "fitness_score": [1.0, 0.1, 0.1],
+            "opponent": "ai.RandomAI",
+            "evaluation_mode": "real",
+        }
+    )
+
+    assert len(recorder.history) == 1
+    assert recorder.history[0]["evaluation_mode"] == "real"
 
 
 def test_nsga2_pre_real_eval_sort_uses_game_round():

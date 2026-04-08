@@ -4,7 +4,6 @@ This module defines the evaluation framework for the evolutionary algorithm. It 
 
 from __future__ import annotations
 
-import random
 from pathlib import Path
 from typing import Any
 
@@ -121,7 +120,7 @@ class Evaluator:
         with timer("bookkeeping_time", stats):
             self.save_prompt(prompt)
 
-        if fitness_recorder is not None:
+        if fitness_recorder is not None and not use_real_evaluation:
             similar_records = fitness_recorder.find_matching_history(prompt, opponent)
             if similar_records:
                 print(f"Found {len(similar_records)} similar records in history for the current prompt.")
@@ -168,6 +167,7 @@ class Evaluator:
                     "fitness": fitness,        # compatibility key
                     "fitness_score": fitness,  # current key
                     "opponent": opponent,
+                    "evaluation_mode": "real" if use_real_evaluation else ("history_reuse" if similar_records else "surrogate"),
                     "evaluation_time": stats.get("total_eval_time", 0.0),
                     "components": {
                         "game_rule": individual.game_rule,
@@ -243,12 +243,13 @@ class Evaluator:
                 self.component_pool.get_component("game_rule", individual.game_rule)
             )
 
+        # Preserve the component-pool order so phase-based prompts render in a
+        # stable, readable structure (identity -> transition -> early/mid/late).
         strategy_order = [
             strategy
             for strategy in self.component_pool.strategy_keys
             if strategy in individual.strategy
         ]
-        random.Random(repr(sorted((individual.strategy or {}).items()))).shuffle(strategy_order)
         strategy_components = [
             line
             for strategy in strategy_order

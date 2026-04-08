@@ -29,6 +29,10 @@ class EAConfig:
     population_size: int = 20
     num_generations: int = 50
     mutation_rate: float = 0.1
+    strategy_mutation_pool_replacement_prob: float = 0.40
+    strategy_mutation_identity_preserving_rewrite_prob: float = 0.35
+    strategy_mutation_identity_shift_rewrite_prob: float = 0.15
+    strategy_mutation_crossover_repair_rewrite_prob: float = 0.10
     selection_method: str = "random"  # Options: "random", "tournament"
     tournament_size: int = 3
     crossover_method: str = "uniform"  # Options: "uniform", "one_point", "two_point"
@@ -59,6 +63,10 @@ class EAConfig:
             "population_size": self.population_size,
             "num_generations": self.num_generations,
             "mutation_rate": self.mutation_rate,
+            "strategy_mutation_pool_replacement_prob": self.strategy_mutation_pool_replacement_prob,
+            "strategy_mutation_identity_preserving_rewrite_prob": self.strategy_mutation_identity_preserving_rewrite_prob,
+            "strategy_mutation_identity_shift_rewrite_prob": self.strategy_mutation_identity_shift_rewrite_prob,
+            "strategy_mutation_crossover_repair_rewrite_prob": self.strategy_mutation_crossover_repair_rewrite_prob,
             "selection_method": self.selection_method,
             "tournament_size": self.tournament_size,
             "crossover_method": self.crossover_method,
@@ -95,4 +103,25 @@ class EAConfig:
         if self.real_eval_rate > 0 and budget == 0:
             return 1
         return max(0, budget)
+
+    def strategy_mutation_mode_weights(self) -> dict[str, float]:
+        """Return normalized sampling weights for strategy-mutation dispatch."""
+        weights = {
+            "pool_replacement": float(self.strategy_mutation_pool_replacement_prob),
+            "identity_preserving_rewrite": float(self.strategy_mutation_identity_preserving_rewrite_prob),
+            "identity_shift_rewrite": float(self.strategy_mutation_identity_shift_rewrite_prob),
+            "crossover_repair_rewrite": float(self.strategy_mutation_crossover_repair_rewrite_prob),
+        }
+        total = sum(max(0.0, value) for value in weights.values())
+        if total <= 0:
+            return {
+                "pool_replacement": 1.0,
+                "identity_preserving_rewrite": 0.0,
+                "identity_shift_rewrite": 0.0,
+                "crossover_repair_rewrite": 0.0,
+            }
+        return {
+            key: max(0.0, value) / total
+            for key, value in weights.items()
+        }
     

@@ -210,11 +210,11 @@ class EA:
     def mutate(self, individual: Individual) -> Individual:
         """Apply one of the configured mutation strategies to a copied child."""
         if self.config.mutation_rate > 0:
-            if random.random() < 0.5:
-                mutated_individual = Mutation.mutate_component_from_pool(individual, self.component_pool, self.config.mutation_rate)
-            else:
-                mutated_individual = Mutation.mutate_component_with_llm(individual, self.component_pool, self.config.mutation_rate)
-    
+            mutated_individual = Mutation.mutate_strategy(
+                individual,
+                self.component_pool,
+                self.config,
+            )
             return mutated_individual
         return individual   
     

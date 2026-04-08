@@ -1,6 +1,9 @@
 """
 Component pool for managing prompt components in the evolutionary algorithm.
-This module defines the ComponentPool class, which loads and organizes prompt components from a JSON file. The ComponentPool provides access to different categories of components, such as combat policies, economy policies, production policies, worker behaviors, targeting policies, and movement policies. These components are used by the evolutionary algorithm to construct and evolve effective prompts for guiding agent behavior in MicroRTS.
+This module defines the ComponentPool class, which loads and organizes prompt
+components from a JSON file. The strategy search space is organized around
+coherent style and phase buckets rather than function-specific policies so
+mutation and crossover can recombine higher-level plans more cleanly.
 """
 
 from __future__ import annotations
@@ -21,14 +24,14 @@ class ComponentPool:
             "field_requirements": [ [ ... ] ],
             "examples": [ [ ... ] ],
             "strategy": {
-                "global_strategy": [ [ ... ] ],
-                "combat_policy": [ [ ... ] ],
-                "economy_policy": [ [ ... ] ],
-                "production_policy": [ [ ... ] ],
-                "worker_policy": [ [ ... ] ],
-                "targeting_policy": [ [ ... ] ],
-                "movement_policy": [ [ ... ] ],
-                "anti_stale_policy": [ [ ... ] ]
+                "strategy_identity": [ [ ... ] ],
+                "phase_transition_rule": [ [ ... ] ],
+                "early_game_plan": [ [ ... ] ],
+                "mid_game_plan": [ [ ... ] ],
+                "late_game_plan": [ [ ... ] ],
+                "decision_priority": [ [ ... ] ],
+                "tactical_heuristics": [ [ ... ] ],
+                "anti_stall_rules": [ [ ... ] ]
             }
         }
     """
