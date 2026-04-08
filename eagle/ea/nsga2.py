@@ -488,6 +488,16 @@ class NSGA2(EA):
                 "survivor_selection_time": generation_stats.get("survivor_selection_time", 0.0),
                 "population_size": len(self.population),
                 "offspring_count": len(offspring),
+                "population_real_history_reuse_initial_count": sum(
+                    1
+                    for ind in self.population
+                    if getattr(ind, "evaluation_mode", None) == "real_history_reuse_initial"
+                ),
+                "offspring_real_history_reuse_initial_count": sum(
+                    1
+                    for ind in offspring
+                    if getattr(ind, "evaluation_mode", None) == "real_history_reuse_initial"
+                ),
                 "log_dir": log_dir,
             }
         )

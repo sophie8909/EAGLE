@@ -50,6 +50,7 @@ class Individual:
 
         # fitness = [win_score, resource_advantage_score, game_round_score]
         self.fitness = DEFAULT_FITNESS.copy()
+        self.evaluation_mode: str | None = None
 
     @property
     def components(self) -> list[ComponentEntry]:
@@ -129,4 +130,5 @@ class Individual:
             **dict(self.legacy_components),
         )
         clone.fitness = self.fitness.copy() if hasattr(self.fitness, "copy") else self.fitness
+        clone.evaluation_mode = self.evaluation_mode
         return clone

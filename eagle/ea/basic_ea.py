@@ -159,7 +159,8 @@ class EA:
             for i, front in enumerate(pareto_fronts):
                 f.write(f"\nPareto Front {i+1}:\n")
                 for ind in front:
-                    f.write(f"{ind} - Fitness: {ind.fitness}\n")
+                    evaluation_mode = getattr(ind, "evaluation_mode", None) or "unknown"
+                    f.write(f"{ind} - Fitness: {ind.fitness} - EvalMode: {evaluation_mode}\n")
                     f.write(f"Prompt:\n{Evaluator(self.component_pool, self.config).construct_prompt(ind)}\n")
             
     def save_component_pool(self, log_dir: str):
@@ -224,6 +225,7 @@ class EA:
         evaluator.evaluate(
             individual,
             use_real_evaluation=True,
+            allow_history_reuse_for_real=bool(generation == -1),
             opponent=opponent,
             profile_output_path=self.get_profile_log_path(),
             generation=generation,

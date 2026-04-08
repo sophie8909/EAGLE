@@ -409,6 +409,7 @@ def test_game_round_surrogate_keeps_parent_first_two_scores():
         evaluator.evaluate(
             individual,
             use_real_evaluation=False,
+            allow_history_reuse_for_real=False,
             opponent=None,
             fitness_recorder=DummyRecorder(),
         )
@@ -447,6 +448,7 @@ def test_real_evaluation_does_not_use_history_shortcut():
     evaluator.evaluate(
         individual,
         use_real_evaluation=True,
+        allow_history_reuse_for_real=False,
         opponent="ai.RandomAI",
         fitness_recorder=recorder,
     )
@@ -455,14 +457,51 @@ def test_real_evaluation_does_not_use_history_shortcut():
     assert recorder.records[0]["evaluation_mode"] == "real"
 
 
+def test_initial_real_evaluation_can_use_history_shortcut():
+    """Verify initial-population real eval may reuse matching history."""
+    config = EAConfig()
+    evaluator = Evaluator(None, config=config)
+    individual = Individual()
+    individual.fitness = [0.0, 0.0, 0.0]
+
+    evaluator.construct_prompt = lambda individual: "test prompt"
+    evaluator.save_prompt = lambda prompt: None
+    evaluator.simulate_games = lambda opponent, stats: (_ for _ in ()).throw(AssertionError("should not run simulation"))
+
+    class DummyRecorder:
+        records = []
+
+        def find_matching_history(self, prompt, opponent):
+            return [{"fitness_score": [1.0, 0.2, 0.3]}]
+
+        def record_fitness(self, record):
+            self.records.append(record)
+
+    recorder = DummyRecorder()
+    evaluator.evaluate(
+        individual,
+        use_real_evaluation=True,
+        allow_history_reuse_for_real=True,
+        opponent="ai.RandomAI",
+        generation=-1,
+        fitness_recorder=recorder,
+    )
+
+    assert individual.fitness == [1.0, 0.2, 0.3]
+    assert recorder.records[0]["evaluation_mode"] == "real_history_reuse_initial"
+
+
 def test_fitness_history_key_uses_stable_digest_and_runtime_context(tmp_path):
     """Verify cache keys are stable and include runtime settings that affect performance."""
     recorder = FitnessRecorder(tmp_path, EAConfig(run_time_per_game_sec=500))
     original_repo_root = recorder.repo_root
+    original_history_path = recorder.history_records_path
     try:
         recorder.repo_root = tmp_path
+        recorder.history_records_path = str(tmp_path / "fitness_history.jsonl")
+        recorder.history = []
         resources_dir = tmp_path / "resources"
-        resources_dir.mkdir()
+        resources_dir.mkdir(exist_ok=True)
         (resources_dir / "config.properties").write_text(
             "map_location=maps/test.xml\n"
             "max_cycles=5000\n"
@@ -470,7 +509,7 @@ def test_fitness_history_key_uses_stable_digest_and_runtime_context(tmp_path):
             encoding="utf-8",
         )
         eagle_dir = tmp_path / "src" / "ai" / "abstraction"
-        eagle_dir.mkdir(parents=True)
+        eagle_dir.mkdir(parents=True, exist_ok=True)
         (eagle_dir / "EAGLE.java").write_text(
             "public class EAGLE { static final Integer LLM_INTERVAL = 7; }\n",
             encoding="utf-8",
@@ -484,11 +523,14 @@ def test_fitness_history_key_uses_stable_digest_and_runtime_context(tmp_path):
         assert key["context"]["eagle_llm_interval"] == 7
     finally:
         recorder.repo_root = original_repo_root
+        recorder.history_records_path = original_history_path
 
 
 def test_history_only_records_real_evaluations(tmp_path):
     """Verify surrogate/history-reuse records stay out of cross-run history."""
     recorder = FitnessRecorder(tmp_path, EAConfig())
+    recorder.history_records_path = str(tmp_path / "fitness_history.jsonl")
+    recorder.history = []
     recorder.record_fitness(
         {
             "prompt": "surrogate prompt",
@@ -508,6 +550,37 @@ def test_history_only_records_real_evaluations(tmp_path):
 
     assert len(recorder.history) == 1
     assert recorder.history[0]["evaluation_mode"] == "real"
+
+
+def test_log_multi_objective_generation_includes_evaluation_mode(tmp_path):
+    """Verify generation text logs show each individual's evaluation mode."""
+    from .basic_ea import EA
+    from . import basic_ea as basic_ea_module
+
+    ea = EA.__new__(EA)
+    ea.component_pool = object()
+    ea.config = EAConfig()
+    ind = Individual()
+    ind.fitness = [1.0, 0.1, 0.2]
+    ind.evaluation_mode = "real_history_reuse_initial"
+
+    original_evaluator = basic_ea_module.Evaluator
+
+    class DummyEvaluator:
+        def __init__(self, component_pool, config):
+            pass
+
+        def construct_prompt(self, individual):
+            return "dummy prompt"
+
+    basic_ea_module.Evaluator = DummyEvaluator
+    try:
+        ea.log_multi_objective_generation(str(tmp_path), 0, [[ind]])
+    finally:
+        basic_ea_module.Evaluator = original_evaluator
+
+    contents = (tmp_path / "generation_1_mo.txt").read_text(encoding="utf-8")
+    assert "EvalMode: real_history_reuse_initial" in contents
 
 
 def test_nsga2_pre_real_eval_sort_uses_game_round():

@@ -4,6 +4,7 @@ This module defines the evaluation framework for the evolutionary algorithm. It 
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
 from typing import Any
 
@@ -100,6 +101,7 @@ class Evaluator:
         individual: Individual,
         use_real_evaluation: bool,
         opponent: str | None,
+        allow_history_reuse_for_real: bool = False,
         profile_output_path: str | Path | None = None,
         generation: int | None = None,
         fitness_recorder: FitnessRecorder | None = None,
@@ -113,6 +115,8 @@ class Evaluator:
         log_path: str | None = None
         llm_calls = 0
         surrogate_score: float | None = None
+        similar_records: list[dict[str, Any]] = []
+        history_reuse_mode: str | None = None
 
         with timer("prompt_render_time", stats):
             prompt = self.construct_prompt(individual)
@@ -120,13 +124,17 @@ class Evaluator:
         with timer("bookkeeping_time", stats):
             self.save_prompt(prompt)
 
-        if fitness_recorder is not None and not use_real_evaluation:
+        should_check_history = fitness_recorder is not None and (
+            not use_real_evaluation or allow_history_reuse_for_real
+        )
+        if should_check_history:
             similar_records = fitness_recorder.find_matching_history(prompt, opponent)
             if similar_records:
                 print(f"Found {len(similar_records)} similar records in history for the current prompt.")
                 for rec in similar_records:
                     print(f"Similar record fitness score: {rec.get('fitness_score')}")
-                use_real_evaluation = False  # Skip real evaluation if we found similar prompts in history to save time.
+                use_real_evaluation = False  # Skip evaluation if we found equivalent prior evidence.
+                history_reuse_mode = "real_history_reuse_initial" if allow_history_reuse_for_real else "history_reuse"
                 fitness = similar_records[random.randint(0, len(similar_records) - 1)].get("fitness_score", [0.0, 0.0, 0.0])  # Use the fitness score from a random similar record as a reference.
             else:
                 print("No similar records found in history for the current prompt.")
@@ -137,6 +145,8 @@ class Evaluator:
             timeout = simulation_meta.get("timeout", False)
             log_path = simulation_meta.get("log_path")
             llm_calls = simulation_meta.get("llm_calls", 0)
+        elif history_reuse_mode is not None:
+            llm_calls = 0
         else:
             with timer("EA_operator_time", stats):
                 with timer("surrogate_time", stats):
@@ -159,6 +169,7 @@ class Evaluator:
         print(fitness)
 
         if fitness_recorder is not None:
+            evaluation_mode = "real" if use_real_evaluation else (history_reuse_mode or "surrogate")
             fitness_recorder.record_fitness(
                 {
                     "individual_id": getattr(individual, "id", None),
@@ -167,7 +178,7 @@ class Evaluator:
                     "fitness": fitness,        # compatibility key
                     "fitness_score": fitness,  # current key
                     "opponent": opponent,
-                    "evaluation_mode": "real" if use_real_evaluation else ("history_reuse" if similar_records else "surrogate"),
+                    "evaluation_mode": evaluation_mode,
                     "evaluation_time": stats.get("total_eval_time", 0.0),
                     "components": {
                         "game_rule": individual.game_rule,
@@ -175,7 +186,10 @@ class Evaluator:
                     }
                 }
             )
+        else:
+            evaluation_mode = "real" if use_real_evaluation else (history_reuse_mode or "surrogate")
         individual.fitness = fitness
+        individual.evaluation_mode = evaluation_mode
         summarize_total_eval_time(stats)
 
         operator_profile = getattr(individual, "operator_profile", None)

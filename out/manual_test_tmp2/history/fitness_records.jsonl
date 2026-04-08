@@ -1,0 +1,4 @@
+{"prompt": "surrogate prompt", "fitness_score": [0.9, 0.1, 0.1], "opponent": "ai.RandomAI", "evaluation_mode": "surrogate"}
+{"prompt": "real prompt", "fitness_score": [1.0, 0.1, 0.1], "opponent": "ai.RandomAI", "evaluation_mode": "real"}
+{"prompt": "surrogate prompt", "fitness_score": [0.9, 0.1, 0.1], "opponent": "ai.RandomAI", "evaluation_mode": "surrogate"}
+{"prompt": "real prompt", "fitness_score": [1.0, 0.1, 0.1], "opponent": "ai.RandomAI", "evaluation_mode": "real"}
