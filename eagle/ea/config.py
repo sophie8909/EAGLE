@@ -25,7 +25,7 @@ def _default_resource_advantage_weights() -> dict[str, float]:
 class EAConfig:
     """Flat configuration surface for all EA, evaluation, and surrogate settings."""
     # Evolution / search settings
-    algorithm: str = "nsga2"  # Options: "ga", "nsga2", "steady_state_nsga2", "moead"
+    algorithm: str = "steady_state_nsga2"  # Options: "ga", "nsga2", "steady_state_nsga2", "moead"
     population_size: int = 20
     num_generations: int = 50
     mutation_rate: float = 0.1

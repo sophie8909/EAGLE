@@ -13,7 +13,7 @@ OPPONENT_LIST = [
     "ai.abstraction.ollama",
     "ai.abstraction.HybridLLMRush",
     "ai.abstraction.StrategicLLMAgent",
-    "ai.abstraction.TurtleDefense", 
+    # "ai.abstraction.TurtleDefense", 
     "ai.abstraction.BoomEconomy"
 ]
 
