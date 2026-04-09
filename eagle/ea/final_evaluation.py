@@ -1,27 +1,61 @@
 import json
+from pathlib import Path
 
 from .config import EAConfig
 from .component_pool import ComponentPool
 from .ea_log_parse import parse_individuals_from_ea_log
 from .evaluate import Evaluator
 from .main import OPPONENT_LIST
+from .result_test import build_result_record, extract_front_one_individual_ids
+
+
+def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: int) -> Path:
+    """Resolve the saved generation log for the final replay step.
+
+    Older call sites pass the internal zero-based generation index, while the
+    saved filenames are one-based (`generation_1_mo.txt`, ...). We accept both
+    to keep final-test replay stable across existing callers.
+    """
+    log_dir = Path(current_log_dir)
+    exact_match = log_dir / f"generation_{last_gen}_mo.txt"
+    if exact_match.exists():
+        return exact_match
+
+    one_based_match = log_dir / f"generation_{last_gen + 1}_mo.txt"
+    if one_based_match.exists():
+        return one_based_match
+
+    raise FileNotFoundError(
+        f"Final generation log not found under {log_dir} for generation index {last_gen}."
+    )
 
 
 def run_final_test_suite(current_log_dir: str, last_gen: int):
-    """Replay winning final-generation individuals against the benchmark opponents."""
-    experiment_log_dir = f"{current_log_dir}"
+    """Replay final-generation Pareto Front 1 individuals against all benchmark opponents."""
+    experiment_log_dir = Path(current_log_dir)
     evaluator = Evaluator(
-        ComponentPool.from_json(f"{experiment_log_dir}/component_pool.json"),
+        ComponentPool.from_json(str(experiment_log_dir / "component_pool.json")),
         EAConfig(),
     )
 
-    last_generation_log_path = f"{experiment_log_dir}/generation_{last_gen}_mo.txt"
-    individuals = parse_individuals_from_ea_log(last_generation_log_path)
+    generation_log_path = _resolve_final_generation_log_path(experiment_log_dir, last_gen)
+    individuals = parse_individuals_from_ea_log(str(generation_log_path))
+    front_one_ids = set(extract_front_one_individual_ids(generation_log_path))
+    selected_individuals = [
+        individual
+        for individual in individuals
+        if not front_one_ids or individual.id in front_one_ids
+    ]
 
-    results = {}
-    for individual in individuals:
-        if individual.fitness[0] != 1.0:
-            continue
+    results = {
+        "generation_log": generation_log_path.name,
+        "selected_individual_count": len(selected_individuals),
+        "selection_rule": "pareto_front_1",
+        "results": {},
+    }
+    for individual in selected_individuals:
+        prompt = evaluator.construct_prompt(individual)
+        evaluator.save_prompt(prompt)
 
         for opponent in OPPONENT_LIST:
             print(f"Testing against opponent: {opponent}")
@@ -39,23 +73,17 @@ def run_final_test_suite(current_log_dir: str, last_gen: int):
                 log_content = f.read()
 
             fitness_score = evaluator.calculate_fitness_score(log_content)
-            if fitness_score[0] == 1.0:
-                result = "Win"
-            elif fitness_score[0] == 0.0:
-                result = "Loss"
-            else:
-                result = "Draw"
-
-            results.setdefault(individual.id, [])
-            results[individual.id].append(
-                {
-                    "opponent": opponent,
-                    "result": result,
-                    "resource_advantage": fitness_score[1],
-                }
+            results["results"].setdefault(individual.id, [])
+            results["results"][individual.id].append(
+                build_result_record(
+                    individual,
+                    opponent,
+                    fitness_score,
+                    str(latest_log_file),
+                )
             )
 
-            with open(f"{experiment_log_dir}/final_test_results.json", "w") as f:
+            with open(experiment_log_dir / "final_test_results.json", "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=4)
 
 
