@@ -15,9 +15,9 @@ from .main import OPPONENT_LIST
 
 
 def parse_max_front_arg(raw_value: str) -> int | None:
-    """Parse CLI front-cutoff values such as `1`, `3`, `all`, or `none`."""
+    """Parse CLI front-cutoff values such as `1`, `3`, or `all`."""
     normalized = str(raw_value).strip().lower()
-    if normalized in {"all", "none"}:
+    if normalized == "all":
         return None
 
     value = int(normalized)

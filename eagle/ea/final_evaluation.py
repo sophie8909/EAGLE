@@ -9,6 +9,14 @@ from .main import OPPONENT_LIST
 from .result_test import build_result_record, extract_individual_ids_up_to_front
 
 
+def _resolve_final_test_max_front(config: EAConfig) -> int | None:
+    """Default missing final-test front limits to Pareto Front 1."""
+    configured_value = getattr(config, "final_test_max_front", 1)
+    if configured_value is None:
+        return 1
+    return configured_value
+
+
 def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: int) -> Path:
     """Resolve the saved generation log for the final replay step.
 
@@ -42,13 +50,14 @@ def run_final_test_suite(
         ComponentPool.from_json(str(experiment_log_dir / "component_pool.json")),
         config,
     )
+    final_test_max_front = _resolve_final_test_max_front(config)
 
     generation_log_path = _resolve_final_generation_log_path(experiment_log_dir, last_gen)
     individuals = parse_individuals_from_ea_log(str(generation_log_path))
     selected_front_ids = set(
         extract_individual_ids_up_to_front(
             generation_log_path,
-            config.final_test_max_front,
+            final_test_max_front,
         )
     )
     selected_individuals = [
@@ -61,8 +70,8 @@ def run_final_test_suite(
         "generation_log": generation_log_path.name,
         "selected_individual_count": len(selected_individuals),
         "selection_rule": (
-            f"pareto_front_1_to_{config.final_test_max_front}"
-            if config.final_test_max_front is not None
+            f"pareto_front_1_to_{final_test_max_front}"
+            if final_test_max_front is not None
             else "all_fronts"
         ),
         "results": {},
