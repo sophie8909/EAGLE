@@ -168,10 +168,15 @@ class SteadyStateNSGA2(NSGA2):
             generation_stats: dict[str, float] = {}
             same_generation_checkpoint = checkpoint.get("generation") == generation
             checkpoint_phase = checkpoint.get("phase")
+            candidate_count_for_checkpoint = checkpoint.get("meta", {}).get("candidate_count", 1)
 
             if same_generation_checkpoint and checkpoint_phase == "generation_step":
                 # Resume point: the child for this generation was already
                 # generated, evaluated, and inserted into the population.
+                offspring = self.deserialize_population(checkpoint.get("offspring"))
+            elif same_generation_checkpoint and checkpoint_phase == "generation_real_eval":
+                # Resume point: the best child was already chosen and fully
+                # real-evaluated, but replacement/logging had not completed yet.
                 offspring = self.deserialize_population(checkpoint.get("offspring"))
             else:
                 if same_generation_checkpoint and checkpoint_phase == "generation_surrogate":
@@ -186,6 +191,7 @@ class SteadyStateNSGA2(NSGA2):
                     generation_stats,
                     candidates=candidate_offspring,
                 )
+                candidate_count_for_checkpoint = len(candidate_offspring)
                 child = self._select_best_candidate_by_game_round(candidate_offspring)
                 offspring = [child]
 
@@ -197,9 +203,26 @@ class SteadyStateNSGA2(NSGA2):
                         generation=generation,
                     )
 
-                # Step 3: immediate steady-state replacement.
-                combined_population = self.population + offspring
+                # Checkpoint meaning:
+                # - phase="generation_real_eval" means the chosen child already
+                #   finished real evaluation
+                # - resuming from here must not call real_evaluation again
+                self.save_checkpoint(
+                    self.build_checkpoint_state(
+                        phase="generation_real_eval",
+                        generation=generation,
+                        population=self.population,
+                        offspring=offspring,
+                        meta={
+                            "candidate_count": candidate_count_for_checkpoint,
+                            "selected_child_id": getattr(child, "id", None),
+                        },
+                    )
+                )
 
+                # Step 3: immediate steady-state replacement.
+
+            if not (same_generation_checkpoint and checkpoint_phase == "generation_step"):
                 # Run NSGA-II environmental selection over parents + one child,
                 # then keep only the survivor population.
                 with timer("survivor_selection_time", generation_stats):
@@ -219,7 +242,7 @@ class SteadyStateNSGA2(NSGA2):
                         offspring=offspring,
                         meta={
                             "completed_births": 1,
-                            "candidate_count": len(candidate_offspring),
+                            "candidate_count": candidate_count_for_checkpoint,
                         },
                     )
                 )
