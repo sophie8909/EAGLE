@@ -20,19 +20,31 @@ def resolve_generation_log_path(log_dir: str | Path, generation: int) -> Path:
     return log_dir_path / f"generation_{generation}_mo.txt"
 
 
-def extract_front_one_individual_ids(generation_log_path: str | Path) -> list[str]:
-    """Extract the individual ids that belong to Pareto Front 1 in one generation log."""
+def extract_individual_ids_up_to_front(
+    generation_log_path: str | Path,
+    max_front: int | None,
+) -> list[str]:
+    """Extract ids that belong to Pareto Front 1 up to the requested front."""
+    if max_front is None:
+        return []
+    if max_front < 1:
+        raise ValueError("max_front must be >= 1 or None.")
+
     generation_log = Path(generation_log_path)
     lines = generation_log.read_text(encoding="utf-8").splitlines()
 
-    front_one_ids: list[str] = []
-    in_front_one = False
+    selected_ids: list[str] = []
+    current_front: int | None = None
     for raw_line in lines:
         line = raw_line.strip()
         if line.startswith("Pareto Front "):
-            in_front_one = line == "Pareto Front 1:"
+            front_label = line.removeprefix("Pareto Front ").removesuffix(":").strip()
+            try:
+                current_front = int(front_label)
+            except ValueError:
+                current_front = None
             continue
-        if not in_front_one or not line.startswith("Individual"):
+        if current_front is None or current_front > max_front or not line.startswith("Individual"):
             continue
 
         start_idx = line.find("id=")
@@ -43,9 +55,14 @@ def extract_front_one_individual_ids(generation_log_path: str | Path) -> list[st
             end_idx = line.find(")", start_idx)
         if end_idx == -1:
             continue
-        front_one_ids.append(line[start_idx + len("id="):end_idx].strip())
+        selected_ids.append(line[start_idx + len("id="):end_idx].strip())
 
-    return front_one_ids
+    return selected_ids
+
+
+def extract_front_one_individual_ids(generation_log_path: str | Path) -> list[str]:
+    """Backward-compatible helper for callers that only need Pareto Front 1."""
+    return extract_individual_ids_up_to_front(generation_log_path, 1)
 
 
 def load_generation_individuals(log_dir: str | Path, generation: int):
@@ -108,7 +125,7 @@ def run_generation_result_test(
     opponents: Iterable[str] | None = None,
     individual_id: str | None = None,
     only_winning_individuals: bool = False,
-    front_only: int | None = 1,
+    max_front: int | None = 1,
     output_path: str | Path | None = None,
 ) -> dict:
     """Replay one saved generation and write per-opponent evaluation results."""
@@ -124,8 +141,8 @@ def run_generation_result_test(
     generation_log_path = resolve_generation_log_path(log_dir_path, generation)
     individuals = load_generation_individuals(log_dir_path, generation)
     allowed_individual_ids: set[str] | None = None
-    if front_only == 1:
-        allowed_individual_ids = set(extract_front_one_individual_ids(generation_log_path))
+    if max_front is not None:
+        allowed_individual_ids = set(extract_individual_ids_up_to_front(generation_log_path, max_front))
 
     selected_individuals = filter_individuals(
         individuals,
@@ -138,7 +155,7 @@ def run_generation_result_test(
         "generation": generation,
         "log_dir": str(log_dir_path),
         "individual_count": len(selected_individuals),
-        "front_only": front_only,
+        "max_front": max_front,
         "opponents": list(opponents or OPPONENT_LIST),
         "results": {},
     }
@@ -175,7 +192,7 @@ def run_generation_result_test(
             destination = (
                 Path(output_path)
                 if output_path is not None
-                else log_dir_path / f"generation_{generation}_front_{front_only if front_only is not None else 'all'}_result_test.json"
+                else log_dir_path / f"generation_{generation}_front_{max_front if max_front is not None else 'all'}_result_test.json"
             )
             with open(destination, "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=4)
@@ -196,9 +213,15 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Replay only individuals whose stored first objective equals 1.0.",
     )
     parser.add_argument(
+        "--max-front",
+        type=int,
+        default=1,
+        help="Replay individuals that belong to Pareto Front 1 up to this front number.",
+    )
+    parser.add_argument(
         "--all-fronts",
         action="store_true",
-        help="Replay all individuals in the generation instead of only Pareto Front 1.",
+        help="Replay all individuals in the generation regardless of Pareto front.",
     )
     parser.add_argument("--output", default=None, help="Optional JSON output path.")
     return parser
@@ -214,7 +237,7 @@ def main() -> None:
         opponents=args.opponent,
         individual_id=args.individual_id,
         only_winning_individuals=args.only_winning_individuals,
-        front_only=None if args.all_fronts else 1,
+        max_front=None if args.all_fronts else args.max_front,
         output_path=args.output,
     )
 

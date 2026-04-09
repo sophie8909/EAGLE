@@ -39,6 +39,7 @@ class EAConfig:
     environment_selection_method: str = "elitism"
     steady_state_surrogate_offspring_count: int = 4
     steady_state_surrogate_selection_metric: str = "game_round_score"
+    final_test_max_front: int | None = 1
 
     # Evaluation runtime settings
     run_time_per_game_sec: int = 500
@@ -73,6 +74,7 @@ class EAConfig:
             "environment_selection_method": self.environment_selection_method,
             "steady_state_surrogate_offspring_count": self.steady_state_surrogate_offspring_count,
             "steady_state_surrogate_selection_metric": self.steady_state_surrogate_selection_metric,
+            "final_test_max_front": self.final_test_max_front,
         }
 
     def fitness_settings(self) -> dict[str, object]:

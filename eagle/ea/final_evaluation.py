@@ -6,7 +6,7 @@ from .component_pool import ComponentPool
 from .ea_log_parse import parse_individuals_from_ea_log
 from .evaluate import Evaluator
 from .main import OPPONENT_LIST
-from .result_test import build_result_record, extract_front_one_individual_ids
+from .result_test import build_result_record, extract_individual_ids_up_to_front
 
 
 def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: int) -> Path:
@@ -31,26 +31,36 @@ def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: in
 
 
 def run_final_test_suite(current_log_dir: str, last_gen: int):
-    """Replay final-generation Pareto Front 1 individuals against all benchmark opponents."""
+    """Replay final-generation individuals up to the configured Pareto front cutoff."""
     experiment_log_dir = Path(current_log_dir)
+    config = EAConfig()
     evaluator = Evaluator(
         ComponentPool.from_json(str(experiment_log_dir / "component_pool.json")),
-        EAConfig(),
+        config,
     )
 
     generation_log_path = _resolve_final_generation_log_path(experiment_log_dir, last_gen)
     individuals = parse_individuals_from_ea_log(str(generation_log_path))
-    front_one_ids = set(extract_front_one_individual_ids(generation_log_path))
+    selected_front_ids = set(
+        extract_individual_ids_up_to_front(
+            generation_log_path,
+            config.final_test_max_front,
+        )
+    )
     selected_individuals = [
         individual
         for individual in individuals
-        if not front_one_ids or individual.id in front_one_ids
+        if not selected_front_ids or individual.id in selected_front_ids
     ]
 
     results = {
         "generation_log": generation_log_path.name,
         "selected_individual_count": len(selected_individuals),
-        "selection_rule": "pareto_front_1",
+        "selection_rule": (
+            f"pareto_front_1_to_{config.final_test_max_front}"
+            if config.final_test_max_front is not None
+            else "all_fronts"
+        ),
         "results": {},
     }
     for individual in selected_individuals:
