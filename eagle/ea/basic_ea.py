@@ -248,4 +248,4 @@ class EA:
     
     def run_final_test(self):
         """Replay the last saved generation against the configured final-test opponents."""
-        run_final_test_suite(self.current_log_dir, self.current_generation)
+        run_final_test_suite(self.current_log_dir, self.current_generation, self.config)

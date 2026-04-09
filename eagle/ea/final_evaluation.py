@@ -30,10 +30,14 @@ def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: in
     )
 
 
-def run_final_test_suite(current_log_dir: str, last_gen: int):
+def run_final_test_suite(
+    current_log_dir: str,
+    last_gen: int,
+    config: EAConfig | None = None,
+):
     """Replay final-generation individuals up to the configured Pareto front cutoff."""
     experiment_log_dir = Path(current_log_dir)
-    config = EAConfig()
+    config = config or EAConfig()
     evaluator = Evaluator(
         ComponentPool.from_json(str(experiment_log_dir / "component_pool.json")),
         config,

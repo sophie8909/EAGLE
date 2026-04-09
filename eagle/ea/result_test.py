@@ -14,6 +14,18 @@ from .evaluate import Evaluator
 from .main import OPPONENT_LIST
 
 
+def parse_max_front_arg(raw_value: str) -> int | None:
+    """Parse CLI front-cutoff values such as `1`, `3`, `all`, or `none`."""
+    normalized = str(raw_value).strip().lower()
+    if normalized in {"all", "none"}:
+        return None
+
+    value = int(normalized)
+    if value < 1:
+        raise argparse.ArgumentTypeError("max front must be >= 1, or use 'all'.")
+    return value
+
+
 def resolve_generation_log_path(log_dir: str | Path, generation: int) -> Path:
     """Resolve the saved generation log path for one NSGA-II generation."""
     log_dir_path = Path(log_dir)
@@ -214,9 +226,9 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--max-front",
-        type=int,
+        type=parse_max_front_arg,
         default=1,
-        help="Replay individuals that belong to Pareto Front 1 up to this front number.",
+        help="Replay individuals in Pareto Front 1 up to this front number, or use 'all'.",
     )
     parser.add_argument(
         "--all-fronts",
