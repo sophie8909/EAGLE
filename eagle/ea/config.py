@@ -6,7 +6,23 @@ file groups related settings and exposes a few helper accessors for cleaner use
 inside refactored modules.
 """
 
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
+
+
+def read_eagle_llm_interval(repo_root: str | Path | None = None) -> int | None:
+    """Read the hard-coded EAGLE LLM interval from `src/ai/abstraction/EAGLE.java`."""
+    root = Path(repo_root) if repo_root is not None else Path(__file__).resolve().parents[2]
+    eagle_java_path = root / "src" / "ai" / "abstraction" / "EAGLE.java"
+    if not eagle_java_path.exists():
+        return None
+
+    content = eagle_java_path.read_text(encoding="utf-8")
+    match = re.search(r"LLM_INTERVAL\s*=\s*(\d+)", content)
+    if match is None:
+        return None
+    return int(match.group(1))
 
 
 def _default_resource_advantage_weights() -> dict[str, float]:

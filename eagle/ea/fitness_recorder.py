@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from pathlib import Path
 from typing import Any
 
-from .config import EAConfig
+from .config import EAConfig, read_eagle_llm_interval
 
 
 class FitnessRecorder:
@@ -57,18 +56,6 @@ class FitnessRecorder:
                 properties[key.strip()] = value.strip()
         return properties
 
-    def _read_eagle_llm_interval(self) -> int | None:
-        """Extract the hard-coded EAGLE LLM interval used during real matches."""
-        eagle_java_path = self.repo_root / "src" / "ai" / "abstraction" / "EAGLE.java"
-        if not eagle_java_path.exists():
-            return None
-
-        content = eagle_java_path.read_text(encoding="utf-8")
-        match = re.search(r"LLM_INTERVAL\s*=\s*(\d+)", content)
-        if match is None:
-            return None
-        return int(match.group(1))
-
     def _history_key_context(self, opponent: str | None) -> dict[str, Any]:
         """Build the non-prompt context that must match for safe cache reuse."""
         properties = self._read_properties_file()
@@ -80,7 +67,7 @@ class FitnessRecorder:
             "resource_advantage_weights": dict(self.config.resource_advantage_weights),
             "map_location": properties.get("map_location"),
             "max_cycles": properties.get("max_cycles"),
-            "eagle_llm_interval": self._read_eagle_llm_interval(),
+            "eagle_llm_interval": read_eagle_llm_interval(self.repo_root),
         }
 
     def build_history_key(self, prompt: Any, opponent: str | None) -> dict[str, Any]:

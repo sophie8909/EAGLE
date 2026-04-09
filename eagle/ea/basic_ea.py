@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, List
 
 from .checkpoint import CheckpointManager, deserialize_individual, serialize_individual
-from .config import EAConfig
+from .config import EAConfig, read_eagle_llm_interval
 from .component_pool import ComponentPool
 from .individual import Individual
 from .evaluate import Evaluator
@@ -46,8 +46,10 @@ class EA:
         """Persist the run configuration next to the generated logs."""
         import json
         config_file = f"{log_dir}/config.json"
+        config_payload = dict(self.config.__dict__)
+        config_payload["llm_interval"] = read_eagle_llm_interval()
         with open(config_file, "w") as f:
-            json.dump(self.config.__dict__, f, indent=4)
+            json.dump(config_payload, f, indent=4)
 
     def initialize_population(self) -> List[Individual]:
         """Create the starting population by sampling strategy indices at random."""
