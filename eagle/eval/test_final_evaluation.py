@@ -24,22 +24,23 @@ class FinalEvaluationTests(unittest.TestCase):
             ],
         )
 
-    def test_build_result_record_uses_two_objective_schema(self) -> None:
-        """Verify replay result records expose the two-objective fitness schema."""
+    def test_build_result_record_uses_three_objective_schema(self) -> None:
+        """Verify replay result records expose the three-objective fitness schema."""
         class DummyIndividual:
             id = "ind-1"
 
         record = build_result_record(
             DummyIndividual(),
             "ai.RandomAI",
-            [1.0, 0.25],
+            [1.0, 0.25, 0.4],
             "fake.log",
         )
 
         self.assertEqual(record["result"], "Win")
         self.assertEqual(record["win_score"], 1.0)
         self.assertEqual(record["game_round_score"], 0.25)
-        self.assertEqual(record["fitness"], [1.0, 0.25])
+        self.assertEqual(record["resource_advantage_score"], 0.4)
+        self.assertEqual(record["fitness"], [1.0, 0.25, 0.4])
 
 
 if __name__ == "__main__":

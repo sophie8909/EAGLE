@@ -311,7 +311,7 @@ class Evaluator:
         )
 
     def calculate_fitness_score(self, log_content: str, parsed_log: dict[str, Any] | None = None) -> list[float]:
-        """Compute the two-objective real-game fitness vector from one log."""
+        """Compute the three-objective real-game fitness vector from one log."""
         fitness = calculate_fitness_score(
             log_content,
             resource_advantage_alpha=self.config.resource_advantage_alpha,
@@ -321,7 +321,8 @@ class Evaluator:
         print(
             "Parsed fitness: "
             f"winning_score={fitness[0]}, "
-            f"game_round_fitness={fitness[1]}"
+            f"game_round_fitness={fitness[1]}, "
+            f"resource_advantage_score={fitness[2]}"
         )
         return fitness
 

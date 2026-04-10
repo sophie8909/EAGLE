@@ -18,8 +18,8 @@ EAGLE treats an agent prompt as a structured combination of:
 These components are recombined and mutated through evolutionary search, then scored with a multi-objective fitness function:
 
 1. `win_score`
-2. `resource_advantage_score`
-3. `game_round_score`
+2. `game_round_score`
+3. `resource_advantage_score`
 
 The system supports both:
 
@@ -232,14 +232,18 @@ Supporting modules:
 EAGLE uses a three-objective fitness vector:
 
 ```python
-[win_score, resource_advantage_score, game_round_score]
+[win_score, game_round_score, resource_advantage_score]
 ```
 
 ### 1. Win Score
 
 Derived from the final winner in the game log.
 
-### 2. Resource Advantage Score
+### 2. Game Round Score
+
+Measures how valid and executable the LLM's per-round move outputs are.
+
+### 3. Resource Advantage Score
 
 Computed from the `Feature locations` section inside Dynamic Prompt blocks.
 
@@ -254,9 +258,6 @@ Per turn, EAGLE summarizes:
 
 Then it applies a late-game-weighted normalized difference, keeping the score in `[-1, 1]`.
 
-### 3. Game Round Score
-
-Measures how valid and executable the LLM's per-round move outputs are.
 
 This is used both:
 

@@ -19,6 +19,8 @@ from eagle.tools.log_parse import (
 )
 from eagle.tools.simulation_runner import set_llm_interval
 from eagle.tools import simulation_runner as simulation_runner_module
+from eagle.surrogate.eval import evaluator as surrogate_eval_module
+from eagle.surrogate.eval import single_round as single_round_module
 
 def test_parse_fitness():
     """Smoke-test parsing on the newest locally available game log."""
@@ -292,20 +294,23 @@ def test_surrogate_version_dispatch_game_round():
     evaluator = Evaluator(None, config=config)
 
     original_method = evaluate_module.simulate_surrogate_games
+    original_compose = surrogate_eval_module.compose_three_part_surrogate_fitness
 
     try:
         evaluate_module.simulate_surrogate_games = lambda *args, **kwargs: (
-            [0.7, 0.2],
+            [0.7, 0.1, 0.3],
             {
                 "log_path": "fake.log",
             },
         )
+        surrogate_eval_module.compose_three_part_surrogate_fitness = lambda prompt, repo_root, config, java_fitness: [java_fitness[0], 0.2, java_fitness[2]]
 
         scores = evaluator.surrogate_evaluation("test prompt")
 
-        assert scores == [0.7, 0.2]
+        assert scores == [0.7, 0.2, 0.3]
     finally:
         evaluate_module.simulate_surrogate_games = original_method
+        surrogate_eval_module.compose_three_part_surrogate_fitness = original_compose
 
 
 def test_surrogate_version_dispatch_policy():
@@ -314,10 +319,11 @@ def test_surrogate_version_dispatch_policy():
     evaluator = Evaluator(None, config=config)
 
     original_method = evaluate_module.simulate_policy_surrogate_games
+    original_compose = surrogate_eval_module.compose_three_part_surrogate_fitness
 
     try:
         evaluate_module.simulate_policy_surrogate_games = lambda *args, **kwargs: (
-            [0.6, 0.4],
+            [0.6, 0.1, 0.4],
             {
                 "log_path": "fake.log",
                 "compiled_policy": {
@@ -328,72 +334,83 @@ def test_surrogate_version_dispatch_policy():
                 },
             },
         )
+        surrogate_eval_module.compose_three_part_surrogate_fitness = lambda prompt, repo_root, config, java_fitness: [java_fitness[0], 0.75, java_fitness[2]]
 
         scores = evaluator.surrogate_evaluation("test prompt")
 
-        assert scores == [0.6, 0.4]
+        assert scores == [0.6, 0.75, 0.4]
     finally:
         evaluate_module.simulate_policy_surrogate_games = original_method
+        surrogate_eval_module.compose_three_part_surrogate_fitness = original_compose
 
 
-def test_surrogate_simulation_uses_resource_advantage_when_no_llm_counters(tmp_path):
-    """Verify surrogate logs fall back to resource advantage for the second objective."""
+def test_compose_three_part_surrogate_fitness_uses_java_and_llm_sources():
+    """Verify surrogate composition keeps win/resource from Java and game-round from LLM."""
     config = EAConfig()
-    repo_root = tmp_path
-    resources_dir = repo_root / "resources"
-    resources_dir.mkdir(parents=True, exist_ok=True)
-    (resources_dir / "config.properties").write_text("AI1=ai.abstraction.EAGLE\n", encoding="utf-8")
-
-    log_file = repo_root / "logs" / "run_2026-04-10_20-28-18.log"
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    log_file.write_text("placeholder log", encoding="utf-8")
-
-    original_render = simulation_runner_module.render_surrogate_agent
-    original_launch = simulation_runner_module.launch_simulation
-    original_wait = simulation_runner_module.wait_for_simulation
-    original_latest = simulation_runner_module.get_latest_log_file
-    original_parse = simulation_runner_module.parse_log
-    original_calculate = simulation_runner_module.calculate_fitness_score
+    original_estimator = surrogate_eval_module.estimate_llm_game_round_score
 
     try:
-        simulation_runner_module.render_surrogate_agent = lambda *args, **kwargs: None
-        simulation_runner_module.launch_simulation = lambda *args, **kwargs: type("P", (), {"returncode": 0})()
-        simulation_runner_module.wait_for_simulation = lambda process: ("", "")
-        simulation_runner_module.get_latest_log_file = lambda repo_root: log_file
-        simulation_runner_module.parse_log = lambda log_content: {
-            "summary": {
-                "winner": "0",
-                "llm_move_count": 0,
-            },
-            "feature_history": [
+        surrogate_eval_module.estimate_llm_game_round_score = lambda prompt, repo_root, config: 0.65
+        fitness = surrogate_eval_module.compose_three_part_surrogate_fitness(
+            prompt="test prompt",
+            repo_root=Path("."),
+            config=config,
+            java_fitness=[0.5, 0.0, 0.2],
+        )
+
+        assert fitness == [0.5, 0.65, 0.2]
+    finally:
+        surrogate_eval_module.estimate_llm_game_round_score = original_estimator
+
+
+def test_build_eagle_round_prompt_matches_java_shape():
+    """Verify the Python helper mirrors EAGLE.java's base+dynamic prompt layout."""
+    prompt = single_round_module.build_eagle_round_prompt(
+        "Base prompt text",
+        "Map size: 8x8\nTurn: 12/5000\n\nFeature locations:\n(1, 1) Ally Worker Unit {HP=1}",
+    )
+
+    assert prompt == (
+        "Base prompt text\n\n"
+        "Map size: 8x8\n"
+        "Turn: 12/5000\n\n"
+        "Feature locations:\n"
+        "(1, 1) Ally Worker Unit {HP=1}\n"
+    )
+
+
+def test_evaluate_eagle_single_round_scores_response_from_llm_json():
+    """Verify the single-round helper calls the LLM path and scores the returned moves."""
+    original_generate = single_round_module.generate_eagle_round_response
+
+    dynamic_prompt = (
+        "Map size: 8x8\n"
+        "Turn: 12/5000\n"
+        "Max actions: 2\n\n"
+        "Feature locations:\n"
+        "(0, 0) Neutral Resource Node {resources=20}\n"
+        "(2, 1) Ally Base Unit {resources=4, HP=10}\n"
+        "(1, 1) Ally Worker Unit {HP=1}\n"
+        "(5, 6) Enemy Base Unit {resources=4, HP=10}\n"
+    )
+
+    try:
+        single_round_module.generate_eagle_round_response = lambda base_prompt, dynamic_prompt_text: {
+            "thinking": "test",
+            "moves": [
                 {
-                    "time": 0,
-                    "ally": {"base": 1, "worker": 3, "light": 0, "heavy": 0, "ranged": 0, "resource": 6},
-                    "enemy": {"base": 1, "worker": 1, "light": 0, "heavy": 0, "ranged": 0, "resource": 2},
-                    "neutral_resource": 20,
+                    "raw_move": "(1, 1): worker harvest((0, 0), (2, 1))",
+                    "unit_position": [1, 1],
+                    "unit_type": "worker",
+                    "action_type": "harvest",
                 }
             ],
         }
-        simulation_runner_module.calculate_fitness_score = lambda *args, **kwargs: [0.5, 0.0]
-
-        fitness, metadata = simulation_runner_module.simulate_surrogate_games(
-            repo_root=repo_root,
-            config=config,
-            prompt="test prompt",
-            opponent="ai.RandomAI",
-            stats={},
-        )
-
-        assert fitness[0] == 0.5
-        assert fitness[1] > 0.0
-        assert metadata["winner"] == "0"
+        result = single_round_module.evaluate_eagle_single_round("Base prompt text", dynamic_prompt)
+        assert result["game_round_score"] > 0.0
+        assert isinstance(result["llm_response"], dict)
     finally:
-        simulation_runner_module.render_surrogate_agent = original_render
-        simulation_runner_module.launch_simulation = original_launch
-        simulation_runner_module.wait_for_simulation = original_wait
-        simulation_runner_module.get_latest_log_file = original_latest
-        simulation_runner_module.parse_log = original_parse
-        simulation_runner_module.calculate_fitness_score = original_calculate
+        single_round_module.generate_eagle_round_response = original_generate
 
 
 def test_surrogate_game_round_falls_back_to_llm_when_no_logs():

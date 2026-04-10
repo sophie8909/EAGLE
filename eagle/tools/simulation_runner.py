@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .fitness_calculator import calculate_fitness_score, resource_advantage_evaluation
+from .fitness_calculator import calculate_fitness_score
 from .llm import LLM
 from .log_parse import parse_log
 from .profiler import timer
@@ -102,6 +102,8 @@ def simulate_games(
     config,
     opponent: str | None,
     stats: dict[str, float],
+    *,
+    test: bool = False,
 ) -> tuple[list[float], dict[str, Any]]:
     """Run one full match, parse the resulting log, and compute real fitness."""
     with timer("bookkeeping_time", stats):
@@ -110,7 +112,7 @@ def simulate_games(
             set_opponent(repo_root, opponent)
 
     with timer("game_launch_time", stats):
-        process = launch_simulation(repo_root, config)
+        process = launch_simulation(repo_root, config, test=test)
 
     with timer("game_play_time", stats):
         _, stderr = wait_for_simulation(process)
@@ -166,6 +168,8 @@ def simulate_surrogate_games(
     stats: dict[str, float],
     ai1_class: str = "ai.abstraction.EAGLESurrogate",
     surrogate_spec: dict[str, object] | None = None,
+    *,
+    test: bool = False,
 ) -> tuple[list[float], dict[str, Any]]:
     """Run one match using the generated surrogate Java agent for player 1."""
     config_path = repo_root / "resources" / "config.properties"
@@ -181,7 +185,7 @@ def simulate_surrogate_games(
                 set_opponent(repo_root, opponent)
 
         with timer("game_launch_time", stats):
-            process = launch_simulation(repo_root, config)
+            process = launch_simulation(repo_root, config, test=test)
 
         with timer("game_play_time", stats):
             _, stderr = wait_for_simulation(process)
@@ -218,21 +222,6 @@ def simulate_surrogate_games(
             resource_advantage_weights=config.resource_advantage_weights,
             parsed_log=parsed_log,
         )
-        summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else {}
-        if summary.get("llm_move_count", 0) == 0:
-            fallback_secondary = resource_advantage_evaluation(
-                parsed_log,
-                resource_advantage_alpha=config.resource_advantage_alpha,
-                resource_advantage_weights=config.resource_advantage_weights,
-            )
-            if len(fitness) > 1:
-                fitness[1] = fallback_secondary
-            else:
-                fitness.append(fallback_secondary)
-            print(
-                "Surrogate log has no LLM move counters; "
-                f"using resource_advantage fallback for secondary score: {fallback_secondary}"
-            )
         metadata = {
             "parsed_log": parsed_log,
             "winner": parsed_log.get("summary", {}).get("winner"),
@@ -251,6 +240,8 @@ def simulate_policy_surrogate_games(
     prompt: str,
     opponent: str | None,
     stats: dict[str, float],
+    *,
+    test: bool = False,
 ) -> tuple[list[float], dict[str, Any]]:
     """Compile a prompt into a fixed policy-driven surrogate spec and run one match."""
     policy, surrogate_spec = compile_prompt_to_surrogate_spec(prompt)
@@ -261,6 +252,7 @@ def simulate_policy_surrogate_games(
         opponent,
         stats,
         surrogate_spec=surrogate_spec,
+        test=test,
     )
     metadata["compiled_policy"] = policy
     return fitness, metadata

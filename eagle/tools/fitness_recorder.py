@@ -60,7 +60,7 @@ class FitnessRecorder:
         """Build the non-prompt context that must match for safe cache reuse."""
         properties = self._read_properties_file()
         return {
-            "history_schema_version": 2,
+            "history_schema_version": 3,
             "opponent": opponent,
             "run_time_per_game_sec": int(self.config.run_time_per_game_sec),
             "resource_advantage_alpha": float(self.config.resource_advantage_alpha),
@@ -68,6 +68,8 @@ class FitnessRecorder:
             "map_location": properties.get("map_location"),
             "max_cycles": properties.get("max_cycles"),
             "eagle_llm_interval": int(self.config.llm_interval),
+            "ai1": properties.get("AI1"),
+            "ai2": properties.get("AI2"),
         }
 
     def build_history_key(self, prompt: Any, opponent: str | None) -> dict[str, Any]:
@@ -134,6 +136,9 @@ class FitnessRecorder:
             "fitness_score": record["fitness_score"],
             "evaluation_mode": record.get("evaluation_mode"),
             "opponent": record.get("opponent"),
+            "game_time_sec": record.get("game_time_sec"),
+            "benchmark_mode": record.get("benchmark_mode"),
+            "log_path": record.get("log_path"),
         }
         return history_record
 
