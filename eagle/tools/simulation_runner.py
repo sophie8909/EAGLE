@@ -10,8 +10,8 @@ from .fitness_calculator import calculate_fitness_score
 from .llm import LLM
 from .log_parse import parse_log
 from .profiler import timer
-from .surrogate_agent_generator import render_surrogate_agent
-from eagle.surrogate_agent import compile_prompt_to_surrogate_spec
+from ..surrogate.eval.agent_generator import render_surrogate_agent
+from ..surrogate.compiler import compile_prompt_to_surrogate_spec
 
 
 def save_prompt(repo_root: Path, prompt: str) -> None:

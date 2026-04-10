@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .component_pool import ComponentPool
-from .individual import Individual
+from ..tools.component_pool import ComponentPool
+from ..tools.individual import Individual
 
 
 class Crossover:

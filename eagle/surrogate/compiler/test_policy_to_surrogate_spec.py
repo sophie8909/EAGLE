@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from eagle.surrogate_agent.policy_to_surrogate_spec import (
+from eagle.surrogate.compiler.policy_to_surrogate_spec import (
     compile_prompt_to_surrogate_spec,
     policy_to_surrogate_spec,
 )

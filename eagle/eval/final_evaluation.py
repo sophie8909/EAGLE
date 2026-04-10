@@ -1,11 +1,11 @@
 import json
 from pathlib import Path
 
-from .config import EAConfig
-from .component_pool import ComponentPool
-from .ea_log_parse import parse_individuals_from_ea_log
+from ..tools.config import EAConfig
+from ..tools.component_pool import ComponentPool
+from ..tools.ea_log_parse import parse_individuals_from_ea_log
 from .evaluate import Evaluator
-from .main import OPPONENT_LIST
+from ..algorithm.main import OPPONENT_LIST
 from .result_test import build_result_record, extract_individual_ids_up_to_front
 
 

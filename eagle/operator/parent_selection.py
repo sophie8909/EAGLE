@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .fitness_utils import fitness_key
+from ..tools.fitness_utils import fitness_key
 
 class ParentSelection:
     """Parent-selection helpers shared by the legacy GA base class."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from eagle.ea.final_test_summary import format_final_test_summary, summarize_final_test_results
+from eagle.eval.final_test_summary import format_final_test_summary, summarize_final_test_results
 
 
 class FinalTestSummaryTests(unittest.TestCase):

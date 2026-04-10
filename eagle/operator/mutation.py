@@ -6,10 +6,10 @@ import random
 import time
 from typing import Any
 
-from .component_pool import ComponentPool
-from .config import EAConfig
-from .individual import Individual
-from .llm import LLM
+from ..tools.component_pool import ComponentPool
+from ..tools.config import EAConfig
+from ..tools.individual import Individual
+from ..tools.llm import LLM
 
 
 class Mutation:

@@ -9,12 +9,12 @@ import random
 from typing import List
 
 from .basic_ea import EA
-from .component_pool import ComponentPool
-from .individual import Individual
-from .config import EAConfig
-from .environment_selection import EnvironmentSelection
-from .fitness_utils import fitness_key
-from .profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
+from ..tools.component_pool import ComponentPool
+from ..tools.individual import Individual
+from ..tools.config import EAConfig
+from ..operator.environment_selection import EnvironmentSelection
+from ..tools.fitness_utils import fitness_key
+from ..tools.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
 
 
 class GA(EA):

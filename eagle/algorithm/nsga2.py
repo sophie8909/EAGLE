@@ -9,10 +9,10 @@ import random
 from typing import List, Tuple
 
 from .basic_ea import EA
-from .component_pool import ComponentPool
-from .individual import Individual
-from .config import EAConfig
-from .profiler import build_base_record, timer, write_jsonl
+from ..tools.component_pool import ComponentPool
+from ..tools.individual import Individual
+from ..tools.config import EAConfig
+from ..tools.profiler import build_base_record, timer, write_jsonl
 
 
 class NSGA2(EA):

@@ -1,8 +1,8 @@
 """Environment selection methods for the genetic algorithm."""
 
 from __future__ import annotations
-from .individual import Individual
-from .fitness_utils import fitness_key
+from ..tools.individual import Individual
+from ..tools.fitness_utils import fitness_key
 
 class EnvironmentSelection:
     """Legacy survivor-selection helpers for the single-objective GA path."""

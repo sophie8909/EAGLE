@@ -1,5 +1,5 @@
 """
-Main entry point for running the evolutionary algorithm to optimize prompt components for MicroRTS. 
+Main entry point for running the evolutionary algorithm to optimize prompt components for MicroRTS.
 This script initializes the experiment configuration, loads the prompt components, and executes the selected evolutionary algorithm to evolve effective prompts for guiding agent behavior in MicroRTS.
 """
 
@@ -13,9 +13,10 @@ OPPONENT_LIST = [
     "ai.abstraction.ollama",
     "ai.abstraction.HybridLLMRush",
     "ai.abstraction.StrategicLLMAgent",
-    # "ai.abstraction.TurtleDefense", 
+    # "ai.abstraction.TurtleDefense",
     "ai.abstraction.BoomEconomy"
 ]
+
 
 def _find_latest_log_dir() -> str | None:
     """Return the newest timestamped run directory under `logs/`, if any."""
@@ -31,8 +32,12 @@ def _find_latest_log_dir() -> str | None:
     return str(sorted(candidates)[-1])
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Run or resume the configured EAGLE evolutionary search."""
     import argparse
+
+    from ..tools.component_pool import ComponentPool
+    from ..tools.config import EAConfig
 
     parser = argparse.ArgumentParser(description="Run or resume the EAGLE evolutionary search.")
     parser.add_argument("--resume-log-dir", type=str, default=None, help="Resume from an existing log directory.")
@@ -43,15 +48,11 @@ if __name__ == "__main__":
     if args.resume_latest and resume_log_dir is None:
         resume_log_dir = _find_latest_log_dir()
 
-    # load configuration
-    from .config import EAConfig
     config = EAConfig()
-    # load prompt components    
-    from .component_pool import ComponentPool
     component_pool = ComponentPool.from_json("prompts/components.json")
-    # run evolutionary algorithm    
     if config.algorithm == "ga":
         from .ga import GA
+
         ga = GA(config, component_pool, opponent_list=OPPONENT_LIST)
         if resume_log_dir:
             ga.attach_log_dir(resume_log_dir)
@@ -59,6 +60,7 @@ if __name__ == "__main__":
         ga.run()
     elif config.algorithm == "nsga2":
         from .nsga2 import NSGA2
+
         nsga2 = NSGA2(config, component_pool, opponent_list=OPPONENT_LIST)
         if resume_log_dir:
             nsga2.attach_log_dir(resume_log_dir)
@@ -68,6 +70,7 @@ if __name__ == "__main__":
         nsga2.run_final_test()
     elif config.algorithm == "steady_state_nsga2":
         from .steady_state_nsga2 import SteadyStateNSGA2
+
         steady_state_nsga2 = SteadyStateNSGA2(config, component_pool, opponent_list=OPPONENT_LIST)
         if resume_log_dir:
             steady_state_nsga2.attach_log_dir(resume_log_dir)
@@ -75,12 +78,9 @@ if __name__ == "__main__":
         steady_state_nsga2.run()
         print("Running final test for Steady-State NSGA2...")
         steady_state_nsga2.run_final_test()
-    # elif config.algorithm == "moead":
-    #     from .moead import MOEAD
-    #     moead = MOEAD(config, component_pool)
-    #     moead.run()
     else:
         raise ValueError(f"Unsupported algorithm: {config.algorithm}")
-    
 
-    
+
+if __name__ == "__main__":
+    main()

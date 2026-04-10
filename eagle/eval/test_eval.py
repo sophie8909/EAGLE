@@ -2,20 +2,20 @@ import tempfile
 from pathlib import Path
 import shutil
 
-from .config import EAConfig
-from .evaluate import Evaluator
-from .fitness_recorder import FitnessRecorder
-from .nsga2 import NSGA2
-from .steady_state_nsga2 import SteadyStateNSGA2
-from .individual import Individual
-from . import evaluate as evaluate_module
-from .log_parse import (
+from eagle.tools.config import EAConfig
+from eagle.eval.evaluate import Evaluator
+from eagle.tools.fitness_recorder import FitnessRecorder
+from eagle.algorithm.nsga2 import NSGA2
+from eagle.algorithm.steady_state_nsga2 import SteadyStateNSGA2
+from eagle.tools.individual import Individual
+from eagle.eval import evaluate as evaluate_module
+from eagle.tools.log_parse import (
     parse_log,
     extract_dynamic_prompt_blocks,
     sample_recent_dynamic_prompt,
     parse_dynamic_prompt_state,
 )
-from .simulation_runner import set_llm_interval
+from eagle.tools.simulation_runner import set_llm_interval
 
 def test_parse_fitness():
     """Smoke-test parsing on the newest locally available game log."""
@@ -549,8 +549,8 @@ def test_set_llm_interval_updates_properties_file(tmp_path):
 
 def test_log_multi_objective_generation_includes_evaluation_mode(tmp_path):
     """Verify generation text logs show each individual's evaluation mode."""
-    from .basic_ea import EA
-    from . import basic_ea as basic_ea_module
+    from eagle.algorithm.basic_ea import EA
+    from eagle.algorithm import basic_ea as basic_ea_module
 
     ea = EA.__new__(EA)
     ea.component_pool = object()

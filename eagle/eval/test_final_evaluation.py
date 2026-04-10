@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import unittest
 
-from eagle.ea.config import EAConfig
-from eagle.ea.final_evaluation import _build_final_test_interval_runs
-from eagle.ea.result_test import build_result_record
+from eagle.tools.config import EAConfig
+from eagle.eval.final_evaluation import _build_final_test_interval_runs
+from eagle.eval.result_test import build_result_record
 
 
 class FinalEvaluationTests(unittest.TestCase):

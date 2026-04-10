@@ -7,11 +7,11 @@ from __future__ import annotations
 import random
 from typing import List, Tuple
 
-from .component_pool import ComponentPool
-from .config import EAConfig
-from .individual import Individual
+from ..tools.component_pool import ComponentPool
+from ..tools.config import EAConfig
+from ..tools.individual import Individual
 from .nsga2 import NSGA2
-from .profiler import timer
+from ..tools.profiler import timer
 
 
 class SteadyStateNSGA2(NSGA2):

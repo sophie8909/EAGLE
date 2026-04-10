@@ -8,18 +8,18 @@ import random
 from pathlib import Path
 from typing import Any, List
 
-from .checkpoint import CheckpointManager, deserialize_individual, serialize_individual
-from .config import EAConfig
-from .component_pool import ComponentPool
-from .individual import Individual
-from .evaluate import Evaluator
-from .parent_selection import ParentSelection
-from .crossover import Crossover
-from .mutation import Mutation
-from .environment_selection import EnvironmentSelection
-from .fitness_recorder import FitnessRecorder
-from .fitness_utils import normalize_fitness
-from .final_evaluation import run_final_test_suite
+from ..tools.checkpoint import CheckpointManager, deserialize_individual, serialize_individual
+from ..tools.config import EAConfig
+from ..tools.component_pool import ComponentPool
+from ..tools.individual import Individual
+from ..eval.evaluate import Evaluator
+from ..operator.parent_selection import ParentSelection
+from ..operator.crossover import Crossover
+from ..operator.mutation import Mutation
+from ..operator.environment_selection import EnvironmentSelection
+from ..tools.fitness_recorder import FitnessRecorder
+from ..tools.fitness_utils import normalize_fitness
+from ..eval.final_evaluation import run_final_test_suite
 
 class EA:
     """Shared scaffolding for the single- and multi-objective EA variants.

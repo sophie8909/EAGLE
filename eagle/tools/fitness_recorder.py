@@ -23,7 +23,7 @@ class FitnessRecorder:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self.records = []
         self.repo_root = Path(__file__).resolve().parents[2]
-        self.history_records_path = str(self.repo_root / "eagle" / "fitness_history.jsonl")
+        self.history_records_path = str(self.repo_root / "history" / "fitness_history.jsonl")
         self.history = []
         self.config = config
         self._load_existing_run_records()

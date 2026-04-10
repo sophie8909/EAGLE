@@ -8,16 +8,16 @@ import random
 from pathlib import Path
 from typing import Any
 
-from .component_pool import ComponentPool
-from .config import EAConfig
-from .individual import Individual
-from .move_validator import (
+from ..tools.component_pool import ComponentPool
+from ..tools.config import EAConfig
+from ..tools.individual import Individual
+from ..tools.move_validator import (
     combine_prompt_with_dynamic,
     is_in_bounds,
     score_game_round_response,
     validate_llm_move_against_state,
 )
-from .fitness_calculator import (
+from ..tools.fitness_calculator import (
     calculate_fitness_score,
     game_round_execution_score,
     material_total,
@@ -26,11 +26,11 @@ from .fitness_calculator import (
     turn_count_score,
     win_loss_evaluation,
 )
-from .surrogate_evaluator import (
+from ..surrogate.eval.evaluator import (
     surrogate_evaluation_game_round,
     surrogate_evaluation_policy,
 )
-from .simulation_runner import (
+from ..tools.simulation_runner import (
     detect_timeout,
     get_latest_log_file,
     launch_simulation,
@@ -42,9 +42,9 @@ from .simulation_runner import (
     simulate_surrogate_games,
     wait_for_simulation,
 )
-from .profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
-from .fitness_recorder import FitnessRecorder
-from .fitness_utils import normalize_fitness
+from ..tools.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
+from ..tools.fitness_recorder import FitnessRecorder
+from ..tools.fitness_utils import normalize_fitness
 
 
 
