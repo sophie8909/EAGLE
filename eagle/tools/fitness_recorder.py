@@ -60,7 +60,7 @@ class FitnessRecorder:
         """Build the non-prompt context that must match for safe cache reuse."""
         properties = self._read_properties_file()
         return {
-            "history_schema_version": 3,
+            "history_schema_version": 4,
             "opponent": opponent,
             "run_time_per_game_sec": int(self.config.run_time_per_game_sec),
             "resource_advantage_alpha": float(self.config.resource_advantage_alpha),

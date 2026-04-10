@@ -22,6 +22,7 @@ from ..tools.simulation_runner import (
     simulate_games,
 )
 from .evaluate import Evaluator
+from ..surrogate.eval.evaluator import estimate_llm_game_round_score
 
 
 def _build_random_prompt_artifacts(config: EAConfig) -> tuple[ComponentPool, Individual, str]:
@@ -54,6 +55,27 @@ def _average(values: list[float]) -> float | None:
     return sum(values) / len(values)
 
 
+def _infer_final_tick(parsed_log: dict[str, Any] | None) -> int | None:
+    """Infer the last observed game tick from parsed log structures."""
+    if not isinstance(parsed_log, dict):
+        return None
+
+    candidates: list[int] = []
+    for row in list(parsed_log.get("resource_history") or []):
+        time_value = row.get("time")
+        if isinstance(time_value, int):
+            candidates.append(time_value)
+    for row in list(parsed_log.get("feature_history") or []):
+        time_value = row.get("time")
+        if isinstance(time_value, int):
+            candidates.append(time_value)
+    for segment in list(parsed_log.get("segments") or []):
+        current_time = segment.get("current_time")
+        if isinstance(current_time, int):
+            candidates.append(current_time)
+    return max(candidates) if candidates else None
+
+
 def _build_mode_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregate one benchmark mode into compact summary statistics."""
     if not records:
@@ -64,6 +86,7 @@ def _build_mode_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
             "avg_game_round_score": None,
             "avg_resource_advantage_score": None,
             "avg_game_time_sec": None,
+            "avg_final_tick": None,
             "win_count": 0,
             "draw_count": 0,
             "loss_count": 0,
@@ -79,6 +102,9 @@ def _build_mode_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         ),
         "avg_game_time_sec": _average(
             [float(record.get("game_time_sec", 0.0)) for record in records if record.get("game_time_sec") is not None]
+        ),
+        "avg_final_tick": _average(
+            [float(record.get("final_tick", 0.0)) for record in records if record.get("final_tick") is not None]
         ),
         "win_count": sum(1 for record in records if record.get("result") == "Win"),
         "draw_count": sum(1 for record in records if record.get("result") == "Draw"),
@@ -114,13 +140,20 @@ def _write_match_results_csv(log_dir: Path, results: dict[str, Any]) -> None:
                     "game_round_score": record.get("game_round_score"),
                     "resource_advantage_score": record.get("resource_advantage_score"),
                     "game_time_sec": record.get("game_time_sec"),
+                    "final_tick": record.get("final_tick"),
+                    "max_cycles": record.get("max_cycles"),
                     "winner": record.get("winner"),
                     "timeout": record.get("timeout"),
                     "llm_calls": record.get("llm_calls"),
                     "llm_interval": record.get("llm_interval"),
                     "run_time_per_game_sec": record.get("run_time_per_game_sec"),
+                    "runner_script": record.get("runner_script"),
                     "ai1": record.get("ai1"),
                     "ai2": record.get("ai2"),
+                    "java_match_win_score": record.get("java_match_win_score"),
+                    "java_match_game_round_score": record.get("java_match_game_round_score"),
+                    "java_match_resource_advantage_score": record.get("java_match_resource_advantage_score"),
+                    "llm_round_score_source": record.get("llm_round_score_source"),
                     "cached": record.get("cached"),
                     "log_path": record.get("log_path"),
                 }
@@ -139,13 +172,20 @@ def _write_match_results_csv(log_dir: Path, results: dict[str, Any]) -> None:
         "game_round_score",
         "resource_advantage_score",
         "game_time_sec",
+        "final_tick",
+        "max_cycles",
         "winner",
         "timeout",
         "llm_calls",
         "llm_interval",
         "run_time_per_game_sec",
+        "runner_script",
         "ai1",
         "ai2",
+        "java_match_win_score",
+        "java_match_game_round_score",
+        "java_match_resource_advantage_score",
+        "llm_round_score_source",
         "cached",
         "log_path",
     ]
@@ -167,10 +207,12 @@ def _write_mode_summary_csv(log_dir: Path, results: dict[str, Any]) -> None:
         "mode",
         "match_count",
         "cached_match_count",
+        "runner_script",
         "avg_win_score",
         "avg_game_round_score",
         "avg_resource_advantage_score",
         "avg_game_time_sec",
+        "avg_final_tick",
         "win_count",
         "draw_count",
         "loss_count",
@@ -186,6 +228,7 @@ def _write_mode_summary_csv(log_dir: Path, results: dict[str, Any]) -> None:
                     "timestamp": results.get("timestamp"),
                     "prompt_digest": results.get("prompt_digest"),
                     "mode": mode_name,
+                    "runner_script": "RunLoop_5000.sh",
                     **summary,
                 }
             )
@@ -216,6 +259,7 @@ def _history_record_to_result(
         "stats": history_record.get("stats"),
         "llm_interval": history_record.get("llm_interval"),
         "run_time_per_game_sec": history_record.get("run_time_per_game_sec"),
+        "runner_script": history_record.get("runner_script"),
         "ai1": history_record.get("ai1"),
         "ai2": history_record.get("ai2"),
         "history_key": history_record.get("history_key"),
@@ -258,11 +302,14 @@ def _record_match(
     stats: dict[str, float] | None = None,
     llm_interval: int | None = None,
     ai1: str | None = None,
+    runner_script: str | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Persist one benchmark match so future reruns can reuse its result."""
     metadata = dict(metadata or {})
     parsed_log = metadata.get("parsed_log") if isinstance(metadata.get("parsed_log"), dict) else None
     parsed_summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else None
+    final_tick = _infer_final_tick(parsed_log)
     ai2 = opponent
     record = {
         "individual_id": None,
@@ -275,6 +322,8 @@ def _record_match(
         "benchmark_mode": benchmark_mode,
         "evaluation_time": float(game_time_sec),
         "game_time_sec": float(game_time_sec),
+        "final_tick": final_tick,
+        "max_cycles": parsed_summary.get("max_cycles") if isinstance(parsed_summary, dict) else None,
         "log_path": log_path,
         "winner": metadata.get("winner"),
         "timeout": metadata.get("timeout"),
@@ -283,12 +332,15 @@ def _record_match(
         "stats": dict(stats or {}),
         "llm_interval": llm_interval,
         "run_time_per_game_sec": int(recorder.config.run_time_per_game_sec),
+        "runner_script": runner_script,
         "ai1": ai1,
         "ai2": ai2,
         "components": {},
     }
+    if isinstance(extra, dict):
+        record.update(extra)
     recorder.record_fitness(record)
-    return {
+    result = {
         "opponent": opponent,
         "benchmark_mode": benchmark_mode,
         "fitness": list(fitness),
@@ -297,6 +349,8 @@ def _record_match(
         "game_round_score": fitness[1] if len(fitness) > 1 else 0.0,
         "resource_advantage_score": fitness[2] if len(fitness) > 2 else 0.0,
         "game_time_sec": float(game_time_sec),
+        "final_tick": final_tick,
+        "max_cycles": parsed_summary.get("max_cycles") if isinstance(parsed_summary, dict) else None,
         "log_path": log_path,
         "winner": metadata.get("winner"),
         "timeout": metadata.get("timeout"),
@@ -305,10 +359,14 @@ def _record_match(
         "stats": dict(stats or {}),
         "llm_interval": llm_interval,
         "run_time_per_game_sec": int(recorder.config.run_time_per_game_sec),
+        "runner_script": runner_script,
         "ai1": ai1,
         "ai2": ai2,
         "cached": False,
     }
+    if isinstance(extra, dict):
+        result.update(extra)
+    return result
 
 
 def _run_eagle_match(
@@ -360,6 +418,7 @@ def _run_eagle_match(
         stats=stats,
         llm_interval=llm_interval,
         ai1=ai1,
+        runner_script="RunLoop_5000.sh",
     )
 
 
@@ -388,7 +447,7 @@ def _run_surrogate_java_match(
     stats: dict[str, float] = {}
     started = time.perf_counter()
     set_ai1(evaluator.repo_root, ai1)
-    fitness, metadata = simulate_surrogate_games(
+    java_fitness, metadata = simulate_surrogate_games(
         repo_root=evaluator.repo_root,
         config=evaluator.config,
         prompt=prompt,
@@ -398,6 +457,17 @@ def _run_surrogate_java_match(
     )
     elapsed = time.perf_counter() - started
     evaluator.config.llm_interval = original_interval
+
+    llm_round_score = estimate_llm_game_round_score(
+        prompt=prompt,
+        repo_root=evaluator.repo_root,
+        config=evaluator.config,
+    )
+    fitness = [
+        float(java_fitness[0]) if len(java_fitness) > 0 else 0.0,
+        float(llm_round_score),
+        float(java_fitness[2]) if len(java_fitness) > 2 else 0.0,
+    ]
 
     return _record_match(
         recorder,
@@ -411,6 +481,14 @@ def _run_surrogate_java_match(
         stats=stats,
         llm_interval=llm_interval,
         ai1=ai1,
+        runner_script="RunLoop_5000.sh",
+        extra={
+            "java_match_fitness": list(java_fitness),
+            "java_match_win_score": float(java_fitness[0]) if len(java_fitness) > 0 else 0.0,
+            "java_match_game_round_score": float(java_fitness[1]) if len(java_fitness) > 1 else 0.0,
+            "java_match_resource_advantage_score": float(java_fitness[2]) if len(java_fitness) > 2 else 0.0,
+            "llm_round_score_source": "eagle_single_round_helper",
+        },
     )
 
 
@@ -448,7 +526,7 @@ def run_surrogate_validation_experiment(
             "strategy": dict(individual.strategy),
         },
         "opponents": opponents,
-        "history_cache_schema_version": 3,
+        "history_cache_schema_version": 4,
         "modes": {
             "eagle_final_test": [],
             "surrogate_java_final_test": [],

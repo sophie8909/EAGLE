@@ -5,6 +5,7 @@ from __future__ import annotations
 import glob
 import os
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,13 @@ def save_prompt(repo_root: Path, prompt: str) -> None:
     prompt_path = repo_root / "prompt.txt"
     with open(prompt_path, "w", encoding="utf-8") as f:
         f.write(prompt)
+
+
+def _target_agent_name(ai1_class: str | None) -> str:
+    """Extract the short Java class name used by log parsing winner detection."""
+    if not ai1_class:
+        return "EAGLE"
+    return str(ai1_class).strip().split(".")[-1] or "EAGLE"
 
 
 def set_opponent(repo_root: Path, opponent: str) -> None:
@@ -91,6 +99,45 @@ def get_latest_log_file(repo_root: Path) -> Path | None:
     return Path(sorted(log_files)[-1])
 
 
+def _log_looks_complete(log_content: str) -> bool:
+    """Return whether a finished-game marker is present in the captured log."""
+    if not log_content:
+        return False
+    return "=== GAME RESULT ===" in log_content or "WINNER:" in log_content
+
+
+def read_completed_log_file(
+    repo_root: Path,
+    *,
+    wait_timeout_sec: float = 3.0,
+    poll_interval_sec: float = 0.2,
+) -> tuple[Path | None, str | None]:
+    """Read the newest run log and wait briefly for final result lines to flush."""
+    deadline = time.perf_counter() + wait_timeout_sec
+    last_path: Path | None = None
+    last_content: str | None = None
+
+    while time.perf_counter() < deadline:
+        latest_log_file = get_latest_log_file(repo_root)
+        if latest_log_file is None or not latest_log_file.exists():
+            time.sleep(poll_interval_sec)
+            continue
+
+        try:
+            log_content = latest_log_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            time.sleep(poll_interval_sec)
+            continue
+
+        last_path = latest_log_file
+        last_content = log_content
+        if _log_looks_complete(log_content):
+            return latest_log_file, log_content
+        time.sleep(poll_interval_sec)
+
+    return last_path, last_content
+
+
 def detect_timeout(log_content: str) -> bool:
     """Heuristically detect timeout-related termination markers in a log."""
     lower_content = log_content.lower()
@@ -106,8 +153,10 @@ def simulate_games(
     test: bool = False,
 ) -> tuple[list[float], dict[str, Any]]:
     """Run one full match, parse the resulting log, and compute real fitness."""
+    ai1_class = "ai.abstraction.EAGLE"
     with timer("bookkeeping_time", stats):
         set_llm_interval(repo_root, config.llm_interval)
+        set_ai1(repo_root, ai1_class)
         if opponent is not None:
             set_opponent(repo_root, opponent)
 
@@ -127,8 +176,8 @@ def simulate_games(
                 "llm_calls": 0,
             }
 
-    latest_log_file = get_latest_log_file(repo_root)
-    if latest_log_file is None:
+    latest_log_file, log_content = read_completed_log_file(repo_root)
+    if latest_log_file is None or log_content is None:
         return [0.0, 0.0], {
             "parsed_log": None,
             "winner": None,
@@ -136,13 +185,10 @@ def simulate_games(
             "log_path": None,
             "llm_calls": 0,
         }
-
     print(f"Testing parse_fitness with log file: {latest_log_file}")
-    with open(latest_log_file, "r", encoding="utf-8") as f:
-        log_content = f.read()
 
     with timer("log_parse_time", stats):
-        parsed_log = parse_log(log_content)
+        parsed_log = parse_log(log_content, target_agent=_target_agent_name(ai1_class))
 
     fitness = calculate_fitness_score(
         log_content,
@@ -200,8 +246,8 @@ def simulate_surrogate_games(
                     "llm_calls": 0,
                 }
 
-        latest_log_file = get_latest_log_file(repo_root)
-        if latest_log_file is None:
+        latest_log_file, log_content = read_completed_log_file(repo_root)
+        if latest_log_file is None or log_content is None:
             return [0.0, 0.0], {
                 "parsed_log": None,
                 "winner": None,
@@ -210,11 +256,8 @@ def simulate_surrogate_games(
                 "llm_calls": 0,
             }
 
-        with open(latest_log_file, "r", encoding="utf-8") as f:
-            log_content = f.read()
-
         with timer("log_parse_time", stats):
-            parsed_log = parse_log(log_content)
+            parsed_log = parse_log(log_content, target_agent=_target_agent_name(ai1_class))
 
         fitness = calculate_fitness_score(
             log_content,

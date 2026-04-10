@@ -34,7 +34,7 @@ SCOREBOARD_RE = re.compile(
 )
 GAMEOVER_RE = re.compile(r"^\s*gs\.gameover\(\)\s*=\s*(?P<value>true|false)\s*$", re.MULTILINE)
 GAME_SETTING_AI_RE = re.compile(r"^\s*AI(?P<slot>[12]):\s*(?P<name>.+?)\s*$", re.MULTILINE)
-WINNER_RE = re.compile(r"^\s*WINNER:\s*(?P<winner>\d+)\s*$", re.MULTILINE)
+WINNER_RE = re.compile(r"^\s*WINNER\s*:?\s*(?P<winner>\d+)\s*$", re.MULTILINE | re.IGNORECASE)
 STACKTRACE_CLASS_RE = re.compile(r"\bat\s+(?P<class>[a-zA-Z_][\w.$]*)\.[\w$<>]+\(")
 
 APPLY_MOVE_RE = re.compile(

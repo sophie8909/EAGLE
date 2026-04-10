@@ -8,9 +8,9 @@ from .fitness_utils import normalize_fitness
 from .log_parse import parse_log
 
 
-def parse_winner_info(log_content: str) -> dict[str, Any]:
+def parse_winner_info(log_content: str, target_agent: str = "EAGLE") -> dict[str, Any]:
     """Parse one game log and expose the winner-related summary fields."""
-    parsed_log = parse_log(log_content)
+    parsed_log = parse_log(log_content, target_agent=target_agent)
     summary = parsed_log.get("summary", {})
     return {
         "parsed_log": parsed_log,
@@ -20,9 +20,12 @@ def parse_winner_info(log_content: str) -> dict[str, Any]:
     }
 
 
-def game_round_execution_score(log_content: str) -> float:
+def game_round_execution_score(
+    log_content: str,
+    parsed_log: dict[str, Any] | None = None,
+) -> float:
     """Score move execution quality from counters extracted out of the log summary."""
-    parsed_log = parse_log(log_content)
+    parsed_log = parsed_log or parse_log(log_content)
     summary = parsed_log["summary"]
     llm_moves = summary["llm_move_count"]
     direct_failure_count = summary["direct_failure_count"]
@@ -84,7 +87,20 @@ def resource_advantage_evaluation(
     """Compute a late-game-weighted material advantage score in [-1, 1]."""
     feature_history = parsed_log.get("feature_history", [])
     if not feature_history:
-        return 0.0
+        resource_history = parsed_log.get("resource_history", [])
+        if not resource_history:
+            return 0.0
+
+        numerator = 0.0
+        denominator = 0.0
+        n = len(resource_history)
+        for i, row in enumerate(resource_history):
+            p0_resources = float(row.get("p0_resources", 0.0))
+            p1_resources = float(row.get("p1_resources", 0.0))
+            weight = ((i + 1) / n) ** float(resource_advantage_alpha)
+            numerator += weight * (p0_resources - p1_resources)
+            denominator += weight * (p0_resources + p1_resources + eps)
+        return numerator / denominator if denominator > 0 else 0.0
 
     n = len(feature_history)
     numerator = 0.0
@@ -109,7 +125,7 @@ def calculate_fitness_score(
     """Assemble the three-objective fitness vector for a real game result."""
     winner_info = parsed_log or parse_winner_info(log_content)["parsed_log"]
     winning_score = win_loss_evaluation(log_content, parsed_log=winner_info)
-    round_score = game_round_execution_score(log_content)
+    round_score = game_round_execution_score(log_content, parsed_log=winner_info)
     resource_score = resource_advantage_evaluation(
         winner_info,
         resource_advantage_alpha=resource_advantage_alpha,
