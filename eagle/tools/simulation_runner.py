@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .fitness_calculator import calculate_fitness_score
+from .fitness_calculator import calculate_fitness_score, resource_advantage_evaluation
 from .llm import LLM
 from .log_parse import parse_log
 from .profiler import timer
@@ -218,6 +218,21 @@ def simulate_surrogate_games(
             resource_advantage_weights=config.resource_advantage_weights,
             parsed_log=parsed_log,
         )
+        summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else {}
+        if summary.get("llm_move_count", 0) == 0:
+            fallback_secondary = resource_advantage_evaluation(
+                parsed_log,
+                resource_advantage_alpha=config.resource_advantage_alpha,
+                resource_advantage_weights=config.resource_advantage_weights,
+            )
+            if len(fitness) > 1:
+                fitness[1] = fallback_secondary
+            else:
+                fitness.append(fallback_secondary)
+            print(
+                "Surrogate log has no LLM move counters; "
+                f"using resource_advantage fallback for secondary score: {fallback_secondary}"
+            )
         metadata = {
             "parsed_log": parsed_log,
             "winner": parsed_log.get("summary", {}).get("winner"),

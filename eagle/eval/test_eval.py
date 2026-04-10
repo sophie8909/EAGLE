@@ -18,6 +18,7 @@ from eagle.tools.log_parse import (
     parse_dynamic_prompt_state,
 )
 from eagle.tools.simulation_runner import set_llm_interval
+from eagle.tools import simulation_runner as simulation_runner_module
 
 def test_parse_fitness():
     """Smoke-test parsing on the newest locally available game log."""
@@ -333,6 +334,66 @@ def test_surrogate_version_dispatch_policy():
         assert scores == [0.6, 0.4]
     finally:
         evaluate_module.simulate_policy_surrogate_games = original_method
+
+
+def test_surrogate_simulation_uses_resource_advantage_when_no_llm_counters(tmp_path):
+    """Verify surrogate logs fall back to resource advantage for the second objective."""
+    config = EAConfig()
+    repo_root = tmp_path
+    resources_dir = repo_root / "resources"
+    resources_dir.mkdir(parents=True, exist_ok=True)
+    (resources_dir / "config.properties").write_text("AI1=ai.abstraction.EAGLE\n", encoding="utf-8")
+
+    log_file = repo_root / "logs" / "run_2026-04-10_20-28-18.log"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("placeholder log", encoding="utf-8")
+
+    original_render = simulation_runner_module.render_surrogate_agent
+    original_launch = simulation_runner_module.launch_simulation
+    original_wait = simulation_runner_module.wait_for_simulation
+    original_latest = simulation_runner_module.get_latest_log_file
+    original_parse = simulation_runner_module.parse_log
+    original_calculate = simulation_runner_module.calculate_fitness_score
+
+    try:
+        simulation_runner_module.render_surrogate_agent = lambda *args, **kwargs: None
+        simulation_runner_module.launch_simulation = lambda *args, **kwargs: type("P", (), {"returncode": 0})()
+        simulation_runner_module.wait_for_simulation = lambda process: ("", "")
+        simulation_runner_module.get_latest_log_file = lambda repo_root: log_file
+        simulation_runner_module.parse_log = lambda log_content: {
+            "summary": {
+                "winner": "0",
+                "llm_move_count": 0,
+            },
+            "feature_history": [
+                {
+                    "time": 0,
+                    "ally": {"base": 1, "worker": 3, "light": 0, "heavy": 0, "ranged": 0, "resource": 6},
+                    "enemy": {"base": 1, "worker": 1, "light": 0, "heavy": 0, "ranged": 0, "resource": 2},
+                    "neutral_resource": 20,
+                }
+            ],
+        }
+        simulation_runner_module.calculate_fitness_score = lambda *args, **kwargs: [0.5, 0.0]
+
+        fitness, metadata = simulation_runner_module.simulate_surrogate_games(
+            repo_root=repo_root,
+            config=config,
+            prompt="test prompt",
+            opponent="ai.RandomAI",
+            stats={},
+        )
+
+        assert fitness[0] == 0.5
+        assert fitness[1] > 0.0
+        assert metadata["winner"] == "0"
+    finally:
+        simulation_runner_module.render_surrogate_agent = original_render
+        simulation_runner_module.launch_simulation = original_launch
+        simulation_runner_module.wait_for_simulation = original_wait
+        simulation_runner_module.get_latest_log_file = original_latest
+        simulation_runner_module.parse_log = original_parse
+        simulation_runner_module.calculate_fitness_score = original_calculate
 
 
 def test_surrogate_game_round_falls_back_to_llm_when_no_logs():
