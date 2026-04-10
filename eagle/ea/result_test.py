@@ -170,8 +170,8 @@ def build_result_record(
         "opponent": opponent,
         "result": result,
         "fitness": fitness_score,
-        "resource_advantage": fitness_score[1],
-        "game_round_score": fitness_score[2],
+        "win_score": fitness_score[0] if len(fitness_score) > 0 else 0.0,
+        "game_round_score": fitness_score[1] if len(fitness_score) > 1 else 0.0,
         "log_path": log_path,
     }
 

@@ -11,6 +11,7 @@ from .llm import LLM
 from .log_parse import parse_log
 from .profiler import timer
 from .surrogate_agent_generator import render_surrogate_agent
+from eagle.surrogate_agent import compile_prompt_to_surrogate_spec
 
 
 def save_prompt(repo_root: Path, prompt: str) -> None:
@@ -162,11 +163,12 @@ def simulate_surrogate_games(
     opponent: str | None,
     stats: dict[str, float],
     ai1_class: str = "ai.abstraction.EAGLESurrogate",
+    surrogate_spec: dict[str, object] | None = None,
 ) -> tuple[list[float], dict[str, Any]]:
     """Run one match using the generated surrogate Java agent for player 1."""
     config_path = repo_root / "resources" / "config.properties"
     original_config = config_path.read_text(encoding="utf-8")
-    surrogate_spec = LLM.ollama_generate_surrogate_strategy_spec(prompt)
+    surrogate_spec = surrogate_spec or LLM.ollama_generate_surrogate_strategy_spec(prompt)
     render_surrogate_agent(repo_root, prompt, surrogate_spec)
 
     try:
@@ -224,3 +226,24 @@ def simulate_surrogate_games(
         return fitness, metadata
     finally:
         config_path.write_text(original_config, encoding="utf-8")
+
+
+def simulate_policy_surrogate_games(
+    repo_root: Path,
+    config,
+    prompt: str,
+    opponent: str | None,
+    stats: dict[str, float],
+) -> tuple[list[float], dict[str, Any]]:
+    """Compile a prompt into a fixed policy-driven surrogate spec and run one match."""
+    policy, surrogate_spec = compile_prompt_to_surrogate_spec(prompt)
+    fitness, metadata = simulate_surrogate_games(
+        repo_root,
+        config,
+        prompt,
+        opponent,
+        stats,
+        surrogate_spec=surrogate_spec,
+    )
+    metadata["compiled_policy"] = policy
+    return fitness, metadata

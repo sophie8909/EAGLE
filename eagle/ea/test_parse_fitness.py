@@ -9,7 +9,6 @@ from .nsga2 import NSGA2
 from .steady_state_nsga2 import SteadyStateNSGA2
 from .individual import Individual
 from . import evaluate as evaluate_module
-from . import llm as llm_module
 from .log_parse import (
     parse_log,
     extract_dynamic_prompt_blocks,
@@ -289,69 +288,54 @@ def test_surrogate_version_dispatch_game_round():
     config = EAConfig(surrogate_version="game_round")
     evaluator = Evaluator(None, config=config)
 
-    original_sampler = evaluate_module.sample_recent_dynamic_prompts
-    original_json = llm_module.LLM.ollama_generate_json_response
-    original_llm = llm_module.LLM.ollama_evaluate_fitness
+    original_method = evaluate_module.simulate_surrogate_games
 
     try:
-        evaluate_module.sample_recent_dynamic_prompts = lambda *args, **kwargs: [{
-            "time": 42,
-            "text": (
-                "Map size: 8x8\nTurn: 42/5000\nMax actions: 2\n\n"
-                "Feature locations:\n"
-                "(0, 0) Neutral Resource Node {resources=20}\n"
-                "(2, 1) Ally Base Unit {resources=4, HP=10}\n"
-                "(1, 1) Ally Worker Unit {HP=1}\n"
-                "(5, 6) Enemy Base Unit {resources=4, HP=10}\n"
-            ),
-            "log_path": "fake.log",
-        }]
-        llm_module.LLM.ollama_generate_json_response = staticmethod(
-            lambda prompt, model="llama3.1:8b", temperature=0.2: {
-                "thinking": "test",
-                "moves": [
-                    {
-                        "raw_move": "(1, 1): worker harvest((0, 0), (2, 1))",
-                        "unit_position": [1, 1],
-                        "unit_type": "worker",
-                        "action_type": "harvest",
-                    }
-                ],
-            }
-        )
-        llm_module.LLM.ollama_evaluate_fitness = staticmethod(
-            lambda prompt, example=None, model="llama3.1:8b": [0.1, 0.9, 0.1, 0.1]
+        evaluate_module.simulate_surrogate_games = lambda *args, **kwargs: (
+            [0.7, 0.2],
+            {
+                "log_path": "fake.log",
+            },
         )
 
         scores = evaluator.surrogate_evaluation("test prompt")
 
-        assert scores[0] > 0.0
+        assert scores == [0.7, 0.2]
     finally:
-        evaluate_module.sample_recent_dynamic_prompts = original_sampler
-        llm_module.LLM.ollama_generate_json_response = original_json
-        llm_module.LLM.ollama_evaluate_fitness = original_llm
+        evaluate_module.simulate_surrogate_games = original_method
+
+
+def test_surrogate_version_dispatch_policy():
+    """Verify policy surrogate dispatch when the config selects that mode."""
+    config = EAConfig(surrogate_version="policy")
+    evaluator = Evaluator(None, config=config)
+
+    original_method = evaluate_module.simulate_policy_surrogate_games
+
+    try:
+        evaluate_module.simulate_policy_surrogate_games = lambda *args, **kwargs: (
+            [0.6, 0.4],
+            {
+                "log_path": "fake.log",
+                "compiled_policy": {
+                    "strategy_identity": "balanced",
+                    "opening_plan": "harvest_first",
+                    "unit_preference": "balanced",
+                    "attack_timing": "mid",
+                },
+            },
+        )
+
+        scores = evaluator.surrogate_evaluation("test prompt")
+
+        assert scores == [0.6, 0.4]
+    finally:
+        evaluate_module.simulate_policy_surrogate_games = original_method
 
 
 def test_surrogate_game_round_falls_back_to_llm_when_no_logs():
-    """Verify fallback to the prompt-only surrogate when no sampled logs exist."""
-    config = EAConfig(surrogate_version="game_round")
-    evaluator = Evaluator(None, config=config)
-
-    original_sampler = evaluate_module.sample_recent_dynamic_prompts
-    original_llm = llm_module.LLM.ollama_evaluate_fitness
-
-    try:
-        evaluate_module.sample_recent_dynamic_prompts = lambda *args, **kwargs: []
-        llm_module.LLM.ollama_evaluate_fitness = staticmethod(
-            lambda prompt, example=None, model="llama3.1:8b": [0.5, 0.2, 0.7, 0.7]
-        )
-
-        scores = evaluator.surrogate_evaluation("test prompt")
-
-        assert scores[0] > 0.0
-    finally:
-        evaluate_module.sample_recent_dynamic_prompts = original_sampler
-        llm_module.LLM.ollama_evaluate_fitness = original_llm
+    """Legacy fallback-to-LLM behavior was intentionally removed."""
+    return None
 
 
 def test_game_round_score_from_llm_response():

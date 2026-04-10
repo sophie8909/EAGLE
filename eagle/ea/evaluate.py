@@ -11,9 +11,6 @@ from typing import Any
 from .component_pool import ComponentPool
 from .config import EAConfig
 from .individual import Individual
-from .log_parse import (
-    sample_recent_dynamic_prompts,
-)
 from .move_validator import (
     combine_prompt_with_dynamic,
     is_in_bounds,
@@ -30,18 +27,18 @@ from .fitness_calculator import (
     win_loss_evaluation,
 )
 from .surrogate_evaluator import (
-    adjust_surrogate_scores,
-    build_surrogate_examples,
     surrogate_evaluation_game_round,
-    surrogate_evaluation_llm,
+    surrogate_evaluation_policy,
 )
 from .simulation_runner import (
     detect_timeout,
     get_latest_log_file,
     launch_simulation,
     save_prompt,
+    set_llm_interval,
     set_opponent,
     simulate_games,
+    simulate_policy_surrogate_games,
     simulate_surrogate_games,
     wait_for_simulation,
 )
@@ -66,12 +63,12 @@ class Evaluator:
         self,
         fitness_recorder: FitnessRecorder | None = None,
     ) -> list[list[str]]:
-        """Build a few prompt/fitness examples for surrogate LLM calibration."""
-        return build_surrogate_examples(fitness_recorder)
+        """The prompt-only LLM surrogate path is disabled."""
+        return []
 
     def _adjust_surrogate_scores(self, surrogate_scores: list[float]) -> list[float]:
-        """Apply the project-specific post-processing used on surrogate outputs."""
-        return adjust_surrogate_scores(surrogate_scores)
+        """The prompt-only LLM surrogate path is disabled."""
+        return surrogate_scores
 
     def _combine_prompt_with_dynamic(self, prompt: str, dynamic_prompt_text: str) -> str:
         """Merge a strategy prompt with one sampled Dynamic Prompt block."""
@@ -316,6 +313,10 @@ class Evaluator:
         """Update the MicroRTS config so the next run uses the requested opponent."""
         set_opponent(self.repo_root, opponent)
 
+    def set_llm_interval(self, llm_interval: int) -> None:
+        """Update the MicroRTS config so the next run uses the requested LLM interval."""
+        set_llm_interval(self.repo_root, llm_interval)
+
     def launch_simulation(self, test: bool=False):
         """Launch the game loop script used for either training or final testing."""
         return launch_simulation(self.repo_root, self.config, test=test)
@@ -353,19 +354,23 @@ class Evaluator:
             return self.surrogate_evaluation_game_round(
                 prompt,
                 opponent=opponent,
-                fitness_recorder=fitness_recorder,
             )
-        return self.surrogate_evaluation_llm(prompt, fitness_recorder=fitness_recorder)
+        return self.surrogate_evaluation_policy(
+            prompt,
+            opponent=opponent,
+        )
 
-    def surrogate_evaluation_llm(self, prompt: str, fitness_recorder: FitnessRecorder | None = None) -> list[float]:
-        """Evaluate a prompt with the prompt-only LLM surrogate."""
-        return surrogate_evaluation_llm(prompt, fitness_recorder=fitness_recorder)
+    # The original prompt-only LLM surrogate function is intentionally kept as
+    # commented reference after removal from runtime dispatch.
+    #
+    # def surrogate_evaluation_llm(self, prompt: str, fitness_recorder: FitnessRecorder | None = None) -> list[float]:
+    #     """Evaluate a prompt with the prompt-only LLM surrogate."""
+    #     return surrogate_evaluation_llm(prompt, fitness_recorder=fitness_recorder)
 
     def surrogate_evaluation_game_round(
         self,
         prompt: str,
         opponent: str | None = None,
-        fitness_recorder: FitnessRecorder | None = None,
     ) -> list[float]:
         """Evaluate a prompt by generating and running the surrogate Java agent."""
         return surrogate_evaluation_game_round(
@@ -373,8 +378,19 @@ class Evaluator:
             repo_root=self.repo_root,
             config=self.config,
             opponent=opponent,
-            fitness_recorder=fitness_recorder,
-            sample_recent_dynamic_prompts_fn=sample_recent_dynamic_prompts,
             simulate_surrogate_games_fn=simulate_surrogate_games,
-            surrogate_evaluation_llm_fn=self.surrogate_evaluation_llm,
+        )
+
+    def surrogate_evaluation_policy(
+        self,
+        prompt: str,
+        opponent: str | None = None,
+    ) -> list[float]:
+        """Evaluate a prompt by compiling it into a fixed-policy surrogate agent."""
+        return surrogate_evaluation_policy(
+            prompt,
+            repo_root=self.repo_root,
+            config=self.config,
+            opponent=opponent,
+            simulate_policy_surrogate_games_fn=simulate_policy_surrogate_games,
         )

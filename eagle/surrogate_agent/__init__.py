@@ -8,6 +8,10 @@ from .prompt_policy_compiler import (
     compile_prompt_to_policy,
     validate_policy,
 )
+from .policy_to_surrogate_spec import (
+    compile_prompt_to_surrogate_spec,
+    policy_to_surrogate_spec,
+)
 
 __all__ = [
     "ALLOWED_VALUES",
@@ -15,5 +19,7 @@ __all__ = [
     "Policy",
     "build_compiler_prompt",
     "compile_prompt_to_policy",
+    "compile_prompt_to_surrogate_spec",
+    "policy_to_surrogate_spec",
     "validate_policy",
 ]

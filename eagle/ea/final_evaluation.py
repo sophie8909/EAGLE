@@ -38,6 +38,16 @@ def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: in
     )
 
 
+def _build_final_test_interval_runs(config: EAConfig) -> list[dict[str, int | str]]:
+    """Return the two final-test interval variants that should always be evaluated."""
+
+    configured_interval = int(getattr(config, "llm_interval", 1))
+    return [
+        {"label": "config", "llm_interval": configured_interval},
+        {"label": "interval_1", "llm_interval": 1},
+    ]
+
+
 def run_final_test_suite(
     current_log_dir: str,
     last_gen: int,
@@ -70,37 +80,47 @@ def run_final_test_suite(
         "generation_log": generation_log_path.name,
         "selected_individual_count": len(selected_individuals),
         "selection_rule": f"pareto_front_1_to_{final_test_max_front}",
+        "interval_runs": _build_final_test_interval_runs(config),
         "results": {},
     }
     for individual in selected_individuals:
         prompt = evaluator.construct_prompt(individual)
         evaluator.save_prompt(prompt)
 
-        for opponent in OPPONENT_LIST:
-            print(f"Testing against opponent: {opponent}")
-            evaluator.set_opponent(opponent)
+        for interval_run in results["interval_runs"]:
+            llm_interval = int(interval_run["llm_interval"])
+            evaluator.set_llm_interval(llm_interval)
 
-            process = evaluator.launch_simulation(test=True)
-            evaluator.wait_for_simulation(process)
+            for opponent in OPPONENT_LIST:
+                print(
+                    "Testing against opponent: "
+                    f"{opponent} (mode={interval_run['label']}, llm_interval={llm_interval})"
+                )
+                evaluator.set_opponent(opponent)
 
-            latest_log_file = evaluator.get_latest_log_file()
-            if not latest_log_file:
-                continue
+                process = evaluator.launch_simulation(test=True)
+                evaluator.wait_for_simulation(process)
 
-            print(f"Testing parse_fitness with log file: {latest_log_file}")
-            with open(latest_log_file, "r") as f:
-                log_content = f.read()
+                latest_log_file = evaluator.get_latest_log_file()
+                if not latest_log_file:
+                    continue
 
-            fitness_score = evaluator.calculate_fitness_score(log_content)
-            results["results"].setdefault(individual.id, [])
-            results["results"][individual.id].append(
-                build_result_record(
+                print(f"Testing parse_fitness with log file: {latest_log_file}")
+                with open(latest_log_file, "r", encoding="utf-8") as f:
+                    log_content = f.read()
+
+                fitness_score = evaluator.calculate_fitness_score(log_content)
+                result_record = build_result_record(
                     individual,
                     opponent,
                     fitness_score,
                     str(latest_log_file),
                 )
-            )
+                result_record["interval_mode"] = str(interval_run["label"])
+                result_record["llm_interval"] = llm_interval
 
-            with open(experiment_log_dir / "final_test_results.json", "w", encoding="utf-8") as f:
-                json.dump(results, f, indent=4)
+                results["results"].setdefault(individual.id, [])
+                results["results"][individual.id].append(result_record)
+
+                with open(experiment_log_dir / "final_test_results.json", "w", encoding="utf-8") as f:
+                    json.dump(results, f, indent=4)
