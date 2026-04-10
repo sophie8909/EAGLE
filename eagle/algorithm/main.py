@@ -37,7 +37,7 @@ def main() -> None:
     import argparse
 
     from ..tools.component_pool import ComponentPool
-    from ..tools.config import EAConfig
+    from ..tools.config import EAConfig, load_config_from_json
 
     parser = argparse.ArgumentParser(description="Run or resume the EAGLE evolutionary search.")
     parser.add_argument("--resume-log-dir", type=str, default=None, help="Resume from an existing log directory.")
@@ -48,7 +48,8 @@ def main() -> None:
     if args.resume_latest and resume_log_dir is None:
         resume_log_dir = _find_latest_log_dir()
 
-    config = EAConfig()
+    config = load_config_from_json(resume_log_dir) if resume_log_dir else EAConfig()
+    config.validate()
     component_pool = ComponentPool.from_json("prompts/components.json")
     if config.algorithm == "ga":
         from .ga import GA

@@ -90,6 +90,15 @@ class NSGA2(EA):
 
         return _pick_one(), _pick_one()
 
+    def select_parent(self) -> Individual:
+        """Sample one parent with NSGA-II's tournament selection policy."""
+        if len(self.population) < 2:
+            raise ValueError("NSGA-II requires at least two individuals for parent selection.")
+
+        self._assign_rank_and_crowding(self.population)
+        a, b = random.sample(self.population, 2)
+        return self._better_parent(a, b)
+
     def dominates(self, ind1: Individual, ind2: Individual) -> bool:
         """
         Return True if ind1 Pareto-dominates ind2.

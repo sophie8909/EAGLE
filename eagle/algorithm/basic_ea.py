@@ -46,8 +46,17 @@ class EA:
         """Persist the run configuration next to the generated logs."""
         import json
         config_file = f"{log_dir}/config.json"
+        valid_fields = set(self.config.__dataclass_fields__.keys())
         with open(config_file, "w") as f:
-            json.dump(dict(self.config.__dict__), f, indent=4)
+            json.dump(
+                {
+                    key: value
+                    for key, value in self.config.__dict__.items()
+                    if key in valid_fields
+                },
+                f,
+                indent=4,
+            )
 
     def initialize_population(self) -> List[Individual]:
         """Create the starting population by sampling strategy indices at random."""
@@ -194,19 +203,34 @@ class EA:
 
         raise ValueError(f"Unsupported selection_method: {self.config.selection_method}")
 
+    def select_parent(self) -> Individual:
+        """Choose exactly one parent according to the configured selection rule."""
+        if self.config.selection_method == "random":
+            return self.population[ParentSelection.random_selection(self.population)]
+
+        if self.config.selection_method == "tournament":
+            fitnesses = [normalize_fitness(ind.fitness) for ind in self.population]
+            idx = ParentSelection.tournament_selection(
+                self.population,
+                fitnesses,
+                min(self.config.tournament_size, len(self.population)),
+            )
+            return self.population[idx]
+
+        raise ValueError(f"Unsupported selection_method: {self.config.selection_method}")
+
     def crossover(self, parent1: Individual, parent2: Individual) -> Individual:
         """Create one child and seed its fitness with the parents' average values."""
-        if self.config.crossover_method == "uniform":
+        if self.config.crossover_mode == "uniform":
             offspring = Crossover.uniform_crossover(self.component_pool, parent1, parent2)
             # Seed surrogate evaluation with a cheap inherited estimate. Real
             # evaluation later overwrites the child with game-derived scores.
-            print(parent1.fitness, parent2.fitness)
             offspring.fitness = [
                 (left + right) / 2
                 for left, right in zip(parent1.fitness, parent2.fitness)
             ]
             return offspring
-        raise ValueError(f"Unsupported crossover_method: {self.config.crossover_method}")
+        raise ValueError(f"Unsupported crossover_mode: {self.config.crossover_mode}")
     
     def mutate(self, individual: Individual) -> Individual:
         """Apply one of the configured mutation strategies to a copied child."""
@@ -217,7 +241,7 @@ class EA:
                 self.config,
             )
             return mutated_individual
-        return individual   
+        return individual.copy()
     
     def real_evaluation(self, individual: Individual, opponent: str, generation: int | None = None):
         """Run a full MicroRTS game and write the resulting fitness back to the individual."""

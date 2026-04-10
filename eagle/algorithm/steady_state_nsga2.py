@@ -5,11 +5,12 @@ Steady-State NSGA-II implementation for multi-objective optimization.
 from __future__ import annotations
 
 import random
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from ..tools.component_pool import ComponentPool
 from ..tools.config import EAConfig
 from ..tools.individual import Individual
+from ..operator.reflection import Reflection
 from .nsga2 import NSGA2
 from ..tools.profiler import timer
 
@@ -35,28 +36,164 @@ class SteadyStateNSGA2(NSGA2):
         self,
         generation_stats: dict[str, float],
     ) -> Individual:
-        """Generate exactly one offspring."""
-        # Steady-state step A: select two parents from the current population.
-        with timer("parent_selection_time", generation_stats):
-            parent1, parent2 = self.select_parents()
-
+        """Generate exactly one offspring through one sampled reproduction operator."""
         child_stats: dict[str, float] = {}
-        # Steady-state step B: create exactly one child via crossover + mutation.
         with timer("offspring_generation_time", generation_stats):
-            with timer("crossover_time", child_stats):
-                child = self.crossover(parent1, parent2)
-            with timer("mutation_time", child_stats):
-                child = self.mutate(child)
+            child = self.generate_candidate_child(generation_stats, child_stats)
+        return child
+
+    def sample_reproduction_operator(
+        self,
+        config: EAConfig,
+        rng: random.Random,
+    ) -> str:
+        """Sample one reproduction operator from the validated config distribution."""
+        weights = config.reproduction_operator_weights()
+        if not weights:
+            raise ValueError("No reproduction operators are enabled in reproduction_operator_probs.")
+        operators = list(weights.keys())
+        probabilities = [weights[operator] for operator in operators]
+        return rng.choices(operators, weights=probabilities, k=1)[0]
+
+    def generate_candidate_child(
+        self,
+        generation_stats: dict[str, float],
+        child_stats: dict[str, float],
+    ) -> Individual:
+        """Sample one operator and generate exactly one candidate child."""
+        operator = self.sample_reproduction_operator(self.config, random)
+        return self.generate_child_with_operator(
+            operator=operator,
+            generation_stats=generation_stats,
+            child_stats=child_stats,
+        )
+
+    def generate_child_with_operator(
+        self,
+        *,
+        operator: str,
+        generation_stats: dict[str, float],
+        child_stats: dict[str, float],
+    ) -> Individual:
+        """Dispatch to the operator-specific child generator and attach metadata."""
+        if operator == "crossover":
+            child, metadata = self.generate_child_by_crossover(generation_stats, child_stats)
+        elif operator == "mutation":
+            child, metadata = self.generate_child_by_mutation(generation_stats, child_stats)
+        elif operator == "reflection":
+            child, metadata = self.generate_child_by_reflection(generation_stats, child_stats)
+        else:
+            raise ValueError(f"Unsupported reproduction operator: {operator!r}")
 
         child.operator_profile = {
+            "operator_type": operator,
+            "parent_ids": metadata.get("parent_ids", []),
+            "crossover_mode": metadata.get("crossover_mode"),
+            "mutation_mode": metadata.get("mutation_mode"),
+            "reflection_context_used_fallback": metadata.get("reflection_context_used_fallback", False),
+            "reflection_fell_back_to_mutation": metadata.get("reflection_fell_back_to_mutation", False),
+            "rewritten_components": metadata.get("rewritten_components", []),
             "crossover_time": child_stats.get("crossover_time", 0.0),
             "mutation_time": child_stats.get("mutation_time", 0.0),
+            "reflection_time": child_stats.get("reflection_time", 0.0),
             "EA_operator_time": child_stats.get("crossover_time", 0.0)
-            + child_stats.get("mutation_time", 0.0),
+            + child_stats.get("mutation_time", 0.0)
+            + child_stats.get("reflection_time", 0.0),
             "ea_llm_call_time": getattr(child, "ea_llm_call_time", 0.0),
         }
-
         return child
+
+    def generate_child_by_crossover(
+        self,
+        generation_stats: dict[str, float],
+        child_stats: dict[str, float],
+    ) -> tuple[Individual, dict[str, Any]]:
+        """Generate one child with the configured crossover operator."""
+        with timer("parent_selection_time", generation_stats):
+            parent1, parent2 = self.select_parents()
+        with timer("crossover_time", child_stats):
+            child = self.crossover(parent1, parent2)
+        return child, {
+            "parent_ids": [getattr(parent1, "id", None), getattr(parent2, "id", None)],
+            "crossover_mode": self.config.crossover_mode,
+        }
+
+    def generate_child_by_mutation(
+        self,
+        generation_stats: dict[str, float],
+        child_stats: dict[str, float],
+        parent: Individual | None = None,
+    ) -> tuple[Individual, dict[str, Any]]:
+        """Generate one child with a standalone single-parent mutation operator."""
+        selected_parent = parent
+        if selected_parent is None:
+            with timer("parent_selection_time", generation_stats):
+                selected_parent = self.select_parent()
+
+        with timer("mutation_time", child_stats):
+            child = self.mutate(selected_parent)
+        mutation_metadata = getattr(child, "mutation_metadata", {}) or {}
+        return child, {
+            "parent_ids": [getattr(selected_parent, "id", None)],
+            "mutation_mode": mutation_metadata.get("mutation_mode"),
+            "rewritten_components": mutation_metadata.get("changed_components", []),
+        }
+
+    def build_reflection_context(
+        self,
+        parent: Individual,
+    ) -> dict[str, Any]:
+        """Build one compact reflection context from the parent's last real evaluation."""
+        last_real_evaluation = getattr(parent, "last_real_evaluation", None)
+        if isinstance(last_real_evaluation, dict):
+            reflection_context = last_real_evaluation.get("reflection_context")
+            if isinstance(reflection_context, dict):
+                return dict(reflection_context)
+
+        fitness = parent.fitness if isinstance(parent.fitness, list) else None
+        return Reflection.safe_fallback_context(fitness=fitness)
+
+    def generate_child_by_reflection(
+        self,
+        generation_stats: dict[str, float],
+        child_stats: dict[str, float],
+    ) -> tuple[Individual, dict[str, Any]]:
+        """Generate one child with the conservative feedback-guided reflection operator."""
+        with timer("parent_selection_time", generation_stats):
+            parent = self.select_parent()
+
+        reflection_context = self.build_reflection_context(parent)
+        if reflection_context.get("missing_data"):
+            print(
+                f"Reflection context missing for parent {getattr(parent, 'id', None)}; "
+                "falling back to mutation."
+            )
+            child, metadata = self.generate_child_by_mutation(
+                generation_stats,
+                child_stats,
+                parent=parent,
+            )
+            metadata["reflection_context_used_fallback"] = True
+            metadata["reflection_fell_back_to_mutation"] = True
+            return child, metadata
+
+        with timer("reflection_time", child_stats):
+            child, reflection_metadata = Reflection.apply_reflection(
+                parent,
+                self.component_pool,
+                self.config,
+                reflection_context,
+            )
+
+        return child, {
+            "parent_ids": [getattr(parent, "id", None)],
+            "rewritten_components": reflection_metadata.get("rewritten_components", []),
+            "reflection_context_used_fallback": reflection_metadata.get(
+                "reflection_context_used_fallback",
+                False,
+            ),
+            "reflection_fell_back_to_mutation": False,
+        }
 
     def _generate_candidate_offspring_batch(
         self,

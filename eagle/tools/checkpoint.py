@@ -24,6 +24,14 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
     if isinstance(operator_profile, dict):
         payload["operator_profile"] = dict(operator_profile)
 
+    mutation_metadata = getattr(individual, "mutation_metadata", None)
+    if isinstance(mutation_metadata, dict):
+        payload["mutation_metadata"] = dict(mutation_metadata)
+
+    last_real_evaluation = getattr(individual, "last_real_evaluation", None)
+    if isinstance(last_real_evaluation, dict):
+        payload["last_real_evaluation"] = dict(last_real_evaluation)
+
     for attr in ("pareto_rank", "crowding_distance", "ea_llm_call_time"):
         if hasattr(individual, attr):
             payload[attr] = getattr(individual, attr)
@@ -48,6 +56,14 @@ def deserialize_individual(payload: dict[str, Any]) -> Individual:
     operator_profile = payload.get("operator_profile")
     if isinstance(operator_profile, dict):
         individual.operator_profile = dict(operator_profile)
+
+    mutation_metadata = payload.get("mutation_metadata")
+    if isinstance(mutation_metadata, dict):
+        individual.mutation_metadata = dict(mutation_metadata)
+
+    last_real_evaluation = payload.get("last_real_evaluation")
+    if isinstance(last_real_evaluation, dict):
+        individual.last_real_evaluation = dict(last_real_evaluation)
 
     for attr in ("pareto_rank", "crowding_distance", "ea_llm_call_time"):
         if attr in payload:

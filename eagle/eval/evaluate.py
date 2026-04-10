@@ -30,6 +30,7 @@ from ..surrogate.eval.evaluator import (
     surrogate_evaluation_game_round,
     surrogate_evaluation_policy,
 )
+from ..operator.reflection import Reflection, read_max_turn_hint
 from ..tools.simulation_runner import (
     detect_timeout,
     get_latest_log_file,
@@ -182,6 +183,21 @@ class Evaluator:
             evaluation_mode = "real" if use_real_evaluation else (history_reuse_mode or "surrogate")
         individual.fitness = fitness
         individual.evaluation_mode = evaluation_mode
+        if use_real_evaluation:
+            summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else {}
+            reflection_context = Reflection.build_compact_reflection_context(
+                parsed_log=parsed_log,
+                fitness=fitness,
+                timeout=timeout,
+                max_turn_hint=read_max_turn_hint(self.repo_root),
+            )
+            individual.last_real_evaluation = {
+                "winner": winner,
+                "timeout": timeout,
+                "log_path": log_path,
+                "parsed_summary": summary,
+                "reflection_context": reflection_context,
+            }
         summarize_total_eval_time(stats)
 
         operator_profile = getattr(individual, "operator_profile", None)

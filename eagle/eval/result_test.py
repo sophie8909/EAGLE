@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Iterable
 
 from ..tools.component_pool import ComponentPool
-from ..tools.config import EAConfig
+from ..tools.config import EAConfig, load_config_from_json
 from ..tools.ea_log_parse import parse_individuals_from_ea_log
 from .evaluate import Evaluator
 from ..algorithm.main import OPPONENT_LIST
@@ -73,18 +73,7 @@ def load_run_config(log_dir: str | Path) -> EAConfig:
     This keeps manual replay aligned with the original run settings instead of
     replaying under today's default `EAConfig()`.
     """
-    log_dir_path = Path(log_dir)
-    config_path = log_dir_path / "config.json"
-    config = EAConfig()
-    if not config_path.exists():
-        return config
-
-    payload = json.loads(config_path.read_text(encoding="utf-8"))
-    valid_fields = set(config.__dataclass_fields__.keys())
-    for key, value in payload.items():
-        if key in valid_fields:
-            setattr(config, key, value)
-    return config
+    return load_config_from_json(log_dir)
 
 
 def extract_individual_ids_up_to_front(
