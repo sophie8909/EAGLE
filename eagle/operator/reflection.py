@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..tools.component_pool import ComponentPool
-from ..tools.config import EAConfig
+from ..config import EAConfig
 from ..tools.individual import Individual
 from .mutation import Mutation
 

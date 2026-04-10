@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from ..tools.component_pool import ComponentPool
-from ..tools.config import EAConfig
+from ..config import EAConfig
 from ..tools.individual import Individual
 from ..tools.llm import LLM
 

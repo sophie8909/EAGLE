@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 import shutil
 
-from eagle.tools.config import EAConfig
+from eagle.config import EAConfig
 from eagle.eval.evaluate import Evaluator
 from eagle.tools.fitness_recorder import FitnessRecorder
 from eagle.algorithm.nsga2 import NSGA2

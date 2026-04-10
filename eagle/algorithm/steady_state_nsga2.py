@@ -8,7 +8,7 @@ import random
 from typing import Any, List, Tuple
 
 from ..tools.component_pool import ComponentPool
-from ..tools.config import EAConfig
+from ..config import EAConfig
 from ..tools.individual import Individual
 from ..operator.reflection import Reflection
 from .nsga2 import NSGA2

@@ -11,7 +11,7 @@ from typing import List
 from .basic_ea import EA
 from ..tools.component_pool import ComponentPool
 from ..tools.individual import Individual
-from ..tools.config import EAConfig
+from ..config import EAConfig
 from ..operator.environment_selection import EnvironmentSelection
 from ..tools.fitness_utils import fitness_key
 from ..tools.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl

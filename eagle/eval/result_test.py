@@ -22,10 +22,10 @@ from pathlib import Path
 from typing import Iterable
 
 from ..tools.component_pool import ComponentPool
-from ..tools.config import EAConfig, load_config_from_json
+from ..config import EAConfig, load_config_from_json
 from ..tools.ea_log_parse import parse_individuals_from_ea_log
 from .evaluate import Evaluator
-from ..algorithm.main import OPPONENT_LIST
+from ..main import OPPONENT_LIST
 
 # CLI examples:
 # `py -m eagle.eval.result_test --log-dir logs/20260409_123456 --generation 20`

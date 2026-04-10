@@ -3,11 +3,11 @@
 import json
 from pathlib import Path
 
-from ..tools.config import EAConfig
+from ..config import EAConfig
 from ..tools.component_pool import ComponentPool
 from ..tools.ea_log_parse import parse_individuals_from_ea_log
 from .evaluate import Evaluator
-from ..algorithm.main import OPPONENT_LIST
+from ..main import OPPONENT_LIST
 from .result_test import build_result_record, extract_individual_ids_up_to_front
 
 

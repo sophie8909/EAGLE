@@ -67,7 +67,7 @@ If you use the Java side LLM game agent directly, make sure the MicroRTS runner 
 
 Main configuration lives in:
 
-- `eagle/tools/config.py`
+- `eagle/config.py`
 
 Important settings:
 
@@ -95,7 +95,7 @@ py -3 -m eagle.main
 
 This will:
 
-1. load prompt components from `prompts/components.json`
+1. load prompt components from `eagle/prompts/components.json`
 2. initialize a population
 3. evolve prompts with GA, NSGA-II, or Steady-State NSGA-II
 4. run real and surrogate evaluations
@@ -114,7 +114,7 @@ Each individual is represented by:
 
 The indices point into the component pool loaded from:
 
-- `prompts/components.json`
+- `eagle/prompts/components.json`
 
 Rendering happens in:
 
@@ -287,7 +287,7 @@ Compiles the prompt into a fixed policy-style surrogate spec, renders the surrog
 
 Samples Dynamic Prompt blocks from recent logs, combines them with the candidate prompt, asks the LLM for moves, validates those moves against the sampled round state, and uses the resulting score as the surrogate signal.
 
-Relevant settings in `eagle/tools/config.py`:
+Relevant settings in `eagle/config.py`:
 
 - `surrogate_recent_log_window`
 - `surrogate_game_round_samples`
@@ -386,9 +386,10 @@ Useful options:
 
 ```text
 eagle/
-|- main.py                         # top-level entry point
+|- main.py                         # main run entry and algorithm dispatch
+|- config.py                       # canonical EA configuration module
 |- algorithm/
-|  |- main.py                      # algorithm runner
+|  |- main.py                      # compatibility wrapper for older imports
 |  |- basic_ea.py                  # shared EA runtime scaffold
 |  |- ga.py                        # single-objective GA
 |  |- nsga2.py                     # multi-objective NSGA-II
@@ -405,7 +406,7 @@ eagle/
 |  |- parent_selection.py          # parent selection
 |  `- environment_selection.py     # survivor selection helpers
 |- tools/
-|  |- config.py                    # EA, fitness, surrogate, and reproduction settings
+|  |- config.py                    # compatibility shim for older config imports
 |  |- individual.py                # candidate prompt representation
 |  |- component_pool.py            # prompt component storage
 |  |- simulation_runner.py         # launches MicroRTS and collects logs
@@ -435,8 +436,8 @@ Relevant backend locations:
 
 ## Typical Research Loop
 
-1. define or update prompt components in `prompts/components.json`
-2. configure EA settings in `eagle/tools/config.py`
+1. define or update prompt components in `eagle/prompts/components.json`
+2. configure EA settings in `eagle/config.py`
 3. run `py -3 -m eagle.main`
 4. inspect generation logs and JSONL profiles
 5. replay strong generations with `eagle/eval/result_test.py`

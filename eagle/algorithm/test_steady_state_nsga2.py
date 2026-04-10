@@ -3,7 +3,7 @@ from __future__ import annotations
 from eagle.algorithm.steady_state_nsga2 import SteadyStateNSGA2
 from eagle.operator.reflection import Reflection
 from eagle.tools.component_pool import ComponentPool
-from eagle.tools.config import EAConfig, load_config_payload
+from eagle.config import EAConfig, load_config_payload
 from eagle.tools.individual import Individual
 
 

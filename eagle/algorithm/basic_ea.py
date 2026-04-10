@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, List
 
 from ..tools.checkpoint import CheckpointManager, deserialize_individual, serialize_individual
-from ..tools.config import EAConfig
+from ..config import EAConfig
 from ..tools.component_pool import ComponentPool
 from ..tools.individual import Individual
 from ..eval.evaluate import Evaluator
