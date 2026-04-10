@@ -1,3 +1,5 @@
+"""Parse MicroRTS runtime logs into structured summaries and state snapshots."""
+
 from __future__ import annotations
 
 import json

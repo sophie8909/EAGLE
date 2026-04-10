@@ -1,3 +1,5 @@
+"""Run MicroRTS matches, patch runtime config, and collect resulting logs."""
+
 from __future__ import annotations
 
 import glob

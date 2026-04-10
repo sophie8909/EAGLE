@@ -1,3 +1,5 @@
+"""Validate and score LLM-issued actions against sampled Dynamic Prompt state."""
+
 from __future__ import annotations
 
 import re

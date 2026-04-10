@@ -1,3 +1,5 @@
+"""Render surrogate prompt/spec data into the generated Java agent source."""
+
 from __future__ import annotations
 
 import json
@@ -12,10 +14,12 @@ PROMPT_END_MARKER = "    // SURROGATE_PROMPT_END"
 
 
 def _java_string_literal(text: str) -> str:
+    """Encode one Python string as a Java string literal."""
     return json.dumps(text)
 
 
 def _render_prompt_array(prompt: str) -> str:
+    """Render the embedded prompt lines block inserted into the Java agent."""
     prompt_lines = [line.rstrip() for line in prompt.splitlines() if line.strip()]
 
     rendered_lines = [PROMPT_START_MARKER, "    private static final String[] EMBEDDED_PROMPT_LINES = {"]
@@ -28,10 +32,12 @@ def _render_prompt_array(prompt: str) -> str:
 
 
 def _java_bool(value: bool) -> str:
+    """Convert a Python boolean into Java's lowercase literal form."""
     return "true" if value else "false"
 
 
 def _render_spec_block(spec: dict) -> str:
+    """Render one surrogate strategy spec into the Java constant block."""
     production_priority = list(spec.get("production_priority", []) or [])
     rendered_lines = [
         SPEC_START_MARKER,
@@ -58,6 +64,7 @@ def _render_spec_block(spec: dict) -> str:
 
 
 def render_surrogate_agent(repo_root: Path, prompt: str, spec: dict) -> Path:
+    """Inject the prompt and surrogate spec into `EAGLESurrogate.java`."""
     java_path = repo_root / "src" / "ai" / "abstraction" / "EAGLESurrogate.java"
     content = java_path.read_text(encoding="utf-8")
     spec_pattern = re.compile(

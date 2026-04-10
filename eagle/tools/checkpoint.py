@@ -1,3 +1,5 @@
+"""Serialize, store, and reload algorithm checkpoint state on disk."""
+
 from __future__ import annotations
 
 import json
@@ -58,6 +60,7 @@ class CheckpointManager:
     """Persist and restore EA runtime state from the run log directory."""
 
     def __init__(self, log_dir: Path):
+        """Bind the checkpoint manager to one experiment log directory."""
         self.log_dir = Path(log_dir)
         self.state_path = self.log_dir / "run_state.json"
         self.event_log_path = self.log_dir / "checkpoints.jsonl"

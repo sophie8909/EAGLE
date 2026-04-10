@@ -1,3 +1,5 @@
+"""Collect lightweight timing and JSONL profiling records for EAGLE runs."""
+
 from __future__ import annotations
 
 import json

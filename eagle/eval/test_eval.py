@@ -1,3 +1,5 @@
+"""Regression tests for evaluation, parsing, history reuse, and EA helpers."""
+
 import tempfile
 from pathlib import Path
 import shutil
@@ -424,9 +426,11 @@ def test_real_evaluation_does_not_use_history_shortcut():
         records = []
 
         def find_matching_history(self, prompt, opponent):
+            """Return cached fitness rows so the real-eval path can ignore them."""
             return [{"fitness_score": [0.8, 0.8, 0.8]}]
 
         def record_fitness(self, record):
+            """Capture writes so the test can inspect the recorded evaluation mode."""
             self.records.append(record)
 
     recorder = DummyRecorder()
@@ -457,9 +461,11 @@ def test_initial_real_evaluation_can_use_history_shortcut():
         records = []
 
         def find_matching_history(self, prompt, opponent):
+            """Return one cached row so the initial-eval shortcut path is exercised."""
             return [{"fitness_score": [1.0, 0.2, 0.3]}]
 
         def record_fitness(self, record):
+            """Capture writes so the test can inspect the reused evaluation mode."""
             self.records.append(record)
 
     recorder = DummyRecorder()
@@ -563,9 +569,11 @@ def test_log_multi_objective_generation_includes_evaluation_mode(tmp_path):
 
     class DummyEvaluator:
         def __init__(self, component_pool, config):
+            """Accept the same constructor shape as the production Evaluator."""
             pass
 
         def construct_prompt(self, individual):
+            """Return a stable fake prompt for generation-log rendering tests."""
             return "dummy prompt"
 
     basic_ea_module.Evaluator = DummyEvaluator

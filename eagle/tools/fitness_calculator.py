@@ -1,3 +1,5 @@
+"""Calculate normalized fitness signals from parsed or raw MicroRTS logs."""
+
 from __future__ import annotations
 
 from typing import Any

@@ -11,6 +11,7 @@ class FinalTestSummaryTests(unittest.TestCase):
     """Verify aggregation over final-test replay records."""
 
     def test_summarize_final_test_results(self) -> None:
+        """Verify final-test aggregation counts outcomes across individuals and opponents."""
         payload = {
             "results": {
                 "ind-a": [
@@ -34,6 +35,7 @@ class FinalTestSummaryTests(unittest.TestCase):
         self.assertEqual(summary["by_individual"]["ind-a"]["Win"], 1)
 
     def test_format_final_test_summary(self) -> None:
+        """Verify the text formatter renders the expected summary sections."""
         summary = {
             "individual_count": 1,
             "total_matches": 2,

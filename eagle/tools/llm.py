@@ -1,3 +1,5 @@
+"""Wrap local Ollama requests used by EAGLE mutation and surrogate workflows."""
+
 import random
 from typing import List
 
@@ -159,6 +161,7 @@ class LLM:
         fallback = dict(fallback or {})
 
         def clamp_int(key: str, minimum: int, maximum: int) -> int:
+            """Clamp one integer field from a generated surrogate spec."""
             try:
                 value = int(spec.get(key, fallback.get(key, minimum)))
             except (TypeError, ValueError):

@@ -13,6 +13,7 @@ class FinalEvaluationTests(unittest.TestCase):
     """Verify final-test runs cover both requested interval settings."""
 
     def test_build_final_test_interval_runs_uses_config_and_interval_one(self) -> None:
+        """Verify final replay always includes the configured interval and interval 1."""
         runs = _build_final_test_interval_runs(EAConfig(llm_interval=7))
 
         self.assertEqual(
@@ -24,6 +25,7 @@ class FinalEvaluationTests(unittest.TestCase):
         )
 
     def test_build_result_record_uses_two_objective_schema(self) -> None:
+        """Verify replay result records expose the two-objective fitness schema."""
         class DummyIndividual:
             id = "ind-1"
 

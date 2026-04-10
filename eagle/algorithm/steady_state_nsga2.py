@@ -28,6 +28,7 @@ class SteadyStateNSGA2(NSGA2):
         component_pool: ComponentPool,
         opponent_list: List[str],
     ):
+        """Initialize the steady-state NSGA-II variant with the shared runtime state."""
         super().__init__(config, component_pool, opponent_list)
 
     def _generate_single_offspring(

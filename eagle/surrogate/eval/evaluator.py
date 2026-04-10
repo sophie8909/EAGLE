@@ -1,3 +1,5 @@
+"""Evaluate prompts through surrogate game-round or policy-based pipelines."""
+
 from __future__ import annotations
 
 from pathlib import Path

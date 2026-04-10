@@ -1,3 +1,5 @@
+"""Replay saved individuals for final benchmark evaluation and result logging."""
+
 import json
 from pathlib import Path
 

@@ -14,6 +14,7 @@ class PolicyToSurrogateSpecTests(unittest.TestCase):
     """Verify policy compression into deterministic surrogate agent specs."""
 
     def test_aggressive_light_policy_maps_to_rush_like_spec(self) -> None:
+        """Verify an aggressive light-unit policy maps to the expected rush-like spec."""
         spec = policy_to_surrogate_spec(
             {
                 "strategy_identity": "aggressive",
@@ -30,6 +31,7 @@ class PolicyToSurrogateSpecTests(unittest.TestCase):
         self.assertEqual(spec["production_priority"][0], "Light")
 
     def test_compile_prompt_to_surrogate_spec_uses_policy_defaults(self) -> None:
+        """Verify vague prompts compile through defaults into a stable surrogate spec."""
         policy, spec = compile_prompt_to_surrogate_spec("Play efficiently and defeat the opponent.")
 
         self.assertEqual(policy["strategy_identity"], "balanced")
