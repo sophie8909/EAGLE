@@ -23,8 +23,9 @@ OPPONENT_LIST = [
 
 
 def _find_latest_log_dir() -> str | None:
-    """Return the newest timestamped run directory under `logs/`, if any."""
-    logs_dir = Path("logs")
+    """Return the newest timestamped run directory under `eagle/logs/`, if any."""
+    repo_root = Path(__file__).resolve().parents[1]
+    logs_dir = repo_root / "eagle" / "logs"
     if not logs_dir.exists():
         return None
 
@@ -47,7 +48,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Run or resume the EAGLE evolutionary search.")
     parser.add_argument("--resume-log-dir", type=str, default=None, help="Resume from an existing log directory.")
-    parser.add_argument("--resume-latest", action="store_true", help="Resume from the most recent run in logs/.")
+    parser.add_argument("--resume-latest", action="store_true", help="Resume from the most recent run in eagle/logs/.")
     args = parser.parse_args()
 
     resume_log_dir = args.resume_log_dir

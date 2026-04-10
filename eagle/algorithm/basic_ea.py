@@ -76,13 +76,13 @@ class EA:
 
         import datetime
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_dir = f"logs/{timestamp}"
-        import os
-        os.makedirs(log_dir, exist_ok=True)
-        self.current_log_dir = Path(log_dir)
+        repo_root = Path(__file__).resolve().parents[2]
+        log_dir = repo_root / "eagle" / "logs" / timestamp
+        log_dir.mkdir(parents=True, exist_ok=True)
+        self.current_log_dir = log_dir
         self.fitness_recorder = FitnessRecorder(self.current_log_dir, self.config)
         self.checkpoint_manager = CheckpointManager(self.current_log_dir)
-        return log_dir
+        return str(log_dir)
 
     def attach_log_dir(self, log_dir: str | Path) -> str:
         """Bind this EA instance to an existing log directory for resuming."""

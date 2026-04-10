@@ -99,7 +99,7 @@ This will:
 2. initialize a population
 3. evolve prompts with GA, NSGA-II, or Steady-State NSGA-II
 4. run real and surrogate evaluations
-5. log generation results under `logs/<timestamp>`
+5. log generation results under `eagle/logs/<timestamp>`
 
 ---
 
@@ -299,7 +299,7 @@ Relevant settings in `eagle/config.py`:
 
 Each run creates a log directory under:
 
-- `logs/<timestamp>`
+- `eagle/logs/<timestamp>`
 
 Typical contents:
 
@@ -322,7 +322,7 @@ py -3 -m eagle.main --resume-latest
 or
 
 ```bash
-py -3 -m eagle.main --resume-log-dir logs/20260405_123456
+py -3 -m eagle.main --resume-log-dir eagle/logs/20260405_123456
 ```
 
 ### Parsing and Reuse
@@ -356,7 +356,7 @@ For ad hoc replay of a specific saved generation, use:
 Example:
 
 ```bash
-py -3 -m eagle.eval.result_test --log-dir logs/20260405_123456 --generation 10
+py -3 -m eagle.eval.result_test --log-dir eagle/logs/20260405_123456 --generation 10
 ```
 
 Default behavior:

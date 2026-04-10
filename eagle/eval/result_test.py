@@ -28,19 +28,19 @@ from .evaluate import Evaluator
 from ..main import OPPONENT_LIST
 
 # CLI examples:
-# `py -m eagle.eval.result_test --log-dir logs/20260409_123456 --generation 20`
+# `py -m eagle.eval.result_test --log-dir eagle/logs/20260409_123456 --generation 20`
 #   Replay only Pareto Front 1 from generation 20.
 #
-# `py -m eagle.eval.result_test --log-dir logs/20260409_123456 --generation 20 --max-front 3`
+# `py -m eagle.eval.result_test --log-dir eagle/logs/20260409_123456 --generation 20 --max-front 3`
 #   Replay Pareto Front 1, 2, and 3 from generation 20.
 #
-# `py -m eagle.eval.result_test --log-dir logs/20260409_123456 --generation 20 --all-fronts`
+# `py -m eagle.eval.result_test --log-dir eagle/logs/20260409_123456 --generation 20 --all-fronts`
 #   Replay every individual stored in generation 20.
 #
-# `py -m eagle.eval.result_test --log-dir logs/20260409_123456 --generation 20 --individual-id <id>`
+# `py -m eagle.eval.result_test --log-dir eagle/logs/20260409_123456 --generation 20 --individual-id <id>`
 #   Replay only one specific individual from generation 20.
 #
-# `py -m eagle.eval.result_test --log-dir logs/20260409_123456 --generation 20 --opponent ai.RandomAI --opponent ai.PassiveAI`
+# `py -m eagle.eval.result_test --log-dir eagle/logs/20260409_123456 --generation 20 --opponent ai.RandomAI --opponent ai.PassiveAI`
 #   Replay against a custom opponent subset instead of the default benchmark list.
 
 
