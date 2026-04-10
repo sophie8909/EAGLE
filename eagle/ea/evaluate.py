@@ -42,6 +42,7 @@ from .simulation_runner import (
     save_prompt,
     set_opponent,
     simulate_games,
+    simulate_surrogate_games,
     wait_for_simulation,
 )
 from .profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
@@ -135,7 +136,7 @@ class Evaluator:
                     print(f"Similar record fitness score: {rec.get('fitness_score')}")
                 use_real_evaluation = False  # Skip evaluation if we found equivalent prior evidence.
                 history_reuse_mode = "real_history_reuse_initial" if allow_history_reuse_for_real else "history_reuse"
-                fitness = similar_records[random.randint(0, len(similar_records) - 1)].get("fitness_score", [0.0, 0.0, 0.0])  # Use the fitness score from a random similar record as a reference.
+                fitness = similar_records[random.randint(0, len(similar_records) - 1)].get("fitness_score", [0.0, 0.0])  # Use the fitness score from a random similar record as a reference.
             else:
                 print("No similar records found in history for the current prompt.")
         if use_real_evaluation:
@@ -150,18 +151,12 @@ class Evaluator:
         else:
             with timer("EA_operator_time", stats):
                 with timer("surrogate_time", stats):
-                    surrogate_score = self.surrogate_evaluation(prompt, 
-                                                                fitness_recorder=fitness_recorder)
-                    primary_score = surrogate_score[0] if surrogate_score else 0.0
-                    if self.config.normalized_surrogate_version == "game_round":
-                        # In game_round mode the surrogate only refreshes the third
-                        # objective; the first two stay inherited from the parents.
-                        if individual.fitness:
-                            fitness = [individual.fitness[0], individual.fitness[1], primary_score]
-                        else:
-                            fitness = [0.0, 0.0, primary_score]
-                    else:
-                        fitness = [primary_score] + individual.fitness[1:] if individual.fitness else [primary_score, 0.0, 0.0]
+                    surrogate_score = self.surrogate_evaluation(
+                        prompt,
+                        opponent=opponent,
+                        fitness_recorder=fitness_recorder,
+                    )
+                    fitness = surrogate_score if surrogate_score else [0.0, 0.0]
             
             llm_calls = 1
 
@@ -303,7 +298,7 @@ class Evaluator:
         )
 
     def calculate_fitness_score(self, log_content: str, parsed_log: dict[str, Any] | None = None) -> list[float]:
-        """Compute the three-objective real-game fitness vector from one log."""
+        """Compute the two-objective real-game fitness vector from one log."""
         fitness = calculate_fitness_score(
             log_content,
             resource_advantage_alpha=self.config.resource_advantage_alpha,
@@ -313,8 +308,7 @@ class Evaluator:
         print(
             "Parsed fitness: "
             f"winning_score={fitness[0]}, "
-            f"resource_advantage={fitness[1]}, "
-            f"game_round_fitness={fitness[2]}"
+            f"game_round_fitness={fitness[1]}"
         )
         return fitness
 
@@ -348,25 +342,39 @@ class Evaluator:
         """Run one real simulation and return its fitness plus parsed metadata."""
         return simulate_games(self.repo_root, self.config, opponent, stats)
 
-    def surrogate_evaluation(self, prompt: str, fitness_recorder: FitnessRecorder | None = None) -> list[float]:
+    def surrogate_evaluation(
+        self,
+        prompt: str,
+        opponent: str | None = None,
+        fitness_recorder: FitnessRecorder | None = None,
+    ) -> list[float]:
         """Dispatch to the configured surrogate implementation."""
         if self.config.normalized_surrogate_version == "game_round":
-            return self.surrogate_evaluation_game_round(prompt, fitness_recorder=fitness_recorder)
+            return self.surrogate_evaluation_game_round(
+                prompt,
+                opponent=opponent,
+                fitness_recorder=fitness_recorder,
+            )
         return self.surrogate_evaluation_llm(prompt, fitness_recorder=fitness_recorder)
 
     def surrogate_evaluation_llm(self, prompt: str, fitness_recorder: FitnessRecorder | None = None) -> list[float]:
         """Evaluate a prompt with the prompt-only LLM surrogate."""
         return surrogate_evaluation_llm(prompt, fitness_recorder=fitness_recorder)
 
-    def surrogate_evaluation_game_round(self, prompt: str, fitness_recorder: FitnessRecorder | None = None) -> list[float]:
-        """Evaluate a prompt on sampled historical game rounds using raw move validation."""
-        from .llm import LLM
+    def surrogate_evaluation_game_round(
+        self,
+        prompt: str,
+        opponent: str | None = None,
+        fitness_recorder: FitnessRecorder | None = None,
+    ) -> list[float]:
+        """Evaluate a prompt by generating and running the surrogate Java agent."""
         return surrogate_evaluation_game_round(
             prompt,
             repo_root=self.repo_root,
             config=self.config,
+            opponent=opponent,
             fitness_recorder=fitness_recorder,
             sample_recent_dynamic_prompts_fn=sample_recent_dynamic_prompts,
-            llm_generate_json_response_fn=LLM.ollama_generate_json_response,
+            simulate_surrogate_games_fn=simulate_surrogate_games,
             surrogate_evaluation_llm_fn=self.surrogate_evaluation_llm,
         )

@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from .fitness_calculator import calculate_fitness_score
+from .llm import LLM
 from .log_parse import parse_log
 from .profiler import timer
+from .surrogate_agent_generator import render_surrogate_agent
 
 
 def save_prompt(repo_root: Path, prompt: str) -> None:
@@ -28,6 +30,20 @@ def set_opponent(repo_root: Path, opponent: str) -> None:
         for line in lines:
             if line.startswith("AI2="):
                 f.write(f"AI2={opponent}\n")
+            else:
+                f.write(line)
+
+
+def set_ai1(repo_root: Path, ai1: str) -> None:
+    """Patch `config.properties` so the next run uses the requested player-1 AI."""
+    config_path = repo_root / "resources" / "config.properties"
+    with open(config_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    with open(config_path, "w", encoding="utf-8") as f:
+        for line in lines:
+            if line.startswith("AI1="):
+                f.write(f"AI1={ai1}\n")
             else:
                 f.write(line)
 
@@ -90,7 +106,7 @@ def simulate_games(
         if process.returncode != 0:
             if stderr:
                 print(stderr)
-            return [0.0, 0.0, 0.0], {
+            return [0.0, 0.0], {
                 "parsed_log": None,
                 "winner": None,
                 "timeout": True,
@@ -100,7 +116,7 @@ def simulate_games(
 
     latest_log_file = get_latest_log_file(repo_root)
     if latest_log_file is None:
-        return [0.0, 0.0, 0.0], {
+        return [0.0, 0.0], {
             "parsed_log": None,
             "winner": None,
             "timeout": True,
@@ -129,3 +145,73 @@ def simulate_games(
         "llm_calls": parsed_log.get("summary", {}).get("segment_count", 0),
     }
     return fitness, metadata
+
+
+def simulate_surrogate_games(
+    repo_root: Path,
+    config,
+    prompt: str,
+    opponent: str | None,
+    stats: dict[str, float],
+    ai1_class: str = "ai.abstraction.EAGLESurrogate",
+) -> tuple[list[float], dict[str, Any]]:
+    """Run one match using the generated surrogate Java agent for player 1."""
+    config_path = repo_root / "resources" / "config.properties"
+    original_config = config_path.read_text(encoding="utf-8")
+    surrogate_spec = LLM.ollama_generate_surrogate_strategy_spec(prompt)
+    render_surrogate_agent(repo_root, prompt, surrogate_spec)
+
+    try:
+        with timer("bookkeeping_time", stats):
+            set_ai1(repo_root, ai1_class)
+            if opponent is not None:
+                set_opponent(repo_root, opponent)
+
+        with timer("game_launch_time", stats):
+            process = launch_simulation(repo_root, config)
+
+        with timer("game_play_time", stats):
+            _, stderr = wait_for_simulation(process)
+            if process.returncode != 0:
+                if stderr:
+                    print(stderr)
+                return [0.0, 0.0], {
+                    "parsed_log": None,
+                    "winner": None,
+                    "timeout": True,
+                    "log_path": None,
+                    "llm_calls": 0,
+                }
+
+        latest_log_file = get_latest_log_file(repo_root)
+        if latest_log_file is None:
+            return [0.0, 0.0], {
+                "parsed_log": None,
+                "winner": None,
+                "timeout": True,
+                "log_path": None,
+                "llm_calls": 0,
+            }
+
+        with open(latest_log_file, "r", encoding="utf-8") as f:
+            log_content = f.read()
+
+        with timer("log_parse_time", stats):
+            parsed_log = parse_log(log_content)
+
+        fitness = calculate_fitness_score(
+            log_content,
+            resource_advantage_alpha=config.resource_advantage_alpha,
+            resource_advantage_weights=config.resource_advantage_weights,
+            parsed_log=parsed_log,
+        )
+        metadata = {
+            "parsed_log": parsed_log,
+            "winner": parsed_log.get("summary", {}).get("winner"),
+            "timeout": detect_timeout(log_content),
+            "log_path": str(latest_log_file),
+            "llm_calls": 0,
+        }
+        return fitness, metadata
+    finally:
+        config_path.write_text(original_config, encoding="utf-8")

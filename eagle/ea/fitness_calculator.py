@@ -104,13 +104,8 @@ def calculate_fitness_score(
     resource_advantage_weights: dict[str, float],
     parsed_log: dict[str, Any] | None = None,
 ) -> list[float]:
-    """Assemble the three-objective fitness vector for a real game result."""
+    """Assemble the two-objective fitness vector for a real game result."""
     winner_info = parsed_log or parse_winner_info(log_content)["parsed_log"]
     winning_score = win_loss_evaluation(log_content, parsed_log=winner_info)
-    resource_advantage_score = resource_advantage_evaluation(
-        winner_info,
-        resource_advantage_alpha=resource_advantage_alpha,
-        resource_advantage_weights=resource_advantage_weights,
-    )
     round_score = game_round_execution_score(log_content)
-    return normalize_fitness([winning_score, resource_advantage_score, round_score])
+    return normalize_fitness([winning_score, round_score])

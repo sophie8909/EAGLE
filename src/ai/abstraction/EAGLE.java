@@ -193,7 +193,7 @@ public class EAGLE extends AbstractionLayerAI {
                     System.getenv().getOrDefault("MICRORTS_PROMPT", "prompt.txt"));
 
     // fallback：避免檔案不存在時直接炸掉
-    static final String DEFAULT_PROMPT = """
+    protected static final String DEFAULT_PROMPT = """
     You are an AI playing a real-time strategy game. You control ALLY units only.
 
     CRITICAL RULES:
@@ -226,7 +226,7 @@ public class EAGLE extends AbstractionLayerAI {
 
     private static String PROMPT = null;
 
-    private static String loadPromptOnce() {
+    protected static String loadPromptOnce() {
         if (PROMPT != null) return PROMPT;
 
         // 允許用相對路徑（相對於你執行 MicroRTS 的工作目錄）
@@ -248,6 +248,10 @@ public class EAGLE extends AbstractionLayerAI {
             PROMPT = DEFAULT_PROMPT;
         }
         return PROMPT;
+    }
+
+    protected String getBasePrompt() {
+        return loadPromptOnce();
     }
     /*
     * 1. Early Game - Economy Focus
@@ -652,7 +656,7 @@ public class EAGLE extends AbstractionLayerAI {
                 .collect(Collectors.joining(", ", "[", "]"));
 
         // Final LLM prompt
-        String basePrompt = loadPromptOnce();
+        String basePrompt = getBasePrompt();
 
         finalPrompt = basePrompt + "\n\n" +
                 mapPrompt + "\n" +

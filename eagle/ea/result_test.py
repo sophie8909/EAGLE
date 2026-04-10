@@ -1,4 +1,18 @@
-"""Utilities for replaying and evaluating one saved generation on demand."""
+"""Utilities for replaying and evaluating one saved generation on demand.
+
+Usage summary:
+- This module replays individuals saved in one `generation_<N>_mo.txt` log.
+- By default it only replays Pareto Front 1.
+- Use `--max-front N` to replay Pareto Front 1..N.
+- Use `--all-fronts` to ignore Pareto-front filtering and replay every saved individual.
+- Use `--individual-id <id>` to replay only one specific individual.
+- Use repeated `--opponent <name>` flags to override the default benchmark opponent list.
+
+Default output:
+- If `--output` is not provided, results are written to
+  `generation_<N>_front_<front>.json` under the run log directory.
+- When `--all-fronts` is used, the output filename uses `front_all`.
+"""
 
 from __future__ import annotations
 
@@ -13,9 +27,30 @@ from .ea_log_parse import parse_individuals_from_ea_log
 from .evaluate import Evaluator
 from .main import OPPONENT_LIST
 
+# CLI examples:
+# `py -m eagle.ea.run_generation_result_test --log-dir logs/20260409_123456 --generation 20`
+#   Replay only Pareto Front 1 from generation 20.
+#
+# `py -m eagle.ea.run_generation_result_test --log-dir logs/20260409_123456 --generation 20 --max-front 3`
+#   Replay Pareto Front 1, 2, and 3 from generation 20.
+#
+# `py -m eagle.ea.run_generation_result_test --log-dir logs/20260409_123456 --generation 20 --all-fronts`
+#   Replay every individual stored in generation 20.
+#
+# `py -m eagle.ea.run_generation_result_test --log-dir logs/20260409_123456 --generation 20 --individual-id <id>`
+#   Replay only one specific individual from generation 20.
+#
+# `py -m eagle.ea.run_generation_result_test --log-dir logs/20260409_123456 --generation 20 --opponent ai.RandomAI --opponent ai.PassiveAI`
+#   Replay against a custom opponent subset instead of the default benchmark list.
+
 
 def parse_max_front_arg(raw_value: str) -> int | None:
-    """Parse CLI front-cutoff values such as `1`, `3`, or `all`."""
+    """Parse CLI front-cutoff values such as `1`, `3`, or `all`.
+
+    Returns:
+    - `None` when the caller explicitly requests `all`
+    - an integer `>= 1` for a bounded Pareto-front cutoff
+    """
     normalized = str(raw_value).strip().lower()
     if normalized == "all":
         return None
@@ -32,11 +67,38 @@ def resolve_generation_log_path(log_dir: str | Path, generation: int) -> Path:
     return log_dir_path / f"generation_{generation}_mo.txt"
 
 
+def load_run_config(log_dir: str | Path) -> EAConfig:
+    """Load the saved run config when available, falling back to defaults.
+
+    This keeps manual replay aligned with the original run settings instead of
+    replaying under today's default `EAConfig()`.
+    """
+    log_dir_path = Path(log_dir)
+    config_path = log_dir_path / "config.json"
+    config = EAConfig()
+    if not config_path.exists():
+        return config
+
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    valid_fields = set(config.__dataclass_fields__.keys())
+    for key, value in payload.items():
+        if key in valid_fields:
+            setattr(config, key, value)
+    return config
+
+
 def extract_individual_ids_up_to_front(
     generation_log_path: str | Path,
     max_front: int | None,
 ) -> list[str]:
-    """Extract ids that belong to Pareto Front 1 up to the requested front."""
+    """Extract ids that belong to Pareto Front 1 up to the requested front.
+
+    Notes:
+    - The EA generation log stores fronts in human-readable text form.
+    - This helper scans that file and collects `id=` values from every front
+      whose front number is `<= max_front`.
+    - When `max_front is None`, callers are expected to skip front filtering.
+    """
     if max_front is None:
         return []
     if max_front < 1:
@@ -71,14 +133,12 @@ def extract_individual_ids_up_to_front(
 
     return selected_ids
 
-
-def extract_front_one_individual_ids(generation_log_path: str | Path) -> list[str]:
-    """Backward-compatible helper for callers that only need Pareto Front 1."""
-    return extract_individual_ids_up_to_front(generation_log_path, 1)
-
-
 def load_generation_individuals(log_dir: str | Path, generation: int):
-    """Load all serialized individuals stored in one saved generation log."""
+    """Load all serialized individuals stored in one saved generation log.
+
+    This reads the structured individual payloads from
+    `generation_<generation>_mo.txt`.
+    """
     generation_log_path = resolve_generation_log_path(log_dir, generation)
     if not generation_log_path.exists():
         raise FileNotFoundError(f"Generation log not found: {generation_log_path}")
@@ -91,7 +151,13 @@ def build_result_record(
     fitness_score: list[float],
     log_path: str,
 ) -> dict:
-    """Convert one replay result into the JSON-friendly output schema."""
+    """Convert one replay result into the JSON-friendly output schema.
+
+    Result labels are derived from the first objective:
+    - `1.0` -> `Win`
+    - `0.0` -> `Loss`
+    - anything else -> `Draw`
+    """
     if fitness_score[0] == 1.0:
         result = "Win"
     elif fitness_score[0] == 0.0:
@@ -117,7 +183,13 @@ def filter_individuals(
     only_winning_individuals: bool = False,
     allowed_individual_ids: set[str] | None = None,
 ):
-    """Filter generation individuals by id and/or their stored first objective."""
+    """Filter generation individuals by id and/or their stored first objective.
+
+    Filtering order:
+    1. Pareto-front filter (`allowed_individual_ids`)
+    2. explicit `individual_id`
+    3. optional `only_winning_individuals`
+    """
     filtered = []
     for individual in individuals:
         if allowed_individual_ids is not None and individual.id not in allowed_individual_ids:
@@ -140,7 +212,21 @@ def run_generation_result_test(
     max_front: int | None = 1,
     output_path: str | Path | None = None,
 ) -> dict:
-    """Replay one saved generation and write per-opponent evaluation results."""
+    """Replay one saved generation and write per-opponent evaluation results.
+
+    Parameters:
+    - `log_dir`: one EA run directory containing `component_pool.json`,
+      `config.json`, and `generation_<N>_mo.txt`
+    - `generation`: saved generation number to replay
+    - `opponents`: optional custom opponent list; defaults to `OPPONENT_LIST`
+    - `individual_id`: optional single-individual override
+    - `only_winning_individuals`: optional extra filter on stored objective 0
+    - `max_front`: replay Pareto Front 1..N; `None` means no front filtering
+    - `output_path`: optional explicit JSON output destination
+
+    Returns:
+    - a JSON-serializable dictionary containing replay metadata and results
+    """
     log_dir_path = Path(log_dir)
     component_pool_path = log_dir_path / "component_pool.json"
     if not component_pool_path.exists():
@@ -148,7 +234,7 @@ def run_generation_result_test(
 
     evaluator = Evaluator(
         ComponentPool.from_json(str(component_pool_path)),
-        EAConfig(),
+        load_run_config(log_dir_path),
     )
     generation_log_path = resolve_generation_log_path(log_dir_path, generation)
     individuals = load_generation_individuals(log_dir_path, generation)
@@ -215,6 +301,18 @@ def run_generation_result_test(
 def build_argument_parser() -> argparse.ArgumentParser:
     """Create the CLI used for replaying one saved generation."""
     parser = argparse.ArgumentParser(description="Replay one saved generation and collect result-test outputs.")
+    # Required:
+    # --log-dir <run_log_dir>
+    # --generation <saved_generation_number>
+    #
+    # Optional:
+    # --max-front <N>         replay Pareto Front 1..N
+    # --all-fronts            replay all individuals regardless of front
+    # --individual-id <id>    replay one specific individual only
+    # --opponent <name>       override opponents; repeat flag to add more
+    # --only-winning-individuals
+    #                         add an extra filter requiring stored objective 0 == 1.0
+    # --output <json_path>    write results to a custom JSON path
     parser.add_argument("--log-dir", required=True, help="Path to one EA experiment log directory.")
     parser.add_argument("--generation", required=True, type=int, help="Saved generation number to replay.")
     parser.add_argument("--opponent", action="append", default=None, help="Optional opponent override. Repeat to test multiple opponents.")

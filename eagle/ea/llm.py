@@ -12,6 +12,27 @@ class LLM:
     """Thin wrappers around the local Ollama endpoints used by the EA pipeline."""
 
     @staticmethod
+    def _extract_first_json_object(raw_output: str) -> dict | None:
+        """Parse one JSON object from model output, tolerating extra wrapper text."""
+        if not raw_output:
+            return None
+        try:
+            parsed = json.loads(raw_output)
+            return parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            pass
+
+        match = re.search(r"\{.*\}", raw_output, re.DOTALL)
+        if not match:
+            return None
+
+        try:
+            parsed = json.loads(match.group(0))
+            return parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            return None
+
+    @staticmethod
     def ollama_generate_json_response(
         prompt: str,
         model: str = "llama3.1:8b",
@@ -39,22 +60,140 @@ class LLM:
             if not raw_output:
                 return None
 
-            try:
-                parsed = json.loads(raw_output)
-                return parsed if isinstance(parsed, dict) else None
-            except json.JSONDecodeError:
-                pass
-
-            # Some models wrap the JSON with extra text, so we salvage the first
-            # top-level object instead of failing immediately.
-            match = re.search(r"\{.*\}", raw_output, re.DOTALL)
-            if not match:
-                return None
-
-            parsed = json.loads(match.group(0))
-            return parsed if isinstance(parsed, dict) else None
+            return LLM._extract_first_json_object(raw_output)
         except Exception:
             return None
+
+    @staticmethod
+    def ollama_generate_surrogate_strategy_spec(
+        strategy_prompt: str,
+        model: str = "llama3.1:8b",
+        temperature: float = 0.1,
+    ) -> dict:
+        """Convert a strategy prompt into a constrained surrogate Java-agent spec."""
+        generation_prompt = f"""
+        You are translating an RTS strategy prompt into a deterministic Java surrogate-agent configuration.
+
+        Your job is to STRICTLY follow the strategy prompt and convert only explicitly supported behaviors into the schema below.
+        Do not invent tactics that are not grounded in the prompt.
+        If the prompt does not clearly justify a behavior, keep the conservative default.
+
+        Supported schema and rules:
+        {{
+          "enabled": boolean,
+          "worker_target_before_barracks": integer,
+          "worker_target_after_barracks": integer,
+          "harvester_target": integer,
+          "desired_barracks": integer,
+          "worker_harass_enabled": boolean,
+          "attack_workers_first": boolean,
+          "attack_structures_first": boolean,
+          "protect_barracks": boolean,
+          "min_lights": integer,
+          "min_ranged": integer,
+          "min_heavies": integer,
+          "production_priority": ["light" | "ranged" | "heavy", ...]
+        }}
+
+        Mapping guidance:
+        - "enabled" should be true when the strategy prompt contains actionable strategy content.
+        - Use small stable integers only. Keep worker/harvester counts in the 0..6 range and desired_barracks in the 0..2 range.
+        - Only set worker_harass_enabled if the prompt clearly wants workers to pressure, scout-harass, or punish exposed workers.
+        - Only set attack_structures_first if the prompt clearly prioritizes production buildings or bases.
+        - Only set protect_barracks if the prompt explicitly says to keep barracks safe or defend production.
+        - "production_priority" must include only the unit types explicitly supported by the prompt. Preserve prompt order when clear.
+        - If a unit type is mentioned as something to train, set its corresponding min_* to at least 1.
+        - If the prompt is vague, return conservative values instead of guessing.
+
+        Output rules:
+        - Return JSON only.
+        - Do not include explanations.
+        - Do not include fields outside the schema.
+
+        Strategy prompt:
+        {strategy_prompt}
+        """.strip()
+
+        fallback = {
+            "enabled": False,
+            "worker_target_before_barracks": 0,
+            "worker_target_after_barracks": 0,
+            "harvester_target": 0,
+            "desired_barracks": 0,
+            "worker_harass_enabled": False,
+            "attack_workers_first": False,
+            "attack_structures_first": False,
+            "protect_barracks": False,
+            "min_lights": 0,
+            "min_ranged": 0,
+            "min_heavies": 0,
+            "production_priority": [],
+        }
+
+        try:
+            response = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": model,
+                    "prompt": generation_prompt,
+                    "stream": False,
+                    "format": "json",
+                    "options": {
+                        "temperature": temperature,
+                    },
+                },
+                timeout=120,
+            )
+            response.raise_for_status()
+            data = response.json()
+            parsed = LLM._extract_first_json_object(data.get("response", "").strip())
+            if not isinstance(parsed, dict):
+                return fallback
+            return LLM._normalize_surrogate_strategy_spec(parsed, fallback)
+        except Exception:
+            return fallback
+
+    @staticmethod
+    def _normalize_surrogate_strategy_spec(spec: dict, fallback: dict | None = None) -> dict:
+        """Clamp one generated surrogate strategy spec into the supported stable schema."""
+        fallback = dict(fallback or {})
+
+        def clamp_int(key: str, minimum: int, maximum: int) -> int:
+            try:
+                value = int(spec.get(key, fallback.get(key, minimum)))
+            except (TypeError, ValueError):
+                value = int(fallback.get(key, minimum))
+            return max(minimum, min(maximum, value))
+
+        normalized = {
+            "enabled": bool(spec.get("enabled", fallback.get("enabled", False))),
+            "worker_target_before_barracks": clamp_int("worker_target_before_barracks", 0, 6),
+            "worker_target_after_barracks": clamp_int("worker_target_after_barracks", 0, 6),
+            "harvester_target": clamp_int("harvester_target", 0, 6),
+            "desired_barracks": clamp_int("desired_barracks", 0, 2),
+            "worker_harass_enabled": bool(spec.get("worker_harass_enabled", fallback.get("worker_harass_enabled", False))),
+            "attack_workers_first": bool(spec.get("attack_workers_first", fallback.get("attack_workers_first", False))),
+            "attack_structures_first": bool(spec.get("attack_structures_first", fallback.get("attack_structures_first", False))),
+            "protect_barracks": bool(spec.get("protect_barracks", fallback.get("protect_barracks", False))),
+            "min_lights": clamp_int("min_lights", 0, 10),
+            "min_ranged": clamp_int("min_ranged", 0, 10),
+            "min_heavies": clamp_int("min_heavies", 0, 10),
+            "production_priority": [],
+        }
+
+        allowed_types = {"light", "ranged", "heavy"}
+        for raw_value in spec.get("production_priority", fallback.get("production_priority", [])) or []:
+            name = str(raw_value).strip().lower()
+            if name in allowed_types and name not in normalized["production_priority"]:
+                normalized["production_priority"].append(name)
+
+        if not normalized["enabled"]:
+            return fallback
+
+        if normalized["worker_target_after_barracks"] < normalized["worker_target_before_barracks"]:
+            normalized["worker_target_after_barracks"] = normalized["worker_target_before_barracks"]
+
+        return normalized
 
     @staticmethod
     def ollama_rewrite_component(

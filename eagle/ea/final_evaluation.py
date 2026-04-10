@@ -63,17 +63,13 @@ def run_final_test_suite(
     selected_individuals = [
         individual
         for individual in individuals
-        if not selected_front_ids or individual.id in selected_front_ids
+        if individual.id in selected_front_ids
     ]
 
     results = {
         "generation_log": generation_log_path.name,
         "selected_individual_count": len(selected_individuals),
-        "selection_rule": (
-            f"pareto_front_1_to_{final_test_max_front}"
-            if final_test_max_front is not None
-            else "all_fronts"
-        ),
+        "selection_rule": f"pareto_front_1_to_{final_test_max_front}",
         "results": {},
     }
     for individual in selected_individuals:
@@ -108,9 +104,3 @@ def run_final_test_suite(
 
             with open(experiment_log_dir / "final_test_results.json", "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=4)
-
-
-if __name__ == "__main__":
-    current_log_dir = "20240930_123456"
-    last_gen = 10
-    run_final_test_suite(current_log_dir, last_gen)

@@ -47,14 +47,13 @@ class NSGA2(EA):
 
     def _sort_by_game_round_score(self, population: List[Individual]) -> List[Individual]:
         """Order offspring by the surrogate game-round objective before real evaluation."""
-        # Before real evaluation, game_round surrogate information lives mainly in
-        # the third objective, so we rank offspring directly by that signal first.
+        # Before real evaluation, game_round surrogate information lives in the
+        # second objective, so we rank offspring directly by that signal first.
         return sorted(
             population,
             key=lambda ind: (
-                ind.fitness[2] if ind.fitness and len(ind.fitness) > 2 else float("-inf"),
-                ind.fitness[0] if ind.fitness and len(ind.fitness) > 0 else float("-inf"),
                 ind.fitness[1] if ind.fitness and len(ind.fitness) > 1 else float("-inf"),
+                ind.fitness[0] if ind.fitness and len(ind.fitness) > 0 else float("-inf"),
             ),
             reverse=True,
         )

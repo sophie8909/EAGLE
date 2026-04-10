@@ -106,7 +106,7 @@ class SteadyStateNSGA2(NSGA2):
 
         return max(
             candidates,
-            key=lambda ind: ind.fitness[2] if ind.fitness and len(ind.fitness) > 2 else float("-inf"),
+            key=lambda ind: ind.fitness[1] if ind.fitness and len(ind.fitness) > 1 else float("-inf"),
         )
 
     def run(self) -> list[Individual]:

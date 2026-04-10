@@ -4,7 +4,6 @@ from pathlib import Path
 import random
 
 from .llm import LLM
-from .move_validator import combine_prompt_with_dynamic, score_game_round_response
 
 
 def build_surrogate_examples(fitness_recorder) -> list[list[str]]:
@@ -46,20 +45,22 @@ def surrogate_evaluation_llm(prompt: str, fitness_recorder=None) -> list[float]:
     """Score a prompt using the prompt-only LLM surrogate."""
     examples = build_surrogate_examples(fitness_recorder)
     surrogate_scores = LLM.ollama_evaluate_fitness(prompt, example=examples)
-    return adjust_surrogate_scores(surrogate_scores)
+    adjusted = adjust_surrogate_scores(surrogate_scores)
+    return [adjusted[0], 0.0]
 
 
 def surrogate_evaluation_game_round(
     prompt: str,
     repo_root: Path,
     config,
+    opponent: str | None,
     fitness_recorder=None,
     *,
     sample_recent_dynamic_prompts_fn,
-    llm_generate_json_response_fn,
+    simulate_surrogate_games_fn,
     surrogate_evaluation_llm_fn,
 ) -> list[float]:
-    """Score a prompt on sampled historical rounds by generating and validating moves."""
+    """Score a prompt by running the generated surrogate Java agent in-game."""
     sampled_dynamic_prompts = sample_recent_dynamic_prompts_fn(
         repo_root / config.surrogate_log_dir,
         recent_count=config.surrogate_recent_log_window,
@@ -70,20 +71,17 @@ def surrogate_evaluation_game_round(
         print("No recent dynamic prompt found for game_round surrogate. Falling back to llm version.")
         return surrogate_evaluation_llm_fn(prompt, fitness_recorder=fitness_recorder)
 
-    round_scores: list[float] = []
-    for sampled_dynamic in sampled_dynamic_prompts:
-        dynamic_text = sampled_dynamic.get("text", "")
-        sampled_time = sampled_dynamic.get("time")
-        sampled_log_path = sampled_dynamic.get("log_path")
-        print(
-            "Using sampled dynamic prompt for game_round surrogate: "
-            f"log={sampled_log_path}, turn={sampled_time}"
-        )
-        combined_prompt = combine_prompt_with_dynamic(prompt, dynamic_text)
-        llm_response = llm_generate_json_response_fn(combined_prompt)
-        round_scores.append(score_game_round_response(llm_response, dynamic_text))
-
-    average_game_round = sum(round_scores) / len(round_scores) if round_scores else 0.0
-    average_game_round = max(-1.0, min(1.0, average_game_round))
-    print(f"Average surrogate game_round score from {len(round_scores)} sampled rounds: {average_game_round}")
-    return [average_game_round, 0.0, 0.0, 0.0]
+    fitness, metadata = simulate_surrogate_games_fn(
+        repo_root,
+        config,
+        prompt,
+        opponent,
+        {},
+    )
+    print(
+        "Surrogate Java-agent evaluation: "
+        f"win_score={fitness[0] if fitness else 0.0}, "
+        f"game_round_score={fitness[1] if len(fitness) > 1 else 0.0}, "
+        f"log={metadata.get('log_path') if metadata else None}"
+    )
+    return fitness

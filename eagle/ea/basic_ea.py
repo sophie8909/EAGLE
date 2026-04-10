@@ -238,10 +238,11 @@ class EA:
     def surrogate_evaluation(self, individual: Individual, generation: int | None = None):
         """Run the configured cheap evaluator instead of a full game simulation."""
         evaluator = Evaluator(self.component_pool, self.config)
+        surrogate_opponent = random.choice(self.opponent_list) if self.opponent_list else None
         evaluator.evaluate(
             individual,
             use_real_evaluation=False,
-            opponent=None,
+            opponent=surrogate_opponent,
             profile_output_path=self.get_profile_log_path(),
             generation=generation,
             fitness_recorder=self.fitness_recorder,

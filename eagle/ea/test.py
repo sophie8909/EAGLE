@@ -7,9 +7,3 @@ from .ea_log_parse import (
 from .final_evaluation import (
     run_final_test_suite,
 )
-
-
-if __name__ == "__main__":
-    current_log_dir = "20240930_123456"
-    last_gen = 10
-    run_final_test_suite(current_log_dir, last_gen)
