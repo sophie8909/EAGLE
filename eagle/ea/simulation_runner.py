@@ -22,30 +22,37 @@ def save_prompt(repo_root: Path, prompt: str) -> None:
 
 def set_opponent(repo_root: Path, opponent: str) -> None:
     """Patch `config.properties` so the next run uses the selected opponent AI."""
-    config_path = repo_root / "resources" / "config.properties"
-    with open(config_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-
-    with open(config_path, "w", encoding="utf-8") as f:
-        for line in lines:
-            if line.startswith("AI2="):
-                f.write(f"AI2={opponent}\n")
-            else:
-                f.write(line)
+    _set_config_property(repo_root, "AI2", opponent)
 
 
 def set_ai1(repo_root: Path, ai1: str) -> None:
     """Patch `config.properties` so the next run uses the requested player-1 AI."""
+    _set_config_property(repo_root, "AI1", ai1)
+
+
+def set_llm_interval(repo_root: Path, llm_interval: int) -> None:
+    """Patch `config.properties` so Java agents can read the configured LLM interval."""
+    _set_config_property(repo_root, "llm_interval", str(int(llm_interval)))
+
+
+def _set_config_property(repo_root: Path, key: str, value: str) -> None:
+    """Update or append one key-value pair inside `config.properties`."""
     config_path = repo_root / "resources" / "config.properties"
     with open(config_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
+    updated = False
     with open(config_path, "w", encoding="utf-8") as f:
         for line in lines:
-            if line.startswith("AI1="):
-                f.write(f"AI1={ai1}\n")
+            if line.startswith(f"{key}="):
+                f.write(f"{key}={value}\n")
+                updated = True
             else:
                 f.write(line)
+        if not updated:
+            if lines and not lines[-1].endswith("\n"):
+                f.write("\n")
+            f.write(f"{key}={value}\n")
 
 
 def launch_simulation(repo_root: Path, config, test: bool = False) -> subprocess.Popen[str]:
@@ -95,6 +102,7 @@ def simulate_games(
 ) -> tuple[list[float], dict[str, Any]]:
     """Run one full match, parse the resulting log, and compute real fitness."""
     with timer("bookkeeping_time", stats):
+        set_llm_interval(repo_root, config.llm_interval)
         if opponent is not None:
             set_opponent(repo_root, opponent)
 
@@ -163,6 +171,7 @@ def simulate_surrogate_games(
 
     try:
         with timer("bookkeeping_time", stats):
+            set_llm_interval(repo_root, config.llm_interval)
             set_ai1(repo_root, ai1_class)
             if opponent is not None:
                 set_opponent(repo_root, opponent)

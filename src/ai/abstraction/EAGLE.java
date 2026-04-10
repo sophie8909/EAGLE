@@ -48,10 +48,8 @@ public class EAGLE extends AbstractionLayerAI {
     String fileName = "Response_format.csv";
     static final String ENDPOINT_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     static final JsonObject MOVE_RESPONSE_SCHEMA;
-    // How often the LLM should act on the game state
-    // NOTE: Fairness is now handled at the game level via ai_decision_interval in config.properties
-    // This should be set to 1 so the LLM responds whenever the game asks
-    static final Integer LLM_INTERVAL = 1;
+    // How often the agent should refresh LLM actions. The value comes from config.properties.
+    static final int LLM_INTERVAL = loadLLMInterval();
     LocalDateTime now = LocalDateTime.now();
     String timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
 
@@ -225,6 +223,20 @@ public class EAGLE extends AbstractionLayerAI {
     """;
 
     private static String PROMPT = null;
+
+    private static int loadLLMInterval() {
+        Properties properties = new Properties();
+        File configFile = new File("resources/config.properties");
+
+        try (FileInputStream input = new FileInputStream(configFile)) {
+            properties.load(input);
+            String rawValue = properties.getProperty("llm_interval", "1").trim();
+            return Math.max(1, Integer.parseInt(rawValue));
+        } catch (Exception e) {
+            System.err.println("Failed to read llm_interval from " + configFile.getPath() + ": " + e.getMessage());
+            return 1;
+        }
+    }
 
     protected static String loadPromptOnce() {
         if (PROMPT != null) return PROMPT;

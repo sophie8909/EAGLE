@@ -81,6 +81,7 @@ def validate_policy(policy: Mapping[str, Any] | None) -> Policy:
     source = policy or {}
 
     for field_name, allowed_values in ALLOWED_VALUES.items():
+        # Validation is intentionally field-local so malformed inputs can be repaired deterministically.
         value = source.get(field_name)
         if value in allowed_values:
             validated[field_name] = str(value)
@@ -93,6 +94,7 @@ def validate_policy(policy: Mapping[str, Any] | None) -> Policy:
 def _parse_llm_policy(raw_response: Any) -> Mapping[str, Any]:
     """Parse a JSON-like LLM response into a mapping."""
 
+    # Accepting an already parsed mapping keeps integration simple for callers with custom LLM wrappers.
     if isinstance(raw_response, Mapping):
         return raw_response
     if isinstance(raw_response, str):
@@ -113,9 +115,11 @@ def _contains_any(text: str, keywords: tuple[str, ...]) -> bool:
 def _compile_rule_based(prompt: str) -> Policy:
     """Compile a policy using deterministic keyword heuristics."""
 
+    # Normalize spacing once so substring checks stay simple and deterministic.
     normalized = " ".join(prompt.lower().split())
     policy: dict[str, str] = dict(DEFAULT_POLICY)
 
+    # The first matching identity wins to compress mixed prompts into one dominant label.
     if _contains_any(
         normalized,
         ("economic", "economy", "expand", "greed", "greedy", "macro"),
@@ -167,6 +171,7 @@ def _compile_rule_based(prompt: str) -> Policy:
     elif _contains_any(normalized, ("ranged", "archer", "distance units")):
         policy["unit_preference"] = "ranged"
 
+    # Late cues are checked before early cues so phrases like "avoid early attacks" stay late-oriented.
     if _contains_any(
         normalized,
         ("late", "later", "avoid early attacks", "only attack later", "attack later"),

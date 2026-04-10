@@ -16,6 +16,7 @@ from .log_parse import (
     sample_recent_dynamic_prompt,
     parse_dynamic_prompt_state,
 )
+from .simulation_runner import set_llm_interval
 
 def test_parse_fitness():
     """Smoke-test parsing on the newest locally available game log."""
@@ -493,7 +494,7 @@ def test_initial_real_evaluation_can_use_history_shortcut():
 
 def test_fitness_history_key_uses_stable_digest_and_runtime_context(tmp_path):
     """Verify cache keys are stable and include runtime settings that affect performance."""
-    recorder = FitnessRecorder(tmp_path, EAConfig(run_time_per_game_sec=500))
+    recorder = FitnessRecorder(tmp_path, EAConfig(run_time_per_game_sec=500, llm_interval=7))
     original_repo_root = recorder.repo_root
     original_history_path = recorder.history_records_path
     try:
@@ -508,18 +509,11 @@ def test_fitness_history_key_uses_stable_digest_and_runtime_context(tmp_path):
             "update_interval=50\n",
             encoding="utf-8",
         )
-        eagle_dir = tmp_path / "src" / "ai" / "abstraction"
-        eagle_dir.mkdir(parents=True, exist_ok=True)
-        (eagle_dir / "EAGLE.java").write_text(
-            "public class EAGLE { static final Integer LLM_INTERVAL = 7; }\n",
-            encoding="utf-8",
-        )
 
         key = recorder.build_history_key("same prompt", "ai.RandomBiasedAI")
 
         assert len(key["prompt_digest"]) == 64
         assert key["context"]["run_time_per_game_sec"] == 500
-        assert key["context"]["update_interval"] == "50"
         assert key["context"]["eagle_llm_interval"] == 7
     finally:
         recorder.repo_root = original_repo_root
@@ -550,6 +544,23 @@ def test_history_only_records_real_evaluations(tmp_path):
 
     assert len(recorder.history) == 1
     assert recorder.history[0]["evaluation_mode"] == "real"
+
+
+def test_set_llm_interval_updates_properties_file(tmp_path):
+    """Verify the runner writes llm_interval into config.properties for Java to read."""
+    resources_dir = tmp_path / "resources"
+    resources_dir.mkdir(parents=True, exist_ok=True)
+    config_path = resources_dir / "config.properties"
+    config_path.write_text(
+        "AI1=ai.abstraction.EAGLE\n"
+        "AI2=ai.RandomAI\n",
+        encoding="utf-8",
+    )
+
+    set_llm_interval(tmp_path, 7)
+
+    updated = config_path.read_text(encoding="utf-8")
+    assert "llm_interval=7" in updated
 
 
 def test_log_multi_objective_generation_includes_evaluation_mode(tmp_path):

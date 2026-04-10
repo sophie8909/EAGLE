@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .config import EAConfig, read_eagle_llm_interval
+from .config import EAConfig
 
 
 class FitnessRecorder:
@@ -67,7 +67,7 @@ class FitnessRecorder:
             "resource_advantage_weights": dict(self.config.resource_advantage_weights),
             "map_location": properties.get("map_location"),
             "max_cycles": properties.get("max_cycles"),
-            "eagle_llm_interval": read_eagle_llm_interval(self.repo_root),
+            "eagle_llm_interval": int(self.config.llm_interval),
         }
 
     def build_history_key(self, prompt: Any, opponent: str | None) -> dict[str, Any]:
