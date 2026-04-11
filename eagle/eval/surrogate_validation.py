@@ -1,4 +1,4 @@
-"""Run one prompt-level benchmark comparing EAGLE vs surrogate Java-agent matches."""
+"""Run prompt-level benchmark batches comparing EAGLE vs surrogate Java-agent matches."""
 
 from __future__ import annotations
 
@@ -25,14 +25,13 @@ from .evaluate import Evaluator
 from ..surrogate.eval.evaluator import estimate_llm_game_round_score
 
 
-def _build_random_prompt_artifacts(config: EAConfig) -> tuple[ComponentPool, Individual, str]:
+def _build_random_prompt_artifacts(component_pool: ComponentPool, config: EAConfig) -> tuple[Individual, str]:
     """Create one random EA-style individual and render its prompt."""
-    component_pool = ComponentPool.from_json(_resolve_component_pool_path())
     individual = Individual()
     individual.initialize_randomly(component_pool)
     evaluator = Evaluator(component_pool, config)
     prompt = evaluator.construct_prompt(individual)
-    return component_pool, individual, prompt
+    return individual, prompt
 
 
 def _make_experiment_log_dir() -> Path:
@@ -53,6 +52,16 @@ def _average(values: list[float]) -> float | None:
     if not values:
         return None
     return sum(values) / len(values)
+
+
+def _safe_float(value: Any) -> float | None:
+    """Convert one optional numeric-ish value into float."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _infer_final_tick(parsed_log: dict[str, Any] | None) -> int | None:
@@ -121,43 +130,51 @@ def _result_label_from_fitness(fitness: list[float]) -> str:
     return "Draw"
 
 
+def _collect_match_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten all individual/mode match results into one table."""
+    rows: list[dict[str, Any]] = []
+    for individual_result in list(results.get("individual_results") or []):
+        individual_info = dict(individual_result.get("individual") or {})
+        for mode_name, records in dict(individual_result.get("modes") or {}).items():
+            for record in records:
+                rows.append(
+                    {
+                        "experiment_type": results.get("experiment_type"),
+                        "timestamp": results.get("timestamp"),
+                        "prompt_digest": individual_result.get("prompt_digest"),
+                        "individual_id": individual_info.get("id"),
+                        "mode": mode_name,
+                        "benchmark_mode": record.get("benchmark_mode"),
+                        "opponent": record.get("opponent"),
+                        "result": record.get("result"),
+                        "win_score": record.get("win_score"),
+                        "game_round_score": record.get("game_round_score"),
+                        "resource_advantage_score": record.get("resource_advantage_score"),
+                        "game_time_sec": record.get("game_time_sec"),
+                        "final_tick": record.get("final_tick"),
+                        "max_cycles": record.get("max_cycles"),
+                        "winner": record.get("winner"),
+                        "timeout": record.get("timeout"),
+                        "llm_calls": record.get("llm_calls"),
+                        "llm_interval": record.get("llm_interval"),
+                        "run_time_per_game_sec": record.get("run_time_per_game_sec"),
+                        "runner_script": record.get("runner_script"),
+                        "ai1": record.get("ai1"),
+                        "ai2": record.get("ai2"),
+                        "java_match_win_score": record.get("java_match_win_score"),
+                        "java_match_game_round_score": record.get("java_match_game_round_score"),
+                        "java_match_resource_advantage_score": record.get("java_match_resource_advantage_score"),
+                        "llm_round_score_source": record.get("llm_round_score_source"),
+                        "cached": record.get("cached"),
+                        "log_path": record.get("log_path"),
+                    }
+                )
+    return rows
+
+
 def _write_match_results_csv(log_dir: Path, results: dict[str, Any]) -> None:
     """Write one flat per-match CSV for downstream plotting and spreadsheet analysis."""
-    rows: list[dict[str, Any]] = []
-    for mode_name, records in dict(results.get("modes") or {}).items():
-        for record in records:
-            rows.append(
-                {
-                    "experiment_type": results.get("experiment_type"),
-                    "timestamp": results.get("timestamp"),
-                    "prompt_digest": results.get("prompt_digest"),
-                    "individual_id": dict(results.get("individual") or {}).get("id"),
-                    "mode": mode_name,
-                    "benchmark_mode": record.get("benchmark_mode"),
-                    "opponent": record.get("opponent"),
-                    "result": record.get("result"),
-                    "win_score": record.get("win_score"),
-                    "game_round_score": record.get("game_round_score"),
-                    "resource_advantage_score": record.get("resource_advantage_score"),
-                    "game_time_sec": record.get("game_time_sec"),
-                    "final_tick": record.get("final_tick"),
-                    "max_cycles": record.get("max_cycles"),
-                    "winner": record.get("winner"),
-                    "timeout": record.get("timeout"),
-                    "llm_calls": record.get("llm_calls"),
-                    "llm_interval": record.get("llm_interval"),
-                    "run_time_per_game_sec": record.get("run_time_per_game_sec"),
-                    "runner_script": record.get("runner_script"),
-                    "ai1": record.get("ai1"),
-                    "ai2": record.get("ai2"),
-                    "java_match_win_score": record.get("java_match_win_score"),
-                    "java_match_game_round_score": record.get("java_match_game_round_score"),
-                    "java_match_resource_advantage_score": record.get("java_match_resource_advantage_score"),
-                    "llm_round_score_source": record.get("llm_round_score_source"),
-                    "cached": record.get("cached"),
-                    "log_path": record.get("log_path"),
-                }
-            )
+    rows = _collect_match_rows(results)
 
     fieldnames = [
         "experiment_type",
@@ -204,6 +221,7 @@ def _write_mode_summary_csv(log_dir: Path, results: dict[str, Any]) -> None:
         "experiment_type",
         "timestamp",
         "prompt_digest",
+        "individual_id",
         "mode",
         "match_count",
         "cached_match_count",
@@ -221,17 +239,139 @@ def _write_mode_summary_csv(log_dir: Path, results: dict[str, Any]) -> None:
     with output_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        for mode_name, summary in summaries.items():
-            writer.writerow(
+        for individual_result in list(results.get("individual_results") or []):
+            summaries = dict(individual_result.get("mode_summaries") or {})
+            individual_info = dict(individual_result.get("individual") or {})
+            for mode_name, summary in summaries.items():
+                writer.writerow(
+                    {
+                        "experiment_type": results.get("experiment_type"),
+                        "timestamp": results.get("timestamp"),
+                        "prompt_digest": individual_result.get("prompt_digest"),
+                        "individual_id": individual_info.get("id"),
+                        "mode": mode_name,
+                        "runner_script": "RunLoop_5000.sh",
+                        **summary,
+                    }
+                )
+
+
+def _build_alignment_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build per-individual/per-opponent Java-vs-surrogate alignment rows."""
+    rows: list[dict[str, Any]] = []
+    for individual_result in list(results.get("individual_results") or []):
+        individual_info = dict(individual_result.get("individual") or {})
+        eagle_by_opponent = {
+            row.get("opponent"): row
+            for row in list(dict(individual_result.get("modes") or {}).get("eagle_final_test") or [])
+            if row.get("opponent")
+        }
+        surrogate_by_opponent = {
+            row.get("opponent"): row
+            for row in list(dict(individual_result.get("modes") or {}).get("surrogate_java_final_test") or [])
+            if row.get("opponent")
+        }
+        for opponent in sorted(set(eagle_by_opponent) | set(surrogate_by_opponent)):
+            eagle_record = eagle_by_opponent.get(opponent, {})
+            surrogate_record = surrogate_by_opponent.get(opponent, {})
+            eagle_fitness = list(eagle_record.get("fitness") or [])
+            surrogate_fitness = list(surrogate_record.get("fitness") or [])
+            win_gap = None
+            round_gap = None
+            resource_gap = None
+            if eagle_fitness and surrogate_fitness:
+                if len(eagle_fitness) > 0 and len(surrogate_fitness) > 0:
+                    win_gap = abs(float(eagle_fitness[0]) - float(surrogate_fitness[0]))
+                if len(eagle_fitness) > 1 and len(surrogate_fitness) > 1:
+                    round_gap = abs(float(eagle_fitness[1]) - float(surrogate_fitness[1]))
+                if len(eagle_fitness) > 2 and len(surrogate_fitness) > 2:
+                    resource_gap = abs(float(eagle_fitness[2]) - float(surrogate_fitness[2]))
+            gap_values = [value for value in [win_gap, round_gap, resource_gap] if value is not None]
+            rows.append(
                 {
                     "experiment_type": results.get("experiment_type"),
                     "timestamp": results.get("timestamp"),
-                    "prompt_digest": results.get("prompt_digest"),
-                    "mode": mode_name,
-                    "runner_script": "RunLoop_5000.sh",
-                    **summary,
+                    "prompt_digest": individual_result.get("prompt_digest"),
+                    "individual_id": individual_info.get("id"),
+                    "opponent": opponent,
+                    "eagle_result": eagle_record.get("result"),
+                    "surrogate_result": surrogate_record.get("result"),
+                    "eagle_win_score": eagle_record.get("win_score"),
+                    "surrogate_win_score": surrogate_record.get("win_score"),
+                    "eagle_game_round_score": eagle_record.get("game_round_score"),
+                    "surrogate_game_round_score": surrogate_record.get("game_round_score"),
+                    "eagle_resource_advantage_score": eagle_record.get("resource_advantage_score"),
+                    "surrogate_resource_advantage_score": surrogate_record.get("resource_advantage_score"),
+                    "win_score_abs_gap": win_gap,
+                    "game_round_score_abs_gap": round_gap,
+                    "resource_advantage_score_abs_gap": resource_gap,
+                    "mean_abs_gap": _average(gap_values),
+                    "same_result_label": eagle_record.get("result") == surrogate_record.get("result")
+                    if eagle_record and surrogate_record
+                    else None,
                 }
             )
+    return rows
+
+
+def _write_alignment_csv(log_dir: Path, results: dict[str, Any]) -> None:
+    """Write per-individual/per-opponent Java-vs-surrogate alignment rows."""
+    rows = _build_alignment_rows(results)
+    fieldnames = [
+        "experiment_type",
+        "timestamp",
+        "prompt_digest",
+        "individual_id",
+        "opponent",
+        "eagle_result",
+        "surrogate_result",
+        "eagle_win_score",
+        "surrogate_win_score",
+        "eagle_game_round_score",
+        "surrogate_game_round_score",
+        "eagle_resource_advantage_score",
+        "surrogate_resource_advantage_score",
+        "win_score_abs_gap",
+        "game_round_score_abs_gap",
+        "resource_advantage_score_abs_gap",
+        "mean_abs_gap",
+        "same_result_label",
+    ]
+    output_path = log_dir / "surrogate_validation_alignment.csv"
+    with output_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _build_alignment_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate alignment quality across all individuals and opponents."""
+    if not rows:
+        return {
+            "pair_count": 0,
+            "same_result_rate": None,
+            "avg_win_score_abs_gap": None,
+            "avg_game_round_score_abs_gap": None,
+            "avg_resource_advantage_score_abs_gap": None,
+            "avg_mean_abs_gap": None,
+        }
+    same_result_flags = [bool(row.get("same_result_label")) for row in rows if row.get("same_result_label") is not None]
+    return {
+        "pair_count": len(rows),
+        "same_result_rate": _average([1.0 if flag else 0.0 for flag in same_result_flags]) if same_result_flags else None,
+        "avg_win_score_abs_gap": _average(
+            [value for value in [_safe_float(row.get("win_score_abs_gap")) for row in rows] if value is not None]
+        ),
+        "avg_game_round_score_abs_gap": _average(
+            [value for value in [_safe_float(row.get("game_round_score_abs_gap")) for row in rows] if value is not None]
+        ),
+        "avg_resource_advantage_score_abs_gap": _average(
+            [value for value in [_safe_float(row.get("resource_advantage_score_abs_gap")) for row in rows] if value is not None]
+        ),
+        "avg_mean_abs_gap": _average(
+            [value for value in [_safe_float(row.get("mean_abs_gap")) for row in rows] if value is not None]
+        ),
+    }
 
 
 def _history_record_to_result(
@@ -496,11 +636,12 @@ def run_surrogate_validation_experiment(
     *,
     config: EAConfig | None = None,
     opponents: list[str] | None = None,
+    num_individuals: int = 1,
 ) -> dict[str, Any]:
-    """Compare one random EA-style prompt under final-test and surrogate-Java matches."""
+    """Compare multiple random EA-style prompts under final-test and surrogate-Java matches."""
     config = config or EAConfig()
     log_dir = _make_experiment_log_dir()
-    component_pool, individual, prompt = _build_random_prompt_artifacts(config)
+    component_pool = ComponentPool.from_json(_resolve_component_pool_path())
     evaluator = Evaluator(component_pool, config)
     recorder = FitnessRecorder(log_dir, config)
 
@@ -515,60 +656,85 @@ def run_surrogate_validation_experiment(
         "run_time_per_game_sec": int(config.run_time_per_game_sec),
         "population_size": int(config.population_size),
         "num_generations": int(config.num_generations),
+        "num_individuals": int(num_individuals),
         "surrogate_version": str(config.surrogate_version),
-        "prompt": prompt,
-        "prompt_digest": _prompt_digest(prompt),
-        "prompt_line_count": len(prompt.splitlines()),
         "component_pool_path": _resolve_component_pool_path(),
-        "individual": {
-            "id": individual.id,
-            "game_rule": individual.game_rule,
-            "strategy": dict(individual.strategy),
-        },
         "opponents": opponents,
         "history_cache_schema_version": 4,
-        "modes": {
-            "eagle_final_test": [],
-            "surrogate_java_final_test": [],
-        },
-        "mode_summaries": {},
+        "individual_results": [],
+        "alignment_summary": {},
     }
 
-    (log_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
-    (log_dir / "individual.json").write_text(
-        json.dumps(results["individual"], ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    for opponent in opponents:
-        results["modes"]["eagle_final_test"].append(
-            _run_eagle_match(
-                evaluator,
-                recorder,
-                prompt=prompt,
-                opponent=opponent,
-                llm_interval=llm_interval,
-            )
-        )
-        results["modes"]["surrogate_java_final_test"].append(
-            _run_surrogate_java_match(
-                evaluator,
-                recorder,
-                prompt=prompt,
-                opponent=opponent,
-                llm_interval=llm_interval,
-            )
-        )
-        results["mode_summaries"] = {
-            mode_name: _build_mode_summary(mode_records)
-            for mode_name, mode_records in results["modes"].items()
+    for individual_index in range(int(num_individuals)):
+        individual, prompt = _build_random_prompt_artifacts(component_pool, config)
+        individual_result = {
+            "individual_index": individual_index,
+            "prompt": prompt,
+            "prompt_digest": _prompt_digest(prompt),
+            "prompt_line_count": len(prompt.splitlines()),
+            "individual": {
+                "id": individual.id,
+                "game_rule": individual.game_rule,
+                "strategy": dict(individual.strategy),
+            },
+            "modes": {
+                "eagle_final_test": [],
+                "surrogate_java_final_test": [],
+            },
+            "mode_summaries": {},
         }
+
+        individual_dir = log_dir / f"individual_{individual_index:03d}_{individual.id}"
+        individual_dir.mkdir(parents=True, exist_ok=True)
+        (individual_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+        (individual_dir / "individual.json").write_text(
+            json.dumps(individual_result["individual"], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        results["individual_results"].append(individual_result)
+
+        for opponent in opponents:
+            individual_result["modes"]["eagle_final_test"].append(
+                _run_eagle_match(
+                    evaluator,
+                    recorder,
+                    prompt=prompt,
+                    opponent=opponent,
+                    llm_interval=llm_interval,
+                )
+            )
+            individual_result["modes"]["surrogate_java_final_test"].append(
+                _run_surrogate_java_match(
+                    evaluator,
+                    recorder,
+                    prompt=prompt,
+                    opponent=opponent,
+                    llm_interval=llm_interval,
+                )
+            )
+            individual_result["mode_summaries"] = {
+                mode_name: _build_mode_summary(mode_records)
+                for mode_name, mode_records in individual_result["modes"].items()
+            }
+            alignment_rows = _build_alignment_rows(results)
+            results["alignment_summary"] = _build_alignment_summary(alignment_rows)
+            (log_dir / "surrogate_validation_results.json").write_text(
+                json.dumps(results, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            _write_match_results_csv(log_dir, results)
+            _write_mode_summary_csv(log_dir, results)
+            _write_alignment_csv(log_dir, results)
+
+        alignment_rows = _build_alignment_rows(results)
+        results["alignment_summary"] = _build_alignment_summary(alignment_rows)
         (log_dir / "surrogate_validation_results.json").write_text(
             json.dumps(results, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
         _write_match_results_csv(log_dir, results)
         _write_mode_summary_csv(log_dir, results)
+        _write_alignment_csv(log_dir, results)
 
     return results
 
@@ -584,6 +750,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional opponent override. Repeat to benchmark multiple opponents.",
     )
+    parser.add_argument(
+        "--num-individuals",
+        type=int,
+        default=1,
+        help="How many random EA-style individuals to benchmark in one experiment run.",
+    )
     return parser
 
 
@@ -594,6 +766,7 @@ def main() -> None:
     results = run_surrogate_validation_experiment(
         config=EAConfig(),
         opponents=args.opponent,
+        num_individuals=max(1, int(args.num_individuals)),
     )
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
