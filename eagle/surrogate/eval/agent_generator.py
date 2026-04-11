@@ -75,9 +75,18 @@ def render_surrogate_agent(repo_root: Path, prompt: str, spec: dict) -> Path:
         rf"{re.escape(PROMPT_START_MARKER)}.*?{re.escape(PROMPT_END_MARKER)}",
         re.DOTALL,
     )
+    spec_match = spec_pattern.search(content)
+    prompt_match = prompt_pattern.search(content)
+    if spec_match is None or prompt_match is None:
+        missing_blocks: list[str] = []
+        if spec_match is None:
+            missing_blocks.append("spec")
+        if prompt_match is None:
+            missing_blocks.append("prompt")
+        missing_text = ", ".join(missing_blocks)
+        raise ValueError(f"Failed to locate surrogate {missing_text} markers in {java_path}")
+
     updated = spec_pattern.sub(_render_spec_block(spec), content, count=1)
     updated = prompt_pattern.sub(_render_prompt_array(prompt), updated, count=1)
-    if updated == content:
-        raise ValueError(f"Failed to locate surrogate prompt markers in {java_path}")
     java_path.write_text(updated, encoding="utf-8")
     return java_path
