@@ -13,10 +13,8 @@ LLM_Gemini_*.json
 tournament_results_*.json
 benchmark_results_*.txt
 sources.list
-/logs/
 /traces/
 !/examples/traces/
-/eagle/logs/
 
 # Python
 __pycache__/

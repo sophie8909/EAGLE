@@ -1,0 +1,2387 @@
+{
+    "generation_log": "generation_7_mo.txt",
+    "selected_individual_count": 20,
+    "selection_rule": "pareto_front_1_to_1",
+    "results": {
+        "ind-84": [
+            {
+                "individual_id": "ind-84",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.1156661594429521,
+                    0.5270718232044199
+                ],
+                "resource_advantage": -0.1156661594429521,
+                "game_round_score": 0.5270718232044199,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_18-54-40.log"
+            },
+            {
+                "individual_id": "ind-84",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.15996059316691816,
+                    0.4977611940298508
+                ],
+                "resource_advantage": -0.15996059316691816,
+                "game_round_score": 0.4977611940298508,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_18-58-21.log"
+            },
+            {
+                "individual_id": "ind-84",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.48594075755156824,
+                    0.8096885813148789
+                ],
+                "resource_advantage": 0.48594075755156824,
+                "game_round_score": 0.8096885813148789,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-06-44.log"
+            },
+            {
+                "individual_id": "ind-84",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.27522947178194257,
+                    0.7095238095238096
+                ],
+                "resource_advantage": -0.27522947178194257,
+                "game_round_score": 0.7095238095238096,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-12-28.log"
+            },
+            {
+                "individual_id": "ind-84",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.27105772834412944,
+                    0.7196531791907514
+                ],
+                "resource_advantage": -0.27105772834412944,
+                "game_round_score": 0.7196531791907514,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-15-47.log"
+            },
+            {
+                "individual_id": "ind-84",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0,
+                    0.7285714285714286
+                ],
+                "resource_advantage": 0.0,
+                "game_round_score": 0.7285714285714286,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-19-12.log"
+            },
+            {
+                "individual_id": "ind-84",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.29744756976450437,
+                    0.4869565217391304
+                ],
+                "resource_advantage": -0.29744756976450437,
+                "game_round_score": 0.4869565217391304,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-27-34.log"
+            },
+            {
+                "individual_id": "ind-84",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.07891998164138929,
+                    0.6578512396694216
+                ],
+                "resource_advantage": -0.07891998164138929,
+                "game_round_score": 0.6578512396694216,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-28-36.log"
+            },
+            {
+                "individual_id": "ind-84",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.20431477577799972,
+                    0.5712230215827339
+                ],
+                "resource_advantage": -0.20431477577799972,
+                "game_round_score": 0.5712230215827339,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-31-13.log"
+            }
+        ],
+        "ind-85": [
+            {
+                "individual_id": "ind-85",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.14789767958284092,
+                    0.5900311526479751
+                ],
+                "resource_advantage": -0.14789767958284092,
+                "game_round_score": 0.5900311526479751,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-34-07.log"
+            },
+            {
+                "individual_id": "ind-85",
+                "opponent": "ai.RandomAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.21015582960959256,
+                    0.4573643410852713
+                ],
+                "resource_advantage": -0.21015582960959256,
+                "game_round_score": 0.4573643410852713,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-40-32.log"
+            },
+            {
+                "individual_id": "ind-85",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.33745918109000544,
+                    0.7483108108108109
+                ],
+                "resource_advantage": 0.33745918109000544,
+                "game_round_score": 0.7483108108108109,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-48-30.log"
+            },
+            {
+                "individual_id": "ind-85",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.4185606195891075,
+                    0.6869791666666667
+                ],
+                "resource_advantage": -0.4185606195891075,
+                "game_round_score": 0.6869791666666667,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-54-21.log"
+            },
+            {
+                "individual_id": "ind-85",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.06547130843918196,
+                    0.6166666666666667
+                ],
+                "resource_advantage": -0.06547130843918196,
+                "game_round_score": 0.6166666666666667,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_19-58-14.log"
+            },
+            {
+                "individual_id": "ind-85",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.0038594852379658855,
+                    0.7333333333333333
+                ],
+                "resource_advantage": -0.0038594852379658855,
+                "game_round_score": 0.7333333333333333,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-00-59.log"
+            },
+            {
+                "individual_id": "ind-85",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.21191756664762093,
+                    0.53
+                ],
+                "resource_advantage": -0.21191756664762093,
+                "game_round_score": 0.53,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-09-21.log"
+            },
+            {
+                "individual_id": "ind-85",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.35403911054158743,
+                    0.6488372093023256
+                ],
+                "resource_advantage": -0.35403911054158743,
+                "game_round_score": 0.6488372093023256,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-10-14.log"
+            },
+            {
+                "individual_id": "ind-85",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.275346140047318,
+                    0.6006802721088436
+                ],
+                "resource_advantage": -0.275346140047318,
+                "game_round_score": 0.6006802721088436,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-13-00.log"
+            }
+        ],
+        "ind-86": [
+            {
+                "individual_id": "ind-86",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.4190256464078793,
+                    0.6937007874015749
+                ],
+                "resource_advantage": 0.4190256464078793,
+                "game_round_score": 0.6937007874015749,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-16-00.log"
+            },
+            {
+                "individual_id": "ind-86",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.03749033475098576,
+                    0.4913953488372093
+                ],
+                "resource_advantage": -0.03749033475098576,
+                "game_round_score": 0.4913953488372093,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-18-32.log"
+            },
+            {
+                "individual_id": "ind-86",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.2753185069124945,
+                    0.7731182795698925
+                ],
+                "resource_advantage": 0.2753185069124945,
+                "game_round_score": 0.7731182795698925,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-26-54.log"
+            },
+            {
+                "individual_id": "ind-86",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.25755779319317296,
+                    0.7177631578947368
+                ],
+                "resource_advantage": -0.25755779319317296,
+                "game_round_score": 0.7177631578947368,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-30-35.log"
+            },
+            {
+                "individual_id": "ind-86",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.2471321650798747,
+                    0.7442622950819673
+                ],
+                "resource_advantage": -0.2471321650798747,
+                "game_round_score": 0.7442622950819673,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-33-37.log"
+            },
+            {
+                "individual_id": "ind-86",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.02887483593757315,
+                    0.6052631578947368
+                ],
+                "resource_advantage": -0.02887483593757315,
+                "game_round_score": 0.6052631578947368,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-36-06.log"
+            },
+            {
+                "individual_id": "ind-86",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.3767230199202776,
+                    0.4739130434782609
+                ],
+                "resource_advantage": -0.3767230199202776,
+                "game_round_score": 0.4739130434782609,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-44-28.log"
+            },
+            {
+                "individual_id": "ind-86",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.19513760428143417,
+                    0.6139534883720931
+                ],
+                "resource_advantage": -0.19513760428143417,
+                "game_round_score": 0.6139534883720931,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-45-31.log"
+            },
+            {
+                "individual_id": "ind-86",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.6224904386272331,
+                    0.7946601941747572
+                ],
+                "resource_advantage": 0.6224904386272331,
+                "game_round_score": 0.7946601941747572,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-49-58.log"
+            }
+        ],
+        "ind-87": [
+            {
+                "individual_id": "ind-87",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.34885342999498964,
+                    0.3491166077738516
+                ],
+                "resource_advantage": -0.34885342999498964,
+                "game_round_score": 0.3491166077738516,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_20-54-04.log"
+            },
+            {
+                "individual_id": "ind-87",
+                "opponent": "ai.RandomAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.32128265187085,
+                    0.6532934131736526
+                ],
+                "resource_advantage": 0.32128265187085,
+                "game_round_score": 0.6532934131736526,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-00-11.log"
+            },
+            {
+                "individual_id": "ind-87",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.41037431945604963,
+                    0.8142394822006473
+                ],
+                "resource_advantage": 0.41037431945604963,
+                "game_round_score": 0.8142394822006473,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-06-52.log"
+            },
+            {
+                "individual_id": "ind-87",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.05559653380121177,
+                    0.7349693251533742
+                ],
+                "resource_advantage": -0.05559653380121177,
+                "game_round_score": 0.7349693251533742,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-12-59.log"
+            },
+            {
+                "individual_id": "ind-87",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.29980639456684943,
+                    0.6151315789473685
+                ],
+                "resource_advantage": -0.29980639456684943,
+                "game_round_score": 0.6151315789473685,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-16-15.log"
+            },
+            {
+                "individual_id": "ind-87",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0,
+                    0.6575757575757576
+                ],
+                "resource_advantage": 0.0,
+                "game_round_score": 0.6575757575757576,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-19-25.log"
+            },
+            {
+                "individual_id": "ind-87",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.25187787738402123,
+                    0.6708333333333334
+                ],
+                "resource_advantage": -0.25187787738402123,
+                "game_round_score": 0.6708333333333334,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-27-47.log"
+            },
+            {
+                "individual_id": "ind-87",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.05288681307587094,
+                    0.6092592592592593
+                ],
+                "resource_advantage": 0.05288681307587094,
+                "game_round_score": 0.6092592592592593,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-28-49.log"
+            },
+            {
+                "individual_id": "ind-87",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.02406566930844461,
+                    0.6513966480446928
+                ],
+                "resource_advantage": -0.02406566930844461,
+                "game_round_score": 0.6513966480446928,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-29-59.log"
+            }
+        ],
+        "ind-88": [
+            {
+                "individual_id": "ind-88",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.1023831036833938,
+                    0.4907246376811594
+                ],
+                "resource_advantage": -0.1023831036833938,
+                "game_round_score": 0.4907246376811594,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-33-41.log"
+            },
+            {
+                "individual_id": "ind-88",
+                "opponent": "ai.RandomAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.792040589458557,
+                    0.7587926509186351
+                ],
+                "resource_advantage": 0.792040589458557,
+                "game_round_score": 0.7587926509186351,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-40-33.log"
+            },
+            {
+                "individual_id": "ind-88",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.26483994587780163,
+                    0.7467836257309942
+                ],
+                "resource_advantage": 0.26483994587780163,
+                "game_round_score": 0.7467836257309942,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-47-51.log"
+            },
+            {
+                "individual_id": "ind-88",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    0.0024261882223477237,
+                    0.7899497487437185
+                ],
+                "resource_advantage": 0.0024261882223477237,
+                "game_round_score": 0.7899497487437185,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-54-29.log"
+            },
+            {
+                "individual_id": "ind-88",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.044441496512847595,
+                    0.77
+                ],
+                "resource_advantage": -0.044441496512847595,
+                "game_round_score": 0.77,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_21-58-17.log"
+            },
+            {
+                "individual_id": "ind-88",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0,
+                    0.6416666666666667
+                ],
+                "resource_advantage": 0.0,
+                "game_round_score": 0.6416666666666667,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-01-01.log"
+            },
+            {
+                "individual_id": "ind-88",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.42856382997129944,
+                    0.6072916666666667
+                ],
+                "resource_advantage": -0.42856382997129944,
+                "game_round_score": 0.6072916666666667,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-09-23.log"
+            },
+            {
+                "individual_id": "ind-88",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.051394826220508574,
+                    0.6588235294117647
+                ],
+                "resource_advantage": -0.051394826220508574,
+                "game_round_score": 0.6588235294117647,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-11-22.log"
+            },
+            {
+                "individual_id": "ind-88",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.07414573223105855,
+                    0.5528571428571429
+                ],
+                "resource_advantage": -0.07414573223105855,
+                "game_round_score": 0.5528571428571429,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-14-13.log"
+            }
+        ],
+        "ind-89": [
+            {
+                "individual_id": "ind-89",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    0.41530292216171816,
+                    0.7213333333333334
+                ],
+                "resource_advantage": 0.41530292216171816,
+                "game_round_score": 0.7213333333333334,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-17-05.log"
+            },
+            {
+                "individual_id": "ind-89",
+                "opponent": "ai.RandomAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.16882085455059917,
+                    0.6047846889952153
+                ],
+                "resource_advantage": -0.16882085455059917,
+                "game_round_score": 0.6047846889952153,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-21-35.log"
+            },
+            {
+                "individual_id": "ind-89",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.13900744595716724,
+                    0.8136612021857924
+                ],
+                "resource_advantage": 0.13900744595716724,
+                "game_round_score": 0.8136612021857924,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-25-51.log"
+            },
+            {
+                "individual_id": "ind-89",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    0.3574924772659457,
+                    0.687741935483871
+                ],
+                "resource_advantage": 0.3574924772659457,
+                "game_round_score": 0.687741935483871,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-29-24.log"
+            },
+            {
+                "individual_id": "ind-89",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    0.3773506033357381,
+                    0.7735099337748345
+                ],
+                "resource_advantage": 0.3773506033357381,
+                "game_round_score": 0.7735099337748345,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-32-34.log"
+            },
+            {
+                "individual_id": "ind-89",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.019161243672598516,
+                    0.7000000000000001
+                ],
+                "resource_advantage": -0.019161243672598516,
+                "game_round_score": 0.7000000000000001,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-35-28.log"
+            },
+            {
+                "individual_id": "ind-89",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.1420200195059599,
+                    0.5947916666666667
+                ],
+                "resource_advantage": -0.1420200195059599,
+                "game_round_score": 0.5947916666666667,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-43-51.log"
+            },
+            {
+                "individual_id": "ind-89",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.05789453109555613,
+                    0.7671428571428572
+                ],
+                "resource_advantage": 0.05789453109555613,
+                "game_round_score": 0.7671428571428572,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-45-55.log"
+            },
+            {
+                "individual_id": "ind-89",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    -0.06260700332801653,
+                    0.7195876288659794
+                ],
+                "resource_advantage": -0.06260700332801653,
+                "game_round_score": 0.7195876288659794,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-47-27.log"
+            }
+        ],
+        "ind-90": [
+            {
+                "individual_id": "ind-90",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.7804793580631466,
+                    0.7778169014084507
+                ],
+                "resource_advantage": 0.7804793580631466,
+                "game_round_score": 0.7778169014084507,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-49-30.log"
+            },
+            {
+                "individual_id": "ind-90",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.06440915236967941,
+                    0.4825665859564165
+                ],
+                "resource_advantage": -0.06440915236967941,
+                "game_round_score": 0.4825665859564165,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_22-55-15.log"
+            },
+            {
+                "individual_id": "ind-90",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.14999306326991046,
+                    0.783265306122449
+                ],
+                "resource_advantage": 0.14999306326991046,
+                "game_round_score": 0.783265306122449,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-03-37.log"
+            },
+            {
+                "individual_id": "ind-90",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.09291124162715099,
+                    0.7415094339622642
+                ],
+                "resource_advantage": -0.09291124162715099,
+                "game_round_score": 0.7415094339622642,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-08-34.log"
+            },
+            {
+                "individual_id": "ind-90",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.09896688833460085,
+                    0.6066666666666667
+                ],
+                "resource_advantage": -0.09896688833460085,
+                "game_round_score": 0.6066666666666667,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-11-47.log"
+            },
+            {
+                "individual_id": "ind-90",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0,
+                    1.0
+                ],
+                "resource_advantage": 0.0,
+                "game_round_score": 1.0,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-13-59.log"
+            },
+            {
+                "individual_id": "ind-90",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.15390320953100883,
+                    0.518421052631579
+                ],
+                "resource_advantage": -0.15390320953100883,
+                "game_round_score": 0.518421052631579,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-22-22.log"
+            },
+            {
+                "individual_id": "ind-90",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.31696221060142016,
+                    0.6709923664122138
+                ],
+                "resource_advantage": -0.31696221060142016,
+                "game_round_score": 0.6709923664122138,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-24-43.log"
+            },
+            {
+                "individual_id": "ind-90",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.005556418335292029,
+                    0.5860655737704918
+                ],
+                "resource_advantage": 0.005556418335292029,
+                "game_round_score": 0.5860655737704918,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-27-26.log"
+            }
+        ],
+        "ind-91": [
+            {
+                "individual_id": "ind-91",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.257922184507366,
+                    0.46328125
+                ],
+                "resource_advantage": -0.257922184507366,
+                "game_round_score": 0.46328125,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-29-52.log"
+            },
+            {
+                "individual_id": "ind-91",
+                "opponent": "ai.RandomAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.2608772882275498,
+                    0.5048101265822785
+                ],
+                "resource_advantage": -0.2608772882275498,
+                "game_round_score": 0.5048101265822785,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-32-39.log"
+            },
+            {
+                "individual_id": "ind-91",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.29435954897671346,
+                    0.7180327868852459
+                ],
+                "resource_advantage": 0.29435954897671346,
+                "game_round_score": 0.7180327868852459,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-41-01.log"
+            },
+            {
+                "individual_id": "ind-91",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.13764575575283952,
+                    0.7259493670886076
+                ],
+                "resource_advantage": -0.13764575575283952,
+                "game_round_score": 0.7259493670886076,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-43-29.log"
+            },
+            {
+                "individual_id": "ind-91",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.2905911068064948,
+                    0.6156521739130435
+                ],
+                "resource_advantage": -0.2905911068064948,
+                "game_round_score": 0.6156521739130435,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-46-45.log"
+            },
+            {
+                "individual_id": "ind-91",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.026263713038880854,
+                    0.781578947368421
+                ],
+                "resource_advantage": -0.026263713038880854,
+                "game_round_score": 0.781578947368421,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-49-13.log"
+            },
+            {
+                "individual_id": "ind-91",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.07175753973953361,
+                    0.7285714285714286
+                ],
+                "resource_advantage": -0.07175753973953361,
+                "game_round_score": 0.7285714285714286,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-57-36.log"
+            },
+            {
+                "individual_id": "ind-91",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.11882482173191293,
+                    0.6533834586466166
+                ],
+                "resource_advantage": -0.11882482173191293,
+                "game_round_score": 0.6533834586466166,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-09_23-58-33.log"
+            },
+            {
+                "individual_id": "ind-91",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.4813846991761346,
+                    0.5852941176470589
+                ],
+                "resource_advantage": -0.4813846991761346,
+                "game_round_score": 0.5852941176470589,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-01-26.log"
+            }
+        ],
+        "ind-92": [
+            {
+                "individual_id": "ind-92",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.13903692595361566,
+                    0.5778443113772455
+                ],
+                "resource_advantage": -0.13903692595361566,
+                "game_round_score": 0.5778443113772455,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-04-59.log"
+            },
+            {
+                "individual_id": "ind-92",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.18030327296369628,
+                    0.3624113475177305
+                ],
+                "resource_advantage": -0.18030327296369628,
+                "game_round_score": 0.3624113475177305,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-08-28.log"
+            },
+            {
+                "individual_id": "ind-92",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.2909941417569655,
+                    0.9106557377049181
+                ],
+                "resource_advantage": 0.2909941417569655,
+                "game_round_score": 0.9106557377049181,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-16-50.log"
+            },
+            {
+                "individual_id": "ind-92",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    0.4038623048385304,
+                    0.7757709251101321
+                ],
+                "resource_advantage": 0.4038623048385304,
+                "game_round_score": 0.7757709251101321,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-19-15.log"
+            },
+            {
+                "individual_id": "ind-92",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.14105428338814385,
+                    0.6007575757575757
+                ],
+                "resource_advantage": -0.14105428338814385,
+                "game_round_score": 0.6007575757575757,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-23-50.log"
+            },
+            {
+                "individual_id": "ind-92",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0,
+                    0.75
+                ],
+                "resource_advantage": 0.0,
+                "game_round_score": 0.75,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-26-29.log"
+            },
+            {
+                "individual_id": "ind-92",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.5275528118952488,
+                    0.7000000000000001
+                ],
+                "resource_advantage": -0.5275528118952488,
+                "game_round_score": 0.7000000000000001,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-34-51.log"
+            },
+            {
+                "individual_id": "ind-92",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.03112198572748733,
+                    0.7162162162162162
+                ],
+                "resource_advantage": -0.03112198572748733,
+                "game_round_score": 0.7162162162162162,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-36-07.log"
+            },
+            {
+                "individual_id": "ind-92",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.42576807969384356,
+                    0.6127272727272727
+                ],
+                "resource_advantage": -0.42576807969384356,
+                "game_round_score": 0.6127272727272727,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-38-26.log"
+            }
+        ],
+        "ind-93": [
+            {
+                "individual_id": "ind-93",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.6596089667271289,
+                    0.7573275862068967
+                ],
+                "resource_advantage": 0.6596089667271289,
+                "game_round_score": 0.7573275862068967,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-41-44.log"
+            },
+            {
+                "individual_id": "ind-93",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.17844804505609627,
+                    0.6736342042755343
+                ],
+                "resource_advantage": 0.17844804505609627,
+                "game_round_score": 0.6736342042755343,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-46-18.log"
+            },
+            {
+                "individual_id": "ind-93",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.14146501954051047,
+                    0.8539823008849557
+                ],
+                "resource_advantage": 0.14146501954051047,
+                "game_round_score": 0.8539823008849557,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-54-41.log"
+            },
+            {
+                "individual_id": "ind-93",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.10308446518460136,
+                    0.6787709497206704
+                ],
+                "resource_advantage": -0.10308446518460136,
+                "game_round_score": 0.6787709497206704,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_00-56-56.log"
+            },
+            {
+                "individual_id": "ind-93",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.08179889751992873,
+                    0.7486238532110091
+                ],
+                "resource_advantage": -0.08179889751992873,
+                "game_round_score": 0.7486238532110091,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-00-26.log"
+            },
+            {
+                "individual_id": "ind-93",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0011502185414869039,
+                    0.5945945945945946
+                ],
+                "resource_advantage": 0.0011502185414869039,
+                "game_round_score": 0.5945945945945946,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-02-41.log"
+            },
+            {
+                "individual_id": "ind-93",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.30910049058384215,
+                    0.5738461538461538
+                ],
+                "resource_advantage": -0.30910049058384215,
+                "game_round_score": 0.5738461538461538,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-11-03.log"
+            },
+            {
+                "individual_id": "ind-93",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.12077173351322758,
+                    0.698159509202454
+                ],
+                "resource_advantage": -0.12077173351322758,
+                "game_round_score": 0.698159509202454,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-12-24.log"
+            },
+            {
+                "individual_id": "ind-93",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.669104371525567,
+                    0.7178451178451178
+                ],
+                "resource_advantage": 0.669104371525567,
+                "game_round_score": 0.7178451178451178,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-15-43.log"
+            }
+        ],
+        "ind-94": [
+            {
+                "individual_id": "ind-94",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.4825612637290003,
+                    0.39285714285714285
+                ],
+                "resource_advantage": -0.4825612637290003,
+                "game_round_score": 0.39285714285714285,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-21-34.log"
+            },
+            {
+                "individual_id": "ind-94",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.06992295629995655,
+                    0.585960591133005
+                ],
+                "resource_advantage": -0.06992295629995655,
+                "game_round_score": 0.585960591133005,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-26-03.log"
+            },
+            {
+                "individual_id": "ind-94",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.12670807979699017,
+                    0.7795620437956206
+                ],
+                "resource_advantage": 0.12670807979699017,
+                "game_round_score": 0.7795620437956206,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-34-26.log"
+            },
+            {
+                "individual_id": "ind-94",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.21409742036234986,
+                    0.6596491228070175
+                ],
+                "resource_advantage": -0.21409742036234986,
+                "game_round_score": 0.6596491228070175,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-39-59.log"
+            },
+            {
+                "individual_id": "ind-94",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.15632729696839257,
+                    0.6007692307692308
+                ],
+                "resource_advantage": -0.15632729696839257,
+                "game_round_score": 0.6007692307692308,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-43-25.log"
+            },
+            {
+                "individual_id": "ind-94",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.003726118428749961,
+                    0.7771428571428571
+                ],
+                "resource_advantage": -0.003726118428749961,
+                "game_round_score": 0.7771428571428571,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-46-00.log"
+            },
+            {
+                "individual_id": "ind-94",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.07223952296286287,
+                    0.6378378378378378
+                ],
+                "resource_advantage": -0.07223952296286287,
+                "game_round_score": 0.6378378378378378,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-54-22.log"
+            },
+            {
+                "individual_id": "ind-94",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.08390164890339333,
+                    0.6063063063063063
+                ],
+                "resource_advantage": -0.08390164890339333,
+                "game_round_score": 0.6063063063063063,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-55-14.log"
+            },
+            {
+                "individual_id": "ind-94",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    -0.042064085779189096,
+                    0.6797979797979797
+                ],
+                "resource_advantage": -0.042064085779189096,
+                "game_round_score": 0.6797979797979797,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-57-33.log"
+            }
+        ],
+        "ind-95": [
+            {
+                "individual_id": "ind-95",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.28904401752499426,
+                    0.49343434343434345
+                ],
+                "resource_advantage": -0.28904401752499426,
+                "game_round_score": 0.49343434343434345,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_01-59-37.log"
+            },
+            {
+                "individual_id": "ind-95",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.12979759564441787,
+                    0.5659574468085107
+                ],
+                "resource_advantage": -0.12979759564441787,
+                "game_round_score": 0.5659574468085107,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-03-34.log"
+            },
+            {
+                "individual_id": "ind-95",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.2776682420969196,
+                    0.7973821989528797
+                ],
+                "resource_advantage": 0.2776682420969196,
+                "game_round_score": 0.7973821989528797,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-11-56.log"
+            },
+            {
+                "individual_id": "ind-95",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.07719318604895911,
+                    0.7007874015748031
+                ],
+                "resource_advantage": -0.07719318604895911,
+                "game_round_score": 0.7007874015748031,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-15-39.log"
+            },
+            {
+                "individual_id": "ind-95",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    0.0023489736284553154,
+                    0.7564516129032259
+                ],
+                "resource_advantage": 0.0023489736284553154,
+                "game_round_score": 0.7564516129032259,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-18-15.log"
+            },
+            {
+                "individual_id": "ind-95",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0,
+                    0.175
+                ],
+                "resource_advantage": 0.0,
+                "game_round_score": 0.175,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-20-38.log"
+            },
+            {
+                "individual_id": "ind-95",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.03585650334973802,
+                    0.7939999999999999
+                ],
+                "resource_advantage": 0.03585650334973802,
+                "game_round_score": 0.7939999999999999,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-29-00.log"
+            },
+            {
+                "individual_id": "ind-95",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.27553888809821425,
+                    0.6592920353982301
+                ],
+                "resource_advantage": -0.27553888809821425,
+                "game_round_score": 0.6592920353982301,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-30-03.log"
+            },
+            {
+                "individual_id": "ind-95",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    -0.03660141527229155,
+                    0.620909090909091
+                ],
+                "resource_advantage": -0.03660141527229155,
+                "game_round_score": 0.620909090909091,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-32-25.log"
+            }
+        ],
+        "ind-96": [
+            {
+                "individual_id": "ind-96",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.27688931841507297,
+                    0.43773584905660373
+                ],
+                "resource_advantage": -0.27688931841507297,
+                "game_round_score": 0.43773584905660373,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-34-35.log"
+            },
+            {
+                "individual_id": "ind-96",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.4091610811332815,
+                    0.5699769053117784
+                ],
+                "resource_advantage": 0.4091610811332815,
+                "game_round_score": 0.5699769053117784,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-37-53.log"
+            },
+            {
+                "individual_id": "ind-96",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.1694977788497728,
+                    0.817857142857143
+                ],
+                "resource_advantage": 0.1694977788497728,
+                "game_round_score": 0.817857142857143,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-46-15.log"
+            },
+            {
+                "individual_id": "ind-96",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.25151164544532084,
+                    0.7439613526570048
+                ],
+                "resource_advantage": -0.25151164544532084,
+                "game_round_score": 0.7439613526570048,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-50-28.log"
+            },
+            {
+                "individual_id": "ind-96",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.18801038220115815,
+                    0.6141666666666666
+                ],
+                "resource_advantage": -0.18801038220115815,
+                "game_round_score": 0.6141666666666666,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-54-32.log"
+            },
+            {
+                "individual_id": "ind-96",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.05033701419626947,
+                    0.80625
+                ],
+                "resource_advantage": -0.05033701419626947,
+                "game_round_score": 0.80625,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_02-56-53.log"
+            },
+            {
+                "individual_id": "ind-96",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.1976315690793831,
+                    0.5815789473684211
+                ],
+                "resource_advantage": -0.1976315690793831,
+                "game_round_score": 0.5815789473684211,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-05-15.log"
+            },
+            {
+                "individual_id": "ind-96",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.014356784586507791,
+                    0.6957446808510638
+                ],
+                "resource_advantage": -0.014356784586507791,
+                "game_round_score": 0.6957446808510638,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-06-07.log"
+            },
+            {
+                "individual_id": "ind-96",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.10673632114071739,
+                    0.5755980861244019
+                ],
+                "resource_advantage": -0.10673632114071739,
+                "game_round_score": 0.5755980861244019,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-08-52.log"
+            }
+        ],
+        "ind-97": [
+            {
+                "individual_id": "ind-97",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.07781550074706771,
+                    0.5792056074766355
+                ],
+                "resource_advantage": -0.07781550074706771,
+                "game_round_score": 0.5792056074766355,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-12-52.log"
+            },
+            {
+                "individual_id": "ind-97",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.29999292942178074,
+                    0.6974595842956121
+                ],
+                "resource_advantage": 0.29999292942178074,
+                "game_round_score": 0.6974595842956121,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-21-14.log"
+            },
+            {
+                "individual_id": "ind-97",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.7266457894374205,
+                    0.8516290726817042
+                ],
+                "resource_advantage": 0.7266457894374205,
+                "game_round_score": 0.8516290726817042,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-29-37.log"
+            },
+            {
+                "individual_id": "ind-97",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.3280775815401245,
+                    0.7214285714285713
+                ],
+                "resource_advantage": -0.3280775815401245,
+                "game_round_score": 0.7214285714285713,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-37-17.log"
+            },
+            {
+                "individual_id": "ind-97",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.2562831288721467,
+                    0.6973451327433628
+                ],
+                "resource_advantage": -0.2562831288721467,
+                "game_round_score": 0.6973451327433628,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-40-41.log"
+            },
+            {
+                "individual_id": "ind-97",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0,
+                    0.805
+                ],
+                "resource_advantage": 0.0,
+                "game_round_score": 0.805,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-43-01.log"
+            },
+            {
+                "individual_id": "ind-97",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.22365755527745168,
+                    0.7678571428571429
+                ],
+                "resource_advantage": -0.22365755527745168,
+                "game_round_score": 0.7678571428571429,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-51-23.log"
+            },
+            {
+                "individual_id": "ind-97",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.11329171228965441,
+                    0.9123287671232876
+                ],
+                "resource_advantage": 0.11329171228965441,
+                "game_round_score": 0.9123287671232876,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-52-34.log"
+            },
+            {
+                "individual_id": "ind-97",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    0.3352576237535569,
+                    0.7209944751381215
+                ],
+                "resource_advantage": 0.3352576237535569,
+                "game_round_score": 0.7209944751381215,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-54-05.log"
+            }
+        ],
+        "ind-98": [
+            {
+                "individual_id": "ind-98",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.2699552524502721,
+                    0.4646153846153846
+                ],
+                "resource_advantage": -0.2699552524502721,
+                "game_round_score": 0.4646153846153846,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_03-57-41.log"
+            },
+            {
+                "individual_id": "ind-98",
+                "opponent": "ai.RandomAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.3254756521064809,
+                    0.4286549707602339
+                ],
+                "resource_advantage": -0.3254756521064809,
+                "game_round_score": 0.4286549707602339,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-02-50.log"
+            },
+            {
+                "individual_id": "ind-98",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.708439591592441,
+                    0.776875
+                ],
+                "resource_advantage": 0.708439591592441,
+                "game_round_score": 0.776875,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-09-58.log"
+            },
+            {
+                "individual_id": "ind-98",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.3468628840390766,
+                    0.7475409836065574
+                ],
+                "resource_advantage": -0.3468628840390766,
+                "game_round_score": 0.7475409836065574,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-16-14.log"
+            },
+            {
+                "individual_id": "ind-98",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.3520276405977867,
+                    0.6682170542635659
+                ],
+                "resource_advantage": -0.3520276405977867,
+                "game_round_score": 0.6682170542635659,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-19-52.log"
+            },
+            {
+                "individual_id": "ind-98",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0036028180002187506,
+                    0.6939393939393939
+                ],
+                "resource_advantage": 0.0036028180002187506,
+                "game_round_score": 0.6939393939393939,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-22-26.log"
+            },
+            {
+                "individual_id": "ind-98",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.5268456375631969,
+                    0.526984126984127
+                ],
+                "resource_advantage": -0.5268456375631969,
+                "game_round_score": 0.526984126984127,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-30-49.log"
+            },
+            {
+                "individual_id": "ind-98",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.11845721172708577,
+                    0.7236363636363636
+                ],
+                "resource_advantage": -0.11845721172708577,
+                "game_round_score": 0.7236363636363636,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-32-07.log"
+            },
+            {
+                "individual_id": "ind-98",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.28455969065113773,
+                    0.655367231638418
+                ],
+                "resource_advantage": -0.28455969065113773,
+                "game_round_score": 0.655367231638418,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-34-29.log"
+            }
+        ],
+        "ind-99": [
+            {
+                "individual_id": "ind-99",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.31447947896362854,
+                    0.520627802690583
+                ],
+                "resource_advantage": -0.31447947896362854,
+                "game_round_score": 0.520627802690583,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-38-06.log"
+            },
+            {
+                "individual_id": "ind-99",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.3577145491429581,
+                    0.6420047732696897
+                ],
+                "resource_advantage": 0.3577145491429581,
+                "game_round_score": 0.6420047732696897,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-42-59.log"
+            },
+            {
+                "individual_id": "ind-99",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.1219757384466109,
+                    0.7441176470588236
+                ],
+                "resource_advantage": 0.1219757384466109,
+                "game_round_score": 0.7441176470588236,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-51-22.log"
+            },
+            {
+                "individual_id": "ind-99",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.4312804327100958,
+                    0.623489932885906
+                ],
+                "resource_advantage": -0.4312804327100958,
+                "game_round_score": 0.623489932885906,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-53-58.log"
+            },
+            {
+                "individual_id": "ind-99",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.10755198622866527,
+                    0.7278260869565217
+                ],
+                "resource_advantage": -0.10755198622866527,
+                "game_round_score": 0.7278260869565217,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-57-04.log"
+            },
+            {
+                "individual_id": "ind-99",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0,
+                    0.694871794871795
+                ],
+                "resource_advantage": 0.0,
+                "game_round_score": 0.694871794871795,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_04-59-20.log"
+            },
+            {
+                "individual_id": "ind-99",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.21994884909824297,
+                    0.4894736842105263
+                ],
+                "resource_advantage": -0.21994884909824297,
+                "game_round_score": 0.4894736842105263,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-07-42.log"
+            },
+            {
+                "individual_id": "ind-99",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.08718915782596277,
+                    0.6542168674698796
+                ],
+                "resource_advantage": -0.08718915782596277,
+                "game_round_score": 0.6542168674698796,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-08-34.log"
+            },
+            {
+                "individual_id": "ind-99",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.18809138992043906,
+                    0.6825842696629213
+                ],
+                "resource_advantage": -0.18809138992043906,
+                "game_round_score": 0.6825842696629213,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-12-00.log"
+            }
+        ],
+        "ind-100": [
+            {
+                "individual_id": "ind-100",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.21084781418300838,
+                    0.4903314917127072
+                ],
+                "resource_advantage": -0.21084781418300838,
+                "game_round_score": 0.4903314917127072,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-15-40.log"
+            },
+            {
+                "individual_id": "ind-100",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.12652692701664855,
+                    0.5199017199017198
+                ],
+                "resource_advantage": -0.12652692701664855,
+                "game_round_score": 0.5199017199017198,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-22-55.log"
+            },
+            {
+                "individual_id": "ind-100",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.5352916063428924,
+                    0.8264705882352942
+                ],
+                "resource_advantage": 0.5352916063428924,
+                "game_round_score": 0.8264705882352942,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-31-17.log"
+            },
+            {
+                "individual_id": "ind-100",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.08329308529182829,
+                    0.7550264550264549
+                ],
+                "resource_advantage": -0.08329308529182829,
+                "game_round_score": 0.7550264550264549,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-37-23.log"
+            },
+            {
+                "individual_id": "ind-100",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.07258109774159374,
+                    0.7635593220338982
+                ],
+                "resource_advantage": -0.07258109774159374,
+                "game_round_score": 0.7635593220338982,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-41-04.log"
+            },
+            {
+                "individual_id": "ind-100",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.005018623799107865,
+                    0.605
+                ],
+                "resource_advantage": -0.005018623799107865,
+                "game_round_score": 0.605,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-43-27.log"
+            },
+            {
+                "individual_id": "ind-100",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.7351627828973732,
+                    0.5020408163265305
+                ],
+                "resource_advantage": -0.7351627828973732,
+                "game_round_score": 0.5020408163265305,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-51-49.log"
+            },
+            {
+                "individual_id": "ind-100",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    -0.17492395185348455,
+                    0.6145631067961165
+                ],
+                "resource_advantage": -0.17492395185348455,
+                "game_round_score": 0.6145631067961165,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-53-58.log"
+            },
+            {
+                "individual_id": "ind-100",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.016071722541931514,
+                    0.7037878787878789
+                ],
+                "resource_advantage": 0.016071722541931514,
+                "game_round_score": 0.7037878787878789,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-56-10.log"
+            }
+        ],
+        "ind-101": [
+            {
+                "individual_id": "ind-101",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.11965993472829368,
+                    0.7857487922705314
+                ],
+                "resource_advantage": 0.11965993472829368,
+                "game_round_score": 0.7857487922705314,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_05-58-42.log"
+            },
+            {
+                "individual_id": "ind-101",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.09343953284250817,
+                    0.4687041564792176
+                ],
+                "resource_advantage": -0.09343953284250817,
+                "game_round_score": 0.4687041564792176,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_06-07-04.log"
+            },
+            {
+                "individual_id": "ind-101",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.33956516155623223,
+                    0.8635897435897436
+                ],
+                "resource_advantage": 0.33956516155623223,
+                "game_round_score": 0.8635897435897436,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_06-15-27.log"
+            },
+            {
+                "individual_id": "ind-101",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.3312557931293366,
+                    0.7613496932515337
+                ],
+                "resource_advantage": -0.3312557931293366,
+                "game_round_score": 0.7613496932515337,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_06-23-03.log"
+            },
+            {
+                "individual_id": "ind-101",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.12322599759096871,
+                    0.7853658536585366
+                ],
+                "resource_advantage": -0.12322599759096871,
+                "game_round_score": 0.7853658536585366,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_06-26-25.log"
+            },
+            {
+                "individual_id": "ind-101",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.011952662721540806,
+                    0.5976190476190476
+                ],
+                "resource_advantage": -0.011952662721540806,
+                "game_round_score": 0.5976190476190476,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_06-28-52.log"
+            },
+            {
+                "individual_id": "ind-101",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.41531556680225196,
+                    0.7274509803921569
+                ],
+                "resource_advantage": -0.41531556680225196,
+                "game_round_score": 0.7274509803921569,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_06-37-14.log"
+            },
+            {
+                "individual_id": "ind-101",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.2127416194837971,
+                    0.7219512195121951
+                ],
+                "resource_advantage": -0.2127416194837971,
+                "game_round_score": 0.7219512195121951,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_06-38-24.log"
+            },
+            {
+                "individual_id": "ind-101",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.4118571734876564,
+                    0.5027522935779817
+                ],
+                "resource_advantage": -0.4118571734876564,
+                "game_round_score": 0.5027522935779817,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_06-40-59.log"
+            }
+        ],
+        "ind-102": [
+            {
+                "individual_id": "ind-102",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.414492914000083,
+                    0.44423676012461055
+                ],
+                "resource_advantage": -0.414492914000083,
+                "game_round_score": 0.44423676012461055,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_06-45-23.log"
+            },
+            {
+                "individual_id": "ind-102",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0062150323945155544,
+                    0.5345323741007194
+                ],
+                "resource_advantage": 0.0062150323945155544,
+                "game_round_score": 0.5345323741007194,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_06-51-47.log"
+            },
+            {
+                "individual_id": "ind-102",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.40951603245444185,
+                    0.7557377049180328
+                ],
+                "resource_advantage": 0.40951603245444185,
+                "game_round_score": 0.7557377049180328,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-00-10.log"
+            },
+            {
+                "individual_id": "ind-102",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.10007236417496804,
+                    0.724607329842932
+                ],
+                "resource_advantage": -0.10007236417496804,
+                "game_round_score": 0.724607329842932,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-03-45.log"
+            },
+            {
+                "individual_id": "ind-102",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.24479868772879287,
+                    0.6774193548387096
+                ],
+                "resource_advantage": -0.24479868772879287,
+                "game_round_score": 0.6774193548387096,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-07-27.log"
+            },
+            {
+                "individual_id": "ind-102",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    0.0,
+                    0.6942857142857143
+                ],
+                "resource_advantage": 0.0,
+                "game_round_score": 0.6942857142857143,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-09-59.log"
+            },
+            {
+                "individual_id": "ind-102",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.4643954510222936,
+                    0.5741935483870968
+                ],
+                "resource_advantage": -0.4643954510222936,
+                "game_round_score": 0.5741935483870968,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-18-22.log"
+            },
+            {
+                "individual_id": "ind-102",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.15958618944112124,
+                    0.7136752136752137
+                ],
+                "resource_advantage": -0.15958618944112124,
+                "game_round_score": 0.7136752136752137,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-19-44.log"
+            },
+            {
+                "individual_id": "ind-102",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.25781912939709173,
+                    0.507741935483871
+                ],
+                "resource_advantage": -0.25781912939709173,
+                "game_round_score": 0.507741935483871,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-22-15.log"
+            }
+        ],
+        "ind-103": [
+            {
+                "individual_id": "ind-103",
+                "opponent": "ai.RandomBiasedAI",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.23661637223882084,
+                    0.4714285714285714
+                ],
+                "resource_advantage": -0.23661637223882084,
+                "game_round_score": 0.4714285714285714,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-25-23.log"
+            },
+            {
+                "individual_id": "ind-103",
+                "opponent": "ai.RandomAI",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.31105497148147493,
+                    0.46377551020408164
+                ],
+                "resource_advantage": -0.31105497148147493,
+                "game_round_score": 0.46377551020408164,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-28-20.log"
+            },
+            {
+                "individual_id": "ind-103",
+                "opponent": "ai.PassiveAI",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    0.2092242516207258,
+                    0.7696969696969697
+                ],
+                "resource_advantage": 0.2092242516207258,
+                "game_round_score": 0.7696969696969697,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-36-42.log"
+            },
+            {
+                "individual_id": "ind-103",
+                "opponent": "ai.abstraction.HeavyRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.17052762667846147,
+                    0.7392045454545454
+                ],
+                "resource_advantage": -0.17052762667846147,
+                "game_round_score": 0.7392045454545454,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-38-04.log"
+            },
+            {
+                "individual_id": "ind-103",
+                "opponent": "ai.abstraction.LightRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.07086847371927432,
+                    0.6067796610169491
+                ],
+                "resource_advantage": -0.07086847371927432,
+                "game_round_score": 0.6067796610169491,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-41-32.log"
+            },
+            {
+                "individual_id": "ind-103",
+                "opponent": "ai.abstraction.ollama",
+                "result": "Draw",
+                "fitness": [
+                    0.5,
+                    -0.04697213907303142,
+                    0.49
+                ],
+                "resource_advantage": -0.04697213907303142,
+                "game_round_score": 0.49,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-43-53.log"
+            },
+            {
+                "individual_id": "ind-103",
+                "opponent": "ai.abstraction.HybridLLMRush",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.24837651239858133,
+                    0.5155339805825243
+                ],
+                "resource_advantage": -0.24837651239858133,
+                "game_round_score": 0.5155339805825243,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-52-15.log"
+            },
+            {
+                "individual_id": "ind-103",
+                "opponent": "ai.abstraction.StrategicLLMAgent",
+                "result": "Loss",
+                "fitness": [
+                    0.0,
+                    -0.34724178900406993,
+                    0.6194444444444445
+                ],
+                "resource_advantage": -0.34724178900406993,
+                "game_round_score": 0.6194444444444445,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-54-26.log"
+            },
+            {
+                "individual_id": "ind-103",
+                "opponent": "ai.abstraction.BoomEconomy",
+                "result": "Win",
+                "fitness": [
+                    1.0,
+                    -0.08711443853430026,
+                    0.6267441860465116
+                ],
+                "resource_advantage": -0.08711443853430026,
+                "game_round_score": 0.6267441860465116,
+                "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-10_07-56-44.log"
+            }
+        ]
+    }
+}

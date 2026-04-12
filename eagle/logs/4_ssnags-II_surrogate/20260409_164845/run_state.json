@@ -1,0 +1,508 @@
+{
+  "algorithm": "steady_state_nsga2",
+  "phase": "generation_complete",
+  "generation": 7,
+  "log_dir": "logs/20260409_164845",
+  "population": [
+    {
+      "id": "ind-14",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 0,
+        "phase_transition_rule": 1,
+        "early_game_plan": 0,
+        "mid_game_plan": 3,
+        "late_game_plan": 0,
+        "decision_priority": 0,
+        "tactical_heuristics": 2,
+        "anti_stall_rules": 2
+      },
+      "fitness": [
+        1.0,
+        0.317379729175533,
+        0.7276223776223776
+      ],
+      "legacy_components": {},
+      "pareto_rank": 0,
+      "crowding_distance": Infinity
+    },
+    {
+      "id": "ind-19",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 1,
+        "phase_transition_rule": 2,
+        "early_game_plan": 3,
+        "mid_game_plan": 1,
+        "late_game_plan": 2,
+        "decision_priority": 0,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 2
+      },
+      "fitness": [
+        1.0,
+        0.30980507249691436,
+        0.8086734693877551
+      ],
+      "legacy_components": {},
+      "pareto_rank": 0,
+      "crowding_distance": Infinity
+    },
+    {
+      "id": "ind-45",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 4,
+        "phase_transition_rule": 2,
+        "early_game_plan": 3,
+        "mid_game_plan": 9,
+        "late_game_plan": 9,
+        "decision_priority": 0,
+        "tactical_heuristics": 3,
+        "anti_stall_rules": 2
+      },
+      "fitness": [
+        0.0,
+        -0.21952119812058352,
+        0.8337662337662338
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.0910054445266724e-05,
+        "mutation_time": 3.517302684485912e-05,
+        "EA_operator_time": 5.608308129012585e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": Infinity,
+      "ea_llm_call_time": 0.0
+    },
+    {
+      "id": "ind-9",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 2,
+        "phase_transition_rule": 2,
+        "early_game_plan": 1,
+        "mid_game_plan": 2,
+        "late_game_plan": 2,
+        "decision_priority": 3,
+        "tactical_heuristics": 1,
+        "anti_stall_rules": 0
+      },
+      "fitness": [
+        1.0,
+        -0.06377778170976396,
+        0.7525862068965519
+      ],
+      "legacy_components": {},
+      "pareto_rank": 1,
+      "crowding_distance": 1.4363448360304887
+    },
+    {
+      "id": "ind-10",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 0,
+        "phase_transition_rule": 0,
+        "early_game_plan": 2,
+        "mid_game_plan": 2,
+        "late_game_plan": 2,
+        "decision_priority": 3,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 3
+      },
+      "fitness": [
+        0.0,
+        -0.026698407452799066,
+        0.7630872483221477
+      ],
+      "legacy_components": {},
+      "pareto_rank": 1,
+      "crowding_distance": Infinity
+    },
+    {
+      "id": "ind-35",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 4,
+        "phase_transition_rule": 8,
+        "early_game_plan": 9,
+        "mid_game_plan": 9,
+        "late_game_plan": 9,
+        "decision_priority": 8,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 2
+      },
+      "fitness": [
+        0.0,
+        -0.20980221480001288,
+        0.7658536585365854
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.777603756636381e-05,
+        "mutation_time": 5.709576135035604,
+        "EA_operator_time": 5.709593911073171,
+        "ea_llm_call_time": 5.7093882479239255
+      },
+      "pareto_rank": 1,
+      "crowding_distance": Infinity,
+      "ea_llm_call_time": 5.7093882479239255
+    },
+    {
+      "id": "ind-59",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 1,
+        "phase_transition_rule": 15,
+        "early_game_plan": 17,
+        "mid_game_plan": 18,
+        "late_game_plan": 16,
+        "decision_priority": 15,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 0
+      },
+      "fitness": [
+        1.0,
+        0.22132056338448805,
+        0.6676056338028168
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.735298428684473e-05,
+        "mutation_time": 3.8759156520245597,
+        "EA_operator_time": 3.8759330050088465,
+        "ea_llm_call_time": 3.8757683329749852
+      },
+      "pareto_rank": 1,
+      "crowding_distance": Infinity,
+      "ea_llm_call_time": 3.8757683329749852
+    },
+    {
+      "id": "ind-61",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 8,
+        "phase_transition_rule": 16,
+        "early_game_plan": 18,
+        "mid_game_plan": 19,
+        "late_game_plan": 17,
+        "decision_priority": 16,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 2
+      },
+      "fitness": [
+        0.5,
+        0.0,
+        0.7128205128205127
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.7530051991343498e-05,
+        "mutation_time": 6.530295563978143,
+        "EA_operator_time": 6.530313094030134,
+        "ea_llm_call_time": 6.530123868025839
+      },
+      "pareto_rank": 1,
+      "crowding_distance": 1.9901849675229077,
+      "ea_llm_call_time": 6.530123868025839
+    },
+    {
+      "id": "ind-71",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 2,
+        "phase_transition_rule": 18,
+        "early_game_plan": 0,
+        "mid_game_plan": 2,
+        "late_game_plan": 19,
+        "decision_priority": 2,
+        "tactical_heuristics": 3,
+        "anti_stall_rules": 3
+      },
+      "fitness": [
+        0.0,
+        0.20672358337256147,
+        0.7084967320261438
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.7002923414111137e-05,
+        "mutation_time": 1.6115515410201624,
+        "EA_operator_time": 1.6115685439435765,
+        "ea_llm_call_time": 1.6114739988697693
+      },
+      "pareto_rank": 1,
+      "crowding_distance": 1.4735701312095646,
+      "ea_llm_call_time": 1.6114739988697693
+    },
+    {
+      "id": "ind-23",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 2,
+        "phase_transition_rule": 3,
+        "early_game_plan": 0,
+        "mid_game_plan": 2,
+        "late_game_plan": 5,
+        "decision_priority": 2,
+        "tactical_heuristics": 3,
+        "anti_stall_rules": 0
+      },
+      "fitness": [
+        0.0,
+        -0.06123271159867463,
+        0.7356060606060606
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.9407016225159168e-05,
+        "mutation_time": 0.7700593449408188,
+        "EA_operator_time": 0.770078751957044,
+        "ea_llm_call_time": 0.7700023039942607
+      },
+      "pareto_rank": 2,
+      "crowding_distance": Infinity,
+      "ea_llm_call_time": 0.7700023039942607
+    },
+    {
+      "id": "ind-5",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 0,
+        "phase_transition_rule": 2,
+        "early_game_plan": 0,
+        "mid_game_plan": 0,
+        "late_game_plan": 0,
+        "decision_priority": 1,
+        "tactical_heuristics": 2,
+        "anti_stall_rules": 1
+      },
+      "fitness": [
+        1.0,
+        0.1129841731541024,
+        0.5810725552050473
+      ],
+      "legacy_components": {},
+      "pareto_rank": 2,
+      "crowding_distance": Infinity
+    },
+    {
+      "id": "ind-6",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 1,
+        "phase_transition_rule": 0,
+        "early_game_plan": 1,
+        "mid_game_plan": 2,
+        "late_game_plan": 0,
+        "decision_priority": 0,
+        "tactical_heuristics": 2,
+        "anti_stall_rules": 1
+      },
+      "fitness": [
+        0.5,
+        -0.046344677176212754,
+        0.65
+      ],
+      "legacy_components": {},
+      "pareto_rank": 2,
+      "crowding_distance": 1.3199874924714754
+    },
+    {
+      "id": "ind-81",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 9,
+        "phase_transition_rule": 20,
+        "early_game_plan": 22,
+        "mid_game_plan": 22,
+        "late_game_plan": 21,
+        "decision_priority": 18,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 3
+      },
+      "fitness": [
+        0.5,
+        -0.026843982371969877,
+        0.6155294117647058
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.6764039173722267e-05,
+        "mutation_time": 4.894535508938134,
+        "EA_operator_time": 4.894552272977307,
+        "ea_llm_call_time": 4.894370252033696
+      },
+      "pareto_rank": 2,
+      "crowding_distance": 1.3847872934792451,
+      "ea_llm_call_time": 4.894370252033696
+    },
+    {
+      "id": "ind-12",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 1,
+        "phase_transition_rule": 3,
+        "early_game_plan": 0,
+        "mid_game_plan": 3,
+        "late_game_plan": 2,
+        "decision_priority": 2,
+        "tactical_heuristics": 3,
+        "anti_stall_rules": 0
+      },
+      "fitness": [
+        0.0,
+        0.042050261257722266,
+        0.6393939393939394
+      ],
+      "legacy_components": {},
+      "pareto_rank": 2,
+      "crowding_distance": 1.5256718945222694
+    },
+    {
+      "id": "ind-18",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 0,
+        "phase_transition_rule": 2,
+        "early_game_plan": 2,
+        "mid_game_plan": 3,
+        "late_game_plan": 2,
+        "decision_priority": 3,
+        "tactical_heuristics": 3,
+        "anti_stall_rules": 3
+      },
+      "fitness": [
+        0.0,
+        -0.24118058530476008,
+        0.7112781954887218
+      ],
+      "legacy_components": {},
+      "pareto_rank": 3,
+      "crowding_distance": Infinity
+    },
+    {
+      "id": "ind-2",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 1,
+        "phase_transition_rule": 1,
+        "early_game_plan": 2,
+        "mid_game_plan": 1,
+        "late_game_plan": 1,
+        "decision_priority": 0,
+        "tactical_heuristics": 2,
+        "anti_stall_rules": 3
+      },
+      "fitness": [
+        0.5,
+        0.0,
+        0.5333333333333333
+      ],
+      "legacy_components": {},
+      "pareto_rank": 3,
+      "crowding_distance": 1.4724456271726107
+    },
+    {
+      "id": "ind-7",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 2,
+        "phase_transition_rule": 3,
+        "early_game_plan": 3,
+        "mid_game_plan": 1,
+        "late_game_plan": 1,
+        "decision_priority": 2,
+        "tactical_heuristics": 3,
+        "anti_stall_rules": 1
+      },
+      "fitness": [
+        0.5,
+        0.07124472788825975,
+        0.43842239185750637
+      ],
+      "legacy_components": {},
+      "pareto_rank": 3,
+      "crowding_distance": Infinity
+    },
+    {
+      "id": "ind-13",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 0,
+        "phase_transition_rule": 0,
+        "early_game_plan": 3,
+        "mid_game_plan": 3,
+        "late_game_plan": 3,
+        "decision_priority": 2,
+        "tactical_heuristics": 3,
+        "anti_stall_rules": 1
+      },
+      "fitness": [
+        1.0,
+        -0.8156127826661763,
+        0.4252747252747253
+      ],
+      "legacy_components": {},
+      "pareto_rank": 3,
+      "crowding_distance": Infinity
+    },
+    {
+      "id": "ind-39",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 0,
+        "phase_transition_rule": 10,
+        "early_game_plan": 11,
+        "mid_game_plan": 11,
+        "late_game_plan": 11,
+        "decision_priority": 10,
+        "tactical_heuristics": 3,
+        "anti_stall_rules": 2
+      },
+      "fitness": [
+        0.0,
+        -0.184262873234962,
+        0.6341463414634146
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.6740988940000534e-05,
+        "mutation_time": 4.315432186005637,
+        "EA_operator_time": 4.315448926994577,
+        "ea_llm_call_time": 4.315291895996779
+      },
+      "pareto_rank": 3,
+      "crowding_distance": 1.3941269286135531,
+      "ea_llm_call_time": 4.315291895996779
+    },
+    {
+      "id": "ind-1",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 0,
+        "phase_transition_rule": 3,
+        "early_game_plan": 0,
+        "mid_game_plan": 3,
+        "late_game_plan": 1,
+        "decision_priority": 0,
+        "tactical_heuristics": 3,
+        "anti_stall_rules": 3
+      },
+      "fitness": [
+        0.0,
+        -0.24254310902296308,
+        0.7066115702479339
+      ],
+      "legacy_components": {},
+      "pareto_rank": 4,
+      "crowding_distance": Infinity
+    }
+  ],
+  "offspring": [],
+  "meta": {
+    "completed_generation": 7
+  }
+}

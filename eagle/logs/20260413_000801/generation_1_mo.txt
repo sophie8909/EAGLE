@@ -1,0 +1,491 @@
+Generation 1 - Multi-objective Optimization
+
+Pareto Front 1:
+Individual(game_rule=0, strategy={'strategy_identity': 1, 'phase_transition_rule': 4, 'early_game_plan': 4, 'mid_game_plan': 4, 'late_game_plan': 4, 'decision_priority': 5, 'tactical_heuristics': 0, 'anti_stall_rules': 3}) - Fitness: [0.5, 0.775, 0.0] - EvalMode: real
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+STRATEGY IDENTITY: Balanced pressure.
+Maintain a workable balance between economy, production, defense, and map pressure at all times.
+Risk tolerance is moderate: respect immediate threats, but exploit exposed workers, units, or structures when trades are efficient.
+Pressure timing is opportunistic rather than rushed or delayed, leaning into advantages as soon as they become credible.
+Preferred win path is to stay structurally sound while accumulating incremental gains that snowball into a winning position.
+PHASE TRANSITION RULE:
+Treat the game as early while development is still the main question: harvesting loops, first workers, first barracks, or a safe defender.
+Treat the game as mid once both sides have credible attack capability or the map contains active pressure around resources, production, or structures that impact balance.
+Treat the game as late when bases, barracks, or worker counts are damaged enough to require decisive endgame pressure, overriding further setup considerations.
+Prefer observed army counts, structure count, and local threat level over rigid turn thresholds.
+EARLY GAME PLAN:
+Maintain flexible adaptation through opportunistic pressure, exploiting exposed economy and production while preserving structural integrity.
+Use scouting to monitor opponent activity and identify vulnerable targets for harassment.
+Prioritize short-term goals that improve contact and pressure, such as threatening unfinished buildings or harvesting paths.
+Keep enough economy at home to support unit flow, but be prepared to shift resources to decisive targets if the game becomes late.
+MID GAME PLAN:
+Apply sustained pressure through targeted harassment of exposed workers, production sites, and vulnerable structures.
+Weaken the enemy's ability to respond by threatening key areas that impact balance, such as unfinished buildings or harvesting paths.
+Maintain a stable economy to ensure continued unit flow while forcing the opponent to allocate resources across multiple defensive demands.
+LATE GAME PLAN:
+Prioritize decisive targets: enemy base first, then workers and combat units that block the finish, followed by enemy barracks next.
+Do not delay a strong attack just to optimize economy further once the game has become decisive.
+If behind, look for high-impact swings by killing production or a vulnerable base, prioritizing exposed workers last.
+DECISION PRIORITY:
+1. Immediate survival and structure preservation to prevent sudden loss of control.
+2. Identify and exploit exposed enemy workers, units, or structures when trades are efficient and advantageous.
+3. Prioritize the current phase plan if it remains coherent with the state and does not compromise immediate survival or pressure.
+4. Avoid idle production that hinders progress and resource float that delays necessary actions.
+5. Optimize movement to improve contact, defense, and economy while minimizing low-value actions.
+TACTICAL HEURISTICS:
+If an enemy is already in range, attack immediately unless a higher-priority survival rule forbids it.
+Prefer finishing low-health enemies when that removes damage or clears the path to a high-value objective.
+Do not retreat from a favorable engagement just to reposition decoratively.
+
+Pareto Front 2:
+Individual(game_rule=0, strategy={'strategy_identity': 1, 'phase_transition_rule': 1, 'early_game_plan': 2, 'mid_game_plan': 2, 'late_game_plan': 1, 'decision_priority': 2, 'tactical_heuristics': 0, 'anti_stall_rules': 2}) - Fitness: [0.5, 0.6166666666666667, 0.0] - EvalMode: real
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+STRATEGY IDENTITY: Balanced pressure.
+Maintain a workable balance between economy, production, defense, and map pressure at all times.
+Risk tolerance is moderate: respect immediate threats, but exploit exposed workers, units, or structures when trades are efficient.
+Pressure timing is opportunistic rather than rushed or delayed, leaning into advantages as soon as they become credible.
+Preferred win path is to stay structurally sound while accumulating incremental gains that snowball into a winning position.
+PHASE TRANSITION RULE:
+Treat the game as early while the main question is development: harvesting loops, first workers, first barracks, or first safe defender.
+Treat the game as mid once both sides have credible attack capability or the map contains active pressure around resources, production, or structures.
+Treat the game as late once bases, barracks, or worker counts are damaged enough that decisive endgame pressure is more important than further setup.
+Prefer observed army counts, structure count, and local threat level over rigid turn thresholds.
+EARLY GAME PLAN:
+Use the opening to establish initiative rather than only scaling passively.
+After the first economic tasks are covered, send early units or workers to contest exposed enemy harvesters, builders, or forward space.
+If the enemy is well defended, fall back to clean development instead of donating units.
+MID GAME PLAN:
+Use selective harassment and map pressure to stretch the enemy across multiple demands.
+Threaten workers, unfinished buildings, and harvesting paths whenever those attacks are safer than a frontal engagement.
+Keep enough economy at home to continue unit flow while the opponent is forced to react.
+LATE GAME PLAN:
+Prioritize decisive targets: enemy base first, enemy barracks next, then workers and combat units that block the finish.
+Do not delay a strong attack just to optimize economy further once the game has become decisive.
+If behind, look for the highest-impact swing by killing production, exposed workers, or a vulnerable base.
+DECISION PRIORITY:
+1. Immediate survival and structure preservation.
+2. Exploit exposed enemy workers, unfinished buildings, and isolated units.
+3. Continue the current phase plan if it is still coherent with the state.
+4. Avoid idle production and resource float.
+5. Avoid low-value movement that does not improve contact, defense, or economy.
+TACTICAL HEURISTICS:
+If an enemy is already in range, attack immediately unless a higher-priority survival rule forbids it.
+Prefer finishing low-health enemies when that removes damage or clears the path to a high-value objective.
+Do not retreat from a favorable engagement just to reposition decoratively.
+ANTI-STALL RULES:
+When combat units exist and no urgent home defense is needed, give them a concrete job: pressure, regroup for contact, defend a key point, or finish a target.
+When economy is stable, extra resources should accelerate the chosen win path rather than sit unused.
+When economy is unstable, fix it with the minimum action needed and then resume the broader plan.
+
+Pareto Front 3:
+Individual(game_rule=0, strategy={'strategy_identity': 2, 'phase_transition_rule': 1, 'early_game_plan': 3, 'mid_game_plan': 2, 'late_game_plan': 1, 'decision_priority': 2, 'tactical_heuristics': 0, 'anti_stall_rules': 3}) - Fitness: [0.5, 0.6125, 0.0] - EvalMode: real
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+STRATEGY IDENTITY: Aggressive tempo.
+Favor fast military conversion, early contact, and relentless forward pressure over slow optimization.
+Risk tolerance is high: accept leaner economy and sharper trades if they disrupt enemy development or seize initiative.
+Pressure timing should be early and continuous, with little tolerance for passive waiting once useful attackers exist.
+Preferred win path is to keep the opponent reacting from the start and end the game before they can outscale or fully stabilize.
+PHASE TRANSITION RULE:
+Treat the game as early while the main question is development: harvesting loops, first workers, first barracks, or first safe defender.
+Treat the game as mid once both sides have credible attack capability or the map contains active pressure around resources, production, or structures.
+Treat the game as late once bases, barracks, or worker counts are damaged enough that decisive endgame pressure is more important than further setup.
+Prefer observed army counts, structure count, and local threat level over rigid turn thresholds.
+MID GAME PLAN:
+Use selective harassment and map pressure to stretch the enemy across multiple demands.
+Threaten workers, unfinished buildings, and harvesting paths whenever those attacks are safer than a frontal engagement.
+Keep enough economy at home to continue unit flow while the opponent is forced to react.
+LATE GAME PLAN:
+Prioritize decisive targets: enemy base first, enemy barracks next, then workers and combat units that block the finish.
+Do not delay a strong attack just to optimize economy further once the game has become decisive.
+If behind, look for the highest-impact swing by killing production, exposed workers, or a vulnerable base.
+DECISION PRIORITY:
+1. Immediate survival and structure preservation.
+2. Exploit exposed enemy workers, unfinished buildings, and isolated units.
+3. Continue the current phase plan if it is still coherent with the state.
+4. Avoid idle production and resource float.
+5. Avoid low-value movement that does not improve contact, defense, or economy.
+TACTICAL HEURISTICS:
+If an enemy is already in range, attack immediately unless a higher-priority survival rule forbids it.
+Prefer finishing low-health enemies when that removes damage or clears the path to a high-value objective.
+Do not retreat from a favorable engagement just to reposition decoratively.

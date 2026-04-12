@@ -1,0 +1,3407 @@
+Generation 4 - Multi-objective Optimization
+
+Pareto Front 1:
+Individual(game_rule=0, strategy={'global_strategy': 6, 'combat_policy': 10, 'economy_policy': 9, 'production_policy': 2, 'worker_policy': 0, 'harassment_policy': 0, 'opening_strategy': 1, 'targeting_policy': 7, 'movement_policy': 7, 'anti_stall_policy': 3, 'time_base_strategy': 3}) - Fitness: [0.5, 0.03424325797124874, 0.7822222222222223]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Resource conversion discipline:
+Floating resources for too long is usually a strategic mistake.
+Convert resources into workers, barracks, or military units when that creates immediate strategic value.
+If the economy is already stable, extra resources should accelerate military pressure.
+Do not block your own economy unnecessarily:
+Avoid parking combat units in ways that interfere with harvesting or building paths.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Value nearby efficiency:
+A reachable target that can be attacked immediately is often better than a theoretically higher-value but distant target.
+Harassment policy:
+Look for chances to disrupt the enemy economy instead of only marching at the enemy base directly.
+If enemy workers are exposed, prioritize attacking or chasing them to reduce enemy income.
+Small groups may pressure resource lines, unfinished buildings, or isolated units when the trade is favorable.
+Production policy:
+The base should produce workers when worker count is below the desired threshold.
+If no barracks exists, assign a worker to build one when resources allow.
+Barracks should produce units according to the chosen global strategy.
+In Worker Defense and Worker Rush, barracks tend to produce Light units.
+In Military Defense, barracks should produce units based on current needs and enemy composition.
+In Military Rush, focus production on military units and sustain offensive pressure.
+Prioritize unit production that counters the enemy composition when possible.
+Late game strategy:
+Focus on aggressive attacks to destroy the enemy base and production structures.
+Do not hesitate to commit to pressure if it can lead to victory, even if it risks some losses.
+Do not sacrifice all workers for offense:
+Even aggressive strategies need enough economy to keep producing units.
+Opening strategy: Worker pressure opener.
+Establish minimal economy, then send available workers or early units to pressure exposed enemy workers.
+The aim is to interrupt enemy harvesting early and force a defensive response.
+Do not overcommit if the enemy defense is already well prepared.
+Threat-first planning:
+Before expanding economy or attacking, check whether our workers, base, or barracks are under immediate danger.
+If so, redirect nearby units to stabilize the position first.
+Worker behavior:
+Workers mainly support economy, but one suitable worker should build a barracks as soon as resources allow if none exists.
+Do not keep producing extra workers once resource flow is stable and military pressure is needed.
+Workers should not remain idle when they could harvest, build, or assist local defense.
+Individual(game_rule=0, strategy={'global_strategy': 8, 'combat_policy': 5, 'economy_policy': 10, 'production_policy': 1, 'worker_policy': 8, 'harassment_policy': 1, 'opening_strategy': 4, 'targeting_policy': 1, 'movement_policy': 8, 'anti_stall_policy': 2, 'time_base_strategy': 3}) - Fitness: [0.5, 0.0, 0.7906759906759907]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Attack commitment:
+If combat units already exist and no immediate home defense is required, prefer pressure on the enemy over passive waiting.
+Once an offensive move has started, continue the attack unless the battlefield clearly turns unfavorable.
+Do not stop outside the enemy base area just to wait for a slightly larger force.
+Target selection:
+Prefer attacking closer enemies when multiple targets are available.
+Prioritize dangerous combat units over workers when possible.
+If the opportunity arises, attack enemy production structures such as barracks.
+Destroying the enemy base or barracks greatly weakens enemy production.
+Harassment policy:
+Use mobile units to force the enemy to react in multiple places.
+If a direct base attack is too risky, pressure enemy workers, barracks access, or harvesting paths first.
+The goal is to slow enemy growth, pull defenders out of position, and create openings for a later decisive attack.
+Production policy:
+Bases produce workers until the economy is stable for the map size.
+Construct a barracks when the base has sufficient resources and none exists nearby.
+Barracks should prioritize producing Heavy units as the primary frontline.
+Produce Ranged units when pathing is narrow, terrain is constrained, or Heavy units are unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Map-aware strategy choice:
+On smaller maps or close-spawn situations, aggressive strategies become stronger and should be considered earlier.
+On larger maps, maintain stronger economy before full commitment.
+Late game strategy:
+Focus on aggressive attacks to destroy the enemy base and production structures.
+Do not hesitate to commit to pressure if it can lead to victory, even if it risks some losses.
+Use nearby units first:
+When defending, prefer using the closest available units to respond quickly.
+Do not pull distant units away if local defenders can handle the threat.
+Opening strategy: Disruption opener.
+Use the first combat-capable units to interfere with enemy mining routes, builders, and unfinished structures.
+The goal is to deny clean development rather than rushing immediately for the enemy base.
+Once the opponent is disorganized, convert the advantage into stronger map control or direct base pressure.
+Treat economy as strategic infrastructure:
+Resource income is what sustains recovery, defense, and long-term pressure.
+Frontline logic matters:
+Durable units should usually move first into contested areas, while fragile units follow in safer positions.
+Individual(game_rule=0, strategy={'global_strategy': 6, 'combat_policy': 4, 'economy_policy': 6, 'production_policy': 10, 'worker_policy': 6, 'harassment_policy': 0, 'opening_strategy': 1, 'targeting_policy': 2, 'movement_policy': 2, 'anti_stall_policy': 3, 'time_base_strategy': 1}) - Fitness: [0.5, 0.06191773167243748, 0.7676744186046512]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Threat-first planning:
+Before expanding economy or attacking, check whether our workers, base, or barracks are under immediate danger.
+If so, redirect nearby units to stabilize the position first.
+Local worker defense is allowed:
+If enemies enter the base area, nearby workers may help defend when necessary to prevent structural or economic collapse.
+Opening strategy: Worker pressure opener.
+Establish minimal economy, then send available workers or early units to pressure exposed enemy workers.
+The aim is to interrupt enemy harvesting early and force a defensive response.
+Do not overcommit if the enemy defense is already well prepared.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Respect travel efficiency:
+Prefer short harvesting loops that minimize walking distance between resource and base.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Harassment policy:
+Look for chances to disrupt the enemy economy instead of only marching at the enemy base directly.
+If enemy workers are exposed, prioritize attacking or chasing them to reduce enemy income.
+Small groups may pressure resource lines, unfinished buildings, or isolated units when the trade is favorable.
+Resource conversion discipline:
+Floating resources for too long is usually a strategic mistake.
+Convert resources into workers, barracks, or military units when that creates immediate strategic value.
+If the economy is already stable, extra resources should accelerate military pressure.
+Movement policy:
+Military units should move according to the selected global strategy.
+In defensive strategies, stay near the base and nearby resources unless chasing a local threat.
+In offensive strategies, advance toward the nearest enemy unit or the enemy base.
+Light units move directly toward nearby enemy units.
+Heavy units push toward enemy buildings.
+Ranged units should keep distance from enemy melee units while staying in attack position.
+Support the chosen win condition:
+All production choices should reinforce whether the current plan is defend, stabilize, pressure, or finish.
+Individual(game_rule=0, strategy={'global_strategy': 13, 'combat_policy': 3, 'economy_policy': 1, 'production_policy': 2, 'worker_policy': 4, 'harassment_policy': 2, 'opening_strategy': 3, 'targeting_policy': 6, 'movement_policy': 7, 'anti_stall_policy': 0, 'time_base_strategy': 1}) - Fitness: [0.5, 0.06308258640009753, 0.6964953271028038]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Harassment policy:
+Do not commit every unit to a frontal attack when selective disruption can gain more value.
+Pick off isolated workers, threaten production structures, and retreat from bad engagements before losses become severe.
+Sustained interference is valuable when it weakens the enemy economy or delays their army production.
+Focus favorable trades:
+Engage when our local force can win or efficiently damage a valuable enemy target.
+Avoid taking fights that sacrifice units for little strategic gain.
+Opening strategy: Heavy frontline opener.
+Stabilize economy, then produce heavy units early to create a durable frontline.
+Use the first heavy units to absorb pressure, break through enemy defenders, and threaten buildings.
+This opening is effective when direct combat around choke points or structures is likely.
+Do not block your own economy unnecessarily:
+Avoid parking combat units in ways that interfere with harvesting or building paths.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Do not ignore kill opportunities:
+A low-health enemy that can be finished now is often worth prioritizing.
+Production policy:
+The base should produce workers when worker count is below the desired threshold.
+If no barracks exists, assign a worker to build one when resources allow.
+Barracks should produce units according to the chosen global strategy.
+In Worker Defense and Worker Rush, barracks tend to produce Light units.
+In Military Defense, barracks should produce units based on current needs and enemy composition.
+In Military Rush, focus production on military units and sustain offensive pressure.
+Prioritize unit production that counters the enemy composition when possible.
+Adaptive control:
+Do not follow one plan blindly.
+Re-evaluate the battlefield every timestep and switch between defense, development, and offense when the state changes.
+Assign builders carefully:
+Use one available worker for construction when possible rather than pulling too many workers off economy.
+ANTI-STALL RULES:
+Do not leave workers idle if they can harvest, build, defend, or attack productively.
+Do not leave bases or barracks idle when resources are sufficient for useful production.
+Do not keep combat units near the base without a clear defensive reason.
+Individual(game_rule=0, strategy={'global_strategy': 13, 'combat_policy': 4, 'economy_policy': 1, 'production_policy': 2, 'worker_policy': 4, 'harassment_policy': 2, 'opening_strategy': 1, 'targeting_policy': 6, 'movement_policy': 2, 'anti_stall_policy': 5, 'time_base_strategy': 1}) - Fitness: [0.5, 0.0625001590362675, 0.7320848728537275]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Adaptive control:
+Do not follow one plan blindly.
+Re-evaluate the battlefield every timestep and switch between defense, development, and offense when the state changes.
+Opening strategy: Worker pressure opener.
+Establish minimal economy, then send available workers or early units to pressure exposed enemy workers.
+The aim is to interrupt enemy harvesting early and force a defensive response.
+Do not overcommit if the enemy defense is already well prepared.
+OPTIMIZE RESOURCE UTILIZATION:
+Do not leave workers unassigned to tasks such as harvesting, building, defending, or attacking if possible.
+Do not maintain idle bases or barracks when sufficient resources allow for productive output.
+Keep combat units away from the base unless there is a legitimate need for defense.
+Do not ignore kill opportunities:
+A low-health enemy that can be finished now is often worth prioritizing.
+Assign builders carefully:
+Use one available worker for construction when possible rather than pulling too many workers off economy.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Movement policy:
+Military units should move according to the selected global strategy.
+In defensive strategies, stay near the base and nearby resources unless chasing a local threat.
+In offensive strategies, advance toward the nearest enemy unit or the enemy base.
+Light units move directly toward nearby enemy units.
+Heavy units push toward enemy buildings.
+Ranged units should keep distance from enemy melee units while staying in attack position.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+Harassment policy:
+Do not commit every unit to a frontal attack when selective disruption can gain more value.
+Pick off isolated workers, threaten production structures, and retreat from bad engagements before losses become severe.
+Sustained interference is valuable when it weakens the enemy economy or delays their army production.
+Production policy:
+The base should produce workers when worker count is below the desired threshold.
+If no barracks exists, assign a worker to build one when resources allow.
+Barracks should produce units according to the chosen global strategy.
+In Worker Defense and Worker Rush, barracks tend to produce Light units.
+In Military Defense, barracks should produce units based on current needs and enemy composition.
+In Military Rush, focus production on military units and sustain offensive pressure.
+Prioritize unit production that counters the enemy composition when possible.
+Individual(game_rule=0, strategy={'global_strategy': 6, 'combat_policy': 4, 'economy_policy': 6, 'production_policy': 2, 'worker_policy': 4, 'harassment_policy': 2, 'opening_strategy': 1, 'targeting_policy': 2, 'movement_policy': 2, 'anti_stall_policy': 5, 'time_base_strategy': 2}) - Fitness: [0.5, 0.06220894535435249, 0.7498796457291894]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Production policy:
+The base should produce workers when worker count is below the desired threshold.
+If no barracks exists, assign a worker to build one when resources allow.
+Barracks should produce units according to the chosen global strategy.
+In Worker Defense and Worker Rush, barracks tend to produce Light units.
+In Military Defense, barracks should produce units based on current needs and enemy composition.
+In Military Rush, focus production on military units and sustain offensive pressure.
+Prioritize unit production that counters the enemy composition when possible.
+Assign builders carefully:
+Use one available worker for construction when possible rather than pulling too many workers off economy.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+OPTIMIZE RESOURCE UTILIZATION:
+Do not leave workers unassigned to tasks such as harvesting, building, defending, or attacking if possible.
+Do not maintain idle bases or barracks when sufficient resources allow for productive output.
+Keep combat units away from the base unless there is a legitimate need for defense.
+Movement policy:
+Military units should move according to the selected global strategy.
+In defensive strategies, stay near the base and nearby resources unless chasing a local threat.
+In offensive strategies, advance toward the nearest enemy unit or the enemy base.
+Light units move directly toward nearby enemy units.
+Heavy units push toward enemy buildings.
+Ranged units should keep distance from enemy melee units while staying in attack position.
+Opening strategy: Worker pressure opener.
+Establish minimal economy, then send available workers or early units to pressure exposed enemy workers.
+The aim is to interrupt enemy harvesting early and force a defensive response.
+Do not overcommit if the enemy defense is already well prepared.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Mid game strategy:
+Produce combat units according to the chosen global strategy.
+Begin applying pressure on the enemy if they are vulnerable or if we have a local advantage.
+Maintain a balance between economy and military production based on the evolving battlefield.
+Threat-first planning:
+Before expanding economy or attacking, check whether our workers, base, or barracks are under immediate danger.
+If so, redirect nearby units to stabilize the position first.
+Harassment policy:
+Do not commit every unit to a frontal attack when selective disruption can gain more value.
+Pick off isolated workers, threaten production structures, and retreat from bad engagements before losses become severe.
+Sustained interference is valuable when it weakens the enemy economy or delays their army production.
+Respect travel efficiency:
+Prefer short harvesting loops that minimize walking distance between resource and base.
+Individual(game_rule=0, strategy={'global_strategy': 13, 'combat_policy': 3, 'economy_policy': 10, 'production_policy': 1, 'worker_policy': 4, 'harassment_policy': 2, 'opening_strategy': 4, 'targeting_policy': 1, 'movement_policy': 7, 'anti_stall_policy': 2, 'time_base_strategy': 3}) - Fitness: [0.8, 0.04412779071666498, 0.7357053936147658]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Late game strategy:
+Focus on aggressive attacks to destroy the enemy base and production structures.
+Do not hesitate to commit to pressure if it can lead to victory, even if it risks some losses.
+Focus favorable trades:
+Engage when our local force can win or efficiently damage a valuable enemy target.
+Avoid taking fights that sacrifice units for little strategic gain.
+Opening strategy: Disruption opener.
+Use the first combat-capable units to interfere with enemy mining routes, builders, and unfinished structures.
+The goal is to deny clean development rather than rushing immediately for the enemy base.
+Once the opponent is disorganized, convert the advantage into stronger map control or direct base pressure.
+Harassment policy:
+Do not commit every unit to a frontal attack when selective disruption can gain more value.
+Pick off isolated workers, threaten production structures, and retreat from bad engagements before losses become severe.
+Sustained interference is valuable when it weakens the enemy economy or delays their army production.
+Attack commitment:
+If combat units already exist and no immediate home defense is required, prefer pressure on the enemy over passive waiting.
+Once an offensive move has started, continue the attack unless the battlefield clearly turns unfavorable.
+Do not stop outside the enemy base area just to wait for a slightly larger force.
+Treat economy as strategic infrastructure:
+Resource income is what sustains recovery, defense, and long-term pressure.
+Do not block your own economy unnecessarily:
+Avoid parking combat units in ways that interfere with harvesting or building paths.
+Target selection:
+Prefer attacking closer enemies when multiple targets are available.
+Prioritize dangerous combat units over workers when possible.
+If the opportunity arises, attack enemy production structures such as barracks.
+Destroying the enemy base or barracks greatly weakens enemy production.
+Production policy:
+Bases produce workers until the economy is stable for the map size.
+Construct a barracks when the base has sufficient resources and none exists nearby.
+Barracks should prioritize producing Heavy units as the primary frontline.
+Produce Ranged units when pathing is narrow, terrain is constrained, or Heavy units are unaffordable.
+Adaptive control:
+Do not follow one plan blindly.
+Re-evaluate the battlefield every timestep and switch between defense, development, and offense when the state changes.
+Assign builders carefully:
+Use one available worker for construction when possible rather than pulling too many workers off economy.
+Individual(game_rule=0, strategy={'global_strategy': 15, 'combat_policy': 4, 'economy_policy': 1, 'production_policy': 10, 'worker_policy': 4, 'harassment_policy': 0, 'opening_strategy': 3, 'targeting_policy': 6, 'movement_policy': 7, 'anti_stall_policy': 0, 'time_base_strategy': 1}) - Fitness: [0.5, 0.0625001590362675, 0.7320848728537275]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Assign builders carefully:
+Use one available worker for construction when possible rather than pulling too many workers off economy.
+Do not ignore kill opportunities:
+A low-health enemy that can be finished now is often worth prioritizing.
+Do not block your own economy unnecessarily:
+Avoid parking combat units in ways that interfere with harvesting or building paths.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Threat-assessment prioritization:
+Before expanding resources or engaging in combat, identify and mitigate any imminent threats to our workers, base, or defensive structures by redeploying nearby units to secure the area.
+ANTI-STALL RULES:
+Do not leave workers idle if they can harvest, build, defend, or attack productively.
+Do not leave bases or barracks idle when resources are sufficient for useful production.
+Do not keep combat units near the base without a clear defensive reason.
+Opening strategy: Heavy frontline opener.
+Stabilize economy, then produce heavy units early to create a durable frontline.
+Use the first heavy units to absorb pressure, break through enemy defenders, and threaten buildings.
+This opening is effective when direct combat around choke points or structures is likely.
+Support the chosen win condition:
+All production choices should reinforce whether the current plan is defend, stabilize, pressure, or finish.
+Harassment policy:
+Look for chances to disrupt the enemy economy instead of only marching at the enemy base directly.
+If enemy workers are exposed, prioritize attacking or chasing them to reduce enemy income.
+Small groups may pressure resource lines, unfinished buildings, or isolated units when the trade is favorable.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+Individual(game_rule=0, strategy={'global_strategy': 6, 'combat_policy': 4, 'economy_policy': 6, 'production_policy': 2, 'worker_policy': 4, 'harassment_policy': 2, 'opening_strategy': 1, 'targeting_policy': 2, 'movement_policy': 2, 'anti_stall_policy': 5, 'time_base_strategy': 2}) - Fitness: [0.5, 0.06220894535435249, 0.7498796457291894]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Production policy:
+The base should produce workers when worker count is below the desired threshold.
+If no barracks exists, assign a worker to build one when resources allow.
+Barracks should produce units according to the chosen global strategy.
+In Worker Defense and Worker Rush, barracks tend to produce Light units.
+In Military Defense, barracks should produce units based on current needs and enemy composition.
+In Military Rush, focus production on military units and sustain offensive pressure.
+Prioritize unit production that counters the enemy composition when possible.
+Assign builders carefully:
+Use one available worker for construction when possible rather than pulling too many workers off economy.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+OPTIMIZE RESOURCE UTILIZATION:
+Do not leave workers unassigned to tasks such as harvesting, building, defending, or attacking if possible.
+Do not maintain idle bases or barracks when sufficient resources allow for productive output.
+Keep combat units away from the base unless there is a legitimate need for defense.
+Movement policy:
+Military units should move according to the selected global strategy.
+In defensive strategies, stay near the base and nearby resources unless chasing a local threat.
+In offensive strategies, advance toward the nearest enemy unit or the enemy base.
+Light units move directly toward nearby enemy units.
+Heavy units push toward enemy buildings.
+Ranged units should keep distance from enemy melee units while staying in attack position.
+Opening strategy: Worker pressure opener.
+Establish minimal economy, then send available workers or early units to pressure exposed enemy workers.
+The aim is to interrupt enemy harvesting early and force a defensive response.
+Do not overcommit if the enemy defense is already well prepared.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Mid game strategy:
+Produce combat units according to the chosen global strategy.
+Begin applying pressure on the enemy if they are vulnerable or if we have a local advantage.
+Maintain a balance between economy and military production based on the evolving battlefield.
+Threat-first planning:
+Before expanding economy or attacking, check whether our workers, base, or barracks are under immediate danger.
+If so, redirect nearby units to stabilize the position first.
+Harassment policy:
+Do not commit every unit to a frontal attack when selective disruption can gain more value.
+Pick off isolated workers, threaten production structures, and retreat from bad engagements before losses become severe.
+Sustained interference is valuable when it weakens the enemy economy or delays their army production.
+Respect travel efficiency:
+Prefer short harvesting loops that minimize walking distance between resource and base.
+Individual(game_rule=0, strategy={'global_strategy': 13, 'combat_policy': 4, 'economy_policy': 1, 'production_policy': 2, 'worker_policy': 4, 'harassment_policy': 2, 'opening_strategy': 3, 'targeting_policy': 6, 'movement_policy': 2, 'anti_stall_policy': 7, 'time_base_strategy': 1}) - Fitness: [0.5, 0.06279137271818253, 0.7142900999782656]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Production policy:
+The base should produce workers when worker count is below the desired threshold.
+If no barracks exists, assign a worker to build one when resources allow.
+Barracks should produce units according to the chosen global strategy.
+In Worker Defense and Worker Rush, barracks tend to produce Light units.
+In Military Defense, barracks should produce units based on current needs and enemy composition.
+In Military Rush, focus production on military units and sustain offensive pressure.
+Prioritize unit production that counters the enemy composition when possible.
+Assign builders carefully:
+Use one available worker for construction when possible rather than pulling too many workers off economy.
+Movement policy:
+Military units should move according to the selected global strategy.
+In defensive strategies, stay near the base and nearby resources unless chasing a local threat.
+In offensive strategies, advance toward the nearest enemy unit or the enemy base.
+Light units move directly toward nearby enemy units.
+Heavy units push toward enemy buildings.
+Ranged units should keep distance from enemy melee units while staying in attack position.
+Harassment policy:
+Do not commit every unit to a frontal attack when selective disruption can gain more value.
+Pick off isolated workers, threaten production structures, and retreat from bad engagements before losses become severe.
+Sustained interference is valuable when it weakens the enemy economy or delays their army production.
+Opening strategy: Heavy frontline opener.
+Stabilize economy, then produce heavy units early to create a durable frontline.
+Use the first heavy units to absorb pressure, break through enemy defenders, and threaten buildings.
+This opening is effective when direct combat around choke points or structures is likely.
+Do not ignore kill opportunities:
+A low-health enemy that can be finished now is often worth prioritizing.
+OPTIMIZE RESOURCE UTILIZATION RULES:
+Prioritize worker utilization for harvesting, building, defense, and attacking when productive opportunities exist.
+Ensure bases and barracks operate at maximum capacity with available resources supporting valuable output.
+Maintain combat units at a safe distance from the base unless a valid defensive posture is justified.
+Adaptive control:
+Do not follow one plan blindly.
+Re-evaluate the battlefield every timestep and switch between defense, development, and offense when the state changes.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+Individual(game_rule=0, strategy={'global_strategy': 13, 'combat_policy': 4, 'economy_policy': 1, 'production_policy': 2, 'worker_policy': 4, 'harassment_policy': 2, 'opening_strategy': 3, 'targeting_policy': 6, 'movement_policy': 2, 'anti_stall_policy': 7, 'time_base_strategy': 1}) - Fitness: [0.5, 0.06293697955914003, 0.7053927135405347]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Production policy:
+The base should produce workers when worker count is below the desired threshold.
+If no barracks exists, assign a worker to build one when resources allow.
+Barracks should produce units according to the chosen global strategy.
+In Worker Defense and Worker Rush, barracks tend to produce Light units.
+In Military Defense, barracks should produce units based on current needs and enemy composition.
+In Military Rush, focus production on military units and sustain offensive pressure.
+Prioritize unit production that counters the enemy composition when possible.
+Assign builders carefully:
+Use one available worker for construction when possible rather than pulling too many workers off economy.
+Movement policy:
+Military units should move according to the selected global strategy.
+In defensive strategies, stay near the base and nearby resources unless chasing a local threat.
+In offensive strategies, advance toward the nearest enemy unit or the enemy base.
+Light units move directly toward nearby enemy units.
+Heavy units push toward enemy buildings.
+Ranged units should keep distance from enemy melee units while staying in attack position.
+Harassment policy:
+Do not commit every unit to a frontal attack when selective disruption can gain more value.
+Pick off isolated workers, threaten production structures, and retreat from bad engagements before losses become severe.
+Sustained interference is valuable when it weakens the enemy economy or delays their army production.
+Opening strategy: Heavy frontline opener.
+Stabilize economy, then produce heavy units early to create a durable frontline.
+Use the first heavy units to absorb pressure, break through enemy defenders, and threaten buildings.
+This opening is effective when direct combat around choke points or structures is likely.
+Do not ignore kill opportunities:
+A low-health enemy that can be finished now is often worth prioritizing.
+OPTIMIZE RESOURCE UTILIZATION RULES:
+Prioritize worker utilization for harvesting, building, defense, and attacking when productive opportunities exist.
+Ensure bases and barracks operate at maximum capacity with available resources supporting valuable output.
+Maintain combat units at a safe distance from the base unless a valid defensive posture is justified.
+Adaptive control:
+Do not follow one plan blindly.
+Re-evaluate the battlefield every timestep and switch between defense, development, and offense when the state changes.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+Individual(game_rule=0, strategy={'global_strategy': 6, 'combat_policy': 4, 'economy_policy': 11, 'production_policy': 2, 'worker_policy': 4, 'harassment_policy': 2, 'opening_strategy': 1, 'targeting_policy': 2, 'movement_policy': 12, 'anti_stall_policy': 5, 'time_base_strategy': 2}) - Fitness: [0.5, 0.06235455219531, 0.7409822592914584]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Opening strategy: Worker pressure opener.
+Establish minimal economy, then send available workers or early units to pressure exposed enemy workers.
+The aim is to interrupt enemy harvesting early and force a defensive response.
+Do not overcommit if the enemy defense is already well prepared.
+OPTIMIZE RESOURCE UTILIZATION:
+Do not leave workers unassigned to tasks such as harvesting, building, defending, or attacking if possible.
+Do not maintain idle bases or barracks when sufficient resources allow for productive output.
+Keep combat units away from the base unless there is a legitimate need for defense.
+Economy policy: 
+Prioritize resource security over expansion, maintaining stable income through balanced worker allocation.
+Assign harvesting workers based on proximity, ensuring each base has adequate nearby resources harvested efficiently.
+Workers should harvest from the closest available resource and return it to their nearest base, rotating tasks as necessary to avoid resource node congestion.
+Mid game strategy:
+Produce combat units according to the chosen global strategy.
+Begin applying pressure on the enemy if they are vulnerable or if we have a local advantage.
+Maintain a balance between economy and military production based on the evolving battlefield.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Movement policy:
+Units execute their assigned movement behaviors based on the overall strategy selected for the game.
+In defensive strategies, maintain proximity to the base and surrounding resources unless a nearby threat requires pursuit.
+In offensive strategies, advance towards the nearest hostile unit or enemy base location.
+Light units move directly towards nearby enemy units.
+Heavy units push forward toward enemy buildings.
+Ranged units maintain a safe distance from enemy melee units while remaining in an attack position.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+Threat-first planning:
+Before expanding economy or attacking, check whether our workers, base, or barracks are under immediate danger.
+If so, redirect nearby units to stabilize the position first.
+Harassment policy:
+Do not commit every unit to a frontal attack when selective disruption can gain more value.
+Pick off isolated workers, threaten production structures, and retreat from bad engagements before losses become severe.
+Sustained interference is valuable when it weakens the enemy economy or delays their army production.
+Assign builders carefully:
+Use one available worker for construction when possible rather than pulling too many workers off economy.
+Production policy:
+The base should produce workers when worker count is below the desired threshold.
+If no barracks exists, assign a worker to build one when resources allow.
+Barracks should produce units according to the chosen global strategy.
+In Worker Defense and Worker Rush, barracks tend to produce Light units.
+In Military Defense, barracks should produce units based on current needs and enemy composition.
+In Military Rush, focus production on military units and sustain offensive pressure.
+Prioritize unit production that counters the enemy composition when possible.
+
+Pareto Front 2:
+Individual(game_rule=0, strategy={'global_strategy': 8, 'combat_policy': 5, 'economy_policy': 2, 'production_policy': 1, 'worker_policy': 8, 'harassment_policy': 0, 'opening_strategy': 1, 'targeting_policy': 1, 'movement_policy': 8, 'anti_stall_policy': 3, 'time_base_strategy': 3}) - Fitness: [0.5, 0.05634421752456705, 0.7581395348837209]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Opening strategy: Worker pressure opener.
+Establish minimal economy, then send available workers or early units to pressure exposed enemy workers.
+The aim is to interrupt enemy harvesting early and force a defensive response.
+Do not overcommit if the enemy defense is already well prepared.
+Resource conversion discipline:
+Floating resources for too long is usually a strategic mistake.
+Convert resources into workers, barracks, or military units when that creates immediate strategic value.
+If the economy is already stable, extra resources should accelerate military pressure.
+Frontline logic matters:
+Durable units should usually move first into contested areas, while fragile units follow in safer positions.
+Harassment policy:
+Look for chances to disrupt the enemy economy instead of only marching at the enemy base directly.
+If enemy workers are exposed, prioritize attacking or chasing them to reduce enemy income.
+Small groups may pressure resource lines, unfinished buildings, or isolated units when the trade is favorable.
+Economy policy:
+Workers should gather resources whenever they are idle unless immediate defense is required.
+Expand the worker economy when worker count is low or when resource income is not stable.
+Maintain enough workers to support production in defense strategies.
+In Military Rush, keep only the minimum worker economy needed to sustain unit production.
+Harvest from the nearest available resource and return to the nearest base.
+Use nearby units first:
+When defending, prefer using the closest available units to respond quickly.
+Do not pull distant units away if local defenders can handle the threat.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Map-aware strategy choice:
+On smaller maps or close-spawn situations, aggressive strategies become stronger and should be considered earlier.
+On larger maps, maintain stronger economy before full commitment.
+Production policy:
+Bases produce workers until the economy is stable for the map size.
+Construct a barracks when the base has sufficient resources and none exists nearby.
+Barracks should prioritize producing Heavy units as the primary frontline.
+Produce Ranged units when pathing is narrow, terrain is constrained, or Heavy units are unaffordable.
+Target selection:
+Prefer attacking closer enemies when multiple targets are available.
+Prioritize dangerous combat units over workers when possible.
+If the opportunity arises, attack enemy production structures such as barracks.
+Destroying the enemy base or barracks greatly weakens enemy production.
+Late game strategy:
+Focus on aggressive attacks to destroy the enemy base and production structures.
+Do not hesitate to commit to pressure if it can lead to victory, even if it risks some losses.
+Individual(game_rule=0, strategy={'global_strategy': 13, 'combat_policy': 10, 'economy_policy': 10, 'production_policy': 1, 'worker_policy': 0, 'harassment_policy': 0, 'opening_strategy': 4, 'targeting_policy': 7, 'movement_policy': 7, 'anti_stall_policy': 3, 'time_base_strategy': 3}) - Fitness: [0.5, 0.03918552434395686, 0.758963807918494]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Late game strategy:
+Focus on aggressive attacks to destroy the enemy base and production structures.
+Do not hesitate to commit to pressure if it can lead to victory, even if it risks some losses.
+Treat economy as strategic infrastructure:
+Resource income is what sustains recovery, defense, and long-term pressure.
+Worker behavior:
+Workers mainly support economy, but one suitable worker should build a barracks as soon as resources allow if none exists.
+Do not keep producing extra workers once resource flow is stable and military pressure is needed.
+Workers should not remain idle when they could harvest, build, or assist local defense.
+Adaptive control:
+Do not follow one plan blindly.
+Re-evaluate the battlefield every timestep and switch between defense, development, and offense when the state changes.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Resource conversion discipline:
+Floating resources for too long is usually a strategic mistake.
+Convert resources into workers, barracks, or military units when that creates immediate strategic value.
+If the economy is already stable, extra resources should accelerate military pressure.
+Production policy:
+Bases produce workers until the economy is stable for the map size.
+Construct a barracks when the base has sufficient resources and none exists nearby.
+Barracks should prioritize producing Heavy units as the primary frontline.
+Produce Ranged units when pathing is narrow, terrain is constrained, or Heavy units are unaffordable.
+Do not block your own economy unnecessarily:
+Avoid parking combat units in ways that interfere with harvesting or building paths.
+Value nearby efficiency:
+A reachable target that can be attacked immediately is often better than a theoretically higher-value but distant target.
+Opening strategy: Disruption opener.
+Use the first combat-capable units to interfere with enemy mining routes, builders, and unfinished structures.
+The goal is to deny clean development rather than rushing immediately for the enemy base.
+Once the opponent is disorganized, convert the advantage into stronger map control or direct base pressure.
+Harassment policy:
+Look for chances to disrupt the enemy economy instead of only marching at the enemy base directly.
+If enemy workers are exposed, prioritize attacking or chasing them to reduce enemy income.
+Small groups may pressure resource lines, unfinished buildings, or isolated units when the trade is favorable.
+Individual(game_rule=0, strategy={'global_strategy': 13, 'combat_policy': 3, 'economy_policy': 10, 'production_policy': 12, 'worker_policy': 8, 'harassment_policy': 2, 'opening_strategy': 4, 'targeting_policy': 1, 'movement_policy': 8, 'anti_stall_policy': 2, 'time_base_strategy': 3}) - Fitness: [0.5, 0.02206389535833249, 0.7631906921453783]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Harassment policy:
+Do not commit every unit to a frontal attack when selective disruption can gain more value.
+Pick off isolated workers, threaten production structures, and retreat from bad engagements before losses become severe.
+Sustained interference is valuable when it weakens the enemy economy or delays their army production.
+Focus favorable trades:
+Engage when our local force can win or efficiently damage a valuable enemy target.
+Avoid taking fights that sacrifice units for little strategic gain.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Adaptive control:
+Do not follow one plan blindly.
+Re-evaluate the battlefield every timestep and switch between defense, development, and offense when the state changes.
+Late game strategy:
+Focus on aggressive attacks to destroy the enemy base and production structures.
+Do not hesitate to commit to pressure if it can lead to victory, even if it risks some losses.
+Production policy:
+Bases produce workers until the economy can sustain a stable map presence.
+Construct a barracks when the base has sufficient resources and none exists nearby.
+Barracks should prioritize producing defensive Heavy units as primary frontline.
+Produce Ranged units in areas with narrow pathing, constrained terrain, or where Heavy units are unaffordable.
+Treat economy as strategic infrastructure:
+Resource income is what sustains recovery, defense, and long-term pressure.
+Opening strategy: Disruption opener.
+Use the first combat-capable units to interfere with enemy mining routes, builders, and unfinished structures.
+The goal is to deny clean development rather than rushing immediately for the enemy base.
+Once the opponent is disorganized, convert the advantage into stronger map control or direct base pressure.
+Target selection:
+Prefer attacking closer enemies when multiple targets are available.
+Prioritize dangerous combat units over workers when possible.
+If the opportunity arises, attack enemy production structures such as barracks.
+Destroying the enemy base or barracks greatly weakens enemy production.
+Attack commitment:
+If combat units already exist and no immediate home defense is required, prefer pressure on the enemy over passive waiting.
+Once an offensive move has started, continue the attack unless the battlefield clearly turns unfavorable.
+Do not stop outside the enemy base area just to wait for a slightly larger force.
+Frontline logic matters:
+Durable units should usually move first into contested areas, while fragile units follow in safer positions.
+
+Pareto Front 3:
+Individual(game_rule=0, strategy={'global_strategy': 13, 'combat_policy': 4, 'economy_policy': 9, 'production_policy': 2, 'worker_policy': 0, 'harassment_policy': 0, 'targeting_policy': 7, 'movement_policy': 2, 'anti_stall_policy': 5, 'time_base_strategy': 1}) - Fitness: [0.5, 0.04837170850375812, 0.7571535475379749]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Value nearby efficiency:
+A reachable target that can be attacked immediately is often better than a theoretically higher-value but distant target.
+Adaptive control:
+Do not follow one plan blindly.
+Re-evaluate the battlefield every timestep and switch between defense, development, and offense when the state changes.
+Movement policy:
+Military units should move according to the selected global strategy.
+In defensive strategies, stay near the base and nearby resources unless chasing a local threat.
+In offensive strategies, advance toward the nearest enemy unit or the enemy base.
+Light units move directly toward nearby enemy units.
+Heavy units push toward enemy buildings.
+Ranged units should keep distance from enemy melee units while staying in attack position.
+Do not sacrifice all workers for offense:
+Even aggressive strategies need enough economy to keep producing units.
+Production policy:
+The base should produce workers when worker count is below the desired threshold.
+If no barracks exists, assign a worker to build one when resources allow.
+Barracks should produce units according to the chosen global strategy.
+In Worker Defense and Worker Rush, barracks tend to produce Light units.
+In Military Defense, barracks should produce units based on current needs and enemy composition.
+In Military Rush, focus production on military units and sustain offensive pressure.
+Prioritize unit production that counters the enemy composition when possible.
+OPTIMIZE RESOURCE UTILIZATION:
+Do not leave workers unassigned to tasks such as harvesting, building, defending, or attacking if possible.
+Do not maintain idle bases or barracks when sufficient resources allow for productive output.
+Keep combat units away from the base unless there is a legitimate need for defense.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+Worker behavior:
+Workers mainly support economy, but one suitable worker should build a barracks as soon as resources allow if none exists.
+Do not keep producing extra workers once resource flow is stable and military pressure is needed.
+Workers should not remain idle when they could harvest, build, or assist local defense.
+Harassment policy:
+Look for chances to disrupt the enemy economy instead of only marching at the enemy base directly.
+If enemy workers are exposed, prioritize attacking or chasing them to reduce enemy income.
+Small groups may pressure resource lines, unfinished buildings, or isolated units when the trade is favorable.
+Individual(game_rule=0, strategy={'global_strategy': 13, 'combat_policy': 4, 'economy_policy': 6, 'production_policy': 10, 'worker_policy': 6, 'harassment_policy': 0, 'opening_strategy': 4, 'targeting_policy': 2, 'movement_policy': 2, 'anti_stall_policy': 2, 'time_base_strategy': 1}) - Fitness: [0.5, 0.053022761194551224, 0.7516899061097085]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Adaptive control:
+Do not follow one plan blindly.
+Re-evaluate the battlefield every timestep and switch between defense, development, and offense when the state changes.
+Local worker defense is allowed:
+If enemies enter the base area, nearby workers may help defend when necessary to prevent structural or economic collapse.
+Movement policy:
+Military units should move according to the selected global strategy.
+In defensive strategies, stay near the base and nearby resources unless chasing a local threat.
+In offensive strategies, advance toward the nearest enemy unit or the enemy base.
+Light units move directly toward nearby enemy units.
+Heavy units push toward enemy buildings.
+Ranged units should keep distance from enemy melee units while staying in attack position.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Respect travel efficiency:
+Prefer short harvesting loops that minimize walking distance between resource and base.
+Support the chosen win condition:
+All production choices should reinforce whether the current plan is defend, stabilize, pressure, or finish.
+Attack commitment:
+If combat units already exist and no immediate home defense is required, prefer pressure on the enemy over passive waiting.
+Once an offensive move has started, continue the attack unless the battlefield clearly turns unfavorable.
+Do not stop outside the enemy base area just to wait for a slightly larger force.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Harassment policy:
+Look for chances to disrupt the enemy economy instead of only marching at the enemy base directly.
+If enemy workers are exposed, prioritize attacking or chasing them to reduce enemy income.
+Small groups may pressure resource lines, unfinished buildings, or isolated units when the trade is favorable.
+Opening strategy: Disruption opener.
+Use the first combat-capable units to interfere with enemy mining routes, builders, and unfinished structures.
+The goal is to deny clean development rather than rushing immediately for the enemy base.
+Once the opponent is disorganized, convert the advantage into stronger map control or direct base pressure.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+Individual(game_rule=0, strategy={'global_strategy': 6, 'combat_policy': 4, 'economy_policy': 10, 'production_policy': 1, 'worker_policy': 6, 'harassment_policy': 0, 'opening_strategy': 4, 'targeting_policy': 2, 'movement_policy': 7, 'anti_stall_policy': 2, 'time_base_strategy': 1}) - Fitness: [0.5, 0.053022761194551224, 0.7516899061097085]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Opening strategy: Disruption opener.
+Use the first combat-capable units to interfere with enemy mining routes, builders, and unfinished structures.
+The goal is to deny clean development rather than rushing immediately for the enemy base.
+Once the opponent is disorganized, convert the advantage into stronger map control or direct base pressure.
+Attack commitment:
+If combat units already exist and no immediate home defense is required, prefer pressure on the enemy over passive waiting.
+Once an offensive move has started, continue the attack unless the battlefield clearly turns unfavorable.
+Do not stop outside the enemy base area just to wait for a slightly larger force.
+Threat-first planning:
+Before expanding economy or attacking, check whether our workers, base, or barracks are under immediate danger.
+If so, redirect nearby units to stabilize the position first.
+Local worker defense is allowed:
+If enemies enter the base area, nearby workers may help defend when necessary to prevent structural or economic collapse.
+Harassment policy:
+Look for chances to disrupt the enemy economy instead of only marching at the enemy base directly.
+If enemy workers are exposed, prioritize attacking or chasing them to reduce enemy income.
+Small groups may pressure resource lines, unfinished buildings, or isolated units when the trade is favorable.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Production policy:
+Bases produce workers until the economy is stable for the map size.
+Construct a barracks when the base has sufficient resources and none exists nearby.
+Barracks should prioritize producing Heavy units as the primary frontline.
+Produce Ranged units when pathing is narrow, terrain is constrained, or Heavy units are unaffordable.
+Protect economy during combat:
+If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.
+Do not let the economy collapse without resistance.
+Do not block your own economy unnecessarily:
+Avoid parking combat units in ways that interfere with harvesting or building paths.
+Treat economy as strategic infrastructure:
+Resource income is what sustains recovery, defense, and long-term pressure.
+Individual(game_rule=0, strategy={'global_strategy': 8, 'combat_policy': 3, 'economy_policy': 10, 'production_policy': 1, 'worker_policy': 4, 'harassment_policy': 1, 'opening_strategy': 4, 'targeting_policy': 1, 'movement_policy': 7, 'anti_stall_policy': 2, 'time_base_strategy': 3}) - Fitness: [0.0, 0.02206389535833249, 0.7631906921453783]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Assign builders carefully:
+Use one available worker for construction when possible rather than pulling too many workers off economy.
+Production policy:
+Bases produce workers until the economy is stable for the map size.
+Construct a barracks when the base has sufficient resources and none exists nearby.
+Barracks should prioritize producing Heavy units as the primary frontline.
+Produce Ranged units when pathing is narrow, terrain is constrained, or Heavy units are unaffordable.
+Do not block your own economy unnecessarily:
+Avoid parking combat units in ways that interfere with harvesting or building paths.
+Opening strategy: Disruption opener.
+Use the first combat-capable units to interfere with enemy mining routes, builders, and unfinished structures.
+The goal is to deny clean development rather than rushing immediately for the enemy base.
+Once the opponent is disorganized, convert the advantage into stronger map control or direct base pressure.
+Harassment policy:
+Use mobile units to force the enemy to react in multiple places.
+If a direct base attack is too risky, pressure enemy workers, barracks access, or harvesting paths first.
+The goal is to slow enemy growth, pull defenders out of position, and create openings for a later decisive attack.
+Attack commitment:
+If combat units already exist and no immediate home defense is required, prefer pressure on the enemy over passive waiting.
+Once an offensive move has started, continue the attack unless the battlefield clearly turns unfavorable.
+Do not stop outside the enemy base area just to wait for a slightly larger force.
+Map-aware strategy choice:
+On smaller maps or close-spawn situations, aggressive strategies become stronger and should be considered earlier.
+On larger maps, maintain stronger economy before full commitment.
+Focus favorable trades:
+Engage when our local force can win or efficiently damage a valuable enemy target.
+Avoid taking fights that sacrifice units for little strategic gain.
+Treat economy as strategic infrastructure:
+Resource income is what sustains recovery, defense, and long-term pressure.
+Late game strategy:
+Focus on aggressive attacks to destroy the enemy base and production structures.
+Do not hesitate to commit to pressure if it can lead to victory, even if it risks some losses.
+Target selection:
+Prefer attacking closer enemies when multiple targets are available.
+Prioritize dangerous combat units over workers when possible.
+If the opportunity arises, attack enemy production structures such as barracks.
+Destroying the enemy base or barracks greatly weakens enemy production.
+
+Pareto Front 4:
+Individual(game_rule=0, strategy={'global_strategy': 6, 'combat_policy': 10, 'economy_policy': 10, 'production_policy': 1, 'worker_policy': 0, 'harassment_policy': 0, 'opening_strategy': 4, 'targeting_policy': 1, 'movement_policy': 7, 'anti_stall_policy': 3, 'time_base_strategy': 3}) - Fitness: [0.0, -0.09261092956301327, 0.5675]
+Prompt:
+GAME RULES:
+Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.
+Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.
+Players can only assign actions to their ally units.
+There are 6 available actions:
+move((Target_x, Target_y))
+- Move unit to target location
+train(Unit_Type)
+- Train a unit (Base and Barracks only)
+build((Target_x, Target_y), Building_Type)
+- Worker builds building
+- Resources are consumed from Ally base
+harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- Worker collects resources and returns to base
+attack((Enemy_x, Enemy_y))
+- Attack enemy unit
+idle()
+- Do nothing this turn
+WIN CONDITION:
+- Destroy all enemy units and buildings
+UNIT TYPES:
+worker:
+- HP: 1
+- Cost: 1
+- Damage: 1
+- Range: 1
+- Speed: 1
+- Abilities: gather resources, build base, build barracks
+- Trained by: base
+light:
+- HP: 4
+- Cost: 2
+- Damage: 2
+- Range: 1
+- Speed: 2
+- Abilities: fast attacker
+Trained by: barracks
+heavy:
+- HP: 8
+- Cost: 3
+- Damage: 4
+- Range: 1
+- Speed: 1
+- Abilities: tank unit
+Trained by: barracks
+ranged:
+- HP: 3
+- Cost: 2
+- Damage: 1
+- Range: 3
+- Speed: 1
+- Abilities: long range attacker
+- Trained by: barracks
+BUILDING TYPES:
+base:
+- HP: 10
+- Cost: 10
+- Abilities: train workers, store resources
+barracks:
+- HP: 5
+- Cost: 5
+- Abilities: train light, heavy, ranged units
+SUGGESTED STRATEGY:
+Early Game:
+- Harvest nonstop
+- Build barracks at 5 resources
+Mid Game:
+- Train army
+- Hunt enemy workers
+- Protect barracks
+Late Game:
+- Group attack
+- Destroy production buildings
+- Control resources
+GAME STATE FORMAT:
+Map size is given
+Feature locations list all units and buildings
+Coordinates are zero-indexed
+Units and buildings have properties:
+- HP
+- resources
+- current_action
+- available
+available = true means unit can receive command
+RAW MOVE FORMAT:
+(X, Y): Unit_Type Action(Action_Arguments)
+X: unit x position
+Y: unit y position
+Unit_Type: worker, light, heavy, ranged, base, barracks
+Action: move, train, build, harvest, attack, idle
+Action_Arguments: arguments for action
+There are 6 available actions:
+- `move` - Unit will move to target location.
+    - Arguments: ((Target_x, Target_y))
+- `train` - Unit will train the provided unit type (only bases and barracks can use this action).
+    - Arguments: (Unit_Type)
+- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).
+    - Arguments: ((Target_x, Target_y), Building_Type)
+- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.
+    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))
+- `attack` - Unit will navigate to, and attack the target enemy.
+    - Arguments: ((Enemy_x, Enemy_y))
+- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.
+    - Arguments: ()
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Late game strategy:
+Focus on aggressive attacks to destroy the enemy base and production structures.
+Do not hesitate to commit to pressure if it can lead to victory, even if it risks some losses.
+Opening strategy: Disruption opener.
+Use the first combat-capable units to interfere with enemy mining routes, builders, and unfinished structures.
+The goal is to deny clean development rather than rushing immediately for the enemy base.
+Once the opponent is disorganized, convert the advantage into stronger map control or direct base pressure.
+Treat economy as strategic infrastructure:
+Resource income is what sustains recovery, defense, and long-term pressure.
+Production policy:
+Bases produce workers until the economy is stable for the map size.
+Construct a barracks when the base has sufficient resources and none exists nearby.
+Barracks should prioritize producing Heavy units as the primary frontline.
+Produce Ranged units when pathing is narrow, terrain is constrained, or Heavy units are unaffordable.
+Threat-first planning:
+Before expanding economy or attacking, check whether our workers, base, or barracks are under immediate danger.
+If so, redirect nearby units to stabilize the position first.
+Do not block your own economy unnecessarily:
+Avoid parking combat units in ways that interfere with harvesting or building paths.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Resource conversion discipline:
+Floating resources for too long is usually a strategic mistake.
+Convert resources into workers, barracks, or military units when that creates immediate strategic value.
+If the economy is already stable, extra resources should accelerate military pressure.
+Worker behavior:
+Workers mainly support economy, but one suitable worker should build a barracks as soon as resources allow if none exists.
+Do not keep producing extra workers once resource flow is stable and military pressure is needed.
+Workers should not remain idle when they could harvest, build, or assist local defense.
+Harassment policy:
+Look for chances to disrupt the enemy economy instead of only marching at the enemy base directly.
+If enemy workers are exposed, prioritize attacking or chasing them to reduce enemy income.
+Small groups may pressure resource lines, unfinished buildings, or isolated units when the trade is favorable.
+Target selection:
+Prefer attacking closer enemies when multiple targets are available.
+Prioritize dangerous combat units over workers when possible.
+If the opportunity arises, attack enemy production structures such as barracks.
+Destroying the enemy base or barracks greatly weakens enemy production.

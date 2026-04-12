@@ -1,0 +1,1042 @@
+{
+    "ind-1260": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 0.78
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.58
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.49
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.002
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.22
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Loss",
+            "round": 0.53
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.63
+        }
+    ],
+    "ind-1261": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.82
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 0.85
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.62
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.47
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.14
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.21
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.26
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.67
+        }
+    ],
+    "ind-1262": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 0.5
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.66
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.52
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.14
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.2
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Loss",
+            "round": 0.48
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.61
+        }
+    ],
+    "ind-1263": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.98
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Draw",
+            "round": 0.26
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.62
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.51
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.138
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.53
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.3
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Draw",
+            "round": 0.2
+        }
+    ],
+    "ind-1264": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.63
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.57
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.139
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.23
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Loss",
+            "round": 0.56
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.65
+        }
+    ],
+    "ind-1265": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.79
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 0.87
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 0.45
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.61
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.5
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.14
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.25
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Loss",
+            "round": 0.49
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.6
+        }
+    ],
+    "ind-1266": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.77
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 0.42
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.62
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.49
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.14
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.24
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.2
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.7
+        }
+    ],
+    "ind-1267": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.55
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.7
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.49
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.137
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.27
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.21
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.62
+        }
+    ],
+    "ind-1268": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.59
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.43
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.135
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.22
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.25
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.65
+        }
+    ],
+    "ind-1269": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.92
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.68
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.45
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.141
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.3
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.25
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.58
+        }
+    ],
+    "ind-1270": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.61
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.48
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.14
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.25
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.25
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.69
+        }
+    ],
+    "ind-1271": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.71
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.58
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.133
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.23
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Loss",
+            "round": 0.43
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.75
+        }
+    ],
+    "ind-1272": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.92
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 0.48
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.74
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.6
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.005
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.43
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Loss",
+            "round": 0.47
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.74
+        }
+    ],
+    "ind-1273": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.89
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.6
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.49
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.139
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.19
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.21
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.61
+        }
+    ],
+    "ind-1274": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.85
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 0.85
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.62
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.44
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.141
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.25
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Loss",
+            "round": 0.46
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.67
+        }
+    ],
+    "ind-1275": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.88
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.53
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.46
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.139
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Draw",
+            "round": 0.2
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.2
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.56
+        }
+    ],
+    "ind-1276": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Draw",
+            "round": 0.18
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.67
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.48
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.143
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.26
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Loss",
+            "round": 0.56
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.61
+        }
+    ],
+    "ind-1277": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.65
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 0.96
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.68
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.43
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.138
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.47
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Loss",
+            "round": 0.46
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.63
+        }
+    ],
+    "ind-1278": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Win",
+            "round": 0.68
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Loss",
+            "round": 0.66
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.48
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.145
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.25
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.31
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Draw",
+            "round": 1.0
+        }
+    ],
+    "ind-1280": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Loss",
+            "round": 0.85
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Loss",
+            "round": 1.0
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Draw",
+            "round": 0.27
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Draw",
+            "round": 0.13
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Loss",
+            "round": 0.53
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "round": 0.145
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Loss",
+            "round": 0.23
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "round": 0.4
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Draw",
+            "round": 0.11
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Loss",
+            "round": 0.64
+        }
+    ]
+}

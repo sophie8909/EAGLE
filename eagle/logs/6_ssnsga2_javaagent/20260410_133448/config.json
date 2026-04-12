@@ -1,0 +1,33 @@
+{
+    "algorithm": "steady_state_nsga2",
+    "population_size": 20,
+    "num_generations": 50,
+    "mutation_rate": 0.1,
+    "strategy_mutation_pool_replacement_prob": 0.4,
+    "strategy_mutation_identity_preserving_rewrite_prob": 0.35,
+    "strategy_mutation_identity_shift_rewrite_prob": 0.15,
+    "strategy_mutation_crossover_repair_rewrite_prob": 0.1,
+    "selection_method": "random",
+    "tournament_size": 3,
+    "crossover_method": "uniform",
+    "environment_selection_method": "elitism",
+    "steady_state_surrogate_offspring_count": 4,
+    "steady_state_surrogate_selection_metric": "game_round_score",
+    "final_test_max_front": 1,
+    "run_time_per_game_sec": 500,
+    "real_eval_rate": 0.25,
+    "llm_interval": 1,
+    "resource_advantage_alpha": 2.0,
+    "resource_advantage_weights": {
+        "base": 10.0,
+        "worker": 1.0,
+        "light": 2.0,
+        "heavy": 2.0,
+        "ranged": 2.0,
+        "resource": 1.0
+    },
+    "surrogate_version": "policy",
+    "surrogate_recent_log_window": 10,
+    "surrogate_game_round_samples": 10,
+    "surrogate_log_dir": "logs"
+}

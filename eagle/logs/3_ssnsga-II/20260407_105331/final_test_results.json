@@ -1,0 +1,158 @@
+{
+    "ind-35": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Draw",
+            "resource_advantage": 0.0
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "resource_advantage": -0.028050326704102978
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Draw",
+            "resource_advantage": 0.04743028994967878
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Draw",
+            "resource_advantage": 0.050999543559659154
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Draw",
+            "resource_advantage": 0.053328475246072066
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "resource_advantage": 0.0
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Draw",
+            "resource_advantage": -0.01620192131708374
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "resource_advantage": 0.028496584798018046
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Win",
+            "resource_advantage": -0.0007879703575563977
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Draw",
+            "resource_advantage": -0.006255418659488718
+        }
+    ],
+    "ind-37": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Draw",
+            "resource_advantage": 0.058178226530697444
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "resource_advantage": -0.008096642663034082
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Draw",
+            "resource_advantage": 0.05646893844781584
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Draw",
+            "resource_advantage": 0.05659627123039563
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Draw",
+            "resource_advantage": 0.05333764204492333
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "resource_advantage": 0.0
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Draw",
+            "resource_advantage": -0.006962024842912034
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "resource_advantage": 0.029518465919744767
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Win",
+            "resource_advantage": 0.007197486666002461
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Draw",
+            "resource_advantage": 0.0
+        }
+    ],
+    "ind-42": [
+        {
+            "opponent": "ai.RandomBiasedAI",
+            "result": "Draw",
+            "resource_advantage": -0.011745213949114765
+        },
+        {
+            "opponent": "ai.RandomAI",
+            "result": "Draw",
+            "resource_advantage": -0.02247898692594972
+        },
+        {
+            "opponent": "ai.PassiveAI",
+            "result": "Draw",
+            "resource_advantage": 0.049771074739055794
+        },
+        {
+            "opponent": "ai.abstraction.HeavyRush",
+            "result": "Draw",
+            "resource_advantage": 0.05081406027000761
+        },
+        {
+            "opponent": "ai.abstraction.LightRush",
+            "result": "Draw",
+            "resource_advantage": 0.02941042272114118
+        },
+        {
+            "opponent": "ai.abstraction.ollama",
+            "result": "Draw",
+            "resource_advantage": -0.004611349877909982
+        },
+        {
+            "opponent": "ai.abstraction.HybridLLMRush",
+            "result": "Draw",
+            "resource_advantage": -0.04770437630428705
+        },
+        {
+            "opponent": "ai.abstraction.StrategicLLMAgent",
+            "result": "Draw",
+            "resource_advantage": 0.029821213688701446
+        },
+        {
+            "opponent": "ai.abstraction.TurtleDefense",
+            "result": "Win",
+            "resource_advantage": -0.0008326061572590564
+        },
+        {
+            "opponent": "ai.abstraction.BoomEconomy",
+            "result": "Draw",
+            "resource_advantage": -0.005739805379348145
+        }
+    ]
+}

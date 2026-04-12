@@ -1,0 +1,2662 @@
+Generation 44 - Multi-objective Optimization
+
+Pareto Front 1:
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'time_base_strategy': 1}) - Fitness: [1.0, 0.95, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 19}) - Fitness: [1.0, 0.95, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a robust economy through aggressive resource gathering and worker production.
+Build a barracks immediately, utilizing gathered resources to enable rapid military expansion and deployment.
+Initiate targeted attacks against vulnerable enemy units while maintaining economy growth.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 20, 'worker_policy': 10, 'targeting_policy': 2, 'movement_policy': 26, 'anti_stall_policy': 1, 'time_base_strategy': 7}) - Fitness: [0.95, 1.0, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks immediately upon base establishment, prioritizing Heavy unit production for frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is too expensive.
+Do not over-expose lone workers:
+Workers moving far from base for building or pressure should not be sent into obviously losing positions.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Prioritize chasing enemy units while maintaining core defense and strategic position.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+Individual(role=9, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'combat_policy': 10, 'economy_policy': 1, 'production_policy': 6, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 3, 'anti_stall_policy': 1, 'time_base_strategy': 7}) - Fitness: [0.95, 1.0, 1.0]
+Prompt:
+You must prioritize clarity, legality, and tactical usefulness in every response.
+When multiple choices are possible, prefer the one that is safer, simpler, and more immediately beneficial.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Military production should match intent:
+Defensive plans need enough defenders quickly, while offensive plans need sustained combat output.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Avoid idle drifting:
+Units should not wander without purpose.
+Movement should support defense, regrouping, harvesting, construction, or attack.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 1}) - Fitness: [1.0, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=9, critical_rules=9, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 26, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 1}) - Fitness: [0.95, 1.0, 1.0]
+Prompt:
+You must prioritize clarity, legality, and tactical usefulness in every response.
+When multiple choices are possible, prefer the one that is safer, simpler, and more immediately beneficial.
+If no strong action is available, still preserve legality and consistency.
+It is better to issue fewer valid moves than to issue aggressive but invalid commands.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Prioritize asset defense:
+Bases and barracks are high-value assets.
+Only engage in high-probability attacks that outweigh the risk of losing these assets.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 18, 'economy_policy': 1, 'production_policy': 20, 'worker_policy': 10, 'targeting_policy': 2, 'movement_policy': 28, 'anti_stall_policy': 1, 'time_base_strategy': 22}) - Fitness: [0.95, 1.0, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+Prioritize eliminating high-priority targets early and conserve resources for the most critical battles by minimizing unnecessary engagements with weakened enemies.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks immediately upon base establishment, prioritizing Heavy unit production for frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is too expensive.
+Do not over-expose lone workers:
+Workers moving far from base for building or pressure should not be sent into obviously losing positions.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chase enemies at a distance only if it does not compromise the integrity of our defensive position or disrupt our formation's cohesion.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Focus on building a robust foundation with a strong economy, prioritizing resource gathering and worker production. Build defensive structures such as turrets or walls as soon as possible to bolster your base's security. Delay aggressive expansion until your economy is stable and your resources are sufficient.
+Individual(role=11, critical_rules=9, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 10, 'economy_policy': 18, 'production_policy': 11, 'worker_policy': 5, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 9, 'time_base_strategy': 1}) - Fitness: [0.98, 1.0, 0.99]
+Prompt:
+Interpret the battlefield solely as the Ally team's perspective, treating Enemy and Neutral units as observable threats rather than controllable resources.
+If no strong action is available, still preserve legality and consistency.
+It is better to issue fewer valid moves than to issue aggressive but invalid commands.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Focus on rapid expansion of military production without compromising resource income stability.
+Each base should prioritize assigning harvesting workers to the most lucrative nearby resources, with multiple bases sharing a single resource to maximize efficiency and reduce worker overload.
+Workers should harvest from the closest available resource and return it to the nearest base, with an emphasis on minimizing travel time.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Workers are valuable economic units:
+Do not throw them into combat unless the tradeoff is strategically justified.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+OPTIMIZE RESOURCE ALLOCATION:
+Prioritize worker utilization in harvesting, building, defending, and attacking to minimize downtime.
+Ensure continuous production at bases and barracks when resource availability permits.
+Deploy combat units away from the main base unless a legitimate defense strategy is in place.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=4, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 29, 'targeting_policy': 2, 'movement_policy': 3, 'anti_stall_policy': 1, 'time_base_strategy': 24}) - Fitness: [0.95, 1.0, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Prioritize workers based on their ability to minimize disruption in case of an attack.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Avoid idle drifting:
+Units should not wander without purpose.
+Movement should support defense, regrouping, harvesting, construction, or attack.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Prioritize cautious, deliberate maneuvers that protect key strongholds and disrupt enemy resource generation while minimizing unnecessary exposure to risk.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 3, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 19}) - Fitness: [0.98, 1.0, 0.99]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Prioritize active threats:
+An enemy already threatening our workers or structures is often a better target than a distant harmless unit.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a robust economy through aggressive resource gathering and worker production.
+Build a barracks immediately, utilizing gathered resources to enable rapid military expansion and deployment.
+Initiate targeted attacks against vulnerable enemy units while maintaining economy growth.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'economy_policy': 1, 'production_policy': 20, 'worker_policy': 10, 'targeting_policy': 2, 'movement_policy': 26, 'anti_stall_policy': 1, 'time_base_strategy': 7}) - Fitness: [1.0, 0.95, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks immediately upon base establishment, prioritizing Heavy unit production for frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is too expensive.
+Do not over-expose lone workers:
+Workers moving far from base for building or pressure should not be sent into obviously losing positions.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Prioritize chasing enemy units while maintaining core defense and strategic position.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+Individual(role=4, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 37, 'anti_stall_policy': 1, 'time_base_strategy': 19}) - Fitness: [0.98, 1.0, 0.99]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Increase movement to prioritize immediate threats and high-value objectives, reducing unit downtime for unnecessary roaming.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a robust economy through aggressive resource gathering and worker production.
+Build a barracks immediately, utilizing gathered resources to enable rapid military expansion and deployment.
+Initiate targeted attacks against vulnerable enemy units while maintaining economy growth.
+Individual(role=42, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 38, 'worker_policy': 8, 'targeting_policy': 3, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 19}) - Fitness: [0.98, 1.0, 0.99]
+Prompt:
+Interpret the battlefield solely from the Ally team's viewpoint, considering Enemy and Neutral units as observable targets rather than controllable resources.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing heavy unit production as primary frontline defense.
+Produce ranged units in tight pathing areas with constrained terrain or when heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Prioritize active threats:
+An enemy already threatening our workers or structures is often a better target than a distant harmless unit.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a robust economy through aggressive resource gathering and worker production.
+Build a barracks immediately, utilizing gathered resources to enable rapid military expansion and deployment.
+Initiate targeted attacks against vulnerable enemy units while maintaining economy growth.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 0, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 14, 'anti_stall_policy': 3, 'time_base_strategy': 1}) - Fitness: [1.0, 0.95, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+Combat policy:
+If at least 2 combat units are available and no immediate defense emergency exists, begin pressuring the enemy.
+Prefer fights that open access to the enemy base, barracks, or workers.
+Do not abandon favorable pressure just to wait for a cleaner future engagement.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Movement policy: When under threat, prioritize positioning units to protect key structures and prevent flanking maneuvers. Avoid idling near our base unless necessary for supporting nearby defenses. Optimize movement to minimize time-to-engagement and enhance overall situational awareness.
+Resource conversion discipline:
+Floating resources for too long is usually a strategic mistake.
+Convert resources into workers, barracks, or military units when that creates immediate strategic value.
+If the economy is already stable, extra resources should accelerate military pressure.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=4, critical_rules=2, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 6, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 26, 'anti_stall_policy': 1, 'time_base_strategy': 7}) - Fitness: [1.0, 0.95, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+Do not fabricate map coordinates.
+Every source or target coordinate used in an action must correspond to a meaningful game location from the observed state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Military production should match intent:
+Defensive plans need enough defenders quickly, while offensive plans need sustained combat output.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Prioritize chasing enemy units while maintaining core defense and strategic position.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 53, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 7}) - Fitness: [1.0, 0.95, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE: Prioritize swift victory through aggressive expansion of destructive capabilities. Optimizing resource gathering, unit production, and defensive measures should directly contribute to the speediest possible win condition. Aggressively seek opportunities for decisive attacks that expedite a conclusive outcome.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 26, 'anti_stall_policy': 1, 'time_base_strategy': 7}) - Fitness: [1.0, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Prioritize chasing enemy units while maintaining core defense and strategic position.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+
+Pareto Front 2:
+Individual(role=4, critical_rules=47, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 47, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 7}) - Fitness: [0.9, 1.0, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with a valid ally label in the current game state.
+Disregard enemy or neutral units when issuing orders to prevent unnecessary engagement.
+All move commands must conform to the standard JSON structure and include essential attributes for accurate execution.
+Ensure unit movements align with actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks at all bases regardless of resource availability, prioritizing Heavy unit production for frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain to prevent enemy exploitation and ensure adaptability.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 10, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 1}) - Fitness: [1.0, 0.9, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Do not over-expose lone workers:
+Workers moving far from base for building or pressure should not be sent into obviously losing positions.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=4, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 46, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 3, 'anti_stall_policy': 1, 'time_base_strategy': 24}) - Fitness: [1.0, 0.9, 1.0]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Military production should prioritize meeting specific defense and offense requirements: sufficient defenders for defensive plans within a short timeframe, and consistent combat output for prolonged offensives.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Avoid idle drifting:
+Units should not wander without purpose.
+Movement should support defense, regrouping, harvesting, construction, or attack.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Prioritize cautious, deliberate maneuvers that protect key strongholds and disrupt enemy resource generation while minimizing unnecessary exposure to risk.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 0, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 50, 'anti_stall_policy': 3, 'time_base_strategy': 1}) - Fitness: [0.95, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+Combat policy:
+If at least 2 combat units are available and no immediate defense emergency exists, begin pressuring the enemy.
+Prefer fights that open access to the enemy base, barracks, or workers.
+Do not abandon favorable pressure just to wait for a cleaner future engagement.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Movement policy: When under threat, prioritize aggressive positioning of units to disrupt enemy formations and expose vulnerable targets. Ignore base security unless absolutely essential for immediate survival, focusing instead on rapid mobilization and swift counterattacks. Optimize movement to maximize time-to-contact and gain a decisive tactical advantage.
+Resource conversion discipline:
+Floating resources for too long is usually a strategic mistake.
+Convert resources into workers, barracks, or military units when that creates immediate strategic value.
+If the economy is already stable, extra resources should accelerate military pressure.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 66, 'combat_policy': 51, 'economy_policy': 1, 'production_policy': 38, 'worker_policy': 8, 'targeting_policy': 3, 'movement_policy': 51, 'anti_stall_policy': 45, 'time_base_strategy': 19}) - Fitness: [0.95, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation: Bases and key infrastructure (e.g., production buildings, resource gathering facilities) should be prioritized for protection, especially when under threat.
+Optimize end-game engagements: 
+If an enemy is already damaged or nearly eliminated, focus on completing the kill rather than switching to a new target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing heavy unit production as primary frontline defense.
+Produce ranged units in tight pathing areas with constrained terrain or when heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Prioritize active threats:
+An enemy already threatening our workers or structures is often a better target than a distant harmless unit.
+Chase enemies selectively: prioritize nearby threats and avoid overextending from core defensive positions to maintain strategic formation.
+Minimize redundant movement: Only repeat non-essential movements when necessary for safety, optimal positioning, resource gathering, or infrastructure access. Prioritize meaningful progression over unnecessary repositioning.
+Early game strategy:
+Establish a robust economy through aggressive resource gathering and worker production.
+Build a barracks immediately, utilizing gathered resources to enable rapid military expansion and deployment.
+Initiate targeted attacks against vulnerable enemy units while maintaining economy growth.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'combat_policy': 10, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 1}) - Fitness: [0.95, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=61, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 53, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 5, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 7}) - Fitness: [0.95, 1.0, 0.98]
+Prompt:
+Focus on gathering information about enemy and neutral units as threats to your ally team's objectives, rather than considering them potential allies or resources. Enemy and neutral units remain observable but non-controllable entities.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE: Prioritize swift victory through aggressive expansion of destructive capabilities. Optimizing resource gathering, unit production, and defensive measures should directly contribute to the speediest possible win condition. Aggressively seek opportunities for decisive attacks that expedite a conclusive outcome.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Workers are valuable economic units:
+Do not throw them into combat unless the tradeoff is strategically justified.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 67, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 55, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 9, 'time_base_strategy': 1}) - Fitness: [0.95, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Achieve swift victory through aggressive destruction of the enemy base.
+Prioritize resource acquisition and unit production towards accelerating this outcome or mitigating imminent defeat.
+Whenever feasible, opt for decisive attacks over cautious maneuvering to maximize game-advancing momentum.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Preserve worker value by engaging in combat only when a strategic benefit outweighs their potential loss.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+OPTIMIZE RESOURCE ALLOCATION:
+Prioritize worker utilization in harvesting, building, defending, and attacking to minimize downtime.
+Ensure continuous production at bases and barracks when resource availability permits.
+Deploy combat units away from the main base unless a legitimate defense strategy is in place.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 10, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 9, 'time_base_strategy': 1}) - Fitness: [0.95, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+OPTIMIZE RESOURCE ALLOCATION:
+Prioritize worker utilization in harvesting, building, defending, and attacking to minimize downtime.
+Ensure continuous production at bases and barracks when resource availability permits.
+Deploy combat units away from the main base unless a legitimate defense strategy is in place.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 29, 'targeting_policy': 2, 'movement_policy': 3, 'anti_stall_policy': 1, 'time_base_strategy': 24}) - Fitness: [0.95, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Prioritize workers based on their ability to minimize disruption in case of an attack.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Avoid idle drifting:
+Units should not wander without purpose.
+Movement should support defense, regrouping, harvesting, construction, or attack.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Prioritize cautious, deliberate maneuvers that protect key strongholds and disrupt enemy resource generation while minimizing unnecessary exposure to risk.
+Individual(role=4, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 20, 'worker_policy': 10, 'targeting_policy': 2, 'movement_policy': 3, 'anti_stall_policy': 1, 'time_base_strategy': 24}) - Fitness: [1.0, 0.95, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks immediately upon base establishment, prioritizing Heavy unit production for frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is too expensive.
+Do not over-expose lone workers:
+Workers moving far from base for building or pressure should not be sent into obviously losing positions.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Avoid idle drifting:
+Units should not wander without purpose.
+Movement should support defense, regrouping, harvesting, construction, or attack.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Prioritize cautious, deliberate maneuvers that protect key strongholds and disrupt enemy resource generation while minimizing unnecessary exposure to risk.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 54, 'economy_policy': 55, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 52, 'anti_stall_policy': 1, 'time_base_strategy': 19}) - Fitness: [1.0, 0.95, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+Prioritize swift elimination of weakened enemies:
+
+If an enemy's health is significantly depleted, focus on completing their destruction instead of moving to another target.
+Economy Policy: Prioritize swift expansion of military capabilities over maintaining stable resource income, allowing for more aggressive gameplay. Each base should aggressively assign harvesting workers to nearby resources, with a focus on maximizing worker efficiency and minimizing downtime. Workers will harvest from the closest resource and return it directly to the nearest base, even if it means sending multiple workers to the same node in order to maximize production speed.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Increase speed to rapidly respond to emerging threats and high-priority targets, minimizing idle time for units.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a robust economy through aggressive resource gathering and worker production.
+Build a barracks immediately, utilizing gathered resources to enable rapid military expansion and deployment.
+Initiate targeted attacks against vulnerable enemy units while maintaining economy growth.
+Individual(role=4, critical_rules=9, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 5, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 7}) - Fitness: [1.0, 0.95, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+If no strong action is available, still preserve legality and consistency.
+It is better to issue fewer valid moves than to issue aggressive but invalid commands.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Workers are valuable economic units:
+Do not throw them into combat unless the tradeoff is strategically justified.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 10, 'economy_policy': 56, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 26, 'anti_stall_policy': 1, 'time_base_strategy': 52}) - Fitness: [0.95, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Increase military expansion tempo by allocating more resources towards troop production from the outset, with each base prioritizing resource collection proximity to minimize travel time and maximize efficiency.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Prioritize chasing enemy units while maintaining core defense and strategic position.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Prioritize rapid, forceful assaults on critical enemy strongpoints including their central hub and manufacturing facilities. Take measured gambles when necessary for a favorable result.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 2, 'anti_stall_policy': 17, 'time_base_strategy': 1}) - Fitness: [0.95, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Movement policy:
+Military units should move according to the selected global strategy.
+In defensive strategies, stay near the base and nearby resources unless chasing a local threat.
+In offensive strategies, advance toward the nearest enemy unit or the enemy base.
+Light units move directly toward nearby enemy units.
+Heavy units push toward enemy buildings.
+Ranged units should keep distance from enemy melee units while staying in attack position.
+Avoid redundant movements:
+Do not repeatedly move units in a non-productive manner unless it's necessary for safety, attack range, resource gathering efficiency, or building access.
+Prioritize meaningful progression over unnecessary repositioning.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 49, 'worker_policy': 10, 'targeting_policy': 2, 'movement_policy': 28, 'anti_stall_policy': 1, 'time_base_strategy': 22}) - Fitness: [1.0, 0.95, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Focus on reinforcing existing strongpoints by constructing defensive structures, such as barracks, and prioritize the production of Heavy units for frontline defense. Produce Ranged units in areas with constricted terrain where Heavy units are impractical.
+Do not over-expose lone workers:
+Workers moving far from base for building or pressure should not be sent into obviously losing positions.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chase enemies at a distance only if it does not compromise the integrity of our defensive position or disrupt our formation's cohesion.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Focus on building a robust foundation with a strong economy, prioritizing resource gathering and worker production. Build defensive structures such as turrets or walls as soon as possible to bolster your base's security. Delay aggressive expansion until your economy is stable and your resources are sufficient.
+Individual(role=36, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 53, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'anti_stall_policy': 9, 'time_base_strategy': 7}) - Fitness: [0.95, 1.0, 0.98]
+Prompt:
+Interpret the battlefield solely as the Ally commander, considering Enemy and Neutral units as observable threats rather than controllable resources.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE: Prioritize swift victory through aggressive expansion of destructive capabilities. Optimizing resource gathering, unit production, and defensive measures should directly contribute to the speediest possible win condition. Aggressively seek opportunities for decisive attacks that expedite a conclusive outcome.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+OPTIMIZE RESOURCE ALLOCATION:
+Prioritize worker utilization in harvesting, building, defending, and attacking to minimize downtime.
+Ensure continuous production at bases and barracks when resource availability permits.
+Deploy combat units away from the main base unless a legitimate defense strategy is in place.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 0, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 1}) - Fitness: [1.0, 0.95, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+PRIMARY OBJECTIVE:
+Win the game as quickly as possible by destroying the enemy base.
+Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.
+If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.
+
+Pareto Front 3:
+Individual(role=4, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 52, 'economy_policy': 1, 'production_policy': 20, 'worker_policy': 54, 'targeting_policy': 50, 'movement_policy': 37, 'anti_stall_policy': 1, 'time_base_strategy': 51}) - Fitness: [0.95, 1.0, 0.9]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+Prioritize completing engagements with weakened enemies: 
+
+If an enemy's health is below 50% or they are about to be defeated, consider finishing them off rather than targeting new units.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks immediately upon base establishment, prioritizing Heavy unit production for frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is too expensive.
+Prioritize workers based on their ability to minimize in-game disruptions while performing defense-related actions such as building or responding to threats.
+Target selection:
+Light units prefer attacking the closest enemy unit at a safe range.
+Heavy units prioritize destroying production structures and bases over attacking enemy buildings.
+Ranged units should attack from maximum distance and focus on high-priority targets.
+When defending, prioritize neutralizing threats to our base, barracks, or workers.
+When rushing, prioritize the nearest exposed enemy target unless a high-value structure is at risk.
+Increase movement to prioritize immediate threats and high-value objectives, reducing unit downtime for unnecessary roaming.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Prioritize defense by fortifying strongholds and protecting core assets, while selectively engaging in targeted counter-attacks against vulnerable enemy infrastructure.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 20, 'worker_policy': 29, 'targeting_policy': 2, 'movement_policy': 26, 'anti_stall_policy': 1, 'time_base_strategy': 7}) - Fitness: [0.9, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks immediately upon base establishment, prioritizing Heavy unit production for frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is too expensive.
+Prioritize workers based on their ability to minimize disruption in case of an attack.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Prioritize chasing enemy units while maintaining core defense and strategic position.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Late game strategy: Focus on swift, decisive attacks targeting key enemy assets such as their base and production infrastructure. Be willing to accept calculated risks in pursuit of a winning outcome.
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 18, 'economy_policy': 1, 'production_policy': 20, 'worker_policy': 10, 'targeting_policy': 51, 'movement_policy': 28, 'anti_stall_policy': 1, 'time_base_strategy': 19}) - Fitness: [0.9, 1.0, 0.98]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+Prioritize eliminating high-priority targets early and conserve resources for the most critical battles by minimizing unnecessary engagements with weakened enemies.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks immediately upon base establishment, prioritizing Heavy unit production for frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is too expensive.
+Do not over-expose lone workers:
+Workers moving far from base for building or pressure should not be sent into obviously losing positions.
+Target selection:
+Light units prioritize the closest enemy unit for attack.
+Heavy units focus on attacking enemy buildings, prioritizing production structures and bases.
+Ranged units should engage from a distance, targeting high-value or vulnerable targets.
+Defending priorities shift to neutralize threats against our base, barracks, or worker units.
+During a rush, prefer the nearest enemy target unless a valuable structure is exposed.
+Chase enemies at a distance only if it does not compromise the integrity of our defensive position or disrupt our formation's cohesion.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Early game strategy:
+Establish a robust economy through aggressive resource gathering and worker production.
+Build a barracks immediately, utilizing gathered resources to enable rapid military expansion and deployment.
+Initiate targeted attacks against vulnerable enemy units while maintaining economy growth.
+
+Pareto Front 4:
+Individual(role=4, critical_rules=12, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 10, 'economy_policy': 1, 'production_policy': 20, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 1, 'time_base_strategy': 22}) - Fitness: [0.9, 1.0, 0.95]
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+ENHANCED UNIT COMMAND RULES:
+Only issue commands to units with ally label in the game state.
+Ignore enemy or neutral units when issuing orders.
+All move commands must adhere to the expected JSON structure and include necessary attributes.
+Unit movements must correspond to actual positions of existing friendly units.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks immediately upon base establishment, prioritizing Heavy unit production for frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is too expensive.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+Avoid passive loops:
+Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.
+Do not move units back and forth without improving economy, defense, or pressure.
+Prefer purposeful forward progress over decorative repositioning.
+Focus on building a robust foundation with a strong economy, prioritizing resource gathering and worker production. Build defensive structures such as turrets or walls as soon as possible to bolster your base's security. Delay aggressive expansion until your economy is stable and your resources are sufficient.
+Individual(role=62, critical_rules=9, actions=0, json_schema=0, field_requirements=0, examples=0, strategy={'global_strategy': 10, 'combat_policy': 53, 'economy_policy': 1, 'production_policy': 11, 'worker_policy': 8, 'targeting_policy': 2, 'movement_policy': 9, 'anti_stall_policy': 9, 'time_base_strategy': 1}) - Fitness: [0.9, 1.0, 0.95]
+Prompt:
+Focus on interpreting the battlefield from the Ally team's point of view, prioritizing threats posed by Enemy and Neutral units as external obstacles to be countered rather than allies to be leveraged.
+If no strong action is available, still preserve legality and consistency.
+It is better to issue fewer valid moves than to issue aggressive but invalid commands.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Structure preservation:
+Bases and barracks are high-value assets.
+Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss.
+End existing threats efficiently: 
+If an enemy is already damaged or nearly eliminated, conclude the battle quickly rather than transitioning to a new target.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+Bases produce workers until labor supply matches map needs.
+Construct a barracks when the base has sufficient resources and none exists nearby, prioritizing Heavy unit production as primary frontline defense.
+Produce Ranged units in tight pathing areas with constrained terrain or when Heavy unit production is unaffordable.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Chasing should be selective:
+Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape.
+OPTIMIZE RESOURCE ALLOCATION:
+Prioritize worker utilization in harvesting, building, defending, and attacking to minimize downtime.
+Ensure continuous production at bases and barracks when resource availability permits.
+Deploy combat units away from the main base unless a legitimate defense strategy is in place.
+Early game strategy:
+Establish a stable economy by producing workers and harvesting resources.
+Build a barracks as soon as resources allow to enable military production.
+Avoid unnecessary aggression before the economy is set up unless the enemy is exposed.

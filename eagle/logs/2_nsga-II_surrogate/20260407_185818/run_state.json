@@ -1,0 +1,1250 @@
+{
+  "algorithm": "nsga2",
+  "phase": "generation_real_eval",
+  "generation": 27,
+  "log_dir": "logs/20260407_185818",
+  "population": [
+    {
+      "id": "ind-253",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 8,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 5,
+        "opening_strategy": 1,
+        "targeting_policy": 1,
+        "movement_policy": 9,
+        "anti_stall_policy": 3,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07230552494422457,
+        0.8876957494407159
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8973019905388355e-05,
+        "mutation_time": 9.902985766530037e-06,
+        "EA_operator_time": 2.8876005671918392e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": Infinity
+    },
+    {
+      "id": "ind-565",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 25,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 0,
+        "opening_strategy": 1,
+        "targeting_policy": 1,
+        "movement_policy": 4,
+        "anti_stall_policy": 3,
+        "time_base_strategy": 1
+      },
+      "fitness": [
+        0.8,
+        0.06325899279180969,
+        0.8158580528374063
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.770199742168188e-05,
+        "mutation_time": 0.23272924206685275,
+        "EA_operator_time": 0.23274694406427443,
+        "ea_llm_call_time": 0.2327115209773183
+      },
+      "pareto_rank": 0,
+      "crowding_distance": Infinity,
+      "ea_llm_call_time": 0.2327115209773183
+    },
+    {
+      "id": "ind-715",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 8,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "opening_strategy": 1,
+        "targeting_policy": 1,
+        "movement_policy": 9,
+        "anti_stall_policy": 3,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        1.0,
+        0.06380100965556383,
+        0.7787589498806683
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8671038560569286e-05,
+        "mutation_time": 6.627989932894707e-06,
+        "EA_operator_time": 2.5299028493463993e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": Infinity
+    },
+    {
+      "id": "ind-919",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 30,
+        "worker_policy": 2,
+        "harassment_policy": 0,
+        "opening_strategy": 9,
+        "targeting_policy": 6,
+        "movement_policy": 32,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 27
+      },
+      "fitness": [
+        -0.3,
+        0.07572266468095724,
+        0.7946496948924784
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.2791093215346336e-05,
+        "mutation_time": 0.3522300829645246,
+        "EA_operator_time": 0.35225287405774,
+        "ea_llm_call_time": 0.352211507037282
+      },
+      "pareto_rank": 0,
+      "crowding_distance": Infinity,
+      "ea_llm_call_time": 0.352211507037282
+    },
+    {
+      "id": "ind-543",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 22,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 14,
+        "worker_policy": 9,
+        "harassment_policy": 0,
+        "opening_strategy": 9,
+        "targeting_policy": 6,
+        "movement_policy": 32,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.8,
+        0.07610712498404795,
+        0.7896073903002309
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.3290980607271194e-05,
+        "mutation_time": 0.5996884900378063,
+        "EA_operator_time": 0.5997117810184136,
+        "ea_llm_call_time": 0.5996585739776492
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.12347903027962664,
+      "ea_llm_call_time": 0.5996585739776492
+    },
+    {
+      "id": "ind-963",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 25,
+        "opening_strategy": 31,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 3,
+        "time_base_strategy": 1
+      },
+      "fitness": [
+        -0.3,
+        0.07260030844010648,
+        0.8419329026876203
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8161023035645485e-05,
+        "mutation_time": 0.528920158976689,
+        "EA_operator_time": 0.5289383199997246,
+        "ea_llm_call_time": 0.5289028378902003
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.7268642416657727,
+      "ea_llm_call_time": 0.5289028378902003
+    },
+    {
+      "id": "ind-1011",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "worker_policy": 9,
+        "harassment_policy": 19,
+        "opening_strategy": 4,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 18
+      },
+      "fitness": [
+        0.8,
+        0.07194982722316362,
+        0.8096102328523073
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8353108316659927e-05,
+        "mutation_time": 6.422051228582859e-06,
+        "EA_operator_time": 2.4775159545242786e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.69274278038507
+    },
+    {
+      "id": "ind-695",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 26,
+        "combat_policy": 1,
+        "economy_policy": 26,
+        "production_policy": 30,
+        "worker_policy": 24,
+        "harassment_policy": 0,
+        "opening_strategy": 1,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.0,
+        0.07549313040794109,
+        0.797080787100715
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8922961317002773e-05,
+        "mutation_time": 0.9565235699992627,
+        "EA_operator_time": 0.9565424929605797,
+        "ea_llm_call_time": 0.9564845149870962
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.6912836282497496,
+      "ea_llm_call_time": 0.9564845149870962
+    },
+    {
+      "id": "ind-1041",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 31,
+        "combat_policy": 8,
+        "economy_policy": 6,
+        "production_policy": 14,
+        "worker_policy": 9,
+        "harassment_policy": 0,
+        "opening_strategy": 1,
+        "targeting_policy": 6,
+        "movement_policy": 1,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07420632496413626,
+        0.8386515698704734
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.842598430812359e-05,
+        "mutation_time": 9.612995199859142e-06,
+        "EA_operator_time": 2.803897950798273e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.3112924697417219
+    },
+    {
+      "id": "ind-865",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 25,
+        "opening_strategy": 9,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 1
+      },
+      "fitness": [
+        0.8,
+        0.0728950919359884,
+        0.7961700559345247
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.5619985535740852e-05,
+        "mutation_time": 0.27554049505852163,
+        "EA_operator_time": 0.27556611504405737,
+        "ea_llm_call_time": 0.2755221499828622
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.1417545252869662,
+      "ea_llm_call_time": 0.2755221499828622
+    },
+    {
+      "id": "ind-1081",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 26,
+        "production_policy": 30,
+        "worker_policy": 9,
+        "harassment_policy": 0,
+        "opening_strategy": 9,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07569026947585439,
+        0.7952556027378049
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.358201891183853e-05,
+        "mutation_time": 8.560949936509132e-06,
+        "EA_operator_time": 3.2142968848347664e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.031821544752689376,
+      "ea_llm_call_time": 0.0
+    },
+    {
+      "id": "ind-345",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 14,
+        "worker_policy": 9,
+        "harassment_policy": 0,
+        "opening_strategy": 9,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.8,
+        0.07610712498404795,
+        0.7896073903002309
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.4731969460844994e-05,
+        "mutation_time": 1.2352014891803265e-05,
+        "EA_operator_time": 3.708398435264826e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": Infinity
+    },
+    {
+      "id": "ind-995",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "economy_policy": 26,
+        "production_policy": 30,
+        "worker_policy": 2,
+        "harassment_policy": 0,
+        "opening_strategy": 4,
+        "targeting_policy": 6,
+        "movement_policy": 32,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07527341396766082,
+        0.800903815175379
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.6988953575491905e-05,
+        "mutation_time": 6.4159976318478584e-06,
+        "EA_operator_time": 2.3404951207339764e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.09538302624808982
+    },
+    {
+      "id": "ind-1019",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 14,
+        "worker_policy": 24,
+        "harassment_policy": 0,
+        "opening_strategy": 1,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07580012769599452,
+        0.7933440887004729
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.83590454980731e-05,
+        "mutation_time": 7.175956852734089e-06,
+        "EA_operator_time": 2.553500235080719e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.07620995227658749,
+      "ea_llm_call_time": 0.0
+    },
+    {
+      "id": "ind-937",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 26,
+        "combat_policy": 1,
+        "economy_policy": 26,
+        "production_policy": 14,
+        "worker_policy": 24,
+        "harassment_policy": 0,
+        "opening_strategy": 4,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07482416325436442,
+        0.8071579354582796
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.649403177201748e-05,
+        "mutation_time": 7.870025001466274e-06,
+        "EA_operator_time": 3.436405677348375e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.07233270432719996
+    },
+    {
+      "id": "ind-659",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 14,
+        "worker_policy": 2,
+        "harassment_policy": 19,
+        "opening_strategy": 4,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 7,
+        "time_base_strategy": 18
+      },
+      "fitness": [
+        0.5,
+        0.07462782845720012,
+        0.810514995356953
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.860898919403553e-05,
+        "mutation_time": 0.6754823180381209,
+        "EA_operator_time": 0.6755009270273149,
+        "ea_llm_call_time": 0.6754525969736278
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.09316170373896662,
+      "ea_llm_call_time": 0.6754525969736278
+    },
+    {
+      "id": "ind-1035",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 19,
+        "worker_policy": 2,
+        "harassment_policy": 0,
+        "opening_strategy": 9,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 30
+      },
+      "fitness": [
+        0.5,
+        0.07509242903489921,
+        0.8040740401540403
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8273945897817612e-05,
+        "mutation_time": 0.3278660799842328,
+        "EA_operator_time": 0.3278843539301306,
+        "ea_llm_call_time": 0.3278497529681772
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.057836448710639164,
+      "ea_llm_call_time": 0.3278497529681772
+    },
+    {
+      "id": "ind-1071",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 2,
+        "harassment_policy": 0,
+        "opening_strategy": 31,
+        "targeting_policy": 6,
+        "movement_policy": 32,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07503819069651724,
+        0.805209920693202
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.4870969355106354e-05,
+        "mutation_time": 6.46000262349844e-06,
+        "EA_operator_time": 3.1330971978604794e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.04918878103637525
+    },
+    {
+      "id": "ind-1075",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 5,
+        "opening_strategy": 1,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07420632496413626,
+        0.8386515698704734
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.7888960428535938e-05,
+        "mutation_time": 7.843016646802425e-06,
+        "EA_operator_time": 2.5731977075338364e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.04159327825013604,
+      "ea_llm_call_time": 0.0
+    },
+    {
+      "id": "ind-1055",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 25,
+        "opening_strategy": 31,
+        "targeting_policy": 6,
+        "movement_policy": 32,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07435371671207722,
+        0.8157701464939255
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.7860904335975647e-05,
+        "mutation_time": 6.199930794537067e-06,
+        "EA_operator_time": 2.4060835130512714e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "pareto_rank": 0,
+      "crowding_distance": 0.3126231422243244
+    }
+  ],
+  "offspring": [
+    {
+      "id": "ind-1115",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 43,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 5,
+        "opening_strategy": 31,
+        "targeting_policy": 1,
+        "movement_policy": 9,
+        "anti_stall_policy": 3,
+        "time_base_strategy": 33
+      },
+      "fitness": [
+        0.5,
+        -0.01449969472980803,
+        0.6701388888888888
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.7770991437137127e-05,
+        "mutation_time": 0.8294561479706317,
+        "EA_operator_time": 0.8294839189620689,
+        "ea_llm_call_time": 0.8294219019589946
+      },
+      "ea_llm_call_time": 0.8294219019589946
+    },
+    {
+      "id": "ind-1117",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 8,
+        "economy_policy": 42,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 5,
+        "opening_strategy": 1,
+        "targeting_policy": 1,
+        "movement_policy": 9,
+        "anti_stall_policy": 22,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07245291669216553,
+        0.8648143260641681
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8216902390122414e-05,
+        "mutation_time": 0.6372393019264564,
+        "EA_operator_time": 0.6372575188288465,
+        "ea_llm_call_time": 0.6372103231260553
+      },
+      "ea_llm_call_time": 0.6372103231260553
+    },
+    {
+      "id": "ind-1137",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 8,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 5,
+        "opening_strategy": 31,
+        "targeting_policy": 1,
+        "movement_policy": 52,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.0733296208281509,
+        0.8517329479673208
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.856300514191389e-05,
+        "mutation_time": 0.2523691590176895,
+        "EA_operator_time": 0.25238772202283144,
+        "ea_llm_call_time": 0.25232995802070946
+      },
+      "ea_llm_call_time": 0.25232995802070946
+    },
+    {
+      "id": "ind-1133",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 25,
+        "opening_strategy": 37,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 24,
+        "time_base_strategy": 18
+      },
+      "fitness": [
+        0.5,
+        0.07227506783163505,
+        0.8257715677699637
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.9906088709831238e-05,
+        "mutation_time": 0.7407160189468414,
+        "EA_operator_time": 0.7407359250355512,
+        "ea_llm_call_time": 0.7406876169843599
+      },
+      "ea_llm_call_time": 0.7406876169843599
+    },
+    {
+      "id": "ind-1129",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 14,
+        "worker_policy": 2,
+        "harassment_policy": 0,
+        "opening_strategy": 1,
+        "targeting_policy": 6,
+        "movement_policy": 1,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07441707671066819,
+        0.8245832826137132
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.855392474681139e-05,
+        "mutation_time": 6.587011739611626e-06,
+        "EA_operator_time": 2.5140936486423016e-05,
+        "ea_llm_call_time": 0.0
+      }
+    },
+    {
+      "id": "ind-1101",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 26,
+        "production_policy": 30,
+        "worker_policy": 2,
+        "harassment_policy": 25,
+        "opening_strategy": 4,
+        "targeting_policy": 6,
+        "movement_policy": 32,
+        "anti_stall_policy": 20,
+        "time_base_strategy": 1
+      },
+      "fitness": [
+        0.5,
+        0.07393686120388365,
+        0.8214183589314996
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.3280968889594078e-05,
+        "mutation_time": 0.5266090510413051,
+        "EA_operator_time": 0.5266323320101947,
+        "ea_llm_call_time": 0.5265905279666185
+      },
+      "ea_llm_call_time": 0.5265905279666185
+    },
+    {
+      "id": "ind-1139",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 31,
+        "combat_policy": 8,
+        "economy_policy": 26,
+        "production_policy": 46,
+        "worker_policy": 36,
+        "harassment_policy": 0,
+        "opening_strategy": 4,
+        "targeting_policy": 26,
+        "movement_policy": 1,
+        "anti_stall_policy": 25,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07473986946589854,
+        0.8197776925229262
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.7400016076862812e-05,
+        "mutation_time": 1.9796493530739099,
+        "EA_operator_time": 1.9796667530899867,
+        "ea_llm_call_time": 1.979600268881768
+      },
+      "ea_llm_call_time": 1.979600268881768
+    },
+    {
+      "id": "ind-1119",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 8,
+        "economy_policy": 6,
+        "worker_policy": 9,
+        "harassment_policy": 25,
+        "opening_strategy": 1,
+        "targeting_policy": 6,
+        "movement_policy": 1,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07355070845006233,
+        0.8174108129024991
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.7955084331333637e-05,
+        "mutation_time": 6.862916052341461e-06,
+        "EA_operator_time": 2.48180003836751e-05,
+        "ea_llm_call_time": 0.0
+      }
+    },
+    {
+      "id": "ind-1127",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 25,
+        "opening_strategy": 31,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "time_base_strategy": 1
+      },
+      "fitness": [
+        0.5,
+        0.07435371671207722,
+        0.8157701464939255
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.779396552592516e-05,
+        "mutation_time": 6.5480126067996025e-06,
+        "EA_operator_time": 2.4341978132724762e-05,
+        "ea_llm_call_time": 0.0
+      }
+    },
+    {
+      "id": "ind-1113",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 25,
+        "economy_policy": 6,
+        "production_policy": 30,
+        "worker_policy": 9,
+        "harassment_policy": 0,
+        "opening_strategy": 1,
+        "targeting_policy": 1,
+        "movement_policy": 4,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.8,
+        0.06937606159987539,
+        0.8064694199690606
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8225982785224915e-05,
+        "mutation_time": 6.046961061656475e-06,
+        "EA_operator_time": 2.427294384688139e-05,
+        "ea_llm_call_time": 0.0
+      }
+    },
+    {
+      "id": "ind-1105",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 25,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 0,
+        "opening_strategy": 9,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 21,
+        "time_base_strategy": 1
+      },
+      "fitness": [
+        0.5,
+        0.06807704236389904,
+        0.8060140543859655
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.4437904357910156e-05,
+        "mutation_time": 0.43534170696511865,
+        "EA_operator_time": 0.43536614486947656,
+        "ea_llm_call_time": 0.4353219729382545
+      },
+      "ea_llm_call_time": 0.4353219729382545
+    },
+    {
+      "id": "ind-1107",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 30,
+        "worker_policy": 15,
+        "harassment_policy": 0,
+        "opening_strategy": 1,
+        "targeting_policy": 22,
+        "movement_policy": 32,
+        "anti_stall_policy": 3,
+        "time_base_strategy": 1
+      },
+      "fitness": [
+        0.5,
+        0.06949082873638346,
+        0.8052538738649424
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.6206020265817642e-05,
+        "mutation_time": 1.3477052561938763e-05,
+        "EA_operator_time": 3.9683072827756405e-05,
+        "ea_llm_call_time": 0.0
+      }
+    },
+    {
+      "id": "ind-1131",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 25,
+        "opening_strategy": 4,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 1
+      },
+      "fitness": [
+        0.5,
+        0.072422459579576,
+        0.802890144393416
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8202001228928566e-05,
+        "mutation_time": 6.237998604774475e-06,
+        "EA_operator_time": 2.443999983370304e-05,
+        "ea_llm_call_time": 0.0
+      }
+    },
+    {
+      "id": "ind-1103",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "economy_policy": 6,
+        "production_policy": 14,
+        "worker_policy": 9,
+        "harassment_policy": 25,
+        "opening_strategy": 9,
+        "targeting_policy": 6,
+        "movement_policy": 32,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07523042084806258,
+        0.8026887683970783
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 2.5138957425951958e-05,
+        "mutation_time": 9.855953976511955e-06,
+        "EA_operator_time": 3.499491140246391e-05,
+        "ea_llm_call_time": 0.0
+      }
+    },
+    {
+      "id": "ind-1109",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 30,
+        "worker_policy": 2,
+        "harassment_policy": 19,
+        "opening_strategy": 4,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 27
+      },
+      "fitness": [
+        0.8,
+        0.07383624595206043,
+        0.8021299638723929
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8391059711575508e-05,
+        "mutation_time": 6.7249638959765434e-06,
+        "EA_operator_time": 2.511602360755205e-05,
+        "ea_llm_call_time": 0.0
+      }
+    },
+    {
+      "id": "ind-1125",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 14,
+        "worker_policy": 9,
+        "harassment_policy": 0,
+        "opening_strategy": 9,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07402847610360579,
+        0.7996088115762691
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8088030628859997e-05,
+        "mutation_time": 7.977010682225227e-06,
+        "EA_operator_time": 2.6065041311085224e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "ea_llm_call_time": 0.0
+    },
+    {
+      "id": "ind-1135",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 1,
+        "economy_policy": 6,
+        "production_policy": 30,
+        "worker_policy": 2,
+        "harassment_policy": 0,
+        "opening_strategy": 38,
+        "targeting_policy": 6,
+        "movement_policy": 51,
+        "anti_stall_policy": 2,
+        "time_base_strategy": 27
+      },
+      "fitness": [
+        0.5,
+        0.07572266468095724,
+        0.7946496948924784
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.7991987988352776e-05,
+        "mutation_time": 0.6266360479639843,
+        "EA_operator_time": 0.6266540399519727,
+        "ea_llm_call_time": 0.6266079399501905
+      },
+      "ea_llm_call_time": 0.6266079399501905
+    },
+    {
+      "id": "ind-1123",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 35,
+        "combat_policy": 1,
+        "economy_policy": 26,
+        "production_policy": 14,
+        "worker_policy": 9,
+        "harassment_policy": 0,
+        "opening_strategy": 9,
+        "targeting_policy": 6,
+        "movement_policy": 9,
+        "anti_stall_policy": 23,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.07580012769599452,
+        0.7933440887004729
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.7583020962774754e-05,
+        "mutation_time": 0.9029786209575832,
+        "EA_operator_time": 0.902996203978546,
+        "ea_llm_call_time": 0.9029486590297893
+      },
+      "ea_llm_call_time": 0.9029486590297893
+    },
+    {
+      "id": "ind-1121",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 8,
+        "economy_policy": 11,
+        "production_policy": 11,
+        "harassment_policy": 0,
+        "opening_strategy": 1,
+        "targeting_policy": 1,
+        "movement_policy": 9,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.5,
+        0.06980056867577918,
+        0.7860515192905706
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.946196425706148e-05,
+        "mutation_time": 1.0323012247681618e-05,
+        "EA_operator_time": 2.97849765047431e-05,
+        "ea_llm_call_time": 0.0
+      }
+    },
+    {
+      "id": "ind-1111",
+      "game_rule": 0,
+      "strategy": {
+        "global_strategy": 7,
+        "combat_policy": 8,
+        "economy_policy": 6,
+        "production_policy": 11,
+        "worker_policy": 9,
+        "harassment_policy": 0,
+        "opening_strategy": 1,
+        "targeting_policy": 1,
+        "movement_policy": 9,
+        "anti_stall_policy": 3,
+        "time_base_strategy": 3
+      },
+      "fitness": [
+        0.8,
+        0.06995406731980588,
+        0.7841831700904496
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "crossover_time": 1.8818071112036705e-05,
+        "mutation_time": 8.134986273944378e-06,
+        "EA_operator_time": 2.6953057385981083e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "ea_llm_call_time": 0.0
+    }
+  ],
+  "meta": {
+    "candidate_order_ids": [
+      "ind-1115",
+      "ind-1117",
+      "ind-1137",
+      "ind-1133",
+      "ind-1129",
+      "ind-1101",
+      "ind-1139",
+      "ind-1119",
+      "ind-1127",
+      "ind-1113",
+      "ind-1105",
+      "ind-1107",
+      "ind-1131",
+      "ind-1103",
+      "ind-1109",
+      "ind-1125",
+      "ind-1135",
+      "ind-1123",
+      "ind-1121",
+      "ind-1111"
+    ],
+    "next_real_eval_index": 1,
+    "real_eval_budget": 5
+  }
+}

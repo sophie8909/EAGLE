@@ -1,0 +1,76 @@
+Generation 11
+Best Individual: Individual(role=1, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[11, 10, 0, 12, 1, 6, 10])
+Prompt:
+You are responsible for choosing actions for all controllable Ally units at the current timestep.
+You must reason from the current game state only and produce valid commands for this turn.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Optimize production flow:
+Maintain consistent resource generation by utilizing existing base and barrack infrastructure, avoiding prolonged idle periods that can hinder progress and create opportunities for the opponent.
+Minimize dispersed engagements by having multiple combat units concentrate their efforts against high-priority proximal targets, thereby conserving resources and maximizing overall effectiveness.
+Economy policy:
+Maintain a stable resource income before expanding military production.
+Each base should maintain harvesting workers assigned to nearby resources.
+Workers should harvest the closest resource and return it to the closest base.
+Avoid sending too many workers to the same resource node.
+Production policy:
+The base should dynamically adjust worker production based on the current worker count in relation to the desired threshold.
+If no barracks exists, allocate a worker to construct one when resources permit and it aligns with the global strategy.
+Barracks should produce units according to the chosen global strategy, adapting to changing circumstances as needed.
+In Worker Defense and Worker Rush, barracks tend to prioritize Light unit production.
+In Military Defense, barracks should dynamically adjust production based on current needs and enemy composition, allocating resources to counter vulnerabilities.
+In Military Rush, focus production on military units while sustaining a strong offensive posture and maintaining adaptability.
+Worker behavior:
+Workers primarily gather resources and support the economy.
+If no barracks exists and resources allow, one worker may build a barracks.
+Under Worker Defense, prioritize worker production and resource gathering.
+Under Worker Rush, workers may scout, pressure nearby enemies, or join attacks when the opportunity is good.
+Workers should attack enemies only if they are nearby or when the current strategy explicitly allows aggressive worker use.
+Value nearby efficiency:
+A reachable target that can be attacked immediately is often better than a theoretically higher-value but distant target.
+Chase enemies selectively, weighing distance against defensive needs to maintain core defenses and spatial awareness.
+Fitness: 1.6570833333333335
+
+Population:
+Individual(role=1, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[11, 10, 0, 12, 1, 6, 10]) - Fitness: 1.6570833333333335
+Individual(role=1, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[11, 8, 7, 6, 11, 6, 11]) - Fitness: 1.6570833333333335
+Individual(role=11, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[3, 8, 7, 8, 1, 7, 5]) - Fitness: 1.65
+Individual(role=1, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[8, 10, 0, 1, 1, 6, 10]) - Fitness: 1.65
+Individual(role=0, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[11, 8, 7, 7, 1, 7, 4]) - Fitness: 1.6466666666666665
+Individual(role=0, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[11, 10, 7, 7, 1, 16, 4]) - Fitness: 1.6466666666666665
+Individual(role=0, critical_rules=7, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[11, 10, 7, 7, 11, 6, 11]) - Fitness: 1.63625
+Individual(role=1, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[11, 5, 7, 6, 11, 6, 11]) - Fitness: 1.6330434782608694
+Individual(role=0, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[11, 8, 9, 7, 11, 17, 4]) - Fitness: 1.6258333333333335
+Individual(role=0, critical_rules=14, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[11, 8, 7, 7, 11, 16, 4]) - Fitness: 1.6258333333333335

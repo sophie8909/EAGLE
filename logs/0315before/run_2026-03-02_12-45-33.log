@@ -1,0 +1,414 @@
+----------Game Settings----------
+Running as Server: STANDALONE
+Server Address: localhost
+Server Port: 9898
+Serialization Type: 2
+Map Location: maps/8x8/basesWorkers8x8.xml
+Max Cycles: 5000
+Partially Observable: false
+Rules Version: 2
+Conflict Policy: 1
+AI1: ai.abstraction.StrategicLLMAgent
+AI2: ai.RandomBiasedAI
+------------------------------------------------
+ 166  gmu3r2g   searching for Move flow of UnittypeTable  : -> rts.units.UnitTypeTable PGSAI 
+ maxCycles --> 5000
+ headless --> true
+ updateInterval --> 50
+ partiallyObservable --> false
+ in this 3 file AIWithComputationBudget ai.abstraction.StrategicLLMAgent  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.StrategicLLMAgent  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.WorkerRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.WorkerRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.LightRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.LightRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.HeavyRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.HeavyRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.RangedRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.RangedRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.TurtleDefense  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.TurtleDefense  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.BoomEconomy  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.BoomEconomy  1 second class  nd mg546924 45 AStarPathFinding
+[StrategicLLMAgent] Initialized with model=llama3.1:8b, base_interval=200, combat_interval=100, initial_strategy=LIGHT_RUSH
+ in this 3 file AIWithComputationBudget ai.abstraction.StrategicLLMAgent  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.StrategicLLMAgent  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.WorkerRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.WorkerRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.LightRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.LightRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.HeavyRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.HeavyRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.RangedRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.RangedRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.TurtleDefense  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.TurtleDefense  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.BoomEconomy  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.BoomEconomy  1 second class  nd mg546924 45 AStarPathFinding
+[StrategicLLMAgent] Initialized with model=llama3.1:8b, base_interval=200, combat_interval=100, initial_strategy=LIGHT_RUSH
+ -->in Game rts gmu3r2g 43    StrategicLLMAgent(model=llama3.1:8b, strategy=LIGHT_RUSH, aggression=0.50, economy=0.50, retreat=0.30, target=BASE, changes=0, consultations=0, errors=0)
+ -->in Game rts gmu3r2g 54    RandomBiasedAI
+ ai1 --> StrategicLLMAgent(model=llama3.1:8b, strategy=LIGHT_RUSH, aggression=0.50, economy=0.50, retreat=0.30, target=BASE, changes=0, consultations=0, errors=0)
+ ai1 --> RandomBiasedAI
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+[StrategicLLMAgent] T=0: Updated params - strategy=LIGHT_RUSH, aggression=0.60, economy=0.40, retreat=0.20, target=ARMY
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): produce(up,Barracks)
+Assigned Harvest to unit: Worker(8)(0, (1,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 20) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 0)=ai.abstraction.Harvest@180bc464}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+[StrategicLLMAgent] T=170: Updated params - strategy=LIGHT_RUSH, aggression=0.65, economy=0.45, retreat=0.20, target=WORKERS
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Barracks(11)(0, (1,0), 4, 0): produce(right,Light)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+[StrategicLLMAgent] T=270: Updated params - strategy=LIGHT_RUSH, aggression=0.80, economy=0.20, retreat=0.40, target=ARMY
+[StrategicLLMAgent] T=270: Retreating! Switching to COUNTER_ATTACK
+[StrategicLLMAgent] T=270: Strategy switch LIGHT_RUSH -> COUNTER_ATTACK
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+Assigned Harvest to unit: Worker(8)(0, (0,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 17) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (0,1), 1, 0)=ai.abstraction.Harvest@6537cf78}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (2,0), 4, 0): move(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,0), 4, 0): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,1), 4, 0): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,2), 4, 0): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,3), 4, 0): attack_location(4,3)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,3), 4, 0): move(down)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,4), 4, 0): attack_location(3,5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,4), 4, 0): move(down)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,4), 4, 0): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,4), 4, 0): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Barracks(11)(0, (1,0), 4, 0): produce(right,Heavy)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,5), 4, 0): attack_location(3,6)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,5), 4, 0): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,6), 4, 0): attack_location(4,6)
+[StrategicLLMAgent] T=370: Strategy switch COUNTER_ATTACK -> LIGHT_RUSH
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+[StrategicLLMAgent] T=370: Updated params - strategy=LIGHT_RUSH, aggression=0.50, economy=0.60, retreat=0.20, target=WORKERS
+Assigned Harvest to unit: Worker(8)(0, (0,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 15) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (0,1), 1, 0)=ai.abstraction.Harvest@34b7bfc0}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+ gmu3r2g : Final UnitAction for Light(16)(0, (3,6), 4, 0): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (4,6), 4, 0): attack_location(5,6)
+ gmu3r2g : Final UnitAction for Light(16)(0, (4,6), 4, 0): attack_location(5,6)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (4,6), 4, 0): attack_location(5,6)
+ gmu3r2g : Final UnitAction for Light(16)(0, (4,6), 3, 0): attack_location(5,6)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Light(16)(0, (4,6), 2, 0): attack_location(5,6)
+ gmu3r2g : Final UnitAction for Light(16)(0, (4,6), 1, 0): attack_location(4,7)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+ gmu3r2g : Final UnitAction for Light(16)(0, (4,6), 1, 0): move(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (5,6), 1, 0): attack_location(6,6)
+ gmu3r2g : Final UnitAction for Light(16)(0, (5,6), 1, 0): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (6,6), 1, 0): attack_location(7,6)
+ gmu3r2g : Final UnitAction for Light(16)(0, (6,6), 1, 0): move(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (6,5), 1, 0): attack_location(7,5)
+ gmu3r2g : Final UnitAction for Light(16)(0, (6,5), 1, 0): move(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Light(16)(0, (6,4), 1, 0): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+ gmu3r2g : Final UnitAction for Light(16)(0, (7,4), 1, 0): move(left)
+[StrategicLLMAgent] T=470: Updated params - strategy=LIGHT_RUSH, aggression=0.80, economy=0.50, retreat=0.35, target=WORKERS
+ gmu3r2g : Final UnitAction for Barracks(11)(0, (1,0), 4, 0): produce(down,Light)
+ gmu3r2g : Final UnitAction for Heavy(19)(0, (2,0), 8, 0): move(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (6,4), 1, 0): attack_location(6,3)
+ gmu3r2g : Final UnitAction for Light(16)(0, (6,4), 1, 0): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(down)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(down)
+ gmu3r2g : Final UnitAction for Heavy(19)(0, (3,0), 8, 0): move(right)
+ gmu3r2g : Final UnitAction for Light(16)(0, (5,4), 1, 0): move(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,2), 1, 1)
+Resources carried: 1
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,2), 1, 1): move(right)
+ gmu3r2g : Final UnitAction for Heavy(19)(0, (4,0), 8, 0): move(down)
+ gmu3r2g : Final UnitAction for Light(16)(0, (5,3), 1, 0): move(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,2), 1, 1)
+Resources carried: 1
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,2), 1, 1): move(right)
+ gmu3r2g : Final UnitAction for Heavy(19)(0, (4,1), 8, 0): attack_location(5,1)
+ gmu3r2g : Final UnitAction for Light(16)(0, (5,2), 1, 0): attack_location(5,1)
+
+=== GAME RESULT ===
+FINAL_TICK: 505
+WINNER: 0
+Player 0 wins!
+===================

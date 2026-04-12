@@ -1,0 +1,1400 @@
+{
+    "actions": [
+        [
+            "There are 6 available actions:",
+            "- `move` - Unit will move to target location.",
+            "    - Arguments: ((Target_x, Target_y))",
+            "- `train` - Unit will train the provided unit type (only bases and barracks can use this action).",
+            "    - Arguments: (Unit_Type)",
+            "- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).",
+            "    - Arguments: ((Target_x, Target_y), Building_Type)",
+            "- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.",
+            "    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))",
+            "- `attack` - Unit will navigate to, and attack the target enemy.",
+            "    - Arguments: ((Enemy_x, Enemy_y))",
+            "- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.",
+            "    - Arguments: ()"
+        ]
+    ],
+    "game_rules": [
+        [
+            "GAME RULES:",
+            "Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.",
+            "Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.",
+            "Players can only assign actions to their ally units.",
+            "There are 6 available actions:",
+            "move((Target_x, Target_y))",
+            "- Move unit to target location",
+            "train(Unit_Type)",
+            "- Train a unit (Base and Barracks only)",
+            "build((Target_x, Target_y), Building_Type)",
+            "- Worker builds building",
+            "- Resources are consumed from Ally base",
+            "harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))",
+            "- Worker collects resources and returns to base",
+            "attack((Enemy_x, Enemy_y))",
+            "- Attack enemy unit",
+            "idle()",
+            "- Do nothing this turn",
+            "WIN CONDITION:",
+            "- Destroy all enemy units and buildings"
+        ]
+    ],
+    "unit_types": [
+        [
+            "UNIT TYPES:",
+            "worker:",
+            "- HP: 1",
+            "- Cost: 1",
+            "- Damage: 1",
+            "- Range: 1",
+            "- Speed: 1",
+            "- Abilities: gather resources, build base, build barracks",
+            "- Trained by: base",
+            "light:",
+            "- HP: 4",
+            "- Cost: 2",
+            "- Damage: 2",
+            "- Range: 1",
+            "- Speed: 2",
+            "- Abilities: fast attacker",
+            "Trained by: barracks",
+            "heavy:",
+            "- HP: 8",
+            "- Cost: 3",
+            "- Damage: 4",
+            "- Range: 1",
+            "- Speed: 1",
+            "- Abilities: tank unit",
+            "Trained by: barracks",
+            "ranged:",
+            "- HP: 3",
+            "- Cost: 2",
+            "- Damage: 1",
+            "- Range: 3",
+            "- Speed: 1",
+            "- Abilities: long range attacker",
+            "- Trained by: barracks"
+        ]
+    ],
+    "building_types": [
+        [
+            "BUILDING TYPES:",
+            "base:",
+            "- HP: 10",
+            "- Cost: 10",
+            "- Abilities: train workers, store resources",
+            "barracks:",
+            "- HP: 5",
+            "- Cost: 5",
+            "- Abilities: train light, heavy, ranged units"
+        ]
+    ],
+    "strategy_guide": [
+        [
+            "SUGGESTED STRATEGY:",
+            "Early Game:",
+            "- Harvest nonstop",
+            "- Build barracks at 5 resources",
+            "Mid Game:",
+            "- Train army",
+            "- Hunt enemy workers",
+            "- Protect barracks",
+            "Late Game:",
+            "- Group attack",
+            "- Destroy production buildings",
+            "- Control resources"
+        ]
+    ],
+    "game_state_format": [
+        [
+            "GAME STATE FORMAT:",
+            "Map size is given",
+            "Feature locations list all units and buildings",
+            "Coordinates are zero-indexed",
+            "Units and buildings have properties:",
+            "- HP",
+            "- resources",
+            "- current_action",
+            "- available",
+            "available = true means unit can receive command"
+        ]
+    ],
+    "raw_move_format": [
+        [
+            "RAW MOVE FORMAT:",
+            "(X, Y): Unit_Type Action(Action_Arguments)",
+            "X: unit x position",
+            "Y: unit y position",
+            "Unit_Type: worker, light, heavy, ranged, base, barracks",
+            "Action: move, train, build, harvest, attack, idle",
+            "Action_Arguments: arguments for action"
+        ]
+    ],
+    "json_schema": [
+        [
+            "REQUIRED JSON FORMAT:",
+            "{",
+            "  \"thinking\": \"Brief strategy\",",
+            "  \"moves\": [",
+            "    {",
+            "      \"raw_move\": \"(x, y): unit_type action((args))\",",
+            "      \"unit_position\": [x, y],",
+            "      \"unit_type\": \"worker\",",
+            "      \"action_type\": \"harvest\"",
+            "    }",
+            "  ]",
+            "}"
+        ]
+    ],
+    "field_requirements": [
+        [
+            "EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:",
+            "- raw_move: string like \"(2, 0): worker harvest((0, 0), (2, 1))\"",
+            "- unit_position: [x, y] array matching your Ally unit position",
+            "- unit_type: \"worker\", \"base\", \"barracks\", \"light\", \"heavy\", or \"ranged\"",
+            "- action_type: \"move\", \"harvest\", \"train\", \"build\", or \"attack\""
+        ]
+    ],
+    "examples": [
+        [
+            "VALID MOVE EXAMPLES:",
+            "{\"raw_move\": \"(1, 1): worker harvest((0, 0), (2, 1))\", \"unit_position\": [1, 1], \"unit_type\": \"worker\", \"action_type\": \"harvest\"}",
+            "{\"raw_move\": \"(2, 1): base train(worker)\", \"unit_position\": [2, 1], \"unit_type\": \"base\", \"action_type\": \"train\"}",
+            "{\"raw_move\": \"(1, 1): worker attack((5, 6))\", \"unit_position\": [1, 1], \"unit_type\": \"worker\", \"action_type\": \"attack\"}",
+            "{\"raw_move\": \"(1, 1): worker move((3, 3))\", \"unit_position\": [1, 1], \"unit_type\": \"worker\", \"action_type\": \"move\"}",
+            "{\"raw_move\": \"(1, 1): worker build((3, 3), barracks)\", \"unit_position\": [1, 1], \"unit_type\": \"worker\", \"action_type\": \"build\"}"
+        ]
+    ],
+    "strategy": {
+        "global_strategy": [
+            [
+                "PRIMARY OBJECTIVE:",
+                "Win the game as quickly as possible by destroying the enemy base.",
+                "Resource collection, unit production, and defense are only valuable if they lead to faster victory or prevent immediate loss.",
+                "If a realistic attack opportunity exists, prefer game-ending pressure over passive optimization."
+            ],
+            [
+                "Aggressive phase transition:",
+                "Harvest immediately in the early game and stabilize minimum economy first.",
+                "Build one barracks as soon as resources allow.",
+                "After a barracks exists, shift priority from additional economy toward sustained military production.",
+                "Once at least 2 combat units are available, begin attacking instead of waiting for a perfect army."
+            ],
+            [
+                "Do not stall for ideal conditions:",
+                "Do not keep accumulating resources without spending them when useful production or pressure is available.",
+                "Do not delay attacks only to build a larger army.",
+                "Do not overproduce workers once resource income is stable for current production needs."
+            ],
+            [
+                "Base-kill orientation:",
+                "If the enemy base location is known, prioritize plans that create direct pressure on the enemy base.",
+                "Enemy production structures and economy are more valuable targets than random distant skirmishes.",
+                "Convert local military advantage into forward pressure instead of prolonged waiting."
+            ],
+            [
+                "STRATEGY:",
+                "At every timestep decide actions using the following priority order.",
+                "Always resolve immediate combat threats before economy or expansion.",
+                "Maintain a balance between military pressure and economic production.",
+                "Avoid leaving units idle whenever possible."
+            ],
+            [
+                "Global strategy selection:",
+                "At every decision step first observe the current game state before choosing actions.",
+                "Extract information about worker count, military count, number of bases and barracks, available resources, distance to the nearest enemy unit, distance to the enemy base, distance to the nearest resource, and whether enemy units are near our base.",
+                "Choose between four global strategies: Worker Defense, Military Defense, Worker Rush, and Military Rush.",
+                "Use defensive strategies when enemy units are close to our base, our army is smaller than the enemy army, or our resources are low.",
+                "Use offensive strategies when our army is equal to or larger than the enemy army and we can pressure the enemy effectively.",
+                "Prefer worker-based strategies when worker count is low or the economy still needs expansion.",
+                "Prefer military-based strategies when worker count is sufficient, a barracks already exists, or sustained military production is needed."
+            ],
+            [
+                "Threat-first planning:",
+                "Before expanding economy or attacking, check whether our workers, base, or barracks are under immediate danger.",
+                "If so, redirect nearby units to stabilize the position first."
+            ],
+            [
+                "Economy-versus-pressure balance:",
+                "Do not overcommit all units to attack if doing so collapses resource gathering.",
+                "Do not overcommit all workers to economy if the enemy can freely pressure our structures."
+            ],
+            [
+                "Map-aware strategy choice:",
+                "On smaller maps or close-spawn situations, aggressive strategies become stronger and should be considered earlier.",
+                "On larger maps, maintain stronger economy before full commitment."
+            ],
+            [
+                "Production continuity:",
+                "A strong strategy keeps production active over time.",
+                "Try to avoid long periods where bases or barracks could produce but remain unused."
+            ],
+            [
+                "Structure preservation:",
+                "Bases and barracks are high-value assets.",
+                "Protect production buildings when threatened unless a decisive attack opportunity clearly outweighs the loss."
+            ],
+            [
+                "Pressure timing:",
+                "Attack when units can arrive together or when the enemy is exposed.",
+                "Avoid sending isolated combat units into unfavorable fights without support."
+            ],
+            [
+                "Opportunity exploitation:",
+                "If the enemy base, barracks, or workers are poorly defended, shift toward immediate pressure.",
+                "Punish exposed economy or production whenever it is safe and efficient."
+            ],
+            [
+                "Adaptive control:",
+                "Do not follow one plan blindly.",
+                "Re-evaluate the battlefield every timestep and switch between defense, development, and offense when the state changes."
+            ],
+            [
+                "Aggressive phase transition:",
+                "Harvest immediately in the early game and establish a stable minimum economy first.",
+                "Construct one barracks as soon as resource accumulation permits.",
+                "After a barracks is built, prioritize sustained military production over additional economic expansion.",
+                "Once at least 2 combat units are available, initiate attacks rather than waiting for a perfectly balanced army."
+            ],
+            [
+                "Prioritize defense by immediately responding to threats against key structures before pursuing economic growth or launching attacks."
+            ],
+            [
+                "Aggressive Counterplay: ",
+                "If an enemy base, barracks, or worker deployment appears vulnerable, transition to aggressive expansion. Prioritize targeting exposed resources or production capabilities when feasible."
+            ],
+            [
+                "Global strategy selection:",
+                "At every decision step first observe the current game state before choosing actions.",
+                "Extract information about worker count, military count, number of bases and barracks, available resources, distance to the nearest enemy unit, distance to the enemy base, distance to the nearest resource, and whether enemy units are near our base.",
+                "Prioritize defensive strategies when enemy proximity is detected or resource disparities exist."
+            ],
+            [
+                "Aggressive Phase Transition Strategy:",
+                "Establish an initial stable minimum economy by harvesting immediately in the early game and accumulating sufficient resources to permit construction of one barracks.",
+                "Prioritize sustained military production over additional economic expansion after constructing a single barracks.",
+                "Initiate attacks with at least 2 combat units available, rather than waiting for a perfectly balanced army."
+            ],
+            [
+                "Aggressively prioritize resource expenditure and combat opportunities over reserve accumulation."
+            ],
+            [
+                "Prioritize resource management: ",
+                "",
+                " Allocate resources efficiently, avoiding unnecessary accumulation and focusing on maintaining a stable supply for current needs.",
+                " Delay attacks if it means building a stronger foundation or exploiting advantageous opportunities."
+            ],
+            [
+                "PRIMARY OBJECTIVE:",
+                "Achieve swift victory by prioritizing destruction of the enemy base. Resource management, unit production, and defensive efforts should be optimized to expedite this goal and minimize potential setbacks. Whenever feasible, capitalize on realistic opportunities for decisive action over incremental gains."
+            ],
+            [
+                "Harvest minimally to maintain a stable economy in the early game and prioritize building defenses such as barracks before shifting resources towards military production."
+            ],
+            [
+                "Avoid unnecessary resource accumulation and focus on applying them in response to emerging threats or opportunities."
+            ],
+            [
+                "PRIMARY OBJECTIVE:",
+                "Achieve decisive victory through swift destruction of the enemy base, prioritizing aggressive maneuvers that maximize pressure on the opponent's core infrastructure over resource management and defensive measures unless imminent defeat is threatened."
+            ]
+        ],
+        "combat_policy": [
+            [
+                "Combat policy:",
+                "If at least 2 combat units are available and no immediate defense emergency exists, begin pressuring the enemy.",
+                "Prefer fights that open access to the enemy base, barracks, or workers.",
+                "Do not abandon favorable pressure just to wait for a cleaner future engagement."
+            ],
+            [
+                "Combat policy:",
+                "If an enemy is already within attack range, attack immediately.",
+                "Prefer attacks that eliminate units or damage high threat targets.",
+                "Do not retreat passively when the fight is favorable.",
+                "If an enemy will enter attack range next turn, consider holding position."
+            ],
+            [
+                "Combat policy:",
+                "If enemy units are near our base, prioritize defending nearby friendly structures and workers.",
+                "If using Worker Defense, military units stay near the base and defend against nearby threats.",
+                "If using Military Defense, defend the base and nearby resources while countering enemy unit types when possible.",
+                "If using Worker Rush, nearby enemies may be attacked aggressively by workers and fast units.",
+                "If using Military Rush, push combat units toward the enemy base and maintain offensive pressure.",
+                "When an enemy is already within attack range, attack immediately instead of drifting away."
+            ],
+            [
+                "Focus favorable trades:",
+                "Engage when our local force can win or efficiently damage a valuable enemy target.",
+                "Avoid taking fights that sacrifice units for little strategic gain."
+            ],
+            [
+                "Protect economy during combat:",
+                "If enemy units threaten harvesting workers, assign nearby defenders or workers to respond when necessary.",
+                "Do not let the economy collapse without resistance."
+            ],
+            [
+                "Use nearby units first:",
+                "When defending, prefer using the closest available units to respond quickly.",
+                "Do not pull distant units away if local defenders can handle the threat."
+            ],
+            [
+                "Commit when contact starts:",
+                "Once melee units are in a favorable engagement, continue pressure rather than dithering with unnecessary movement."
+            ],
+            [
+                "Avoid scattered skirmishing:",
+                "Multiple combat units should converge on nearby threats rather than splitting across low-value distant targets."
+            ],
+            [
+                "Punish exposed enemies:",
+                "Workers, ranged units, and unfinished production structures are vulnerable targets when they can be attacked safely."
+            ],
+            [
+                "Maintain frontline logic:",
+                "Heavy or durable units should absorb contact pressure first when possible.",
+                "Fragile or valuable units should not unnecessarily lead the fight."
+            ],
+            [
+                "End local threats cleanly:",
+                "If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target."
+            ],
+            [
+                "Prioritize protecting vulnerable assets: Workers, ranged units, and unfinished production structures should be shielded from harm whenever possible."
+            ],
+            [
+                "Combat policy: ",
+                "If at least 2 combat units are available and no immediate defense emergency exists, initiate aggressive action against the enemy.",
+                "Prioritize engagements that compromise key enemy infrastructure such as their base, barracks, or resource gathering capabilities.",
+                "Avoid relinquishing advantageous pressure to wait for a more favorable future opportunity."
+            ],
+            [
+                "Combat policy:",
+                "",
+                "If at least 3 combat units are available and no immediate defense emergency exists, launch an attack on key enemy infrastructure, prioritizing the base and resource production areas.",
+                "Prefer engagements that create opportunities for long-term damage or disruption of the enemy's economy.",
+                "Do not abandon a strong offense to wait for a more favorable future engagement."
+            ],
+            [
+                "Prioritize immediate unit deployment:",
+                "",
+                "When under attack, focus on utilizing nearby units for swift countermeasures.",
+                "Avoid overextending by recalling distant troops unless necessary."
+            ],
+            [
+                "Focus on minimizing losses:",
+                "Prioritize defense and avoid engaging in battles where our forces will suffer significant casualties for limited strategic benefits."
+            ],
+            [
+                "Combat policy:",
+                "",
+                "Prioritize defense and protect existing units.",
+                "Attack only if an enemy is already within attack range.",
+                "Prefer to counterattack against high threat targets.",
+                "Hold position if an enemy will enter attack range next turn."
+            ],
+            [
+                "Combat policy:",
+                "",
+                "Attack enemies within attack range as soon as possible and prioritize eliminating or damaging units with high threat values. Do not fall back unnecessarily while maintaining a favorable situation. Consider staying put if an enemy will reach attack range on the following turn."
+            ],
+            [
+                "Prioritize nearby units for defense:",
+                "",
+                "When threatened, focus on engaging the enemy with the closest units available to minimize response time. Only engage distant units if necessary and they are critical to preventing a breach."
+            ],
+            [
+                "Prioritize eliminating high-priority targets quickly: If an enemy is already severely damaged, focus on finishing it rather than diverting resources to a new target."
+            ],
+            [
+                "Combat policy:",
+                "Prioritize defensive positioning to maintain unit safety and survival.",
+                "Attack only if an enemy is already within attack range or will enter it next turn.",
+                "Prefer attacks that eliminate units or damage high threat targets when advantageous.",
+                "Do not abandon a favorable fight by retreating passively."
+            ],
+            [
+                "Prioritize efficient resource utilization and minimize unnecessary aggression: ",
+                "",
+                "If an enemy's health is already compromised, consider eliminating it before moving on to a new target."
+            ],
+            [
+                "Prioritize swift elimination of severely weakened enemies over pursuing new targets."
+            ],
+            [
+                "Combat policy: ",
+                "If an enemy is in attack range, prioritize immediate engagement. ",
+                "Prefer strikes that destroy or severely harm enemies. ",
+                "Hold ground unless facing overwhelming odds. ",
+                "Consider remaining stationary if an enemy will reach attack range soon."
+            ],
+            [
+                "Optimize terminal engagements: If an enemy is heavily damaged or on the brink of defeat, prioritize completing its elimination instead of shifting focus to another target."
+            ],
+            [
+                "Combat policy:",
+                "Attack enemies at optimal range to maximize damage output.",
+                "Prioritize engagements that destroy hostile units or severely threaten allies.",
+                "Maintain aggressive posture unless facing overwhelming odds; do not default to defensive stances when advantageous to press the attack.",
+                "Evaluate potential for flanking and positioning to gain a strategic advantage before engaging an enemy on next turn."
+            ],
+            [
+                "Attack enemies in range directly, prioritizing elimination and targeting threats. Hold ground when advantageous, as retreating may be counterproductive. Consider maintaining position if an enemy will soon reach combat distance."
+            ],
+            [
+                "Combat policy:",
+                "Prioritize defense when possible.",
+                "Attack only if an enemy is already within attack range or will enter it next turn.",
+                "Prefer attacks that eliminate units or damage high threat targets."
+            ],
+            [
+                "Prioritize eliminating high-priority targets: If an enemy is already damaged or nearly eliminated, focus on completing their destruction rather than reallocating resources to a new threat."
+            ]
+        ],
+        "economy_policy": [
+            [
+                "Economy policy:",
+                "Harvest immediately in the early game to establish stable income.",
+                "Keep enough workers to sustain production, but do not overproduce workers once the economy is stable.",
+                "After a barracks is active, additional economic growth is lower priority than converting income into military pressure."
+            ],
+            [
+                "Economy policy:",
+                "Maintain a stable resource income before expanding military production.",
+                "Each base should maintain harvesting workers assigned to nearby resources.",
+                "Workers should harvest the closest resource and return it to the closest base.",
+                "Avoid sending too many workers to the same resource node."
+            ],
+            [
+                "Economy policy:",
+                "Workers should gather resources whenever they are idle unless immediate defense is required.",
+                "Expand the worker economy when worker count is low or when resource income is not stable.",
+                "Maintain enough workers to support production in defense strategies.",
+                "In Military Rush, keep only the minimum worker economy needed to sustain unit production.",
+                "Harvest from the nearest available resource and return to the nearest base."
+            ],
+            [
+                "Protect harvesting flow:",
+                "A worker carrying or collecting resources should usually continue unless danger or a higher-priority task interrupts it."
+            ],
+            [
+                "Early economy matters:",
+                "If the map is not under immediate threat, prioritize setting up consistent harvesting before excessive aggression."
+            ],
+            [
+                "Avoid worker congestion:",
+                "Do not crowd too many workers onto the same path or resource if nearby alternatives exist."
+            ],
+            [
+                "Respect travel efficiency:",
+                "Prefer short harvesting loops that minimize walking distance between resource and base."
+            ],
+            [
+                "Replace lost workers when needed:",
+                "If worker count drops below a stable operating level, rebuild the economy unless survival requires pure defense."
+            ],
+            [
+                "Spend resources with purpose:",
+                "Do not float resources too long if workers or production structures could convert them into advantage."
+            ],
+            [
+                "Do not sacrifice all workers for offense:",
+                "Even aggressive strategies need enough economy to keep producing units."
+            ],
+            [
+                "Treat economy as strategic infrastructure:",
+                "Resource income is what sustains recovery, defense, and long-term pressure."
+            ],
+            [
+                "Economy policy: Harvest resources as soon as possible to ensure immediate revenue and set up a stable foundation for further expansion. Maintain a balance between worker production and resource gathering to avoid over-expansion. Once military capabilities are established with the activation of a barracks, prioritize transitioning excess funds towards bolstering military strength rather than solely pursuing economic growth."
+            ],
+            [
+                "Rebuild the economy only if the enemy is not at our gates, otherwise prioritize defending what we have left."
+            ],
+            [
+                "Replace lost workers aggressively when needed:",
+                "If worker count drops significantly below a stable operating level, prioritize rapid rebuilding of the economy at all costs if survival depends on it."
+            ],
+            [
+                "Do not overextend by sacrificing too many workers for offense: even the most aggressive strategies require sufficient economy to maintain unit production."
+            ],
+            [
+                "Avoid excessive unit production at the expense of worker loss:",
+                "",
+                "Aggressive strategies still require a stable economy to maintain unit production."
+            ],
+            [
+                "Improve path efficiency and resource allocation: Prioritize spreading workers across available paths and resources to minimize bottlenecks."
+            ],
+            [
+                "Prioritize rapid expansion over cautious resource gathering when the situation allows."
+            ],
+            [
+                "Optimize Resource Management:",
+                "",
+                "Maintain a stable resource income as a prerequisite for scaling up military production.",
+                "Assign harvesting workers to nearby resources, with each base responsible for its own workers.",
+                "Workers should collect from the nearest accessible resource and return it directly to their assigned base.",
+                "Implement worker distribution strategies to prevent overcrowding of individual resource nodes."
+            ],
+            [
+                "Avoid sacrificing an entire workforce in pursuit of an aggressive offense: Ensure that even the most assertive tactics maintain sufficient economic production to sustain unit creation."
+            ],
+            [
+                "Prioritize unit production and resource gathering over all-out offensive attacks, ensuring sufficient economic foundation remains intact."
+            ],
+            [
+                "Do not prioritize offense at the expense of worker survival: Aggressive strategies require a balanced economy to maintain production capabilities."
+            ],
+            [
+                "Economy policy:",
+                "Prioritize rapid expansion of military production over maintaining a stable resource income.",
+                "Assign more harvesting workers to nearby resources, especially those with high yield or scarcity.",
+                "Optimize worker routes to minimize travel time and maximize resource gathering efficiency by having them harvest the closest resource and return it directly to their assigned base.",
+                "Increase the number of workers sent to the same resource node to overwhelm available defenses."
+            ],
+            [
+                "Make the strategy prioritize offense over economy but still maintain sufficient unit production capacity."
+            ],
+            [
+                "Balance offense and economy: Sacrifice some workers for added aggression if it does not severely hinder unit production."
+            ],
+            [
+                "Optimize Resource Management:",
+                "",
+                "Maintain a stable resource income as a prerequisite for scaling up military production.",
+                "Assign harvesting workers to nearby resources, with each base responsible for its own workers.",
+                "Workers should collect from the nearest accessible resource and return it directly to their assigned base.",
+                "Implement defensive worker distribution strategies to minimize exposure and prevent overcrowding of individual resource nodes."
+            ]
+        ],
+        "production_policy": [
+            [
+                "Production policy:",
+                "Build one barracks as soon as resources allow and none exists.",
+                "After the barracks is built, prioritize producing combat units over further worker growth unless the economy is clearly unstable.",
+                "If at least 2 combat units can be fielded, prepare to pressure the enemy instead of waiting for a perfect composition."
+            ],
+            [
+                "Production policy:",
+                "Bases produce workers until the economy is stable for the map size.",
+                "Construct a barracks when the base has sufficient resources and none exists nearby.",
+                "Barracks should prioritize producing Heavy units as the primary frontline.",
+                "Produce Ranged units when pathing is narrow, terrain is constrained, or Heavy units are unaffordable."
+            ],
+            [
+                "Production policy:",
+                "The base should produce workers when worker count is below the desired threshold.",
+                "If no barracks exists, assign a worker to build one when resources allow.",
+                "Barracks should produce units according to the chosen global strategy.",
+                "In Worker Defense and Worker Rush, barracks tend to produce Light units.",
+                "In Military Defense, barracks should produce units based on current needs and enemy composition.",
+                "In Military Rush, focus production on military units and sustain offensive pressure.",
+                "Prioritize unit production that counters the enemy composition when possible."
+            ],
+            [
+                "Maintain production uptime:",
+                "If a base or barracks is idle and resources allow useful production, consider producing immediately."
+            ],
+            [
+                "Do not overbuild too early:",
+                "A barracks should usually be built after basic economy is functioning or when the situation clearly demands military access."
+            ],
+            [
+                "Worker production should be purposeful:",
+                "Keep producing workers until economy is sufficient, but avoid excessive worker count when military pressure is urgent."
+            ],
+            [
+                "Military production should match intent:",
+                "Defensive plans need enough defenders quickly, while offensive plans need sustained combat output."
+            ],
+            [
+                "React to enemy composition:",
+                "If the enemy emphasizes fragile units or workers, faster attackers may be effective.",
+                "If the enemy has exposed buildings, stronger push units gain value."
+            ],
+            [
+                "Preserve production capacity:",
+                "Do not leave barracks undefended if losing them would collapse future military output."
+            ],
+            [
+                "Use resources efficiently over time:",
+                "Steady unit production is often stronger than saving too long for a delayed reaction."
+            ],
+            [
+                "Support the chosen win condition:",
+                "All production choices should reinforce whether the current plan is defend, stabilize, pressure, or finish."
+            ],
+            [
+                "Preserve production capacity: ",
+                "",
+                "Maintain adequate defense for key infrastructure to prevent sudden losses in military output and production capabilities."
+            ],
+            [
+                "Do not rush to build barracks prematurely: Ensure a stable economy before constructing them, unless military needs necessitate earlier deployment."
+            ],
+            [
+                "Maintain defense uptime:",
+                "If a base or barracks is idle and resources allow useful deployment, consider deploying defensive units immediately."
+            ],
+            [
+                "Production policy:",
+                "The base should produce workers until the desired worker count is reached.",
+                "If no barracks exists, assign a worker to build one as soon as resources permit.",
+                "Barracks should prioritize producing units based on current needs and enemy composition.",
+                "In Worker Defense and Worker Rush, focus on producing Light units when possible.",
+                "In Military Defense, adjust production to balance defensive capabilities with ongoing needs.",
+                "In Military Rush, focus production on high-priority military units and maintain offensive momentum whenever feasible."
+            ],
+            [
+                "Wait for a stable economy to form before investing in additional military buildings, such as barracks, unless an immediate threat requires their presence."
+            ],
+            [
+                "Build a barracks only when the economy is stable or when immediate military needs arise."
+            ],
+            [
+                "Focus on preserving and supporting the existing defense capabilities: ",
+                "All production choices should either maintain or enhance the chosen defensive posture."
+            ],
+            [
+                "Delay building a barracks until basic economic functions are operational or when immediate military needs arise."
+            ],
+            [
+                "Build key structures before focusing on excessive expansion: A barracks should typically be constructed once a stable resource income is established, or in response to an immediate need for military capabilities."
+            ],
+            [
+                "Production policy:",
+                "The base should produce workers at an increased rate when worker count is below the desired threshold.",
+                "If no barracks exists, assign a minimum of two workers to build one as quickly as resources allow.",
+                "Barracks should produce units according to the chosen global strategy, with a bias towards aggressive units such as Light or Heavy units."
+            ],
+            [
+                "Increase worker production below the desired threshold and allocate resources to construct a barracks immediately if one does not exist. Barracks should primarily produce Light units in Worker Defense and Worker Rush, adaptively producing units based on current needs and enemy composition in Military Defense, and focus on military units with sustained offensive pressure in Military Rush."
+            ],
+            [
+                "Shift resource allocation towards worker creation and unit defense until a stable defensive posture is achieved."
+            ],
+            [
+                "Production policy:",
+                "The base should aggressively produce workers when worker count is below the desired threshold and maintain a buffer to ensure optimal worker utilization.",
+                "If no barracks exists, assign a worker to build one as soon as resources allow.",
+                "Barracks should rapidly produce units according to the chosen global strategy.",
+                "In Worker Defense and Worker Rush, barracks tend to prioritize production of Light units while also preparing for defensive capabilities.",
+                "In Military Defense, barracks should adaptively produce units based on current needs and real-time enemy composition analysis.",
+                "In Military Rush, focus production on high-damage military units and sustain relentless offensive pressure to overwhelm the enemy."
+            ],
+            [
+                "Build one barracks as soon as resources permit and none exist. After the barracks is constructed, prioritize manufacturing combat units over additional worker production unless economic instability is evident. Field at least two combat units before shifting to pressuring the enemy."
+            ],
+            [
+                "Make all production choices more geared towards rapidly expanding and confronting the enemy's position to maximize territorial control."
+            ],
+            [
+                "Production policy:",
+                "The base should generate workers as soon as worker count falls below desired threshold.",
+                "If no barracks exists, allocate a worker to build one when resources permit.",
+                "Barracks will produce units according to the chosen global strategy.",
+                "In Worker Defense and Worker Rush, barracks tend to produce Light units.",
+                "In Military Defense, barracks should produce units based on current needs and enemy composition.",
+                "In Military Rush, focus production on military units and maintain offensive pressure.",
+                "Prioritize unit production that counters the enemy composition whenever possible."
+            ],
+            [
+                "Production policy:",
+                "The base should generate workers when the worker count is below the desired threshold.",
+                "If no barracks exists, assign a worker to construct one when resources permit.",
+                "Barracks should produce units according to the chosen global strategy.",
+                "In Worker Defense and Worker Rush, barracks tend to produce Light units.",
+                "In Military Defense, barracks should produce units based on current needs and enemy composition.",
+                "In Military Rush, focus production on military units and sustain offensive pressure.",
+                "Prioritize unit production that counters the enemy composition when possible."
+            ]
+        ],
+        "worker_policy": [
+            [
+                "Worker behavior:",
+                "Workers mainly support economy, but one suitable worker should build a barracks as soon as resources allow if none exists.",
+                "Do not keep producing extra workers once resource flow is stable and military pressure is needed.",
+                "Workers should not remain idle when they could harvest, build, or assist local defense."
+            ],
+            [
+                "Worker behavior:",
+                "Workers should primarily focus on harvesting and maintaining the economy.",
+                "Keep roughly two harvesting workers per base when space allows.",
+                "On very small or crowded maps keep only one harvester per base.",
+                "Workers may assist in combat only when enemy heavy or ranged threats are weak."
+            ],
+            [
+                "Worker behavior:",
+                "Workers primarily gather resources and support the economy.",
+                "If no barracks exists and resources allow, one worker may build a barracks.",
+                "Under Worker Defense, prioritize worker production and resource gathering.",
+                "Under Worker Rush, workers may scout, pressure nearby enemies, or join attacks when the opportunity is good.",
+                "Workers should attack enemies only if they are nearby or when the current strategy explicitly allows aggressive worker use."
+            ],
+            [
+                "Do not leave workers idle without reason:",
+                "Idle workers should usually harvest, build, or assist in urgent local defense."
+            ],
+            [
+                "Assign builders carefully:",
+                "Use one available worker for construction when possible rather than pulling too many workers off economy."
+            ],
+            [
+                "Workers are valuable economic units:",
+                "Do not throw them into combat unless the tradeoff is strategically justified."
+            ],
+            [
+                "Local worker defense is allowed:",
+                "If enemies enter the base area, nearby workers may help defend when necessary to prevent structural or economic collapse."
+            ],
+            [
+                "Maintain economy after combat:",
+                "When danger passes, workers should quickly return to harvesting or unfinished economic tasks."
+            ],
+            [
+                "Use the nearest suitable worker for tasks:",
+                "The worker chosen to build or defend should preferably be the one that can respond with the least disruption."
+            ],
+            [
+                "Worker Rush requires commitment:",
+                "If the chosen strategy is worker-based aggression, workers must pressure decisively rather than drifting halfway between economy and combat."
+            ],
+            [
+                "Do not over-expose lone workers:",
+                "Workers moving far from base for building or pressure should not be sent into obviously losing positions."
+            ],
+            [
+                "Worker behavior:",
+                "Workers primarily gather resources and support the economy.",
+                "If no barracks exists and resources allow, one worker may build a barracks.",
+                "Prioritize resource gathering under Defensive Strategy.",
+                "Under Aggressive Strategy, workers can scout, pressure nearby enemies, or join attacks when opportunities arise; they will also attack enemies if within range, unless explicitly restricted."
+            ],
+            [
+                "Worker behavior:",
+                "Workers primarily gather resources and support the economy.",
+                "If no barracks exists and resources allow, one worker may build a barracks.",
+                "Under Worker Defense, prioritize worker production and aggressively expand resource gathering to quickly recover losses.",
+                "Under Worker Rush, workers are highly aggressive, scouting for opportunities to pressure or attack nearby enemies and joining attacks whenever possible.",
+                "Workers actively seek out and engage enemy forces if they are within striking distance."
+            ],
+            [
+                "Optimize resource allocation to maintain a balance between construction and economic growth by only using one available worker for building tasks when feasible."
+            ],
+            [
+                "Optimize builder allocation: Prioritize using a single available worker for construction tasks over overcommitting to construction at the expense of economic production."
+            ],
+            [
+                "Assign builders strategically:",
+                "Prioritize using existing idle workers for construction to minimize disruptions to the economy."
+            ],
+            [
+                "Worker Rush demands unwavering focus: If the selected strategy involves aggressive worker deployment, workers should relentlessly apply pressure instead of vacillating between economic contributions and combat effectiveness."
+            ],
+            [
+                "Allow local workers to take a more proactive role in defending the base against enemy invasions."
+            ],
+            [
+                "Assign builders judiciously: Prioritize one available worker for construction tasks while minimizing the loss of workers from resource gathering operations."
+            ],
+            [
+                "Local units are now allowed to sacrifice themselves for base defense: If enemies breach our base perimeter, nearby reinforcements will immediately engage and attempt to hold off the intruders at all costs."
+            ],
+            [
+                "Use the nearest most aggressive worker for tasks: The worker chosen to attack or expand should preferably be the one that can cause the most damage."
+            ],
+            [
+                "Local units are permitted to intervene in base defense situations: ",
+                "When enemy forces breach the base perimeter, local laborers may assist with defensive efforts as needed to avert infrastructure damage and resource depletion."
+            ],
+            [
+                "Prioritize using the closest available worker with a relatively low task load for building and defending efforts."
+            ],
+            [
+                "Assign a higher number of workers to construction tasks: Use as many available workers for construction as feasible, prioritizing swift resource gathering and production development."
+            ],
+            [
+                "Optimize builder allocation: Prioritize using a single available worker for construction tasks over removing multiple workers from resource gathering activities."
+            ],
+            [
+                "Assign a higher proportion of units to the frontlines: Use multiple available workers for construction when possible, and consider diverting some economic resources to support frontline operations."
+            ],
+            [
+                "Local unit aid is enabled: ",
+                "If enemies breach the main structure's perimeter, nearby units may assist in repelling them to maintain infrastructure and resource integrity."
+            ],
+            [
+                "Assign units for construction judiciously: Utilize one idle unit whenever feasible, reserving multiple simultaneous deployments from the resource gathering process."
+            ]
+        ],
+        "harassment_policy": [
+            [
+                "Harassment policy:",
+                "Look for chances to disrupt the enemy economy instead of only marching at the enemy base directly.",
+                "If enemy workers are exposed, prioritize attacking or chasing them to reduce enemy income.",
+                "Small groups may pressure resource lines, unfinished buildings, or isolated units when the trade is favorable."
+            ],
+            [
+                "Harassment policy:",
+                "Use mobile units to force the enemy to react in multiple places.",
+                "If a direct base attack is too risky, pressure enemy workers, barracks access, or harvesting paths first.",
+                "The goal is to slow enemy growth, pull defenders out of position, and create openings for a later decisive attack."
+            ],
+            [
+                "Harassment policy:",
+                "Do not commit every unit to a frontal attack when selective disruption can gain more value.",
+                "Pick off isolated workers, threaten production structures, and retreat from bad engagements before losses become severe.",
+                "Sustained interference is valuable when it weakens the enemy economy or delays their army production."
+            ],
+            [
+                "Prioritize direct attacks on enemy economic assets and vulnerable infrastructure over holding positions near the enemy base."
+            ],
+            [
+                "Prioritize protecting key assets and infrastructure, and focus on denying the enemy access to resources and production by targeting their economy indirectly whenever possible."
+            ],
+            [
+                "Focus on disrupting the enemy's supply chains and core infrastructure rather than solely targeting their main base. Prioritize attacks against enemy workers if they are vulnerable, and consider pressuring key resources, uncompleted structures, or isolated units with smaller groups of troops when advantageous."
+            ],
+            [
+                "Prioritize direct attacks on key strategic targets and aggressively pursue opportunities to disrupt enemy resources and infrastructure. Focus on eliminating exposed enemy workers and targeting critical resource lines, unfinished structures, and isolated units whenever possible."
+            ],
+            [
+                "Prioritize constant aggression and disruption of enemy resources and operations over direct assaults on their base. Focus on targeting exposed enemy workers, destroying resource-gathering units, and pressuring vulnerable infrastructure to maximize damage and minimize economic gains for the enemy."
+            ],
+            [
+                "Focus on disrupting the enemy's supply lines and critical assets instead of primarily targeting their main stronghold. Prioritize strikes against enemy labor forces if they're exposed, and consider applying pressure to essential resources, unfinished constructions, or isolated units with smaller detachments when beneficial."
+            ],
+            [
+                "Aggressive harassment policy:",
+                "Use mobile units to force the enemy to react in multiple areas simultaneously, creating chaos and disrupting their economy.",
+                "Prioritize pressuring key infrastructure like barracks access or harvesting paths before launching a direct base attack, aiming to severely impede enemy growth and create strategic vulnerabilities for a decisive strike."
+            ],
+            [
+                "Harassment policy: Focus on weakening the enemy's economy by targeting key resource gathering areas, supply lines, and vulnerable buildings before attempting direct base attacks."
+            ],
+            [
+                "Employ defensive tactics by prioritizing the protection of key assets and forcing the enemy to defend multiple locations simultaneously. If direct base attacks are too high-risk, focus on disrupting enemy worker supply lines, restricting access to barracks or resource gathering routes, with the aim of slowing down enemy growth and creating opportunities for a decisive counterattack at a later stage."
+            ],
+            [
+                "Harassment policy:",
+                "Employ mobile units to compel the enemy to allocate resources across multiple fronts.",
+                "If direct base attacks prove too costly, apply pressure to enemy resource gathering, worker flow, or key infrastructure access first.",
+                "This approach aims to stifle enemy expansion, disrupt their defensive posture, and create opportunities for a decisive counterattack."
+            ],
+            [
+                "Mobile harassment: Focus on using mobile units to force the enemy to react in multiple areas simultaneously. If direct base attacks are too high-risk, target enemy worker routes, barracks access points, or resource gathering paths first, aiming to slow down their expansion, disrupt their defensive positioning, and create opportunities for a decisive counterattack later."
+            ],
+            [
+                "Mobile unit deployment strategy:",
+                "Employ mobile units to force the enemy to respond across multiple fronts.",
+                "Prioritize disrupting key resource gathering routes, worker movements, or strategic building access if direct base assaults are too high-risk.",
+                "This tactic aims to hinder enemy expansion, disrupt defensive positioning, and create opportunities for a decisive counterattack."
+            ],
+            [
+                "Aggressive harassment strategy:",
+                "Use mobile units to pin down the enemy's defenses in multiple locations.",
+                "Prioritize disrupting key infrastructure such as resource collection, barracks access, or worker paths before committing to direct base attacks.",
+                "The objective is to disrupt the enemy's economy and defensive posture, creating opportunities for a decisive strike."
+            ],
+            [
+                "Focus on rapid expansion and immediate aggression by using mobile units to disrupt the enemy's economy and force them to divert resources to multiple defensive efforts, prioritizing attacks on key infrastructure such as harvesting paths or critical building access points to limit their ability to expand and defend effectively."
+            ],
+            [
+                "Mobile unit deployment: Utilize mobile units to prompt the enemy's response in multiple areas. If direct base attacks are too high-risk, prioritize pressure on enemy worker flows, barracks access, or resource gathering paths. The aim is to hinder enemy growth, disrupt defensive positions, and create opportunities for a subsequent decisive assault."
+            ],
+            [
+                "Aggressive harassment policy: ",
+                "Use mobile units to force the enemy to react in multiple places, prioritizing their destruction over holding ground.",
+                "Pressure key infrastructure such as barracks access or harvesting paths before attempting direct base attacks."
+            ],
+            [
+                "Aggressive harassment policy: ",
+                "",
+                "Use mobile units to engage the enemy in multiple areas simultaneously.",
+                "Prioritize disrupting key infrastructure such as resource gathering routes or building access over direct base attacks when feasible.",
+                "The objective is to constrict enemy expansion, lure defenders away from strategic positions, and create opportunities for a decisive counterattack."
+            ],
+            [
+                "Aggressive playstyle:",
+                "Prioritize disrupting the enemy's economy and resources over direct attacks on their base.",
+                "Target exposed enemy workers for destruction to cripple their income generation capabilities.",
+                "Small groups can apply pressure on vulnerable targets such as resource lines, construction sites, or isolated units when advantageous."
+            ],
+            [
+                "Focus on protecting key assets and slowing down enemy progression by prioritizing attacks on exposed resources, unfinished structures, and isolated units when advantageous."
+            ]
+        ],
+        "opening_strategy": [
+            [
+                "Opening strategy: Stable economy opener.",
+                "Start by assigning workers to nonstop harvesting and secure reliable resource income.",
+                "Build a barracks as soon as resources allow, then transition into balanced military production.",
+                "This opening is strongest when the map is large or the enemy is not applying early pressure."
+            ],
+            [
+                "Opening strategy: Worker pressure opener.",
+                "Establish minimal economy, then send available workers or early units to pressure exposed enemy workers.",
+                "The aim is to interrupt enemy harvesting early and force a defensive response.",
+                "Do not overcommit if the enemy defense is already well prepared."
+            ],
+            [
+                "Opening strategy: Ranged kiting opener.",
+                "Prioritize reaching ranged unit production early, then use ranged units to harass while staying out of melee contact.",
+                "Attack enemy workers or slow melee units, then reposition to keep distance and repeat the attack cycle.",
+                "This opening is strongest when there is enough space to kite and the enemy relies on short-range units."
+            ],
+            [
+                "Opening strategy: Heavy frontline opener.",
+                "Stabilize economy, then produce heavy units early to create a durable frontline.",
+                "Use the first heavy units to absorb pressure, break through enemy defenders, and threaten buildings.",
+                "This opening is effective when direct combat around choke points or structures is likely."
+            ],
+            [
+                "Opening strategy: Disruption opener.",
+                "Use the first combat-capable units to interfere with enemy mining routes, builders, and unfinished structures.",
+                "The goal is to deny clean development rather than rushing immediately for the enemy base.",
+                "Once the opponent is disorganized, convert the advantage into stronger map control or direct base pressure."
+            ],
+            [
+                "Opening strategy: Economy disruption opener.",
+                "",
+                "Establish an initial economic presence, then dispatch available labor or early production units to harass vulnerable enemy gathering operations. The goal is to prematurely disrupt the enemy's resource acquisition efforts and elicit a defensive reaction without overextending against a well-prepared defense."
+            ],
+            [
+                "Opening strategy: Defensive worker harassment.",
+                "",
+                "Establish a basic economy, then dispatch available workers or initial units to harass exposed enemy workers.",
+                "The goal is to disrupt enemy resource gathering early on and provoke a defensive reaction from them.",
+                "Avoid overextending if their defenses are already robust."
+            ],
+            [
+                "Opening strategy: Aggressive worker rush.",
+                "",
+                "Establish an economy quickly, then send all available workers or early units to attack exposed enemy workers directly, aiming to immediately disrupt their resource gathering. Be cautious not to commit too many resources if the enemy defense is strong."
+            ],
+            [
+                "Opening strategy: Defensive anchor.",
+                "Use initial combat-capable units to disrupt enemy infrastructure and prevent efficient expansion, focusing on denying clear lines of progression over immediate base aggression. Once the opponent's development is hindered, leverage the gained advantage for superior map control and strategic positioning."
+            ],
+            [
+                "Opening strategy: Aggressive expansion opener.",
+                "Start by assigning all available workers to rapid expansion of resource gathering and securing a strong resource income advantage.",
+                "Build multiple barracks simultaneously as soon as resources allow, then transition into accelerated military production with an emphasis on fast unit deployment."
+            ],
+            [
+                "Opening strategy: Aggressive Denial.",
+                "Use the first combat-capable units to disrupt enemy mining routes, builders, and unfinished structures, preventing a clean development phase.",
+                "Once the opponent's economy is disrupted, capitalize on the advantage by expanding map control or transitioning into direct base pressure."
+            ],
+            [
+                "Opening strategy: Proactive disruptor.",
+                "",
+                "Use the first combat-capable units to aggressively target enemy mining routes, builders, and unfinished structures, disrupting their economy and creation of defensive assets.",
+                "The goal is to gain an early tempo by denying the opponent clean development opportunities and forcing them into a reactive position, which can then be converted into stronger map control or direct base pressure."
+            ],
+            [
+                "Opening strategy: Defensive worker harassment.",
+                "Establish minimal economy, then allocate workers or early units to harass exposed enemy workers.",
+                "The goal is to disrupt enemy resource gathering early and provoke a defensive reaction without overextending our forces if enemy defenses are already fortified."
+            ],
+            [
+                "Establish an economy that can sustain basic defenses, then employ available workers or initial units to apply targeted pressure on enemy worker clusters.",
+                "",
+                "Note: I changed \"Worker pressure opener\" to \"worker clusters\" to make it more specific and clear what the strategy aims at pressuring."
+            ],
+            [
+                "Opening strategy: Initial Disruption.",
+                "",
+                "Use initial combat-capable units to disrupt enemy mining routes, builders, and unfinished structures without immediately rushing their base.",
+                "The goal is to deny clean development and create opportunities for stronger map control or direct base pressure by disorganizing the opponent."
+            ],
+            [
+                "Opening strategy: Defensive kiting opener.",
+                "Prioritize reaching ranged unit production early, then use ranged units to harass from a safe distance while avoiding direct melee contact.",
+                "Attack enemy workers or slow-moving melee units, then reposition to maintain distance and repeat the attack cycle.",
+                "This opening excels when there is sufficient space to kite and the enemy relies on short-range units."
+            ],
+            [
+                "Opening strategy: Aggressive disruption opener.",
+                "Use the first combat-capable units to disrupt enemy mining routes, builders, and unfinished structures from the start, denying them a clean development cycle and forcing an immediate response. This approach aims to quickly create chaos and leverage the advantage into stronger map control or direct base pressure."
+            ]
+        ],
+        "targeting_policy": [
+            [
+                "ATTACK PRIORITY:",
+                "1. Enemy base",
+                "2. Enemy barracks or other production structures",
+                "3. Nearby enemy workers",
+                "4. Enemy combat units that block the attack or directly threaten our survival"
+            ],
+            [
+                "Target selection:",
+                "Prefer attacking closer enemies when multiple targets are available.",
+                "Prioritize dangerous combat units over workers when possible.",
+                "If the opportunity arises, attack enemy production structures such as barracks.",
+                "Destroying the enemy base or barracks greatly weakens enemy production."
+            ],
+            [
+                "Target selection:",
+                "Light units prefer attacking the closest enemy unit.",
+                "Heavy units prefer attacking enemy buildings, especially production structures and bases.",
+                "Ranged units should attack from distance and prefer high value or dangerous targets.",
+                "When defending, prioritize enemies threatening our base, barracks, or workers.",
+                "When rushing, prioritize the nearest enemy target first unless a high value structure is exposed."
+            ],
+            [
+                "Prioritize active threats:",
+                "An enemy already threatening our workers or structures is often a better target than a distant harmless unit."
+            ],
+            [
+                "Eliminate enemy production when possible:",
+                "Destroying barracks or bases reduces future enemy strength and can be worth more than chasing single units."
+            ],
+            [
+                "Punish exposed economy:",
+                "Enemy workers are strong targets when removing them safely disrupts the opponent's resource flow."
+            ],
+            [
+                "Do not ignore kill opportunities:",
+                "A low-health enemy that can be finished now is often worth prioritizing."
+            ],
+            [
+                "Value nearby efficiency:",
+                "A reachable target that can be attacked immediately is often better than a theoretically higher-value but distant target."
+            ],
+            [
+                "Match target to unit role:",
+                "Frontline units can pressure buildings and close targets, while ranged units should prefer safer high-value attacks."
+            ],
+            [
+                "Defensive targeting should be local and urgent:",
+                "When under attack, choose the enemy that most directly threatens our survival first."
+            ],
+            [
+                "Offensive targeting should weaken the enemy system:",
+                "Prefer attacks that damage production, economy, or army cohesion rather than random low-impact contact."
+            ],
+            [
+                "Focus on protecting key assets and prioritize avoiding unnecessary risks in engagements, allowing frontline units to apply pressure when advantageous while keeping ranged units at a safe distance."
+            ],
+            [
+                "Prioritize finishing low-health enemies to maximize immediate impact and prevent potential future threats."
+            ],
+            [
+                "Target selection:",
+                "Prefer attacking the most threatening enemy units first when multiple targets are available.",
+                "Prioritize destroying key enemy infrastructure over supporting units whenever possible.",
+                "Take out enemy production centers such as barracks at every opportunity to cripple enemy capacity for replacement and regeneration."
+            ],
+            [
+                "ATTACK PRIORITY:",
+                "1. Enemy base",
+                "2. Enemy defenseless or low-priority structures (excluding production)",
+                "3. Nearby enemy workers and lightly guarded resource collections",
+                "4. Enemy combat units posing a direct threat to our forces"
+            ],
+            [
+                "Prioritize killing low-health enemies to maximize immediate advantages in resource gain and strategic control."
+            ],
+            [
+                "Prioritize high-damage attacks on key infrastructure, such as production facilities and economic hubs, to efficiently cripple the enemy's war effort while minimizing unnecessary engagements."
+            ],
+            [
+                "Target selection:",
+                "Prioritize closer enemies when multiple targets are available.",
+                "Dangerous combat units should be targeted before workers whenever feasible.",
+                "Enemy production facilities like barracks should be attacked if the situation allows it.",
+                "Weakening enemy production by destroying their base or barracks is crucial."
+            ],
+            [
+                "Target selection: ",
+                "Optimize for immediate threats by prioritizing closer enemies over longer-range targets when multiple options are available.",
+                "Dangerous enemy combat units should be targeted first whenever possible, while keeping worker units in reserve if feasible.",
+                "When an opportunity presents itself, focus on destroying key production structures such as barracks to disrupt the enemy's capacity to produce new units."
+            ],
+            [
+                "Prioritize attacks on the enemy's resource generation and combat capabilities: ",
+                "",
+                "prefer targeting production facilities, economic hubs, or key military units rather than making incidental, non-damaging strikes."
+            ],
+            [
+                "Target high-priority assets such as resource gathering, infrastructure, and military core units instead of randomly attacking enemy forces."
+            ],
+            [
+                "Prioritize attacks that target enemy production, economy, or army cohesion over random engagements to minimize immediate losses and create opportunities for counterattacks."
+            ],
+            [
+                "Attack critical infrastructure before engaging in random skirmishes."
+            ],
+            [
+                "Target key strategic assets including resource gathering points, critical infrastructure, and the enemy's core military units with increased priority over random attacks on their forces."
+            ]
+        ],
+        "movement_policy": [
+            [
+                "Movement policy:",
+                "When attacking, move toward enemy structures or immediate combat contact rather than stopping in empty space.",
+                "Do not keep offensive units hovering near our own base without a defensive reason.",
+                "A good movement choice should reduce time-to-contact or improve the next useful action."
+            ],
+            [
+                "Movement policy:",
+                "Combat units should advance toward enemy units or structures when idle.",
+                "Heavy units should lead the attack formation.",
+                "Ranged units should stay behind frontline units when possible.",
+                "Avoid unnecessary movement that delays combat or blocks friendly units."
+            ],
+            [
+                "Movement policy:",
+                "Military units should move according to the selected global strategy.",
+                "In defensive strategies, stay near the base and nearby resources unless chasing a local threat.",
+                "In offensive strategies, advance toward the nearest enemy unit or the enemy base.",
+                "Light units move directly toward nearby enemy units.",
+                "Heavy units push toward enemy buildings.",
+                "Ranged units should keep distance from enemy melee units while staying in attack position."
+            ],
+            [
+                "Avoid idle drifting:",
+                "Units should not wander without purpose.",
+                "Movement should support defense, regrouping, harvesting, construction, or attack."
+            ],
+            [
+                "Use short purposeful paths:",
+                "Prefer direct movement toward useful objectives rather than decorative repositioning."
+            ],
+            [
+                "Defensive movement stays compact:",
+                "When the chosen plan is defense, keep combat units close enough to protect key structures and workers."
+            ],
+            [
+                "Offensive movement should create pressure:",
+                "When attacking, move toward contact or enemy infrastructure instead of hesitating in empty space."
+            ],
+            [
+                "Do not block your own economy unnecessarily:",
+                "Avoid parking combat units in ways that interfere with harvesting or building paths."
+            ],
+            [
+                "Frontline logic matters:",
+                "Durable units should usually move first into contested areas, while fragile units follow in safer positions."
+            ],
+            [
+                "Chasing should be selective:",
+                "Do not chase a distant enemy unit so far that you abandon core defense or lose strategic shape."
+            ],
+            [
+                "Position for the next useful action:",
+                "A good move is one that sets up attack range, defense coverage, building access, or efficient harvesting on the following turn."
+            ],
+            [
+                "Prioritize durable units to enter contested zones initially, and have them be accompanied by more agile units that can provide support from a safe distance."
+            ],
+            [
+                "Prioritize aggressive unit placement to minimize interference with resource gathering and construction routes."
+            ],
+            [
+                "Prioritize durable units to enter contested zones initially, then quickly follow up with additional durable units and accompany them with agile support units that can provide cover fire while staying at a safe distance."
+            ],
+            [
+                "Movement policy: Prioritize moving towards enemy structures or engaging enemies directly over idle positioning when attacking, and avoid unnecessary proximity to our base unless defending. Optimize movement for reduced time-to-contact or improved subsequent actions."
+            ],
+            [
+                "Move units towards contact points or strategic locations to apply continuous pressure on the enemy's defense rather than idling in open areas."
+            ],
+            [
+                "Maintain a balance between defense and resource generation: Ensure combat units are positioned to support key objectives without hindering access to critical areas, such as resource nodes or construction sites."
+            ],
+            [
+                "Movement policy:",
+                "Prioritize moving towards enemy structures or engaging in combat when attacking, rather than lingering in open areas.",
+                "Avoid keeping offense-focused units idle near our base unless a defensive necessity arises.",
+                "Optimize movement to minimize time-to-contact and maximize the efficiency of subsequent actions."
+            ],
+            [
+                "Movement policy:",
+                "When engaging enemies, prioritize moving towards their defenses or directly into combat to maintain momentum and pressure on the opponent.",
+                "Avoid lingering with aggressive units near our base unless doing so serves a clear defensive purpose.",
+                "A suitable movement decision should minimize time-to-engagement or prepare for the next advantageous action."
+            ],
+            [
+                "Position for optimal resource protection and future maneuverability: ",
+                "A good move is one that prioritizes unit safety, minimizes exposure to enemy threats, and maintains strategic options for the next turn."
+            ],
+            [
+                "Position for the optimal counter to an opponent's potential future action: ",
+                "A good move is one that prevents enemy attack range, blocks defense vulnerabilities, restricts building access, or disrupts resource gathering efficiency on the next turn."
+            ],
+            [
+                "Balance economy growth with defense considerations: Limit the deployment of combat units to avoid obstructing resource gathering and construction routes whenever possible."
+            ],
+            [
+                "Position for the next decisive action: A good move is one that establishes advantageous attack opportunities, fortified defensive positions, unhindered building access, or optimizes resource gathering for the upcoming turn."
+            ]
+        ],
+        "anti_stall_policy": [
+            [
+                "ANTI-STALL RULES:",
+                "Do not leave workers idle if they can harvest, build, defend, or attack productively.",
+                "Do not leave bases or barracks idle when resources are sufficient for useful production.",
+                "Do not keep combat units near the base without a clear defensive reason."
+            ],
+            [
+                "Avoid passive loops:",
+                "Do not repeat non-productive movement unless repositioning is necessary for safety, attack range, harvesting flow, or building access.",
+                "Do not move units back and forth without improving economy, defense, or pressure.",
+                "Prefer purposeful forward progress over decorative repositioning."
+            ],
+            [
+                "Attack commitment:",
+                "If combat units already exist and no immediate home defense is required, prefer pressure on the enemy over passive waiting.",
+                "Once an offensive move has started, continue the attack unless the battlefield clearly turns unfavorable.",
+                "Do not stop outside the enemy base area just to wait for a slightly larger force."
+            ],
+            [
+                "Resource conversion discipline:",
+                "Floating resources for too long is usually a strategic mistake.",
+                "Convert resources into workers, barracks, or military units when that creates immediate strategic value.",
+                "If the economy is already stable, extra resources should accelerate military pressure."
+            ],
+            [
+                "Attack commitment: ",
+                "If combat units already exist and no immediate home defense is required, prioritize defensive positioning over aggressive pressure on the enemy.",
+                "Once an offensive move has started, continue to absorb enemy countermeasures unless the battlefield clearly turns unfavorable in our favor.",
+                "Avoid stopping outside the enemy base area solely to wait for a larger force."
+            ],
+            [
+                "OPTIMIZE RESOURCE UTILIZATION:",
+                "Do not leave workers idle unless harvesting, building, defending, or attacking is impossible due to insufficient resources.",
+                "Do not leave bases or barracks idle when resources are sufficient for productive activities.",
+                "Remove unnecessary combat units from the vicinity of the base."
+            ],
+            [
+                "Prioritize resource conversion to optimize defense and offense efficiency. Convert excess resources into defensive structures or units if possible, but also consider accelerating production of key offensive assets during advantageous economic conditions."
+            ],
+            [
+                "Avoid unnecessary movement cycles:",
+                "Don't repeat non-beneficial actions unless repositioning is essential for safety, attack range, resource gathering, or building access.",
+                "Prioritize meaningful advancements over redundant maneuvers."
+            ],
+            [
+                "Attack strategy:",
+                "",
+                "If existing combat units are present and no immediate defensive action is needed, prioritize pressuring the enemy over standing idle.",
+                "Once an offensive maneuver has commenced, maintain the attack unless the battlefield's circumstances become decidedly unfavorable.",
+                "Avoid halting outside the enemy base area solely to wait for a slightly larger force."
+            ],
+            [
+                "Attack strategy: ",
+                "If combat units are already present and no immediate defense is necessary, favor aggressive pressure on the enemy over passive waiting.",
+                "Once an offensive move begins, maintain momentum unless the situation becomes clearly disadvantageous.",
+                "Avoid halting outside the enemy base solely to await a numerically superior force."
+            ],
+            [
+                "Defense strategy:",
+                "",
+                "If existing combat units are present and no immediate defensive action is needed, prioritize holding ground over standing idle.",
+                "Once a defensive maneuver has commenced, maintain the defense unless the battlefield's circumstances become decidedly unfavorable.",
+                "Avoid retreating outside the allied base area solely to wait for a slightly larger force."
+            ],
+            [
+                "Avoid redundant maneuvers: ",
+                "Do not repeatedly reposition unless necessary for safety, optimal attack range, efficient resource gathering, or unobstructed building access. ",
+                "Do not move units in a non-strategic pattern without enhancing economy, defense, or pressure on the opponent. ",
+                "Prioritize forward movement with clear objectives over unnecessary repositioning."
+            ],
+            [
+                "Prioritize sustained aggression when feasible, continuing attacks even in the face of initial losses, but retreat if the enemy's position becomes too strong or the unit count significantly outweighs your own forces within their stronghold."
+            ],
+            [
+                "Focus on absorbing and countering enemy aggression instead of proactively pushing forward. ",
+                "",
+                "If combat units are present and no immediate defensive measures are needed, prioritize maintaining pressure against the enemy rather than idling in place. ",
+                "Continue applying counter-pressure unless the situation becomes irreversibly unfavorable or a significant threat to our forces emerges."
+            ],
+            [
+                "Prioritize forward momentum: ",
+                "Only allow units to repeat non-productive movement if it serves a critical function such as safety, attack range, resource flow, or building access. ",
+                "Favor relentless advancement over unnecessary repositioning."
+            ],
+            [
+                "Attack strategy:",
+                "Prioritize aggressive engagement if combat units are present and no immediate defense is necessary.",
+                "Continue pressing the attack unless the battle becomes decisively unfavorable.",
+                "Avoid halting outside enemy territory solely to await additional forces."
+            ],
+            [
+                "Attack strategy:",
+                "Prioritize aggressive action against the enemy when combat units are available and no immediate defense is necessary.",
+                "Continue attacking until the battle becomes decisively unfavorable or strategic objectives are achieved, avoiding prolonged idling outside enemy territory."
+            ],
+            [
+                "Minimize unnecessary movement by prioritizing strategic positioning over redundant redeployment unless it directly serves a defensive or economic objective."
+            ]
+        ],
+        "time_base_strategy": [
+            [
+                "TIME-BASED STRATEGY:",
+                "Early game (turns 0-100): Focus on harvesting and building a barracks.",
+                "Mid game (turns 101-200): Shift toward producing combat units and applying pressure if the enemy is vulnerable.",
+                "Late game (turns 201+): Prioritize aggressive attacks on the enemy base and production structures to secure victory."
+            ],
+            [
+                "Early game strategy:",
+                "Establish a stable economy by producing workers and harvesting resources.",
+                "Build a barracks as soon as resources allow to enable military production.",
+                "Avoid unnecessary aggression before the economy is set up unless the enemy is exposed."
+            ],
+            [
+                "Mid game strategy:",
+                "Produce combat units according to the chosen global strategy.",
+                "Begin applying pressure on the enemy if they are vulnerable or if we have a local advantage.",
+                "Maintain a balance between economy and military production based on the evolving battlefield."
+            ],
+            [
+                "Late game strategy:",
+                "Focus on aggressive attacks to destroy the enemy base and production structures.",
+                "Do not hesitate to commit to pressure if it can lead to victory, even if it risks some losses."
+            ],
+            [
+                "Early game strategy: ",
+                "Prioritize resource gathering and worker production for economic stability.",
+                "Delay military development until a sustainable resource income is established, then construct a barracks to initiate troop production."
+            ],
+            [
+                "Initial Phase Deployment:",
+                "",
+                "Establish an economic foundation by generating units and extracting essential resources.",
+                "Construct a military facility once resource availability permits, enabling troop creation.",
+                "Only engage in non-essential combat if the opponent's vulnerabilities are apparent prior to establishing a stable economy."
+            ],
+            [
+                "Mid game strategy: Produce combat units in line with our global strategy, then focus on exerting pressure on the enemy where possible. Balance economic output with military needs as the battle unfolds."
+            ],
+            [
+                "Mid game strategy:",
+                "Produce combat units aggressively, prioritizing offense over defense.",
+                "Initiate all-out attacks on the enemy if they are weakened or our forces dominate their positions.",
+                "Optimize resource allocation to favor rapid expansion of military capabilities over economic stability."
+            ],
+            [
+                "Initial Economic Setup: Establish a solid foundation by producing workers and collecting resources. Construct a barracks as soon as resource availability permits, enabling later military expansion. Refrain from unprovoked aggression until the economy is stable unless the opponent is already vulnerable."
+            ],
+            [
+                "Mid-game strategy: ",
+                "Generate units as per the overarching strategy blueprint.",
+                "Initiate aggressive maneuvers against the opponent if they appear weak or if we possess localized superiority.",
+                "Pursue an equilibrium between resource gathering and troop manufacture, adapting to shifting theater conditions."
+            ],
+            [
+                "Mid-game strategy: ",
+                "Produce combat units as per the chosen global strategy plan.",
+                "Initiate pressure on the enemy whenever they appear weak or our current circumstances favor us.",
+                "Balance resource allocation between economic development and military reinforcement, adapting to the dynamic battlefield conditions."
+            ],
+            [
+                "Increase unit production rates and accelerate construction of key infrastructure, prioritizing military facilities to enable swift troop deployment. Engage opponents aggressively whenever feasible, exploiting identified weaknesses before securing a solid economic base."
+            ]
+        ]
+    }
+}

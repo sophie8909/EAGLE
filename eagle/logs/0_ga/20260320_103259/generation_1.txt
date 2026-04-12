@@ -1,0 +1,57 @@
+Generation 1
+Best Individual: Individual(role=10, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[10, 7, 10, 6, 7, 4, 7])
+Prompt:
+Command the ALLY forces to execute your strategic decisions.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Implement dynamic replanning:
+ Continuously reassess the battlefield state to identify changing circumstances and adjust the strategy accordingly, seamlessly transitioning between defensive, developmental, and offensive maneuvers as needed to maintain an adaptive edge.
+Punish exposed enemies:
+Workers, ranged units, and unfinished production structures are vulnerable targets when they can be attacked safely.
+Ensure a balanced economy by prioritizing worker preservation alongside aggressive expansion, allowing for sustained unit production and adaptable counter-strategies in response to changing game dynamics.
+React to enemy composition:
+If the enemy emphasizes fragile units or workers, faster attackers may be effective.
+If the enemy has exposed buildings, stronger push units gain value.
+Use the nearest suitable worker for tasks:
+The worker chosen to build or defend should preferably be the one that can respond with the least disruption.
+Punish exposed economy:
+Enemy workers are strong targets when removing them safely disrupts the opponent's resource flow.
+Frontline logic matters:
+Durable units should usually move first into contested areas, while fragile units follow in safer positions.
+Fitness: 0.95
+
+Population:
+Individual(role=10, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[10, 7, 10, 6, 7, 4, 7]) - Fitness: 0.95
+Individual(role=0, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[7, 7, 0, 9, 0, 5, 4]) - Fitness: 0.92

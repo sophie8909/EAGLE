@@ -1,0 +1,366 @@
+Generation 18
+Best Individual: Individual(role=12, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 9, 7, 5, 11, 0, 6])
+Prompt:
+B
+a
+l
+a
+n
+c
+e
+ 
+s
+t
+r
+a
+t
+e
+g
+i
+c
+ 
+p
+l
+a
+n
+n
+i
+n
+g
+ 
+w
+i
+t
+h
+ 
+t
+a
+c
+t
+i
+c
+a
+l
+ 
+e
+x
+e
+c
+u
+t
+i
+o
+n
+ 
+b
+y
+ 
+i
+n
+t
+e
+g
+r
+a
+t
+i
+n
+g
+ 
+c
+o
+n
+s
+i
+d
+e
+r
+a
+t
+i
+o
+n
+ 
+o
+f
+ 
+e
+c
+o
+n
+o
+m
+y
+,
+ 
+p
+r
+o
+d
+u
+c
+t
+i
+o
+n
+,
+ 
+c
+o
+m
+b
+a
+t
+,
+ 
+a
+n
+d
+ 
+u
+n
+i
+t
+ 
+m
+o
+v
+e
+m
+e
+n
+t
+ 
+i
+n
+ 
+a
+ 
+c
+o
+h
+e
+s
+i
+v
+e
+ 
+p
+l
+a
+n
+.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Global strategy selection:
+At every decision step first observe the current game state before choosing actions.
+Extract information about worker count, military count, number of bases and barracks, available resources, distance to the nearest enemy unit, distance to the enemy base, distance to the nearest resource, and whether enemy units are near our base.
+Choose between four global strategies: Worker Defense, Military Defense, Worker Rush, and Military Rush.
+Use defensive strategies when enemy units are close to our base, our army is smaller than the enemy army, or our resources are low.
+Use offensive strategies when our army is equal to or larger than the enemy army and we can pressure the enemy effectively.
+Prefer worker-based strategies when worker count is low or the economy still needs expansion.
+Prefer military-based strategies when worker count is sufficient, a barracks already exists, or sustained military production is needed.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Spend resources with purpose:
+Do not float resources too long if workers or production structures could convert them into advantage.
+Military production should match intent:
+Defensive plans need enough defenders quickly, while offensive plans need sustained combat output.
+M
+a
+i
+n
+t
+a
+i
+n
+ 
+e
+c
+o
+n
+o
+m
+y
+ 
+a
+f
+t
+e
+r
+ 
+c
+o
+m
+b
+a
+t
+:
+ 
+W
+h
+e
+n
+ 
+e
+n
+e
+m
+y
+ 
+p
+r
+e
+s
+e
+n
+c
+e
+ 
+s
+u
+b
+s
+i
+d
+e
+s
+,
+ 
+w
+o
+r
+k
+f
+o
+r
+c
+e
+ 
+s
+h
+o
+u
+l
+d
+ 
+r
+a
+p
+i
+d
+l
+y
+ 
+r
+e
+s
+u
+m
+e
+ 
+r
+e
+s
+o
+u
+r
+c
+e
+ 
+g
+a
+t
+h
+e
+r
+i
+n
+g
+ 
+o
+r
+ 
+i
+n
+c
+o
+m
+p
+l
+e
+t
+e
+ 
+e
+c
+o
+n
+o
+m
+i
+c
+ 
+a
+c
+t
+i
+v
+i
+t
+i
+e
+s
+.
+Target selection:
+Prefer attacking closer enemies when multiple targets are available.
+Prioritize dangerous combat units over workers when possible.
+If the opportunity arises, attack enemy production structures such as barracks.
+Destroying the enemy base or barracks greatly weakens enemy production.
+Do not block your own economy unnecessarily:
+Avoid parking combat units in ways that interfere with harvesting or building paths.
+Fitness: 5.6
+
+Population:
+Individual(role=12, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 9, 7, 5, 11, 0, 6]) - Fitness: 5.6
+Individual(role=19, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 9, 7, 5, 6, 11, 9]) - Fitness: 5.2
+Individual(role=7, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 9, 7, 5, 6, 11, 6]) - Fitness: 5.1
+Individual(role=7, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 9, 7, 5, 6, 11, 9]) - Fitness: 5.0
+Individual(role=7, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 9, 7, 5, 6, 11, 9]) - Fitness: 4.9
+Individual(role=7, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 9, 7, 5, 6, 11, 9]) - Fitness: 4.8
+Individual(role=12, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 8, 7, 5, 11, 0, 6]) - Fitness: 4.7
+Individual(role=7, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 6, 7, 5, 6, 11, 9]) - Fitness: 4.6
+Individual(role=15, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 9, 7, 5, 6, 11, 6]) - Fitness: 4.6
+Individual(role=15, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 9, 7, 5, 6, 11, 6]) - Fitness: 4.6

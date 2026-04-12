@@ -1,0 +1,62 @@
+Generation 1
+Best Individual: Individual(role=4, critical_rules=4, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[4, 2, 8, 6, 2, 3, 0])
+Prompt:
+You must interpret the battlefield from the perspective of the Ally team only.
+Enemy and Neutral units are observed targets, not controllable assets.
+Do not omit required fields in any move object.
+Every move must contain raw_move, unit_position, unit_type, and action_type.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Map-aware strategy choice:
+On smaller maps or close-spawn situations, aggressive strategies become stronger and should be considered earlier.
+On larger maps, maintain stronger economy before full commitment.
+Focus favorable trades:
+Engage when our local force can win or efficiently damage a valuable enemy target.
+Avoid taking fights that sacrifice units for little strategic gain.
+Do not sacrifice all workers for offense:
+Even aggressive strategies need enough economy to keep producing units.
+React to enemy composition:
+If the enemy emphasizes fragile units or workers, faster attackers may be effective.
+If the enemy has exposed buildings, stronger push units gain value.
+Do not leave workers idle without reason:
+Idle workers should usually harvest, build, or assist in urgent local defense.
+Eliminate enemy production when possible:
+Destroying barracks or bases reduces future enemy strength and can be worth more than chasing single units.
+Movement policy:
+Combat units should advance toward enemy units or structures when idle.
+Heavy units should lead the attack formation.
+Ranged units should stay behind frontline units when possible.
+Avoid unnecessary movement that delays combat or blocks friendly units.
+Fitness: 0.5
+
+Population:
+Individual(role=4, critical_rules=4, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[4, 2, 8, 6, 2, 3, 0]) - Fitness: 0.5
+Individual(role=7, critical_rules=8, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[8, 7, 7, 1, 0, 0, 8]) - Fitness: 0.5
+Individual(role=8, critical_rules=1, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[0, 8, 5, 2, 3, 9, 7]) - Fitness: 0.5

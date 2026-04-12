@@ -1,0 +1,692 @@
+{
+  "algorithm": "steady_state_nsga2",
+  "phase": "generation_complete",
+  "generation": 3,
+  "log_dir": "/home/mhlab/MicroRTS/eagle/logs/20260413_000801",
+  "population": [
+    {
+      "id": "ind-9",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 1,
+        "phase_transition_rule": 4,
+        "early_game_plan": 4,
+        "mid_game_plan": 4,
+        "late_game_plan": 4,
+        "decision_priority": 1,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 3
+      },
+      "fitness": [
+        0.5,
+        0.8375,
+        0.0
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "operator_type": "mutation",
+        "parent_ids": [
+          "ind-5"
+        ],
+        "crossover_mode": null,
+        "mutation_mode": "pool_replacement",
+        "reflection_context_used_fallback": false,
+        "reflection_fell_back_to_mutation": false,
+        "rewritten_components": [
+          "decision_priority"
+        ],
+        "crossover_time": 0.0,
+        "mutation_time": 2.7249101549386978e-05,
+        "reflection_time": 0.0,
+        "EA_operator_time": 2.7249101549386978e-05,
+        "ea_llm_call_time": 0.0
+      },
+      "mutation_metadata": {
+        "mutation_mode": "pool_replacement",
+        "changed_components": [
+          "decision_priority"
+        ],
+        "old_identity": 1,
+        "new_identity": 1,
+        "repair_triggered": false,
+        "rewrite_prompt_summary": ""
+      },
+      "last_real_evaluation": {
+        "winner": null,
+        "timeout": false,
+        "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-13_00-13-38.log",
+        "parsed_summary": {
+          "target_agent": "EAGLE",
+          "segment_count": 5,
+          "llm_move_count": 8,
+          "direct_failure_count": 1,
+          "duplicate_skipped_count": 0,
+          "applied_failure_count": 0,
+          "applied_success_count": 7,
+          "resource_history": [
+            {
+              "time": 0,
+              "p0_resources": 5,
+              "p1_resources": 5
+            },
+            {
+              "time": 1,
+              "p0_resources": 5,
+              "p1_resources": 5
+            },
+            {
+              "time": 2,
+              "p0_resources": 5,
+              "p1_resources": 5
+            },
+            {
+              "time": 3,
+              "p0_resources": 5,
+              "p1_resources": 5
+            }
+          ],
+          "feature_history": [
+            {
+              "time": 0,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            },
+            {
+              "time": 1,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            },
+            {
+              "time": 2,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            },
+            {
+              "time": 3,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            }
+          ],
+          "winner": null,
+          "declared_winner": null,
+          "crashed_side": null,
+          "target_side": "0",
+          "termination_reason": null
+        },
+        "reflection_context": {
+          "outcome": "draw",
+          "win_score": 0.5,
+          "final_turn": 3,
+          "max_turn": 5000,
+          "ended_by_timeout": false,
+          "global_instruction_quality": {
+            "llm_move_count": 8,
+            "applied_success_count": 7,
+            "applied_failure_count": 0,
+            "duplicate_skipped_count": 0,
+            "direct_failure_count": 1,
+            "success_rate": 0.875,
+            "failure_rate": 0.125,
+            "duplicate_rate": 0.0
+          },
+          "phase_instruction_quality": {
+            "early": {
+              "llm_move_count": 4,
+              "applied_success_count": 3,
+              "applied_failure_count": 0,
+              "duplicate_skipped_count": 0,
+              "direct_failure_count": 1,
+              "success_rate": 0.75,
+              "failure_rate": 0.25,
+              "duplicate_rate": 0.0
+            },
+            "mid": {
+              "llm_move_count": 2,
+              "applied_success_count": 2,
+              "applied_failure_count": 0,
+              "duplicate_skipped_count": 0,
+              "direct_failure_count": 0,
+              "success_rate": 1.0,
+              "failure_rate": 0.0,
+              "duplicate_rate": 0.0
+            },
+            "late": {
+              "llm_move_count": 2,
+              "applied_success_count": 2,
+              "applied_failure_count": 0,
+              "duplicate_skipped_count": 0,
+              "direct_failure_count": 0,
+              "success_rate": 1.0,
+              "failure_rate": 0.0,
+              "duplicate_rate": 0.0
+            }
+          },
+          "action_type_stats": {
+            "intent_counts": {
+              "move": 0,
+              "harvest": 3,
+              "build": 0,
+              "train": 2,
+              "attack": 3
+            },
+            "executed_counts": {
+              "move": 0,
+              "harvest": 3,
+              "build": 0,
+              "train": 2,
+              "attack": 2
+            }
+          },
+          "diagnosis_notes": []
+        }
+      },
+      "pareto_rank": 0,
+      "crowding_distance": Infinity,
+      "ea_llm_call_time": 0.0
+    },
+    {
+      "id": "ind-5",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 1,
+        "phase_transition_rule": 4,
+        "early_game_plan": 4,
+        "mid_game_plan": 4,
+        "late_game_plan": 4,
+        "decision_priority": 5,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 3
+      },
+      "fitness": [
+        0.5,
+        0.775,
+        0.0
+      ],
+      "legacy_components": {},
+      "operator_profile": {
+        "operator_type": "mutation",
+        "parent_ids": [
+          "ind-2"
+        ],
+        "crossover_mode": null,
+        "mutation_mode": "pool_replacement",
+        "reflection_context_used_fallback": false,
+        "reflection_fell_back_to_mutation": false,
+        "rewritten_components": [
+          "strategy_identity",
+          "phase_transition_rule",
+          "early_game_plan",
+          "mid_game_plan",
+          "late_game_plan",
+          "decision_priority"
+        ],
+        "crossover_time": 0.0,
+        "mutation_time": 4.337808954063803,
+        "reflection_time": 0.0,
+        "EA_operator_time": 4.337808954063803,
+        "ea_llm_call_time": 4.337657284224406
+      },
+      "mutation_metadata": {
+        "mutation_mode": "pool_replacement",
+        "changed_components": [
+          "strategy_identity",
+          "phase_transition_rule",
+          "early_game_plan",
+          "mid_game_plan",
+          "late_game_plan",
+          "decision_priority"
+        ],
+        "old_identity": 2,
+        "new_identity": 1,
+        "repair_triggered": true,
+        "rewrite_prompt_summary": "crossover_repair_rewrite: rewrote phase_transition_rule, early_game_plan, mid_game_plan, late_game_plan, decision_priority"
+      },
+      "last_real_evaluation": {
+        "winner": null,
+        "timeout": false,
+        "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-13_00-11-07.log",
+        "parsed_summary": {
+          "target_agent": "EAGLE",
+          "segment_count": 5,
+          "llm_move_count": 8,
+          "direct_failure_count": 1,
+          "duplicate_skipped_count": 0,
+          "applied_failure_count": 1,
+          "applied_success_count": 6,
+          "resource_history": [
+            {
+              "time": 0,
+              "p0_resources": 5,
+              "p1_resources": 5
+            },
+            {
+              "time": 1,
+              "p0_resources": 5,
+              "p1_resources": 5
+            },
+            {
+              "time": 2,
+              "p0_resources": 5,
+              "p1_resources": 5
+            },
+            {
+              "time": 3,
+              "p0_resources": 5,
+              "p1_resources": 5
+            }
+          ],
+          "feature_history": [
+            {
+              "time": 0,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            },
+            {
+              "time": 1,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            },
+            {
+              "time": 2,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            },
+            {
+              "time": 3,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            }
+          ],
+          "winner": null,
+          "declared_winner": null,
+          "crashed_side": null,
+          "target_side": "0",
+          "termination_reason": null
+        },
+        "reflection_context": {
+          "outcome": "draw",
+          "win_score": 0.5,
+          "final_turn": 3,
+          "max_turn": 5000,
+          "ended_by_timeout": false,
+          "global_instruction_quality": {
+            "llm_move_count": 8,
+            "applied_success_count": 6,
+            "applied_failure_count": 1,
+            "duplicate_skipped_count": 0,
+            "direct_failure_count": 1,
+            "success_rate": 0.75,
+            "failure_rate": 0.25,
+            "duplicate_rate": 0.0
+          },
+          "phase_instruction_quality": {
+            "early": {
+              "llm_move_count": 4,
+              "applied_success_count": 3,
+              "applied_failure_count": 1,
+              "duplicate_skipped_count": 0,
+              "direct_failure_count": 0,
+              "success_rate": 0.75,
+              "failure_rate": 0.25,
+              "duplicate_rate": 0.0
+            },
+            "mid": {
+              "llm_move_count": 2,
+              "applied_success_count": 2,
+              "applied_failure_count": 0,
+              "duplicate_skipped_count": 0,
+              "direct_failure_count": 0,
+              "success_rate": 1.0,
+              "failure_rate": 0.0,
+              "duplicate_rate": 0.0
+            },
+            "late": {
+              "llm_move_count": 2,
+              "applied_success_count": 1,
+              "applied_failure_count": 0,
+              "duplicate_skipped_count": 0,
+              "direct_failure_count": 1,
+              "success_rate": 0.5,
+              "failure_rate": 0.5,
+              "duplicate_rate": 0.0
+            }
+          },
+          "action_type_stats": {
+            "intent_counts": {
+              "move": 0,
+              "harvest": 3,
+              "build": 0,
+              "train": 4,
+              "attack": 1
+            },
+            "executed_counts": {
+              "move": 0,
+              "harvest": 3,
+              "build": 0,
+              "train": 4,
+              "attack": 0
+            }
+          },
+          "diagnosis_notes": [
+            "Late-game duplicate and failed actions were frequent."
+          ]
+        }
+      },
+      "pareto_rank": 1,
+      "crowding_distance": Infinity,
+      "ea_llm_call_time": 4.337657284224406
+    },
+    {
+      "id": "ind-0",
+      "game_rule": 0,
+      "strategy": {
+        "strategy_identity": 1,
+        "phase_transition_rule": 1,
+        "early_game_plan": 2,
+        "mid_game_plan": 2,
+        "late_game_plan": 1,
+        "decision_priority": 2,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 2
+      },
+      "fitness": [
+        0.5,
+        0.6166666666666667,
+        0.0
+      ],
+      "legacy_components": {},
+      "last_real_evaluation": {
+        "winner": null,
+        "timeout": false,
+        "log_path": "/home/mhlab/MicroRTS/logs/run_2026-04-13_00-08-03.log",
+        "parsed_summary": {
+          "target_agent": "EAGLE",
+          "segment_count": 4,
+          "llm_move_count": 6,
+          "direct_failure_count": 1,
+          "duplicate_skipped_count": 0,
+          "applied_failure_count": 2,
+          "applied_success_count": 3,
+          "resource_history": [
+            {
+              "time": 0,
+              "p0_resources": 5,
+              "p1_resources": 5
+            },
+            {
+              "time": 1,
+              "p0_resources": 5,
+              "p1_resources": 5
+            },
+            {
+              "time": 2,
+              "p0_resources": 5,
+              "p1_resources": 5
+            }
+          ],
+          "feature_history": [
+            {
+              "time": 0,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            },
+            {
+              "time": 1,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            },
+            {
+              "time": 2,
+              "ally": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "enemy": {
+                "base": 1,
+                "worker": 1,
+                "light": 0,
+                "heavy": 0,
+                "ranged": 0,
+                "resource": 5
+              },
+              "neutral_resource": 40
+            }
+          ],
+          "winner": null,
+          "declared_winner": null,
+          "crashed_side": null,
+          "target_side": "0",
+          "termination_reason": null
+        },
+        "reflection_context": {
+          "outcome": "draw",
+          "win_score": 0.5,
+          "final_turn": 2,
+          "max_turn": 5000,
+          "ended_by_timeout": false,
+          "global_instruction_quality": {
+            "llm_move_count": 6,
+            "applied_success_count": 3,
+            "applied_failure_count": 2,
+            "duplicate_skipped_count": 0,
+            "direct_failure_count": 1,
+            "success_rate": 0.5,
+            "failure_rate": 0.5,
+            "duplicate_rate": 0.0
+          },
+          "phase_instruction_quality": {
+            "early": {
+              "llm_move_count": 2,
+              "applied_success_count": 0,
+              "applied_failure_count": 2,
+              "duplicate_skipped_count": 0,
+              "direct_failure_count": 0,
+              "success_rate": 0.0,
+              "failure_rate": 1.0,
+              "duplicate_rate": 0.0
+            },
+            "mid": {
+              "llm_move_count": 2,
+              "applied_success_count": 2,
+              "applied_failure_count": 0,
+              "duplicate_skipped_count": 0,
+              "direct_failure_count": 0,
+              "success_rate": 1.0,
+              "failure_rate": 0.0,
+              "duplicate_rate": 0.0
+            },
+            "late": {
+              "llm_move_count": 2,
+              "applied_success_count": 1,
+              "applied_failure_count": 0,
+              "duplicate_skipped_count": 0,
+              "direct_failure_count": 1,
+              "success_rate": 0.5,
+              "failure_rate": 0.5,
+              "duplicate_rate": 0.0
+            }
+          },
+          "action_type_stats": {
+            "intent_counts": {
+              "move": 0,
+              "harvest": 2,
+              "build": 0,
+              "train": 2,
+              "attack": 0
+            },
+            "executed_counts": {
+              "move": 0,
+              "harvest": 2,
+              "build": 0,
+              "train": 2,
+              "attack": 0
+            }
+          },
+          "diagnosis_notes": [
+            "Late-game duplicate and failed actions were frequent."
+          ]
+        }
+      },
+      "pareto_rank": 2,
+      "crowding_distance": Infinity
+    }
+  ],
+  "offspring": [],
+  "meta": {
+    "completed_generation": 3
+  }
+}

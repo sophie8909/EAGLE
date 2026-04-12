@@ -1,0 +1,1755 @@
+----------Game Settings----------
+Running as Server: STANDALONE
+Server Address: localhost
+Server Port: 9898
+Serialization Type: 2
+Map Location: maps/8x8/basesWorkers8x8.xml
+Max Cycles: 5000
+Partially Observable: false
+Rules Version: 2
+Conflict Policy: 1
+AI1: ai.abstraction.EAGLE
+AI2: ai.abstraction.HybridLLMRush
+------------------------------------------------
+ 166  gmu3r2g   searching for Move flow of UnittypeTable  : -> rts.units.UnitTypeTable PGSAI 
+ maxCycles --> 5000
+ headless --> true
+ updateInterval --> 50
+ partiallyObservable --> false
+responseSchema  270 :  gmu3r2g  -> {"type":"object","properties":{"thinking":{"type":"string","description":"Plan out what moves you should take you can do multiple moves at a times"},"moves":{"type":"array","items":{"type":"object","properties":{"raw_move":{"type":"string"},"unit_position":{"type":"array","items":{"type":"integer"},"minItems":2,"maxItems":2},"unit_type":{"type":"string","enum":["worker","light","heavy","ranged","base","barracks"]},"action_type":{"type":"string","enum":["move","train","build","harvest","attack"]}},"required":["raw_move","unit_position","unit_type","action_type"]}}},"required":["moves","thinking"],"propertyOrdering":["thinking","moves"]}
+ in this 3 file AIWithComputationBudget ai.abstraction.EAGLE  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.EAGLE  1 second class  nd mg546924 45 AStarPathFinding
+ in this 2 nd mg546924 180 rts.units.UnitTypeTable@b065c63
+ in this 1 st nd mg546924 288   ----- >  Y / N 
+ in this 3 file AIWithComputationBudget ai.abstraction.HybridLLMRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.HybridLLMRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.WorkerRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.WorkerRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.LightRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.LightRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.HeavyRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.HeavyRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.RangedRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.RangedRush  1 second class  nd mg546924 45 AStarPathFinding
+[HybridLLMRush] Initialized with model=llama3.1:8b, interval=200, initial_strategy=WORKER_RUSH
+ in this 3 file AIWithComputationBudget ai.abstraction.EAGLE  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.EAGLE  1 second class  nd mg546924 45 AStarPathFinding
+ in this 2 nd mg546924 180 rts.units.UnitTypeTable@b065c63
+ in this 1 st nd mg546924 288   ----- >  Y / N 
+ -->in Game rts gmu3r2g 43    EAGLE(AStarPathFinding)
+ in this 3 file AIWithComputationBudget ai.abstraction.HybridLLMRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.HybridLLMRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.WorkerRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.WorkerRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.LightRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.LightRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.HeavyRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.HeavyRush  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.RangedRush  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.RangedRush  1 second class  nd mg546924 45 AStarPathFinding
+[HybridLLMRush] Initialized with model=llama3.1:8b, interval=200, initial_strategy=WORKER_RUSH
+ -->in Game rts gmu3r2g 54    HybridLLMRush(model=llama3.1:8b, strategy=WORKER_RUSH, changes=0, consultations=0, errors=0)
+ ai1 --> EAGLE(AStarPathFinding)
+ ai1 --> HybridLLMRush(model=llama3.1:8b, strategy=WORKER_RUSH, changes=0, consultations=0, errors=0)
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+✅ Loaded prompt from: /home/mhlab/MicroRTS/prompt.txt
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 0/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=20}
+(7, 7) Neutral Resource Node {resources=20}
+(2, 1) Ally Base Unit {resources=5, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=5, current_action="idling", HP=10}
+(1, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 6) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{ "thinking": "Establish reliable income, build first barracks, defend only what is necessary during setup, and punish exposed enemy workers if a low-risk opening appears.", 
+"moves": [
+  {
+    "raw_move": "(2, 1): worker harvest((0, 0), (2, 1))",
+    "unit_position": [2, 1],
+    "unit_type": "worker",
+    "action_type": "harvest"
+  },
+  {
+    "raw_move": "(1, 1): base train(worker)",
+    "unit_position": [1, 1],
+    "unit_type": "base",
+    "action_type": "train"
+  }
+]
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(2,1) type=worker
+'harvest' failed: non-worker at (2, 1)
+ Applying LLM move: (1, 1): base train(worker) | action_type=train | unit=(1,1) type=base
+'train' failed: not base/barracks at (1, 1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 0 p0 player 0(5) p1 player 1(5)
+T: 0, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{ (Base(6)(0, (2,1), 10, 0),wait(10))(Worker(8)(0, (1,1), 1, 0),wait(10)) }
+Assigned Harvest to unit: Worker(9)(1, (6,6), 1, 0) target: Resource(5)(-1, (7,7), 1, 20) base: Base(7)(1, (5,6), 10, 0)
+Current actions map: {Base(7)(1, (5,6), 10, 0)=ai.abstraction.Train@2038ae61, Worker(9)(1, (6,6), 1, 0)=ai.abstraction.Harvest@3c0f93f1}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,6), 1, 0)
+Resources carried: 0
+Current position: (6,6)
+Target: (7,7), Base: (5,6)
+➡️ Moving toward resource at: (7,7)
+✅ Returned UnitAction (move to resource): move(down)
+ gmu3r2g : Final UnitAction for Base(7)(1, (5,6), 10, 0): produce(down,Worker)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,6), 1, 0): move(down)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 10/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=20}
+(7, 7) Neutral Resource Node {resources=20}
+(2, 1) Ally Base Unit {resources=5, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=5, current_action="producing unit at (0,0)", HP=10}
+(1, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{ 
+  "thinking": "Balanced pressure strategy",
+  "moves": [
+    {
+      "raw_move": "(2, 1): worker harvest((0, 0), (2, 1))",
+      "unit_position": [2, 1],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    },
+    {
+      "raw_move": "(1, 1): base train(light)",
+      "unit_position": [1, 1],
+      "unit_type": "base",
+      "action_type": "train"
+    }
+  ]
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(2,1) type=worker
+'harvest' failed: non-worker at (2, 1)
+ Applying LLM move: (1, 1): base train(light) | action_type=train | unit=(1,1) type=base
+'train' failed: not base/barracks at (1, 1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 10 p0 player 0(5) p1 player 1(5)
+T: 10, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{ (Base(6)(0, (2,1), 10, 0),wait(10))(Worker(8)(0, (1,1), 1, 0),wait(10)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,7), 1, 0)
+Resources carried: 0
+Current position: (6,7)
+Target: (7,7), Base: (5,6)
+➡️ Moving toward resource at: (7,7)
+ 164  in second block 
+📤 Returned Final UnitAction: harvest(right)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,7), 1, 0): harvest(right)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 20/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=20}
+(7, 7) Neutral Resource Node {resources=20}
+(2, 1) Ally Base Unit {resources=5, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=5, current_action="producing unit at (0,0)", HP=10}
+(1, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="harvesting from (0,0)", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Maintaining a balanced economy and production while applying pressure on the enemy.", 
+"moves": [
+    {"raw_move": "(2, 1): base train(light)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}, 
+    {"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+]}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): base train(light) | action_type=train | unit=(2,1) type=base
+ Applying LLM move: (1, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(1,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (1,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 20) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Base(6)(0, (2,1), 10, 0)=ai.abstraction.Train@2ac273d3, Worker(8)(0, (1,1), 1, 0)=ai.abstraction.Harvest@71423665}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 20 p0 player 0(5) p1 player 1(5)
+T: 20, P0: 0 (5), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 10, 0): produce(right,Light)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+🎯 Final translateActions() PlayerAction:
+{ (Base(6)(0, (2,1), 10, 0),produce(right,Light))(Worker(8)(0, (1,1), 1, 0),move(left)) }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 30/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=20}
+(7, 7) Neutral Resource Node {resources=19}
+(2, 1) Ally Base Unit {resources=5, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=5, current_action="producing unit at (0,0)", HP=10}
+(0, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Establish a strong economy and protect it while applying pressure on the enemy.", "moves": [{"raw_move": "(2, 1): worker harvest((0, 0), (2, 1))", "unit_position": [2, 1], "unit_type": "worker", "action_type": "harvest"}, {"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}]}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(2,1) type=worker
+'harvest' failed: non-worker at (2, 1)
+ Applying LLM move: (2, 1): base train(worker) | action_type=train | unit=(2,1) type=base
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 0) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 30 p0 player 0(5) p1 player 1(5)
+T: 30, P0: 0 (5), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (0,1), 1, 0),harvest(up)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,7), 1, 1)
+Resources carried: 1
+Current position: (6,7)
+Target: (7,7), Base: (5,6)
+⬅️ Returning to base at: (5,6)
+✅ Returned UnitAction (move to base): move(up)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,7), 1, 1): move(up)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 40/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=20}
+(7, 7) Neutral Resource Node {resources=19}
+(2, 1) Ally Base Unit {resources=5, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=5, current_action="producing unit at (0,0)", HP=10}
+(0, 1) Ally Worker Unit {current_action="harvesting from (0,0)", HP=1}
+(6, 6) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Balanced pressure strategy to eliminate enemy units and buildings.", 
+"moves": [
+    {
+        "raw_move": "(2, 1): base train(worker)", 
+        "unit_position": [2, 1], 
+        "unit_type": "base", 
+        "action_type": "train"
+    },
+    {
+        "raw_move": "(0, 1): worker move((7, 7))",
+        "unit_position": [0, 1],
+        "unit_type": "worker",
+        "action_type": "move"
+    }
+]
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): base train(worker) | action_type=train | unit=(2,1) type=base
+ Applying LLM move: (0, 1): worker move((7, 7)) | action_type=move | unit=(0,1) type=worker
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 0) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 40 p0 player 0(5) p1 player 1(5)
+T: 40, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{  }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,6), 1, 1)
+Resources carried: 1
+Current position: (6,6)
+Target: (7,7), Base: (5,6)
+⬅️ Returning to base at: (5,6)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(left)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,6), 1, 1): return(left)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 50/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=19}
+(7, 7) Neutral Resource Node {resources=19}
+(2, 1) Ally Base Unit {resources=5, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=5, current_action="idling", HP=10}
+(0, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 6) Enemy Worker Unit {current_action="idling", HP=1}
+(5, 7) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Expand economy and train army while maintaining defensive presence", 
+"moves": [
+    {"raw_move": "(2, 1): worker harvest((0, 0), (2, 1))", "unit_position": [2, 1], "unit_type": "worker", "action_type": "harvest"},
+    {"raw_move": "(5, 6): base train(worker)", "unit_position": [5, 6], "unit_type": "base", "action_type": "train"}
+] 
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(2,1) type=worker
+'harvest' failed: non-worker at (2, 1)
+  ----->   Can't command non-owned unit at (5, 6) - skipping.
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 1) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 50 p0 player 0(5) p1 player 1(5)
+T: 50, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (0,1), 1, 1),wait(10)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,6), 1, 0)
+Resources carried: 0
+Current position: (6,6)
+Target: (7,7), Base: (5,6)
+➡️ Moving toward resource at: (7,7)
+✅ Returned UnitAction (move to resource): move(down)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,6), 1, 0): move(down)
+ gmu3r2g : Final UnitAction for Base(7)(1, (5,6), 10, 0): produce(up,Worker)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (5,7), 1, 0): move(left)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 60/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=19}
+(7, 7) Neutral Resource Node {resources=19}
+(2, 1) Ally Base Unit {resources=5, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=5, current_action="producing unit at (0,0)", HP=10}
+(0, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="idling", HP=1}
+(4, 7) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{ "thinking": "Maintain reliable income and expand production.", "moves": [ {"raw_move": "(0, 1): worker harvest((0, 0), (2, 1))", "unit_position": [0, 1], "unit_type": "worker", "action_type": "harvest"}, {"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"} ] }
+========================
+LLM returned String as expected.
+ Applying LLM move: (0, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(0,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (0,1), 1, 1) target: Resource(4)(-1, (0,0), 1, 19) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (0,1), 1, 1)=ai.abstraction.Harvest@56235b8e, Base(6)(0, (2,1), 10, 0)=ai.abstraction.Train@3632be31}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+ Applying LLM move: (2, 1): base train(worker) | action_type=train | unit=(2,1) type=base
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 1) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 60 p0 player 0(5) p1 player 1(5)
+T: 60, P0: 0 (5), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (0,1), 1, 1),move(right)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,7), 1, 0)
+Resources carried: 0
+Current position: (6,7)
+Target: (7,7), Base: (5,6)
+➡️ Moving toward resource at: (7,7)
+ 164  in second block 
+📤 Returned Final UnitAction: harvest(right)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,7), 1, 0): harvest(right)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (4,7), 1, 0): move(left)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 70/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=19}
+(7, 7) Neutral Resource Node {resources=19}
+(2, 1) Ally Base Unit {resources=5, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=5, current_action="producing unit at (0,0)", HP=10}
+(1, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="harvesting from (0,0)", HP=1}
+(3, 7) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Early Game Plan", "moves": [
+    {"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"},
+    {"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+]}
+========================
+LLM returned String as expected.
+ Applying LLM move: (1, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(1,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (1,1), 1, 1) target: Resource(4)(-1, (0,0), 1, 19) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 1)=ai.abstraction.Harvest@5abca1e0, Base(6)(0, (2,1), 10, 0)=ai.abstraction.Train@2286778}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+ Applying LLM move: (2, 1): base train(worker) | action_type=train | unit=(2,1) type=base
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 70 p0 player 0(5) p1 player 1(5)
+T: 70, P0: 0 (5), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (1,1), 1, 1),return(right)) }
+ gmu3r2g : Final UnitAction for Worker(10)(1, (3,7), 1, 0): move(left)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 80/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=19}
+(7, 7) Neutral Resource Node {resources=18}
+(2, 1) Ally Base Unit {resources=6, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=6, current_action="producing unit at (0,0)", HP=10}
+(1, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="idling", HP=1}
+(2, 7) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Balanced pressure strategy. Focus on maintaining a strong economy and defending our base while pressuring the enemy.", 
+"moves": [
+    {
+      "raw_move": "(2, 1): worker harvest((0, 0), (2, 1))", 
+      "unit_position": [2, 1], 
+      "unit_type": "worker", 
+      "action_type": "harvest"
+    },
+    {
+      "raw_move": "(1, 1): base train(worker)", 
+      "unit_position": [1, 1], 
+      "unit_type": "base", 
+      "action_type": "train"
+    }
+  ]
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(2,1) type=worker
+'harvest' failed: non-worker at (2, 1)
+ Applying LLM move: (1, 1): base train(worker) | action_type=train | unit=(1,1) type=base
+'train' failed: not base/barracks at (1, 1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 80 p0 player 0(6) p1 player 1(5)
+T: 80, P0: 0 (6), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (1,1), 1, 0),move(left)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,7), 1, 1)
+Resources carried: 1
+Current position: (6,7)
+Target: (7,7), Base: (5,6)
+⬅️ Returning to base at: (5,6)
+✅ Returned UnitAction (move to base): move(left)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,7), 1, 1): move(left)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,7), 1, 0): move(up)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 90/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=19}
+(7, 7) Neutral Resource Node {resources=18}
+(2, 1) Ally Base Unit {resources=6, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=6, current_action="producing unit at (0,0)", HP=10}
+(0, 1) Ally Worker Unit {current_action="idling", HP=1}
+(5, 7) Enemy Worker Unit {current_action="idling", HP=1}
+(2, 6) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Initial strategy: Harvest nonstop to establish economy, then build first barracks and defend only what is necessary. If enemy workers are exposed, punish them.", 
+"moves": [
+    {"raw_move": "(0, 1): worker harvest((0, 0), (2, 1))", "unit_position": [0, 1], "unit_type": "worker", "action_type": "harvest"},
+    {"raw_move": "(2, 6): enemy_worker attack((5, 6))", "unit_position": [5, 7], "unit_type": "enemy_worker", "action_type": "attack"}
+]}
+========================
+LLM returned String as expected.
+ Applying LLM move: (0, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(0,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (0,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 19) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (0,1), 1, 0)=ai.abstraction.Harvest@4e9ba398, Base(6)(0, (2,1), 10, 0)=ai.abstraction.Train@6d7b4f4c}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+  ----->   Can't command non-owned unit at (5, 7) - skipping.
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 0) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 90 p0 player 0(6) p1 player 1(5)
+T: 90, P0: 0 (6), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (0,1), 1, 0),harvest(up)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (5,7), 1, 1)
+Resources carried: 1
+Current position: (5,7)
+Target: (7,7), Base: (5,6)
+⬅️ Returning to base at: (5,6)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(up)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (5,7), 1, 1): return(up)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,6), 1, 0): move(up)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 100/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=19}
+(7, 7) Neutral Resource Node {resources=18}
+(2, 1) Ally Base Unit {resources=6, current_action="idling", HP=10}
+(5, 6) Enemy Base Unit {resources=6, current_action="idling", HP=10}
+(0, 1) Ally Worker Unit {current_action="harvesting from (0,0)", HP=1}
+(5, 7) Enemy Worker Unit {current_action="idling", HP=1}
+(2, 5) Enemy Worker Unit {current_action="idling", HP=1}
+(5, 5) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Balanced pressure strategy.", "moves": [
+    {"raw_move": "(0, 1): worker harvest((0, 0), (2, 1))", "unit_position": [0, 1], "unit_type": "worker", "action_type": "harvest"},
+    {"raw_move": "(2, 1): base build((4, 3), barracks)", "unit_position": [2, 1], "unit_type": "base", "action_type": "build"}
+]}
+========================
+LLM returned String as expected.
+ Applying LLM move: (0, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(0,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (0,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 19) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (0,1), 1, 0)=ai.abstraction.Harvest@527740a2, Base(6)(0, (2,1), 10, 0)=ai.abstraction.Train@6d7b4f4c}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+ Applying LLM move: (2, 1): base build((4, 3), barracks) | action_type=build | unit=(2,1) type=base
+'build' failed: non-worker at (2, 1)
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 0) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 100 p0 player 0(6) p1 player 1(5)
+T: 100, P0: 0 (6), P1: 1 (5)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 10, 0): produce(up,Worker)
+🎯 Final translateActions() PlayerAction:
+{ (Base(6)(0, (2,1), 10, 0),produce(up,Worker)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (5,7), 1, 0)
+Resources carried: 0
+Current position: (5,7)
+Target: (7,7), Base: (5,6)
+➡️ Moving toward resource at: (7,7)
+✅ Returned UnitAction (move to resource): move(right)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (5,7), 1, 0): move(right)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,5), 1, 0): move(up)
+ gmu3r2g : Final UnitAction for Base(7)(1, (5,6), 10, 0): produce(right,Worker)
+ gmu3r2g : Final UnitAction for Worker(11)(1, (5,5), 1, 0): move(left)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 110/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=18}
+(7, 7) Neutral Resource Node {resources=18}
+(2, 1) Ally Base Unit {resources=6, current_action="producing unit at (0,0)", HP=10}
+(5, 6) Enemy Base Unit {resources=6, current_action="producing unit at (0,0)", HP=10}
+(0, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="idling", HP=1}
+(2, 4) Enemy Worker Unit {current_action="idling", HP=1}
+(4, 5) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Establishing economy and pressure", 
+"moves": [
+    {"raw_move": "(0, 1): worker harvest((0, 0), (2, 1))", "unit_position": [0, 1], "unit_type": "worker", "action_type": "harvest"},
+    {"raw_move": "(2, 4): worker attack((5, 6))", "unit_position": [2, 4], "unit_type": "worker", "action_type": "attack"}
+]
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (0, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(0,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (0,1), 1, 1) target: Resource(4)(-1, (0,0), 1, 18) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (0,1), 1, 1)=ai.abstraction.Harvest@13a5fe33}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+  ----->   Can't command non-owned unit at (2, 4) - skipping.
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 1) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 110 p0 player 0(6) p1 player 1(5)
+T: 110, P0: 0 (6), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (0,1), 1, 1),move(right)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,7), 1, 0)
+Resources carried: 0
+Current position: (6,7)
+Target: (7,7), Base: (5,6)
+➡️ Moving toward resource at: (7,7)
+ 164  in second block 
+📤 Returned Final UnitAction: harvest(right)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,7), 1, 0): harvest(right)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,4), 1, 0): move(up)
+ gmu3r2g : Final UnitAction for Worker(11)(1, (4,5), 1, 0): move(left)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 120/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=18}
+(7, 7) Neutral Resource Node {resources=18}
+(2, 1) Ally Base Unit {resources=6, current_action="producing unit at (0,0)", HP=10}
+(5, 6) Enemy Base Unit {resources=6, current_action="producing unit at (0,0)", HP=10}
+(1, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="harvesting from (0,0)", HP=1}
+(2, 3) Enemy Worker Unit {current_action="idling", HP=1}
+(3, 5) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Balanced pressure strategy. In the early game, prioritize harvesting to establish a reliable income and avoid idle workers. Build the first barracks as soon as resources allow without collapsing the basic economy. Defend only what is necessary during setup, but punish exposed enemy workers if a low-risk opening appears.", 
+"moves": [
+    {"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"},
+    {"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+]}
+========================
+LLM returned String as expected.
+ Applying LLM move: (1, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(1,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (1,1), 1, 1) target: Resource(4)(-1, (0,0), 1, 18) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 1)=ai.abstraction.Harvest@3108bc}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+ Applying LLM move: (2, 1): base train(worker) | action_type=train | unit=(2,1) type=base
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 120 p0 player 0(6) p1 player 1(5)
+T: 120, P0: 0 (6), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (1,1), 1, 1),return(right)) }
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,3), 1, 0): move(up)
+ gmu3r2g : Final UnitAction for Worker(11)(1, (3,5), 1, 0): move(up)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 130/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=18}
+(7, 7) Neutral Resource Node {resources=17}
+(2, 1) Ally Base Unit {resources=7, current_action="producing unit at (0,0)", HP=10}
+(5, 6) Enemy Base Unit {resources=7, current_action="producing unit at (0,0)", HP=10}
+(1, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="idling", HP=1}
+(2, 2) Enemy Worker Unit {current_action="idling", HP=1}
+(3, 4) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Continuing the balanced pressure strategy, I will focus on maintaining economy, production, and defense while looking for opportunities to exploit enemy weaknesses.", 
+"moves": [
+    {"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"},
+    {"raw_move": "(6, 7): worker attack((5, 6))", "unit_position": [6, 7], "unit_type": "worker", "action_type": "attack"}
+]}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): base train(worker) | action_type=train | unit=(2,1) type=base
+  ----->   Can't command non-owned unit at (6, 7) - skipping.
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 130 p0 player 0(7) p1 player 1(5)
+T: 130, P0: 0 (7), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (1,1), 1, 0),move(left)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,7), 1, 1)
+Resources carried: 1
+Current position: (6,7)
+Target: (7,7), Base: (5,6)
+⬅️ Returning to base at: (5,6)
+✅ Returned UnitAction (move to base): move(left)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,7), 1, 1): move(left)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,2), 1, 0): attack_location(2,1)
+ gmu3r2g : Final UnitAction for Worker(11)(1, (3,4), 1, 0): move(up)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,2), 1, 0): attack_location(2,1)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 140/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=18}
+(7, 7) Neutral Resource Node {resources=17}
+(2, 1) Ally Base Unit {resources=7, current_action="producing unit at (0,0)", HP=8}
+(5, 6) Enemy Base Unit {resources=7, current_action="producing unit at (0,0)", HP=10}
+(0, 1) Ally Worker Unit {current_action="idling", HP=1}
+(5, 7) Enemy Worker Unit {current_action="idling", HP=1}
+(2, 2) Enemy Worker Unit {current_action="idling", HP=1}
+(3, 3) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Balanced pressure strategy, focusing on immediate survival and structure preservation. Exploit exposed enemy workers and unfinished buildings.", 
+"moves": [
+    {"raw_move": "(2, 2): worker harvest((0, 1), (2, 2))", "unit_position": [2, 2], "unit_type": "worker", "action_type": "harvest"},
+    {"raw_move": "(5, 7): enemy_worker attack((2, 2))", "unit_position": [5, 7], "unit_type": "enemy_worker", "action_type": "attack"}
+]}
+========================
+LLM returned String as expected.
+  ----->   Can't command non-owned unit at (2, 2) - skipping.
+  ----->   Can't command non-owned unit at (5, 7) - skipping.
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 0) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 140 p0 player 0(7) p1 player 1(5)
+T: 140, P0: 0 (7), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (0,1), 1, 0),harvest(up)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (5,7), 1, 1)
+Resources carried: 1
+Current position: (5,7)
+Target: (7,7), Base: (5,6)
+⬅️ Returning to base at: (5,6)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(up)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (5,7), 1, 1): return(up)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,2), 1, 0): attack_location(2,1)
+ gmu3r2g : Final UnitAction for Worker(11)(1, (3,3), 1, 0): move(up)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,2), 1, 0): attack_location(2,1)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 150/5000
+Max actions: 3
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=18}
+(7, 7) Neutral Resource Node {resources=17}
+(2, 1) Ally Base Unit {resources=6, current_action="idling", HP=6}
+(5, 6) Enemy Base Unit {resources=6, current_action="idling", HP=10}
+(0, 1) Ally Worker Unit {current_action="harvesting from (0,0)", HP=1}
+(5, 7) Enemy Worker Unit {current_action="idling", HP=1}
+(2, 2) Enemy Worker Unit {current_action="idling", HP=1}
+(3, 2) Enemy Worker Unit {current_action="idling", HP=1}
+(2, 0) Ally Worker Unit {current_action="idling", HP=1}
+(6, 6) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{  
+  "thinking": "Establish strong economy and defense while pressuring enemy workers.",  
+  "moves": [  
+    {  
+      "raw_move": "(0, 1): worker harvest((0, 0), (2, 1))",  
+      "unit_position": [0, 1],  
+      "unit_type": "worker",  
+      "action_type": "harvest"  
+    },  
+    {  
+      "raw_move": "(2, 1): base train(worker)",  
+      "unit_position": [2, 1],  
+      "unit_type": "base",  
+      "action_type": "train"  
+    },  
+    {  
+      "raw_move": "(6, 6): worker attack((5, 7))",  
+      "unit_position": [6, 6],  
+      "unit_type": "worker",  
+      "action_type": "attack"  
+    }  
+  ]  
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (0, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(0,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (0,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 18) base: Base(6)(0, (2,1), 6, 0)
+Current actions map: {Worker(8)(0, (0,1), 1, 0)=ai.abstraction.Harvest@370736d9, Base(6)(0, (2,1), 6, 0)=ai.abstraction.Train@5f9d02cb}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+ Applying LLM move: (2, 1): base train(worker) | action_type=train | unit=(2,1) type=base
+  ----->   Can't command non-owned unit at (6, 6) - skipping.
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 0) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 150 p0 player 0(6) p1 player 1(5)
+T: 150, P0: 0 (6), P1: 1 (5)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 6, 0): produce(left,Worker)
+🎯 Final translateActions() PlayerAction:
+{ (Base(6)(0, (2,1), 6, 0),produce(left,Worker))(Worker(12)(0, (2,0), 1, 0),wait(10)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (5,7), 1, 0)
+Resources carried: 0
+Current position: (5,7)
+Target: (7,7), Base: (5,6)
+➡️ Moving toward resource at: (7,7)
+✅ Returned UnitAction (move to resource): move(right)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (5,7), 1, 0): move(right)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,2), 1, 0): attack_location(2,1)
+ gmu3r2g : Final UnitAction for Worker(11)(1, (3,2), 1, 0): move(up)
+ gmu3r2g : Final UnitAction for Base(7)(1, (5,6), 10, 0): produce(up,Worker)
+ gmu3r2g : Final UnitAction for Worker(13)(1, (6,6), 1, 0): move(up)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,2), 1, 0): attack_location(2,1)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 160/5000
+Max actions: 3
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=17}
+(7, 7) Neutral Resource Node {resources=17}
+(2, 1) Ally Base Unit {resources=6, current_action="producing unit at (0,0)", HP=4}
+(5, 6) Enemy Base Unit {resources=6, current_action="producing unit at (0,0)", HP=10}
+(0, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="idling", HP=1}
+(2, 2) Enemy Worker Unit {current_action="idling", HP=1}
+(3, 1) Enemy Worker Unit {current_action="idling", HP=1}
+(2, 0) Ally Worker Unit {current_action="idling", HP=1}
+(6, 5) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{ "thinking": "Balanced pressure strategy. Maintain a workable balance between economy, production, defense, and map pressure at all times.", "moves": [ {"raw_move": "(2, 0): worker harvest((0, 1), (2, 1))", "unit_position": [2, 0], "unit_type": "worker", "action_type": "harvest" }, {"raw_move": "(5, 6): base train(worker)", "unit_position": [5, 6], "unit_type": "base", "action_type": "train" } ] }
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 0): worker harvest((0, 1), (2, 1)) | action_type=harvest | unit=(2,0) type=worker
+Assigned Harvest to unit: Worker(12)(0, (2,0), 1, 0) target: Worker(8)(0, (0,1), 1, 1) base: Base(6)(0, (2,1), 4, 0)
+Current actions map: {Worker(8)(0, (0,1), 1, 1)=ai.abstraction.Harvest@370736d9, Worker(12)(0, (2,0), 1, 0)=ai.abstraction.Harvest@63753b6d}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+  ----->   Can't command non-owned unit at (5, 6) - skipping.
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 1) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 160 p0 player 0(6) p1 player 1(5)
+T: 160, P0: 0 (6), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,1), Base: (2,1)
+➡️ Moving toward resource at: (0,1)
+✅ Returned UnitAction (move to resource): move(right)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (2,0), 1, 0): move(right)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(12)(0, (2,0), 1, 0),move(right))(Worker(8)(0, (0,1), 1, 1),wait(10)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,7), 1, 0)
+Resources carried: 0
+Current position: (6,7)
+Target: (7,7), Base: (5,6)
+➡️ Moving toward resource at: (7,7)
+ 164  in second block 
+📤 Returned Final UnitAction: harvest(right)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,7), 1, 0): harvest(right)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,2), 1, 0): attack_location(2,1)
+ gmu3r2g : Final UnitAction for Worker(11)(1, (3,1), 1, 0): attack_location(2,1)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,2), 1, 0): attack_location(2,1)
+ gmu3r2g : Final UnitAction for Worker(11)(1, (3,1), 1, 0): attack_location(2,1)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 170/5000
+Max actions: 2
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=17}
+(7, 7) Neutral Resource Node {resources=17}
+(5, 6) Enemy Base Unit {resources=6, current_action="producing unit at (0,0)", HP=10}
+(0, 1) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="harvesting from (0,0)", HP=1}
+(2, 2) Enemy Worker Unit {current_action="idling", HP=1}
+(3, 1) Enemy Worker Unit {current_action="idling", HP=1}
+(3, 0) Ally Worker Unit {current_action="idling", HP=1}
+(6, 5) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Balanced pressure strategy. Prioritize immediate survival and structure preservation.", 
+"moves": [
+    {"raw_move": "(3, 0): worker harvest((7, 7), (3, 4))", 
+     "unit_position": [3, 0], 
+     "unit_type": "worker", 
+     "action_type": "harvest"}, 
+    {"raw_move": "(0, 1): worker attack((5, 6))", 
+     "unit_position": [0, 1], 
+     "unit_type": "worker", 
+     "action_type": "attack"}
+]}
+========================
+LLM returned String as expected.
+ Applying LLM move: (3, 0): worker harvest((7, 7), (3, 4)) | action_type=harvest | unit=(3,0) type=worker
+'harvest' failed: couldn't resolve resource/base units
+ Applying LLM move: (0, 1): worker attack((5, 6)) | action_type=attack | unit=(0,1) type=worker
+⚠️ Skipping auto-override for Worker(8)(0, (0,1), 1, 1) (already has LLM action)
+⚠️ Skipping auto-override for Worker(12)(0, (3,0), 1, 0) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 170 p0 player 0(6) p1 player 1(5)
+T: 170, P0: 0 (6), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,1), Base: (2,1)
+➡️ Moving toward resource at: (0,1)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(down)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (3,0), 1, 0): move(left)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (0,1), 1, 1),move(down))(Worker(12)(0, (3,0), 1, 0),move(left)) }
+ gmu3r2g : Final UnitAction for Worker(10)(1, (2,2), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Worker(11)(1, (3,1), 1, 0): attack_location(3,0)
+ gmu3r2g : Final UnitAction for Worker(13)(1, (6,5), 1, 0): move(up)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ gmu3r2g : Final UnitAction for Worker(11)(1, (3,1), 1, 0): move(left)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Dynamic Prompt ===
+Map size: 8x8
+Turn: 180/5000
+Max actions: 1
+
+Feature locations:
+(0, 0) Neutral Resource Node {resources=17}
+(7, 7) Neutral Resource Node {resources=16}
+(5, 6) Enemy Base Unit {resources=6, current_action="producing unit at (0,0)", HP=10}
+(0, 2) Ally Worker Unit {current_action="idling", HP=1}
+(6, 7) Enemy Worker Unit {current_action="idling", HP=1}
+(1, 2) Enemy Worker Unit {current_action="idling", HP=1}
+(3, 1) Enemy Worker Unit {current_action="moving to (0,0)", HP=1}
+(6, 4) Enemy Worker Unit {current_action="idling", HP=1}
+
+========================
+=== Raw LLM Response ===
+{"thinking": "Initial economy establishment and basic defense", "moves": [{"raw_move": "(0, 2): worker harvest((0, 0), (3, 3))", "unit_position": [0, 2], "unit_type": "worker", "action_type": "harvest"}] }
+========================
+LLM returned String as expected.
+ Applying LLM move: (0, 2): worker harvest((0, 0), (3, 3)) | action_type=harvest | unit=(0,2) type=worker
+'harvest' failed: couldn't resolve resource/base units
+⚠️ Skipping auto-override for Worker(8)(0, (0,2), 1, 1) (already has LLM action)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 180 p0 player 0(6) p1 player 1(5)
+T: 180, P0: 0 (6), P1: 1 (5)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,2), 1, 1): move(down)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (0,2), 1, 1),move(down)) }
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(9)(1, (6,7), 1, 1)
+Resources carried: 1
+Current position: (6,7)
+Target: (7,7), Base: (5,6)
+⬅️ Returning to base at: (5,6)
+✅ Returned UnitAction (move to base): move(left)
+ gmu3r2g : Final UnitAction for Worker(9)(1, (6,7), 1, 1): move(left)
+ gmu3r2g : Final UnitAction for Worker(10)(1, (1,2), 1, 0): attack_location(0,2)
+ gmu3r2g : Final UnitAction for Worker(13)(1, (6,4), 1, 0): move(left)
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+🎯 (LLM_INTERVAL skip) translateActions() generated PlayerAction:
+{  }
+
+=== GAME RESULT ===
+FINAL_TICK: 185
+WINNER: 1
+Player 1 wins!
+===================

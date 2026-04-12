@@ -1,0 +1,87 @@
+Generation 30
+Best Individual: Individual(role=5, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[4, 9, 2, 2, 4, 15, 2])
+Prompt:
+You should make decisions that are legal, executable, and grounded in the actual positions shown in the game state.
+Do not invent units, buildings, resources, or map locations.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+MAP BIAS:
+On small maps or close spawns, strongly prefer Worker Rush or Military Rush.
+On larger maps, still build early military and transition into pressure as soon as possible.
+Distance is not a reason to stay passive for long.
+Use movement to close distance quickly and force contact.
+End fights cleanly:
+Do not abandon a winning fight halfway.
+If enemy defenders are collapsing, continue through to structures.
+The goal of combat is to remove resistance and open a path to victory.
+Every favorable engagement should increase strategic pressure.
+Worker floor, not worker growth:
+Keep enough workers to avoid total economic collapse.
+Avoid adding workers beyond what nearby resources and production can efficiently use.
+Replace lost workers only when production would otherwise stall badly.
+Military pressure usually matters more than economic perfection.
+Barracks timing:
+If no barracks exists and resources are sufficient or close, move directly toward building one.
+Do not postpone barracks construction for comfortable economic growth.
+Earlier military unlock is usually better than smoother economy.
+A fast barracks creates attack windows.
+Idle worker rule:
+An idle worker should be harvesting, building, attacking, or repositioning with clear purpose.
+Do not let workers drift aimlessly.
+Every worker action should create tempo or value.
+Idle time is wasted pressure.
+Unit-role targeting: 
+Heavy units prioritize structures and frontline blockers for maximum suppression. 
+Ranged units aim for safe, high-impact targets such as exposed workers or defenders.
+Fast units aggressively target vulnerable enemies within reach, pressuring their positions. 
+Assign unit roles based on optimal speed-to-damage ratio.
+Anti-hesitation:
+Do not stop halfway to regroup unless the regroup immediately improves a nearby fight.
+Do not oscillate back and forth between tiles.
+Repeated non-productive movement is a mistake.
+Tempo is lost when units hesitate.
+Fitness: 0.98
+
+Population:
+Individual(role=5, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[4, 9, 2, 2, 4, 15, 2]) - Fitness: 0.98
+Individual(role=3, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[6, 8, 6, 8, 8, 1, 2]) - Fitness: 0.98
+Individual(role=3, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[6, 9, 2, 6, 21, 7, 2]) - Fitness: 0.98
+Individual(role=3, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[6, 8, 6, 8, 8, 1, 2]) - Fitness: 0.98
+Individual(role=3, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[6, 29, 2, 2, 4, 7, 2]) - Fitness: 0.98
+Individual(role=11, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[6, 30, 5, 6, 3, 7, 15]) - Fitness: 0.98
+Individual(role=5, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[0, 6, 2, 6, 13, 15, 2]) - Fitness: 0.97
+Individual(role=11, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 7, 5, 6, 3, 1, 15]) - Fitness: 0.97
+Individual(role=5, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[0, 1, 6, 4, 8, 16, 10]) - Fitness: 0.97
+Individual(role=3, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[4, 1, 2, 16, 4, 15, 21]) - Fitness: 0.97

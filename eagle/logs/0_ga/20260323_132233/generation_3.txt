@@ -1,0 +1,75 @@
+Generation 3
+Best Individual: Individual(role=1, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[8, 10, 7, 4, 5, 2, 8, 2])
+Prompt:
+You are responsible for choosing actions for all controllable Ally units at the current timestep.
+You must reason from the current game state only and produce valid commands for this turn.
+CRITICAL RULES:
+You can ONLY command units marked as "Ally".
+NEVER command "Enemy" or "Neutral" units.
+Each move MUST be a JSON object with all required fields.
+The unit_position must exactly match an Ally unit position from the game state.
+ACTIONS (use exact format):
+- move((x, y)) - Move to position
+- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
+- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
+- build((x, y), building_type) - Worker builds: base, barracks
+- attack((enemy_x, enemy_y)) - Attack enemy at position
+REQUIRED JSON FORMAT:
+{
+  "thinking": "Brief strategy",
+  "moves": [
+    {
+      "raw_move": "(x, y): unit_type action((args))",
+      "unit_position": [x, y],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
+- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
+- unit_position: [x, y] array matching your Ally unit position
+- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
+- action_type: "move", "harvest", "train", "build", or "attack"
+VALID MOVE EXAMPLES:
+{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
+{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
+{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
+{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
+{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
+Map-aware strategy choice:
+On smaller maps or close-spawn situations, aggressive strategies become stronger and should be considered earlier.
+On larger maps, maintain stronger economy before full commitment.
+End local threats cleanly:
+If an enemy is already damaged or nearly eliminated, finishing it may be better than switching to a fresh target.
+Replace lost workers when needed:
+If worker count drops below a stable operating level, rebuild the economy unless survival requires pure defense.
+Do not overbuild too early:
+A barracks should usually be built after basic economy is functioning or when the situation clearly demands military access.
+Workers are valuable economic units:
+Do not throw them into combat unless the tradeoff is strategically justified.
+Target selection:
+Light units prefer attacking the closest enemy unit.
+Heavy units prefer attacking enemy buildings, especially production structures and bases.
+Ranged units should attack from distance and prefer high value or dangerous targets.
+When defending, prioritize enemies threatening our base, barracks, or workers.
+When rushing, prioritize the nearest enemy target first unless a high value structure is exposed.
+Frontline logic matters:
+Durable units should usually move first into contested areas, while fragile units follow in safer positions.
+Attack commitment:
+If combat units already exist and no immediate home defense is required, prefer pressure on the enemy over passive waiting.
+Once an offensive move has started, continue the attack unless the battlefield clearly turns unfavorable.
+Do not stop outside the enemy base area just to wait for a slightly larger force.
+Fitness: 0.95
+
+Population:
+Individual(role=1, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[8, 10, 7, 4, 5, 2, 8, 2]) - Fitness: 0.95
+Individual(role=4, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 0, 8, 7, 10, 9, 2, 3]) - Fitness: 0.95
+Individual(role=5, critical_rules=10, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[5, 0, 8, 2, 10, 7, 6, 1]) - Fitness: 0.95
+Individual(role=4, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 0, 8, 7, 10, 9, 12, 3]) - Fitness: 0.95
+Individual(role=6, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[8, 5, 2, 7, 4, 5, 6, 2]) - Fitness: 0.95
+Individual(role=5, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[8, 0, 3, 2, 4, 8, 8, 2]) - Fitness: 0.95
+Individual(role=7, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[8, 12, 2, 7, 4, 9, 11, 2]) - Fitness: 0.95
+Individual(role=1, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[8, 1, 7, 4, 4, 2, 2, 2]) - Fitness: 0.95
+Individual(role=4, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[1, 6, 11, 7, 10, 5, 4, 1]) - Fitness: 0.92
+Individual(role=4, critical_rules=0, actions=0, json_schema=0, field_requirements=0, examples=0, strategy=[8, 10, 13, 7, 4, 5, 13, 2]) - Fitness: 0.92

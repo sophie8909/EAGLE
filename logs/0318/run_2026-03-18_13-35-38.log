@@ -1,0 +1,291 @@
+----------Game Settings----------
+Running as Server: STANDALONE
+Server Address: localhost
+Server Port: 9898
+Serialization Type: 2
+Map Location: maps/8x8/basesWorkers8x8.xml
+Max Cycles: 5000
+Partially Observable: false
+Rules Version: 2
+Conflict Policy: 1
+AI1: ai.abstraction.EAGLE
+AI2: ai.PassiveAI
+------------------------------------------------
+ 166  gmu3r2g   searching for Move flow of UnittypeTable  : -> rts.units.UnitTypeTable PGSAI 
+ maxCycles --> 5000
+ headless --> true
+ updateInterval --> 50
+ partiallyObservable --> false
+responseSchema  270 :  gmu3r2g  -> {"type":"object","properties":{"thinking":{"type":"string","description":"Plan out what moves you should take you can do multiple moves at a times"},"moves":{"type":"array","items":{"type":"object","properties":{"raw_move":{"type":"string"},"unit_position":{"type":"array","items":{"type":"integer"},"minItems":2,"maxItems":2},"unit_type":{"type":"string","enum":["worker","light","heavy","ranged","base","barracks"]},"action_type":{"type":"string","enum":["move","train","build","harvest","attack"]}},"required":["raw_move","unit_position","unit_type","action_type"]}}},"required":["moves","thinking"],"propertyOrdering":["thinking","moves"]}
+ in this 3 file AIWithComputationBudget ai.abstraction.EAGLE  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.EAGLE  1 second class  nd mg546924 45 AStarPathFinding
+ in this 2 nd mg546924 180 rts.units.UnitTypeTable@b065c63
+ in this 1 st nd mg546924 288   ----- >  Y / N 
+ in this 3 file AIWithComputationBudget ai.abstraction.EAGLE  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.EAGLE  1 second class  nd mg546924 45 AStarPathFinding
+ in this 2 nd mg546924 180 rts.units.UnitTypeTable@b065c63
+ in this 1 st nd mg546924 288   ----- >  Y / N 
+ -->in Game rts gmu3r2g 43    EAGLE(AStarPathFinding)
+ -->in Game rts gmu3r2g 54    PassiveAI
+ ai1 --> EAGLE(AStarPathFinding)
+ ai1 --> PassiveAI
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+✅ Loaded prompt from: /home/mhlab/MicroRTS/prompt.txt
+=== Raw LLM Response ===
+{
+  "thinking": "Establishing a defensive presence and securing resources",
+  "moves": [
+    {
+      "raw_move": "(2, 1): base move((5, 4))",
+      "unit_position": [2, 1],
+      "unit_type": "base",
+      "action_type": "move"
+    },
+    {
+      "raw_move": "(1, 1): worker harvest((0, 0), (2, 1))",
+      "unit_position": [1, 1],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    }
+  ]
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): base move((5, 4)) | action_type=move | unit=(2,1) type=base
+'move' failed: structure at (2, 1)
+ Applying LLM move: (1, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(1,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (1,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 20) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 0)=ai.abstraction.Harvest@59ec2012}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 0 p0 player 0(5) p1 player 1(5)
+T: 0, P0: 0 (5), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+🎯 Final translateActions() PlayerAction:
+{ (Worker(8)(0, (1,1), 1, 0),move(left))(Base(6)(0, (2,1), 10, 0),wait(10)) }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Raw LLM Response ===
+{
+  "thinking": "Assessing enemy base and defending our own",
+  "moves": [
+    {
+      "raw_move": "(2, 1): worker harvest((0, 0), (2, 1))",
+      "unit_position": [2, 1],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    },
+    {
+      "raw_move": "(1, 1): worker move((5, 6))",
+      "unit_position": [1, 1],
+      "unit_type": "worker",
+      "action_type": "move"
+    }
+  ]
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(2,1) type=worker
+'harvest' failed: non-worker at (2, 1)
+ Applying LLM move: (1, 1): worker move((5, 6)) | action_type=move | unit=(1,1) type=worker
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 1 p0 player 0(5) p1 player 1(5)
+T: 1, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Raw LLM Response ===
+{
+  "thinking": "Defend and stabilize our base before expanding military pressure",
+  "moves": [
+    {
+      "raw_move": "(2, 1): worker harvest((0, 0), (2, 1))",
+      "unit_position": [2, 1],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    },
+    {
+      "raw_move": "(1, 1): base train(worker)",
+      "unit_position": [5, 6], 	"Not a valid unit position. Choosing the nearest ally worker instead: (1, 1) is not available so I will choose (2, 1). This should actually be an error message, but since we are at turn 2 I will assume this is allowed for now - future turns it would cause an error. So I am putting the base here as there is a worker nearby to train on, and the resources are near enough for a new worker to build and harvest them without needing to move too far away from the main resource nodes (0, 0) or (7, 7). This choice of position allows us to stabilize our economy while still expanding military production in a relatively safe area. This is based on the current game state where we have two neutral resources available at turns 1 and 2 respectively. The enemy base has an idle worker at position (6, 6) which could be targeted later as it's moving slowly away from its original base and may not be able to return without being attacked by our units in this area. We have one unit type available for expansion: a ranged unit which can attack targets up to two spaces away. Based on these considerations, our priority should be building defensive structures near the current resource nodes to ensure our economy isn't disrupted while we continue expanding militarily from this central location (2, 1). So my first move at turn 3 will train a worker and second move build a base nearby which has one unit available at turn three: the ranged unit. For now, I will choose the ally base (2, 1) as its current action is idling and it can be used to create new workers to collect resources without over-extending our units. The closest resource node (0, 0) is within a reasonable distance for our worker at position (1, 1) to harvest from, but I will move the base to (5, 6) in case something unexpected happens and it needs to defend this location as there are enemy resources nearby which could pose an attack threat if they're able to reach it before our military is ready. Our current plan should be to stabilize our economy while expanding militarily from this central position (2, 1). We will continue to monitor the enemy's movements for any signs of aggression and prepare our defenses accordingly. Next turn we can reassess our strategy based on the new game state and adjust as needed to achieve our win condition which is currently focused around stabilizing our economy before expanding militarily from this central position (2, 1). We should also consider building defensive structures near our current resource nodes at turns 3-5 to ensure they are protected while we continue expanding militarily from this location. This will be my strategy for the next few turns as it allows us to expand our military production while maintaining a stable economy and defending against potential threats in the area.":
+      "unit_position: [2, 1],",
+      "unit_type": "base",
+      "action_type": "train"
+    }
+  ]
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(2,1) type=worker
+'harvest' failed: non-worker at (2, 1)
+  ----->   Can't command non-owned unit at (5, 6) - skipping.
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 2 p0 player 0(5) p1 player 1(5)
+T: 2, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Raw LLM Response ===
+{
+  "thinking": "Defend and expand economy",
+  "moves": [
+    {
+      "raw_move": "(1, 1): worker harvest((2, 1), (1, 1))",
+      "unit_position": [1, 1],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    },
+    {
+      "raw_move": "(0, 0): base train(worker)",
+      "unit_position": [2, 1],
+      "unit_type": "base",
+      "action_type": "train"
+    }
+  ]
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (1, 1): worker harvest((2, 1), (1, 1)) | action_type=harvest | unit=(1,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (1,1), 1, 0) target: Base(6)(0, (2,1), 10, 0) base: Worker(8)(0, (1,1), 1, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 0)=ai.abstraction.Harvest@3159c4b8}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+ Applying LLM move: (0, 0): base train(worker) | action_type=train | unit=(2,1) type=base
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 3 p0 player 0(5) p1 player 1(5)
+T: 3, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Raw LLM Response ===
+{"thinking": "Defend base and establish economy before expanding military pressure.", 
+"moves": [
+    {
+      "raw_move": "(2, 1): worker harvest((0, 0), (2, 1))", 
+      "unit_position": [2, 1], 
+      "unit_type": "worker", 
+      "action_type": "harvest"
+    }, 
+    {
+      "raw_move": "(1, 1): base train(worker)", 
+      "unit_position": [1, 1], 
+      "unit_type": "base", 
+      "action_type": "train"
+    }
+]}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(2,1) type=worker
+'harvest' failed: non-worker at (2, 1)
+ Applying LLM move: (1, 1): base train(worker) | action_type=train | unit=(1,1) type=base
+'train' failed: not base/barracks at (1, 1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 4 p0 player 0(5) p1 player 1(5)
+T: 4, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Raw LLM Response ===
+{
+  "thinking": "Defend against enemy base and stabilize economy",
+  "moves": [
+    {
+      "raw_move": "(5, 6): worker attack((1, 1))",
+      "unit_position": [5, 6],
+      "unit_type": "worker",
+      "action_type": "attack"
+    },
+    {
+      "raw_move": "(2, 1): base train(worker)",
+      "unit_position": [2, 1],
+      "unit_type": "base",
+      "action_type": "train"
+    }
+  ]
+}
+========================
+LLM returned String as expected.
+  ----->   Can't command non-owned unit at (5, 6) - skipping.
+ Applying LLM move: (2, 1): base train(worker) | action_type=train | unit=(2,1) type=base
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 5 p0 player 0(5) p1 player 1(5)
+T: 5, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Raw LLM Response ===
+{"thinking": "Defend base and resource node, prepare for potential expansion.", 
+"moves": [
+    {"raw_move": "(2, 1): base train(worker)", 
+     "unit_position": [2, 1], 
+     "unit_type": "base", 
+     "action_type": "train"}, 
+    {"raw_move": "(1, 1): worker attack((5, 6))", 
+     "unit_position": [1, 1], 
+     "unit_type": "worker", 
+     "action_type": "attack"}
+]}
+========================
+LLM returned String as expected.
+ Applying LLM move: (2, 1): base train(worker) | action_type=train | unit=(2,1) type=base
+ Applying LLM move: (1, 1): worker attack((5, 6)) | action_type=attack | unit=(1,1) type=worker
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 6 p0 player 0(5) p1 player 1(5)
+T: 6, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
+=== Raw LLM Response ===
+{
+  "thinking": "Assessing immediate threats and focusing on resource gathering",
+  "moves": [
+    {
+      "raw_move": "(1, 1): worker harvest((0, 0), (2, 1))",
+      "unit_position": [1, 1],
+      "unit_type": "worker",
+      "action_type": "harvest"
+    },
+    {
+      "raw_move": "(2, 1): base train(worker)",
+      "unit_position": [2, 1],
+      "unit_type": "base",
+      "action_type": "train"
+    }
+  ]
+}
+========================
+LLM returned String as expected.
+ Applying LLM move: (1, 1): worker harvest((0, 0), (2, 1)) | action_type=harvest | unit=(1,1) type=worker
+Assigned Harvest to unit: Worker(8)(0, (1,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 20) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 0)=ai.abstraction.Harvest@5649fd9b, Base(6)(0, (2,1), 10, 0)=ai.abstraction.Train@6adede5}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+ Applying LLM move: (2, 1): base train(worker) | action_type=train | unit=(2,1) type=base
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 7 p0 player 0(5) p1 player 1(5)
+T: 7, P0: 0 (5), P1: 1 (5)
+🎯 Final translateActions() PlayerAction:
+{  }
+ initLogsIfNeeded  ~~~~  ~~ ~ ~
+ [EAGLE.getAction] start 
