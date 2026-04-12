@@ -109,9 +109,26 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         return INJECTED_STRATEGY_ENABLED;
     }
 
+    protected void logStateSnapshot(int player, GameState gs) {
+        Player p0 = gs.getPlayer(0);
+        Player p1 = gs.getPlayer(1);
+        int currentTime = gs.getTime();
+
+        System.out.println("gs.gameover() = " + gs.gameover());
+        System.out.println("Running getAction for Player: " + player);
+        System.out.println(" current time " + currentTime + " p0 " + p0 + " p1 " + p1);
+        System.out.printf(
+                "T: %d, P0: %d (%s), P1: %d (%s)%n",
+                currentTime,
+                p0.getID(), p0.getResources(),
+                p1.getID(), p1.getResources()
+        );
+    }
+
     @Override
     public PlayerAction getAction(int player, GameState gs) throws Exception {
         if (!hasInjectedStrategy()) {
+            logStateSnapshot(player, gs);
             return translateActions(player, gs);
         }
 
@@ -145,6 +162,7 @@ public class EAGLESurrogate extends AbstractionLayerAI {
             }
         }
 
+        logStateSnapshot(player, gs);
         return translateActions(player, gs);
     }
 
