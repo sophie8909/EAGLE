@@ -26,7 +26,8 @@ from .plots import (
     plot_behavior_comparison,
     plot_bland_altman,
     plot_error_histogram,
-    plot_fitness_3d,
+    plot_metric_consistency,
+    plot_pairwise_metric_scatter,
     plot_scatter_consistency,
     plot_topk_overlap,
 )
@@ -257,9 +258,73 @@ def run_consistency_analysis(
         "error_histogram": plot_error_histogram(merged_rows, figures_dir / cfg.ERROR_HISTOGRAM_FILENAME),
         "topk_overlap": plot_topk_overlap(overall_summary, figures_dir / cfg.TOPK_OVERLAP_FILENAME),
     }
-    fitness_3d_path = plot_fitness_3d(merged_rows, figures_dir / cfg.FITNESS_3D_FILENAME)
-    if fitness_3d_path is not None:
-        figure_paths["fitness_3d"] = fitness_3d_path
+    pairwise_plots = {
+        "pairwise_win_resource": plot_pairwise_metric_scatter(
+            merged_rows,
+            prompt_x_key="prompt_win",
+            prompt_y_key="prompt_resource",
+            java_x_key="java_win",
+            java_y_key="java_resource",
+            x_label="Win",
+            y_label="Resource",
+            title="Win vs Resource",
+            output_path=figures_dir / cfg.PAIRWISE_WIN_RESOURCE_FILENAME,
+        ),
+        "pairwise_win_accuracy": plot_pairwise_metric_scatter(
+            merged_rows,
+            prompt_x_key="prompt_win",
+            prompt_y_key="prompt_accuracy",
+            java_x_key="java_win",
+            java_y_key="java_accuracy",
+            x_label="Win",
+            y_label="Accuracy",
+            title="Win vs Accuracy",
+            output_path=figures_dir / cfg.PAIRWISE_WIN_ACCURACY_FILENAME,
+        ),
+        "pairwise_resource_accuracy": plot_pairwise_metric_scatter(
+            merged_rows,
+            prompt_x_key="prompt_resource",
+            prompt_y_key="prompt_accuracy",
+            java_x_key="java_resource",
+            java_y_key="java_accuracy",
+            x_label="Resource",
+            y_label="Accuracy",
+            title="Resource vs Accuracy",
+            output_path=figures_dir / cfg.PAIRWISE_RESOURCE_ACCURACY_FILENAME,
+        ),
+    }
+    for name, path in pairwise_plots.items():
+        if path is not None:
+            figure_paths[name] = path
+    single_metric_plots = {
+        "win_consistency": plot_metric_consistency(
+            merged_rows,
+            prompt_key="prompt_win",
+            java_key="java_win",
+            axis_label="Win",
+            title="Win Consistency",
+            output_path=figures_dir / cfg.WIN_CONSISTENCY_FILENAME,
+        ),
+        "resource_consistency": plot_metric_consistency(
+            merged_rows,
+            prompt_key="prompt_resource",
+            java_key="java_resource",
+            axis_label="Resource",
+            title="Resource Consistency",
+            output_path=figures_dir / cfg.RESOURCE_CONSISTENCY_FILENAME,
+        ),
+        "accuracy_consistency": plot_metric_consistency(
+            merged_rows,
+            prompt_key="prompt_accuracy",
+            java_key="java_accuracy",
+            axis_label="Accuracy",
+            title="Accuracy Consistency",
+            output_path=figures_dir / cfg.ACCURACY_CONSISTENCY_FILENAME,
+        ),
+    }
+    for name, path in single_metric_plots.items():
+        if path is not None:
+            figure_paths[name] = path
     behavior_figure_path = plot_behavior_comparison(behavior_similarity_rows, figures_dir / cfg.BEHAVIOR_COMPARISON_FILENAME)
     if behavior_figure_path is not None:
         figure_paths["behavior_comparison"] = behavior_figure_path

@@ -167,8 +167,18 @@ def write_analysis_report(
         "  This histogram shows how large the absolute prediction errors are across aligned samples.",
         f"- Top-k overlap: `{figures_dir.name}/{cfg.TOPK_OVERLAP_FILENAME}`",
         "  This chart shows how much Java preserves the top-ranked prompt_ids used by EA selection.",
-        f"- 3D fitness scatter: `{figures_dir.name}/{cfg.FITNESS_3D_FILENAME}`",
-        "  This plot compares the joint distribution of win, resource, and accuracy metrics for prompt-based and Java agents.",
+        f"- Pairwise win-resource: `{figures_dir.name}/{cfg.PAIRWISE_WIN_RESOURCE_FILENAME}`",
+        "  This plot compares prompt-based and Java distributions in win-resource space.",
+        f"- Pairwise win-accuracy: `{figures_dir.name}/{cfg.PAIRWISE_WIN_ACCURACY_FILENAME}`",
+        "  This plot compares prompt-based and Java distributions in win-accuracy space.",
+        f"- Pairwise resource-accuracy: `{figures_dir.name}/{cfg.PAIRWISE_RESOURCE_ACCURACY_FILENAME}`",
+        "  This plot compares prompt-based and Java distributions in resource-accuracy space.",
+        f"- Win consistency: `{figures_dir.name}/{cfg.WIN_CONSISTENCY_FILENAME}`",
+        "  This scatter plot compares prompt-based and Java win values directly.",
+        f"- Resource consistency: `{figures_dir.name}/{cfg.RESOURCE_CONSISTENCY_FILENAME}`",
+        "  This scatter plot compares prompt-based and Java resource values directly.",
+        f"- Accuracy consistency: `{figures_dir.name}/{cfg.ACCURACY_CONSISTENCY_FILENAME}`",
+        "  This scatter plot compares prompt-based and Java accuracy values directly.",
     ]
 
     if behavior_rows:

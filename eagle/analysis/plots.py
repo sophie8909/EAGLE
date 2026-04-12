@@ -40,6 +40,42 @@ def plot_scatter_consistency(rows: list[dict[str, Any]], output_path: Path) -> P
     return output_path
 
 
+def plot_metric_consistency(
+    rows: list[dict[str, Any]],
+    *,
+    prompt_key: str,
+    java_key: str,
+    axis_label: str,
+    title: str,
+    output_path: Path,
+) -> Path | None:
+    """Plot one metric's prompt-vs-Java consistency with a y=x reference line."""
+    plt = _import_pyplot()
+    paired = [
+        (row.get(prompt_key), row.get(java_key))
+        for row in rows
+        if row.get(prompt_key) is not None and row.get(java_key) is not None
+    ]
+    if not paired:
+        return None
+
+    x_values = [float(pair[0]) for pair in paired]
+    y_values = [float(pair[1]) for pair in paired]
+    min_value = min(x_values + y_values)
+    max_value = max(x_values + y_values)
+
+    plt.figure(figsize=cfg.BAR_FIGSIZE)
+    plt.scatter(x_values, y_values, alpha=0.75, color=cfg.MEAN_GAP_BAR_COLOR)
+    plt.plot([min_value, max_value], [min_value, max_value], linestyle="--", color="black", linewidth=1.0)
+    plt.xlabel(f"Prompt-Based {axis_label}")
+    plt.ylabel(f"Java {axis_label}")
+    plt.title(title)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=cfg.FIGURE_DPI)
+    plt.close()
+    return output_path
+
+
 def plot_bland_altman(rows: list[dict[str, Any]], output_path: Path) -> Path:
     """Plot Bland-Altman bias and limits of agreement."""
     plt = _import_pyplot()
@@ -126,48 +162,54 @@ def plot_behavior_comparison(rows: list[dict[str, Any]], output_path: Path) -> P
     return output_path
 
 
-def plot_fitness_3d(rows: list[dict[str, Any]], output_path: Path) -> Path | None:
-    """Plot x=win, y=resource, z=accuracy for prompt-based and Java agents."""
+def plot_pairwise_metric_scatter(
+    rows: list[dict[str, Any]],
+    *,
+    prompt_x_key: str,
+    prompt_y_key: str,
+    java_x_key: str,
+    java_y_key: str,
+    x_label: str,
+    y_label: str,
+    title: str,
+    output_path: Path,
+) -> Path | None:
+    """Plot one 2D metric pair for prompt-based and Java agents."""
     plt = _import_pyplot()
-
     prompt_points = [
-        (row.get("prompt_win"), row.get("prompt_resource"), row.get("prompt_accuracy"))
+        (row.get(prompt_x_key), row.get(prompt_y_key))
         for row in rows
-        if row.get("prompt_win") is not None and row.get("prompt_resource") is not None and row.get("prompt_accuracy") is not None
+        if row.get(prompt_x_key) is not None and row.get(prompt_y_key) is not None
     ]
     java_points = [
-        (row.get("java_win"), row.get("java_resource"), row.get("java_accuracy"))
+        (row.get(java_x_key), row.get(java_y_key))
         for row in rows
-        if row.get("java_win") is not None and row.get("java_resource") is not None and row.get("java_accuracy") is not None
+        if row.get(java_x_key) is not None and row.get(java_y_key) is not None
     ]
     if not prompt_points and not java_points:
         return None
 
-    figure = plt.figure(figsize=(9, 7))
-    axis = figure.add_subplot(111, projection="3d")
+    plt.figure(figsize=(8, 6))
     if prompt_points:
-        axis.scatter(
+        plt.scatter(
             [float(point[0]) for point in prompt_points],
             [float(point[1]) for point in prompt_points],
-            [float(point[2]) for point in prompt_points],
             alpha=0.75,
             color=cfg.MEAN_GAP_BAR_COLOR,
             label="Prompt-Based",
         )
     if java_points:
-        axis.scatter(
+        plt.scatter(
             [float(point[0]) for point in java_points],
             [float(point[1]) for point in java_points],
-            [float(point[2]) for point in java_points],
             alpha=0.75,
             color=cfg.SAME_RESULT_BAR_COLOR,
             label="Java",
         )
-    axis.set_xlabel("Win")
-    axis.set_ylabel("Resource")
-    axis.set_zlabel("Accuracy")
-    axis.set_title("3D Fitness Distribution")
-    axis.legend()
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(title)
+    plt.legend()
     plt.tight_layout()
     plt.savefig(output_path, dpi=cfg.FIGURE_DPI)
     plt.close()

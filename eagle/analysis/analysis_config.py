@@ -49,7 +49,12 @@ BLAND_ALTMAN_FILENAME = "bland_altman.png"
 ERROR_HISTOGRAM_FILENAME = "error_histogram.png"
 TOPK_OVERLAP_FILENAME = "topk_overlap.png"
 BEHAVIOR_COMPARISON_FILENAME = "behavior_comparison.png"
-FITNESS_3D_FILENAME = "fitness_3d_scatter.png"
+PAIRWISE_WIN_RESOURCE_FILENAME = "pairwise_win_resource.png"
+PAIRWISE_WIN_ACCURACY_FILENAME = "pairwise_win_accuracy.png"
+PAIRWISE_RESOURCE_ACCURACY_FILENAME = "pairwise_resource_accuracy.png"
+WIN_CONSISTENCY_FILENAME = "win_consistency.png"
+RESOURCE_CONSISTENCY_FILENAME = "resource_consistency.png"
+ACCURACY_CONSISTENCY_FILENAME = "accuracy_consistency.png"
 
 # Rule-based interpretation thresholds.
 SPEARMAN_HIGH_THRESHOLD = 0.7
