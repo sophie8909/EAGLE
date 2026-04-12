@@ -124,3 +124,51 @@ def plot_behavior_comparison(rows: list[dict[str, Any]], output_path: Path) -> P
     plt.savefig(output_path, dpi=cfg.FIGURE_DPI)
     plt.close()
     return output_path
+
+
+def plot_fitness_3d(rows: list[dict[str, Any]], output_path: Path) -> Path | None:
+    """Plot x=win, y=resource, z=accuracy for prompt-based and Java agents."""
+    plt = _import_pyplot()
+
+    prompt_points = [
+        (row.get("prompt_win"), row.get("prompt_resource"), row.get("prompt_accuracy"))
+        for row in rows
+        if row.get("prompt_win") is not None and row.get("prompt_resource") is not None and row.get("prompt_accuracy") is not None
+    ]
+    java_points = [
+        (row.get("java_win"), row.get("java_resource"), row.get("java_accuracy"))
+        for row in rows
+        if row.get("java_win") is not None and row.get("java_resource") is not None and row.get("java_accuracy") is not None
+    ]
+    if not prompt_points and not java_points:
+        return None
+
+    figure = plt.figure(figsize=(9, 7))
+    axis = figure.add_subplot(111, projection="3d")
+    if prompt_points:
+        axis.scatter(
+            [float(point[0]) for point in prompt_points],
+            [float(point[1]) for point in prompt_points],
+            [float(point[2]) for point in prompt_points],
+            alpha=0.75,
+            color=cfg.MEAN_GAP_BAR_COLOR,
+            label="Prompt-Based",
+        )
+    if java_points:
+        axis.scatter(
+            [float(point[0]) for point in java_points],
+            [float(point[1]) for point in java_points],
+            [float(point[2]) for point in java_points],
+            alpha=0.75,
+            color=cfg.SAME_RESULT_BAR_COLOR,
+            label="Java",
+        )
+    axis.set_xlabel("Win")
+    axis.set_ylabel("Resource")
+    axis.set_zlabel("Accuracy")
+    axis.set_title("3D Fitness Distribution")
+    axis.legend()
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=cfg.FIGURE_DPI)
+    plt.close()
+    return output_path

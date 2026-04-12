@@ -41,6 +41,12 @@ BEHAVIOR_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "combat_unit_composition": ("combat_unit_composition", "combat_comp", "unit_composition"),
 }
 
+RESULT_COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
+    "win": ("win_score", "win_rate", "score", "outcome_score"),
+    "resource": ("resource_advantage_score", "resource_score", "resource_advantage", "resource"),
+    "accuracy": ("game_round_score", "accuracy", "instruction_accuracy", "round_accuracy"),
+}
+
 
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
     """Read one CSV file into a list of row dictionaries."""
@@ -123,6 +129,11 @@ def normalize_result_rows(rows: list[dict[str, str]], source_name: str) -> list[
         score = _parse_outcome_score(row)
         if score is None:
             raise ValueError(f"{source_name} row {index} is missing a score/outcome-compatible column")
+        component_values = {
+            "win": _parse_float(_first_present_value(row, RESULT_COMPONENT_ALIASES["win"])),
+            "resource": _parse_float(_first_present_value(row, RESULT_COMPONENT_ALIASES["resource"])),
+            "accuracy": _parse_float(_first_present_value(row, RESULT_COMPONENT_ALIASES["accuracy"])),
+        }
         normalized.append(
             {
                 "prompt_id": prompt_id,
@@ -130,6 +141,7 @@ def normalize_result_rows(rows: list[dict[str, str]], source_name: str) -> list[
                 "map_name": map_name,
                 "opponent": opponent,
                 "score": float(score),
+                "components": component_values,
                 "source": source_name,
                 "raw_row": dict(row),
             }
@@ -140,6 +152,7 @@ def normalize_result_rows(rows: list[dict[str, str]], source_name: str) -> list[
 def aggregate_result_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Aggregate repeated rows with the same prompt/map/opponent/seed key."""
     grouped: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    grouped_components: dict[tuple[str, str, str, str], dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     for row in rows:
         key = (
             str(row["prompt_id"]),
@@ -148,9 +161,17 @@ def aggregate_result_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             str(row["opponent"]),
         )
         grouped[key].append(float(row["score"]))
+        for component_name, component_value in dict(row.get("components") or {}).items():
+            if component_value is not None:
+                grouped_components[key][component_name].append(float(component_value))
 
     aggregated: list[dict[str, Any]] = []
     for (prompt_id, seed, map_name, opponent), values in grouped.items():
+        component_means = {
+            component_name: (sum(component_values) / len(component_values))
+            for component_name, component_values in grouped_components.get((prompt_id, seed, map_name, opponent), {}).items()
+            if component_values
+        }
         aggregated.append(
             {
                 "prompt_id": prompt_id,
@@ -158,6 +179,7 @@ def aggregate_result_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "map_name": map_name,
                 "opponent": opponent,
                 "score": sum(values) / len(values),
+                "components": component_means,
                 "sample_count": len(values),
             }
         )
@@ -187,6 +209,12 @@ def merge_result_rows(prompt_rows: list[dict[str, Any]], java_rows: list[dict[st
                 "opponent": key[3],
                 "prompt_score": float(prompt_row["score"]),
                 "java_score": float(java_row["score"]),
+                "prompt_win": dict(prompt_row.get("components") or {}).get("win"),
+                "prompt_resource": dict(prompt_row.get("components") or {}).get("resource"),
+                "prompt_accuracy": dict(prompt_row.get("components") or {}).get("accuracy"),
+                "java_win": dict(java_row.get("components") or {}).get("win"),
+                "java_resource": dict(java_row.get("components") or {}).get("resource"),
+                "java_accuracy": dict(java_row.get("components") or {}).get("accuracy"),
                 "prompt_sample_count": int(prompt_row.get("sample_count", 1)),
                 "java_sample_count": int(java_row.get("sample_count", 1)),
             }

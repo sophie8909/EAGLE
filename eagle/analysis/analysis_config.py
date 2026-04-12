@@ -49,6 +49,7 @@ BLAND_ALTMAN_FILENAME = "bland_altman.png"
 ERROR_HISTOGRAM_FILENAME = "error_histogram.png"
 TOPK_OVERLAP_FILENAME = "topk_overlap.png"
 BEHAVIOR_COMPARISON_FILENAME = "behavior_comparison.png"
+FITNESS_3D_FILENAME = "fitness_3d_scatter.png"
 
 # Rule-based interpretation thresholds.
 SPEARMAN_HIGH_THRESHOLD = 0.7

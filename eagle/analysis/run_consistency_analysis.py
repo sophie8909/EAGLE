@@ -26,6 +26,7 @@ from .plots import (
     plot_behavior_comparison,
     plot_bland_altman,
     plot_error_histogram,
+    plot_fitness_3d,
     plot_scatter_consistency,
     plot_topk_overlap,
 )
@@ -181,6 +182,12 @@ def run_consistency_analysis(
             "opponent",
             "prompt_score",
             "java_score",
+            "prompt_win",
+            "prompt_resource",
+            "prompt_accuracy",
+            "java_win",
+            "java_resource",
+            "java_accuracy",
             "prompt_sample_count",
             "java_sample_count",
         ],
@@ -250,6 +257,9 @@ def run_consistency_analysis(
         "error_histogram": plot_error_histogram(merged_rows, figures_dir / cfg.ERROR_HISTOGRAM_FILENAME),
         "topk_overlap": plot_topk_overlap(overall_summary, figures_dir / cfg.TOPK_OVERLAP_FILENAME),
     }
+    fitness_3d_path = plot_fitness_3d(merged_rows, figures_dir / cfg.FITNESS_3D_FILENAME)
+    if fitness_3d_path is not None:
+        figure_paths["fitness_3d"] = fitness_3d_path
     behavior_figure_path = plot_behavior_comparison(behavior_similarity_rows, figures_dir / cfg.BEHAVIOR_COMPARISON_FILENAME)
     if behavior_figure_path is not None:
         figure_paths["behavior_comparison"] = behavior_figure_path

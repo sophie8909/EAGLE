@@ -167,6 +167,8 @@ def write_analysis_report(
         "  This histogram shows how large the absolute prediction errors are across aligned samples.",
         f"- Top-k overlap: `{figures_dir.name}/{cfg.TOPK_OVERLAP_FILENAME}`",
         "  This chart shows how much Java preserves the top-ranked prompt_ids used by EA selection.",
+        f"- 3D fitness scatter: `{figures_dir.name}/{cfg.FITNESS_3D_FILENAME}`",
+        "  This plot compares the joint distribution of win, resource, and accuracy metrics for prompt-based and Java agents.",
     ]
 
     if behavior_rows:
