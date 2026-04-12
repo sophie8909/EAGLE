@@ -1,0 +1,6 @@
+{
+  "strategy_identity": "economic",
+  "opening_plan": "harvest_first",
+  "unit_preference": "worker",
+  "attack_timing": "late"
+}

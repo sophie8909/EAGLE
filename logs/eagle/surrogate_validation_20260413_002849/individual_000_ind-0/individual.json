@@ -1,0 +1,14 @@
+{
+  "id": "ind-0",
+  "game_rule": 0,
+  "strategy": {
+    "strategy_identity": 2,
+    "phase_transition_rule": 1,
+    "early_game_plan": 0,
+    "mid_game_plan": 3,
+    "late_game_plan": 2,
+    "decision_priority": 0,
+    "tactical_heuristics": 2,
+    "anti_stall_rules": 3
+  }
+}

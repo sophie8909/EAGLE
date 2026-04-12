@@ -5,86 +5,165 @@ import shutil
 from pathlib import Path
 
 
-# Example: run_2026-03-27-00-00-32.log
-LOG_PATTERN = re.compile(
-    r"^run_(\d{4})-(\d{2})-(\d{2})_\d{2}-\d{2}-\d{2}\.log$"
+PROJECT_ROOT = Path(__file__).resolve().parent
+LOGS_ROOT = PROJECT_ROOT / "logs"
+MICRORTS_LOGS_ROOT = LOGS_ROOT / "microrts"
+EAGLE_LOGS_ROOT = LOGS_ROOT / "eagle"
+LEGACY_EAGLE_LOGS_ROOT = PROJECT_ROOT / "eagle" / "logs"
+
+# Example: run_2026-03-27_00-00-32.log
+MICRORTS_LOG_PATTERN = re.compile(
+    r"^(?:run|run_test|surrogate|surrogate_test)_(\d{4})-(\d{2})-(\d{2})_\d{2}-\d{2}-\d{2}\.log$"
 )
-
-# Example: Response2026-03-31_13-57-48_LLM_Gemini_OneShot.json
-# It only relies on the leading date part after "Response"
-RESPONSE_PATTERN = re.compile(
-    r"^Response(\d{4})-(\d{2})-(\d{2})[_-].*"
-)
+RESPONSE_PATTERN = re.compile(r"^Response(\d{4})-(\d{2})-(\d{2})[_-].*")
 
 
-def safe_move(file_path: Path, target_dir: Path) -> bool:
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target_file = target_dir / file_path.name
-
-    if target_file.exists():
-        print(f"[SKIP] Target already exists: {target_file}")
+def safe_move(source: Path, destination: Path) -> bool:
+    """Move one file or directory unless the destination already exists."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        print(f"[SKIP] Target already exists: {destination.as_posix().encode('ascii', errors='backslashreplace').decode('ascii')}")
         return False
 
-    shutil.move(str(file_path), str(target_file))
-    print(f"[MOVE] {file_path} -> {target_dir}/")
+    shutil.move(str(source), str(destination))
+    source_text = source.as_posix().encode("ascii", errors="backslashreplace").decode("ascii")
+    destination_text = destination.as_posix().encode("ascii", errors="backslashreplace").decode("ascii")
+    print(f"[MOVE] {source_text} -> {destination_text}")
     return True
 
 
-def organize_logs(logs_dir: str = "logs") -> None:
-    base_path = Path(logs_dir)
-
-    if not base_path.exists():
-        print(f"[WARN] Logs directory does not exist: {base_path.resolve()}")
-        return
-
+def merge_directory_contents(source_dir: Path, destination_dir: Path) -> tuple[int, int]:
+    """Move the children of one directory into another directory."""
+    destination_dir.mkdir(parents=True, exist_ok=True)
     moved_count = 0
     skipped_count = 0
 
-    for item in base_path.iterdir():
-        if not item.is_file():
-            continue
-
-        match = LOG_PATTERN.match(item.name)
-        if not match:
-            skipped_count += 1
-            continue
-
-        _, month, day = match.groups()
-        folder_name = f"{month}{day}"
-        target_dir = base_path / folder_name
-
-        if safe_move(item, target_dir):
+    for item in source_dir.iterdir():
+        destination = destination_dir / item.name
+        if safe_move(item, destination):
             moved_count += 1
         else:
             skipped_count += 1
 
-    print(f"[LOGS] moved={moved_count}, skipped={skipped_count}")
+    try:
+        source_dir.rmdir()
+    except OSError:
+        pass
+
+    return moved_count, skipped_count
 
 
-def organize_responses(responses_dir: str = "responses") -> None:
-    base_path = Path(responses_dir)
+def remove_duplicate_source_dir_if_fully_copied(source_dir: Path, destination_dir: Path) -> bool:
+    """Delete one source directory when every child already exists in the destination."""
+    if not source_dir.exists() or not destination_dir.exists():
+        return False
+    source_children = sorted(child.name for child in source_dir.iterdir())
+    destination_children = sorted(child.name for child in destination_dir.iterdir())
+    if source_children != destination_children:
+        return False
+    shutil.rmtree(source_dir)
+    source_text = source_dir.as_posix().encode("ascii", errors="backslashreplace").decode("ascii")
+    print(f"[REMOVE DUPLICATE SOURCE] {source_text}")
+    return True
 
-    if not base_path.exists():
-        print(f"[WARN] Responses directory does not exist: {base_path.resolve()}")
+
+def organize_root_microrts_logs(logs_root: Path = LOGS_ROOT) -> None:
+    """Move loose MicroRTS runtime logs under logs/microrts/<MMDD>/."""
+    logs_root.mkdir(parents=True, exist_ok=True)
+    MICRORTS_LOGS_ROOT.mkdir(parents=True, exist_ok=True)
+    moved_count = 0
+    skipped_count = 0
+
+    for item in logs_root.iterdir():
+        if not item.is_file():
+            continue
+        match = MICRORTS_LOG_PATTERN.match(item.name)
+        if not match:
+            skipped_count += 1
+            continue
+        _, month, day = match.groups()
+        destination = MICRORTS_LOGS_ROOT / f"{month}{day}" / item.name
+        if safe_move(item, destination):
+            moved_count += 1
+        else:
+            skipped_count += 1
+
+    print(f"[ROOT MICRORTS LOGS] moved={moved_count}, skipped={skipped_count}")
+
+
+def migrate_legacy_microrts_log_dirs(logs_root: Path = LOGS_ROOT) -> None:
+    """Move legacy date folders from logs/ into logs/microrts/."""
+    MICRORTS_LOGS_ROOT.mkdir(parents=True, exist_ok=True)
+    moved_count = 0
+    skipped_count = 0
+
+    for item in logs_root.iterdir():
+        if not item.is_dir():
+            continue
+        if item.name in {"eagle", "microrts"}:
+            continue
+        destination = MICRORTS_LOGS_ROOT / item.name
+        if destination.exists() and destination.is_dir():
+            moved, skipped = merge_directory_contents(item, destination)
+            moved_count += moved
+            skipped_count += skipped
+            remove_duplicate_source_dir_if_fully_copied(item, destination)
+            continue
+        if safe_move(item, destination):
+            moved_count += 1
+        else:
+            skipped_count += 1
+
+    print(f"[LEGACY MICRORTS DIRS] moved={moved_count}, skipped={skipped_count}")
+
+
+def migrate_legacy_eagle_logs(
+    legacy_root: Path = LEGACY_EAGLE_LOGS_ROOT,
+    eagle_root: Path = EAGLE_LOGS_ROOT,
+) -> None:
+    """Move legacy eagle/logs/* directories into logs/eagle/."""
+    if not legacy_root.exists():
+        print(f"[WARN] Legacy EAGLE logs directory does not exist: {legacy_root}")
+        return
+
+    eagle_root.mkdir(parents=True, exist_ok=True)
+    moved_count = 0
+    skipped_count = 0
+
+    for item in legacy_root.iterdir():
+        destination = eagle_root / item.name
+        if destination.exists() and destination.is_dir() and item.is_dir():
+            moved, skipped = merge_directory_contents(item, destination)
+            moved_count += moved
+            skipped_count += skipped
+            continue
+        if safe_move(item, destination):
+            moved_count += 1
+        else:
+            skipped_count += 1
+
+    print(f"[LEGACY EAGLE LOGS] moved={moved_count}, skipped={skipped_count}")
+
+
+def organize_responses(responses_dir: Path = PROJECT_ROOT / "responses") -> None:
+    """Move response files into responses/<MMDD>/."""
+    if not responses_dir.exists():
+        print(f"[WARN] Responses directory does not exist: {responses_dir}")
         return
 
     moved_count = 0
     skipped_count = 0
 
-    for item in base_path.iterdir():
+    for item in responses_dir.iterdir():
         if not item.is_file():
             continue
-
         match = RESPONSE_PATTERN.match(item.name)
         if not match:
             skipped_count += 1
             continue
-
         _, month, day = match.groups()
-        folder_name = f"{month}{day}"
-        target_dir = base_path / folder_name
-
-        if safe_move(item, target_dir):
+        destination = responses_dir / f"{month}{day}" / item.name
+        if safe_move(item, destination):
             moved_count += 1
         else:
             skipped_count += 1
@@ -92,51 +171,37 @@ def organize_responses(responses_dir: str = "responses") -> None:
     print(f"[RESPONSES] moved={moved_count}, skipped={skipped_count}")
 
 
+def organize_root_responses(project_root: Path = PROJECT_ROOT) -> None:
+    """Move loose root-level Response*. files into responses/<MMDD>/."""
+    responses_root = project_root / "responses"
+    responses_root.mkdir(parents=True, exist_ok=True)
+    moved_count = 0
+    skipped_count = 0
 
-
-
-def organize_microrts_responses(base_dir: str = "."):
-    base_path = Path(base_dir)
-    responses_root = base_path / "responses"
-    responses_root.mkdir(exist_ok=True)
-
-    moved = 0
-    skipped = 0
-
-    for file in base_path.iterdir():
-        if not file.is_file():
+    for item in project_root.iterdir():
+        if not item.is_file():
             continue
-
-        match = RESPONSE_PATTERN.match(file.name)
+        match = RESPONSE_PATTERN.match(item.name)
         if not match:
             continue
-
         _, month, day = match.groups()
-        date_folder = f"{month}{day}"
+        destination = responses_root / f"{month}{day}" / item.name
+        if safe_move(item, destination):
+            moved_count += 1
+        else:
+            skipped_count += 1
 
-        target_dir = responses_root / date_folder
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        target_file = target_dir / file.name
-
-        if target_file.exists():
-            print(f"[SKIP] {file.name}")
-            skipped += 1
-            continue
-
-        shutil.move(str(file), str(target_file))
-        print(f"[MOVE] {file.name} -> responses/{date_folder}/")
-        moved += 1
-
-    print(f"\nDone. moved={moved}, skipped={skipped}")
+    print(f"[ROOT RESPONSES] moved={moved_count}, skipped={skipped_count}")
 
 
 def main() -> None:
-    organize_logs("logs")
-    organize_responses("responses")
-    organize_microrts_responses(".")
-    print("[DONE] Organization finished.")
-
+    """Migrate legacy logs into the EAGLE-first directory layout."""
+    organize_root_microrts_logs()
+    migrate_legacy_microrts_log_dirs()
+    migrate_legacy_eagle_logs()
+    organize_responses()
+    organize_root_responses()
+    print("[DONE] Log organization finished.")
 
 
 if __name__ == "__main__":

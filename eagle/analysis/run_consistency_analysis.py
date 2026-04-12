@@ -54,8 +54,8 @@ def _resolve_paths_from_run_dir(run_dir: Path) -> tuple[Path, Path]:
 
 
 def _find_latest_surrogate_validation_run() -> Path:
-    """Find the most recent surrogate-validation run under eagle/logs."""
-    logs_root = (cfg.ANALYSIS_ROOT.parent / "logs").resolve()
+    """Find the most recent surrogate-validation run under logs/eagle."""
+    logs_root = (cfg.ANALYSIS_ROOT.parent / "logs" / "eagle").resolve()
     if not logs_root.exists():
         raise FileNotFoundError(f"Logs directory not found: {logs_root}")
     candidates = [
@@ -363,8 +363,8 @@ def run_consistency_analysis(
 def build_argument_parser() -> argparse.ArgumentParser:
     """Build the CLI for consistency analysis."""
     parser = argparse.ArgumentParser(description="Analyze consistency between prompt-based and Java agent results.")
-    parser.add_argument("--run_dir", type=Path, default=None, help="Optional surrogate-validation run directory under eagle/logs/<run>.")
-    parser.add_argument("--latest-run", action="store_true", help="Use the most recent surrogate_validation_* run under eagle/logs.")
+    parser.add_argument("--run_dir", type=Path, default=None, help="Optional surrogate-validation run directory under logs/eagle/<run>.")
+    parser.add_argument("--latest-run", action="store_true", help="Use the most recent surrogate_validation_* run under logs/eagle.")
     parser.add_argument("--prompt_results", type=Path, default=cfg.DEFAULT_PROMPT_RESULTS_CSV, help="Prompt-based results CSV path.")
     parser.add_argument("--java_results", type=Path, default=cfg.DEFAULT_JAVA_RESULTS_CSV, help="Java agent results CSV path.")
     parser.add_argument("--output_dir", type=Path, default=None, help="Output directory for analysis artifacts.")
