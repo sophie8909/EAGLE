@@ -49,8 +49,8 @@ def _legacy_reproduction_operator_probs() -> dict[str, float]:
 class EAConfig:
     """Flat configuration surface for all EA, evaluation, and surrogate settings."""
     algorithm: str = "steady_state_nsga2"
-    population_size: int = 20
-    num_generations: int = 1
+    population_size: int = 3
+    num_generations: int = 4
     mutation_rate: float = 0.1
     reproduction_operator_probs: dict[str, float] = field(
         default_factory=_default_reproduction_operator_probs
@@ -70,7 +70,7 @@ class EAConfig:
     steady_state_surrogate_selection_metric: str = "game_round_score"
     final_test_max_front: int | None = 1
 
-    run_time_per_game_sec: int = 5000
+    run_time_per_game_sec: int = 10
     real_eval_rate: float = 0.25
     llm_interval: int = 1
 
