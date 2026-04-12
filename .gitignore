@@ -30,3 +30,4 @@ tournament/traces/*.xml
 prompt.txt
 resources/config.properties
 resources/config.properties
+/.venv
