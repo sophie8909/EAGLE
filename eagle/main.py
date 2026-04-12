@@ -8,17 +8,12 @@ from .config import EAConfig, load_config_from_json
 from .tools.component_pool import ComponentPool
 
 OPPONENT_LIST = [
-    "ai.RandomBiasedAI",
-    "ai.RandomAI",
     "ai.PassiveAI",
+    "ai.RandomAI",
+    "ai.RandomBiasedAI",
     "ai.abstraction.HeavyRush",
     "ai.abstraction.LightRush",
-    # "ai.abstraction.LLM_Gemini", # game log diff, ignore it
-    "ai.abstraction.ollama",
-    "ai.abstraction.HybridLLMRush",
-    "ai.abstraction.StrategicLLMAgent",
-    # "ai.abstraction.TurtleDefense",
-    "ai.abstraction.BoomEconomy",
+    "ai.abstraction.WorkerRush",
 ]
 
 

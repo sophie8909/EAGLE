@@ -1,0 +1,63 @@
+{
+  "run_dir": "/home/mhlab/MicroRTS/eagle/logs/surrogate_validation_20260411_211441",
+  "prompt_results_path": "/home/mhlab/MicroRTS/eagle/logs/surrogate_validation_20260411_211441/surrogate_validation_matches.csv",
+  "java_results_path": "/home/mhlab/MicroRTS/eagle/logs/surrogate_validation_20260411_211441/surrogate_validation_matches.csv",
+  "behavior_prompt_path": null,
+  "behavior_java_path": null,
+  "result_root": "/home/mhlab/MicroRTS/eagle/analysis/result",
+  "top_k_values": [
+    5,
+    10,
+    20
+  ],
+  "figures_dirname": "figures",
+  "summary_metrics_filename": "summary_metrics.csv",
+  "behavior_similarity_filename": "behavior_similarity.csv",
+  "report_filename": "analysis_report.md",
+  "merged_results_filename": "merged_results.csv",
+  "merged_behavior_filename": "merged_behavior.csv",
+  "behavior_metric_aliases": {
+    "worker_production": [
+      "worker_production_count",
+      "worker_production_rate",
+      "worker_count",
+      "worker_rate"
+    ],
+    "barracks_build": [
+      "barracks_build_count",
+      "barracks_build_rate",
+      "barracks_count",
+      "barracks_rate"
+    ],
+    "harvest_action": [
+      "harvest_action_count",
+      "harvest_action_rate",
+      "harvest_count",
+      "harvest_rate"
+    ],
+    "attack_action": [
+      "attack_action_count",
+      "attack_action_rate",
+      "attack_count",
+      "attack_rate"
+    ],
+    "idle_ratio": [
+      "idle_ratio",
+      "idle_rate"
+    ],
+    "first_attack_turn": [
+      "first_attack_turn",
+      "attack_turn_first"
+    ],
+    "resource_collection_rate": [
+      "resource_collection_rate",
+      "resource_rate",
+      "harvest_rate_per_turn"
+    ],
+    "combat_unit_composition": [
+      "combat_unit_composition",
+      "combat_comp",
+      "unit_composition"
+    ]
+  }
+}
