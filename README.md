@@ -69,6 +69,8 @@ Important EAGLE-specific Java classes are still kept inside the vendored MicroRT
   Base config used by `scripts.run_evolution` when `--config` is not provided.
 - `configs/evaluation/surrogate_validation.json`
   Base config used by `scripts.run_surrogate_validation` when `--config` is not provided.
+- `configs/evaluation/final_test.json`
+  Replay/final-test override config used by `scripts.run_prompt_eval` and final benchmark replays.
 - `configs/experiments/`
   Experiment-specific artifacts and reference materials.
 
@@ -185,6 +187,7 @@ Useful examples:
 
 ```bash
 python -m scripts.run_prompt_eval --log-dir logs/<run_dir> --generation 1
+python -m scripts.run_prompt_eval --config configs/evaluation/final_test.json --log-dir logs/<run_dir> --generation 1
 python -m scripts.run_prompt_eval --log-dir logs/<run_dir> --generation 1 --opponent ai.RandomAI
 python -m scripts.run_prompt_eval --log-dir logs/<run_dir> --generation 1 --individual-id ind-3
 python -m scripts.run_prompt_eval --log-dir logs/<run_dir> --generation 1 --max-front 3
@@ -199,6 +202,8 @@ Key options:
 - `--individual-id`: replay only one individual
 - `--max-front`: replay Pareto Front 1 up to N
 - `--all-fronts`: replay every saved individual in the generation
+- `--config`: optional replay/final-test override JSON for `run_time_per_game_sec`
+  and `llm_intervals`
 - `--output`: write results to a custom JSON path
 
 Outputs:

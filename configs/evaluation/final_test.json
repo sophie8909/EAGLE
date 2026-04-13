@@ -1,0 +1,4 @@
+{
+  "run_time_per_game_sec": 60,
+  "llm_intervals": [1, 10]
+}

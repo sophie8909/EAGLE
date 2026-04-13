@@ -318,6 +318,15 @@ def load_config_from_json(path_or_dir: str | Path) -> EAConfig:
     return load_config_payload(payload)
 
 
+def clone_config(config: EAConfig) -> EAConfig:
+    """Return one validated copy of an existing config object."""
+    payload = {
+        field_name: deepcopy(getattr(config, field_name))
+        for field_name in config.__dataclass_fields__
+    }
+    return load_config_payload(payload)
+
+
 def load_config_from_optional_json(path_or_dir: str | Path | None) -> EAConfig:
     """Load one config file when provided, otherwise fall back to defaults."""
     if path_or_dir is None:

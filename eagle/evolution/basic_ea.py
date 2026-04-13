@@ -13,14 +13,14 @@ from ..config import EAConfig
 from ..project import EAGLE_LOGS_DIR
 from ..utils.component_pool import ComponentPool
 from ..utils.individual import Individual
-from ..evaluation.evaluate import Evaluator
+from ..evaluation.evaluator import Evaluator
 from ..evolution.operators.parent_selection import ParentSelection
 from ..evolution.operators.crossover import Crossover
 from ..evolution.operators.mutation import Mutation
 from ..evolution.operators.environment_selection import EnvironmentSelection
 from ..utils.fitness_recorder import FitnessRecorder
 from ..utils.fitness_utils import normalize_fitness
-from ..evaluation.final_evaluation import run_final_test_suite
+from ..evaluation.final_test_runner import run_final_test_suite
 
 class EA:
     """Shared scaffolding for the single- and multi-objective EA variants.

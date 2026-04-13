@@ -1,0 +1,5372 @@
+----------Game Settings----------
+Running as Server: STANDALONE
+Server Address: localhost
+Server Port: 9898
+Serialization Type: 2
+Map Location: maps/8x8/basesWorkers8x8.xml
+Max Cycles: 5000
+Partially Observable: false
+Rules Version: 2
+Conflict Policy: 1
+AI1: ai.abstraction.EAGLESurrogate
+AI2: ai.RandomAI
+------------------------------------------------
+ 166  gmu3r2g   searching for Move flow of UnittypeTable  : -> rts.units.UnitTypeTable PGSAI 
+ maxCycles --> 5000
+ headless --> true
+ updateInterval --> 50
+ partiallyObservable --> false
+ in this 3 file AIWithComputationBudget ai.abstraction.EAGLESurrogate  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.EAGLESurrogate  1 second class  nd mg546924 45 AStarPathFinding
+ in this 3 file AIWithComputationBudget ai.abstraction.EAGLESurrogate  nd mg546924 38. timeBudget:  -1  iterationsBudget : -1
+ in this  45 : abstract layer ai ai.abstraction.EAGLESurrogate  1 second class  nd mg546924 45 AStarPathFinding
+ -->in Game rts gmu3r2g 43    EAGLESurrogate(AStarPathFinding)
+ -->in Game rts gmu3r2g 54    RandomAI
+ ai1 --> EAGLESurrogate(AStarPathFinding)
+ ai1 --> RandomAI
+ in this 55 second class  nd mg546924 56 
+ in this 57 second class  nd mg546924 56 
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 0 p0 player 0(5) p1 player 1(5)
+T: 0, P0: 0 (5), P1: 1 (5)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 10, 0): produce(up,Worker)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 1 p0 player 0(5) p1 player 1(5)
+T: 1, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 2 p0 player 0(5) p1 player 1(5)
+T: 2, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 3 p0 player 0(5) p1 player 1(5)
+T: 3, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 4 p0 player 0(5) p1 player 1(5)
+T: 4, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 5 p0 player 0(5) p1 player 1(5)
+T: 5, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 6 p0 player 0(5) p1 player 1(5)
+T: 6, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 7 p0 player 0(5) p1 player 1(5)
+T: 7, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 8 p0 player 0(5) p1 player 1(5)
+T: 8, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 9 p0 player 0(5) p1 player 1(5)
+T: 9, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 10 p0 player 0(5) p1 player 1(5)
+T: 10, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 11 p0 player 0(5) p1 player 1(5)
+T: 11, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 12 p0 player 0(5) p1 player 1(5)
+T: 12, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 13 p0 player 0(5) p1 player 1(5)
+T: 13, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 14 p0 player 0(5) p1 player 1(5)
+T: 14, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 15 p0 player 0(5) p1 player 1(5)
+T: 15, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 16 p0 player 0(5) p1 player 1(5)
+T: 16, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 17 p0 player 0(5) p1 player 1(5)
+T: 17, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 18 p0 player 0(5) p1 player 1(5)
+T: 18, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 19 p0 player 0(5) p1 player 1(5)
+T: 19, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 20 p0 player 0(5) p1 player 1(5)
+T: 20, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 21 p0 player 0(5) p1 player 1(5)
+T: 21, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 22 p0 player 0(5) p1 player 1(5)
+T: 22, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 23 p0 player 0(5) p1 player 1(5)
+T: 23, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 24 p0 player 0(5) p1 player 1(5)
+T: 24, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 25 p0 player 0(5) p1 player 1(5)
+T: 25, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 26 p0 player 0(5) p1 player 1(5)
+T: 26, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 27 p0 player 0(5) p1 player 1(5)
+T: 27, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 28 p0 player 0(5) p1 player 1(5)
+T: 28, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 29 p0 player 0(5) p1 player 1(5)
+T: 29, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 30 p0 player 0(5) p1 player 1(5)
+T: 30, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 31 p0 player 0(5) p1 player 1(5)
+T: 31, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 32 p0 player 0(5) p1 player 1(5)
+T: 32, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 33 p0 player 0(5) p1 player 1(5)
+T: 33, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 34 p0 player 0(5) p1 player 1(5)
+T: 34, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 35 p0 player 0(5) p1 player 1(5)
+T: 35, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 36 p0 player 0(5) p1 player 1(5)
+T: 36, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 37 p0 player 0(5) p1 player 1(5)
+T: 37, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 38 p0 player 0(5) p1 player 1(5)
+T: 38, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 39 p0 player 0(5) p1 player 1(5)
+T: 39, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 40 p0 player 0(5) p1 player 1(5)
+T: 40, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 41 p0 player 0(5) p1 player 1(5)
+T: 41, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 42 p0 player 0(5) p1 player 1(5)
+T: 42, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 43 p0 player 0(5) p1 player 1(5)
+T: 43, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 44 p0 player 0(5) p1 player 1(5)
+T: 44, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 45 p0 player 0(5) p1 player 1(5)
+T: 45, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 46 p0 player 0(5) p1 player 1(5)
+T: 46, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 47 p0 player 0(5) p1 player 1(5)
+T: 47, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 48 p0 player 0(5) p1 player 1(5)
+T: 48, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 49 p0 player 0(5) p1 player 1(5)
+T: 49, P0: 0 (5), P1: 1 (5)
+Assigned Harvest to unit: Worker(8)(0, (1,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 20) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 0)=ai.abstraction.Harvest@762efe5d, Base(6)(0, (2,1), 10, 0)=ai.abstraction.Train@5d22bbb7}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+Assigned Harvest to unit: Worker(10)(0, (2,0), 1, 0) target: Resource(4)(-1, (0,0), 1, 20) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 0)=ai.abstraction.Harvest@762efe5d, Base(6)(0, (2,1), 10, 0)=ai.abstraction.Train@5d22bbb7, Worker(10)(0, (2,0), 1, 0)=ai.abstraction.Harvest@41a4555e}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 50 p0 player 0(4) p1 player 1(5)
+T: 50, P0: 0 (4), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 10, 0): produce(right,Worker)
+ gmu3r2g : Final UnitAction for Worker(10)(0, (2,0), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 51 p0 player 0(4) p1 player 1(5)
+T: 51, P0: 0 (4), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 52 p0 player 0(4) p1 player 1(5)
+T: 52, P0: 0 (4), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 53 p0 player 0(4) p1 player 1(5)
+T: 53, P0: 0 (4), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 54 p0 player 0(4) p1 player 1(5)
+T: 54, P0: 0 (4), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 55 p0 player 0(4) p1 player 1(5)
+T: 55, P0: 0 (4), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 56 p0 player 0(4) p1 player 1(5)
+T: 56, P0: 0 (4), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 57 p0 player 0(4) p1 player 1(5)
+T: 57, P0: 0 (4), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 58 p0 player 0(4) p1 player 1(5)
+T: 58, P0: 0 (4), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 59 p0 player 0(4) p1 player 1(5)
+T: 59, P0: 0 (4), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 60 p0 player 0(4) p1 player 1(4)
+T: 60, P0: 0 (4), P1: 1 (4)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (1,0), 1, 0)
+Resources carried: 0
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+ 171  in 4rd block 
+📤 Returned Final UnitAction: harvest(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+ gmu3r2g : Final UnitAction for Worker(10)(0, (1,0), 1, 0): harvest(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 61 p0 player 0(4) p1 player 1(4)
+T: 61, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 62 p0 player 0(4) p1 player 1(4)
+T: 62, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 63 p0 player 0(4) p1 player 1(4)
+T: 63, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 64 p0 player 0(4) p1 player 1(4)
+T: 64, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 65 p0 player 0(4) p1 player 1(4)
+T: 65, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 66 p0 player 0(4) p1 player 1(4)
+T: 66, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 67 p0 player 0(4) p1 player 1(4)
+T: 67, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 68 p0 player 0(4) p1 player 1(4)
+T: 68, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 69 p0 player 0(4) p1 player 1(4)
+T: 69, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 70 p0 player 0(4) p1 player 1(4)
+T: 70, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 71 p0 player 0(4) p1 player 1(4)
+T: 71, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 72 p0 player 0(4) p1 player 1(4)
+T: 72, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 73 p0 player 0(4) p1 player 1(4)
+T: 73, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 74 p0 player 0(4) p1 player 1(4)
+T: 74, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 75 p0 player 0(4) p1 player 1(4)
+T: 75, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 76 p0 player 0(4) p1 player 1(4)
+T: 76, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 77 p0 player 0(4) p1 player 1(4)
+T: 77, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 78 p0 player 0(4) p1 player 1(4)
+T: 78, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 79 p0 player 0(4) p1 player 1(4)
+T: 79, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 80 p0 player 0(4) p1 player 1(4)
+T: 80, P0: 0 (4), P1: 1 (4)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (1,0), 1, 1)
+Resources carried: 1
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+ gmu3r2g : Final UnitAction for Worker(10)(0, (1,0), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 81 p0 player 0(4) p1 player 1(4)
+T: 81, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 82 p0 player 0(4) p1 player 1(4)
+T: 82, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 83 p0 player 0(4) p1 player 1(4)
+T: 83, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 84 p0 player 0(4) p1 player 1(4)
+T: 84, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 85 p0 player 0(4) p1 player 1(4)
+T: 85, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 86 p0 player 0(4) p1 player 1(4)
+T: 86, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 87 p0 player 0(4) p1 player 1(4)
+T: 87, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 88 p0 player 0(4) p1 player 1(4)
+T: 88, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 89 p0 player 0(4) p1 player 1(4)
+T: 89, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 90 p0 player 0(4) p1 player 1(4)
+T: 90, P0: 0 (4), P1: 1 (4)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,0), 1, 1)
+Resources carried: 1
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(down)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(10)(0, (2,0), 1, 1): return(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 91 p0 player 0(4) p1 player 1(4)
+T: 91, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 92 p0 player 0(4) p1 player 1(4)
+T: 92, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 93 p0 player 0(4) p1 player 1(4)
+T: 93, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 94 p0 player 0(4) p1 player 1(4)
+T: 94, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 95 p0 player 0(4) p1 player 1(4)
+T: 95, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 96 p0 player 0(4) p1 player 1(4)
+T: 96, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 97 p0 player 0(4) p1 player 1(4)
+T: 97, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 98 p0 player 0(4) p1 player 1(4)
+T: 98, P0: 0 (4), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 99 p0 player 0(4) p1 player 1(4)
+T: 99, P0: 0 (4), P1: 1 (4)
+Assigned Harvest to unit: Worker(12)(0, (3,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 18) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 0)=ai.abstraction.Build@470e2030, Worker(10)(0, (2,0), 1, 0)=ai.abstraction.Harvest@41a4555e, Worker(12)(0, (3,1), 1, 0)=ai.abstraction.Harvest@3fb4f649}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 100 p0 player 0(5) p1 player 1(4)
+T: 100, P0: 0 (5), P1: 1 (4)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (3,1), 1, 0)
+Resources carried: 0
+Current position: (3,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(down)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): produce(up,Barracks)
+ gmu3r2g : Final UnitAction for Worker(10)(0, (2,0), 1, 0): move(right)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (3,1), 1, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 101 p0 player 0(5) p1 player 1(4)
+T: 101, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 102 p0 player 0(5) p1 player 1(4)
+T: 102, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 103 p0 player 0(5) p1 player 1(4)
+T: 103, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 104 p0 player 0(5) p1 player 1(4)
+T: 104, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 105 p0 player 0(5) p1 player 1(4)
+T: 105, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 106 p0 player 0(5) p1 player 1(4)
+T: 106, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 107 p0 player 0(5) p1 player 1(4)
+T: 107, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 108 p0 player 0(5) p1 player 1(4)
+T: 108, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 109 p0 player 0(5) p1 player 1(4)
+T: 109, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 110 p0 player 0(5) p1 player 1(5)
+T: 110, P0: 0 (5), P1: 1 (5)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (3,2), 1, 0)
+Resources carried: 0
+Current position: (3,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(10)(0, (3,0), 1, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (3,2), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 111 p0 player 0(5) p1 player 1(5)
+T: 111, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 112 p0 player 0(5) p1 player 1(5)
+T: 112, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 113 p0 player 0(5) p1 player 1(5)
+T: 113, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 114 p0 player 0(5) p1 player 1(5)
+T: 114, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 115 p0 player 0(5) p1 player 1(5)
+T: 115, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 116 p0 player 0(5) p1 player 1(5)
+T: 116, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 117 p0 player 0(5) p1 player 1(5)
+T: 117, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 118 p0 player 0(5) p1 player 1(5)
+T: 118, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 119 p0 player 0(5) p1 player 1(5)
+T: 119, P0: 0 (5), P1: 1 (5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 120 p0 player 0(5) p1 player 1(4)
+T: 120, P0: 0 (5), P1: 1 (4)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (3,1), 1, 0)
+Resources carried: 0
+Current position: (3,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(10)(0, (3,1), 1, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (2,2), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 121 p0 player 0(5) p1 player 1(4)
+T: 121, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 122 p0 player 0(5) p1 player 1(4)
+T: 122, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 123 p0 player 0(5) p1 player 1(4)
+T: 123, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 124 p0 player 0(5) p1 player 1(4)
+T: 124, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 125 p0 player 0(5) p1 player 1(4)
+T: 125, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 126 p0 player 0(5) p1 player 1(4)
+T: 126, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 127 p0 player 0(5) p1 player 1(4)
+T: 127, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 128 p0 player 0(5) p1 player 1(4)
+T: 128, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 129 p0 player 0(5) p1 player 1(4)
+T: 129, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 130 p0 player 0(5) p1 player 1(4)
+T: 130, P0: 0 (5), P1: 1 (4)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (3,2), 1, 0)
+Resources carried: 0
+Current position: (3,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(10)(0, (3,2), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (1,2), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 131 p0 player 0(5) p1 player 1(4)
+T: 131, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 132 p0 player 0(5) p1 player 1(4)
+T: 132, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 133 p0 player 0(5) p1 player 1(4)
+T: 133, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 134 p0 player 0(5) p1 player 1(4)
+T: 134, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 135 p0 player 0(5) p1 player 1(4)
+T: 135, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 136 p0 player 0(5) p1 player 1(4)
+T: 136, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 137 p0 player 0(5) p1 player 1(4)
+T: 137, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 138 p0 player 0(5) p1 player 1(4)
+T: 138, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 139 p0 player 0(5) p1 player 1(4)
+T: 139, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 140 p0 player 0(5) p1 player 1(4)
+T: 140, P0: 0 (5), P1: 1 (4)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (0,2), 1, 0)
+Resources carried: 0
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(up)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (0,2), 1, 0): move(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 141 p0 player 0(5) p1 player 1(4)
+T: 141, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 142 p0 player 0(5) p1 player 1(4)
+T: 142, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 143 p0 player 0(5) p1 player 1(4)
+T: 143, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 144 p0 player 0(5) p1 player 1(4)
+T: 144, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 145 p0 player 0(5) p1 player 1(4)
+T: 145, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 146 p0 player 0(5) p1 player 1(4)
+T: 146, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 147 p0 player 0(5) p1 player 1(4)
+T: 147, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 148 p0 player 0(5) p1 player 1(4)
+T: 148, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 149 p0 player 0(5) p1 player 1(4)
+T: 149, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 150 p0 player 0(5) p1 player 1(4)
+T: 150, P0: 0 (5), P1: 1 (4)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (0,1), 1, 0): harvest(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 151 p0 player 0(5) p1 player 1(4)
+T: 151, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 152 p0 player 0(5) p1 player 1(4)
+T: 152, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 153 p0 player 0(5) p1 player 1(4)
+T: 153, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 154 p0 player 0(5) p1 player 1(4)
+T: 154, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 155 p0 player 0(5) p1 player 1(4)
+T: 155, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 156 p0 player 0(5) p1 player 1(4)
+T: 156, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 157 p0 player 0(5) p1 player 1(4)
+T: 157, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 158 p0 player 0(5) p1 player 1(4)
+T: 158, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 159 p0 player 0(5) p1 player 1(4)
+T: 159, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 160 p0 player 0(5) p1 player 1(4)
+T: 160, P0: 0 (5), P1: 1 (4)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 161 p0 player 0(5) p1 player 1(4)
+T: 161, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 162 p0 player 0(5) p1 player 1(4)
+T: 162, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 163 p0 player 0(5) p1 player 1(4)
+T: 163, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 164 p0 player 0(5) p1 player 1(4)
+T: 164, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 165 p0 player 0(5) p1 player 1(4)
+T: 165, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 166 p0 player 0(5) p1 player 1(4)
+T: 166, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 167 p0 player 0(5) p1 player 1(4)
+T: 167, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 168 p0 player 0(5) p1 player 1(4)
+T: 168, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 169 p0 player 0(5) p1 player 1(4)
+T: 169, P0: 0 (5), P1: 1 (4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 170 p0 player 0(5) p1 player 1(3)
+T: 170, P0: 0 (5), P1: 1 (3)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(down)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (0,1), 1, 1): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 171 p0 player 0(5) p1 player 1(3)
+T: 171, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 172 p0 player 0(5) p1 player 1(3)
+T: 172, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 173 p0 player 0(5) p1 player 1(3)
+T: 173, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 174 p0 player 0(5) p1 player 1(3)
+T: 174, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 175 p0 player 0(5) p1 player 1(3)
+T: 175, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 176 p0 player 0(5) p1 player 1(3)
+T: 176, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 177 p0 player 0(5) p1 player 1(3)
+T: 177, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 178 p0 player 0(5) p1 player 1(3)
+T: 178, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 179 p0 player 0(5) p1 player 1(3)
+T: 179, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 180 p0 player 0(5) p1 player 1(3)
+T: 180, P0: 0 (5), P1: 1 (3)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (0,2), 1, 1)
+Resources carried: 1
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (0,2), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 181 p0 player 0(5) p1 player 1(3)
+T: 181, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 182 p0 player 0(5) p1 player 1(3)
+T: 182, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 183 p0 player 0(5) p1 player 1(3)
+T: 183, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 184 p0 player 0(5) p1 player 1(3)
+T: 184, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 185 p0 player 0(5) p1 player 1(3)
+T: 185, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 186 p0 player 0(5) p1 player 1(3)
+T: 186, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 187 p0 player 0(5) p1 player 1(3)
+T: 187, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 188 p0 player 0(5) p1 player 1(3)
+T: 188, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 189 p0 player 0(5) p1 player 1(3)
+T: 189, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 190 p0 player 0(5) p1 player 1(3)
+T: 190, P0: 0 (5), P1: 1 (3)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (1,2), 1, 1)
+Resources carried: 1
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(left)
+ gmu3r2g : Final UnitAction for Worker(10)(0, (2,2), 1, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (1,2), 1, 1): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 191 p0 player 0(5) p1 player 1(3)
+T: 191, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 192 p0 player 0(5) p1 player 1(3)
+T: 192, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 193 p0 player 0(5) p1 player 1(3)
+T: 193, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 194 p0 player 0(5) p1 player 1(3)
+T: 194, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 195 p0 player 0(5) p1 player 1(3)
+T: 195, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 196 p0 player 0(5) p1 player 1(3)
+T: 196, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 197 p0 player 0(5) p1 player 1(3)
+T: 197, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 198 p0 player 0(5) p1 player 1(3)
+T: 198, P0: 0 (5), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 199 p0 player 0(5) p1 player 1(3)
+T: 199, P0: 0 (5), P1: 1 (3)
+Assigned Harvest to unit: Worker(8)(0, (1,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 17) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 0)=ai.abstraction.Harvest@33833882, Worker(10)(0, (2,3), 1, 0)=ai.abstraction.Harvest@41a4555e, Worker(12)(0, (0,2), 1, 1)=ai.abstraction.Harvest@3fb4f649}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 200 p0 player 0(0) p1 player 1(3)
+T: 200, P0: 0 (0), P1: 1 (3)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,3), 1, 0)
+Resources carried: 0
+Current position: (2,3)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (0,2), 1, 1)
+Resources carried: 1
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (0,2), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 201 p0 player 0(0) p1 player 1(3)
+T: 201, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 202 p0 player 0(0) p1 player 1(3)
+T: 202, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 203 p0 player 0(0) p1 player 1(3)
+T: 203, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 204 p0 player 0(0) p1 player 1(3)
+T: 204, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 205 p0 player 0(0) p1 player 1(3)
+T: 205, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 206 p0 player 0(0) p1 player 1(3)
+T: 206, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 207 p0 player 0(0) p1 player 1(3)
+T: 207, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 208 p0 player 0(0) p1 player 1(3)
+T: 208, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 209 p0 player 0(0) p1 player 1(3)
+T: 209, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 210 p0 player 0(0) p1 player 1(3)
+T: 210, P0: 0 (0), P1: 1 (3)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,3), 1, 0)
+Resources carried: 0
+Current position: (2,3)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (1,2), 1, 1)
+Resources carried: 1
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (1,2), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 211 p0 player 0(0) p1 player 1(3)
+T: 211, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 212 p0 player 0(0) p1 player 1(3)
+T: 212, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 213 p0 player 0(0) p1 player 1(3)
+T: 213, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 214 p0 player 0(0) p1 player 1(3)
+T: 214, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 215 p0 player 0(0) p1 player 1(3)
+T: 215, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 216 p0 player 0(0) p1 player 1(3)
+T: 216, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 217 p0 player 0(0) p1 player 1(3)
+T: 217, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 218 p0 player 0(0) p1 player 1(3)
+T: 218, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 219 p0 player 0(0) p1 player 1(3)
+T: 219, P0: 0 (0), P1: 1 (3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 220 p0 player 0(0) p1 player 1(2)
+T: 220, P0: 0 (0), P1: 1 (2)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,3), 1, 0)
+Resources carried: 0
+Current position: (2,3)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (2,2), 1, 1)
+Resources carried: 1
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(up)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (2,2), 1, 1): return(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 221 p0 player 0(0) p1 player 1(2)
+T: 221, P0: 0 (0), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 222 p0 player 0(0) p1 player 1(2)
+T: 222, P0: 0 (0), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 223 p0 player 0(0) p1 player 1(2)
+T: 223, P0: 0 (0), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 224 p0 player 0(0) p1 player 1(2)
+T: 224, P0: 0 (0), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 225 p0 player 0(0) p1 player 1(2)
+T: 225, P0: 0 (0), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 226 p0 player 0(0) p1 player 1(2)
+T: 226, P0: 0 (0), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 227 p0 player 0(0) p1 player 1(2)
+T: 227, P0: 0 (0), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 228 p0 player 0(0) p1 player 1(2)
+T: 228, P0: 0 (0), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 229 p0 player 0(0) p1 player 1(2)
+T: 229, P0: 0 (0), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 230 p0 player 0(1) p1 player 1(2)
+T: 230, P0: 0 (1), P1: 1 (2)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(10)(0, (2,3), 1, 0)
+Resources carried: 0
+Current position: (2,3)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 10, 0): produce(up,Worker)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 231 p0 player 0(1) p1 player 1(2)
+T: 231, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 232 p0 player 0(1) p1 player 1(2)
+T: 232, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 233 p0 player 0(1) p1 player 1(2)
+T: 233, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 234 p0 player 0(1) p1 player 1(2)
+T: 234, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 235 p0 player 0(1) p1 player 1(2)
+T: 235, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 236 p0 player 0(1) p1 player 1(2)
+T: 236, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 237 p0 player 0(1) p1 player 1(2)
+T: 237, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 238 p0 player 0(1) p1 player 1(2)
+T: 238, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 239 p0 player 0(1) p1 player 1(2)
+T: 239, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 240 p0 player 0(1) p1 player 1(2)
+T: 240, P0: 0 (1), P1: 1 (2)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(12)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(down)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(12)(0, (2,2), 1, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 241 p0 player 0(1) p1 player 1(2)
+T: 241, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 242 p0 player 0(1) p1 player 1(2)
+T: 242, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 243 p0 player 0(1) p1 player 1(2)
+T: 243, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 244 p0 player 0(1) p1 player 1(2)
+T: 244, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 245 p0 player 0(1) p1 player 1(2)
+T: 245, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 246 p0 player 0(1) p1 player 1(2)
+T: 246, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 247 p0 player 0(1) p1 player 1(2)
+T: 247, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 248 p0 player 0(1) p1 player 1(2)
+T: 248, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 249 p0 player 0(1) p1 player 1(2)
+T: 249, P0: 0 (1), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 250 p0 player 0(2) p1 player 1(2)
+T: 250, P0: 0 (2), P1: 1 (2)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 251 p0 player 0(2) p1 player 1(2)
+T: 251, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 252 p0 player 0(2) p1 player 1(2)
+T: 252, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 253 p0 player 0(2) p1 player 1(2)
+T: 253, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 254 p0 player 0(2) p1 player 1(2)
+T: 254, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 255 p0 player 0(2) p1 player 1(2)
+T: 255, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 256 p0 player 0(2) p1 player 1(2)
+T: 256, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 257 p0 player 0(2) p1 player 1(2)
+T: 257, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 258 p0 player 0(2) p1 player 1(2)
+T: 258, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 259 p0 player 0(2) p1 player 1(2)
+T: 259, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 260 p0 player 0(2) p1 player 1(2)
+T: 260, P0: 0 (2), P1: 1 (2)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 261 p0 player 0(2) p1 player 1(2)
+T: 261, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 262 p0 player 0(2) p1 player 1(2)
+T: 262, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 263 p0 player 0(2) p1 player 1(2)
+T: 263, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 264 p0 player 0(2) p1 player 1(2)
+T: 264, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 265 p0 player 0(2) p1 player 1(2)
+T: 265, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 266 p0 player 0(2) p1 player 1(2)
+T: 266, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 267 p0 player 0(2) p1 player 1(2)
+T: 267, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 268 p0 player 0(2) p1 player 1(2)
+T: 268, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 269 p0 player 0(2) p1 player 1(2)
+T: 269, P0: 0 (2), P1: 1 (2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 270 p0 player 0(2) p1 player 1(1)
+T: 270, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 271 p0 player 0(2) p1 player 1(1)
+T: 271, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 272 p0 player 0(2) p1 player 1(1)
+T: 272, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 273 p0 player 0(2) p1 player 1(1)
+T: 273, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 274 p0 player 0(2) p1 player 1(1)
+T: 274, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 275 p0 player 0(2) p1 player 1(1)
+T: 275, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 276 p0 player 0(2) p1 player 1(1)
+T: 276, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 277 p0 player 0(2) p1 player 1(1)
+T: 277, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 278 p0 player 0(2) p1 player 1(1)
+T: 278, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 279 p0 player 0(2) p1 player 1(1)
+T: 279, P0: 0 (2), P1: 1 (1)
+Assigned Harvest to unit: Worker(18)(0, (2,0), 1, 0) target: Resource(4)(-1, (0,0), 1, 15) base: Base(6)(0, (2,1), 10, 0)
+Current actions map: {Worker(8)(0, (0,1), 1, 1)=ai.abstraction.Harvest@33833882, Base(6)(0, (2,1), 10, 0)=ai.abstraction.Train@200a570f, Worker(18)(0, (2,0), 1, 0)=ai.abstraction.Harvest@16b3fc9e}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 280 p0 player 0(1) p1 player 1(1)
+T: 280, P0: 0 (1), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 281 p0 player 0(1) p1 player 1(1)
+T: 281, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 282 p0 player 0(1) p1 player 1(1)
+T: 282, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 283 p0 player 0(1) p1 player 1(1)
+T: 283, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 284 p0 player 0(1) p1 player 1(1)
+T: 284, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 285 p0 player 0(1) p1 player 1(1)
+T: 285, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 286 p0 player 0(1) p1 player 1(1)
+T: 286, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 287 p0 player 0(1) p1 player 1(1)
+T: 287, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 288 p0 player 0(1) p1 player 1(1)
+T: 288, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 289 p0 player 0(1) p1 player 1(1)
+T: 289, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 290 p0 player 0(1) p1 player 1(1)
+T: 290, P0: 0 (1), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 10, 0): produce(right,Worker)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 291 p0 player 0(1) p1 player 1(1)
+T: 291, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 292 p0 player 0(1) p1 player 1(1)
+T: 292, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 293 p0 player 0(1) p1 player 1(1)
+T: 293, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 294 p0 player 0(1) p1 player 1(1)
+T: 294, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 295 p0 player 0(1) p1 player 1(1)
+T: 295, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 296 p0 player 0(1) p1 player 1(1)
+T: 296, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 297 p0 player 0(1) p1 player 1(1)
+T: 297, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 298 p0 player 0(1) p1 player 1(1)
+T: 298, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 299 p0 player 0(1) p1 player 1(1)
+T: 299, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 300 p0 player 0(2) p1 player 1(1)
+T: 300, P0: 0 (2), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 301 p0 player 0(2) p1 player 1(1)
+T: 301, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 302 p0 player 0(2) p1 player 1(1)
+T: 302, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 303 p0 player 0(2) p1 player 1(1)
+T: 303, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 304 p0 player 0(2) p1 player 1(1)
+T: 304, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 305 p0 player 0(2) p1 player 1(1)
+T: 305, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 306 p0 player 0(2) p1 player 1(1)
+T: 306, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 307 p0 player 0(2) p1 player 1(1)
+T: 307, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 308 p0 player 0(2) p1 player 1(1)
+T: 308, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 309 p0 player 0(2) p1 player 1(1)
+T: 309, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 310 p0 player 0(2) p1 player 1(1)
+T: 310, P0: 0 (2), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 311 p0 player 0(2) p1 player 1(1)
+T: 311, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 312 p0 player 0(2) p1 player 1(1)
+T: 312, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 313 p0 player 0(2) p1 player 1(1)
+T: 313, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 314 p0 player 0(2) p1 player 1(1)
+T: 314, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 315 p0 player 0(2) p1 player 1(1)
+T: 315, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 316 p0 player 0(2) p1 player 1(1)
+T: 316, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 317 p0 player 0(2) p1 player 1(1)
+T: 317, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 318 p0 player 0(2) p1 player 1(1)
+T: 318, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 319 p0 player 0(2) p1 player 1(1)
+T: 319, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 320 p0 player 0(2) p1 player 1(1)
+T: 320, P0: 0 (2), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 321 p0 player 0(2) p1 player 1(1)
+T: 321, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 322 p0 player 0(2) p1 player 1(1)
+T: 322, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 323 p0 player 0(2) p1 player 1(1)
+T: 323, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 324 p0 player 0(2) p1 player 1(1)
+T: 324, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 325 p0 player 0(2) p1 player 1(1)
+T: 325, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 326 p0 player 0(2) p1 player 1(1)
+T: 326, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 327 p0 player 0(2) p1 player 1(1)
+T: 327, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 328 p0 player 0(2) p1 player 1(1)
+T: 328, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 329 p0 player 0(2) p1 player 1(1)
+T: 329, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 330 p0 player 0(2) p1 player 1(1)
+T: 330, P0: 0 (2), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 331 p0 player 0(2) p1 player 1(1)
+T: 331, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 332 p0 player 0(2) p1 player 1(1)
+T: 332, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 333 p0 player 0(2) p1 player 1(1)
+T: 333, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 334 p0 player 0(2) p1 player 1(1)
+T: 334, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 335 p0 player 0(2) p1 player 1(1)
+T: 335, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 336 p0 player 0(2) p1 player 1(1)
+T: 336, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 337 p0 player 0(2) p1 player 1(1)
+T: 337, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 338 p0 player 0(2) p1 player 1(1)
+T: 338, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 339 p0 player 0(2) p1 player 1(1)
+T: 339, P0: 0 (2), P1: 1 (1)
+Assigned Harvest to unit: Worker(19)(0, (3,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 14) base: Base(6)(0, (2,1), 9, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 1)=ai.abstraction.Harvest@33833882, Worker(18)(0, (2,0), 1, 0)=ai.abstraction.Harvest@16b3fc9e, Base(6)(0, (2,1), 9, 0)=ai.abstraction.Train@e2d56bf, Worker(19)(0, (3,1), 1, 0)=ai.abstraction.Harvest@244038d0}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 340 p0 player 0(1) p1 player 1(0)
+T: 340, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(19)(0, (3,1), 1, 0)
+Resources carried: 0
+Current position: (3,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(18)(0, (2,0), 1, 0): move(right)
+ gmu3r2g : Final UnitAction for Worker(19)(0, (3,1), 1, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 341 p0 player 0(1) p1 player 1(0)
+T: 341, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 342 p0 player 0(1) p1 player 1(0)
+T: 342, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 343 p0 player 0(1) p1 player 1(0)
+T: 343, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 344 p0 player 0(1) p1 player 1(0)
+T: 344, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 345 p0 player 0(1) p1 player 1(0)
+T: 345, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 346 p0 player 0(1) p1 player 1(0)
+T: 346, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 347 p0 player 0(1) p1 player 1(0)
+T: 347, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 348 p0 player 0(1) p1 player 1(0)
+T: 348, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 349 p0 player 0(1) p1 player 1(0)
+T: 349, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 350 p0 player 0(2) p1 player 1(1)
+T: 350, P0: 0 (2), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(19)(0, (4,1), 1, 0)
+Resources carried: 0
+Current position: (4,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 8, 0): produce(up,Worker)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 351 p0 player 0(2) p1 player 1(1)
+T: 351, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 352 p0 player 0(2) p1 player 1(1)
+T: 352, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 353 p0 player 0(2) p1 player 1(1)
+T: 353, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 354 p0 player 0(2) p1 player 1(1)
+T: 354, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 355 p0 player 0(2) p1 player 1(1)
+T: 355, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 356 p0 player 0(2) p1 player 1(1)
+T: 356, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 357 p0 player 0(2) p1 player 1(1)
+T: 357, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 358 p0 player 0(2) p1 player 1(1)
+T: 358, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 359 p0 player 0(2) p1 player 1(1)
+T: 359, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 360 p0 player 0(2) p1 player 1(1)
+T: 360, P0: 0 (2), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(19)(0, (4,1), 1, 0)
+Resources carried: 0
+Current position: (4,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 361 p0 player 0(2) p1 player 1(1)
+T: 361, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 362 p0 player 0(2) p1 player 1(1)
+T: 362, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 363 p0 player 0(2) p1 player 1(1)
+T: 363, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 364 p0 player 0(2) p1 player 1(1)
+T: 364, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 365 p0 player 0(2) p1 player 1(1)
+T: 365, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 366 p0 player 0(2) p1 player 1(1)
+T: 366, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 367 p0 player 0(2) p1 player 1(1)
+T: 367, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 368 p0 player 0(2) p1 player 1(1)
+T: 368, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 369 p0 player 0(2) p1 player 1(1)
+T: 369, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 370 p0 player 0(2) p1 player 1(1)
+T: 370, P0: 0 (2), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(19)(0, (4,1), 1, 0)
+Resources carried: 0
+Current position: (4,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 371 p0 player 0(2) p1 player 1(1)
+T: 371, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 372 p0 player 0(2) p1 player 1(1)
+T: 372, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 373 p0 player 0(2) p1 player 1(1)
+T: 373, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 374 p0 player 0(2) p1 player 1(1)
+T: 374, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 375 p0 player 0(2) p1 player 1(1)
+T: 375, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 376 p0 player 0(2) p1 player 1(1)
+T: 376, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 377 p0 player 0(2) p1 player 1(1)
+T: 377, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 378 p0 player 0(2) p1 player 1(1)
+T: 378, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 379 p0 player 0(2) p1 player 1(1)
+T: 379, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 380 p0 player 0(2) p1 player 1(1)
+T: 380, P0: 0 (2), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 381 p0 player 0(2) p1 player 1(1)
+T: 381, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 382 p0 player 0(2) p1 player 1(1)
+T: 382, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 383 p0 player 0(2) p1 player 1(1)
+T: 383, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 384 p0 player 0(2) p1 player 1(1)
+T: 384, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 385 p0 player 0(2) p1 player 1(1)
+T: 385, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 386 p0 player 0(2) p1 player 1(1)
+T: 386, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 387 p0 player 0(2) p1 player 1(1)
+T: 387, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 388 p0 player 0(2) p1 player 1(1)
+T: 388, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 389 p0 player 0(2) p1 player 1(1)
+T: 389, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 390 p0 player 0(2) p1 player 1(1)
+T: 390, P0: 0 (2), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(down)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(18)(0, (3,0), 1, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 391 p0 player 0(2) p1 player 1(1)
+T: 391, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 392 p0 player 0(2) p1 player 1(1)
+T: 392, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 393 p0 player 0(2) p1 player 1(1)
+T: 393, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 394 p0 player 0(2) p1 player 1(1)
+T: 394, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 395 p0 player 0(2) p1 player 1(1)
+T: 395, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 396 p0 player 0(2) p1 player 1(1)
+T: 396, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 397 p0 player 0(2) p1 player 1(1)
+T: 397, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 398 p0 player 0(2) p1 player 1(1)
+T: 398, P0: 0 (2), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 399 p0 player 0(2) p1 player 1(1)
+T: 399, P0: 0 (2), P1: 1 (1)
+Assigned Harvest to unit: Worker(21)(0, (2,0), 1, 0) target: Resource(4)(-1, (0,0), 1, 13) base: Base(6)(0, (2,1), 7, 0)
+Current actions map: {Worker(8)(0, (1,1), 1, 0)=ai.abstraction.Harvest@33833882, Worker(18)(0, (3,1), 1, 0)=ai.abstraction.Harvest@16b3fc9e, Base(6)(0, (2,1), 7, 0)=ai.abstraction.Train@5680a178, Barracks(15)(0, (1,0), 4, 0)=ai.abstraction.Train@5fdef03a, Worker(21)(0, (2,0), 1, 0)=ai.abstraction.Harvest@3b22cdd0}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 400 p0 player 0(2) p1 player 1(0)
+T: 400, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (3,1), 1, 0)
+Resources carried: 0
+Current position: (3,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 7, 0): produce(down,Worker)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 401 p0 player 0(2) p1 player 1(0)
+T: 401, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 402 p0 player 0(2) p1 player 1(0)
+T: 402, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 403 p0 player 0(2) p1 player 1(0)
+T: 403, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 404 p0 player 0(2) p1 player 1(0)
+T: 404, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 405 p0 player 0(2) p1 player 1(0)
+T: 405, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 406 p0 player 0(2) p1 player 1(0)
+T: 406, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 407 p0 player 0(2) p1 player 1(0)
+T: 407, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 408 p0 player 0(2) p1 player 1(0)
+T: 408, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 409 p0 player 0(2) p1 player 1(0)
+T: 409, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 410 p0 player 0(2) p1 player 1(0)
+T: 410, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (3,1), 1, 0)
+Resources carried: 0
+Current position: (3,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 411 p0 player 0(2) p1 player 1(0)
+T: 411, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 412 p0 player 0(2) p1 player 1(0)
+T: 412, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 413 p0 player 0(2) p1 player 1(0)
+T: 413, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 414 p0 player 0(2) p1 player 1(0)
+T: 414, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 415 p0 player 0(2) p1 player 1(0)
+T: 415, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 416 p0 player 0(2) p1 player 1(0)
+T: 416, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 417 p0 player 0(2) p1 player 1(0)
+T: 417, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 418 p0 player 0(2) p1 player 1(0)
+T: 418, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 419 p0 player 0(2) p1 player 1(0)
+T: 419, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 420 p0 player 0(2) p1 player 1(0)
+T: 420, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (3,1), 1, 0)
+Resources carried: 0
+Current position: (3,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 421 p0 player 0(2) p1 player 1(0)
+T: 421, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 422 p0 player 0(2) p1 player 1(0)
+T: 422, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 423 p0 player 0(2) p1 player 1(0)
+T: 423, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 424 p0 player 0(2) p1 player 1(0)
+T: 424, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 425 p0 player 0(2) p1 player 1(0)
+T: 425, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 426 p0 player 0(2) p1 player 1(0)
+T: 426, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 427 p0 player 0(2) p1 player 1(0)
+T: 427, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 428 p0 player 0(2) p1 player 1(0)
+T: 428, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 429 p0 player 0(2) p1 player 1(0)
+T: 429, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 430 p0 player 0(2) p1 player 1(0)
+T: 430, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (3,1), 1, 0)
+Resources carried: 0
+Current position: (3,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 431 p0 player 0(2) p1 player 1(0)
+T: 431, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 432 p0 player 0(2) p1 player 1(0)
+T: 432, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 433 p0 player 0(2) p1 player 1(0)
+T: 433, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 434 p0 player 0(2) p1 player 1(0)
+T: 434, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 435 p0 player 0(2) p1 player 1(0)
+T: 435, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 436 p0 player 0(2) p1 player 1(0)
+T: 436, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 437 p0 player 0(2) p1 player 1(0)
+T: 437, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 438 p0 player 0(2) p1 player 1(0)
+T: 438, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 439 p0 player 0(2) p1 player 1(0)
+T: 439, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 440 p0 player 0(2) p1 player 1(0)
+T: 440, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (3,1), 1, 0)
+Resources carried: 0
+Current position: (3,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(18)(0, (3,1), 1, 0): move(right)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (2,0), 1, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 441 p0 player 0(2) p1 player 1(0)
+T: 441, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 442 p0 player 0(2) p1 player 1(0)
+T: 442, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 443 p0 player 0(2) p1 player 1(0)
+T: 443, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 444 p0 player 0(2) p1 player 1(0)
+T: 444, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 445 p0 player 0(2) p1 player 1(0)
+T: 445, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 446 p0 player 0(2) p1 player 1(0)
+T: 446, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 447 p0 player 0(2) p1 player 1(0)
+T: 447, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 448 p0 player 0(2) p1 player 1(0)
+T: 448, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 449 p0 player 0(2) p1 player 1(0)
+T: 449, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 450 p0 player 0(2) p1 player 1(0)
+T: 450, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (4,1), 1, 0)
+Resources carried: 0
+Current position: (4,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Barracks(15)(0, (1,0), 4, 0): produce(right,Light)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 451 p0 player 0(2) p1 player 1(0)
+T: 451, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 452 p0 player 0(2) p1 player 1(0)
+T: 452, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 453 p0 player 0(2) p1 player 1(0)
+T: 453, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 454 p0 player 0(2) p1 player 1(0)
+T: 454, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 455 p0 player 0(2) p1 player 1(0)
+T: 455, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 456 p0 player 0(2) p1 player 1(0)
+T: 456, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 457 p0 player 0(2) p1 player 1(0)
+T: 457, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 458 p0 player 0(2) p1 player 1(0)
+T: 458, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 459 p0 player 0(2) p1 player 1(0)
+T: 459, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 460 p0 player 0(2) p1 player 1(0)
+T: 460, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (4,1), 1, 0)
+Resources carried: 0
+Current position: (4,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 461 p0 player 0(2) p1 player 1(0)
+T: 461, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 462 p0 player 0(2) p1 player 1(0)
+T: 462, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 463 p0 player 0(2) p1 player 1(0)
+T: 463, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 464 p0 player 0(2) p1 player 1(0)
+T: 464, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 465 p0 player 0(2) p1 player 1(0)
+T: 465, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 466 p0 player 0(2) p1 player 1(0)
+T: 466, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 467 p0 player 0(2) p1 player 1(0)
+T: 467, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 468 p0 player 0(2) p1 player 1(0)
+T: 468, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 469 p0 player 0(2) p1 player 1(0)
+T: 469, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 470 p0 player 0(2) p1 player 1(0)
+T: 470, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (4,1), 1, 0)
+Resources carried: 0
+Current position: (4,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 471 p0 player 0(2) p1 player 1(0)
+T: 471, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 472 p0 player 0(2) p1 player 1(0)
+T: 472, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 473 p0 player 0(2) p1 player 1(0)
+T: 473, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 474 p0 player 0(2) p1 player 1(0)
+T: 474, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 475 p0 player 0(2) p1 player 1(0)
+T: 475, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 476 p0 player 0(2) p1 player 1(0)
+T: 476, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 477 p0 player 0(2) p1 player 1(0)
+T: 477, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 478 p0 player 0(2) p1 player 1(0)
+T: 478, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 479 p0 player 0(2) p1 player 1(0)
+T: 479, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 480 p0 player 0(2) p1 player 1(0)
+T: 480, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (4,1), 1, 0)
+Resources carried: 0
+Current position: (4,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 481 p0 player 0(2) p1 player 1(0)
+T: 481, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 482 p0 player 0(2) p1 player 1(0)
+T: 482, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 483 p0 player 0(2) p1 player 1(0)
+T: 483, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 484 p0 player 0(2) p1 player 1(0)
+T: 484, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 485 p0 player 0(2) p1 player 1(0)
+T: 485, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 486 p0 player 0(2) p1 player 1(0)
+T: 486, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 487 p0 player 0(2) p1 player 1(0)
+T: 487, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 488 p0 player 0(2) p1 player 1(0)
+T: 488, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 489 p0 player 0(2) p1 player 1(0)
+T: 489, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 490 p0 player 0(2) p1 player 1(0)
+T: 490, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (4,1), 1, 0)
+Resources carried: 0
+Current position: (4,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(18)(0, (4,1), 1, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (3,0), 1, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 491 p0 player 0(2) p1 player 1(0)
+T: 491, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 492 p0 player 0(2) p1 player 1(0)
+T: 492, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 493 p0 player 0(2) p1 player 1(0)
+T: 493, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 494 p0 player 0(2) p1 player 1(0)
+T: 494, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 495 p0 player 0(2) p1 player 1(0)
+T: 495, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 496 p0 player 0(2) p1 player 1(0)
+T: 496, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 497 p0 player 0(2) p1 player 1(0)
+T: 497, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 498 p0 player 0(2) p1 player 1(0)
+T: 498, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 499 p0 player 0(2) p1 player 1(0)
+T: 499, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 500 p0 player 0(3) p1 player 1(0)
+T: 500, P0: 0 (3), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (4,2), 1, 0)
+Resources carried: 0
+Current position: (4,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (4,0), 1, 0)
+Resources carried: 0
+Current position: (4,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 5, 0): produce(down,Worker)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 501 p0 player 0(3) p1 player 1(0)
+T: 501, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 502 p0 player 0(3) p1 player 1(0)
+T: 502, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 503 p0 player 0(3) p1 player 1(0)
+T: 503, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 504 p0 player 0(3) p1 player 1(0)
+T: 504, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 505 p0 player 0(3) p1 player 1(0)
+T: 505, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 506 p0 player 0(3) p1 player 1(0)
+T: 506, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 507 p0 player 0(3) p1 player 1(0)
+T: 507, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 508 p0 player 0(3) p1 player 1(0)
+T: 508, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 509 p0 player 0(3) p1 player 1(0)
+T: 509, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 510 p0 player 0(3) p1 player 1(0)
+T: 510, P0: 0 (3), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(18)(0, (4,2), 1, 0)
+Resources carried: 0
+Current position: (4,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (4,0), 1, 0)
+Resources carried: 0
+Current position: (4,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 0): harvest(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 511 p0 player 0(3) p1 player 1(0)
+T: 511, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 512 p0 player 0(3) p1 player 1(0)
+T: 512, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 513 p0 player 0(3) p1 player 1(0)
+T: 513, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 514 p0 player 0(3) p1 player 1(0)
+T: 514, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 515 p0 player 0(3) p1 player 1(0)
+T: 515, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 516 p0 player 0(3) p1 player 1(0)
+T: 516, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 517 p0 player 0(3) p1 player 1(0)
+T: 517, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 518 p0 player 0(3) p1 player 1(0)
+T: 518, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 519 p0 player 0(3) p1 player 1(0)
+T: 519, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 520 p0 player 0(3) p1 player 1(0)
+T: 520, P0: 0 (3), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (4,0), 1, 0)
+Resources carried: 0
+Current position: (4,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 521 p0 player 0(3) p1 player 1(0)
+T: 521, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 522 p0 player 0(3) p1 player 1(0)
+T: 522, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 523 p0 player 0(3) p1 player 1(0)
+T: 523, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 524 p0 player 0(3) p1 player 1(0)
+T: 524, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 525 p0 player 0(3) p1 player 1(0)
+T: 525, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 526 p0 player 0(3) p1 player 1(0)
+T: 526, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 527 p0 player 0(3) p1 player 1(0)
+T: 527, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 528 p0 player 0(3) p1 player 1(0)
+T: 528, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 529 p0 player 0(3) p1 player 1(0)
+T: 529, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 530 p0 player 0(1) p1 player 1(0)
+T: 530, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (4,0), 1, 0)
+Resources carried: 0
+Current position: (4,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(8)(0, (0,1), 1, 1): move(right)
+ gmu3r2g : Final UnitAction for Light(24)(0, (2,0), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 531 p0 player 0(1) p1 player 1(0)
+T: 531, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 532 p0 player 0(1) p1 player 1(0)
+T: 532, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 533 p0 player 0(1) p1 player 1(0)
+T: 533, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 534 p0 player 0(1) p1 player 1(0)
+T: 534, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 535 p0 player 0(1) p1 player 1(0)
+T: 535, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 536 p0 player 0(1) p1 player 1(0)
+T: 536, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 537 p0 player 0(1) p1 player 1(0)
+T: 537, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 538 p0 player 0(1) p1 player 1(0)
+T: 538, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,0), 4, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 539 p0 player 0(1) p1 player 1(0)
+T: 539, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 540 p0 player 0(1) p1 player 1(1)
+T: 540, P0: 0 (1), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(8)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (4,0), 1, 0)
+Resources carried: 0
+Current position: (4,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(down)
+ gmu3r2g : Final UnitAction for Worker(8)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (4,0), 1, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 541 p0 player 0(1) p1 player 1(1)
+T: 541, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 542 p0 player 0(1) p1 player 1(1)
+T: 542, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 543 p0 player 0(1) p1 player 1(1)
+T: 543, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 544 p0 player 0(1) p1 player 1(1)
+T: 544, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 545 p0 player 0(1) p1 player 1(1)
+T: 545, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 546 p0 player 0(1) p1 player 1(1)
+T: 546, P0: 0 (1), P1: 1 (1)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,1), 4, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 547 p0 player 0(1) p1 player 1(1)
+T: 547, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 548 p0 player 0(1) p1 player 1(1)
+T: 548, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 549 p0 player 0(1) p1 player 1(1)
+T: 549, P0: 0 (1), P1: 1 (1)
+Assigned Harvest to unit: Worker(25)(0, (2,2), 1, 0) target: Resource(4)(-1, (0,0), 1, 10) base: Base(6)(0, (2,1), 4, 0)
+Current actions map: {Worker(8)(0, (1,1), 0, 0)=ai.abstraction.Harvest@33833882, Worker(21)(0, (4,1), 1, 0)=ai.abstraction.Harvest@3b22cdd0, Light(24)(0, (3,1), 4, 0)=ai.abstraction.Attack@4d591d15, Base(6)(0, (2,1), 4, 0)=ai.abstraction.Train@65ae6ba4, Worker(25)(0, (2,2), 1, 0)=ai.abstraction.Harvest@48cf768c}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 550 p0 player 0(1) p1 player 1(1)
+T: 550, P0: 0 (1), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (4,1), 1, 0)
+Resources carried: 0
+Current position: (4,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(25)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(down)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (4,1), 1, 0): move(right)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 4, 0): produce(up,Worker)
+ gmu3r2g : Final UnitAction for Worker(25)(0, (2,2), 1, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 551 p0 player 0(1) p1 player 1(1)
+T: 551, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 552 p0 player 0(1) p1 player 1(1)
+T: 552, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 553 p0 player 0(1) p1 player 1(1)
+T: 553, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 554 p0 player 0(1) p1 player 1(1)
+T: 554, P0: 0 (1), P1: 1 (1)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,2), 4, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 555 p0 player 0(1) p1 player 1(1)
+T: 555, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 556 p0 player 0(1) p1 player 1(1)
+T: 556, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 557 p0 player 0(1) p1 player 1(1)
+T: 557, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 558 p0 player 0(1) p1 player 1(1)
+T: 558, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 559 p0 player 0(1) p1 player 1(1)
+T: 559, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 560 p0 player 0(1) p1 player 1(1)
+T: 560, P0: 0 (1), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (5,1), 1, 0)
+Resources carried: 0
+Current position: (5,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(25)(0, (2,3), 1, 0)
+Resources carried: 0
+Current position: (2,3)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (5,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Worker(25)(0, (2,3), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 561 p0 player 0(1) p1 player 1(1)
+T: 561, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 562 p0 player 0(1) p1 player 1(1)
+T: 562, P0: 0 (1), P1: 1 (1)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,3), 4, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 563 p0 player 0(1) p1 player 1(1)
+T: 563, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 564 p0 player 0(1) p1 player 1(1)
+T: 564, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 565 p0 player 0(1) p1 player 1(1)
+T: 565, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 566 p0 player 0(1) p1 player 1(1)
+T: 566, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 567 p0 player 0(1) p1 player 1(1)
+T: 567, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 568 p0 player 0(1) p1 player 1(1)
+T: 568, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 569 p0 player 0(1) p1 player 1(1)
+T: 569, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 570 p0 player 0(1) p1 player 1(1)
+T: 570, P0: 0 (1), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (4,1), 1, 0)
+Resources carried: 0
+Current position: (4,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(25)(0, (1,3), 1, 0)
+Resources carried: 0
+Current position: (1,3)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (4,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,4), 4, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(25)(0, (1,3), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 571 p0 player 0(1) p1 player 1(1)
+T: 571, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 572 p0 player 0(1) p1 player 1(1)
+T: 572, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 573 p0 player 0(1) p1 player 1(1)
+T: 573, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 574 p0 player 0(1) p1 player 1(1)
+T: 574, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 575 p0 player 0(1) p1 player 1(1)
+T: 575, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 576 p0 player 0(1) p1 player 1(1)
+T: 576, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 577 p0 player 0(1) p1 player 1(1)
+T: 577, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 578 p0 player 0(1) p1 player 1(1)
+T: 578, P0: 0 (1), P1: 1 (1)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,5), 4, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 579 p0 player 0(1) p1 player 1(1)
+T: 579, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 580 p0 player 0(1) p1 player 1(1)
+T: 580, P0: 0 (1), P1: 1 (1)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (3,1), 1, 0)
+Resources carried: 0
+Current position: (3,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(25)(0, (0,3), 1, 0)
+Resources carried: 0
+Current position: (0,3)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(up)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (3,1), 1, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(25)(0, (0,3), 1, 0): move(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 581 p0 player 0(1) p1 player 1(1)
+T: 581, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 582 p0 player 0(1) p1 player 1(1)
+T: 582, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 583 p0 player 0(1) p1 player 1(1)
+T: 583, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 584 p0 player 0(1) p1 player 1(1)
+T: 584, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 585 p0 player 0(1) p1 player 1(1)
+T: 585, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 586 p0 player 0(1) p1 player 1(1)
+T: 586, P0: 0 (1), P1: 1 (1)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,6), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 587 p0 player 0(1) p1 player 1(1)
+T: 587, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 588 p0 player 0(1) p1 player 1(1)
+T: 588, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 589 p0 player 0(1) p1 player 1(1)
+T: 589, P0: 0 (1), P1: 1 (1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 590 p0 player 0(1) p1 player 1(0)
+T: 590, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (3,2), 1, 0)
+Resources carried: 0
+Current position: (3,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (3,2), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 591 p0 player 0(1) p1 player 1(0)
+T: 591, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 592 p0 player 0(1) p1 player 1(0)
+T: 592, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 593 p0 player 0(1) p1 player 1(0)
+T: 593, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 594 p0 player 0(1) p1 player 1(0)
+T: 594, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (4,6), 4, 0): attack_location(5,6)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 595 p0 player 0(1) p1 player 1(0)
+T: 595, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 596 p0 player 0(1) p1 player 1(0)
+T: 596, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 597 p0 player 0(1) p1 player 1(0)
+T: 597, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 598 p0 player 0(1) p1 player 1(0)
+T: 598, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 599 p0 player 0(1) p1 player 1(0)
+T: 599, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (4,6), 4, 0): attack_location(5,6)
+Assigned Harvest to unit: Worker(27)(0, (2,0), 1, 0) target: Resource(4)(-1, (0,0), 1, 10) base: Base(6)(0, (2,1), 3, 0)
+Current actions map: {Worker(21)(0, (2,2), 1, 0)=ai.abstraction.Harvest@3b22cdd0, Light(24)(0, (4,6), 4, 0)=ai.abstraction.Attack@59f95c5d, Worker(27)(0, (2,0), 1, 0)=ai.abstraction.Harvest@5ccd43c2}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 600 p0 player 0(0) p1 player 1(0)
+T: 600, P0: 0 (0), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (2,2), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (2,0), 1, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 601 p0 player 0(0) p1 player 1(0)
+T: 601, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 602 p0 player 0(0) p1 player 1(0)
+T: 602, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 603 p0 player 0(0) p1 player 1(0)
+T: 603, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 604 p0 player 0(0) p1 player 1(0)
+T: 604, P0: 0 (0), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (4,6), 4, 0): attack_location(5,6)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 605 p0 player 0(0) p1 player 1(0)
+T: 605, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 606 p0 player 0(0) p1 player 1(0)
+T: 606, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 607 p0 player 0(0) p1 player 1(0)
+T: 607, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 608 p0 player 0(0) p1 player 1(0)
+T: 608, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 609 p0 player 0(0) p1 player 1(0)
+T: 609, P0: 0 (0), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (4,6), 4, 0): attack_location(5,6)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 610 p0 player 0(0) p1 player 1(0)
+T: 610, P0: 0 (0), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(21)(0, (1,2), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 611 p0 player 0(0) p1 player 1(0)
+T: 611, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 612 p0 player 0(0) p1 player 1(0)
+T: 612, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 613 p0 player 0(0) p1 player 1(0)
+T: 613, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 614 p0 player 0(0) p1 player 1(0)
+T: 614, P0: 0 (0), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (4,6), 4, 0): attack_location(5,6)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 615 p0 player 0(0) p1 player 1(0)
+T: 615, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 616 p0 player 0(0) p1 player 1(0)
+T: 616, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 617 p0 player 0(0) p1 player 1(0)
+T: 617, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 618 p0 player 0(0) p1 player 1(0)
+T: 618, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 619 p0 player 0(0) p1 player 1(0)
+T: 619, P0: 0 (0), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (4,6), 4, 0): attack_location(4,5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 620 p0 player 0(0) p1 player 1(0)
+T: 620, P0: 0 (0), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (0,2), 1, 0)
+Resources carried: 0
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (3,0), 1, 0)
+Resources carried: 0
+Current position: (3,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (3,0), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 621 p0 player 0(0) p1 player 1(0)
+T: 621, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 622 p0 player 0(0) p1 player 1(0)
+T: 622, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 623 p0 player 0(0) p1 player 1(0)
+T: 623, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 624 p0 player 0(0) p1 player 1(0)
+T: 624, P0: 0 (0), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (4,6), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 625 p0 player 0(0) p1 player 1(0)
+T: 625, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 626 p0 player 0(0) p1 player 1(0)
+T: 626, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 627 p0 player 0(0) p1 player 1(0)
+T: 627, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 628 p0 player 0(0) p1 player 1(0)
+T: 628, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 629 p0 player 0(0) p1 player 1(0)
+T: 629, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 630 p0 player 0(0) p1 player 1(0)
+T: 630, P0: 0 (0), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (0,2), 1, 0)
+Resources carried: 0
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (0,2), 1, 0): move(right)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (2,0), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 631 p0 player 0(0) p1 player 1(0)
+T: 631, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 632 p0 player 0(0) p1 player 1(0)
+T: 632, P0: 0 (0), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (5,6), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 633 p0 player 0(0) p1 player 1(0)
+T: 633, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 634 p0 player 0(0) p1 player 1(0)
+T: 634, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 635 p0 player 0(0) p1 player 1(0)
+T: 635, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 636 p0 player 0(0) p1 player 1(0)
+T: 636, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 637 p0 player 0(0) p1 player 1(0)
+T: 637, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 638 p0 player 0(0) p1 player 1(0)
+T: 638, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 639 p0 player 0(0) p1 player 1(0)
+T: 639, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 640 p0 player 0(0) p1 player 1(0)
+T: 640, P0: 0 (0), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,0), 1, 0)
+Resources carried: 0
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+ 171  in 4rd block 
+📤 Returned Final UnitAction: harvest(left)
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,6), 4, 0): attack_location(6,7)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,0), 1, 0): harvest(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 641 p0 player 0(0) p1 player 1(0)
+T: 641, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 642 p0 player 0(0) p1 player 1(0)
+T: 642, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 643 p0 player 0(0) p1 player 1(0)
+T: 643, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 644 p0 player 0(0) p1 player 1(0)
+T: 644, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 645 p0 player 0(0) p1 player 1(0)
+T: 645, P0: 0 (0), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,6), 4, 0): attack_location(7,6)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 646 p0 player 0(0) p1 player 1(0)
+T: 646, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 647 p0 player 0(0) p1 player 1(0)
+T: 647, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 648 p0 player 0(0) p1 player 1(0)
+T: 648, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 649 p0 player 0(0) p1 player 1(0)
+T: 649, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 650 p0 player 0(0) p1 player 1(0)
+T: 650, P0: 0 (0), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,6), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 651 p0 player 0(0) p1 player 1(0)
+T: 651, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 652 p0 player 0(0) p1 player 1(0)
+T: 652, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 653 p0 player 0(0) p1 player 1(0)
+T: 653, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 654 p0 player 0(0) p1 player 1(0)
+T: 654, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 655 p0 player 0(0) p1 player 1(0)
+T: 655, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 656 p0 player 0(0) p1 player 1(0)
+T: 656, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 657 p0 player 0(0) p1 player 1(0)
+T: 657, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 658 p0 player 0(0) p1 player 1(0)
+T: 658, P0: 0 (0), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (7,6), 4, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 659 p0 player 0(0) p1 player 1(0)
+T: 659, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 660 p0 player 0(0) p1 player 1(0)
+T: 660, P0: 0 (0), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(21)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,0), 1, 1)
+Resources carried: 1
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(21)(0, (1,2), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,0), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 661 p0 player 0(0) p1 player 1(0)
+T: 661, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 662 p0 player 0(0) p1 player 1(0)
+T: 662, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 663 p0 player 0(0) p1 player 1(0)
+T: 663, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 664 p0 player 0(0) p1 player 1(0)
+T: 664, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 665 p0 player 0(0) p1 player 1(0)
+T: 665, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 666 p0 player 0(0) p1 player 1(0)
+T: 666, P0: 0 (0), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,6), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 667 p0 player 0(0) p1 player 1(0)
+T: 667, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 668 p0 player 0(0) p1 player 1(0)
+T: 668, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 669 p0 player 0(0) p1 player 1(0)
+T: 669, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 670 p0 player 0(0) p1 player 1(0)
+T: 670, P0: 0 (0), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (2,0), 1, 1)
+Resources carried: 1
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(down)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (2,0), 1, 1): return(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 671 p0 player 0(0) p1 player 1(0)
+T: 671, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 672 p0 player 0(0) p1 player 1(0)
+T: 672, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 673 p0 player 0(0) p1 player 1(0)
+T: 673, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 674 p0 player 0(0) p1 player 1(0)
+T: 674, P0: 0 (0), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (7,6), 4, 0): move(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 675 p0 player 0(0) p1 player 1(0)
+T: 675, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 676 p0 player 0(0) p1 player 1(0)
+T: 676, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 677 p0 player 0(0) p1 player 1(0)
+T: 677, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 678 p0 player 0(0) p1 player 1(0)
+T: 678, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 679 p0 player 0(0) p1 player 1(0)
+T: 679, P0: 0 (0), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 680 p0 player 0(1) p1 player 1(0)
+T: 680, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (2,0), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 2, 0): produce(left,Worker)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 681 p0 player 0(1) p1 player 1(0)
+T: 681, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 682 p0 player 0(1) p1 player 1(0)
+T: 682, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (7,5), 4, 0): move(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 683 p0 player 0(1) p1 player 1(0)
+T: 683, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 684 p0 player 0(1) p1 player 1(0)
+T: 684, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 685 p0 player 0(1) p1 player 1(0)
+T: 685, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 686 p0 player 0(1) p1 player 1(0)
+T: 686, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 687 p0 player 0(1) p1 player 1(0)
+T: 687, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 688 p0 player 0(1) p1 player 1(0)
+T: 688, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 689 p0 player 0(1) p1 player 1(0)
+T: 689, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 690 p0 player 0(1) p1 player 1(0)
+T: 690, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,0), 1, 0)
+Resources carried: 0
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+ 171  in 4rd block 
+📤 Returned Final UnitAction: harvest(left)
+ gmu3r2g : Final UnitAction for Light(24)(0, (7,4), 4, 0): move(up)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,0), 1, 0): harvest(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 691 p0 player 0(1) p1 player 1(0)
+T: 691, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 692 p0 player 0(1) p1 player 1(0)
+T: 692, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 693 p0 player 0(1) p1 player 1(0)
+T: 693, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 694 p0 player 0(1) p1 player 1(0)
+T: 694, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 695 p0 player 0(1) p1 player 1(0)
+T: 695, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 696 p0 player 0(1) p1 player 1(0)
+T: 696, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 697 p0 player 0(1) p1 player 1(0)
+T: 697, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 698 p0 player 0(1) p1 player 1(0)
+T: 698, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (7,4), 4, 0): move(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 699 p0 player 0(1) p1 player 1(0)
+T: 699, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 700 p0 player 0(1) p1 player 1(0)
+T: 700, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 701 p0 player 0(1) p1 player 1(0)
+T: 701, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 702 p0 player 0(1) p1 player 1(0)
+T: 702, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 703 p0 player 0(1) p1 player 1(0)
+T: 703, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 704 p0 player 0(1) p1 player 1(0)
+T: 704, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 705 p0 player 0(1) p1 player 1(0)
+T: 705, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 706 p0 player 0(1) p1 player 1(0)
+T: 706, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (7,3), 4, 0): attack_location(6,3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 707 p0 player 0(1) p1 player 1(0)
+T: 707, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 708 p0 player 0(1) p1 player 1(0)
+T: 708, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 709 p0 player 0(1) p1 player 1(0)
+T: 709, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 710 p0 player 0(1) p1 player 1(0)
+T: 710, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,0), 1, 1)
+Resources carried: 1
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,0), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 711 p0 player 0(1) p1 player 1(0)
+T: 711, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (7,3), 4, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 712 p0 player 0(1) p1 player 1(0)
+T: 712, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 713 p0 player 0(1) p1 player 1(0)
+T: 713, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 714 p0 player 0(1) p1 player 1(0)
+T: 714, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 715 p0 player 0(1) p1 player 1(0)
+T: 715, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 716 p0 player 0(1) p1 player 1(0)
+T: 716, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 717 p0 player 0(1) p1 player 1(0)
+T: 717, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 718 p0 player 0(1) p1 player 1(0)
+T: 718, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 719 p0 player 0(1) p1 player 1(0)
+T: 719, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,3), 4, 0): move(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 720 p0 player 0(1) p1 player 1(0)
+T: 720, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (2,0), 1, 1)
+Resources carried: 1
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(down)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (2,0), 1, 1): return(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 721 p0 player 0(1) p1 player 1(0)
+T: 721, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 722 p0 player 0(1) p1 player 1(0)
+T: 722, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 723 p0 player 0(1) p1 player 1(0)
+T: 723, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 724 p0 player 0(1) p1 player 1(0)
+T: 724, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 725 p0 player 0(1) p1 player 1(0)
+T: 725, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 726 p0 player 0(1) p1 player 1(0)
+T: 726, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 727 p0 player 0(1) p1 player 1(0)
+T: 727, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,2), 4, 0): attack_location(6,1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 728 p0 player 0(1) p1 player 1(0)
+T: 728, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 729 p0 player 0(1) p1 player 1(0)
+T: 729, P0: 0 (1), P1: 1 (0)
+Assigned Harvest to unit: Worker(28)(0, (1,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 7) base: Base(6)(0, (2,1), 2, 0)
+Current actions map: {Light(24)(0, (6,2), 4, 0)=ai.abstraction.Attack@4aa8f0b4, Worker(27)(0, (2,0), 1, 0)=ai.abstraction.Harvest@5ccd43c2, Base(6)(0, (2,1), 2, 0)=ai.abstraction.Train@7960847b, Worker(28)(0, (1,1), 1, 0)=ai.abstraction.Harvest@6a6824be}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 730 p0 player 0(1) p1 player 1(0)
+T: 730, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (2,0), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 2, 0): produce(right,Worker)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (1,1), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 731 p0 player 0(1) p1 player 1(0)
+T: 731, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 732 p0 player 0(1) p1 player 1(0)
+T: 732, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,2), 4, 0): move(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 733 p0 player 0(1) p1 player 1(0)
+T: 733, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 734 p0 player 0(1) p1 player 1(0)
+T: 734, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 735 p0 player 0(1) p1 player 1(0)
+T: 735, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 736 p0 player 0(1) p1 player 1(0)
+T: 736, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 737 p0 player 0(1) p1 player 1(0)
+T: 737, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 738 p0 player 0(1) p1 player 1(0)
+T: 738, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 739 p0 player 0(1) p1 player 1(0)
+T: 739, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 740 p0 player 0(1) p1 player 1(0)
+T: 740, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,0), 1, 0)
+Resources carried: 0
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+ 171  in 4rd block 
+📤 Returned Final UnitAction: harvest(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,1), 4, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,0), 1, 0): harvest(left)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (0,1), 1, 0): harvest(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 741 p0 player 0(1) p1 player 1(0)
+T: 741, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 742 p0 player 0(1) p1 player 1(0)
+T: 742, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 743 p0 player 0(1) p1 player 1(0)
+T: 743, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 744 p0 player 0(1) p1 player 1(0)
+T: 744, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 745 p0 player 0(1) p1 player 1(0)
+T: 745, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 746 p0 player 0(1) p1 player 1(0)
+T: 746, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 747 p0 player 0(1) p1 player 1(0)
+T: 747, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 748 p0 player 0(1) p1 player 1(0)
+T: 748, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,2), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 749 p0 player 0(1) p1 player 1(0)
+T: 749, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 750 p0 player 0(1) p1 player 1(0)
+T: 750, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 751 p0 player 0(1) p1 player 1(0)
+T: 751, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 752 p0 player 0(1) p1 player 1(0)
+T: 752, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 753 p0 player 0(1) p1 player 1(0)
+T: 753, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 754 p0 player 0(1) p1 player 1(0)
+T: 754, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 755 p0 player 0(1) p1 player 1(0)
+T: 755, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 756 p0 player 0(1) p1 player 1(0)
+T: 756, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,2), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 757 p0 player 0(1) p1 player 1(0)
+T: 757, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 758 p0 player 0(1) p1 player 1(0)
+T: 758, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 759 p0 player 0(1) p1 player 1(0)
+T: 759, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 760 p0 player 0(1) p1 player 1(0)
+T: 760, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,0), 1, 1)
+Resources carried: 1
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(down)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,0), 1, 1): move(down)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (0,1), 1, 1): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 761 p0 player 0(1) p1 player 1(0)
+T: 761, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 762 p0 player 0(1) p1 player 1(0)
+T: 762, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 763 p0 player 0(1) p1 player 1(0)
+T: 763, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 764 p0 player 0(1) p1 player 1(0)
+T: 764, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (7,2), 4, 0): attack_location(7,1)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 765 p0 player 0(1) p1 player 1(0)
+T: 765, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 766 p0 player 0(1) p1 player 1(0)
+T: 766, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 767 p0 player 0(1) p1 player 1(0)
+T: 767, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 768 p0 player 0(1) p1 player 1(0)
+T: 768, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 769 p0 player 0(1) p1 player 1(0)
+T: 769, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (7,2), 4, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 770 p0 player 0(1) p1 player 1(0)
+T: 770, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (0,2), 1, 1)
+Resources carried: 1
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (0,2), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 771 p0 player 0(1) p1 player 1(0)
+T: 771, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 772 p0 player 0(1) p1 player 1(0)
+T: 772, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 773 p0 player 0(1) p1 player 1(0)
+T: 773, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 774 p0 player 0(1) p1 player 1(0)
+T: 774, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 775 p0 player 0(1) p1 player 1(0)
+T: 775, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 776 p0 player 0(1) p1 player 1(0)
+T: 776, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 777 p0 player 0(1) p1 player 1(0)
+T: 777, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (6,2), 4, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 778 p0 player 0(1) p1 player 1(0)
+T: 778, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 779 p0 player 0(1) p1 player 1(0)
+T: 779, P0: 0 (1), P1: 1 (0)
+Assigned Harvest to unit: Worker(29)(0, (3,1), 1, 0) target: Resource(4)(-1, (0,0), 1, 5) base: Base(6)(0, (2,1), 2, 0)
+Current actions map: {Light(24)(0, (6,2), 4, 0)=ai.abstraction.Attack@5c8da962, Worker(27)(0, (1,1), 1, 0)=ai.abstraction.Harvest@5ccd43c2, Worker(28)(0, (1,2), 1, 1)=ai.abstraction.Harvest@6a6824be, Worker(29)(0, (3,1), 1, 0)=ai.abstraction.Harvest@512ddf17}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 780 p0 player 0(1) p1 player 1(0)
+T: 780, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,2), 1, 1)
+Resources carried: 1
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(29)(0, (3,1), 1, 0)
+Resources carried: 0
+Current position: (3,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(up)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (1,2), 1, 1): move(right)
+ gmu3r2g : Final UnitAction for Worker(29)(0, (3,1), 1, 0): move(up)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 781 p0 player 0(1) p1 player 1(0)
+T: 781, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 782 p0 player 0(1) p1 player 1(0)
+T: 782, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 783 p0 player 0(1) p1 player 1(0)
+T: 783, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 784 p0 player 0(1) p1 player 1(0)
+T: 784, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 785 p0 player 0(1) p1 player 1(0)
+T: 785, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (5,2), 4, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 786 p0 player 0(1) p1 player 1(0)
+T: 786, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 787 p0 player 0(1) p1 player 1(0)
+T: 787, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 788 p0 player 0(1) p1 player 1(0)
+T: 788, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 789 p0 player 0(1) p1 player 1(0)
+T: 789, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 790 p0 player 0(1) p1 player 1(0)
+T: 790, P0: 0 (1), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (2,2), 1, 1)
+Resources carried: 1
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(up)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (0,1), 1, 0): harvest(up)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (2,2), 1, 1): return(up)
+ gmu3r2g : Final UnitAction for Base(6)(0, (2,1), 2, 0): produce(up,Worker)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 791 p0 player 0(1) p1 player 1(0)
+T: 791, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 792 p0 player 0(1) p1 player 1(0)
+T: 792, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 793 p0 player 0(1) p1 player 1(0)
+T: 793, P0: 0 (1), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (5,2), 4, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 794 p0 player 0(1) p1 player 1(0)
+T: 794, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 795 p0 player 0(1) p1 player 1(0)
+T: 795, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 796 p0 player 0(1) p1 player 1(0)
+T: 796, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 797 p0 player 0(1) p1 player 1(0)
+T: 797, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 798 p0 player 0(1) p1 player 1(0)
+T: 798, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 799 p0 player 0(1) p1 player 1(0)
+T: 799, P0: 0 (1), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 800 p0 player 0(2) p1 player 1(0)
+T: 800, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (2,2), 1, 0)
+Resources carried: 0
+Current position: (2,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (2,2), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 801 p0 player 0(2) p1 player 1(0)
+T: 801, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (4,2), 4, 0): attack_location(3,2)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 802 p0 player 0(2) p1 player 1(0)
+T: 802, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 803 p0 player 0(2) p1 player 1(0)
+T: 803, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 804 p0 player 0(2) p1 player 1(0)
+T: 804, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 805 p0 player 0(2) p1 player 1(0)
+T: 805, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 806 p0 player 0(2) p1 player 1(0)
+T: 806, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (4,2), 4, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 807 p0 player 0(2) p1 player 1(0)
+T: 807, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 808 p0 player 0(2) p1 player 1(0)
+T: 808, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 809 p0 player 0(2) p1 player 1(0)
+T: 809, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 810 p0 player 0(2) p1 player 1(0)
+T: 810, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(27)(0, (0,1), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 811 p0 player 0(2) p1 player 1(0)
+T: 811, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 812 p0 player 0(2) p1 player 1(0)
+T: 812, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 813 p0 player 0(2) p1 player 1(0)
+T: 813, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 814 p0 player 0(2) p1 player 1(0)
+T: 814, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,2), 4, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 815 p0 player 0(2) p1 player 1(0)
+T: 815, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 816 p0 player 0(2) p1 player 1(0)
+T: 816, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 817 p0 player 0(2) p1 player 1(0)
+T: 817, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 818 p0 player 0(2) p1 player 1(0)
+T: 818, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 819 p0 player 0(2) p1 player 1(0)
+T: 819, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 820 p0 player 0(2) p1 player 1(0)
+T: 820, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (1,2), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 821 p0 player 0(2) p1 player 1(0)
+T: 821, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 822 p0 player 0(2) p1 player 1(0)
+T: 822, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,3), 4, 0): attack_location(4,3)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 823 p0 player 0(2) p1 player 1(0)
+T: 823, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 824 p0 player 0(2) p1 player 1(0)
+T: 824, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 825 p0 player 0(2) p1 player 1(0)
+T: 825, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 826 p0 player 0(2) p1 player 1(0)
+T: 826, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 827 p0 player 0(2) p1 player 1(0)
+T: 827, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,3), 4, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 828 p0 player 0(2) p1 player 1(0)
+T: 828, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 829 p0 player 0(2) p1 player 1(0)
+T: 829, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 830 p0 player 0(3) p1 player 1(0)
+T: 830, P0: 0 (3), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (0,2), 1, 0)
+Resources carried: 0
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,1), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 831 p0 player 0(3) p1 player 1(0)
+T: 831, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 832 p0 player 0(3) p1 player 1(0)
+T: 832, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 833 p0 player 0(3) p1 player 1(0)
+T: 833, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 834 p0 player 0(3) p1 player 1(0)
+T: 834, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 835 p0 player 0(3) p1 player 1(0)
+T: 835, P0: 0 (3), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (2,3), 4, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 836 p0 player 0(3) p1 player 1(0)
+T: 836, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 837 p0 player 0(3) p1 player 1(0)
+T: 837, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 838 p0 player 0(3) p1 player 1(0)
+T: 838, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 839 p0 player 0(3) p1 player 1(0)
+T: 839, P0: 0 (3), P1: 1 (0)
+Assigned Harvest to unit: Worker(30)(0, (2,0), 1, 0) target: Resource(4)(-1, (0,0), 1, 4) base: Base(6)(0, (2,1), 2, 0)
+Current actions map: {Light(24)(0, (2,3), 4, 0)=ai.abstraction.Attack@2c13da15, Worker(27)(0, (0,1), 1, 0)=ai.abstraction.Harvest@5ccd43c2, Worker(28)(0, (0,2), 1, 0)=ai.abstraction.Harvest@6a6824be, Worker(30)(0, (2,0), 1, 0)=ai.abstraction.Harvest@77556fd}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 840 p0 player 0(2) p1 player 1(0)
+T: 840, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (0,2), 1, 0)
+Resources carried: 0
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(30)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (0,1), 1, 0): harvest(up)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (0,2), 1, 0): move(right)
+ gmu3r2g : Final UnitAction for Worker(30)(0, (2,0), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 841 p0 player 0(2) p1 player 1(0)
+T: 841, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 842 p0 player 0(2) p1 player 1(0)
+T: 842, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 843 p0 player 0(2) p1 player 1(0)
+T: 843, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (1,3), 4, 0): attack_location(1,4)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 844 p0 player 0(2) p1 player 1(0)
+T: 844, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 845 p0 player 0(2) p1 player 1(0)
+T: 845, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 846 p0 player 0(2) p1 player 1(0)
+T: 846, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 847 p0 player 0(2) p1 player 1(0)
+T: 847, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 848 p0 player 0(2) p1 player 1(0)
+T: 848, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (1,3), 4, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 849 p0 player 0(2) p1 player 1(0)
+T: 849, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 850 p0 player 0(2) p1 player 1(0)
+T: 850, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(30)(0, (1,0), 1, 0)
+Resources carried: 0
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+ 171  in 4rd block 
+📤 Returned Final UnitAction: harvest(left)
+ gmu3r2g : Final UnitAction for Worker(30)(0, (1,0), 1, 0): harvest(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 851 p0 player 0(2) p1 player 1(0)
+T: 851, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 852 p0 player 0(2) p1 player 1(0)
+T: 852, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 853 p0 player 0(2) p1 player 1(0)
+T: 853, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 854 p0 player 0(2) p1 player 1(0)
+T: 854, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 855 p0 player 0(2) p1 player 1(0)
+T: 855, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 856 p0 player 0(2) p1 player 1(0)
+T: 856, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (1,4), 4, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 857 p0 player 0(2) p1 player 1(0)
+T: 857, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 858 p0 player 0(2) p1 player 1(0)
+T: 858, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 859 p0 player 0(2) p1 player 1(0)
+T: 859, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 860 p0 player 0(2) p1 player 1(0)
+T: 860, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(27)(0, (0,1), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 861 p0 player 0(2) p1 player 1(0)
+T: 861, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 862 p0 player 0(2) p1 player 1(0)
+T: 862, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 863 p0 player 0(2) p1 player 1(0)
+T: 863, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 864 p0 player 0(2) p1 player 1(0)
+T: 864, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (1,5), 4, 0): attack_location(2,5)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 865 p0 player 0(2) p1 player 1(0)
+T: 865, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 866 p0 player 0(2) p1 player 1(0)
+T: 866, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 867 p0 player 0(2) p1 player 1(0)
+T: 867, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 868 p0 player 0(2) p1 player 1(0)
+T: 868, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 869 p0 player 0(2) p1 player 1(0)
+T: 869, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (1,5), 4, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 870 p0 player 0(2) p1 player 1(0)
+T: 870, P0: 0 (2), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(30)(0, (1,0), 1, 1)
+Resources carried: 1
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (1,2), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Worker(30)(0, (1,0), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 871 p0 player 0(2) p1 player 1(0)
+T: 871, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 872 p0 player 0(2) p1 player 1(0)
+T: 872, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 873 p0 player 0(2) p1 player 1(0)
+T: 873, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 874 p0 player 0(2) p1 player 1(0)
+T: 874, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 875 p0 player 0(2) p1 player 1(0)
+T: 875, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 876 p0 player 0(2) p1 player 1(0)
+T: 876, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 877 p0 player 0(2) p1 player 1(0)
+T: 877, P0: 0 (2), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (0,5), 4, 0): move(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 878 p0 player 0(2) p1 player 1(0)
+T: 878, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 879 p0 player 0(2) p1 player 1(0)
+T: 879, P0: 0 (2), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 880 p0 player 0(3) p1 player 1(0)
+T: 880, P0: 0 (3), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,1), 1, 0)
+Resources carried: 0
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (0,2), 1, 0)
+Resources carried: 0
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(30)(0, (2,0), 1, 1)
+Resources carried: 1
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(down)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Worker(30)(0, (2,0), 1, 1): return(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 881 p0 player 0(3) p1 player 1(0)
+T: 881, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 882 p0 player 0(3) p1 player 1(0)
+T: 882, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 883 p0 player 0(3) p1 player 1(0)
+T: 883, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 884 p0 player 0(3) p1 player 1(0)
+T: 884, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 885 p0 player 0(3) p1 player 1(0)
+T: 885, P0: 0 (3), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (0,6), 4, 0): attack_location(0,7)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 886 p0 player 0(3) p1 player 1(0)
+T: 886, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 887 p0 player 0(3) p1 player 1(0)
+T: 887, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 888 p0 player 0(3) p1 player 1(0)
+T: 888, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 889 p0 player 0(3) p1 player 1(0)
+T: 889, P0: 0 (3), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 890 p0 player 0(4) p1 player 1(0)
+T: 890, P0: 0 (4), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (0,1), 1, 0)
+Resources carried: 0
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Directly adjacent to resource, issuing HARVEST action.
+📤 Returned Final UnitAction: harvest(up)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (0,2), 1, 0)
+Resources carried: 0
+Current position: (0,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(30)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+✅ Returned UnitAction (move to resource): move(left)
+ gmu3r2g : Final UnitAction for Light(24)(0, (0,6), 4, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (0,1), 1, 0): harvest(up)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (0,2), 1, 0): move(right)
+ gmu3r2g : Final UnitAction for Worker(30)(0, (2,0), 1, 0): move(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 891 p0 player 0(4) p1 player 1(0)
+T: 891, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 892 p0 player 0(4) p1 player 1(0)
+T: 892, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 893 p0 player 0(4) p1 player 1(0)
+T: 893, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 894 p0 player 0(4) p1 player 1(0)
+T: 894, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 895 p0 player 0(4) p1 player 1(0)
+T: 895, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 896 p0 player 0(4) p1 player 1(0)
+T: 896, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 897 p0 player 0(4) p1 player 1(0)
+T: 897, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 898 p0 player 0(4) p1 player 1(0)
+T: 898, P0: 0 (4), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (0,7), 4, 0): attack_location(1,7)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 899 p0 player 0(4) p1 player 1(0)
+T: 899, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 900 p0 player 0(4) p1 player 1(0)
+T: 900, P0: 0 (4), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(30)(0, (1,0), 1, 0)
+Resources carried: 0
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+ 171  in 4rd block 
+📤 Returned Final UnitAction: harvest(left)
+ gmu3r2g : Final UnitAction for Worker(30)(0, (1,0), 1, 0): harvest(left)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 901 p0 player 0(4) p1 player 1(0)
+T: 901, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 902 p0 player 0(4) p1 player 1(0)
+T: 902, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 903 p0 player 0(4) p1 player 1(0)
+T: 903, P0: 0 (4), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (0,7), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 904 p0 player 0(4) p1 player 1(0)
+T: 904, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 905 p0 player 0(4) p1 player 1(0)
+T: 905, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 906 p0 player 0(4) p1 player 1(0)
+T: 906, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 907 p0 player 0(4) p1 player 1(0)
+T: 907, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 908 p0 player 0(4) p1 player 1(0)
+T: 908, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 909 p0 player 0(4) p1 player 1(0)
+T: 909, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 910 p0 player 0(4) p1 player 1(0)
+T: 910, P0: 0 (4), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (0,1), 1, 1)
+Resources carried: 1
+Current position: (0,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (0,0), Base: (2,1)
+➡️ Moving toward resource at: (0,0)
+📤 Returned Final UnitAction: null
+ gmu3r2g : Final UnitAction for Worker(27)(0, (0,1), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 911 p0 player 0(4) p1 player 1(0)
+T: 911, P0: 0 (4), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (1,7), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 912 p0 player 0(4) p1 player 1(0)
+T: 912, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 913 p0 player 0(4) p1 player 1(0)
+T: 913, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 914 p0 player 0(4) p1 player 1(0)
+T: 914, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 915 p0 player 0(4) p1 player 1(0)
+T: 915, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 916 p0 player 0(4) p1 player 1(0)
+T: 916, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 917 p0 player 0(4) p1 player 1(0)
+T: 917, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 918 p0 player 0(4) p1 player 1(0)
+T: 918, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 919 p0 player 0(4) p1 player 1(0)
+T: 919, P0: 0 (4), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (2,7), 4, 0): move(right)
+Assigned Harvest to unit: Worker(28)(0, (1,2), 1, 0) target: Resource(5)(-1, (7,7), 1, 15) base: Base(6)(0, (2,1), 2, 0)
+Current actions map: {Light(24)(0, (2,7), 4, 0)=ai.abstraction.Attack@368239c8, Worker(27)(0, (1,1), 1, 1)=ai.abstraction.Harvest@5ccd43c2, Worker(28)(0, (1,2), 1, 0)=ai.abstraction.Harvest@9e89d68, Worker(30)(0, (1,0), 1, 1)=ai.abstraction.Harvest@77556fd}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 920 p0 player 0(4) p1 player 1(0)
+T: 920, P0: 0 (4), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(27)(0, (1,1), 1, 1)
+Resources carried: 1
+Current position: (1,1)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(right)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,2), 1, 0)
+Resources carried: 0
+Current position: (1,2)
+Target: (7,7), Base: (2,1)
+➡️ Moving toward resource at: (7,7)
+✅ Returned UnitAction (move to resource): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(30)(0, (1,0), 1, 1)
+Resources carried: 1
+Current position: (1,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+✅ Returned UnitAction (move to base): move(right)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,1), 1, 1): return(right)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (1,2), 1, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(30)(0, (1,0), 1, 1): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 921 p0 player 0(4) p1 player 1(0)
+T: 921, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 922 p0 player 0(4) p1 player 1(0)
+T: 922, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 923 p0 player 0(4) p1 player 1(0)
+T: 923, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 924 p0 player 0(4) p1 player 1(0)
+T: 924, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 925 p0 player 0(4) p1 player 1(0)
+T: 925, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 926 p0 player 0(4) p1 player 1(0)
+T: 926, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 927 p0 player 0(4) p1 player 1(0)
+T: 927, P0: 0 (4), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (3,7), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 928 p0 player 0(4) p1 player 1(0)
+T: 928, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 929 p0 player 0(4) p1 player 1(0)
+T: 929, P0: 0 (4), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 930 p0 player 0(5) p1 player 1(0)
+T: 930, P0: 0 (5), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,3), 1, 0)
+Resources carried: 0
+Current position: (1,3)
+Target: (7,7), Base: (2,1)
+➡️ Moving toward resource at: (7,7)
+✅ Returned UnitAction (move to resource): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(30)(0, (2,0), 1, 1)
+Resources carried: 1
+Current position: (2,0)
+Target: (0,0), Base: (2,1)
+⬅️ Returning to base at: (2,1)
+⚠️  issue in they findPathToAdjacentPosition No path to adjacent cell of resource found. May be blocked or unreachable.
+📤 Returned Final UnitAction: return(down)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (1,1), 1, 0): move(left)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (1,3), 1, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(30)(0, (2,0), 1, 1): return(down)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 931 p0 player 0(5) p1 player 1(0)
+T: 931, P0: 0 (5), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 932 p0 player 0(5) p1 player 1(0)
+T: 932, P0: 0 (5), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 933 p0 player 0(5) p1 player 1(0)
+T: 933, P0: 0 (5), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 934 p0 player 0(5) p1 player 1(0)
+T: 934, P0: 0 (5), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 935 p0 player 0(5) p1 player 1(0)
+T: 935, P0: 0 (5), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (4,7), 4, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 936 p0 player 0(5) p1 player 1(0)
+T: 936, P0: 0 (5), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 937 p0 player 0(5) p1 player 1(0)
+T: 937, P0: 0 (5), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 938 p0 player 0(5) p1 player 1(0)
+T: 938, P0: 0 (5), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 939 p0 player 0(5) p1 player 1(0)
+T: 939, P0: 0 (5), P1: 1 (0)
+Assigned Harvest to unit: Worker(30)(0, (2,0), 1, 0) target: Resource(5)(-1, (7,7), 1, 15) base: Base(6)(0, (2,1), 2, 0)
+Current actions map: {Light(24)(0, (4,7), 4, 0)=ai.abstraction.Attack@3b192d32, Worker(27)(0, (0,1), 1, 0)=ai.abstraction.Build@16f65612, Worker(28)(0, (1,4), 1, 0)=ai.abstraction.Harvest@9e89d68, Worker(30)(0, (2,0), 1, 0)=ai.abstraction.Harvest@311d617d}
+ ---> gmu3r2g inside 136 : abstraction layer ai : 136  harvest  
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 940 p0 player 0(6) p1 player 1(0)
+T: 940, P0: 0 (6), P1: 1 (0)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(28)(0, (1,4), 1, 0)
+Resources carried: 0
+Current position: (1,4)
+Target: (7,7), Base: (2,1)
+➡️ Moving toward resource at: (7,7)
+✅ Returned UnitAction (move to resource): move(down)
+🟡 inside Harvest class : gmu3r2g
+🎯 Executing Harvest for unit: Worker(30)(0, (2,0), 1, 0)
+Resources carried: 0
+Current position: (2,0)
+Target: (7,7), Base: (2,1)
+➡️ Moving toward resource at: (7,7)
+✅ Returned UnitAction (move to resource): move(right)
+ gmu3r2g : Final UnitAction for Worker(27)(0, (0,1), 1, 0): produce(up,Barracks)
+ gmu3r2g : Final UnitAction for Worker(28)(0, (1,4), 1, 0): move(down)
+ gmu3r2g : Final UnitAction for Worker(30)(0, (2,0), 1, 0): move(right)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 941 p0 player 0(6) p1 player 1(0)
+T: 941, P0: 0 (6), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 942 p0 player 0(6) p1 player 1(0)
+T: 942, P0: 0 (6), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 943 p0 player 0(6) p1 player 1(0)
+T: 943, P0: 0 (6), P1: 1 (0)
+ gmu3r2g : Final UnitAction for Light(24)(0, (5,7), 4, 0): attack_location(5,6)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 944 p0 player 0(6) p1 player 1(0)
+T: 944, P0: 0 (6), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 945 p0 player 0(6) p1 player 1(0)
+T: 945, P0: 0 (6), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 946 p0 player 0(6) p1 player 1(0)
+T: 946, P0: 0 (6), P1: 1 (0)
+gs.gameover() = false
+Running getAction for Player: 0
+ current time 947 p0 player 0(6) p1 player 1(0)
+T: 947, P0: 0 (6), P1: 1 (0)
+
+=== GAME RESULT ===
+FINAL_TICK: 948
+WINNER: 0
+Player 0 wins!
+===================

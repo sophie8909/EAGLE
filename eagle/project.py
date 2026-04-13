@@ -20,6 +20,7 @@ THIRD_PARTY_DIR = PROJECT_ROOT / "third_party"
 PROMPTS_DIR = PROJECT_ROOT / "eagle" / "prompts"
 DEFAULT_EVOLUTION_CONFIG_PATH = EVOLUTION_CONFIGS_DIR / "default.json"
 DEFAULT_SURROGATE_VALIDATION_CONFIG_PATH = EVALUATION_CONFIGS_DIR / "surrogate_validation.json"
+DEFAULT_FINAL_TEST_CONFIG_PATH = EVALUATION_CONFIGS_DIR / "final_test.json"
 
 
 def ensure_directory(path: Path, *, tolerate_file: bool = False) -> Path:

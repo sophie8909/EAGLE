@@ -89,7 +89,9 @@ def render_surrogate_agent(repo_root: Path, prompt: str, spec: dict) -> Path:
         missing_text = ", ".join(missing_blocks)
         raise ValueError(f"Failed to locate surrogate {missing_text} markers in {java_path}")
 
-    updated = spec_pattern.sub(_render_spec_block(spec), content, count=1)
-    updated = prompt_pattern.sub(_render_prompt_array(prompt), updated, count=1)
+    rendered_spec_block = _render_spec_block(spec)
+    rendered_prompt_block = _render_prompt_array(prompt)
+    updated = spec_pattern.sub(lambda _: rendered_spec_block, content, count=1)
+    updated = prompt_pattern.sub(lambda _: rendered_prompt_block, updated, count=1)
     java_path.write_text(updated, encoding="utf-8")
     return java_path
