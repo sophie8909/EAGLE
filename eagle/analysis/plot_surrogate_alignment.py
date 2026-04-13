@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 from collections import defaultdict
 from pathlib import Path
 
-from . import analysis_config as cfg
+import matplotlib.pyplot as plt
 
 
 NUMERIC_FIELDS = {
@@ -58,48 +57,19 @@ def load_alignment_rows(csv_path: Path) -> list[dict[str, object]]:
     return rows
 
 
-def _resolve_csv_path(cli_csv_path: Path | None) -> Path:
-    """Resolve input CSV from CLI or config defaults."""
-    if cli_csv_path is not None:
-        return cli_csv_path.resolve()
-    if cfg.DEFAULT_ALIGNMENT_CSV:
-        return Path(cfg.DEFAULT_ALIGNMENT_CSV).resolve()
-    raise ValueError("No alignment CSV path provided. Pass one on the CLI or set DEFAULT_ALIGNMENT_CSV in analysis_config.py")
-
-
-def _resolve_output_dir(csv_path: Path, run_name: str | None) -> Path:
-    """Resolve output folder under eagle/analysis/result/<run>."""
-    resolved_run_name = run_name or csv_path.parent.name
-    output_dir = cfg.RESULT_ROOT / resolved_run_name
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir.resolve()
-
-
-def _write_config_snapshot(csv_path: Path, output_dir: Path, run_name: str) -> Path:
-    """Persist the effective analysis configuration next to generated plots."""
-    snapshot = {
-        "run_name": run_name,
-        "csv_path": str(csv_path),
-        "output_dir": str(output_dir),
-        "figure_dpi": cfg.FIGURE_DPI,
-        "bar_figsize": list(cfg.BAR_FIGSIZE),
-        "heatmap_min_width": cfg.HEATMAP_MIN_WIDTH,
-        "heatmap_min_height": cfg.HEATMAP_MIN_HEIGHT,
-        "heatmap_width_per_opponent": cfg.HEATMAP_WIDTH_PER_OPPONENT,
-        "heatmap_height_per_individual": cfg.HEATMAP_HEIGHT_PER_INDIVIDUAL,
-        "mean_gap_bar_color": cfg.MEAN_GAP_BAR_COLOR,
-        "same_result_bar_color": cfg.SAME_RESULT_BAR_COLOR,
-        "heatmap_cmap": cfg.HEATMAP_CMAP,
-    }
-    output_path = output_dir / cfg.CONFIG_SNAPSHOT_FILENAME
-    output_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
-    return output_path
+def _sanitize_filename(name: str) -> str:
+    """Convert a plot title or key into a filesystem-safe stem."""
+    safe = []
+    for ch in name:
+        if ch.isalnum() or ch in {"-", "_"}:
+            safe.append(ch)
+        else:
+            safe.append("_")
+    return "".join(safe).strip("_") or "plot"
 
 
 def plot_mean_gap_by_opponent(rows: list[dict[str, object]], output_dir: Path) -> Path:
     """Plot average mean absolute gap for each opponent."""
-    import matplotlib.pyplot as plt
-
     grouped: dict[str, list[float]] = defaultdict(list)
     for row in rows:
         opponent = str(row.get("opponent") or "")
@@ -110,24 +80,22 @@ def plot_mean_gap_by_opponent(rows: list[dict[str, object]], output_dir: Path) -
     opponents = sorted(grouped)
     values = [sum(grouped[opponent]) / len(grouped[opponent]) for opponent in opponents]
 
-    plt.figure(figsize=cfg.BAR_FIGSIZE)
-    plt.bar(opponents, values, color=cfg.MEAN_GAP_BAR_COLOR)
+    plt.figure(figsize=(10, 5))
+    plt.bar(opponents, values, color="#3A6EA5")
     plt.ylabel("Average Mean Absolute Gap")
     plt.xlabel("Opponent")
     plt.title("Surrogate Alignment by Opponent")
     plt.xticks(rotation=30, ha="right")
     plt.tight_layout()
 
-    output_path = output_dir / cfg.MEAN_GAP_FILENAME
-    plt.savefig(output_path, dpi=cfg.FIGURE_DPI)
+    output_path = output_dir / "mean_gap_by_opponent.png"
+    plt.savefig(output_path, dpi=180)
     plt.close()
     return output_path
 
 
 def plot_same_result_rate_by_opponent(rows: list[dict[str, object]], output_dir: Path) -> Path:
     """Plot result-label agreement rate for each opponent."""
-    import matplotlib.pyplot as plt
-
     grouped: dict[str, list[float]] = defaultdict(list)
     for row in rows:
         opponent = str(row.get("opponent") or "")
@@ -138,8 +106,8 @@ def plot_same_result_rate_by_opponent(rows: list[dict[str, object]], output_dir:
     opponents = sorted(grouped)
     values = [sum(grouped[opponent]) / len(grouped[opponent]) for opponent in opponents]
 
-    plt.figure(figsize=cfg.BAR_FIGSIZE)
-    plt.bar(opponents, values, color=cfg.SAME_RESULT_BAR_COLOR)
+    plt.figure(figsize=(10, 5))
+    plt.bar(opponents, values, color="#6BA368")
     plt.ylabel("Same Result Rate")
     plt.xlabel("Opponent")
     plt.ylim(0.0, 1.0)
@@ -147,16 +115,14 @@ def plot_same_result_rate_by_opponent(rows: list[dict[str, object]], output_dir:
     plt.xticks(rotation=30, ha="right")
     plt.tight_layout()
 
-    output_path = output_dir / cfg.SAME_RESULT_FILENAME
-    plt.savefig(output_path, dpi=cfg.FIGURE_DPI)
+    output_path = output_dir / "same_result_rate_by_opponent.png"
+    plt.savefig(output_path, dpi=180)
     plt.close()
     return output_path
 
 
 def plot_per_individual_gap_heatmap(rows: list[dict[str, object]], output_dir: Path) -> Path:
     """Plot a heatmap of mean absolute gap for each individual/opponent pair."""
-    import matplotlib.pyplot as plt
-
     opponents = sorted({str(row.get("opponent") or "") for row in rows if row.get("opponent")})
     individual_ids = sorted({str(row.get("individual_id") or "") for row in rows if row.get("individual_id")})
 
@@ -173,10 +139,8 @@ def plot_per_individual_gap_heatmap(rows: list[dict[str, object]], output_dir: P
             row_values.append(sum(numeric_values) / len(numeric_values) if numeric_values else float("nan"))
         matrix.append(row_values)
 
-    width = max(cfg.HEATMAP_MIN_WIDTH, len(opponents) * cfg.HEATMAP_WIDTH_PER_OPPONENT)
-    height = max(cfg.HEATMAP_MIN_HEIGHT, len(individual_ids) * cfg.HEATMAP_HEIGHT_PER_INDIVIDUAL)
-    plt.figure(figsize=(width, height))
-    image = plt.imshow(matrix, aspect="auto", cmap=cfg.HEATMAP_CMAP)
+    plt.figure(figsize=(max(8, len(opponents) * 1.2), max(5, len(individual_ids) * 0.45)))
+    image = plt.imshow(matrix, aspect="auto", cmap="viridis")
     plt.colorbar(image, label="Mean Absolute Gap")
     plt.xticks(range(len(opponents)), opponents, rotation=30, ha="right")
     plt.yticks(range(len(individual_ids)), individual_ids)
@@ -185,8 +149,8 @@ def plot_per_individual_gap_heatmap(rows: list[dict[str, object]], output_dir: P
     plt.title("Per-Individual Alignment Heatmap")
     plt.tight_layout()
 
-    output_path = output_dir / cfg.HEATMAP_FILENAME
-    plt.savefig(output_path, dpi=cfg.FIGURE_DPI)
+    output_path = output_dir / "alignment_heatmap.png"
+    plt.savefig(output_path, dpi=180)
     plt.close()
     return output_path
 
@@ -196,15 +160,14 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Plot surrogate-validation alignment CSV files.")
     parser.add_argument(
         "csv_path",
-        nargs="?",
         type=Path,
-        default=None,
-        help="Path to surrogate_validation_alignment.csv. Optional when set in analysis_config.py.",
+        help="Path to surrogate_validation_alignment.csv",
     )
     parser.add_argument(
-        "--run-name",
+        "--output-dir",
+        type=Path,
         default=None,
-        help="Optional output run name. Defaults to the input CSV parent folder name.",
+        help="Optional output directory for generated figures. Defaults to the CSV parent / plots.",
     )
     return parser
 
@@ -214,29 +177,21 @@ def main() -> None:
     parser = build_argument_parser()
     args = parser.parse_args()
 
-    csv_path = _resolve_csv_path(args.csv_path)
-    run_name = args.run_name or csv_path.parent.name
-    output_dir = _resolve_output_dir(csv_path, run_name)
+    csv_path = args.csv_path.resolve()
+    output_dir = (args.output_dir or (csv_path.parent / "plots")).resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     rows = load_alignment_rows(csv_path)
     if not rows:
         raise ValueError(f"No rows found in alignment CSV: {csv_path}")
 
-    try:
-        import matplotlib.pyplot  # noqa: F401
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(
-            "matplotlib is required for plotting. Install it in this environment before running eagle.analysis.plot_surrogate_alignment."
-        ) from exc
-
     generated = [
         plot_mean_gap_by_opponent(rows, output_dir),
         plot_same_result_rate_by_opponent(rows, output_dir),
         plot_per_individual_gap_heatmap(rows, output_dir),
-        _write_config_snapshot(csv_path, output_dir, run_name),
     ]
 
-    print("Generated analysis artifacts:")
+    print("Generated plots:")
     for path in generated:
         print(path)
 

@@ -1,6 +1,0 @@
-Generation 1 - Multi-objective Optimization
-
-Pareto Front 1:
-Individual(game_rule=0, strategy={}) - Fitness: [1.0, 0.1, 0.2] - EvalMode: real_history_reuse_initial
-Prompt:
-dummy prompt

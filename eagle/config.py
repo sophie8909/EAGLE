@@ -45,26 +45,33 @@ def _legacy_reproduction_operator_probs() -> dict[str, float]:
     }
 
 
+def _default_strategy_mutation() -> dict[str, float]:
+    """Return the default strategy-mutation mode distribution."""
+    return {
+        "pool_replacement": 0.40,
+        "identity_preserving_rewrite": 0.35,
+        "identity_shift_rewrite": 0.25,
+    }
+
+
 @dataclass
 class EAConfig:
     """Flat configuration surface for all EA, evaluation, and surrogate settings."""
     algorithm: str = "steady_state_nsga2"
     population_size: int = 3
     num_generations: int = 4
-    mutation_rate: float = 0.1
     reproduction_operator_probs: dict[str, float] = field(
         default_factory=_default_reproduction_operator_probs
     )
     enable_reflection_operator: bool = True
     reflection_max_components_to_rewrite: int = 1
-    strategy_mutation_pool_replacement_prob: float = 0.40
-    strategy_mutation_identity_preserving_rewrite_prob: float = 0.35
-    strategy_mutation_identity_shift_rewrite_prob: float = 0.15
-    strategy_mutation_crossover_repair_rewrite_prob: float = 0.10
+    strategy_mutation: dict[str, float] = field(
+        default_factory=_default_strategy_mutation
+    )
     selection_method: str = "random"
     tournament_size: int = 3
-    crossover_mode: str = "uniform"
-    crossover_method: str = "uniform"
+    crossover: str = "uniform"
+    crossover_repair_enabled: bool = True
     environment_selection_method: str = "elitism"
     steady_state_surrogate_offspring_count: int = 4
     steady_state_surrogate_selection_metric: str = "game_round_score"
@@ -80,35 +87,30 @@ class EAConfig:
     )
 
     surrogate_version: str = "policy"
-    surrogate_recent_log_window: int = 10
-    surrogate_game_round_samples: int = 10
+    surrogate_recent_match_window: int = 10
+    surrogate_round_samples_per_match: int = 10
     surrogate_log_dir: str = "logs"
 
     def __post_init__(self) -> None:
         """Normalize aliases and validate the config surface eagerly."""
         self._legacy_missing_reproduction_operator_probs = False
-        self._sync_crossover_aliases()
+        self._normalize_crossover()
         self.validate()
 
-    def _sync_crossover_aliases(self) -> None:
-        """Keep the legacy `crossover_method` field aligned with `crossover_mode`."""
-        normalized_mode = str(self.crossover_mode or self.crossover_method or "uniform").strip().lower()
-        normalized_method = str(self.crossover_method or normalized_mode).strip().lower()
-        if normalized_mode != normalized_method:
-            normalized_method = normalized_mode
-        self.crossover_mode = normalized_mode
-        self.crossover_method = normalized_method
+    def _normalize_crossover(self) -> None:
+        """Normalize the single crossover selector used by the active code path."""
+        self.crossover = str(self.crossover or "uniform").strip().lower()
 
     def validate(self) -> None:
         """Validate config values that affect offspring generation behavior."""
-        self._sync_crossover_aliases()
+        self._normalize_crossover()
 
         if self.reflection_max_components_to_rewrite < 1:
             raise ValueError("reflection_max_components_to_rewrite must be >= 1.")
 
-        if self.crossover_mode != "uniform":
+        if self.crossover != "uniform":
             raise ValueError(
-                f"Unsupported crossover_mode: {self.crossover_mode!r}. Only 'uniform' is supported."
+                f"Unsupported crossover: {self.crossover!r}. Only 'uniform' is supported."
             )
 
         probabilities = self._normalized_probability_input(self.reproduction_operator_probs)
@@ -141,24 +143,37 @@ class EAConfig:
                 "enable_reflection_operator and zero-probability filters."
             )
 
+        strategy_mutation = self._normalized_strategy_mutation_input(self.strategy_mutation)
+        expected_mutation_keys = {
+            "pool_replacement",
+            "identity_preserving_rewrite",
+            "identity_shift_rewrite",
+        }
+        actual_mutation_keys = set(strategy_mutation.keys())
+        if actual_mutation_keys != expected_mutation_keys:
+            raise ValueError(
+                "strategy_mutation must define exactly "
+                f"{sorted(expected_mutation_keys)}, got {sorted(actual_mutation_keys)}."
+            )
+        if all(value <= 0.0 for value in strategy_mutation.values()):
+            raise ValueError("strategy_mutation must leave at least one mode enabled.")
+
+        self.strategy_mutation = strategy_mutation
+
     def evolution_settings(self) -> dict[str, object]:
         """Return the subset of fields that control population search behavior."""
         return {
             "algorithm": self.algorithm,
             "population_size": self.population_size,
             "num_generations": self.num_generations,
-            "mutation_rate": self.mutation_rate,
             "reproduction_operator_probs": dict(self.reproduction_operator_probs),
             "enable_reflection_operator": self.enable_reflection_operator,
             "reflection_max_components_to_rewrite": self.reflection_max_components_to_rewrite,
-            "strategy_mutation_pool_replacement_prob": self.strategy_mutation_pool_replacement_prob,
-            "strategy_mutation_identity_preserving_rewrite_prob": self.strategy_mutation_identity_preserving_rewrite_prob,
-            "strategy_mutation_identity_shift_rewrite_prob": self.strategy_mutation_identity_shift_rewrite_prob,
-            "strategy_mutation_crossover_repair_rewrite_prob": self.strategy_mutation_crossover_repair_rewrite_prob,
+            "strategy_mutation": dict(self.strategy_mutation),
             "selection_method": self.selection_method,
             "tournament_size": self.tournament_size,
-            "crossover_mode": self.crossover_mode,
-            "crossover_method": self.crossover_method,
+            "crossover": self.crossover,
+            "crossover_repair_enabled": self.crossover_repair_enabled,
             "environment_selection_method": self.environment_selection_method,
             "steady_state_surrogate_offspring_count": self.steady_state_surrogate_offspring_count,
             "steady_state_surrogate_selection_metric": self.steady_state_surrogate_selection_metric,
@@ -176,8 +191,8 @@ class EAConfig:
         """Return the subset of fields used by surrogate evaluators."""
         return {
             "surrogate_version": self.surrogate_version,
-            "surrogate_recent_log_window": self.surrogate_recent_log_window,
-            "surrogate_game_round_samples": self.surrogate_game_round_samples,
+            "surrogate_recent_match_window": self.surrogate_recent_match_window,
+            "surrogate_round_samples_per_match": self.surrogate_round_samples_per_match,
             "surrogate_log_dir": self.surrogate_log_dir,
         }
 
@@ -196,19 +211,13 @@ class EAConfig:
 
     def strategy_mutation_mode_weights(self) -> dict[str, float]:
         """Return normalized sampling weights for strategy-mutation dispatch."""
-        weights = {
-            "pool_replacement": float(self.strategy_mutation_pool_replacement_prob),
-            "identity_preserving_rewrite": float(self.strategy_mutation_identity_preserving_rewrite_prob),
-            "identity_shift_rewrite": float(self.strategy_mutation_identity_shift_rewrite_prob),
-            "crossover_repair_rewrite": float(self.strategy_mutation_crossover_repair_rewrite_prob),
-        }
+        weights = self._normalized_strategy_mutation_input(self.strategy_mutation)
         total = sum(max(0.0, value) for value in weights.values())
         if total <= 0:
             return {
                 "pool_replacement": 1.0,
                 "identity_preserving_rewrite": 0.0,
                 "identity_shift_rewrite": 0.0,
-                "crossover_repair_rewrite": 0.0,
             }
         return {
             key: max(0.0, value) / total
@@ -233,6 +242,12 @@ class EAConfig:
         probabilities = dict(raw_probabilities or {})
         return {str(key): float(value) for key, value in probabilities.items()}
 
+    @staticmethod
+    def _normalized_strategy_mutation_input(raw_strategy_mutation: dict[str, float] | None) -> dict[str, float]:
+        """Convert strategy-mutation weights into a plain float dictionary."""
+        strategy_mutation = dict(raw_strategy_mutation or {})
+        return {str(key): float(value) for key, value in strategy_mutation.items()}
+
 
 def load_config_payload(payload: dict[str, Any] | None) -> EAConfig:
     """Build one validated config from a JSON-like payload."""
@@ -244,15 +259,37 @@ def load_config_payload(payload: dict[str, Any] | None) -> EAConfig:
         config.reproduction_operator_probs = _legacy_reproduction_operator_probs()
         config._legacy_missing_reproduction_operator_probs = True
 
+    legacy_strategy_mutation = {
+        "pool_replacement": payload.get("strategy_mutation_pool_replacement_prob"),
+        "identity_preserving_rewrite": payload.get("strategy_mutation_identity_preserving_rewrite_prob"),
+        "identity_shift_rewrite": payload.get("strategy_mutation_identity_shift_rewrite_prob"),
+    }
+    if "strategy_mutation" not in payload and any(value is not None for value in legacy_strategy_mutation.values()):
+        config.strategy_mutation = {
+            key: float(value)
+            for key, value in legacy_strategy_mutation.items()
+            if value is not None
+        }
+
+    legacy_crossover_repair_prob = payload.get("strategy_mutation_crossover_repair_rewrite_prob")
+    if "crossover_repair_enabled" not in payload and legacy_crossover_repair_prob is not None:
+        config.crossover_repair_enabled = float(legacy_crossover_repair_prob) > 0.0
+
+    if "surrogate_recent_match_window" not in payload and "surrogate_recent_log_window" in payload:
+        config.surrogate_recent_match_window = int(payload["surrogate_recent_log_window"])
+    if "surrogate_round_samples_per_match" not in payload and "surrogate_game_round_samples" in payload:
+        config.surrogate_round_samples_per_match = int(payload["surrogate_game_round_samples"])
+
     for key, value in payload.items():
         if key not in valid_fields:
             continue
         setattr(config, key, value)
 
-    if "crossover_mode" not in payload and "crossover_method" in payload:
-        config.crossover_mode = str(payload["crossover_method"])
-    if "crossover_method" not in payload and "crossover_mode" in payload:
-        config.crossover_method = str(payload["crossover_mode"])
+    if "crossover" not in payload:
+        if "crossover_mode" in payload:
+            config.crossover = str(payload["crossover_mode"])
+        elif "crossover_method" in payload:
+            config.crossover = str(payload["crossover_method"])
 
     config.validate()
     return config
@@ -266,3 +303,10 @@ def load_config_from_json(path_or_dir: str | Path) -> EAConfig:
         return EAConfig()
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     return load_config_payload(payload)
+
+
+def load_config_from_optional_json(path_or_dir: str | Path | None) -> EAConfig:
+    """Load one config file when provided, otherwise fall back to defaults."""
+    if path_or_dir is None:
+        return EAConfig()
+    return load_config_from_json(path_or_dir)

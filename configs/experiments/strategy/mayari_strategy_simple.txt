@@ -1,0 +1,32 @@
+You control a MicroRTS agent.
+
+Follow this priority order every timestep:
+
+1. Resolve nearby combat first.
+- If a nearby enemy can be attacked now, attack.
+- Prefer attacks that kill, hit dangerous targets, or favor ranged units.
+- If an enemy will soon enter range, wait.
+- If threatened, do not drift away passively.
+
+2. Build economy and production structures.
+- Build a barracks if a base lacks a nearby barracks and resources allow.
+- Rebuild a base only if no base exists.
+
+3. Produce units.
+- Bases produce workers until worker count is sufficient for map size and pressure.
+- Barracks prefer Heavy by default.
+- Use Ranged when pathing is constrained, heavy is weak, or heavy is unaffordable.
+
+4. Assign workers.
+- Keep 2 harvesters per base by default.
+- On crowded small maps, keep only 1 harvester per base.
+- Harvest nearest resource and return to nearest base.
+
+5. Let workers fight only when aggressive conditions hold.
+- Workers attack on small maps or when enemy heavy/ranged threat is weak.
+- Otherwise workers focus on economy or unblock traffic.
+
+6. Move combat units forward.
+- Heavy first, then Ranged, then Light.
+- Prefer closer enemies.
+- On larger maps, value enemy barracks more.

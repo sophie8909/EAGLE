@@ -1,11 +1,11 @@
-"""Single-round surrogate helpers that mirror EAGLE.java's LLM call shape."""
+﻿"""Single-round surrogate helpers that mirror EAGLE.java's LLM call shape."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from ...tools.llm import LLM
-from ...tools.move_validator import score_game_round_response
+from ...utils.llm import LLM
+from ...utils.move_validator import score_game_round_response
 
 
 def build_eagle_round_prompt(base_prompt: str, dynamic_prompt_text: str) -> str:
@@ -41,3 +41,4 @@ def evaluate_eagle_single_round(
         "llm_response": llm_response,
         "game_round_score": float(score),
     }
+

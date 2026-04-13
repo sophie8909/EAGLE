@@ -6,6 +6,8 @@ import json
 import re
 from pathlib import Path
 
+from ...envs.microrts.compiler import locate_microrts_root
+
 
 SPEC_START_MARKER = "    // SURROGATE_SPEC_START"
 SPEC_END_MARKER = "    // SURROGATE_SPEC_END"
@@ -65,7 +67,8 @@ def _render_spec_block(spec: dict) -> str:
 
 def render_surrogate_agent(repo_root: Path, prompt: str, spec: dict) -> Path:
     """Inject the prompt and surrogate spec into `EAGLESurrogate.java`."""
-    java_path = repo_root / "src" / "ai" / "abstraction" / "EAGLESurrogate.java"
+    microrts_root = locate_microrts_root(repo_root)
+    java_path = microrts_root / "src" / "ai" / "abstraction" / "EAGLESurrogate.java"
     content = java_path.read_text(encoding="utf-8")
     spec_pattern = re.compile(
         rf"{re.escape(SPEC_START_MARKER)}.*?{re.escape(SPEC_END_MARKER)}",

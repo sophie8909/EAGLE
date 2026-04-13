@@ -1,462 +1,222 @@
 ﻿![EAGLE header](docs/assets/eagle-header.svg)
 
-# EAGLE on MicroRTS
+# EAGLE
 
-This repository is centered on **EAGLE**, an evolutionary prompt optimization pipeline built on top of **MicroRTS**.
+EAGLE is the main project in this repository. MicroRTS is treated as a vendored third-party environment under `third_party/microrts`, while the Python-side research workflow lives under `eagle/`.
 
-EAGLE evolves prompt components for an LLM-based MicroRTS agent, evaluates them with both real game outcomes and surrogate estimators, and logs each generation for later replay and analysis.
-
----
-
-## What EAGLE Does
-
-EAGLE treats an agent prompt as a structured combination of:
-
-- one stable `game_rule` component
-- multiple evolvable `strategy` components
-
-These components are recombined and mutated through evolutionary search, then scored with a multi-objective fitness function:
-
-1. `win_score`
-2. `game_round_score`
-3. `resource_advantage_score`
-
-The system supports both:
-
-- real evaluation by launching actual MicroRTS games
-- surrogate evaluation using either:
-  - policy-compiled surrogate games (`policy`)
-  - sampled historical Dynamic Prompt replay (`game_round`)
-
----
-
-## Repository Focus
-
-If you are working on EAGLE, the main code lives in:
-
-- `eagle/algorithm`
-- `eagle/eval`
-- `eagle/operator`
-- `eagle/tools`
-
-The Java MicroRTS engine and LLM agents remain in the repository as the execution backend, but this README is organized around the EAGLE workflow first.
-
----
-
-## Quick Start
-
-### 1. Prepare the backend
-
-EAGLE depends on the local MicroRTS runtime and your local LLM endpoint.
-
-You should have:
-
-- Java / MicroRTS build ready
-- Ollama available at `http://localhost:11434`
-- a model such as `llama3.1:8b` already pulled
-
-Typical Ollama startup:
-
-```bash
-ollama serve
-```
-
-If you use the Java side LLM game agent directly, make sure the MicroRTS runner scripts and `resources/config.properties` are configured correctly.
-
-### 2. Configure EAGLE
-
-Main configuration lives in:
-
-- `eagle/config.py`
-
-Important settings:
-
-- `algorithm`
-- `population_size`
-- `num_generations`
-- `reproduction_operator_probs`
-- `enable_reflection_operator`
-- `reflection_max_components_to_rewrite`
-- `crossover_mode`
-- `steady_state_surrogate_offspring_count`
-- `steady_state_surrogate_selection_metric`
-- `real_eval_rate`
-- `surrogate_version`
-- `resource_advantage_alpha`
-- `resource_advantage_weights`
-
-### 3. Start an evolutionary run
-
-From the repository root:
-
-```bash
-py -3 -m eagle.main
-```
-
-This will:
-
-1. load prompt components from `eagle/prompts/components.json`
-2. initialize a population
-3. evolve prompts with GA, NSGA-II, or Steady-State NSGA-II
-4. run real and surrogate evaluations
-5. log generation results under `eagle/logs/<timestamp>`
-
----
-
-## Core Workflow
-
-### Prompt Representation
-
-Each individual is represented by:
-
-- `game_rule`
-- `strategy: dict[str, int]`
-
-The indices point into the component pool loaded from:
-
-- `eagle/prompts/components.json`
-
-Rendering happens in:
-
-- `eagle/eval/evaluate.py`
-
-### Evolutionary Algorithms
-
-Supported algorithms:
-
-- `GA`
-- `NSGA2`
-- `SteadyStateNSGA2`
-
-Implemented in:
-
-- `eagle/algorithm/ga.py`
-- `eagle/algorithm/nsga2.py`
-- `eagle/algorithm/steady_state_nsga2.py`
-
-### NSGA-II vs Steady-State NSGA-II
-
-- `NSGA2` uses generational replacement: it builds a full offspring population, then performs one environmental selection step over parents plus offspring.
-- `SteadyStateNSGA2` keeps the same NSGA-II ranking logic, tournament policy, and crowding-based survivor selection, but each generation first generates multiple candidate children, surrogate-ranks them by `game_round_score`, then sends only the best candidate to full real evaluation and immediate replacement.
-- Both variants still use the same three-objective fitness vector and the same real/surrogate evaluation pipeline.
-
-### Steady-State Reproduction Flow
-
-Steady-state NSGA-II now uses an operator-first offspring pipeline:
-
-1. sample one reproduction operator
-2. generate exactly one child with that operator
-3. surrogate-evaluate the child
-4. keep candidate metadata in `operator_profile`
-
-Supported first-class reproduction operators:
-
-- `crossover`: 2 parents, existing NSGA-II parent selection, current uniform crossover preserved
-- `mutation`: 1 parent, standalone mutation operator
-- `reflection`: 1 parent, conservative feedback-guided rewrite of a small number of strategy components
-
-The steady-state selection pipeline after child creation is unchanged:
-
-- generate a candidate batch
-- surrogate-rank by `game_round_score`
-- real-evaluate only the best candidate
-- run standard NSGA-II survivor selection
-
-### Operators
-
-- parent selection: `eagle/operator/parent_selection.py`
-- crossover: `eagle/operator/crossover.py`
-- mutation: `eagle/operator/mutation.py`
-- reflection: `eagle/operator/reflection.py`
-
-### Reproduction Configuration
-
-Steady-state operator sampling is controlled by:
-
-```python
-reproduction_operator_probs = {
-    "crossover": 0.45,
-    "mutation": 0.45,
-    "reflection": 0.10,
-}
-enable_reflection_operator = True
-reflection_max_components_to_rewrite = 1
-crossover_mode = "uniform"
-```
-
-Rules:
-
-- all three operator probabilities are configurable
-- probability `0` means the operator is never sampled
-- probabilities must sum to `1.0` within tolerance
-- if `enable_reflection_operator` is `False`, reflection is excluded automatically and the remaining weights are renormalized
-- invalid operator config fails during startup validation
-
-Backward-compatible fallback for older saved configs that do not contain `reproduction_operator_probs`:
-
-```python
-{
-    "crossover": 0.5,
-    "mutation": 0.5,
-    "reflection": 0.0,
-}
-```
-
-### Reflection Operator
-
-The first reflection scaffold is intentionally conservative:
-
-- it uses one parent only
-- it rewrites only a small subset of strategy components
-- it prefers changing 1-2 components, not the whole prompt
-- it uses compact summarized real-evaluation feedback instead of full raw logs or full raw LLM responses
-- if no reflection context is available, it falls back safely to mutation and logs that fallback
-
-### Evaluation
-
-Evaluation orchestration:
-
-- `eagle/eval/evaluate.py`
-
-Supporting modules:
-
-- real game launch and log retrieval: `eagle/tools/simulation_runner.py`
-- fitness computation: `eagle/tools/fitness_calculator.py`
-- single-round move validation: `eagle/tools/move_validator.py`
-- surrogate logic: `eagle/surrogate/eval/evaluator.py`
-
----
-
-## Fitness Design
-
-EAGLE uses a three-objective fitness vector:
-
-```python
-[win_score, game_round_score, resource_advantage_score]
-```
-
-### 1. Win Score
-
-Derived from the final winner in the game log.
-
-### 2. Game Round Score
-
-Measures how valid and executable the LLM's per-round move outputs are.
-
-### 3. Resource Advantage Score
-
-Computed from the `Feature locations` section inside Dynamic Prompt blocks.
-
-Per turn, EAGLE summarizes:
-
-- `base`
-- `worker`
-- `light`
-- `heavy`
-- `ranged`
-- `resource`
-
-Then it applies a late-game-weighted normalized difference, keeping the score in `[-1, 1]`.
-
-
-This is used both:
-
-- in real game log analysis
-- in the `game_round` surrogate mode
-
----
-
-## Surrogate Modes
-
-Configure with:
-
-```python
-surrogate_version = "policy"
-```
-
-or
-
-```python
-surrogate_version = "game_round"
-```
-
-### `policy`
-
-Compiles the prompt into a fixed policy-style surrogate spec, renders the surrogate agent, and scores it through surrogate games.
-
-### `game_round`
-
-Samples Dynamic Prompt blocks from recent logs, combines them with the candidate prompt, asks the LLM for moves, validates those moves against the sampled round state, and uses the resulting score as the surrogate signal.
-
-Relevant settings in `eagle/config.py`:
-
-- `surrogate_recent_log_window`
-- `surrogate_game_round_samples`
-- `surrogate_log_dir`
-
----
-
-## Logs and Outputs
-
-Each run creates a log directory under:
-
-- `eagle/logs/<timestamp>`
-
-Typical contents:
-
-- `config.json`
-- `component_pool.json`
-- `generation_<n>_mo.txt`
-- `run_state.json`
-- `checkpoints.jsonl`
-- `profiles.jsonl`
-- `generation_profiles.jsonl`
-
-`run_state.json` keeps the latest resumable snapshot. `checkpoints.jsonl` appends one full checkpoint after each individual evaluation, so an interrupted run can continue from the middle of a generation instead of restarting that generation.
-
-Resume commands:
-
-```bash
-py -3 -m eagle.main --resume-latest
-```
-
-or
-
-```bash
-py -3 -m eagle.main --resume-log-dir eagle/logs/20260405_123456
-```
-
-### Parsing and Reuse
-
-Game log parsing:
-
-- `eagle/tools/log_parse.py`
-
-EA generation log parsing:
-
-- `eagle/tools/ea_log_parse.py`
-
----
-
-## Final Evaluation
-
-To replay a saved final generation against the configured benchmark opponents, EAGLE uses:
-
-- `eagle/eval/final_evaluation.py`
-
-The `NSGA2` and `SteadyStateNSGA2` main flows already call final test at the end of a run.
-
----
-
-## Result Test for One Generation
-
-For ad hoc replay of a specific saved generation, use:
-
-- `eagle/eval/result_test.py`
-
-Example:
-
-```bash
-py -3 -m eagle.eval.result_test --log-dir eagle/logs/20260405_123456 --generation 10
-```
-
-Default behavior:
-
-- replays only `Pareto Front 1`
-- writes results to:
+## Repository Structure
 
 ```text
-generation_10_front_1_result_test.json
+EAGLE/
+|- README.md
+|- requirements.txt
+|- pyproject.toml
+|- configs/
+|  |- evolution/
+|  |- evaluation/
+|  `- experiments/
+|- eagle/
+|  |- __init__.py
+|  |- config.py
+|  |- main.py
+|  |- project.py
+|  |- evolution/
+|  |- evaluation/
+|  |- surrogate/
+|  |- prompts/
+|  |- analysis/
+|  |- utils/
+|  `- envs/
+|     `- microrts/
+|        |- adapter.py
+|        |- compiler.py
+|        |- parser.py
+|        `- runner.py
+|- scripts/
+|  |- run_evolution.py
+|  |- run_surrogate_validation.py
+|  |- run_prompt_eval.py
+|  |- analyze_results.py
+|  `- legacy/
+|- third_party/
+|  `- microrts/
+|- logs/
+|  |- eagle/
+|  `- microrts/
+|- results/
+|- responses/
+|- history/
+`- tests/
 ```
 
-Useful options:
+## EAGLE and MicroRTS
+
+- `eagle/` contains the Python research code: EA search, evaluation, surrogate tooling, analysis, and shared utilities.
+- `third_party/microrts/` contains the Java RTS environment, maps, resources, jars, and Java-side EAGLE agent code.
+- `eagle/envs/microrts/` is the adapter layer that centralizes MicroRTS root discovery, Java compilation, runtime execution, and log parsing.
+- New Python code should call the adapter layer instead of hardcoding MicroRTS paths.
+
+Important EAGLE-specific Java classes are still kept inside the vendored MicroRTS tree for compatibility:
+
+- `third_party/microrts/src/ai/abstraction/EAGLE.java`
+- `third_party/microrts/src/ai/abstraction/EAGLESurrogate.java`
+
+## Configs
+
+`configs/` is now part of the active workflow rather than just a placeholder.
+
+- `configs/evolution/default.json`
+  Base config used by `scripts.run_evolution` when `--config` is not provided.
+- `configs/evaluation/surrogate_validation.json`
+  Base config used by `scripts.run_surrogate_validation` when `--config` is not provided.
+- `configs/experiments/`
+  Experiment-specific artifacts and reference materials.
+
+Current behavior:
+
+- `scripts.run_evolution` loads `configs/evolution/default.json` by default.
+- `scripts.run_surrogate_validation` loads `configs/evaluation/surrogate_validation.json` by default.
+- Saved run directories still keep their own `config.json`, and resume mode uses the saved run config first.
+
+## Environment Setup
+
+1. Create and activate a Python environment.
+2. Install Python dependencies:
 
 ```bash
---individual-id ind-42
---opponent ai.RandomAI
---all-fronts
---only-winning-individuals
---output custom_result.json
+pip install -r requirements.txt
 ```
 
----
+3. Make sure `java` and `javac` are available on `PATH`.
+4. If you use the LLM-backed agents, make sure Ollama is reachable from the environment where you run EAGLE.
+5. Run all commands from the repository root.
 
-## Project Structure
+## Compile MicroRTS
 
-### EAGLE Python pipeline
+The preferred compile path is now the Python adapter, which targets `third_party/microrts`.
 
-```text
-eagle/
-|- main.py                         # main run entry and algorithm dispatch
-|- config.py                       # canonical EA configuration module
-|- algorithm/
-|  |- main.py                      # compatibility wrapper for older imports
-|  |- basic_ea.py                  # shared EA runtime scaffold
-|  |- ga.py                        # single-objective GA
-|  |- nsga2.py                     # multi-objective NSGA-II
-|  |- steady_state_nsga2.py        # steady-state multi-objective NSGA-II
-|  `- test_steady_state_nsga2.py   # focused steady-state regression checks
-|- eval/
-|  |- evaluate.py                  # evaluation orchestrator
-|  |- final_evaluation.py          # final replay evaluation
-|  `- result_test.py               # replay a specific generation on demand
-|- operator/
-|  |- crossover.py                 # crossover operators
-|  |- mutation.py                  # mutation operators
-|  |- reflection.py                # reflection operator scaffold
-|  |- parent_selection.py          # parent selection
-|  `- environment_selection.py     # survivor selection helpers
-|- tools/
-|  |- config.py                    # compatibility shim for older config imports
-|  |- individual.py                # candidate prompt representation
-|  |- component_pool.py            # prompt component storage
-|  |- simulation_runner.py         # launches MicroRTS and collects logs
-|  |- fitness_calculator.py        # fitness computation
-|  |- move_validator.py            # round-level move legality checks
-|  |- log_parse.py                 # MicroRTS game log parsing
-|  |- ea_log_parse.py              # EA generation log parsing
-|  |- checkpoint.py                # checkpoint serialization
-|  |- fitness_recorder.py          # history and record management
-|  `- profiler.py                  # JSONL profiling helpers
-`- surrogate/
-   |- compiler/
-   `- eval/
+```python
+from eagle.envs.microrts import compile_microrts
+
+compile_microrts()
 ```
 
-### MicroRTS backend
+This compiles Java sources from `third_party/microrts/src` and writes classes into `third_party/microrts/bin`.
 
-Relevant backend locations:
+## Main Scripts
 
-- `src`
-- `resources/config.properties`
-- `RunLoop.sh`
-- `RunLoop_5000.sh`
-- `maps`
+The primary user-facing entrypoints are under `scripts/`.
 
----
+### 1. `scripts.run_evolution`
 
-## Typical Research Loop
+Run the main EA workflow:
 
-1. define or update prompt components in `eagle/prompts/components.json`
-2. configure EA settings in `eagle/config.py`
-3. run `py -3 -m eagle.main`
-4. inspect generation logs and JSONL profiles
-5. replay strong generations with `eagle/eval/result_test.py`
-6. compare Pareto-front prompts and final replay outcomes
+```bash
+python -m scripts.run_evolution
+```
 
----
+Useful examples:
+
+```bash
+python -m scripts.run_evolution --quick-run --timeout-sec 60 --skip-final-test
+python -m scripts.run_evolution --config configs/evolution/default.json
+python -m scripts.run_evolution --algorithm steady_state_nsga2
+python -m scripts.run_evolution --resume-latest
+python -m scripts.run_evolution --resume-log-dir logs/<run_dir>
+python -m scripts.run_evolution --opponent ai.PassiveAI
+```
+
+Key options:
+
+- `--config`: load one base config JSON file
+- `--quick-run`: run a minimal end-to-end EA benchmark
+- `--timeout-sec`: override per-game timeout
+- `--skip-final-test`: skip the extra final replay stage
+- `--resume-latest`: resume the newest run under `logs/`
+- `--resume-log-dir`: resume a specific log directory
+- `--opponent`: use one specific opponent class
+
+Outputs:
+
+- per-run logs under `logs/eagle/<timestamp>/`
+- generation summaries, profiles, checkpoints, and run state in the run directory
+
+### 2. `scripts.run_surrogate_validation`
+
+Compare prompt-based EAGLE evaluation with surrogate-Java evaluation:
+
+```bash
+python -m scripts.run_surrogate_validation
+```
+
+Useful examples:
+
+```bash
+python -m scripts.run_surrogate_validation --smoke-test
+python -m scripts.run_surrogate_validation --quick-run --timeout-sec 60
+python -m scripts.run_surrogate_validation --config configs/evaluation/surrogate_validation.json
+python -m scripts.run_surrogate_validation --opponent ai.PassiveAI
+python -m scripts.run_surrogate_validation --num-individuals 3
+```
+
+Key options:
+
+- `--config`: load one surrogate-validation config JSON file
+- `--smoke-test`: verify prompt/spec generation and MicroRTS wiring without launching games
+- `--quick-run`: run one individual against one opponent using real matches
+- `--timeout-sec`: override per-game timeout
+- `--opponent`: add one or more opponents
+- `--num-individuals`: control how many sampled prompts are benchmarked
+
+Outputs:
+
+- run logs under `logs/eagle/surrogate_validation_<timestamp>/`
+- alignment summary between EAGLE and surrogate-Java evaluation
+
+### 3. `scripts.run_prompt_eval`
+
+Replay saved individuals from a previous EA run:
+
+```bash
+python -m scripts.run_prompt_eval --log-dir logs/<run_dir> --generation <N>
+```
+
+Useful examples:
+
+```bash
+python -m scripts.run_prompt_eval --log-dir logs/<run_dir> --generation 1
+python -m scripts.run_prompt_eval --log-dir logs/<run_dir> --generation 1 --opponent ai.RandomAI
+python -m scripts.run_prompt_eval --log-dir logs/<run_dir> --generation 1 --individual-id ind-3
+python -m scripts.run_prompt_eval --log-dir logs/<run_dir> --generation 1 --max-front 3
+python -m scripts.run_prompt_eval --log-dir logs/<run_dir> --generation 1 --all-fronts
+```
+
+Key options:
+
+- `--log-dir`: path to one EA run directory
+- `--generation`: saved generation number to replay
+- `--opponent`: override the benchmark opponent list
+- `--individual-id`: replay only one individual
+- `--max-front`: replay Pareto Front 1 up to N
+- `--all-fronts`: replay every saved individual in the generation
+- `--output`: write results to a custom JSON path
+
+Outputs:
+
+- a JSON result file in the run directory unless `--output` is provided
+
+## Output Locations
+
+- EAGLE run logs: `logs/eagle/<timestamp>/`
+- Surrogate validation logs: `logs/eagle/surrogate_validation_<timestamp>/`
+- MicroRTS runtime logs: `logs/microrts/*.log`
+- Response CSV files: `responses/`
+- Analysis outputs: `results/analysis/`
+- Legacy archived files: `results/legacy_archive/`
+- Cross-run fitness history: `history/fitness_history.jsonl`
 
 ## Notes
 
-- `llm_crossover` in `eagle/operator/crossover.py` is currently a documented placeholder and falls back to uniform crossover.
-- `crossover_mode` is still the user-facing crossover switch, and the current stable implementation is `uniform`.
-- reflection currently uses compact summary feedback from the parent's latest real evaluation instead of a full trajectory-level analysis.
-- The current pipeline is organized so that `Evaluator` stays mostly orchestration, while parsing, surrogate scoring, and simulation launching live in separate modules.
-
----
-
-## MicroRTS Attribution
-
-MicroRTS originates from the research environment created by Santiago Ontanon.
-
-If you use this repository in research, please cite the original MicroRTS work as well as your EAGLE-specific work or repository snapshot.
+- `scripts/legacy/` contains older helper scripts that were kept for reference.
+- Some result metadata still uses legacy field names such as `runner_script`, even though the actual runtime path is now the Python adapter.
+- The active MicroRTS location is `third_party/microrts`. The old root-level MicroRTS copy has been removed.

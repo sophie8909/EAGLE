@@ -1,1 +1,0 @@
-{"algorithm": "nsga2", "phase": "generation_real_eval", "generation": 4, "log_dir": "out\\checkpoint_smoke", "population": [{"id": "ind-7", "game_rule": 2, "strategy": {"attack": 3}, "fitness": [1.0, 0.5, -0.2], "legacy_components": {}, "operator_profile": {"mutation_time": 1.25}}], "offspring": [], "meta": {"next_real_eval_index": 2}}

@@ -1,12 +1,12 @@
-"""Evaluate prompts through surrogate game-round or policy-based pipelines."""
+﻿"""Evaluate prompts through surrogate game-round or policy-based pipelines."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from ...tools.llm import LLM
-from ...tools.log_parse import sample_recent_dynamic_prompts
-from ...tools.fitness_utils import normalize_fitness
+from ...utils.llm import LLM
+from ...utils.log_parse import sample_recent_dynamic_prompts
+from ...utils.fitness_utils import normalize_fitness
 from .single_round import evaluate_eagle_single_round
 
 # The original prompt-only LLM surrogate path is intentionally disabled.
@@ -76,8 +76,8 @@ def estimate_llm_game_round_score(
     logs_dir = _resolve_surrogate_logs_dir(repo_root, config)
     sampled_dynamic_prompts = sample_recent_dynamic_prompts(
         logs_dir,
-        recent_count=max(1, int(getattr(config, "surrogate_recent_log_window", 10))),
-        sample_count=max(1, int(getattr(config, "surrogate_game_round_samples", 10))),
+        recent_count=max(1, int(getattr(config, "surrogate_recent_match_window", 10))),
+        sample_count=max(1, int(getattr(config, "surrogate_round_samples_per_match", 10))),
     )
     if not sampled_dynamic_prompts:
         print("No recent Dynamic Prompt samples found for LLM game-round surrogate; using 0.0.")
@@ -170,3 +170,4 @@ def surrogate_evaluation_policy(
         f"log={metadata.get('log_path') if metadata else None}"
     )
     return fitness
+

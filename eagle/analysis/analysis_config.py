@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..project import RESULTS_DIR
 
 ANALYSIS_ROOT = Path(__file__).resolve().parent
-RESULT_ROOT = ANALYSIS_ROOT / "result"
+RESULT_ROOT = RESULTS_DIR / "analysis"
 
 # Optional default input. Keep None when you prefer passing CSV path via CLI.
 DEFAULT_ALIGNMENT_CSV: str | None = None
