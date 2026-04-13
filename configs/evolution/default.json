@@ -24,7 +24,7 @@
   "final_test_max_front": 1,
   "run_time_per_game_sec": 500,
   "real_eval_rate": 0.25,
-  "llm_interval": 1,
+  "llm_interval": 10,
   "resource_advantage_alpha": 2.0,
   "resource_advantage_weights": {
     "base": 10.0,

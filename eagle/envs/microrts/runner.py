@@ -171,20 +171,20 @@ def run_java_agent_game(
         set_ai1(project_root, ai1_class)
         if opponent is not None:
             set_opponent(project_root, opponent)
-        set_llm_interval(project_root, getattr(config, "llm_interval", 1))
+        set_llm_interval(project_root, config.llm_interval)
 
         log_path = _make_log_path(project_root, prefix=log_prefix)
         exit_code, timed_out, log_path_str, game_time_sec = launch_java_match(
             project_root=project_root,
-            run_time_per_game_sec=int(getattr(config, "run_time_per_game_sec", 5000)),
+            run_time_per_game_sec=int(config.run_time_per_game_sec),
             log_path=log_path,
         )
         log_content = Path(log_path_str).read_text(encoding="utf-8", errors="replace")
         parsed_log = parse_game_log(log_content, target_agent=_target_agent_name(ai1_class))
         fitness = calculate_fitness_score(
             log_content,
-            resource_advantage_alpha=getattr(config, "resource_advantage_alpha", 2.0),
-            resource_advantage_weights=getattr(config, "resource_advantage_weights", {}),
+            resource_advantage_alpha=config.resource_advantage_alpha,
+            resource_advantage_weights=config.resource_advantage_weights,
             parsed_log=parsed_log,
         )
         metadata = {

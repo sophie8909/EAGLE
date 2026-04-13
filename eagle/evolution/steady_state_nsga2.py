@@ -233,9 +233,7 @@ class SteadyStateNSGA2(NSGA2):
         if not candidates:
             raise ValueError("steady-state candidate batch cannot be empty")
 
-        selection_metric = str(
-            getattr(self.config, "steady_state_surrogate_selection_metric", "game_round_score")
-        ).strip().lower()
+        selection_metric = str(self.config.steady_state_surrogate_selection_metric).strip().lower()
         if selection_metric != "game_round_score":
             raise ValueError(
                 "steady_state_surrogate_selection_metric currently only supports "

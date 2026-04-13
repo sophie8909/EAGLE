@@ -13,7 +13,7 @@ from .result_test import build_result_record, extract_individual_ids_up_to_front
 
 def _resolve_final_test_max_front(config: EAConfig) -> int | None:
     """Default missing final-test front limits to Pareto Front 1."""
-    configured_value = getattr(config, "final_test_max_front", 1)
+    configured_value = config.final_test_max_front
     if configured_value is None:
         return 1
     return configured_value
@@ -43,7 +43,7 @@ def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: in
 def _build_final_test_interval_runs(config: EAConfig) -> list[dict[str, int | str]]:
     """Return the two final-test interval variants that should always be evaluated."""
 
-    configured_interval = int(getattr(config, "llm_interval", 1))
+    configured_interval = int(config.llm_interval)
     return [
         {"label": "config", "llm_interval": configured_interval},
         {"label": "interval_1", "llm_interval": 1},

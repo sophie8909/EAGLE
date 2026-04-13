@@ -61,7 +61,7 @@ from .single_round import evaluate_eagle_single_round
 
 def _resolve_surrogate_logs_dir(repo_root: Path, config) -> Path:
     """Resolve the log directory used for sampled Dynamic Prompt surrogate rounds."""
-    configured = Path(str(getattr(config, "surrogate_log_dir", "logs")))
+    configured = Path(str(config.surrogate_log_dir))
     if configured.is_absolute():
         return configured
     return repo_root / configured
@@ -76,8 +76,8 @@ def estimate_llm_game_round_score(
     logs_dir = _resolve_surrogate_logs_dir(repo_root, config)
     sampled_dynamic_prompts = sample_recent_dynamic_prompts(
         logs_dir,
-        recent_count=max(1, int(getattr(config, "surrogate_recent_match_window", 10))),
-        sample_count=max(1, int(getattr(config, "surrogate_round_samples_per_match", 10))),
+        recent_count=max(1, int(config.surrogate_recent_match_window)),
+        sample_count=max(1, int(config.surrogate_round_samples_per_match)),
     )
     if not sampled_dynamic_prompts:
         print("No recent Dynamic Prompt samples found for LLM game-round surrogate; using 0.0.")
