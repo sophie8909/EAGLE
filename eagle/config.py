@@ -8,32 +8,36 @@ inside refactored modules.
 
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import math
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-
-def _default_resource_advantage_weights() -> dict[str, float]:
-    """Return the default material weights used by the resource-advantage objective."""
-    return {
-        "base": 10.0,
-        "worker": 1.0,
-        "light": 2.0,
-        "heavy": 2.0,
-        "ranged": 2.0,
-        "resource": 1.0,
-    }
+from .project import DEFAULT_EVOLUTION_CONFIG_PATH
 
 
-def _default_reproduction_operator_probs() -> dict[str, float]:
-    """Return the default steady-state reproduction-operator distribution."""
-    return {
-        "crossover": 0.45,
-        "mutation": 0.45,
-        "reflection": 0.10,
-    }
+@lru_cache(maxsize=1)
+def _default_evolution_payload() -> dict[str, Any]:
+    """Load the canonical default EA settings from configs/evolution/default.json."""
+    if not DEFAULT_EVOLUTION_CONFIG_PATH.exists():
+        raise FileNotFoundError(
+            "Default evolution config not found. "
+            f"Expected preset JSON at {DEFAULT_EVOLUTION_CONFIG_PATH}."
+        )
+    return json.loads(DEFAULT_EVOLUTION_CONFIG_PATH.read_text(encoding="utf-8"))
+
+
+def _default_config_value(key: str) -> Any:
+    """Return one deep-copied default value from the canonical evolution preset."""
+    payload = _default_evolution_payload()
+    if key not in payload:
+        raise KeyError(
+            f"Missing required default config key {key!r} in {DEFAULT_EVOLUTION_CONFIG_PATH}."
+        )
+    return deepcopy(payload[key])
 
 
 def _legacy_reproduction_operator_probs() -> dict[str, float]:
@@ -45,51 +49,60 @@ def _legacy_reproduction_operator_probs() -> dict[str, float]:
     }
 
 
-def _default_strategy_mutation() -> dict[str, float]:
-    """Return the default strategy-mutation mode distribution."""
-    return {
-        "pool_replacement": 0.40,
-        "identity_preserving_rewrite": 0.35,
-        "identity_shift_rewrite": 0.25,
-    }
-
-
 @dataclass
 class EAConfig:
     """Flat configuration surface for all EA, evaluation, and surrogate settings."""
-    algorithm: str = "steady_state_nsga2"
-    population_size: int = 3
-    num_generations: int = 4
+    algorithm: str = field(default_factory=lambda: str(_default_config_value("algorithm")))
+    population_size: int = field(default_factory=lambda: int(_default_config_value("population_size")))
+    num_generations: int = field(default_factory=lambda: int(_default_config_value("num_generations")))
     reproduction_operator_probs: dict[str, float] = field(
-        default_factory=_default_reproduction_operator_probs
+        default_factory=lambda: dict(_default_config_value("reproduction_operator_probs"))
     )
-    enable_reflection_operator: bool = True
-    reflection_max_components_to_rewrite: int = 1
+    enable_reflection_operator: bool = field(
+        default_factory=lambda: bool(_default_config_value("enable_reflection_operator"))
+    )
+    reflection_max_components_to_rewrite: int = field(
+        default_factory=lambda: int(_default_config_value("reflection_max_components_to_rewrite"))
+    )
     strategy_mutation: dict[str, float] = field(
-        default_factory=_default_strategy_mutation
+        default_factory=lambda: dict(_default_config_value("strategy_mutation"))
     )
-    selection_method: str = "random"
-    tournament_size: int = 3
-    crossover: str = "uniform"
-    crossover_repair_enabled: bool = True
-    environment_selection_method: str = "elitism"
-    steady_state_surrogate_offspring_count: int = 4
-    steady_state_surrogate_selection_metric: str = "game_round_score"
-    final_test_max_front: int | None = 1
+    selection_method: str = field(default_factory=lambda: str(_default_config_value("selection_method")))
+    tournament_size: int = field(default_factory=lambda: int(_default_config_value("tournament_size")))
+    crossover: str = field(default_factory=lambda: str(_default_config_value("crossover")))
+    crossover_repair_enabled: bool = field(
+        default_factory=lambda: bool(_default_config_value("crossover_repair_enabled"))
+    )
+    environment_selection_method: str = field(
+        default_factory=lambda: str(_default_config_value("environment_selection_method"))
+    )
+    steady_state_surrogate_offspring_count: int = field(
+        default_factory=lambda: int(_default_config_value("steady_state_surrogate_offspring_count"))
+    )
+    steady_state_surrogate_selection_metric: str = field(
+        default_factory=lambda: str(_default_config_value("steady_state_surrogate_selection_metric"))
+    )
+    final_test_max_front: int | None = field(default_factory=lambda: _default_config_value("final_test_max_front"))
 
-    run_time_per_game_sec: int = 10
-    real_eval_rate: float = 0.25
-    llm_interval: int = 1
+    run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
+    real_eval_rate: float = field(default_factory=lambda: float(_default_config_value("real_eval_rate")))
+    llm_interval: int = field(default_factory=lambda: int(_default_config_value("llm_interval")))
 
-    resource_advantage_alpha: float = 2.0
+    resource_advantage_alpha: float = field(
+        default_factory=lambda: float(_default_config_value("resource_advantage_alpha"))
+    )
     resource_advantage_weights: dict[str, float] = field(
-        default_factory=_default_resource_advantage_weights
+        default_factory=lambda: dict(_default_config_value("resource_advantage_weights"))
     )
 
-    surrogate_version: str = "policy"
-    surrogate_recent_match_window: int = 10
-    surrogate_round_samples_per_match: int = 10
-    surrogate_log_dir: str = "logs"
+    surrogate_version: str = field(default_factory=lambda: str(_default_config_value("surrogate_version")))
+    surrogate_recent_match_window: int = field(
+        default_factory=lambda: int(_default_config_value("surrogate_recent_match_window"))
+    )
+    surrogate_round_samples_per_match: int = field(
+        default_factory=lambda: int(_default_config_value("surrogate_round_samples_per_match"))
+    )
+    surrogate_log_dir: str = field(default_factory=lambda: str(_default_config_value("surrogate_log_dir")))
 
     def __post_init__(self) -> None:
         """Normalize aliases and validate the config surface eagerly."""
