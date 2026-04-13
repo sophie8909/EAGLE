@@ -1,0 +1,1447 @@
+{
+    "actions": [
+        [
+            "There are 6 available actions:",
+            "- `move` - Unit will move to target location.",
+            "    - Arguments: ((Target_x, Target_y))",
+            "- `train` - Unit will train the provided unit type (only bases and barracks can use this action).",
+            "    - Arguments: (Unit_Type)",
+            "- `build` - Unit will build the provided building type at the target location, consuming the resource cost from the ally base (only workers can use this action).",
+            "    - Arguments: ((Target_x, Target_y), Building_Type)",
+            "- `harvest` - Unit will navigate to the target resource, collect a resource and bring it back to the target ally base.",
+            "    - Arguments: ((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))",
+            "- `attack` - Unit will navigate to, and attack the target enemy.",
+            "    - Arguments: ((Enemy_x, Enemy_y))",
+            "- `idle` - The target unit will do nothing for a round. This is the default for all available units that are not assigned an action.",
+            "    - Arguments: ()"
+        ]
+    ],
+    "game_rules": [
+        [
+            "GAME RULES:",
+            "Two players, Player 1 (Ally) and Player 2 (Enemy) are competing to eliminate all opposing enemy units in a Real Time Strategy (RTS) game.",
+            "Each step, each player can assign actions to their units if they are not already doing an action. Each unit can only be assigned ONE action.",
+            "Players can only assign actions to their ally units.",
+            "There are 6 available actions:",
+            "move((Target_x, Target_y))",
+            "- Move unit to target location",
+            "train(Unit_Type)",
+            "- Train a unit (Base and Barracks only)",
+            "build((Target_x, Target_y), Building_Type)",
+            "- Worker builds building",
+            "- Resources are consumed from Ally base",
+            "harvest((Resource_x, Resource_y), (Ally_Base_x, Ally_Base_y))",
+            "- Worker collects resources and returns to base",
+            "attack((Enemy_x, Enemy_y))",
+            "- Attack enemy unit",
+            "idle()",
+            "- Do nothing this turn",
+            "WIN CONDITION:",
+            "- Destroy all enemy units and buildings"
+        ]
+    ],
+    "unit_types": [
+        [
+            "UNIT TYPES:",
+            "worker:",
+            "- HP: 1",
+            "- Cost: 1",
+            "- Damage: 1",
+            "- Range: 1",
+            "- Speed: 1",
+            "- Abilities: gather resources, build base, build barracks",
+            "- Trained by: base",
+            "light:",
+            "- HP: 4",
+            "- Cost: 2",
+            "- Damage: 2",
+            "- Range: 1",
+            "- Speed: 2",
+            "- Abilities: fast attacker",
+            "Trained by: barracks",
+            "heavy:",
+            "- HP: 8",
+            "- Cost: 3",
+            "- Damage: 4",
+            "- Range: 1",
+            "- Speed: 1",
+            "- Abilities: tank unit",
+            "Trained by: barracks",
+            "ranged:",
+            "- HP: 3",
+            "- Cost: 2",
+            "- Damage: 1",
+            "- Range: 3",
+            "- Speed: 1",
+            "- Abilities: long range attacker",
+            "- Trained by: barracks"
+        ]
+    ],
+    "building_types": [
+        [
+            "BUILDING TYPES:",
+            "base:",
+            "- HP: 10",
+            "- Cost: 10",
+            "- Abilities: train workers, store resources",
+            "barracks:",
+            "- HP: 5",
+            "- Cost: 5",
+            "- Abilities: train light, heavy, ranged units"
+        ]
+    ],
+    "strategy_guide": [
+        [
+            "SUGGESTED STRATEGY:",
+            "Early Game:",
+            "- Harvest nonstop",
+            "- Build barracks at 5 resources",
+            "Mid Game:",
+            "- Train army",
+            "- Hunt enemy workers",
+            "- Protect barracks",
+            "Late Game:",
+            "- Group attack",
+            "- Destroy production buildings",
+            "- Control resources"
+        ]
+    ],
+    "game_state_format": [
+        [
+            "GAME STATE FORMAT:",
+            "Map size is given",
+            "Feature locations list all units and buildings",
+            "Coordinates are zero-indexed",
+            "Units and buildings have properties:",
+            "- HP",
+            "- resources",
+            "- current_action",
+            "- available",
+            "available = true means unit can receive command"
+        ]
+    ],
+    "raw_move_format": [
+        [
+            "RAW MOVE FORMAT:",
+            "(X, Y): Unit_Type Action(Action_Arguments)",
+            "X: unit x position",
+            "Y: unit y position",
+            "Unit_Type: worker, light, heavy, ranged, base, barracks",
+            "Action: move, train, build, harvest, attack, idle",
+            "Action_Arguments: arguments for action"
+        ]
+    ],
+    "json_schema": [
+        [
+            "REQUIRED JSON FORMAT:",
+            "{",
+            "  \"thinking\": \"Brief strategy\",",
+            "  \"moves\": [",
+            "    {",
+            "      \"raw_move\": \"(x, y): unit_type action((args))\",",
+            "      \"unit_position\": [x, y],",
+            "      \"unit_type\": \"worker\",",
+            "      \"action_type\": \"harvest\"",
+            "    }",
+            "  ]",
+            "}"
+        ]
+    ],
+    "field_requirements": [
+        [
+            "EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:",
+            "- raw_move: string like \"(2, 0): worker harvest((0, 0), (2, 1))\"",
+            "- unit_position: [x, y] array matching your Ally unit position",
+            "- unit_type: \"worker\", \"base\", \"barracks\", \"light\", \"heavy\", or \"ranged\"",
+            "- action_type: \"move\", \"harvest\", \"train\", \"build\", or \"attack\""
+        ]
+    ],
+    "examples": [
+        [
+            "VALID MOVE EXAMPLES:",
+            "{\"raw_move\": \"(1, 1): worker harvest((0, 0), (2, 1))\", \"unit_position\": [1, 1], \"unit_type\": \"worker\", \"action_type\": \"harvest\"}",
+            "{\"raw_move\": \"(2, 1): base train(worker)\", \"unit_position\": [2, 1], \"unit_type\": \"base\", \"action_type\": \"train\"}",
+            "{\"raw_move\": \"(1, 1): worker attack((5, 6))\", \"unit_position\": [1, 1], \"unit_type\": \"worker\", \"action_type\": \"attack\"}",
+            "{\"raw_move\": \"(1, 1): worker move((3, 3))\", \"unit_position\": [1, 1], \"unit_type\": \"worker\", \"action_type\": \"move\"}",
+            "{\"raw_move\": \"(1, 1): worker build((3, 3), barracks)\", \"unit_position\": [1, 1], \"unit_type\": \"worker\", \"action_type\": \"build\"}"
+        ]
+    ],
+    "strategy": {
+        "strategy_identity": [
+            [
+                "STRATEGY IDENTITY: Economy-first scaling.",
+                "Prioritize stable harvesting, worker continuity, and disciplined setup before large commitments.",
+                "Risk tolerance is low early and moderate later: avoid fragile fights unless they directly protect economy or open clear value.",
+                "Pressure timing is delayed until income and production are stable enough to support continuous reinforcement.",
+                "Preferred win path is to build an economic lead first, then overwhelm the opponent through superior sustained production."
+            ],
+            [
+                "STRATEGY IDENTITY: Balanced pressure.",
+                "Maintain a workable balance between economy, production, defense, and map pressure at all times.",
+                "Risk tolerance is moderate: respect immediate threats, but exploit exposed workers, units, or structures when trades are efficient.",
+                "Pressure timing is opportunistic rather than rushed or delayed, leaning into advantages as soon as they become credible.",
+                "Preferred win path is to stay structurally sound while accumulating incremental gains that snowball into a winning position."
+            ],
+            [
+                "STRATEGY IDENTITY: Aggressive tempo.",
+                "Favor fast military conversion, early contact, and relentless forward pressure over slow optimization.",
+                "Risk tolerance is high: accept leaner economy and sharper trades if they disrupt enemy development or seize initiative.",
+                "Pressure timing should be early and continuous, with little tolerance for passive waiting once useful attackers exist.",
+                "Preferred win path is to keep the opponent reacting from the start and end the game before they can outscale or fully stabilize."
+            ],
+            [
+                "STRATEGY IDENTITY: Aggressive expansion.",
+                "Prioritize swift conquest of key resources, aggressive unit deployment, and rapid transition to all-out warfare before opponents can establish a strong economy or defense.",
+                "Risk tolerance is high throughout: aggressively seek out and exploit enemy weaknesses at every opportunity.",
+                "Pressure timing is immediate once any credible threat emerges, regardless of income or production stability.",
+                "Preferred win path is to overwhelm the opponent through relentless aggression and forceful pressure rather than building an economic lead."
+            ],
+            [
+                "STRATEGY IDENTITY: Ambitious Annihilation.",
+                "Prioritize swift conquest of key resources, aggressive unit deployment, and rapid transition to all-out warfare before opponents can establish a strong economy or defense.",
+                "Risk tolerance is high throughout: aggressively seek out and exploit enemy weaknesses at every opportunity.",
+                "Pressure timing is immediate once any credible threat emerges, regardless of income or production stability.",
+                "Preferred win path is to overwhelm the opponent through relentless aggression and forceful pressure rather than building an economic lead.",
+                "",
+                "Note: I've renamed \"Aggressive expansion\" to \"Ambitious Annihilation\" to reflect a clearly different overall strategic style."
+            ],
+            [
+                "STRATEGY IDENTITY: Aggressive Expansion.",
+                "Prioritize rapid expansion, aggressive scouting, and early pressure application over cautious setup.",
+                "Risk tolerance is high throughout: aggressively pursue opportunities to disrupt or destroy enemy economy and infrastructure.",
+                "Pressure timing is immediate, focusing on disrupting the opponent's economy and infrastructure as soon as possible.",
+                "Preferred win path is to rapidly overwhelm the opponent through superior aggression and resource control."
+            ],
+            [
+                "STRATEGY IDENTITY: Aggressive expansion.",
+                "Prioritize rapid territory capture, early pressure establishment, and swift unit production over economy growth.",
+                "Risk tolerance is high regardless of game phase: seize opportunities for decisive victories rather than avoiding risk.",
+                "Pressure timing is immediate once resources are available to support continuous reinforcement.",
+                "Preferred win path is to quickly establish a strong, aggressive presence that forces the opponent into reactive mode."
+            ],
+            [
+                "STRATEGY IDENTITY: Aggressive expansion through rapid scaling.",
+                "Prioritize aggressive harvesting, maximum worker utilization, and swift setup before large commitments.",
+                "Risk tolerance is moderate throughout: aggressively take fights that damage enemy economy or open clear value, and do not shy away from defensive measures to protect key assets.",
+                "Pressure timing is accelerated until income and production are rapidly increasing enough to support continuous reinforcement and expansion into the opponent's territory.",
+                "Preferred win path is to build a significant economic lead through aggressive resource gathering, then overwhelm the opponent through rapid expansion and superior sustained production."
+            ]
+        ],
+        "phase_transition_rule": [
+            [
+                "PHASE TRANSITION RULE:",
+                "Early game lasts while economy is still being established: worker count is low, no barracks exists, or income is not yet stable.",
+                "Shift to mid game once a barracks exists or military production is online and both sides can realistically contest space.",
+                "Shift to late game when one side has enough army presence or map control that the next major fights can decide production or base survival.",
+                "Use turn count only as a weak tiebreaker when state signals are unclear."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early while the main question is development: harvesting loops, first workers, first barracks, or first safe defender.",
+                "Treat the game as mid once both sides have credible attack capability or the map contains active pressure around resources, production, or structures.",
+                "Treat the game as late once bases, barracks, or worker counts are damaged enough that decisive endgame pressure is more important than further setup.",
+                "Prefer observed army counts, structure count, and local threat level over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Stay in early game only while our plan is still forming and a missing economic or production piece would change everything.",
+                "Enter mid game when the first meaningful army can be fielded and movement decisions start shaping map control.",
+                "Enter late game when a committed attack, base race, or production collapse is underway or imminent.",
+                "Do not stay in an outdated phase label just because the clock is low or high; respond to the actual battlefield."
+            ],
+            [],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early while key resources are underdeveloped: insufficient gold, food, or production capacity.",
+                "Treat the game as mid once both sides have credible warfare capability or the map contains aggressive pressure around key assets, such as resource nodes, production facilities, or strategic structures.",
+                "Treat the game as late once core infrastructure, including bases, barracks, and worker counts, is severely damaged or threatened, making decisive endgame pressure essential for survival.",
+                "Prefer observed army strength, structure count, and local threat level over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Stay in early game only while our plan is still forming and key resources are scarce or imbalanced.",
+                "Enter mid game when the first viable army can be fielded and strategic movement decisions start shaping map control.",
+                "Enter late game when a committed attack, base race, or production collapse is underway or imminent.",
+                "Prioritize adapting to battlefield developments over rigid phase labels."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition from early to mid when both sides have credible attack capability or the map contains active pressure around resources, production, or structures.",
+                "Transition from mid to late once bases, barracks, or worker counts are significantly damaged, threatening sustained production and economy stability.",
+                "Prefer observed army counts, structure count, and local threat level over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early when key resources are underdeveloped: insufficient gold, food, or production capacity, while our aggressive expansion is still unfolding.",
+                "Treat the game as mid once both sides have credible warfare capability or the map contains immediate pressure around key assets, such as resource nodes, production facilities, or strategic structures that our growing army can target.",
+                "Treat the game as late when core infrastructure, including severely damaged bases, barracks, and worker counts, is threatened, making decisive endgame pressure essential for survival through relentless aggression and forceful pressure."
+            ],
+            [
+                "[phase_transition_rule]",
+                "PHASE TRANSITION RULE:",
+                "Transition between early game, mid game, and late game based on a combination of state-based conditions and rigid turn thresholds.",
+                "Monitor enemy economy, infrastructure damage, unit composition, and structure counts to determine the current phase.",
+                "In early game, prioritize rapid expansion, aggressive scouting, and early pressure application.",
+                "In mid game, balance resource control with coordinated pressure and base defense.",
+                "In late game, focus on collapsing the enemy system with coordinated pressure and favoring actions that end the enemy faster or preserve minimum necessary structures."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition into mid game as soon as military conversion begins and units can be dispatched in meaningful groups, even if economic foundations are incomplete.",
+                "Enter late game when a decisive attack or strategic shift, such as a base race, production collapse, or economy disruption, gains momentum or is imminent.",
+                "Avoid staying in an outdated phase due to rigid turn thresholds; instead, adapt to the evolving battlefield situation."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition to early phase when economy and development milestones are met: first workers, first barracks, or initial safe defender established.",
+                "Transition to mid phase when both sides have viable attack capabilities or resource-intensive activities occur around key areas.",
+                "Transition to late phase when strategic assets like bases, barracks, or worker counts are threatened, prioritizing decisive endgame pressure over ongoing setup.",
+                "Prioritize contextual indicators, such as army composition, structure count, and immediate threats, over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition to early phase while key resources remain underdeveloped: insufficient gold, food, or production capacity persists.",
+                "Shift to mid phase once both sides exhibit credible warfare capability through observable metrics like army strength, structure count, and local threats around strategic assets.",
+                "Declare late phase when core infrastructure is severely damaged or threatened, necessitating decisive endgame pressure for survival."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Stay in early game only while key economic and production foundations are being laid out.",
+                "Enter mid game when resource management, unit composition, and map control decisions start taking precedence.",
+                "Enter late game when a decisive attack, strategic shift, or critical production milestone is underway or imminent.",
+                "Adjust phase labels based on evolving battlefield conditions, rather than rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Decide early/mid/late based on state-based conditions over rigid turn thresholds.",
+                "Early game: Prioritize stable harvesting and worker continuity while setting up a disciplined economy.",
+                "Mid game: Once the economy is stable, transition into a phase where production and combat are balanced.",
+                "Late game: Pressure timing is delayed until income and production are stable enough to support continuous reinforcement."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Assess early/mid/late phases based on the state of both sides' economies and structures rather than rigid turn thresholds.",
+                "Early phase: Determine if the main question revolves around development (harvesting loops, first workers, first barracks, or first safe defender).",
+                "Mid phase: Trigger once both sides have credible attack capability or exhibit active pressure around resources, production, or structures.",
+                "Late phase: Activate when bases, barracks, or worker counts are significantly compromised, favoring decisive endgame pressure over further setup.",
+                "Prioritize observed army counts, structure count, and local threat level to inform phase transitions."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Prioritize swift transition to mid-game by recognizing credible warfare capability on both sides or aggressive pressure around key assets, such as resource nodes, production facilities, or strategic structures, before treating the game as late.",
+                "Prefer observed army strength, structure count, and local threat level over rigid turn thresholds.",
+                "Treat the game as early while core infrastructure is underdeveloped: insufficient base health, barracks production capacity, or worker counts below critical thresholds.",
+                "Treat the game as late once core infrastructure is severely damaged or threatened, making decisive endgame pressure essential for survival."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early while key resources are underdeveloped: insufficient gold, food, or production capacity.",
+                "Treat the game as mid once both sides have credible warfare capability or aggressive pressure is observed around key assets like resource nodes, production facilities, or strategic structures.",
+                "Treat the game as late once core infrastructure, including bases and barracks, is severely damaged or threatened, making decisive endgame pressure essential for survival.",
+                "Prefer observed army strength, structure count, and local threat level over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Early game lasts while economy is still immature: initial worker ramp-up is incomplete, no barracks exists, or income is not yet self-sustaining.",
+                "Shift to mid game once a barracks has been established and military production is online, enabling both sides to contest space effectively.",
+                "Shift to late game when one side gains sufficient army presence or map control to dictate production or base survival outcomes in major fights.",
+                "Use turn count as a decisive tiebreaker only when state signals are ambiguous and unclear."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early while main development milestones remain unmet: harvesting loops, first workers, first barracks, or first safe defender.",
+                "Treat the game as mid once credible attack capability is demonstrated by either side or pressure around resources, production, or structures becomes a significant concern.",
+                "Treat the game as late when base, barracks, or worker counts are sufficiently damaged to prioritize decisive endgame pressure over continued setup and expansion.",
+                "Prefer observed army counts, structure count, and local threat level over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early if key development milestones have not yet been reached: no stable harvesting loops, initial workers or barracks, or safe defenders.",
+                "Treat the game as mid once both sides possess credible attack capabilities or the map displays active pressure around resources, production units, or structures.",
+                "Treat the game as late when base and structure damage exceeds a threshold that prioritizes endgame pressure over further setup."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Determine early phase by underdeveloped key resources: insufficient gold, food, or production capacity.",
+                "Transition to mid phase when either side demonstrates credible warfare capability or aggressive pressure is exerted around key assets like resource nodes, production facilities, or strategic structures.",
+                "Decide late phase based on severely damaged core infrastructure, including bases and barracks, necessitating decisive endgame pressure for survival.",
+                "Prioritize observed army strength, structure count, and local threat over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early while the main question is development: harvesting loops, first workers, first barracks, or initial unit production.",
+                "Treat the game as mid once both sides have credible attack capability or the map contains active pressure against key assets and resource control.",
+                "Treat the game as late once the opponent's base, resource gathering, or production capacity is under severe threat from direct pressure or economic disruption.",
+                "Prefer observed army counts, structure count, and local threat level over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition to early phase when primary focus shifts from resource gathering to development milestones such as harvesting loops, initial worker deployment, first barracks construction, or establishment of a secure defensive posture.",
+                "Switch to mid phase once both players demonstrate credible attack capabilities or the map exhibits active pressure around critical areas like resources, production facilities, and key structures.",
+                "Designate late phase when base, barracks, or workforce damages necessitate prioritizing endgame pressure over continued setup efforts."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early while main development milestones remain unmet: establishing a stable economy, first workers, first barracks, or acquiring credible defense.",
+                "Treat the game as mid when the opponent's attack capability becomes credible or pressure around resources, production, or structures reaches a critical level.",
+                "Treat the game as late when base, barracks, or worker counts are heavily damaged to prioritize decisive endgame pressure over continued setup and expansion.",
+                "Prefer observed army counts, structure count, and local threat level over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition to early phase if main development focus remains on resource gathering and unit creation (e.g., first workers, barracks, or safe defenders).",
+                "Switch to mid game once both sides demonstrate credible attack capabilities or active pressure is observed around strategic assets.",
+                "Shift to late phase when critical infrastructure (bases, barracks) or workforce resilience is compromised, necessitating decisive action over further setup optimization.",
+                "Prioritize dynamic indicators like army counts, structure status, and local threats over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition from early to mid game when the opponent's key assets are under constant pressure, as evidenced by aggressive expansion or credible warfare capability.",
+                "Transition from mid to late game when core infrastructure is severely damaged or threatened, making decisive endgame pressure essential for survival and forcing a shift from economic superiority to forceful counter-pressure against key strategic locations."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition to early phase when income and resource gathering become less dominant in decision-making.",
+                "Switch to mid phase once both players demonstrate credible attack capabilities or the map exhibits active pressure around critical areas like resources, production facilities, and key structures, indicating a shift from defensive setup to strategic engagement.",
+                "Designate late phase when economic stability and production continuity are threatened by base, barracks, or workforce damages, necessitating prioritization of endgame pressure."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early while main development milestones remain unmet: harvesting loops, first workers, or initial resource gathering.",
+                "Treat the game as mid when either side demonstrates credible attack capability, pressure around resources, production, or structures becomes a significant concern, or both sides have reached a dynamic balance of power.",
+                "Treat the game as late when base, barracks, or worker counts are significantly damaged to prioritize decisive endgame pressure over continued setup and expansion."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition the game to early phase when key resources remain underdeveloped: low gold, food, or production capacity.",
+                "Switch to mid phase once both sides have credible warfare capabilities or aggressive pressure is applied around critical assets like resource nodes, production facilities, or strategic structures.",
+                "Shift to late phase when core infrastructure is severely damaged or threatened, requiring decisive endgame pressure for survival.",
+                "Prioritize observed army strength, structure count, and local threat level over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Align with strategy_identity's economy-first scaling approach by prioritizing early-game stability and gradual progression through economic and production milestones. Enter mid game when resource management, unit composition, and map control decisions become critical to sustained growth. Transition to late game in response to decisive attacks, strategic shifts, or imminent critical production milestones that enable superior sustained pressure on the opponent's economy and defense. Adjust phase labels dynamically based on evolving battlefield conditions to optimize strategy consistency and coherent decision-making."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early while main development milestones remain unmet: harvesting loops, first workers, first barracks, or first safe defender. ",
+                "Prioritize transition to mid when credible attack capability is demonstrated by either side or resource competition escalates significantly.",
+                "Transition to late when base, barracks, or worker counts are severely depleted and decisive endgame pressure becomes essential to prevent opponent recovery.",
+                "Prefer observed army counts, structure count, and local threat level over rigid turn thresholds."
+            ],
+            [
+                "Phase Transition Rule:",
+                "Early/mid/late decisions should now consider stable harvesting, worker continuity, and disciplined setup before large commitments. Use state-based conditions to determine phase transitions instead of rigid turn thresholds. Ensure economy, production, combat, and pressure are integrated naturally in each phase. Adjust decision priority according to the chosen strategy_identity."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition to early phase immediately upon detection of enemy unit deployment or resource gathering in a vulnerable location, regardless of development milestones.",
+                "Switch to mid phase once both players demonstrate credible attack capabilities, or the map exhibits active pressure around key areas such as resources, production facilities, and structures critical to economy stability.",
+                "Designate late phase when base, barracks, or workforce damages necessitate prioritizing endgame pressure over continued setup efforts, or opponents establish a strong defensive posture."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early while main questions of resource gathering and initial unit production persist.",
+                "Treat the game as mid when both sides have demonstrated credible attack capability or map pressure around resources and structures is evident.",
+                "Treat the game as late when base and structure counts, worker utilization, or observed army numbers indicate a transition to decisive endgame action.",
+                "Prefer dynamic phase evaluation based on current state, production capacity, and immediate threats over rigid turn thresholds."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Define early phase by initial resource gathering, first worker deployment, and defense establishment: prioritize stable harvesting loops and safeguard resource access.",
+                "Define mid phase by the emergence of credible attack capability or sustained pressure around resources, production, or strategic structures.",
+                "Define late phase by significant base, barracks, or worker damage, shifting focus from setup to decisive endgame pressure: leverage superior sustained production and army strength to overwhelm the opponent."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition to early phase based on state-based conditions, such as income and resource gathering becoming less dominant in decision-making.",
+                "Switch to mid phase once both players demonstrate credible attack capabilities and the map exhibits active pressure around critical areas like resources, production facilities, and key structures.",
+                "Designate late phase when economic stability and production continuity are threatened by base, barracks, or workforce damages."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Transition to early game while main questions of resource gathering and initial unit production persist, indicating an economy-focused stage where rapid expansion is key.",
+                "Switch to mid game when both sides have demonstrated credible attack capability or map pressure around resources and structures becomes evident, signaling a balance between economic growth and military development.",
+                "Shift to late game when base and structure counts, worker utilization, or observed army numbers indicate a transition to decisive endgame action, requiring swift adaptation and aggressive momentum."
+            ],
+            [
+                "PHASE TRANSITION RULE:",
+                "Treat the game as early while key resources are significantly underdeveloped: gold, food, or production capacity is insufficient to sustain immediate warfare capability.",
+                "Treat the game as mid once both sides have established credible warfare capability, demonstrated by aggressive pressure around key assets such as resource nodes, production facilities, or strategic structures.",
+                "Treat the game as late when core infrastructure, including bases, barracks, and worker counts, has been severely damaged or threatened, necessitating decisive endgame pressure to ensure survival.",
+                "Prefer observed army strength, structure count, and local threat level over rigid turn thresholds, adapting strategy_identity's aggressive expansion approach to maintain momentum and forceful pressure throughout the game."
+            ]
+        ],
+        "early_game_plan": [
+            [
+                "EARLY GAME PLAN:",
+                "Open with nonstop harvesting to establish reliable income and avoid idle workers.",
+                "Build the first barracks as soon as resources allow without collapsing the basic economy.",
+                "Defend only what is necessary during setup, but punish exposed enemy workers if a low-risk opening appears."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Aim for minimal but stable economy first, then convert quickly into the first production structure and first combat units.",
+                "Use one suitable worker as the builder and keep the rest harvesting efficiently.",
+                "Avoid premature full commitment until at least a small force can pressure or defend coherently."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Use the opening to establish initiative rather than only scaling passively.",
+                "After the first economic tasks are covered, send early units or workers to contest exposed enemy harvesters, builders, or forward space.",
+                "If the enemy is well defended, fall back to clean development instead of donating units."
+            ],
+            [],
+            [
+                "EARLY GAME PLAN: ",
+                "Expand aggressively with immediate production of key units and structures to quickly overwhelm opponents in resource acquisition and deployment, then rapidly transition into all-out warfare before establishing a strong economy or defense."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Launch aggressive military conversion and early contact by building the first barracks simultaneously with initial harvesting to ensure both rapid income growth and early combat capacity. Prioritize punishing exposed enemy workers and unfinished buildings during setup, while maintaining minimal essential defense to protect our own resources."
+            ],
+            [
+                "EARLY GAME PLAN: ",
+                "Establish a stable foundation by prioritizing early harvesting to secure consistent income and worker continuity. Build the first barracks as soon as possible while maintaining a balanced economy. During setup, focus on essential defense and seize opportunities to disrupt the opponent's economy when feasible."
+            ],
+            [
+                "EARLY GAME PLAN: ",
+                "Initiate swift conquest of key resources through aggressive unit deployment and rapid expansion of key infrastructure, disrupting opponent's early game momentum while setting the stage for decisive endgame pressure. Maintain immediate production of key units and structures to overwhelm opponents in resource acquisition and deployment, then rapidly transition into all-out warfare, leveraging high risk tolerance and exploiting enemy weaknesses at every opportunity."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Prioritize rapid expansion and aggressive scouting to disrupt enemy economy and infrastructure as soon as possible.",
+                "Focus on applying early pressure to weaken the opponent's defenses and create opportunities for rapid growth.",
+                "Incorporate combat and production elements that naturally integrate with this plan, such as expanding resource gathering, upgrading key structures, and developing a balanced unit composition.",
+                "Apply consistent pressure timing throughout, focusing on disrupting enemy infrastructure and economy in coordination with phase_transition_rule transitions."
+            ],
+            [
+                "EARLY GAME PLAN: ",
+                "Expand immediately with aggressive unit deployment and rapid production of key resources to disrupt opponents' economy and defense, then quickly transition into decisive endgame pressure by targeting key assets like resource nodes, production facilities, or strategic structures."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Favor fast military conversion and relentless forward pressure over slow optimization from the start.",
+                "Accept leaner economy and sharper trades if they disrupt enemy development or seize initiative early on.",
+                "Pressure timing should be continuous, with little tolerance for passive waiting once useful attackers exist.",
+                "Attack when units can arrive together or when enemy economy and production are open to damage from the beginning."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Establish immediate, continuous harvesting for stable income and minimize idle labor to start.",
+                "Construct the initial barracks based on resource availability while maintaining economic resilience.",
+                "During early game setup, prioritize defensive measures only as needed, reserving punishment of exposed enemy resources for strategic opportunities."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Initiate rapid expansion by simultaneously gathering resources through aggressive harvesting and establishing a strong economic foundation with early production infrastructure.",
+                "Build the first barracks as soon as possible to facilitate unit deployment while maintaining a balanced economy.",
+                "Prioritize swift conquest of key resources, defending only essential positions during setup, and punish exposed enemy workers if a low-risk opportunity arises."
+            ],
+            [
+                "Early game plan:",
+                "Prioritize stable harvesting and worker continuity to establish a solid economic foundation. Ensure disciplined setup before committing to large-scale production or combat. Focus on building resource-gathering capacity, expanding infrastructure, and accumulating essential units for the next phase."
+            ],
+            [
+                "EARLY GAME PLAN: ",
+                "Immediately expand aggressive presence with rapid production of essential units and infrastructure, prioritizing swift conquest of key resources through relentless pressure on enemy positions, exploiting their weaknesses with immediate force to set the stage for rapid transition into all-out warfare."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Initiate rapid expansion by immediately constructing resource-gathering structures to maximize income and suppress idle worker presence.",
+                "Build the initial barracks quickly while maintaining economic stability, then focus on expanding military capabilities and aggressive pressure against key assets.",
+                "During setup, prioritize minimal defensive measures while preparing to punish exposed enemy workers with swift and decisive counter-attacks."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Favor fast military conversion, early contact, and relentless forward pressure over slow optimization.",
+                "Initiate intense map control contests to dictate resource flow, unit placement, and base survival outcomes from the start.",
+                "Use rapid expansion and scouting to identify vulnerabilities in the opponent's economy and exploit them swiftly.",
+                "Keep enough economy at home to maintain a strong unit flow while pressuring the enemy continuously."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Aggressively expand by immediately applying pressure through early game resource denial and unit production while maintaining rapid territory capture.",
+                "Establish a strong, aggressive presence that forces the opponent into reactive mode by building the first barracks as soon as resources allow without compromising economy growth.",
+                "Punish exposed enemy workers if a low-risk opening appears during setup, but prioritize swift unit production over defensive measures to quickly establish an advantageous position."
+            ],
+            [
+                "[early_game_plan]",
+                "EARLY GAME PLAN:",
+                "1. Establish a stable harvesting loop as quickly as possible to maximize resource income.",
+                "2. Ensure worker continuity and disciplined setup by prioritizing barracks construction and defender deployment.",
+                "3. Delay large commitments until the economy is stable, but maintain a moderate risk tolerance: engage in defensive fights if necessary to protect economy or open clear value.",
+                "4. Allocate resources to support continuous reinforcement, allowing for delayed pressure timing until income and production are sufficient.",
+                "",
+                "Note: This rewritten text preserves the original semantic intent while adhering to the provided requirements."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Initiate rapid expansion by immediately constructing resource-gathering structures to maximize income and suppress idle worker presence.",
+                "Construct the initial barracks quickly in tandem with expanding economic capabilities, then focus on aggressive pressure against key assets while maintaining a minimal defensive posture.",
+                "During setup, prioritize swift counter-attacks against exposed enemy workers and units to create opportunities for decisive aggression."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Initiate rapid expansion by immediately constructing resource-gathering structures to maximize income without suppressing idle worker presence; instead, utilize them for early scouting and map control.",
+                "Build the initial barracks quickly while maintaining economic stability, then focus on expanding military capabilities and aggressive pressure against key assets.",
+                "During setup, prioritize minimal defensive measures that can be rapidly upgraded or abandoned as needed, preparing to punish exposed enemy workers with swift and decisive counter-attacks that align with our preferred win path of overwhelming the opponent through forceful pressure rather than building an economic lead."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Prioritize establishing a stable economy through balanced harvesting and worker deployment to ensure consistent income.",
+                "Initial barracks construction should follow immediately after resource availability allows it, without jeopardizing the basic economy's sustainability.",
+                "Defend only necessary assets during setup, but swiftly address exposed enemy workers if a low-risk opportunity arises."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Execute aggressive expansion by prioritizing fast military conversion, early contact, and relentless forward pressure to disrupt enemy development and seize initiative.",
+                "Build the first barracks as soon as resources allow without compromising basic economy stability.",
+                "Punish exposed enemy workers immediately, even if it means taking some initial losses, to establish a strong presence and force the opponent into reactive mode."
+            ],
+            [
+                "EARLY GAME PLAN: ",
+                "Prioritize stable early-game income through nonstop harvesting and minimize idleness of initial worker deployments.",
+                "Build first critical structures like barracks or safe defenders as soon as resources allow without jeopardizing the basic economy's integrity.",
+                "Defend strategically during setup, focusing on protecting essential early-game assets while being cautious not to overextend unnecessarily."
+            ],
+            [
+                "EARLY GAME PLAN: ",
+                "Build a strong foundation by immediately producing essential units and structures that support resource gathering and worker continuity.",
+                "Gradually expand while maintaining stable harvesting and disciplined setup to create opportunities for decisive action without exposing the economy to undue risk.",
+                "Avoid premature commitments to large-scale warfare until key assets are under constant pressure, allowing for a smooth transition into all-out pressure against strategic locations."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Prioritize stable harvesting and worker continuity to establish a strong economic foundation.",
+                "Disciplined setup is essential before large commitments; focus on resource gathering and production infrastructure without neglecting defensive capabilities.",
+                "Avoid fragile fights unless they directly protect the economy or open clear value opportunities, as risk tolerance remains low in this phase.",
+                "Pressure timing is delayed until income and production are stable enough to support continuous reinforcement, allowing for a controlled expansion into mid-game plans."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Aggressively expand by immediately applying pressure through early game resource denial and unit production while maintaining rapid territory capture.",
+                "Establish a strong, aggressive presence that forces the opponent into reactive mode by building the first barracks as soon as resources allow without compromising economy growth, then rapidly transition to all-out warfare to overwhelm the opponent through relentless aggression and forceful pressure rather than building an economic lead.",
+                "Punish exposed enemy workers if a low-risk opening appears during setup, but prioritize swift unit production over defensive measures to quickly establish an advantageous position that can be leveraged for aggressive expansion."
+            ],
+            [
+                "EARLY GAME PLAN: ",
+                "Prioritize stable harvesting and worker continuity by immediately producing essential resources and structures while ensuring disciplined setup and balanced resource utilization.",
+                "Transition into aggressive expansion when key assets like resource nodes, production facilities, or strategic structures are developed enough to support sustained reinforcement and continuous pressure.",
+                "Maintain a strong economy as the foundation for future growth, while leveraging growing army strength to disrupt opponents' economy and defense through targeted aggression."
+            ],
+            [
+                "EARLY GAME PLAN: ",
+                "Prioritize stable harvesting, worker continuity, and disciplined setup through early-game stability, gradually progressing through economic and production milestones. Establish a solid foundation by producing key units and structures to support continuous reinforcement, then transition into a balanced expansion that integrates economy, production, combat, and pressure naturally, while maintaining sufficient workers for sustained growth and defense."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Establish a stable economic foundation through efficient harvesting and resource management while rapidly expanding into adjacent territories.",
+                "Build the first barracks as soon as resources allow without compromising economy growth, enabling a strong early game presence that forces the opponent into reactive mode.",
+                "Prioritize swift unit production to quickly establish an advantageous position, but avoid exposing economy or workers to excessive risk."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Prioritize stable harvesting and worker continuity to establish a reliable economy. Disciplined setup is key before large commitments. Integrate economy, production, combat, and pressure naturally to support continuous reinforcement. Adjust decision priority according to the chosen strategy_identity: Economy-first scaling.",
+                "",
+                "Risk tolerance is low early: avoid fragile fights unless they directly protect economy or open clear value. Pressure timing is delayed until income and production are stable enough to support continuous reinforcement. Focus on building an economic lead first, then overwhelm the opponent through superior sustained production by adapting production uptime based on current phase plan objectives and available resources."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Prioritize swift conquest of key resources and aggressive unit deployment to disrupt opponent's economy and defense before establishing a strong base or defensive posture.",
+                "Initial barracks construction should follow immediately after resource availability allows it, prioritizing rapid transition to all-out warfare over economic sustainability.",
+                "Swifly address exposed enemy workers and resources if a low-risk opportunity arises, aggressively exploiting weaknesses to delay opponent's setup efforts."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Prioritize rapid expansion through aggressive harvesting and maximum worker utilization to rapidly increase income and production.",
+                "Build the first barracks simultaneously with early game expansion efforts without compromising basic economic stability.",
+                "Defend only essential infrastructure during setup, then aggressively target exposed enemy workers for swift economy damage and clear value creation."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Prioritize stable harvesting and worker continuity to establish an unshakeable economic foundation.",
+                "Disciplined setup is crucial before large commitments; focus on robust resource gathering and production infrastructure while maintaining adequate defensive capabilities to protect the economy from early threats.",
+                "Avoid fragile fights unless they directly safeguard the economy or unlock clear value opportunities, as risk tolerance remains low in this phase.",
+                "Pressure timing is delayed until income and production are stable enough to support continuous reinforcement, enabling a controlled expansion into mid-game plans that builds upon the established economic foundation."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Prioritize stable harvesting and worker continuity to establish a strong economic foundation.",
+                "Disciplined setup precedes large commitments; focus on resource gathering and initial production infrastructure while safeguarding resource access and early defense establishment.",
+                "Avoid fragile fights unless they directly protect the economy or open clear value opportunities, as risk tolerance remains low in this phase.",
+                "Pressure timing is delayed until income and production are stable enough to support continuous reinforcement, enabling a controlled transition into mid-game plans."
+            ],
+            [
+                "EARLY GAME PLAN:",
+                "Prioritize rapid expansion through aggressive harvesting and maximum worker utilization to rapidly increase income and production.",
+                "Construct the first barracks as part of early game expansion efforts, ensuring a stable foundation for subsequent growth.",
+                "Focus on targeting exposed enemy resources and workers during setup, disrupting their economy and creating opportunities for clear value creation."
+            ],
+            [
+                "EARLY GAME PLAN: ",
+                "Aggressively expand with rapid unit deployment and structure construction, prioritizing swift conquest of key resources to force an early transition into all-out warfare before opponents can establish a secure economy or robust defense."
+            ]
+        ],
+        "mid_game_plan": [
+            [
+                "MID GAME PLAN:",
+                "Keep production active while balancing enough workers to sustain it.",
+                "Use the growing army to pressure enemy workers, barracks access, and exposed structures instead of wandering without purpose.",
+                "Fight for tempo by turning local advantages into repeated pressure rather than waiting for a perfect maxed force."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Shift from setup into sustained military conversion once barracks and income are functioning.",
+                "Maintain production uptime at base and barracks, replacing lost workers only when income becomes unstable.",
+                "Attack when units can arrive together or when enemy economy and production are open to damage."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Use selective harassment and map pressure to stretch the enemy across multiple demands.",
+                "Threaten workers, unfinished buildings, and harvesting paths whenever those attacks are safer than a frontal engagement.",
+                "Keep enough economy at home to continue unit flow while the opponent is forced to react."
+            ],
+            [],
+            [
+                "MID GAME PLAN:",
+                "Continue aggressive expansion with the growing army, focusing on immediate pressure against key assets like resource nodes, production facilities, or strategic structures to disrupt opponents' economy and defense.",
+                "Maintain active production while balancing enough workers to sustain it and use the expanding army to overwhelm enemy resources, barracks access, and exposed structures through relentless aggression."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Shift strategy focus from setup completion to rapid expansion by prioritizing sustained military conversion with optimal unit deployment.",
+                "Maintain a balanced production schedule at base and barracks, replacing lost workers only when income stability is threatened.",
+                "Attack the enemy's economy and production hubs simultaneously whenever feasible, taking advantage of units arriving together or exploiting vulnerable targets."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Maintain production uptime while keeping workers flexible enough to adapt to changing circumstances.",
+                "Use the growing army to apply consistent pressure on enemy resources, structures, and vulnerable units, focusing on converting local advantages into sustained pressure rather than waiting for a maximal force."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Continue Ambitious Annihilation's aggressive expansion with the growing army, focusing on immediate pressure against key assets like resource nodes, production facilities, or strategic structures to disrupt opponents' economy and defense.",
+                "Maintain active production while balancing enough workers to sustain it and use the expanding army to overwhelm enemy resources, barracks access, and exposed structures through relentless aggression and forceful pressure."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Balance resource control with coordinated pressure and base defense. ",
+                "Incorporate combat and production elements that naturally integrate with this aggressive expansion strategy, such as expanding resource gathering, upgrading key structures, and developing a balanced unit composition.",
+                "Apply consistent pressure timing throughout, focusing on disrupting enemy infrastructure and economy in coordination with phase_transition_rule transitions.",
+                "Prioritize rapid expansion and aggressive scouting to maintain momentum and create opportunities for further growth. ",
+                "Focus on applying mid-game pressure to weaken the opponent's defenses and collapse their system through coordinated actions."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Shift from setup into sustained military expansion once barracks and income are stable.",
+                "Prioritize maintaining production uptime at key locations while adapting to evolving battlefield conditions, replacing lost workers only when necessary for continued growth.",
+                "Attack decisively when units can arrive together or exploit vulnerable enemy economy and production."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Balance ongoing production with sustained worker allocation to maintain both.",
+                "Direct pressure against enemy workers, critical structures, and vulnerable resources using the growing army's strength.",
+                "Turn situational advantages into proactive, repeated attacks instead of relying on maximum force readiness."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Continue aggressive expansion with the growing army, prioritizing immediate pressure against key assets like resource nodes, production facilities, or strategic structures to disrupt opponents' economy and defense.",
+                "Maintain active production while utilizing the expanding army to overwhelm enemy resources, barracks access, and exposed structures through relentless aggression, ensuring a swift transition to decisive endgame pressure."
+            ],
+            [
+                "Mid game plan:",
+                "Prioritize resource management and unit composition to optimize economy and combat capabilities. Ensure map control decisions support strategic objectives. Balance production and reinforcement needs with pressure timing to maintain a stable foundation for future growth. Continue building on early game foundations, but shift focus towards sustained aggression and exploitation of opportunities as they arise."
+            ],
+            [
+                "EARLY GAME PLAN is replaced by the following:",
+                "",
+                "[mid_game_plan]",
+                "MID GAME PLAN:",
+                "Transition from early aggressive expansion to decisive mid-game pressure by targeting key resources and infrastructure. Prioritize swift conquest of key assets through relentless pressure on enemy positions, exploiting their weaknesses with immediate force to set the stage for rapid transition into all-out warfare.",
+                "",
+                "Decision priority remains high: aggressively seek out and exploit enemy weaknesses at every opportunity. Pressure timing is immediate once any credible threat emerges, regardless of income or production stability."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Continue aggressive expansion with the growing army by targeting high-priority assets like key resource nodes, production facilities, or strategic structures that can be immediately pressured to disrupt opponents' economy and defense.",
+                "Balance production needs while using the expanding army to overwhelm enemy resources, barracks access, and exposed structures through relentless aggression, prioritizing swift conquest of key resources and aggressive unit deployment to maintain momentum."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Maintain early-game tempo by prioritizing rapid expansion, scouting, and map control contests over slow optimization.",
+                "Initiate selective harassment and map pressure to force the enemy into multiple simultaneous engagements.",
+                "Threaten exposed workers, unfinished buildings, and harvesting paths whenever attacking is safer than frontal engagement.",
+                "Preserve enough economy at home for continuous unit flow while the opponent reacts."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Apply pressure through the growing army, targeting enemy workers, barracks access, and exposed structures while maintaining production activity and sufficient worker counts to sustain it."
+            ],
+            [
+                "In mid game, prioritize sustained economic output and continuous reinforcement. Allocate resources to maintain a stable harvesting loop, ensure worker continuity, and support production. Delay pressure timing until income and production are sufficient to support continuous reinforcement. Maintain a moderate risk tolerance: engage in defensive fights if necessary to protect economy or open clear value."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Integrate rapid expansion and economic growth from early game plan while prioritizing swift conquest of key resources.",
+                "Aggressively deploy units to exert pressure on critical assets like resource nodes, production facilities, or strategic structures.",
+                "Maintain a high level of aggression by constantly seeking opportunities for decisive battles and eliminating any potential threats before they develop into major issues."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Maintain production uptime while aggressively seeking out and exploiting enemy weaknesses at every opportunity using the growing army to pressure key assets, such as workers, barracks access, and exposed structures, to align with our preferred win path of overwhelming the opponent through forceful pressure rather than building an economic lead."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Balance production with worker deployment to maintain consistent income.",
+                "Utilize the growing army to apply targeted pressure on enemy resources, production facilities, and key structures, maximizing efficiency over brute force."
+            ],
+            [
+                "MID GAME PLAN: ",
+                "Maintain aggressive momentum by leveraging the expanding army to target enemy weak points, workers, and structures, while ensuring continuous resource supply and adapting production uptime based on current objectives and available resources to sustain decisive expansion goals."
+            ],
+            [
+                "Mid game plan:",
+                "Prioritize resource management and unit composition to optimize economy and combat capabilities while aligning with the strategy_identity's risk tolerance and pressure timing constraints. Ensure map control decisions support strategic objectives and balance production and reinforcement needs to maintain a stable foundation for future growth, gradually increasing aggression and exploitation of opportunities as they arise."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Continue aggressive expansion with the growing army, prioritizing key assets like resource nodes, production facilities, or strategic structures to disrupt opponents' economy and defense.",
+                "Maintain active production while balancing enough workers to sustain it and use the expanding army to overwhelm enemy resources, barracks access, and exposed structures through relentless aggression, preserving a stable economic lead as the foundation for decisive endgame pressure."
+            ],
+            [
+                "MID GAME PLAN: ",
+                "Integrate balanced production and worker deployment for sustainable income.",
+                "Prioritize selective application of military pressure against enemy economy and infrastructure while maintaining control of strategic areas."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Continue aggressive expansion with the growing army by targeting high-priority assets like key resource nodes, production facilities, or strategic structures that can be immediately pressured to disrupt opponents' economy and defense.",
+                "Prioritize swift unit production over maintaining balance between production needs and aggression to overwhelm enemy resources, barracks access, and exposed structures through relentless aggression, focusing on swift conquest of key resources and aggressive unit deployment to maintain momentum."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Continue scaling up economic lead through sustained aggressive expansion with the growing army, focusing on immediate pressure against key assets like resource nodes, production facilities, or strategic structures to disrupt opponents' economy and defense.",
+                "Maintain stable production while ensuring continuous reinforcement through efficient harvesting and worker deployment, utilizing the expanding army to overwhelm enemy resources, barracks access, and exposed structures by leveraging superior sustained production."
+            ],
+            [
+                "MID GAME PLAN: Continue aggressive expansion with the growing army, prioritizing key assets like resource nodes, production facilities, or strategic structures that directly protect economy or open clear value opportunities. Maintain active production while balancing enough workers to sustain it and use the expanding army to overwhelm enemy resources, barracks access, and exposed structures through relentless aggression that supports strategy_identity's win path objectives of building an economic lead first and then overwhelming the opponent through superior sustained pressure."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Gradually increase economic pressure by targeting high-value enemy structures or units that disrupt our economy or resource collection.",
+                "Maintain a balanced focus on both production and unit development to ensure sustained growth and reinforcement capabilities.",
+                "As the opponent's economy is weakened, shift emphasis towards more aggressive expansion, seeking opportunities to overwhelm their defenses through superior mobilization."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Integrate economy, production, combat, and pressure naturally to support continuous reinforcement. Adjust decision priority according to the chosen strategy_identity: Economy-first scaling. ",
+                "Risk tolerance is moderate: avoid unnecessary fights unless they directly protect economy or open clear value. Pressure timing should be delayed until income and production are stable enough to support continuous reinforcement. Focus on maintaining an economic lead while adapting production uptime based on current phase plan objectives and available resources to overwhelm the opponent through superior sustained production."
+            ],
+            [
+                "MID GAME PLAN: ",
+                "Prioritize targeting vulnerable areas of opponent's economy such as exposed workers, weak resource points, or poorly defended production facilities with the growing army, while maintaining sufficient worker deployment to support continuous production and pressure application."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Accelerate production growth through aggressive army expansion and continuous pressure on enemy economy and infrastructure.",
+                "Balance sufficient worker allocation to sustain production while leveraging the growing army to harass exposed workers, barracks access, and structures, thereby disrupting opponent's tempo and limiting their response time."
+            ],
+            [
+                "MID GAME PLAN: ",
+                "Balance economic growth with controlled military pressure to sustain a strong, adaptable presence on the map.",
+                "Prioritize targeted attacks on enemy economy and critical infrastructure, while continuously reinforcing production capabilities and worker deployment to maintain a stable foundation for future expansion."
+            ],
+            [
+                "MID GAME PLAN: ",
+                "Accelerate mid-game growth by focusing resource collection on critical resources that fuel expansion, and allocate workforce effectively to maintain momentum in both economic and military development.",
+                "Leverage the army's growing presence to disrupt enemy tempo through targeted attacks on exposed workers, structures, and resource-gathering operations."
+            ],
+            [
+                "MID GAME PLAN:",
+                "Prioritize swift transition to all-out warfare by rapidly pressuring key assets such as resource nodes, production facilities, or strategic structures. Maintain aggressive unit deployment and structure construction while adapting strategy_identity's approach to pressure the opponent's economy and defense simultaneously. Focus on collapsing the enemy system with coordinated pressure rather than spreading into low-value chases, favoring actions that end the enemy faster or preserve the minimum structure needed to win."
+            ]
+        ],
+        "late_game_plan": [
+            [
+                "LATE GAME PLAN:",
+                "Convert advantage into a finishing attack on enemy base and production rather than drifting into endless small trades.",
+                "Spend accumulated resources aggressively on the units most likely to end the game soon.",
+                "Protect our own remaining production only if doing so does not throw away a realistic winning push."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Prioritize decisive targets: enemy base first, enemy barracks next, then workers and combat units that block the finish.",
+                "Do not delay a strong attack just to optimize economy further once the game has become decisive.",
+                "If behind, look for the highest-impact swing by killing production, exposed workers, or a vulnerable base."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Once both sides have reduced economies or damaged structure counts, each unit matters more than long-term scaling.",
+                "Collapse on the enemy system with coordinated pressure instead of splitting into low-value chases.",
+                "If a base race emerges, favor actions that end the enemy faster or preserve the minimum structure needed to win."
+            ],
+            [],
+            [
+                "LATE GAME PLAN:",
+                "Transition from aggressive expansion to decisive endgame pressure by targeting core infrastructure, including severely damaged bases, barracks, and worker counts. Overwhelm opponents through relentless aggression and forceful pressure on key assets like resource nodes, production facilities, or strategic structures to disrupt their economy and defense, securing a swift victory."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Launch a decisive finishing attack on the enemy's base and production, focusing on eliminating key vulnerabilities rather than engaging in prolonged skirmishes.",
+                "Spend accumulated resources aggressively on units that can immediately capitalize on existing advantages and threaten a swift conclusion to the game.",
+                "Prioritize ending the game before the opponent can stabilize or outscale by targeting their critical infrastructure and exploiting any lingering weaknesses."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Maintain and reinforce economic lead through continued production and army growth. Use sustained pressure to overwhelm the opponent's economy and infrastructure. Prioritize conversion of local advantages into continuous reinforcement, ensuring a stable supply chain to support further expansion and defense. Focus on converting enemy resources, structures, and vulnerable units into long-term value rather than waiting for a maximal force."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Transition from Ambitious Annihilation's aggressive expansion to decisive endgame pressure by targeting core infrastructure, including severely damaged bases, barracks, and worker counts. Overwhelm opponents through relentless aggression and forceful pressure on key assets like resource nodes, production facilities, or strategic structures to disrupt their economy and defense, securing a swift victory."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Once both sides have reduced economies and damaged structures significantly, each unit matters more than long-term scaling.",
+                "Collapse on the enemy system with coordinated pressure instead of splitting into low-value chases.",
+                "If a base race emerges, favor actions that end the enemy faster or preserve the minimum structure needed to win through immediate aggressive expansion."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Once both sides have reduced economies or damaged structure counts, each unit's survival value and mobility matter more than long-term scaling.",
+                "Coordinate pressure instead of splitting into low-value chases, focusing on decisive attacks that disrupt enemy economy and production.",
+                "If a base race emerges, prioritize actions that end the enemy faster or preserve minimum structures for a quick win."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Target enemy strategic assets and disrupt their economy by pressuring key structures, vulnerable workers, and exposed resources.",
+                "Directly challenge opponent's production and defense capabilities through focused attacks and repeated pressure.",
+                "Maintain continuous reinforcement of your own army to overwhelm the opponent with sustained superior production."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Transition from aggressive expansion to decisive endgame pressure by targeting severely damaged core infrastructure, including bases, barracks, and worker counts. Overwhelm opponents through relentless aggression and forceful pressure on key assets like resource nodes, production facilities, or strategic structures to disrupt their economy and defense, securing a swift victory by exploiting any exposed weaknesses and eliminating all potential threats to achieve a crushing endgame outcome."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Converge resources towards decisive action, prioritizing high-leverage targets in enemy base and production.",
+                "Focus spending on essential units for rapid game closure, rather than sustaining small trades.",
+                "Defend own critical production only when its loss would severely compromise the finishing push."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "As both sides' economies wane and structure counts decline, prioritize crushing the enemy's core systems through synchronized attacks rather than dispersing units in low-priority pursuits.",
+                "When a base race unfolds, focus on swift, decisive actions that either rapidly eliminate the opponent or safeguard minimal essential structures for victory."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Transition from aggressive expansion to decisive endgame pressure by targeting severely damaged core infrastructure: bases, barracks, worker counts, and key assets like resource nodes, production facilities, or strategic structures. Overwhelm opponents through relentless aggression and forceful pressure on the most critical points of vulnerability to disrupt their economy and defense, securing a swift victory."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Transition to late game by targeting core infrastructure and decisive endgame pressure. ",
+                "Prioritize aggressive unit deployment to overwhelm enemy resources, barracks access, and exposed structures through relentless aggression.",
+                "Maintain momentum by swiftly conquering key resources and utilizing the expanding army to disrupt opponents' economy and defense.",
+                "Ensure continuous resource acquisition and aggressively seek out enemy weaknesses at every opportunity to exploit them with immediate force.",
+                "Reposition for decisive endgame pressure against key assets like core infrastructure, production facilities, or strategic structures."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Maintain aggressive tempo by prioritizing relentless forward pressure, continuous map control contests, and selective harassment to force the enemy into multiple simultaneous engagements.",
+                "Threaten exposed workers, unfinished buildings, and harvesting paths whenever attacking is safer than frontal engagement.",
+                "Preserve enough economy at home for continuous unit flow while the opponent reacts, but be willing to accept leaner economy if it disrupts enemy development or seizes initiative.",
+                "Focus on finishing the game before the opponent can outscale or fully stabilize by continuously applying pressure and exploiting vulnerabilities in their economy."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Apply decisive endgame pressure by targeting enemy base and barracks to maximize damage while minimizing risk.",
+                "Prioritize swift unit production over continued economy growth to quickly establish a strong, aggressive presence that forces the opponent into reactive mode.",
+                "Maintain sufficient worker counts to sustain production activity, but do not compromise immediate attack or kill opportunities that damage enemy production or exposed workers."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "1. Maintain a strong economic lead by prioritizing sustained production and continuous reinforcement.",
+                "2. Ensure worker continuity and allocate resources to support stable harvesting loops.",
+                "3. Delay pressure timing if necessary, but maintain a moderate risk tolerance: engage in defensive fights if necessary to protect economy or open clear value.",
+                "4. Allocate resources to support the preferred win path of overwhelming the opponent through superior sustained production."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Once both sides have collapsed economies or severely damaged core infrastructure, each unit's contribution outweighs long-term scaling considerations.",
+                "Concentrate pressure on key assets and eliminate threats with decisive battles rather than dispersing units in low-priority chases.",
+                "In a base race scenario, prioritize actions that swiftly eliminate the enemy or preserve essential structures for victory."
+            ],
+            [
+                "In late game, maintain relentless aggression and forceful pressure against key assets by repositioning to exploit enemy weaknesses in production, base defense, and resource gathering. Prioritize targeting exposed workers, barracks access, and vulnerable structures to align with our preferred win path of overwhelming the opponent through aggressive expansion rather than building an economic lead. Continuously acquire resources and reposition for decisive pressure against critical objectives, maintaining a high level of risk tolerance throughout."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Balance continued economic pressure with aggressive endgame planning to maintain a strong lead.",
+                "Apply targeted pressure on enemy resources and production facilities, while prioritizing the destruction of key structures to prevent counterattacks.",
+                "Maintain consistent income through efficient harvesting and worker deployment, ensuring that production can sustain continuous reinforcement.",
+                "Utilize the growing army to overwhelm the opponent through superior sustained production, and be prepared to adapt to changing circumstances as the endgame unfolds."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Apply decisive endgame pressure by targeting high-priority enemy targets such as resource gathering points, key structures, and strategic weak points to maximize damage and disrupt the opponent's economy.",
+                "Prioritize swift unit production over continued economy growth to quickly establish a strong, aggressive presence that forces the opponent into reactive mode and prevents them from scaling or stabilizing.",
+                "Maintain sufficient worker counts to sustain production activity, but focus on allocating resources towards immediate attack or kill opportunities that damage enemy production or exposed workers, and be prepared to reposition for the next useful fight or objective."
+            ],
+            [
+                "LATE GAME PLAN: ",
+                "Reorient economy and combat towards a decisive victory by focusing on high-leverage targets that cripple enemy production and threaten their base. Allocate resources to essential units for rapid game closure, rather than sustaining small trades or maintaining marginal advantages. Secure critical production only when its loss would severely compromise the finishing push, prioritizing swift resolution over prolonged defense."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Once both sides have reduced economies and damaged structure counts are irrelevant, focus on maximizing unit efficiency and adaptability.",
+                "Coordinated pressure becomes crucial; prioritize direct attacks over split chases unless a clear opportunity for rapid resolution arises.",
+                "In base races, favor decisive actions that minimize structural investments while securing victory."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Target core infrastructure, such as severely damaged bases, barracks, and worker counts, for decisive endgame pressure. Secure the economy by overwhelming opponents through relentless aggression on key assets like resource nodes, production facilities, or strategic structures, ultimately forcing a swift victory through sustained superiority in production and resource management."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Shift focus from maintaining economic stability to aggressively pursuing key strategic objectives and eliminating opponent's defensive capabilities.",
+                "Target enemy resources and critical infrastructure for destruction while protecting own core economy and ensuring continuous reinforcement through efficient harvesting and worker deployment.",
+                "Utilize superior sustained production to overwhelm the opponent, leveraging growing army strength to break through defenses and secure a decisive victory."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Apply decisive endgame pressure by targeting key enemy assets such as base and barracks simultaneously to maximize damage while minimizing risk.",
+                "Prioritize aggressive unit deployment over continued economy growth to quickly establish a strong, aggressive presence that forces the opponent into reactive mode and leverages our preferred win path of overwhelming them through relentless aggression and forceful pressure rather than building an economic lead."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Shift focus from maintaining economic stability to aggressively pursuing key strategic objectives by targeting enemy resources and critical infrastructure for destruction while protecting own core economy.",
+                "Ensure continuous reinforcement through efficient harvesting and worker deployment, but prioritize breaking through opponent's defenses with superior sustained production and growing army strength to secure a decisive victory."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Shift from aggressive expansion to decisive endgame reinforcement by targeting critical infrastructure vulnerabilities, including damaged bases, barracks, and key asset concentrations. Overwhelm opponents through relentless pressure on resource nodes, production facilities, and strategic structures to disrupt their economy and defense, securing a swift victory that maintains strategy_identity's win path objectives of building an economic lead first and then overwhelming the opponent through superior sustained pressure."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Apply decisive endgame pressure by targeting high-value enemy structures and units that disrupt our economy or resource collection, while minimizing risk and preserving our economic lead.",
+                "Prioritize swift unit production over continued economy growth to quickly establish a strong, aggressive presence that supports our preferred win path of overwhelming the opponent through superior sustained production.",
+                "Maintain sufficient worker counts to sustain production activity while focusing on decisive endgame pressure, but do not compromise immediate attack or kill opportunities that damage enemy production or exposed workers."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Once income and production are stable enough to support continuous reinforcement, each unit matters more than long-term scaling.",
+                "Collapse on the enemy system with coordinated pressure instead of splitting into low-value chases.",
+                "If a base race emerges, favor actions that end the enemy faster or preserve the minimum structure needed to win, while maintaining an economic lead and overwhelming the opponent through superior sustained production."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Apply relentless pressure on enemy resources and key structures while prioritizing the destruction of strategic assets to prevent counterattacks and disrupt opponents' economy.",
+                "Maintain consistent income through efficient harvesting and worker deployment, ensuring that production can sustain continuous reinforcement and support aggressive endgame planning.",
+                "Utilize the growing army to overwhelm the opponent through superior sustained production and forceful pressure, adapting rapidly to changing circumstances as the endgame unfolds."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Accelerate expansion and pressure through continuous reinforcement and sustained army growth to overwhelm the opponent's economy and production.",
+                "Maintain sufficient worker allocation to support rapid expansion while leveraging the growing army to disrupt opponent's tempo, limit their response time, and capture key territory.",
+                "Prioritize direct attacks on enemy strongpoints and vital infrastructure to break their resistance and accelerate our own economic and military momentum."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Shift focus from maintaining economic stability to aggressively pursuing key strategic objectives by targeting enemy critical infrastructure for destruction while protecting own core economy and ensuring continuous reinforcement through efficient harvesting and worker deployment.",
+                "Utilize superior sustained production to overwhelm the opponent, leveraging growing army strength to break through defenses and secure a decisive victory by building on the established economic lead."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Accelerate expansion through sustained reinforcement and continuous army growth to decisively overwhelm the opponent's economy and production by leveraging pressure timing as defined in strategy_identity.",
+                "Maintain sufficient worker allocation to support rapid expansion while disrupting the opponent's tempo, limiting their response time, and capturing key territory.",
+                "Prioritize targeted direct attacks on enemy strongpoints and vital infrastructure to break their resistance and accelerate our own economic and military momentum."
+            ],
+            [
+                "LATE GAME PLAN:",
+                "Prioritize decisive endgame pressure by collapsing on key assets such as resource nodes, production facilities, or strategic structures with coordinated attacks rather than splitting forces into low-value chases.",
+                "In a base race, favor actions that end the enemy faster or preserve the minimum structure needed to win."
+            ]
+        ],
+        "decision_priority": [
+            [
+                "DECISION PRIORITY:",
+                "1. Prevent immediate loss of base, barracks, or trapped workers when survival is at stake.",
+                "2. Take immediate attack or kill opportunities that damage enemy production, base, or exposed workers.",
+                "3. Maintain production uptime if resources and safe production options exist.",
+                "4. Maintain enough harvesting to keep production alive.",
+                "5. Reposition for the next useful fight or objective."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Resolve units already in combat or about to be hit.",
+                "2. Preserve or create favorable local trades.",
+                "3. Spend resources on useful workers, barracks, or combat units without delay.",
+                "4. Keep the economy functioning efficiently.",
+                "5. Improve formation, pressure angle, or map access."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Immediate survival and structure preservation.",
+                "2. Exploit exposed enemy workers, unfinished buildings, and isolated units.",
+                "3. Continue the current phase plan if it is still coherent with the state.",
+                "4. Avoid idle production and resource float.",
+                "5. Avoid low-value movement that does not improve contact, defense, or economy."
+            ],
+            [],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize swift conquest of key resources by attacking enemy positions that threaten our aggressive expansion, exploiting their weaknesses with immediate force.",
+                "2. Take advantage of opportunities to damage enemy production, base, and exposed workers through aggressive unit deployment and rapid transition to all-out warfare.",
+                "3. Maintain production uptime while aggressively seeking out and exploiting enemy weaknesses at every opportunity.",
+                "4. Ensure continuous resource acquisition by repositioning for the next useful fight or objective, maintaining enough harvesting to sustain relentless aggression.",
+                "5. Reposition for the next immediate attack or kill opportunity that aligns with our preferred win path of overwhelming the opponent through forceful pressure rather than building an economic lead."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize early military conversion and continuous pressure to disrupt enemy development and seize initiative.",
+                "2. Immediately exploit exposed enemy workers, unfinished buildings, and isolated units to gain a decisive advantage.",
+                "3. Pursue the current phase plan aggressively, adapting tactics as needed to stay ahead of the opponent's pace.",
+                "4. Continuously monitor and optimize production and resource allocation to maintain a strong economy and combat capacity.",
+                "5. Focus on high-value movement that improves contact, defense, or economy, and avoid low-priority actions that stall progress."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Resolve units already in combat or about to be hit and prioritize early game plan commitments.",
+                "2. Preserve or create favorable local trades, but do not delay large commitments if they align with the economy-first strategy.",
+                "3. Spend resources on useful workers, barracks, or combat units without delay, considering practical constraints over ambitious redesigns.",
+                "4. Keep the economy functioning efficiently to support continuous reinforcement and pressure timing.",
+                "5. Improve formation, pressure angle, or map access, but prioritize executing existing commitments before making local adjustments."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize immediate defense of base, barracks, and trapped workers when survival is at stake.",
+                "2. Seize opportunities to damage enemy production, base, or exposed workers through decisive attacks or kills.",
+                "3. Maintain stable production uptime by ensuring consistent resource availability and safe production options exist.",
+                "4. Sustain sufficient harvesting to support ongoing production needs.",
+                "5. Execute strategic repositioning for the next crucial fight or objective while adhering to economic lead preservation."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize swift conquest of key resources by attacking enemy positions that threaten our Ambitious Annihilation expansion, exploiting their weaknesses with immediate force.",
+                "2. Take advantage of opportunities to damage enemy production, base, and exposed workers through aggressive unit deployment and rapid transition to all-out warfare.",
+                "3. Maintain production uptime while aggressively seeking out and exploiting enemy weaknesses at every opportunity.",
+                "4. Ensure continuous resource acquisition by repositioning for the next useful fight or objective, maintaining enough harvesting to sustain relentless aggression.",
+                "5. Reposition for the next immediate attack or kill opportunity that aligns with our preferred win path of overwhelming the opponent through forceful pressure rather than building an economic lead."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Resolve units already in combat or about to be hit immediately, taking priority over other goals if necessary.",
+                "2. Preserve or create favorable local trades while maintaining aggressive expansion momentum.",
+                "3. Spend resources on useful workers, barracks, or combat units without delay to fuel rapid growth and pressure application.",
+                "4. Keep the economy functioning efficiently, but prioritize disrupting enemy infrastructure and economy in coordination with phase_transition_rule transitions.",
+                "5. Improve formation, pressure angle, or map access while focusing on collapsing the enemy system through coordinated pressure and aggressive expansion."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Resolve units already in combat or about to be hit.",
+                "2. Prioritize and execute decisive trades that disrupt enemy development or seize initiative early on.",
+                "3. Spend resources on useful workers, barracks, or combat units without delay.",
+                "4. Keep the economy functioning efficiently while maintaining pressure timing as continuous with little tolerance for passive waiting.",
+                "5. Adapt formation, pressure angle, or map access to stay ahead of the opponent and maintain relentless forward pressure."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize swift conquest of key resources by exploiting enemy weaknesses with targeted attacks and maintaining aggressive unit deployment.",
+                "2. Take advantage of opportunities to damage enemy production, base, and exposed workers while maintaining a strong economy and defense.",
+                "3. Maintain production uptime while aggressively seeking out and exploiting enemy weaknesses at every opportunity.",
+                "4. Ensure continuous resource acquisition by repositioning for the next useful fight or objective, maintaining enough harvesting to sustain relentless aggression.",
+                "5. Adjust decision priority based on compact reflection context to optimize strategy for the current game state."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prevent loss of strategic assets like bases, barracks, and key structures when survival is at stake.",
+                "2. Prioritize immediate attacks or kills that damage enemy economy, disrupt resource flow, or protect vital infrastructure.",
+                "3. Maintain continuous production by allocating workers and resources efficiently across ongoing construction and reinforcement.",
+                "4. Balance harvesting with production needs to ensure stable income and resource availability.",
+                "5. Reposition for the next strategic objective that aligns with the current phase plan's goals and pressure timing."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize swift conquest of key resources over all other considerations to maintain aggressive expansion strategy.",
+                "2. Immediately exploit exposed enemy workers, unfinished buildings, and isolated units to disrupt opponents' economy and defense.",
+                "3. Continue the current phase plan if it is still coherent with the state and supports the overall aggressive expansion goal.",
+                "4. Avoid idle production and resource float that undermines rapid expansion and transition to all-out warfare.",
+                "5. Prioritize high-value movement that improves contact, defense, or economy, even if it means sacrificing some short-term gains in favor of long-term strategic advantage."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize swift conquest of key resources by making one conservative improvement using compact feedback from parent's last real game to reinforce existing aggressive expansion strategy.",
+                "2. Take advantage of opportunities to damage enemy production, base, and exposed workers through strategic unit deployment and rapid transition to all-out warfare while preserving existing risk tolerance and pressure timing.",
+                "3. Maintain production uptime while aggressively seeking out and exploiting enemy weaknesses at every opportunity, giving priority to practical constraints that improve execution reliability over ambitious redesigns.",
+                "4. Ensure continuous resource acquisition by repositioning for the next useful fight or objective, maintaining enough harvesting to sustain relentless aggression in line with preferred win path of overwhelming opponent through forceful pressure rather than building economic lead.",
+                "5. Reposition for the next immediate attack or kill opportunity that aligns with our existing strategic style and preferred win path."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Resolve urgent conflicts and threats to stability.",
+                "2. Preserve or create favorable local trades while maintaining overall economic balance.",
+                "3. Allocate resources to essential production and unit development without delay.",
+                "4. Ensure the economy remains stable and productive.",
+                "5. Optimize decision-making to align with strategy_identity priorities, including pressure timing and win path objectives."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize swift conquest of key resources by attacking enemy positions that threaten our strategy_identity, exploiting their weaknesses with immediate force.",
+                "2. Take advantage of opportunities to damage enemy production, base, and exposed workers through aggressive unit deployment and rapid transition to all-out warfare.",
+                "3. Maintain production uptime while aggressively seeking out and exploiting enemy weaknesses at every opportunity.",
+                "4. Ensure continuous resource acquisition by repositioning for the next useful fight or objective, maintaining enough harvesting to sustain relentless aggression.",
+                "5. Reposition for the next immediate attack or kill opportunity that aligns with our preferred win path of overwhelming the opponent through forceful pressure rather than building an economic lead."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Attack enemy positions threatening aggressive expansion and immediately exploit their weaknesses to secure key resources.",
+                "2. Exploit opportunities to damage enemy production, base, and exposed workers using aggressive unit deployment and rapid transition to all-out warfare.",
+                "3. Maintain production uptime while aggressively seeking out and exploiting enemy weaknesses at every opportunity.",
+                "4. Ensure continuous resource acquisition by repositioning for the next useful fight or objective, maintaining enough harvesting to sustain relentless aggression.",
+                "5. Reposition for decisive pressure against key assets aligning with our preferred win path of overwhelming the opponent through forceful pressure rather than building an economic lead."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Preserve immediate survival and structure preservation while adapting to evolving state conditions.",
+                "2. Continuously exploit exposed enemy workers, unfinished buildings, and isolated units as opportunities arise.",
+                "3. Maintain the current phase plan unless its coherence with the state is compromised by new information or changing circumstances.",
+                "4. Avoid excessive idle production and resource accumulation that does not directly support the chosen win path.",
+                "5. Prioritize movement that improves contact, defense, economy, and overall momentum over low-value actions."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize immediate attack or kill opportunities that damage enemy production, base, or exposed workers over preventing loss of base, barracks, or trapped workers to seize opportunities for decisive victories and maximize aggressive expansion goals.",
+                "2. Take immediate action against enemy weak points and exploit existing pressure to prevent reactive countermeasures and maintain momentum.",
+                "3. Adaptively adjust production uptime based on current phase plan objectives and available resources rather than maintaining fixed production levels.",
+                "4. Ensure continuous resource supply through harvesting, scouting, or other means to sustain aggressive expansion goals.",
+                "5. Reposition for the next useful fight or objective to maintain pressure and momentum while minimizing risk."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Resolve units already in combat or about to be hit.",
+                "2. Preserve or create favorable local trades.",
+                "3. Allocate resources for disciplined setup and worker continuity before large commitments.",
+                "4. Keep the economy functioning efficiently by maintaining stable harvesting loops and ensuring continuous production support.",
+                "5. Improve formation, pressure angle, or map access while prioritizing sustained economic output and defensive capability."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Resolve units in immediate danger of being hit or already engaged in combat.",
+                "2. Favorably adjust local trades to prevent potential losses and promote growth.",
+                "3. Allocate resources immediately for essential workers, barracks, and combat units that support the strategy_identity's Aggressive expansion approach.",
+                "4. Maintain a stable economy despite pressure timing, prioritizing swift conquest over long-term scaling considerations.",
+                "5. Continuously assess and refine formation, pressure angle, and map access to ensure relentless aggression and forceful pressure against opponents."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize immediate exploitation of enemy weaknesses threatening aggressive expansion by targeting key resources and attacking exposed positions.",
+                "2. Rapidly transition to all-out warfare using aggressive unit deployment to damage enemy production, base, and exposed workers at every opportunity.",
+                "3. Maintain high-risk, high-reward gameplay by aggressively seeking out and exploiting enemy weaknesses with a focus on relentless aggression over economic stability.",
+                "4. Reposition for decisive pressure against key assets while continuously acquiring resources to sustain forceful pressure against critical objectives.",
+                "5. Align all decisions with the preferred win path of overwhelming the opponent through aggressive expansion rather than building an economic lead, ensuring swift conquest of key resources and rapid transition to all-out warfare."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Preserve the economy by preventing immediate loss of base, barracks, or trapped workers when survival is at stake.",
+                "2. Seize opportunities that damage enemy production, base, or exposed workers to delay opponent's economic growth.",
+                "3. Ensure continuous production if resources and safe production options are available.",
+                "4. Maintain sufficient harvesting to keep production stable and support sustained reinforcement.",
+                "5. Position for the next strategic fight or objective while maintaining control of key areas."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize immediate attack or kill opportunities that damage enemy production, base, or exposed workers over continued passive waiting to seize opportunities for decisive victories and maximize aggressive expansion goals.",
+                "2. Take immediate action against enemy weak points and exploit existing pressure to prevent reactive countermeasures and maintain momentum.",
+                "3. Adaptively adjust production uptime based on current phase plan objectives and available resources rather than maintaining fixed production levels.",
+                "4. Ensure continuous resource supply through harvesting, scouting, or other means to sustain aggressive expansion goals.",
+                "5. Reposition for the next useful fight or objective to maintain pressure and momentum while minimizing risk and adhering to early and continuous pressure timing."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Ensure survival by preventing immediate loss of base, barracks, or trapped workers.",
+                "2. Prioritize impactful opportunities that damage enemy production, base, or exposed workers.",
+                "3. Sustain production if resources and safe options are available to maintain a stable economy.",
+                "4. Balance harvesting with the need for continuous production and resource flow.",
+                "5. Reorient towards objectives that support the preferred win path of building an economic lead first."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Adjust strategy identity if game ended in a draw, reflecting increased risk tolerance and strategic style may be altered.",
+                "2. Prioritize swift conquest of key resources by attacking enemy positions that threaten our aggressive expansion, exploiting their weaknesses with immediate force, while maintaining existing strategic style unless feedback suggests local adjustments.",
+                "3. Take advantage of opportunities to damage enemy production, base, and exposed workers through aggressive unit deployment and rapid transition to all-out warfare, preserving preferred win path of overwhelming the opponent through forceful pressure.",
+                "4. Maintain production uptime while aggressively seeking out and exploiting enemy weaknesses at every opportunity, keeping strategy identity unchanged unless local adjustments are strongly suggested by compact feedback.",
+                "5. Ensure continuous resource acquisition by repositioning for the next useful fight or objective, maintaining enough harvesting to sustain relentless aggression, and preserving existing strategic style unless strong evidence indicates otherwise."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize protecting the economy by preserving base, barracks, and workers when survival is at risk.",
+                "2. Leverage opportunities that damage enemy production, base, or exposed workers to slow opponent's economic growth.",
+                "3. Sustain continuous production whenever resources allow for safe and efficient utilization.",
+                "4. Maintain stable harvesting to support sustained reinforcement and reinforce key areas.",
+                "5. Position for the next strategic fight or objective while maintaining control of key areas, ensuring a smooth transition into pressure against key strategic locations."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize preserving core economy by preventing immediate loss of base, barracks, or trapped workers when survival is at stake, ensuring continuity of essential resources and production infrastructure.",
+                "2. Identify opportunities to damage enemy production, base, or exposed workers to disrupt their economic growth and create a competitive advantage.",
+                "3. Balance resource utilization with risk tolerance: ensure continuous production only if doing so does not compromise the economy's stability or expose it to unnecessary threats.",
+                "4. Maintain sufficient harvesting to support sustained reinforcement and stable production, while being mindful of pressure timing as defined in the strategy_identity.",
+                "5. Align decision-making with strategic objectives by positioning for the next key fight or objective while maintaining control of critical areas."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Attack enemy positions threatening aggressive expansion and immediately exploit their weaknesses to secure key resources.",
+                "2. Immediately damage enemy production, base, and exposed workers using aggressive unit deployment to disrupt opponents' economy and defense.",
+                "3. Maintain production uptime while aggressively seeking out and exploiting enemy weaknesses at every opportunity to overwhelm the opponent through relentless aggression.",
+                "4. Ensure continuous resource acquisition by repositioning for the next useful fight or objective, maintaining enough harvesting to sustain forceful pressure against key assets.",
+                "5. Apply decisive endgame pressure against key enemy assets such as base and barracks simultaneously to maximize damage while minimizing risk, in alignment with our preferred win path of overwhelming the opponent through relentless aggression and forceful pressure rather than building an economic lead."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize preserving core economy by preventing immediate loss of base, barracks, or trapped workers when survival is at stake, ensuring continuity of essential resources and production infrastructure.",
+                "2. Identify opportunities to damage enemy production, base, or exposed workers to disrupt their economic growth and create a competitive advantage.",
+                "3. Balance resource utilization with risk tolerance: ensure continuous production only if doing so does not compromise the economy's stability or expose it to unnecessary threats.",
+                "4. Maintain sufficient harvesting and reinforcement to support stable production and pressure timing as defined in the strategy_identity, while being mindful of the current phase plan's goals and priorities.",
+                "5. Align decision-making with strategic objectives by positioning for the next key fight or objective while maintaining control of critical areas and supporting the preferred win path."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Resolve urgent conflicts and threats to stability that directly impact the economy or compromise the preferred win path of building an economic lead first and then overwhelming the opponent through superior sustained production.",
+                "2. Preserve favorable local trades while maintaining overall economic balance, prioritizing resource conversion into useful production over unnecessary storage or idle resources.",
+                "3. Allocate resources to essential production and unit development without delay, focusing on sustaining stable income and production that supports continuous reinforcement of key infrastructure.",
+                "4. Ensure the economy remains stable and productive, with pressure timing aligned with strategy_identity's win path objectives of building an economic lead first and then overwhelming the opponent through superior sustained pressure.",
+                "5. Optimize decision-making to align with strategy_identity priorities, including pressure timing and win path objectives, while ensuring that tactical heuristics and anti-stall rules are respected for stabilizing and optimizing internal consistency."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Resolve urgent threats to stability and protect economic lead.",
+                "2. Preserve or create favorable local trades while maintaining overall economic balance.",
+                "3. Allocate resources to essential production and unit development without delay.",
+                "4. Ensure the economy remains stable and productive, supporting continuous reinforcement.",
+                "5. Optimize decision-making to align with strategy_identity priorities: pressure timing is delayed until income and production are stable enough to support sustained growth."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize stable harvesting and worker continuity over preventing loss of base, barracks, or trapped workers to establish a reliable economy and seize opportunities for decisive victories under Economy-first scaling.",
+                "2. Take immediate action against enemy weak points and exploit existing pressure to prevent reactive countermeasures and maintain momentum while adapting production uptime based on current phase plan objectives and available resources.",
+                "3. Ensure continuous resource supply through harvesting, scouting, or other means to sustain aggressive expansion goals under Economy-first scaling, with a focus on building an economic lead first, then overwhelming the opponent through superior sustained production.",
+                "4. Reposition for the next useful fight or objective that aligns with current phase plan objectives and available resources to maintain pressure and momentum while minimizing risk.",
+                "5. Adaptively adjust decision priority according to the chosen strategy_identity: Economy-first scaling, prioritizing stable harvesting, worker continuity, and disciplined setup before large commitments, and avoiding fragile fights unless they directly protect economy or open clear value."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Seize opportunities that damage enemy production, base, or exposed workers to delay opponent's economic growth immediately, given aggressive expansion's high risk tolerance and priority on swift conquest.",
+                "2. Preserve the economy by preventing immediate loss of base, barracks, or trapped workers when survival is at stake, but do not prioritize short-term safety over long-term strategic objectives.",
+                "3. Ensure continuous production if resources and safe production options are available, adapting to changing circumstances as the endgame unfolds.",
+                "4. Maintain sufficient harvesting to keep production stable and support sustained reinforcement, prioritizing forceful pressure over economic sustainability when necessary for aggressive expansion.",
+                "5. Position for the next strategic fight or objective while maintaining control of key areas, utilizing relentless aggression and forceful pressure to overwhelm opponents through superior sustained production."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize objectives that accelerate economic lead through aggressive resource gathering and rapid expansion, then overwhelm the opponent through superior sustained production.",
+                "2. Take immediate action against exposed enemy assets, including workers, barracks access, and structures, to disrupt their tempo and limit response time.",
+                "3. Maintain sufficient worker allocation for continuous reinforcement and expansion, while leveraging the growing army to support rapid economic and military momentum.",
+                "4. Ensure adequate harvesting to sustain production, and prioritize objectives that clear value and damage enemy economy or infrastructure.",
+                "5. Reposition forces for optimal positioning in anticipation of the next decisive phase transition or engagement."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prevent immediate loss of base, barracks, or trapped workers when survival is at stake.",
+                "2. Take immediate attack or kill opportunities that damage enemy production, base, or exposed workers.",
+                "3. Maintain production uptime if resources and safe production options exist.",
+                "4. Adjust decision priority to prioritize immediate actions that address the low productivity due to insufficient harvesting in the early game.",
+                "5. Reposition for the next useful fight or objective."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize preserving core economy by preventing immediate loss of base, barracks, or trapped workers when survival is at stake, ensuring continuity of essential resources and production infrastructure.",
+                "2. Identify opportunities to damage enemy production, base, or exposed workers to disrupt their economic growth and create a competitive advantage.",
+                "3. Balance resource utilization with risk tolerance: ensure continuous production only if doing so aligns with the strategy_identity's delayed pressure timing principle and does not compromise the economy's stability.",
+                "4. Maintain sufficient harvesting to support sustained reinforcement and stable production while positioning for strategic objectives, such as key fights or objective captures, and maintaining control of critical areas.",
+                "5. Realize opportunities to gain a competitive advantage through selective application of military pressure against enemy resources and infrastructure, guided by the strategy_identity's preferred win path."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize decision-making actions aligned with early-game strategy_identity when survival is at stake, focusing on preserving base, barracks, and worker continuity.",
+                "2. Seize immediate attack or kill opportunities that damage enemy production, base, or exposed workers while maintaining low risk tolerance.",
+                "3. Ensure continuous production by prioritizing safe options for resource conversion and minimizing idle time for units and structures.",
+                "4. Maintain stable harvesting loops to sustain production capabilities.",
+                "5. Reposition for the next useful fight or objective in alignment with mid-game plan objectives."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize preserving core economy by preventing immediate loss of base, barracks, or trapped workers when survival is at stake, ensuring continuity of essential resources and production infrastructure.",
+                "2. Identify opportunities to damage enemy production, base, or exposed workers to disrupt their economic growth and create a competitive advantage.",
+                "3. Balance resource utilization with risk tolerance: ensure continuous production only if doing so does not compromise the economy's stability or expose it to unnecessary threats based on phase_transition_rule conditions.",
+                "4. Maintain sufficient harvesting to support sustained reinforcement and stable production in alignment with early_game_plan, mid_game_plan, and late_game_plan objectives.",
+                "5. Align decision-making with strategic objectives by positioning for the next key fight or objective while maintaining control of critical areas as defined in strategy_identity."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Preserve core economy continuity: prioritize immediate prevention of base, barracks, and worker losses when survival is at risk, ensuring essential resources and production infrastructure stability.",
+                "2. Identify damage opportunities to enemy production, base, or exposed workers to disrupt their growth and gain a competitive advantage.",
+                "3. Balance resource utilization with moderate risk tolerance, prioritizing continuous production only if it supports economy stability and doesn't expose it to unnecessary threats.",
+                "4. Maintain sufficient harvesting for sustained reinforcement and stable production, aligning with the strategy's pressure timing principles.",
+                "5. Align decision-making with strategic objectives by positioning for key fights or objectives while maintaining control of critical areas."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Prioritize aggressive resource gathering to rapidly increase income and production, ensuring a stable foundation for subsequent growth.",
+                "2. Identify opportunities to damage enemy production, base, or exposed workers to disrupt their economic growth and create a competitive advantage.",
+                "3. Balance resource utilization with risk tolerance: ensure continuous production only if doing so aligns with the accelerated pressure timing defined in strategy_identity.",
+                "4. Maintain sufficient harvesting to support sustained reinforcement and stable production, while being mindful of positioning for the next key fight or objective.",
+                "5. Align decision-making with strategic objectives by prioritizing aggressive momentum and rapid expansion to overwhelm the opponent's economy and production."
+            ],
+            [
+                "DECISION PRIORITY:",
+                "1. Immediately address any existing combat threats with priority to resolving units already in combat or about to be hit.",
+                "2. Preserve favorable local trades by focusing on resource conversion and unit production without disrupting economic efficiency.",
+                "3. Allocate resources promptly for useful workers, barracks, and combat units to maintain momentum and forceful pressure throughout the game.",
+                "4. Prioritize adapting strategy_identity's aggressive expansion approach over purely economic considerations to ensure swift transition to all-out warfare.",
+                "5. Optimize formation, pressure angle, or map access in real-time to minimize losses and maximize impact on the opponent's economy and defense."
+            ]
+        ],
+        "tactical_heuristics": [
+            [
+                "TACTICAL HEURISTICS:",
+                "If an enemy is already in range, attack immediately unless a higher-priority survival rule forbids it.",
+                "Prefer finishing low-health enemies when that removes damage or clears the path to a high-value objective.",
+                "Do not retreat from a favorable engagement just to reposition decoratively."
+            ],
+            [
+                "TACTICAL HEURISTICS:",
+                "Heavy or durable units should lead contact when possible.",
+                "Ranged or fragile units should attack from safer positions and avoid taking the first melee hit.",
+                "Use local formation logic to stabilize fights, but do not let it override the global plan."
+            ],
+            [
+                "TACTICAL HEURISTICS:",
+                "Nearby units should handle nearby threats first when defending workers, base, or barracks.",
+                "Do not pull distant units away if local defenders can solve the problem.",
+                "After danger passes, return units to their broader plan quickly."
+            ],
+            []
+        ],
+        "anti_stall_rules": [
+            [
+                "ANTI-STALL RULES:",
+                "Do not leave workers idle if they can harvest, build, defend, or attack productively.",
+                "Do not leave bases or barracks idle when resources can be converted into useful production.",
+                "Do not float resources for long when the current phase plan clearly wants workers, barracks, or units."
+            ],
+            [
+                "ANTI-STALL RULES:",
+                "Do not move units back and forth without improving attack range, defense coverage, harvesting flow, or build access.",
+                "If an offensive move has started and the fight is still favorable, continue pressure instead of stuttering outside contact.",
+                "If a defensive hold succeeds, transition back into harvesting, production, or counterpressure instead of waiting idly."
+            ],
+            [
+                "ANTI-STALL RULES:",
+                "When combat units exist and no urgent home defense is needed, give them a concrete job: pressure, regroup for contact, defend a key point, or finish a target.",
+                "When economy is stable, extra resources should accelerate the chosen win path rather than sit unused.",
+                "When economy is unstable, fix it with the minimum action needed and then resume the broader plan."
+            ],
+            []
+        ]
+    }
+}
