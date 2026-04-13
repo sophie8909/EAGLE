@@ -24,7 +24,7 @@ from ..envs.microrts.adapter import (
 )
 from ..envs.microrts.runner import run_prompt_based_game
 from ..utils.simulation_runner import simulate_surrogate_games
-from .evaluate import Evaluator
+from .evaluator import Evaluator
 from ..surrogate.eval.evaluator import estimate_llm_game_round_score
 
 DEFAULT_SURROGATE_VALIDATION_TIMEOUT_SEC = 60
