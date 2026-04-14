@@ -324,24 +324,7 @@ class NSGA2(EA):
         signature.sort()
         return signature
 
-    def _evaluate_initial_population(self) -> None:
-        """Run full evaluation on the initial population before evolutionary steps."""
-        with timer("initial_population_evaluation_time", {}):
-            for index, individual in enumerate(self.population):
-                self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
-                # Checkpoint meaning:
-                # - phase="initial_population" means generation -1 is still
-                #   being evaluated
-                # - evaluated_initial_count tells resume() how many individuals
-                #   were already fully real-evaluated
-                self.save_checkpoint(
-                    self.build_checkpoint_state(
-                        phase="initial_population",
-                        generation=-1,
-                        meta={"evaluated_initial_count": index + 1},
-                    )
-                )
-
+    
     def _generate_offspring(self, generation: int, generation_stats: dict[str, float]) -> List[Individual]:
         """Create and surrogate-evaluate one full offspring population."""
         offspring: List[Individual] = []
@@ -534,21 +517,21 @@ class NSGA2(EA):
     def _has_converged(
         self,
         pareto_fronts: List[List[Individual]],
-        last_5_front_signatures: List[List[Tuple]],
+        past_front_signatures: List[List[Tuple]],
     ) -> bool:
         """Detect simple convergence by checking whether the first front has stabilized."""
         if not pareto_fronts:
             return False
 
         current_signature = self._front_signature(pareto_fronts[0])
-        last_5_front_signatures.append(current_signature)
+        past_front_signatures.append(current_signature)
 
-        if len(last_5_front_signatures) > 5:
-            last_5_front_signatures.pop(0)
+        if len(past_front_signatures) > self.config.convergence_generations:
+            past_front_signatures.pop(0)
 
         return (
-            len(last_5_front_signatures) == 5
-            and all(sig == last_5_front_signatures[0] for sig in last_5_front_signatures)
+            len(past_front_signatures) == self.config.convergence_generations
+            and all(sig == past_front_signatures[0] for sig in past_front_signatures)
         )
 
     def run(self) -> list:
@@ -569,42 +552,9 @@ class NSGA2(EA):
         log_dir = self.create_log_folder()
         checkpoint = self.load_checkpoint()
 
-        # Phase 0: restore runtime state if a checkpoint exists.
-        if checkpoint:
-            self.population = self.deserialize_population(checkpoint.get("population"))
-            self.current_generation = checkpoint.get("generation", 0)
+        self._evaluate_initial_population(checkpoint)
 
-            # Phase 0a: recover an interrupted initial-population evaluation.
-            if checkpoint.get("phase") == "initial_population":
-                start_initial = checkpoint.get("meta", {}).get("evaluated_initial_count", 0)
-                with timer("initial_population_evaluation_time", {}):
-                    for index in range(start_initial, len(self.population)):
-                        individual = self.population[index]
-                        self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
-                        self.save_checkpoint(
-                            self.build_checkpoint_state(
-                                phase="initial_population",
-                                generation=-1,
-                                meta={"evaluated_initial_count": index + 1},
-                            )
-                        )
-                checkpoint = self.build_checkpoint_state(
-                    phase="generation_complete",
-                    generation=-1,
-                    meta={"completed_generation": -1},
-                )
-                self.save_checkpoint(checkpoint)
-        else:
-            # Phase 0b: fresh run; fully evaluate generation -1 before evolution starts.
-            self._evaluate_initial_population()
-            checkpoint = self.build_checkpoint_state(
-                phase="generation_complete",
-                generation=-1,
-                meta={"completed_generation": -1},
-            )
-            self.save_checkpoint(checkpoint)
-
-        last_5_front_signatures: List[List[Tuple]] = []
+        past_front_signatures: List[List[Tuple]] = []
 
         start_generation = checkpoint.get("generation", 0) + (1 if checkpoint.get("phase") == "generation_complete" else 0)
 
@@ -651,7 +601,7 @@ class NSGA2(EA):
             )
 
             # Phase 7: simple convergence check on the current first Pareto front.
-            if self._has_converged(pareto_fronts, last_5_front_signatures):
+            if self._has_converged(pareto_fronts, past_front_signatures):
                 break
 
             checkpoint = self.build_checkpoint_state(

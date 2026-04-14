@@ -245,6 +245,7 @@ class SteadyStateNSGA2(NSGA2):
             key=lambda ind: ind.fitness[1] if ind.fitness and len(ind.fitness) > 1 else float("-inf"),
         )
 
+
     def run(self) -> list[Individual]:
         """
         Main steady-state NSGA-II optimization loop.
@@ -259,42 +260,10 @@ class SteadyStateNSGA2(NSGA2):
         log_dir = self.create_log_folder()
         checkpoint = self.load_checkpoint()
 
-        # Phase 0: restore runtime state if a checkpoint exists.
-        if checkpoint:
-            self.population = self.deserialize_population(checkpoint.get("population"))
-            self.current_generation = checkpoint.get("generation", 0)
+        """Run full evaluation on the initial population before evolutionary steps."""
+        self._evaluate_initial_population(checkpoint)
 
-            # Phase 0a: recover an interrupted initial-population evaluation.
-            if checkpoint.get("phase") == "initial_population":
-                start_initial = checkpoint.get("meta", {}).get("evaluated_initial_count", 0)
-                with timer("initial_population_evaluation_time", {}):
-                    for index in range(start_initial, len(self.population)):
-                        individual = self.population[index]
-                        self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
-                        self.save_checkpoint(
-                            self.build_checkpoint_state(
-                                phase="initial_population",
-                                generation=-1,
-                                meta={"evaluated_initial_count": index + 1},
-                            )
-                        )
-                checkpoint = self.build_checkpoint_state(
-                    phase="generation_complete",
-                    generation=-1,
-                    meta={"completed_generation": -1},
-                )
-                self.save_checkpoint(checkpoint)
-        else:
-            # Phase 0b: fresh run; fully evaluate generation -1 before evolution starts.
-            self._evaluate_initial_population()
-            checkpoint = self.build_checkpoint_state(
-                phase="generation_complete",
-                generation=-1,
-                meta={"completed_generation": -1},
-            )
-            self.save_checkpoint(checkpoint)
-
-        last_5_front_signatures: List[List[Tuple]] = []
+        past_front_signatures: List[List[Tuple]] = []
         start_generation = checkpoint.get("generation", 0) + (
             1 if checkpoint.get("phase") == "generation_complete" else 0
         )
@@ -401,7 +370,7 @@ class SteadyStateNSGA2(NSGA2):
             )
 
             # Phase 4: simple convergence check on the current first Pareto front.
-            if self._has_converged(pareto_fronts, last_5_front_signatures):
+            if self._has_converged(pareto_fronts, past_front_signatures):
                 break
 
             checkpoint = self.build_checkpoint_state(

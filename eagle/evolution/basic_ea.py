@@ -21,6 +21,7 @@ from ..evolution.operators.environment_selection import EnvironmentSelection
 from ..utils.fitness_recorder import FitnessRecorder
 from ..utils.fitness_utils import normalize_fitness
 from ..evaluation.final_test_runner import run_final_test_suite
+from ..utils.profiler import build_base_record, timer, write_jsonl
 
 class EA:
     """Shared scaffolding for the single- and multi-objective EA variants.
@@ -67,6 +68,54 @@ class EA:
             individual.initialize_randomly(self.component_pool)
             individuals.append(individual)
         return individuals
+    
+    def _evaluate_initial_population(self, checkpoint: dict | None) -> None:
+        # Phase 0: restore runtime state if a checkpoint exists.
+        if checkpoint:
+            self.population = self.deserialize_population(checkpoint.get("population"))
+            self.current_generation = checkpoint.get("generation", 0)
+
+            # Phase 0a: recover an interrupted initial-population evaluation.
+            if checkpoint.get("phase") == "initial_population":
+                start_initial = checkpoint.get("meta", {}).get("evaluated_initial_count", 0)
+                with timer("initial_population_evaluation_time", {}):
+                    for index in range(start_initial, len(self.population)):
+                        individual = self.population[index]
+                        self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
+                        self.save_checkpoint(
+                            self.build_checkpoint_state(
+                                phase="initial_population",
+                                generation=-1,
+                                meta={"evaluated_initial_count": index + 1},
+                            )
+                        )
+        else:
+            # Phase 0b: fresh run; fully evaluate generation -1 before evolution starts.
+            with timer("initial_population_evaluation_time", {}):
+                for index, individual in enumerate(self.population):
+                    self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
+                    # Checkpoint meaning:
+                    # - phase="initial_population" means generation -1 is still
+                    #   being evaluated
+                    # - evaluated_initial_count tells resume() how many individuals
+                    #   were already fully real-evaluated
+                    self.save_checkpoint(
+                        self.build_checkpoint_state(
+                            phase="initial_population",
+                            generation=-1,
+                            meta={"evaluated_initial_count": index + 1},
+                        )
+                    )
+        
+        
+        checkpoint = self.build_checkpoint_state(
+            phase="generation_complete",
+            generation=-1,
+            meta={"completed_generation": -1},
+        )
+        self.save_checkpoint(checkpoint)
+       
+
     
     def create_log_folder(self) -> str:
         """Create or reuse the per-run log directory and initialize history recording."""

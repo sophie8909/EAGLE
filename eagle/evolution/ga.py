@@ -40,46 +40,7 @@ class GA(EA):
 
         last_5_fitness = []
 
-        if checkpoint:
-            self.population = self.deserialize_population(checkpoint.get("population"))
-            self.current_generation = checkpoint.get("generation", 0)
-            if checkpoint.get("phase") == "initial_population":
-                start_initial = checkpoint.get("meta", {}).get("evaluated_initial_count", 0)
-                with timer("initial_population_evaluation_time", {}):
-                    for index in range(start_initial, len(self.population)):
-                        individual = self.population[index]
-                        self.real_evaluation(individual, random.choice(self.opponent_list), generation=0)
-                        self.save_checkpoint(
-                            self.build_checkpoint_state(
-                                phase="initial_population",
-                                generation=-1,
-                                meta={"evaluated_initial_count": index + 1},
-                            )
-                        )
-                checkpoint = self.build_checkpoint_state(
-                    phase="generation_complete",
-                    generation=-1,
-                    meta={"completed_generation": -1},
-                )
-                self.save_checkpoint(checkpoint)
-        else:
-            with timer("initial_population_evaluation_time", {}):
-                for index, individual in enumerate(self.population):
-                    self.real_evaluation(individual, random.choice(self.opponent_list), generation=0)
-                    self.save_checkpoint(
-                        self.build_checkpoint_state(
-                            phase="initial_population",
-                            generation=-1,
-                            meta={"evaluated_initial_count": index + 1},
-                        )
-                    )
-
-            checkpoint = self.build_checkpoint_state(
-                phase="generation_complete",
-                generation=-1,
-                meta={"completed_generation": -1},
-            )
-            self.save_checkpoint(checkpoint)
+        self._evaluate_initial_population(checkpoint)
 
         start_generation = checkpoint.get("generation", 0) + (1 if checkpoint.get("phase") == "generation_complete" else 0)
 
