@@ -55,6 +55,7 @@ class EAConfig:
     algorithm: str = field(default_factory=lambda: str(_default_config_value("algorithm")))
     population_size: int = field(default_factory=lambda: int(_default_config_value("population_size")))
     num_generations: int = field(default_factory=lambda: int(_default_config_value("num_generations")))
+    convergence_generations: int = field(default_factory=lambda: int(_default_config_value("convergence_generations")))
     reproduction_operator_probs: dict[str, float] = field(
         default_factory=lambda: dict(_default_config_value("reproduction_operator_probs"))
     )
@@ -79,9 +80,6 @@ class EAConfig:
     steady_state_surrogate_offspring_count: int = field(
         default_factory=lambda: int(_default_config_value("steady_state_surrogate_offspring_count"))
     )
-    steady_state_surrogate_selection_metric: str = field(
-        default_factory=lambda: str(_default_config_value("steady_state_surrogate_selection_metric"))
-    )
     final_test_max_front: int | None = field(default_factory=lambda: _default_config_value("final_test_max_front"))
 
     run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
@@ -103,6 +101,7 @@ class EAConfig:
         default_factory=lambda: int(_default_config_value("surrogate_round_samples_per_match"))
     )
     surrogate_log_dir: str = field(default_factory=lambda: str(_default_config_value("surrogate_log_dir")))
+
 
     def __post_init__(self) -> None:
         """Normalize aliases and validate the config surface eagerly."""

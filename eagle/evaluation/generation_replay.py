@@ -160,13 +160,10 @@ def filter_individuals(
     *,
     individual_id: str | None = None,
     only_winning_individuals: bool = False,
-    allowed_individual_ids: set[str] | None = None,
 ):
     """Filter generation individuals by id and/or their stored first objective."""
     filtered = []
     for individual in individuals:
-        if allowed_individual_ids is not None and individual.id not in allowed_individual_ids:
-            continue
         if individual_id is not None and individual.id != individual_id:
             continue
         if only_winning_individuals and individual.fitness[0] != 1.0:
@@ -199,15 +196,24 @@ def run_generation_result_test(
     )
     generation_log_path = resolve_generation_log_path(log_dir_path, generation)
     individuals = load_generation_individuals(log_dir_path, generation)
-    allowed_individual_ids: set[str] | None = None
-    if max_front is not None:
-        allowed_individual_ids = set(extract_individual_ids_up_to_front(generation_log_path, max_front))
+    allowed_individual = individuals
+    for i, front in enumerate(individuals):
+        print(f"Front {i} has {len(front)} individuals.")
 
+    if max_front is not None:
+        allowed_individual = individuals[:max_front] if max_front <= len(individuals) else individuals
+
+    # Flatten the list of fronts into a single list of individuals
+    flattened = []
+    for front in allowed_individual:
+        flattened.extend(front)
+    allowed_individual = flattened
+
+    print(allowed_individual)
     selected_individuals = filter_individuals(
-        individuals,
+        allowed_individual,
         individual_id=individual_id,
         only_winning_individuals=only_winning_individuals,
-        allowed_individual_ids=allowed_individual_ids,
     )
 
     interval_runs = build_interval_runs(config_path, runtime_config.llm_interval)

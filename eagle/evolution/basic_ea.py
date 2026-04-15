@@ -42,6 +42,7 @@ class EA:
         self.fitness_recorder: FitnessRecorder | None = None
         self.checkpoint_manager: CheckpointManager | None = None
         self.current_generation = 0
+        self.checkpoint = None
 
 
     def save_config(self, log_dir: str):
@@ -69,15 +70,15 @@ class EA:
             individuals.append(individual)
         return individuals
     
-    def _evaluate_initial_population(self, checkpoint: dict | None) -> None:
+    def _evaluate_initial_population(self):
         # Phase 0: restore runtime state if a checkpoint exists.
-        if checkpoint:
-            self.population = self.deserialize_population(checkpoint.get("population"))
-            self.current_generation = checkpoint.get("generation", 0)
+        if self.checkpoint:
+            self.population = self.deserialize_population(self.checkpoint.get("population"))
+            self.current_generation = self.checkpoint.get("generation", 0)
 
             # Phase 0a: recover an interrupted initial-population evaluation.
-            if checkpoint.get("phase") == "initial_population":
-                start_initial = checkpoint.get("meta", {}).get("evaluated_initial_count", 0)
+            if self.checkpoint.get("phase") == "initial_population":
+                start_initial = self.checkpoint.get("meta", {}).get("evaluated_initial_count", 0)
                 with timer("initial_population_evaluation_time", {}):
                     for index in range(start_initial, len(self.population)):
                         individual = self.population[index]
@@ -108,12 +109,12 @@ class EA:
                     )
         
         
-        checkpoint = self.build_checkpoint_state(
+        self.checkpoint = self.build_checkpoint_state(
             phase="generation_complete",
             generation=-1,
             meta={"completed_generation": -1},
         )
-        self.save_checkpoint(checkpoint)
+        self.save_checkpoint(self.checkpoint)
        
 
     

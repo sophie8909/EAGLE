@@ -58,9 +58,10 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
 
     if args.quick_run:
         config.population_size = max(2, min(config.population_size, 2))
-        config.num_generations = 1
+        config.num_generations = 2
         config.real_eval_rate = 0.0
-        config.steady_state_surrogate_offspring_count = 1
+        config.steady_state_surrogate_offspring_count = 2
+        config.run_time_per_game_sec = 30
         config.final_test_max_front = 0
 
     config.validate()

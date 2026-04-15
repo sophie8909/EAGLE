@@ -1,4 +1,4 @@
 {
-  "run_time_per_game_sec": 60,
+  "run_time_per_game_sec": 5000,
   "llm_intervals": [1, 10]
 }

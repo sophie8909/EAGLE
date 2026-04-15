@@ -228,22 +228,15 @@ class SteadyStateNSGA2(NSGA2):
 
         return candidates
 
-    def _select_best_candidate_by_game_round(self, candidates: List[Individual]) -> Individual:
+    def _select_best_half_candidate(self, candidates: List[Individual]) -> Individual:
         """Pick the candidate with the highest surrogate game-round score."""
         if not candidates:
             raise ValueError("steady-state candidate batch cannot be empty")
 
-        selection_metric = str(self.config.steady_state_surrogate_selection_metric).strip().lower()
-        if selection_metric != "game_round_score":
-            raise ValueError(
-                "steady_state_surrogate_selection_metric currently only supports "
-                "'game_round_score'"
-            )
+        sorted_candidates = sorted(candidates, key=lambda ind: ind.fitness, reverse=True)
+        best_candidate = sorted_candidates[:len(sorted_candidates) // 2+1]
 
-        return max(
-            candidates,
-            key=lambda ind: ind.fitness[1] if ind.fitness and len(ind.fitness) > 1 else float("-inf"),
-        )
+        return best_candidate
 
 
     def run(self) -> list[Individual]:
@@ -258,34 +251,34 @@ class SteadyStateNSGA2(NSGA2):
         5. immediately inserts it into the population.
         """
         log_dir = self.create_log_folder()
-        checkpoint = self.load_checkpoint()
+        self.checkpoint = self.load_checkpoint()
 
         """Run full evaluation on the initial population before evolutionary steps."""
-        self._evaluate_initial_population(checkpoint)
+        self._evaluate_initial_population()
 
         past_front_signatures: List[List[Tuple]] = []
-        start_generation = checkpoint.get("generation", 0) + (
-            1 if checkpoint.get("phase") == "generation_complete" else 0
+        start_generation = self.checkpoint.get("generation", 0) + (
+            1 if self.checkpoint.get("phase") == "generation_complete" else 0
         )
 
         for generation in range(start_generation, self.config.num_generations):
             # Phase 1: one steady-state generation = one single-child update.
             generation_stats: dict[str, float] = {}
-            same_generation_checkpoint = checkpoint.get("generation") == generation
-            checkpoint_phase = checkpoint.get("phase")
-            candidate_count_for_checkpoint = checkpoint.get("meta", {}).get("candidate_count", 1)
+            same_generation_checkpoint = self.checkpoint.get("generation") == generation
+            checkpoint_phase = self.checkpoint.get("phase")
+            candidate_count_for_checkpoint = self.checkpoint.get("meta", {}).get("candidate_count", 1)
 
             if same_generation_checkpoint and checkpoint_phase == "generation_step":
                 # Resume point: the child for this generation was already
                 # generated, evaluated, and inserted into the population.
-                offspring = self.deserialize_population(checkpoint.get("offspring"))
+                offspring = self.deserialize_population(self.checkpoint.get("offspring"))
             elif same_generation_checkpoint and checkpoint_phase == "generation_real_eval":
                 # Resume point: the best child was already chosen and fully
                 # real-evaluated, but replacement/logging had not completed yet.
-                offspring = self.deserialize_population(checkpoint.get("offspring"))
+                offspring = self.deserialize_population(self.checkpoint.get("offspring"))
             else:
                 if same_generation_checkpoint and checkpoint_phase == "generation_surrogate":
-                    candidate_offspring = self.deserialize_population(checkpoint.get("offspring"))
+                    candidate_offspring = self.deserialize_population(self.checkpoint.get("offspring"))
                 else:
                     candidate_offspring = []
 
@@ -297,7 +290,9 @@ class SteadyStateNSGA2(NSGA2):
                     candidates=candidate_offspring,
                 )
                 candidate_count_for_checkpoint = len(candidate_offspring)
-                child = self._select_best_candidate_by_game_round(candidate_offspring)
+                child_candidate = self._select_best_half_candidate(candidate_offspring)
+                print(child_candidate)
+                child = random.choice(child_candidate)
                 offspring = [child]
 
                 # Step 2: only the best surrogate candidate receives real evaluation.

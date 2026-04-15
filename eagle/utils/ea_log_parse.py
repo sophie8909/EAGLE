@@ -79,8 +79,15 @@ def parse_individuals_from_ea_log(log_file: str):
     with open(log_file, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
+    
     individuals = []
+    front = []
     for line in lines:
+        if line.startswith("Pareto Front "):
+            if front:
+                individuals.append(front)
+                front = []
+            continue
         if not line.startswith("Individual"):
             continue
 
@@ -102,6 +109,9 @@ def parse_individuals_from_ea_log(log_file: str):
         if fitness_str.startswith("[") and fitness_str.endswith("]"):
             individual.fitness = _parse_literal(fitness_str)
 
-        individuals.append(individual)
+        front.append(individual)
+
+    if front:
+        individuals.append(front)
 
     return individuals
