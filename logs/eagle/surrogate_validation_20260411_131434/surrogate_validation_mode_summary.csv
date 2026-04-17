@@ -1,3 +1,0 @@
-experiment_type,timestamp,prompt_digest,mode,match_count,cached_match_count,runner_script,avg_win_score,avg_game_round_score,avg_resource_advantage_score,avg_game_time_sec,avg_final_tick,win_count,draw_count,loss_count
-surrogate_validation,2026-04-11T13:14:34.868283,a1b1a0d993bc6677ec40213a0801822da4d358402970b7a65c39a4caa9e77bb6,eagle_final_test,6,0,RunLoop_5000.sh,0.3333333333333333,0.6942180296565007,-0.00603690760006458,3083.8870942670233,854.8333333333334,1,2,3
-surrogate_validation,2026-04-11T13:14:34.868283,a1b1a0d993bc6677ec40213a0801822da4d358402970b7a65c39a4caa9e77bb6,surrogate_java_final_test,6,0,RunLoop_5000.sh,0.08333333333333333,0.4351574074074074,0.0,4.800717714145624,,0,1,5
