@@ -25,6 +25,10 @@
   "include_strategy_identity_in_prompt": true,
   "run_time_per_game_sec": 500,
   "real_eval_rate": 0.25,
+  "real_eval_opponents": [
+    "ai.abstraction.LightRush",
+    "ai.abstraction.HeavyRush"
+  ],
   "llm_interval": 10,
   "resource_advantage_alpha": 2.0,
   "resource_advantage_weights": {

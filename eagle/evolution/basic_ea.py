@@ -14,6 +14,7 @@ from ..project import EAGLE_LOGS_DIR
 from ..utils.component_pool import ComponentPool
 from ..utils.individual import Individual
 from ..evaluation.evaluator import Evaluator
+from ..utils.fitness_calculator import raw_resource_advantage_score
 from ..evolution.operators.parent_selection import ParentSelection
 from ..evolution.operators.crossover import Crossover
 from ..evolution.operators.mutation import Mutation
@@ -23,7 +24,10 @@ from ..utils.fitness_utils import normalize_fitness
 from ..evaluation.final_test_runner import run_final_test_suite
 from ..utils.profiler import build_base_record, timer, write_jsonl
 
-REAL_EVAL_OPPONENT = "ai.abstraction.HeavyRush"
+DEFAULT_REAL_EVAL_OPPONENTS = [
+    "ai.abstraction.LightRush",
+    "ai.abstraction.HeavyRush",
+]
 
 class EA:
     """Shared scaffolding for the single- and multi-objective EA variants.
@@ -299,18 +303,55 @@ class EA:
         return mutated_individual
     
     def real_evaluation(self, individual: Individual, opponent: str, generation: int | None = None):
-        """Run a full MicroRTS game and write the resulting fitness back to the individual."""
+        """Run the selected child against all configured real-eval opponents."""
         evaluator = Evaluator(self.component_pool, self.config)
-        resolved_opponent = REAL_EVAL_OPPONENT
-        evaluator.evaluate(
-            individual,
-            use_real_evaluation=True,
-            allow_history_reuse_for_real=bool(generation == -1),
-            opponent=resolved_opponent,
-            profile_output_path=self.get_profile_log_path(),
-            generation=generation,
-            fitness_recorder=self.fitness_recorder,
-        )
+        configured_opponents = list(getattr(self.config, "real_eval_opponents", []) or [])
+        real_eval_opponents = configured_opponents or list(DEFAULT_REAL_EVAL_OPPONENTS)
+
+        aggregated_scores: list[float] = []
+        per_opponent_results: list[dict[str, Any]] = []
+
+        for resolved_opponent in real_eval_opponents:
+            evaluator.evaluate(
+                individual,
+                use_real_evaluation=True,
+                allow_history_reuse_for_real=bool(generation == -1),
+                opponent=resolved_opponent,
+                profile_output_path=self.get_profile_log_path(),
+                generation=generation,
+                fitness_recorder=self.fitness_recorder,
+            )
+            last_real_evaluation = getattr(individual, "last_real_evaluation", {}) or {}
+            parsed_log = last_real_evaluation.get("parsed_log")
+            raw_score = (
+                raw_resource_advantage_score(
+                    parsed_log,
+                    self.config.resource_advantage_weights,
+                )
+                if isinstance(parsed_log, dict)
+                else 0.0
+            )
+            aggregated_scores.append(raw_score)
+            per_opponent_results.append(
+                {
+                    "opponent": resolved_opponent,
+                    "fitness": list(individual.fitness) if isinstance(individual.fitness, list) else individual.fitness,
+                    "raw_resource_advantage_score": raw_score,
+                    "winner": last_real_evaluation.get("winner"),
+                    "timeout": last_real_evaluation.get("timeout"),
+                    "log_path": last_real_evaluation.get("log_path"),
+                    "parsed_summary": last_real_evaluation.get("parsed_summary"),
+                }
+            )
+
+        individual.fitness = list(aggregated_scores)
+        individual.evaluation_mode = "real"
+        individual.last_real_evaluation = {
+            "mode": "multi_opponent_resource_dual_objective",
+            "opponents": real_eval_opponents,
+            "per_opponent": per_opponent_results,
+            "aggregated_fitness": list(aggregated_scores),
+        }
 
     
     def surrogate_evaluation(self, individual: Individual, generation: int | None = None):

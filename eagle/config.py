@@ -87,6 +87,7 @@ class EAConfig:
 
     run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
     real_eval_rate: float = field(default_factory=lambda: float(_default_config_value("real_eval_rate")))
+    real_eval_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("real_eval_opponents")))
     llm_interval: int = field(default_factory=lambda: int(_default_config_value("llm_interval")))
 
     resource_advantage_alpha: float = field(
@@ -203,6 +204,7 @@ class EAConfig:
             "steady_state_surrogate_selection_metric": self.steady_state_surrogate_selection_metric,
             "final_test_max_front": self.final_test_max_front,
             "include_strategy_identity_in_prompt": self.include_strategy_identity_in_prompt,
+            "real_eval_opponents": list(self.real_eval_opponents),
         }
 
     def fitness_settings(self) -> dict[str, object]:

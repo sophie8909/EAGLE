@@ -1,10 +1,9 @@
-"""Calculate normalized fitness signals from parsed or raw MicroRTS logs."""
+"""Calculate fitness signals from parsed or raw MicroRTS logs."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from .fitness_utils import normalize_fitness
 from .log_parse import parse_log
 
 
@@ -78,6 +77,38 @@ def material_total(snapshot: dict[str, Any], resource_advantage_weights: dict[st
     )
 
 
+def raw_resource_advantage_score(
+    parsed_log: dict[str, Any],
+    resource_advantage_weights: dict[str, float],
+) -> float:
+    """Compute the final weighted ally-minus-enemy material/resource difference."""
+    summary = parsed_log.get("summary", {})
+    target_side = summary.get("target_side")
+    feature_history = parsed_log.get("feature_history", [])
+    resource_history = parsed_log.get("resource_history", [])
+
+    if feature_history:
+        final_row = feature_history[-1]
+        ally_total = material_total(final_row.get("ally", {}), resource_advantage_weights)
+        enemy_total = material_total(final_row.get("enemy", {}), resource_advantage_weights)
+        return ally_total - enemy_total
+
+    if resource_history:
+        final_row = resource_history[-1]
+        p0_resources = float(final_row.get("p0_resources", 0.0))
+        p1_resources = float(final_row.get("p1_resources", 0.0))
+        resource_weight = float(resource_advantage_weights.get("resource", 1.0))
+        if str(target_side) == "1":
+            ally_resources = p1_resources * resource_weight
+            enemy_resources = p0_resources * resource_weight
+        else:
+            ally_resources = p0_resources * resource_weight
+            enemy_resources = p1_resources * resource_weight
+        return ally_resources - enemy_resources
+
+    return 0.0
+
+
 def resource_advantage_evaluation(
     parsed_log: dict[str, Any],
     resource_advantage_alpha: float,
@@ -129,4 +160,4 @@ def calculate_fitness_score(
         resource_advantage_alpha=resource_advantage_alpha,
         resource_advantage_weights=resource_advantage_weights,
     )
-    return normalize_fitness([winning_score, round_score, resource_score])
+    return [winning_score, round_score, resource_score]

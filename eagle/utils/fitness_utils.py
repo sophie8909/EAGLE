@@ -1,4 +1,4 @@
-"""Utilities for working with the project's 3-objective fitness vectors."""
+"""Utilities for working with the project's fitness vectors."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ DEFAULT_FITNESS = [0.0, 0.0, 0.0]
 
 def normalize_fitness(fitness) -> list[float]:
     """
-    Normalize any fitness representation into a fixed 3-score vector.
+    Normalize any fitness representation into a fixed-width score vector.
 
     Accepted inputs:
     - None
@@ -27,12 +27,7 @@ def normalize_fitness(fitness) -> list[float]:
         values = []
         for value in fitness[:FITNESS_DIMENSIONS]:
             try:
-                value = float(value)
-                if value < -1:
-                    value = -1.0
-                elif value > 1:
-                    value = 1.0
-                values.append(value)
+                values.append(float(value))
             except (TypeError, ValueError):
                 values.append(0.0)
         while len(values) < FITNESS_DIMENSIONS:

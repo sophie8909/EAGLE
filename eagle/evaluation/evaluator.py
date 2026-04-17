@@ -30,6 +30,7 @@ from ..utils.fitness_calculator import (
     game_round_execution_score,
     material_total,
     parse_winner_info,
+    raw_resource_advantage_score,
     resource_advantage_evaluation,
     turn_count_score,
     win_loss_evaluation,
@@ -193,8 +194,17 @@ class Evaluator:
                 "winner": winner,
                 "timeout": timeout,
                 "log_path": log_path,
+                "parsed_log": parsed_log,
                 "parsed_summary": summary,
                 "reflection_context": reflection_context,
+                "raw_resource_advantage_score": (
+                    raw_resource_advantage_score(
+                        parsed_log,
+                        self.config.resource_advantage_weights,
+                    )
+                    if isinstance(parsed_log, dict)
+                    else 0.0
+                ),
             }
         summarize_total_eval_time(stats)
 
