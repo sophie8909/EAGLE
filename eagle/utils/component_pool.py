@@ -39,7 +39,26 @@ class ComponentPool:
 
     def __init__(self, components: Dict[str, Any]):
         """Normalize the raw JSON component structure into convenient lookup lists."""
-        self.components = components
+        normalized_components = dict(components)
+        strategy_components = dict(normalized_components.get("strategy", {}))
+
+        preferred_strategy_keys = [
+            "strategy_identity",
+            "phase_transition_rule",
+            "early_game_plan",
+            "mid_game_plan",
+            "late_game_plan",
+            "decision_priority",
+            "tactical_heuristics",
+            "anti_stall_rules",
+        ]
+        for key in preferred_strategy_keys:
+            if key in normalized_components and key not in strategy_components:
+                strategy_components[key] = normalized_components.pop(key)
+
+        normalized_components["strategy"] = strategy_components
+
+        self.components = normalized_components
         self.component_keys = list(self.components.keys())
         self.strategy_keys = list(self.components.get("strategy", {}).keys())
         source_game_rule_keys = [
@@ -83,7 +102,7 @@ class ComponentPool:
     @classmethod
     def from_json(cls, filepath: str) -> ComponentPool:
         """Load a component pool definition from disk."""
-        with open(filepath, "r") as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
         return cls(data)
 
