@@ -449,9 +449,30 @@ public class EAGLE extends AbstractionLayerAI {
         ).toString();
     }
 
+    private static Path resolveProjectRoot() {
+        Path current = Paths.get("").toAbsolutePath().normalize();
+        while (current != null) {
+            if (Files.exists(current.resolve("third_party").resolve("microrts"))) {
+                return current;
+            }
+            Path fileName = current.getFileName();
+            Path parent = current.getParent();
+            Path grandParent = parent != null ? parent.getParent() : null;
+            if (fileName != null
+                    && "microrts".equals(fileName.toString())
+                    && parent != null
+                    && parent.getFileName() != null
+                    && "third_party".equals(parent.getFileName().toString())
+                    && grandParent != null) {
+                return grandParent;
+            }
+            current = current.getParent();
+        }
+        return Paths.get("").toAbsolutePath().normalize();
+    }
+
     private static Path resolveResponseLogsDirectory() throws IOException {
-        Path workingDir = Paths.get("").toAbsolutePath().normalize();
-        Path projectRoot = workingDir.getParent() != null ? workingDir.getParent() : workingDir;
+        Path projectRoot = resolveProjectRoot();
         Path responsesDir = projectRoot.resolve("logs").resolve("responses");
         Files.createDirectories(responsesDir);
         return responsesDir;
