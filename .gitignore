@@ -36,4 +36,5 @@ resources/config.properties
 resources/config.properties
 /.venv
 *.jsonl
-logs/eagle/20260415_130102/checkpoints.jsonl
+/logs/
+
