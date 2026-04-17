@@ -296,9 +296,25 @@ public class EAGLESurrogate_v1 extends AbstractionLayerAI {
         }
     }
 
+    private static Path resolveProjectRoot() {
+        Path current = Paths.get("").toAbsolutePath().normalize();
+        while (current != null) {
+            if (Files.exists(current.resolve("third_party").resolve("microrts"))) {
+                return current;
+            }
+            if ("microrts".equals(current.getFileName().toString())
+                    && current.getParent() != null
+                    && "third_party".equals(current.getParent().getFileName().toString())
+                    && current.getParent().getParent() != null) {
+                return current.getParent().getParent();
+            }
+            current = current.getParent();
+        }
+        return Paths.get("").toAbsolutePath().normalize();
+    }
+
     private static Path resolveMicrortsLogsDirectory() throws IOException {
-        Path workingDir = Paths.get("").toAbsolutePath().normalize();
-        Path projectRoot = workingDir.getParent() != null ? workingDir.getParent() : workingDir;
+        Path projectRoot = resolveProjectRoot();
         Path logsDir = projectRoot.resolve("logs").resolve("microrts");
         Files.createDirectories(logsDir);
         return logsDir;
