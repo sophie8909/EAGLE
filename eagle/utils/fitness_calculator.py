@@ -84,36 +84,34 @@ def resource_advantage_evaluation(
     resource_advantage_weights: dict[str, float],
     eps: float = 1e-9,
 ) -> float:
-    """Compute a late-game-weighted material advantage score in [-1, 1]."""
+    """Compute the final weighted resource/material difference score in [-1, 1]."""
+    summary = parsed_log.get("summary", {})
+    target_side = summary.get("target_side")
     feature_history = parsed_log.get("feature_history", [])
-    if not feature_history:
-        resource_history = parsed_log.get("resource_history", [])
-        if not resource_history:
-            return 0.0
+    resource_history = parsed_log.get("resource_history", [])
 
-        numerator = 0.0
-        denominator = 0.0
-        n = len(resource_history)
-        for i, row in enumerate(resource_history):
-            p0_resources = float(row.get("p0_resources", 0.0))
-            p1_resources = float(row.get("p1_resources", 0.0))
-            weight = ((i + 1) / n) ** float(resource_advantage_alpha)
-            numerator += weight * (p0_resources - p1_resources)
-            denominator += weight * (p0_resources + p1_resources + eps)
-        return numerator / denominator if denominator > 0 else 0.0
+    if feature_history:
+        final_row = feature_history[-1]
+        ally_total = material_total(final_row.get("ally", {}), resource_advantage_weights)
+        enemy_total = material_total(final_row.get("enemy", {}), resource_advantage_weights)
+        denominator = ally_total + enemy_total + eps
+        return (ally_total - enemy_total) / denominator if denominator > 0 else 0.0
 
-    n = len(feature_history)
-    numerator = 0.0
-    denominator = 0.0
+    if resource_history:
+        final_row = resource_history[-1]
+        p0_resources = float(final_row.get("p0_resources", 0.0))
+        p1_resources = float(final_row.get("p1_resources", 0.0))
+        resource_weight = float(resource_advantage_weights.get("resource", 1.0))
+        if str(target_side) == "1":
+            ally_resources = p1_resources * resource_weight
+            enemy_resources = p0_resources * resource_weight
+        else:
+            ally_resources = p0_resources * resource_weight
+            enemy_resources = p1_resources * resource_weight
+        denominator = ally_resources + enemy_resources + eps
+        return (ally_resources - enemy_resources) / denominator if denominator > 0 else 0.0
 
-    for i, row in enumerate(feature_history):
-        ally_total = material_total(row.get("ally", {}), resource_advantage_weights)
-        enemy_total = material_total(row.get("enemy", {}), resource_advantage_weights)
-        weight = ((i + 1) / n) ** float(resource_advantage_alpha)
-        numerator += weight * (ally_total - enemy_total)
-        denominator += weight * (ally_total + enemy_total + eps)
-
-    return numerator / denominator if denominator > 0 else 0.0
+    return 0.0
 
 
 def calculate_fitness_score(

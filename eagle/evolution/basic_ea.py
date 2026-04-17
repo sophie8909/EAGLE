@@ -23,6 +23,8 @@ from ..utils.fitness_utils import normalize_fitness
 from ..evaluation.final_test_runner import run_final_test_suite
 from ..utils.profiler import build_base_record, timer, write_jsonl
 
+REAL_EVAL_OPPONENT = "ai.abstraction.HeavyRush"
+
 class EA:
     """Shared scaffolding for the single- and multi-objective EA variants.
 
@@ -299,11 +301,12 @@ class EA:
     def real_evaluation(self, individual: Individual, opponent: str, generation: int | None = None):
         """Run a full MicroRTS game and write the resulting fitness back to the individual."""
         evaluator = Evaluator(self.component_pool, self.config)
+        resolved_opponent = REAL_EVAL_OPPONENT
         evaluator.evaluate(
             individual,
             use_real_evaluation=True,
             allow_history_reuse_for_real=bool(generation == -1),
-            opponent=opponent,
+            opponent=resolved_opponent,
             profile_output_path=self.get_profile_log_path(),
             generation=generation,
             fitness_recorder=self.fitness_recorder,
@@ -325,16 +328,20 @@ class EA:
                 generation=generation,
                 fitness_recorder=self.fitness_recorder,
             )
+            raw_fitness = list(individual.fitness)
+            selection_score = raw_fitness[2] if len(raw_fitness) > 2 else (raw_fitness[0] if raw_fitness else 0.0)
+            individual.fitness = [selection_score, 0.0, 0.0]
             individual.last_surrogate_evaluation = {
                 "mode": "random",
                 "opponents": [surrogate_opponent],
                 "scores": [
                     {
                         "opponent": surrogate_opponent,
-                        "fitness": list(individual.fitness),
+                        "fitness": raw_fitness,
                     }
                 ],
-                "aggregated_fitness": list(individual.fitness),
+                "aggregated_fitness": raw_fitness,
+                "selection_fitness": list(individual.fitness),
             }
             return
 
@@ -363,19 +370,26 @@ class EA:
                 )
 
             if not fitness_samples:
-                individual.fitness = [0.0, 0.0, 0.0]
+                aggregated_fitness = [0.0, 0.0, 0.0]
             else:
                 objective_count = len(fitness_samples[0])
-                individual.fitness = [
+                aggregated_fitness = [
                     sum(sample[idx] for sample in fitness_samples) / len(fitness_samples)
                     for idx in range(objective_count)
                 ]
+            selection_score = (
+                aggregated_fitness[2]
+                if len(aggregated_fitness) > 2
+                else (aggregated_fitness[0] if aggregated_fitness else 0.0)
+            )
+            individual.fitness = [selection_score, 0.0, 0.0]
             individual.evaluation_mode = original_mode or "surrogate"
             individual.last_surrogate_evaluation = {
                 "mode": "all_avg",
                 "opponents": opponents,
                 "scores": per_opponent_scores,
-                "aggregated_fitness": list(individual.fitness),
+                "aggregated_fitness": aggregated_fitness,
+                "selection_fitness": list(individual.fitness),
             }
             return
 

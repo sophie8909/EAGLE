@@ -4,10 +4,14 @@ import ai.abstraction.pathfinding.AStarPathFinding;
 import ai.abstraction.pathfinding.PathFinding;
 import ai.core.AI;
 import ai.core.ParameterSpecification;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import gui.PhysicalGameStatePanel;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
@@ -190,7 +194,9 @@ public class EAGLESurrogate extends AbstractionLayerAI {
     private static final int TARGET_TOP_K = 3;
 
     private String turnLogFileName;
+    private String responseCsvFileName;
     private boolean logsInitialized = false;
+    private boolean endGameMetricsLogged = false;
     private final StringBuilder moveLogBuffer = new StringBuilder();
     private final Random rng = new Random();
 
@@ -255,7 +261,9 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         if (!logsInitialized) {
             String ts = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
             try {
-                turnLogFileName = resolveMicrortsLogFilePath("run_" + ts + "_surrogate.txt").toString();
+                turnLogFileName = resolveMicrortsLogFilePath("run_" + ts + "_surrogate.log").toString();
+                responseCsvFileName = resolveResponseFilePath("Response" + ts + "_EAGLESurrogate_surrogate.csv").toString();
+                initializeResponseCsv(responseCsvFileName);
             } catch (IOException e) {
                 throw new RuntimeException("Failed to initialize surrogate log path.", e);
             }
@@ -291,6 +299,17 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         return resolveMicrortsLogsDirectory().resolve(filename);
     }
 
+    private static Path resolveResponseLogsDirectory() throws IOException {
+        Path projectRoot = resolveProjectRoot();
+        Path logsDir = projectRoot.resolve("logs").resolve("responses");
+        Files.createDirectories(logsDir);
+        return logsDir;
+    }
+
+    private static Path resolveResponseFilePath(String filename) throws IOException {
+        return resolveResponseLogsDirectory().resolve(filename);
+    }
+
     private void appendTurnLog(String text) {
         try (FileWriter fw = new FileWriter(turnLogFileName, true)) {
             fw.write(text);
@@ -298,6 +317,82 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private static void initializeResponseCsv(String filename) throws IOException {
+        try (FileWriter writer = new FileWriter(filename)) {
+            writer.append("Thinking,Moves,Feature locations,Request Time, Request / Prompt Tokens, response Time, Response Tokens, Latency(milliseconds),Total Tokens,Score_in_every_run\n");
+        }
+    }
+
+    private static String escapeForCSV(String value) {
+        if (value == null) {
+            return "\"\"";
+        }
+        return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+
+    private static String extractFeatureArray(String dynamicPrompt) {
+        String[] lines = dynamicPrompt.split("\\R");
+        return Arrays.stream(lines)
+            .map(line -> "\"" + line.replace("\"", "\\\"") + "\"")
+            .reduce((left, right) -> left + ", " + right)
+            .map(joined -> "[" + joined + "]")
+            .orElse("[]");
+    }
+
+    private void appendResponseCsv(String thinking, String moves, String dynamicPrompt, String scoreSnapshot) {
+        try (FileWriter writer = new FileWriter(responseCsvFileName, true)) {
+            writer.append(escapeForCSV(thinking)).append(",")
+                .append(escapeForCSV(moves)).append(",")
+                .append(escapeForCSV(extractFeatureArray(dynamicPrompt))).append(",")
+                .append(escapeForCSV("N/A")).append(",")
+                .append("0,")
+                .append(escapeForCSV("N/A")).append(",")
+                .append("0,")
+                .append("0,")
+                .append("0,")
+                .append(escapeForCSV(scoreSnapshot))
+                .append("\n");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void logEndGameMetrics(GameState gs, int player) {
+        if (endGameMetricsLogged) {
+            return;
+        }
+
+        JsonObject playerStats = new JsonObject();
+        playerStats.addProperty("player_id", player);
+        playerStats.addProperty("resources", gs.getPlayer(player).getResources());
+        playerStats.addProperty("winner", gs.winner());
+        playerStats.addProperty("game_over", gs.gameover());
+
+        JsonObject gameMetrics = new JsonObject();
+        gameMetrics.addProperty("turn", gs.getTime());
+        gameMetrics.addProperty("score_snapshot", PhysicalGameStatePanel.info1);
+        gameMetrics.addProperty("response_csv", responseCsvFileName);
+        gameMetrics.addProperty("turn_log", turnLogFileName);
+
+        JsonObject wrapper = new JsonObject();
+        wrapper.addProperty("agent_type", "surrogate");
+        wrapper.addProperty("agent_name", getClass().getSimpleName());
+        wrapper.add("player_final_stats", playerStats);
+        wrapper.add("game_metrics", gameMetrics);
+        wrapper.addProperty(
+            "end_time",
+            java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"))
+        );
+
+        try (FileWriter writer = new FileWriter(resolveResponseFilePath("game_summary_surrogate.json").toString(), true)) {
+            writer.write(new GsonBuilder().setPrettyPrinting().create().toJson(wrapper));
+            writer.write(System.lineSeparator());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        endGameMetricsLogged = true;
     }
 
     private void logMove(String status, Unit unit, String action, String target) {
@@ -474,8 +569,9 @@ public class EAGLESurrogate extends AbstractionLayerAI {
 
         StringBuilder rawLog = new StringBuilder();
         rawLog.append("=== Turn ").append(gs.getTime()).append(" ===\n");
+        String dynamicPrompt = buildDynamicPromptLikeEAGLE(player, gs);
         rawLog.append("=== Dynamic Prompt ===\n");
-        rawLog.append(buildDynamicPromptLikeEAGLE(player, gs));
+        rawLog.append(dynamicPrompt);
         rawLog.append("========================\n");
 
         if (!hasInjectedStrategy()) {
@@ -493,6 +589,15 @@ public class EAGLESurrogate extends AbstractionLayerAI {
             rawLog.append("========================\n");
 
             appendTurnLog(rawLog.toString());
+            appendResponseCsv(
+                "Injected strategy disabled",
+                "(none)",
+                dynamicPrompt,
+                PhysicalGameStatePanel.info1
+            );
+            if (gs.gameover()) {
+                logEndGameMetrics(gs, player);
+            }
             return pa;
         }
 
@@ -542,6 +647,16 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         rawLog.append("========================\n");
 
         appendTurnLog(rawLog.toString());
+        String movesSummary = moveLogBuffer.length() == 0 ? "(none)" : moveLogBuffer.toString();
+        appendResponseCsv(
+            "Surrogate strategy applied",
+            movesSummary,
+            dynamicPrompt,
+            PhysicalGameStatePanel.info1
+        );
+        if (gs.gameover()) {
+            logEndGameMetrics(gs, player);
+        }
         return pa;
     }
 
