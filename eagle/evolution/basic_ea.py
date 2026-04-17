@@ -313,15 +313,73 @@ class EA:
     def surrogate_evaluation(self, individual: Individual, generation: int | None = None):
         """Run the configured cheap evaluator instead of a full game simulation."""
         evaluator = Evaluator(self.component_pool, self.config)
-        surrogate_opponent = random.choice(self.opponent_list) if self.opponent_list else None
-        evaluator.evaluate(
-            individual,
-            use_real_evaluation=False,
-            opponent=surrogate_opponent,
-            profile_output_path=self.get_profile_log_path(),
-            generation=generation,
-            fitness_recorder=self.fitness_recorder,
-        )
+        surrogate_mode = str(self.config.surrogate_mode).strip().lower()
+
+        if surrogate_mode == "random":
+            surrogate_opponent = random.choice(self.opponent_list) if self.opponent_list else None
+            evaluator.evaluate(
+                individual,
+                use_real_evaluation=False,
+                opponent=surrogate_opponent,
+                profile_output_path=self.get_profile_log_path(),
+                generation=generation,
+                fitness_recorder=self.fitness_recorder,
+            )
+            individual.last_surrogate_evaluation = {
+                "mode": "random",
+                "opponents": [surrogate_opponent],
+                "scores": [
+                    {
+                        "opponent": surrogate_opponent,
+                        "fitness": list(individual.fitness),
+                    }
+                ],
+                "aggregated_fitness": list(individual.fitness),
+            }
+            return
+
+        if surrogate_mode == "all_avg":
+            opponents = list(self.opponent_list) if self.opponent_list else [None]
+            fitness_samples: list[list[float]] = []
+            original_mode = getattr(individual, "evaluation_mode", None)
+            per_opponent_scores: list[dict[str, object]] = []
+
+            for surrogate_opponent in opponents:
+                evaluator.evaluate(
+                    individual,
+                    use_real_evaluation=False,
+                    opponent=surrogate_opponent,
+                    profile_output_path=None,
+                    generation=generation,
+                    fitness_recorder=None,
+                )
+                sampled_fitness = list(individual.fitness)
+                fitness_samples.append(sampled_fitness)
+                per_opponent_scores.append(
+                    {
+                        "opponent": surrogate_opponent,
+                        "fitness": sampled_fitness,
+                    }
+                )
+
+            if not fitness_samples:
+                individual.fitness = [0.0, 0.0, 0.0]
+            else:
+                objective_count = len(fitness_samples[0])
+                individual.fitness = [
+                    sum(sample[idx] for sample in fitness_samples) / len(fitness_samples)
+                    for idx in range(objective_count)
+                ]
+            individual.evaluation_mode = original_mode or "surrogate"
+            individual.last_surrogate_evaluation = {
+                "mode": "all_avg",
+                "opponents": opponents,
+                "scores": per_opponent_scores,
+                "aggregated_fitness": list(individual.fitness),
+            }
+            return
+
+        raise ValueError(f"Unsupported surrogate_mode: {self.config.surrogate_mode}")
 
     
     def run_final_test(self):

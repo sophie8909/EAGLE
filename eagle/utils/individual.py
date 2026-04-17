@@ -131,4 +131,10 @@ class Individual:
         )
         clone.fitness = self.fitness.copy() if hasattr(self.fitness, "copy") else self.fitness
         clone.evaluation_mode = self.evaluation_mode
+        last_surrogate_evaluation = getattr(self, "last_surrogate_evaluation", None)
+        if isinstance(last_surrogate_evaluation, dict):
+            clone.last_surrogate_evaluation = dict(last_surrogate_evaluation)
+        last_real_evaluation = getattr(self, "last_real_evaluation", None)
+        if isinstance(last_real_evaluation, dict):
+            clone.last_real_evaluation = dict(last_real_evaluation)
         return clone

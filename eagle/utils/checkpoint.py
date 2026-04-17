@@ -32,6 +32,10 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
     if isinstance(last_real_evaluation, dict):
         payload["last_real_evaluation"] = dict(last_real_evaluation)
 
+    last_surrogate_evaluation = getattr(individual, "last_surrogate_evaluation", None)
+    if isinstance(last_surrogate_evaluation, dict):
+        payload["last_surrogate_evaluation"] = dict(last_surrogate_evaluation)
+
     for attr in ("pareto_rank", "crowding_distance", "ea_llm_call_time"):
         if hasattr(individual, attr):
             payload[attr] = getattr(individual, attr)
@@ -64,6 +68,10 @@ def deserialize_individual(payload: dict[str, Any]) -> Individual:
     last_real_evaluation = payload.get("last_real_evaluation")
     if isinstance(last_real_evaluation, dict):
         individual.last_real_evaluation = dict(last_real_evaluation)
+
+    last_surrogate_evaluation = payload.get("last_surrogate_evaluation")
+    if isinstance(last_surrogate_evaluation, dict):
+        individual.last_surrogate_evaluation = dict(last_surrogate_evaluation)
 
     for attr in ("pareto_rank", "crowding_distance", "ea_llm_call_time"):
         if attr in payload:

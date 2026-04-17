@@ -97,6 +97,7 @@ class EAConfig:
     )
 
     surrogate_version: str = field(default_factory=lambda: str(_default_config_value("surrogate_version")))
+    surrogate_mode: str = field(default_factory=lambda: str(_default_config_value("surrogate_mode")))
     surrogate_recent_match_window: int = field(
         default_factory=lambda: int(_default_config_value("surrogate_recent_match_window"))
     )
@@ -175,6 +176,14 @@ class EAConfig:
 
         self.strategy_mutation = strategy_mutation
 
+        normalized_surrogate_mode = str(self.surrogate_mode).strip().lower()
+        if normalized_surrogate_mode not in {"random", "all_avg"}:
+            raise ValueError(
+                f"Unsupported surrogate_mode: {self.surrogate_mode!r}. "
+                "Use 'random' or 'all_avg'."
+            )
+        self.surrogate_mode = normalized_surrogate_mode
+
     def evolution_settings(self) -> dict[str, object]:
         """Return the subset of fields that control population search behavior."""
         return {
@@ -207,6 +216,7 @@ class EAConfig:
         """Return the subset of fields used by surrogate evaluators."""
         return {
             "surrogate_version": self.surrogate_version,
+            "surrogate_mode": self.surrogate_mode,
             "surrogate_recent_match_window": self.surrogate_recent_match_window,
             "surrogate_round_samples_per_match": self.surrogate_round_samples_per_match,
             "surrogate_log_dir": self.surrogate_log_dir,
