@@ -169,3 +169,64 @@ class ComponentPool:
     def parse_component_str(self, component_str: str) -> List[str]:
         """Convert a text block back into the line-based storage format."""
         return component_str.splitlines()
+
+    @staticmethod
+    def _normalize_component_lines(component_lines: List[str]) -> List[str]:
+        """Drop empty placeholder lines while preserving original text order."""
+        return [str(line) for line in component_lines if str(line).strip()]
+
+    def render_static_prompt_lines(self, game_rule_index: int = 0) -> List[str]:
+        """Render the non-strategy prompt prefix from the current component schema."""
+        source_blocks: List[List[str]] = []
+        can_render_from_source = all(
+            len(self.components.get(key, [])) <= 1
+            for key in self.game_rule_source_keys
+        )
+
+        if can_render_from_source:
+            for key in self.game_rule_source_keys:
+                for component in self.components.get(key, []):
+                    normalized_lines = self._normalize_component_lines(component)
+                    if normalized_lines:
+                        source_blocks.append(normalized_lines)
+        else:
+            normalized_lines = self._normalize_component_lines(
+                self.get_component("game_rule", game_rule_index)
+            )
+            if normalized_lines:
+                source_blocks.append(normalized_lines)
+
+        rendered_lines: List[str] = []
+        for block in source_blocks:
+            if rendered_lines:
+                rendered_lines.append("")
+            rendered_lines.extend(block)
+        return rendered_lines
+
+    def render_strategy_prompt_lines(
+        self,
+        strategy_indices: Dict[str, int] | None,
+        *,
+        include_strategy_identity: bool = True,
+    ) -> List[str]:
+        """Render the strategy portion of the prompt in schema order."""
+        strategy_indices = dict(strategy_indices or {})
+        rendered_lines: List[str] = []
+
+        for strategy_key in self.strategy_keys:
+            if strategy_key == "strategy_identity" and not include_strategy_identity:
+                continue
+            if strategy_key not in strategy_indices:
+                continue
+
+            normalized_lines = self._normalize_component_lines(
+                self.get_strategy_component(strategy_key, strategy_indices[strategy_key])
+            )
+            if not normalized_lines:
+                continue
+
+            if rendered_lines:
+                rendered_lines.append("")
+            rendered_lines.extend(normalized_lines)
+
+        return rendered_lines

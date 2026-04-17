@@ -22,6 +22,7 @@
   "environment_selection_method": "elitism",
   "steady_state_surrogate_offspring_count": 8,
   "final_test_max_front": 1,
+  "include_strategy_identity_in_prompt": true,
   "run_time_per_game_sec": 500,
   "real_eval_rate": 0.25,
   "llm_interval": 10,

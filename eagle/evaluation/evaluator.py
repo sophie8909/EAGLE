@@ -255,29 +255,22 @@ class Evaluator:
 
     def construct_prompt(self, individual: Individual) -> str:
         """Render one individual's selected components into the final strategy prompt."""
-        # Use the individual's component indices to retrieve the corresponding components from the component pool and construct a prompt string
-        prompt_lines: list[str] = []
-
+        static_prompt_lines = []
         if self.component_pool.has_category("game_rule"):
-            prompt_lines.extend(
-                self.component_pool.get_component("game_rule", individual.game_rule)
+            static_prompt_lines = self.component_pool.render_static_prompt_lines(
+                individual.game_rule
             )
 
-        # Preserve the component-pool order so phase-based prompts render in a
-        # stable, readable structure (identity -> transition -> early/mid/late).
-        strategy_order = [
-            strategy
-            for strategy in self.component_pool.strategy_keys
-            if strategy in individual.strategy
-        ]
-        strategy_components = [
-            line
-            for strategy in strategy_order
-            for line in self.component_pool.get_strategy_component(strategy, individual.strategy[strategy])
-        ]
-        # Combine the components into a single prompt string (this is a simplified example, the actual construction may be more complex)
-        prompt = "\n".join(prompt_lines + strategy_components)
-        return prompt
+        strategy_prompt_lines = self.component_pool.render_strategy_prompt_lines(
+            individual.strategy,
+            include_strategy_identity=self.config.include_strategy_identity_in_prompt,
+        )
+
+        prompt_lines = static_prompt_lines.copy()
+        if prompt_lines and strategy_prompt_lines:
+            prompt_lines.append("")
+        prompt_lines.extend(strategy_prompt_lines)
+        return "\n".join(prompt_lines)
 
     def game_round_execution_score(self, log_content: str) -> float:
         """Compute the round-execution score directly from a full game log."""

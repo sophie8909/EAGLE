@@ -81,6 +81,9 @@ class EAConfig:
         default_factory=lambda: int(_default_config_value("steady_state_surrogate_offspring_count"))
     )
     final_test_max_front: int | None = field(default_factory=lambda: _default_config_value("final_test_max_front"))
+    include_strategy_identity_in_prompt: bool = field(
+        default_factory=lambda: bool(_default_config_value("include_strategy_identity_in_prompt"))
+    )
 
     run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
     real_eval_rate: float = field(default_factory=lambda: float(_default_config_value("real_eval_rate")))
@@ -190,6 +193,7 @@ class EAConfig:
             "steady_state_surrogate_offspring_count": self.steady_state_surrogate_offspring_count,
             "steady_state_surrogate_selection_metric": self.steady_state_surrogate_selection_metric,
             "final_test_max_front": self.final_test_max_front,
+            "include_strategy_identity_in_prompt": self.include_strategy_identity_in_prompt,
         }
 
     def fitness_settings(self) -> dict[str, object]:
