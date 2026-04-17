@@ -94,7 +94,18 @@ def _make_log_path(project_root: Path | None = None, prefix: str = "run") -> Pat
     """Create a timestamped runtime log path under the shared log directory."""
     logs_dir = _runtime_logs_dir(project_root)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    return logs_dir / f"{prefix}_{timestamp}.log"
+    normalized_prefix = str(prefix or "run").strip().lower()
+    if normalized_prefix == "run":
+        filename = f"run_{timestamp}.log"
+    elif normalized_prefix == "run_test":
+        filename = f"run_{timestamp}_test.log"
+    elif normalized_prefix == "run_surrogate":
+        filename = f"run_{timestamp}_surrogate.log"
+    elif normalized_prefix == "run_test_surrogate":
+        filename = f"run_{timestamp}_test_surrogate.log"
+    else:
+        filename = f"{normalized_prefix}_{timestamp}.log"
+    return logs_dir / filename
 
 
 def launch_java_match(

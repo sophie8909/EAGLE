@@ -43,7 +43,7 @@ def run_surrogate_validation_case(
         opponent=opponent,
         prompt=prompt,
         compile_first=True,
-        log_prefix="surrogate_run" if not test else "surrogate_test",
+        log_prefix="run_surrogate" if not test else "run_test_surrogate",
     )
 
 

@@ -11,6 +11,9 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import rts.GameState;
 import rts.PhysicalGameState;
 import rts.Player;
@@ -284,9 +287,25 @@ public class EAGLESurrogate_v1 extends AbstractionLayerAI {
     private void initLogsIfNeeded() {
         if (!logsInitialized) {
             String ts = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
-            turnLogFileName = "SurrogateLog_" + ts + ".txt";
+            try {
+                turnLogFileName = resolveMicrortsLogFilePath("run_" + ts + "_surrogate.txt").toString();
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to initialize surrogate log path.", e);
+            }
             logsInitialized = true;
         }
+    }
+
+    private static Path resolveMicrortsLogsDirectory() throws IOException {
+        Path workingDir = Paths.get("").toAbsolutePath().normalize();
+        Path projectRoot = workingDir.getParent() != null ? workingDir.getParent() : workingDir;
+        Path logsDir = projectRoot.resolve("logs").resolve("microrts");
+        Files.createDirectories(logsDir);
+        return logsDir;
+    }
+
+    private static Path resolveMicrortsLogFilePath(String filename) throws IOException {
+        return resolveMicrortsLogsDirectory().resolve(filename);
     }
 
     private void appendTurnLog(String text) {

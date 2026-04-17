@@ -461,6 +461,10 @@ public class EAGLE extends AbstractionLayerAI {
         return resolveResponseLogsDirectory().resolve(filename);
     }
 
+    private static Path resolveResponseArtifactPath(String filename) throws IOException {
+        return resolveResponseLogsDirectory().resolve(filename);
+    }
+
     /**
      * Methods
      */
@@ -494,7 +498,7 @@ public class EAGLE extends AbstractionLayerAI {
                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"));
         wrapper.addProperty("end_time", timestamp);
 
-        try (FileWriter writer = new FileWriter("game_summary.json", true)) {
+        try (FileWriter writer = new FileWriter(resolveResponseArtifactPath("game_summary.json").toString(), true)) {
             System.out.println(" am i in : 245 LLM _gemini ");
             writer.write(new GsonBuilder().setPrettyPrinting().create().toJson(wrapper));
             writer.write(System.lineSeparator());
