@@ -264,6 +264,65 @@ def run_generation_result_test(
                 )
                 with open(destination, "w", encoding="utf-8") as f:
                     json.dump(results, f, indent=4)
+    
+        # java agent test final result
+        for opponent in resolved_opponents:
+            print(
+                f"Testing generation {generation}, individual {individual.id} "
+                f"against opponent: {opponent} (java agent test)"
+            )
+                        # run surrogate java agent (same as validation pipeline)
+
+            stats: dict[str, float] = {}
+
+            from ..utils.simulation_runner import simulate_surrogate_games
+            from ..surrogate.eval.evaluator import estimate_llm_game_round_score
+            from ..envs.microrts.adapter import set_ai1
+
+            # use surrogate agent
+            set_ai1(evaluator.repo_root, "ai.abstraction.EAGLESurrogate")
+
+            java_fitness, metadata = simulate_surrogate_games(
+                repo_root=evaluator.repo_root,
+                config=evaluator.config,
+                prompt=prompt,
+                opponent=opponent,
+                stats=stats,
+                test=True,
+            )
+
+            # LLM round score (same design as surrogate_validation)
+            llm_round_score = estimate_llm_game_round_score(
+                prompt=prompt,
+                repo_root=evaluator.repo_root,
+                config=evaluator.config,
+            )
+
+            # combine into final fitness (important: same schema)
+            fitness_score = [
+                float(java_fitness[0]) if len(java_fitness) > 0 else 0.0,
+                float(llm_round_score),
+                float(java_fitness[2]) if len(java_fitness) > 2 else 0.0,
+            ]
+
+            results["results"].setdefault(individual.id, [])
+            result_record = build_result_record(
+                individual,
+                opponent,
+                fitness_score,
+                str(metadata.get("log_path")),
+            )
+            result_record["interval_mode"] = "java_agent_test"
+            result_record["llm_interval"] = None
+            results["results"][individual.id].append(result_record)
+
+            destination = (
+                Path(output_path)
+                if output_path is not None
+                else log_dir_path / f"generation_{generation}_front_{max_front if max_front is not None else 'all'}_result_test.json"
+            )
+            with open(destination, "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=4)
 
     return results
 

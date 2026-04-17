@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Random;
 import rts.GameState;
 import rts.PhysicalGameState;
 import rts.Player;
@@ -26,7 +25,7 @@ import rts.units.UnitTypeTable;
  * The Python surrogate pipeline rewrites only the injected spec/prompt blocks,
  * while the execution logic below stays stable.
  */
-public class EAGLESurrogate extends AbstractionLayerAI {
+public class EAGLESurrogate_v1 extends AbstractionLayerAI {
 
     protected UnitTypeTable utt;
     UnitType workerType;
@@ -42,14 +41,17 @@ public class EAGLESurrogate extends AbstractionLayerAI {
     private static final int WORKER_TARGET_AFTER_BARRACKS = 4;
     private static final int HARVESTER_TARGET = 3;
     private static final int DESIRED_BARRACKS = 1;
-    private static final boolean WORKER_HARASS_ENABLED = true;
+    private static final boolean WORKER_HARASS_ENABLED = false;
     private static final boolean ATTACK_WORKERS_FIRST = false;
     private static final boolean ATTACK_STRUCTURES_FIRST = false;
     private static final boolean PROTECT_BARRACKS = true;
-    private static final int MIN_LIGHTS = 0;
+    private static final int MIN_LIGHTS = 2;
     private static final int MIN_RANGED = 0;
     private static final int MIN_HEAVIES = 0;
     private static final String[] PRODUCTION_PRIORITY = {
+        "Light",
+        "Light",
+        "Ranged"
     };
     // SURROGATE_SPEC_END
 
@@ -187,53 +189,46 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         "Risk tolerance is high: accept leaner economy and sharper trades if they disrupt enemy development or seize initiative.",
         "Pressure timing should be early and continuous, with little tolerance for passive waiting once useful attackers exist.",
         "Preferred win path is to keep the opponent reacting from the start and end the game before they can outscale or fully stabilize.",
-        "PHASE TRANSITION RULE:",
-        "Treat the game as early while the main question is development: harvesting loops, first workers, first barracks, or first safe defender.",
-        "Treat the game as mid once both sides have credible attack capability or the map contains active pressure around resources, production, or structures.",
-        "Treat the game as late once bases, barracks, or worker counts are damaged enough that decisive endgame pressure is more important than further setup.",
-        "Prefer observed army counts, structure count, and local threat level over rigid turn thresholds.",
+        "EARLY/MID/LATE TRANSITION RULE:",
+        "Determine early/mid/late game phases using a state-based approach rather than rigid turn thresholds. This rule should integrate economy, production, combat, and pressure into each phase plan, ensuring internal consistency with the chosen strategy_identity. Given our Aggressive tempo strategy's focus on disrupting opponent development through early expansion and initiative establishment, transition points will be driven by the evolving strategic landscape and enemy adaptation.",
+        "In early_game, prioritize rapid expansion and initiative establishment to disrupt opponent development.",
+        "As we transition into mid_game, shift emphasis towards selective harassment and resource management to stretch the enemy across multiple demands.",
+        "Late_game priorities revolve around consolidating advantage through aggressive investments in key units, finishing attacks on the enemy's base and production centers.",
         "EARLY GAME PLAN:",
-        "Aim for minimal but stable economy first, then convert quickly into the first production structure and first combat units.",
-        "Use one suitable worker as the builder and keep the rest harvesting efficiently.",
-        "Avoid premature full commitment until at least a small force can pressure or defend coherently.",
+        "Initiate rapid expansion and initiative establishment in the opening phase to disrupt opponent development and dictate the tempo of play.",
+        "Immediately contest exposed enemy resources, such as harvesters, buildings, or key strategic locations, with decisive early actions that exploit opportunities for swift growth.",
+        "If confronted with a well-defended enemy, reassess the plan to prioritize targeted harassment over aggressive exposure, focusing on efficient resource management and adaptable response strategies.",
         "MID GAME PLAN:",
-        "Shift from setup into sustained military conversion once barracks and income are functioning.",
-        "Maintain production uptime at base and barracks, replacing lost workers only when income becomes unstable.",
-        "Attack when units can arrive together or when enemy economy and production are open to damage.",
+        "Shift emphasis towards sustained selective harassment and targeted pressure on key points to disrupt enemy production and resource gathering, forcing the opponent into a defensive posture.",
+        "Prioritize high-impact threats against exposed infrastructure, such as unfinished buildings or key harvesting paths, over frontal engagements whenever feasible, while allocating sufficient resources at home to sustain unit flow and adapt to changing circumstances.",
+        "LATE GAME PLAN:",
+        "Prioritize a decisive, high-reward assault on the enemy's key infrastructure: base and main production centers. Allocate accumulated resources aggressively towards the units most likely to deliver a game-ending blow, while minimizing our own losses and maintaining sufficient production uptime to ensure an immediate winning opportunity is not squandered.",
         "DECISION PRIORITY:",
-        "1. Immediate survival and structure preservation.",
-        "2. Exploit exposed enemy workers, unfinished buildings, and isolated units.",
-        "3. Continue the current phase plan if it is still coherent with the state.",
-        "4. Avoid idle production and resource float.",
-        "5. Avoid low-value movement that does not improve contact, defense, or economy.",
+        "1. Protect base and key infrastructure from immediate loss when survival is at stake, prioritizing defense over repositioning unless unavoidable.",
+        "2. Exploit opportunities to severely damage enemy production, base, or exposed workers through aggressive timing, disrupting development and seizing initiative with maximum impact.",
+        "3. Maximize production uptime by maintaining sufficient resources and safe production options at all times, tolerating no loss of our own production.",
+        "4. Ensure sustained harvesting to feed units and maintain a stable economy under continuous pressure from the enemy.",
+        "5. Rapidly reposition for the next decisive engagement or objective that drives progress towards our Aggressive tempo strategy, prioritizing key targets and enemy vulnerabilities.",
         "TACTICAL HEURISTICS:",
         "Heavy or durable units should lead contact when possible.",
         "Ranged or fragile units should attack from safer positions and avoid taking the first melee hit.",
         "Use local formation logic to stabilize fights, but do not let it override the global plan.",
         "ANTI-STALL RULES:",
-        "Do not leave workers idle if they can harvest, build, defend, or attack productively.",
-        "Do not leave bases or barracks idle when resources can be converted into useful production.",
-        "Do not float resources for long when the current phase plan clearly wants workers, barracks, or units."
+        "When combat units exist and no urgent home defense is needed, give them a concrete job: pressure, regroup for contact, defend a key point, or finish a target.",
+        "When economy is stable, extra resources should accelerate the chosen win path rather than sit unused.",
+        "When economy is unstable, fix it with the minimum action needed and then resume the broader plan."
     };
     // SURROGATE_PROMPT_END
-
-    private static final double P_FAIL_WORKER = 0.10;
-    private static final double P_FAIL_BUILD = 0.15;
-    private static final double P_FAIL_TRAIN = 0.10;
-    private static final double P_FAIL_COMBAT = 0.15;
-    private static final int ATTACK_RADIUS_LIMIT = 5;
-    private static final int TARGET_TOP_K = 3;
 
     private String turnLogFileName;
     private boolean logsInitialized = false;
     private final StringBuilder moveLogBuffer = new StringBuilder();
-    private final Random rng = new Random();
 
-    public EAGLESurrogate(UnitTypeTable a_utt) {
+    public EAGLESurrogate_v1(UnitTypeTable a_utt) {
         this(a_utt, new AStarPathFinding());
     }
 
-    public EAGLESurrogate(UnitTypeTable a_utt, PathFinding a_pf) {
+    public EAGLESurrogate_v1(UnitTypeTable a_utt, PathFinding a_pf) {
         super(a_pf);
         reset(a_utt);
     }
@@ -254,7 +249,7 @@ public class EAGLESurrogate extends AbstractionLayerAI {
 
     @Override
     public AI clone() {
-        return new EAGLESurrogate(utt, pf);
+        return new EAGLESurrogate_v1(utt, pf);
     }
 
     @Override
@@ -321,10 +316,6 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         }
 
         moveLogBuffer.append("\n");
-    }
-
-    private boolean shouldSkip(double probability) {
-        return rng.nextDouble() < probability;
     }
 
     private String unitActionToString(UnitAction action) {
@@ -445,12 +436,6 @@ public class EAGLESurrogate extends AbstractionLayerAI {
             }
             rawLog.append("]\n");
         }
-        rawLog.append("P_FAIL_WORKER=").append(P_FAIL_WORKER).append("\n");
-        rawLog.append("P_FAIL_BUILD=").append(P_FAIL_BUILD).append("\n");
-        rawLog.append("P_FAIL_TRAIN=").append(P_FAIL_TRAIN).append("\n");
-        rawLog.append("P_FAIL_COMBAT=").append(P_FAIL_COMBAT).append("\n");
-        rawLog.append("ATTACK_RADIUS_LIMIT=").append(ATTACK_RADIUS_LIMIT).append("\n");
-        rawLog.append("TARGET_TOP_K=").append(TARGET_TOP_K).append("\n");
         rawLog.append("========================\n");
     }
 
@@ -552,12 +537,7 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         int workerCount = countUnits(pgs, player.getID(), workerType);
         int barracksCount = countUnits(pgs, player.getID(), barracksType);
         int targetWorkers = barracksCount > 0 ? spec.workerTargetAfterBarracks : spec.workerTargetBeforeBarracks;
-
         if (workerCount < targetWorkers && player.getResources() >= workerType.cost) {
-            if (shouldSkip(P_FAIL_TRAIN)) {
-                logMove("SKIPPED", base, "train", workerType.name + " [dropout]");
-                return;
-            }
             train(base, workerType);
             logMove("APPLIED", base, "train", workerType.name);
         }
@@ -566,10 +546,6 @@ public class EAGLESurrogate extends AbstractionLayerAI {
     protected void barracksBehavior(Unit barracks, Player player, PhysicalGameState pgs, StrategySpec spec) {
         UnitType nextType = chooseProductionType(player, pgs, spec);
         if (nextType != null && player.getResources() >= nextType.cost) {
-            if (shouldSkip(P_FAIL_TRAIN)) {
-                logMove("SKIPPED", barracks, "train", nextType.name + " [dropout]");
-                return;
-            }
             train(barracks, nextType);
             logMove("APPLIED", barracks, "train", nextType.name);
         }
@@ -589,27 +565,19 @@ public class EAGLESurrogate extends AbstractionLayerAI {
 
         if (baseCount == 0 && !freeWorkers.isEmpty() && player.getResources() >= baseType.cost) {
             Unit builder = freeWorkers.remove(0);
-            if (shouldSkip(P_FAIL_BUILD)) {
-                logMove("SKIPPED", builder, "build", baseType.name + " [dropout]");
-            } else {
-                buildIfNotAlreadyBuilding(builder, baseType, builder.getX(), builder.getY(), reservedPositions, player, pgs);
-                logMove("APPLIED", builder, "build", baseType.name + " @(" + builder.getX() + "," + builder.getY() + ")");
-                resourcesUsed += baseType.cost;
-            }
+            buildIfNotAlreadyBuilding(builder, baseType, builder.getX(), builder.getY(), reservedPositions, player, pgs);
+            logMove("APPLIED", builder, "build", baseType.name + " @(" + builder.getX() + "," + builder.getY() + ")");
+            resourcesUsed += baseType.cost;
         }
 
         while (barracksCount < spec.desiredBarracks
                 && !freeWorkers.isEmpty()
                 && player.getResources() >= barracksType.cost + resourcesUsed) {
             Unit builder = freeWorkers.remove(0);
-            if (shouldSkip(P_FAIL_BUILD)) {
-                logMove("SKIPPED", builder, "build", barracksType.name + " [dropout]");
-            } else {
-                buildIfNotAlreadyBuilding(builder, barracksType, builder.getX(), builder.getY(), reservedPositions, player, pgs);
-                logMove("APPLIED", builder, "build", barracksType.name + " @(" + builder.getX() + "," + builder.getY() + ")");
-                resourcesUsed += barracksType.cost;
-                barracksCount++;
-            }
+            buildIfNotAlreadyBuilding(builder, barracksType, builder.getX(), builder.getY(), reservedPositions, player, pgs);
+            logMove("APPLIED", builder, "build", barracksType.name + " @(" + builder.getX() + "," + builder.getY() + ")");
+            resourcesUsed += barracksType.cost;
+            barracksCount++;
         }
 
         int desiredHarvesters = Math.min(freeWorkers.size(), Math.max(1, spec.harvesterTarget));
@@ -636,11 +604,6 @@ public class EAGLESurrogate extends AbstractionLayerAI {
             return false;
         }
 
-        if (shouldSkip(P_FAIL_WORKER)) {
-            logMove("SKIPPED", worker, "harvest", "[dropout]");
-            return true;
-        }
-
         if (worker.getResources() > 0) {
             AbstractAction aa = getAbstractAction(worker);
             if (!(aa instanceof Harvest) || ((Harvest) aa).base != closestBase) {
@@ -664,11 +627,6 @@ public class EAGLESurrogate extends AbstractionLayerAI {
     }
 
     protected void combatBehavior(Unit attacker, Player player, GameState gs, StrategySpec spec) {
-        if (shouldSkip(P_FAIL_COMBAT)) {
-            logMove("SKIPPED", attacker, "attack", "[dropout]");
-            return;
-        }
-
         Unit target = selectAttackTarget(attacker, player, gs.getPhysicalGameState(), spec);
         if (target != null) {
             attack(attacker, target);
@@ -677,77 +635,9 @@ public class EAGLESurrogate extends AbstractionLayerAI {
     }
 
     protected Unit selectAttackTarget(Unit attacker, Player player, PhysicalGameState pgs, StrategySpec spec) {
-        List<Unit> topCandidates = new ArrayList<>();
-        List<Integer> topScores = new ArrayList<>();
+        Unit best = null;
+        int bestScore = Integer.MIN_VALUE;
 
-        for (Unit candidate : pgs.getUnits()) {
-            if (candidate.getPlayer() < 0 || candidate.getPlayer() == player.getID()) {
-                continue;
-            }
-
-            int distance = Math.abs(candidate.getX() - attacker.getX()) + Math.abs(candidate.getY() - attacker.getY());
-            if (distance > ATTACK_RADIUS_LIMIT) {
-                continue;
-            }
-
-            int score = -distance;
-
-            if (spec.attackWorkersFirst && candidate.getType() == workerType) {
-                score += 30;
-            }
-            if (spec.attackStructuresFirst && (candidate.getType() == baseType || candidate.getType() == barracksType)) {
-                score += 25;
-            }
-            if (spec.protectBarracks && candidate.getType().canAttack && !candidate.getType().canHarvest) {
-                score += 8;
-            }
-            if (candidate.getType() == baseType) {
-                score += 5;
-            }
-            if (candidate.getType() == barracksType) {
-                score += 7;
-            }
-
-            int insertPos = topCandidates.size();
-            for (int i = 0; i < topScores.size(); i++) {
-                if (score > topScores.get(i)) {
-                    insertPos = i;
-                    break;
-                }
-            }
-
-            if (insertPos < TARGET_TOP_K) {
-                topCandidates.add(insertPos, candidate);
-                topScores.add(insertPos, score);
-
-                if (topCandidates.size() > TARGET_TOP_K) {
-                    topCandidates.remove(TARGET_TOP_K);
-                    topScores.remove(TARGET_TOP_K);
-                }
-            }
-        }
-
-        if (!topCandidates.isEmpty()) {
-            double roll = rng.nextDouble();
-            int index;
-            if (topCandidates.size() == 1) {
-                index = 0;
-            } else if (topCandidates.size() == 2) {
-                index = roll < 0.75 ? 0 : 1;
-            } else {
-                if (roll < 0.70) {
-                    index = 0;
-                } else if (roll < 0.90) {
-                    index = 1;
-                } else {
-                    index = 2;
-                }
-            }
-            return topCandidates.get(index);
-        }
-
-        Unit bestFallback = null;
-        int bestFallbackScore = Integer.MIN_VALUE;
         for (Unit candidate : pgs.getUnits()) {
             if (candidate.getPlayer() < 0 || candidate.getPlayer() == player.getID()) {
                 continue;
@@ -772,13 +662,13 @@ public class EAGLESurrogate extends AbstractionLayerAI {
                 score += 7;
             }
 
-            if (bestFallback == null || score > bestFallbackScore) {
-                bestFallback = candidate;
-                bestFallbackScore = score;
+            if (best == null || score > bestScore) {
+                best = candidate;
+                bestScore = score;
             }
         }
 
-        return bestFallback;
+        return best;
     }
 
     protected UnitType chooseProductionType(Player player, PhysicalGameState pgs, StrategySpec spec) {
