@@ -27,7 +27,7 @@ def parse_max_front_arg(raw_value: str) -> int | None:
 
     value = int(normalized)
     if value < 1:
-        raise argparse.ArgumentTypeError("max front must be >= 1, or use 'all'.")
+        return None
     return value
 
 
@@ -87,9 +87,9 @@ def extract_individual_ids_up_to_front(
 ) -> list[str]:
     """Extract ids that belong to Pareto Front 1 up to the requested front."""
     if max_front is None:
-        return []
+        max_front = float("inf")
     if max_front < 1:
-        raise ValueError("max_front must be >= 1 or None.")
+        max_front = float("inf")
 
     generation_log = Path(generation_log_path)
     lines = generation_log.read_text(encoding="utf-8").splitlines()
@@ -211,7 +211,6 @@ def run_generation_result_test(
 
     print(allowed_individual)
     selected_individuals = filter_individuals(
-        allowed_individual,
         allowed_individual,
         individual_id=individual_id,
         only_winning_individuals=only_winning_individuals,

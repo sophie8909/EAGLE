@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from ..config import EAConfig, clone_config
@@ -15,27 +16,48 @@ from .generation_replay import build_result_record, extract_individual_ids_up_to
 
 
 def _resolve_final_test_max_front(config: EAConfig) -> int | None:
-    """Default missing final-test front limits to Pareto Front 1."""
+    """Normalize the configured front cutoff for final-test replay selection."""
     configured_value = config.final_test_max_front
     if configured_value is None:
         return 1
-    return configured_value
+    if int(configured_value) < 1:
+        return None
+    return int(configured_value)
 
 
-def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: int) -> Path:
+def _extract_generation_number(path: Path) -> int:
+    """Extract the human-readable generation number from `generation_<N>_mo.txt`."""
+    match = re.match(r"generation_(\d+)_mo\.txt$", path.name)
+    if not match:
+        return -1
+    return int(match.group(1))
+
+
+def _resolve_latest_generation_log_path(current_log_dir: str | Path) -> Path:
+    """Return the newest saved multi-objective generation log under one run directory."""
+    log_dir = Path(current_log_dir)
+    candidates = sorted(
+        log_dir.glob("generation_*_mo.txt"),
+        key=_extract_generation_number,
+    )
+    if not candidates:
+        raise FileNotFoundError(f"No multi-objective generation logs found under {log_dir}.")
+    return candidates[-1]
+
+
+def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: int | None) -> Path:
     """Resolve the saved generation log for the final replay step."""
     log_dir = Path(current_log_dir)
-    exact_match = log_dir / f"generation_{last_gen}_mo.txt"
-    if exact_match.exists():
-        return exact_match
+    if last_gen is not None:
+        exact_match = log_dir / f"generation_{last_gen}_mo.txt"
+        if exact_match.exists():
+            return exact_match
 
-    one_based_match = log_dir / f"generation_{last_gen + 1}_mo.txt"
-    if one_based_match.exists():
-        return one_based_match
+        one_based_match = log_dir / f"generation_{last_gen + 1}_mo.txt"
+        if one_based_match.exists():
+            return one_based_match
 
-    raise FileNotFoundError(
-        f"Final generation log not found under {log_dir} for generation index {last_gen}."
-    )
+    return _resolve_latest_generation_log_path(log_dir)
 
 
 def _load_final_test_override_payload(config_path: str | Path | None = None) -> dict:
@@ -89,7 +111,7 @@ def _build_final_test_interval_runs(
 
 def run_final_test_suite(
     current_log_dir: str,
-    last_gen: int,
+    last_gen: int | None,
     config: EAConfig | None = None,
     final_test_config_path: str | Path | None = None,
 ):
@@ -104,24 +126,38 @@ def run_final_test_suite(
     final_test_max_front = _resolve_final_test_max_front(base_config)
 
     generation_log_path = _resolve_final_generation_log_path(experiment_log_dir, last_gen)
-    individuals = parse_individuals_from_ea_log(str(generation_log_path))
+    individuals_by_front = parse_individuals_from_ea_log(str(generation_log_path))
     selected_front_ids = set(
         extract_individual_ids_up_to_front(
             generation_log_path,
             final_test_max_front,
         )
     )
-    selected_individuals = [
+    flattened_individuals = [
         individual
-        for individual in individuals
-        if individual.id in selected_front_ids
+        for front in individuals_by_front
+        for individual in front
     ]
+    if selected_front_ids:
+        selected_individuals = [
+            individual
+            for individual in flattened_individuals
+            if individual.id in selected_front_ids
+        ]
+    else:
+        selected_individuals = flattened_individuals
 
     interval_runs = _build_final_test_interval_runs(runtime_config, final_test_config_path)
+    generation_number = _extract_generation_number(generation_log_path)
     results = {
+        "generation": generation_number,
         "generation_log": generation_log_path.name,
         "selected_individual_count": len(selected_individuals),
-        "selection_rule": f"pareto_front_1_to_{final_test_max_front}",
+        "selection_rule": (
+            f"pareto_front_1_to_{final_test_max_front}"
+            if final_test_max_front is not None
+            else "all_fronts"
+        ),
         "test_config_path": str(
             Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
         ),
