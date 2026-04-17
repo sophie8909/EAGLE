@@ -24,6 +24,9 @@ import java.text.SimpleDateFormat;
 import java.util.stream.Collectors;
 import gui.frontend.FEStatePane;
 import rts.Game;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 
 /**
@@ -441,7 +444,21 @@ public class EAGLE extends AbstractionLayerAI {
      */
     public String createFileName() throws Exception {
         System.out.println("aiName1 "+this.aiName1+" "+this.aiName2+" "+aiName2+" "+aiName1);
-        return "Response"+timestamp+"_"+this.aiName1+"_"+num_shot+"_"+this.aiName2+"_"+MODEL+".csv";
+        return resolveResponseFilePath(
+                "Response"+timestamp+"_"+this.aiName1+"_"+num_shot+"_"+this.aiName2+"_"+MODEL+".csv"
+        ).toString();
+    }
+
+    private static Path resolveResponseLogsDirectory() throws IOException {
+        Path workingDir = Paths.get("").toAbsolutePath().normalize();
+        Path projectRoot = workingDir.getParent() != null ? workingDir.getParent() : workingDir;
+        Path responsesDir = projectRoot.resolve("logs").resolve("responses");
+        Files.createDirectories(responsesDir);
+        return responsesDir;
+    }
+
+    private static Path resolveResponseFilePath(String filename) throws IOException {
+        return resolveResponseLogsDirectory().resolve(filename);
     }
 
     /**
@@ -501,7 +518,13 @@ public class EAGLE extends AbstractionLayerAI {
 
         // Build names once
         String ts = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
-        fileName01 = "Response" + ts + "_" + a + "_" + num_shot + "_" + b + "_" + MODEL + ".csv";
+        try {
+            fileName01 = resolveResponseFilePath(
+                    "Response" + ts + "_" + a + "_" + num_shot + "_" + b + "_" + MODEL + ".csv"
+            ).toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to initialize EAGLE response log path.", e);
+        }
        // FilenameXXXten = "LLM_Gemini_" + ts + ".json";
 
         try (FileWriter writer = new FileWriter(fileName01)) {

@@ -13,8 +13,8 @@ EXPERIMENT_CONFIGS_DIR = CONFIGS_DIR / "experiments"
 LOGS_DIR = PROJECT_ROOT / "logs"
 EAGLE_LOGS_DIR = LOGS_DIR / "eagle"
 MICRORTS_LOGS_DIR = LOGS_DIR / "microrts"
+RESPONSES_DIR = LOGS_DIR / "responses"
 RESULTS_DIR = PROJECT_ROOT / "results"
-RESPONSES_DIR = PROJECT_ROOT / "responses"
 HISTORY_DIR = PROJECT_ROOT / "history"
 THIRD_PARTY_DIR = PROJECT_ROOT / "third_party"
 PROMPTS_DIR = PROJECT_ROOT / "eagle" / "prompts"
@@ -43,4 +43,4 @@ def ensure_project_directories(*, include_responses: bool = False) -> None:
     for path in (LOGS_DIR, EAGLE_LOGS_DIR, MICRORTS_LOGS_DIR, RESULTS_DIR, HISTORY_DIR):
         ensure_directory(path)
     if include_responses:
-        ensure_directory(RESPONSES_DIR, tolerate_file=True)
+        ensure_directory(RESPONSES_DIR)
