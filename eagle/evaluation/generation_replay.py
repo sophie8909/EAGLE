@@ -212,6 +212,7 @@ def run_generation_result_test(
     print(allowed_individual)
     selected_individuals = filter_individuals(
         allowed_individual,
+        allowed_individual,
         individual_id=individual_id,
         only_winning_individuals=only_winning_individuals,
     )
