@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 from ..project import EAGLE_LOGS_DIR, ensure_directory
+from ..utils.checkpoint import deserialize_individual
 from ..utils.ea_log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
 
 
@@ -84,8 +85,72 @@ def _clean_axis_label(label: str) -> str:
     return label.split(".")[-1]
 
 
-def _load_generation_entries(run_dir: Path) -> list[tuple[int, list, set[str]]]:
-    """Load population snapshots plus Front-1 ids for every saved generation log."""
+def _dominates(left_fitness: list[float], right_fitness: list[float]) -> bool:
+    """Return whether one fitness vector Pareto-dominates another."""
+    better_in_any = False
+    for left_value, right_value in zip(left_fitness, right_fitness):
+        if left_value < right_value:
+            return False
+        if left_value > right_value:
+            better_in_any = True
+    return better_in_any
+
+
+def _front_one_ids_from_population(individuals: list) -> set[str]:
+    """Compute Front-1 ids directly from one population snapshot."""
+    front_one: list = []
+    for candidate in individuals:
+        candidate_fitness = list(getattr(candidate, "fitness", []) or [])
+        dominated = False
+        for other in individuals:
+            if other is candidate:
+                continue
+            other_fitness = list(getattr(other, "fitness", []) or [])
+            if _dominates(other_fitness, candidate_fitness):
+                dominated = True
+                break
+        if not dominated:
+            front_one.append(candidate)
+    return {getattr(individual, "id", "") for individual in front_one}
+
+
+def _load_generation_entries_from_checkpoints(run_dir: Path) -> list[tuple[int, list, set[str]]]:
+    """Load complete generation populations from checkpoints when available."""
+    checkpoints_path = run_dir / "checkpoints.jsonl"
+    if not checkpoints_path.exists():
+        return []
+
+    latest_by_generation: dict[int, dict] = {}
+    for raw_line in checkpoints_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if payload.get("phase") != "generation_complete":
+            continue
+        generation = int(payload.get("generation", -999))
+        latest_by_generation[generation] = payload
+
+    loaded: list[tuple[int, list, set[str]]] = []
+    for generation in sorted(latest_by_generation):
+        payload = latest_by_generation[generation]
+        individuals = [
+            deserialize_individual(individual_payload)
+            for individual_payload in list(payload.get("population") or [])
+        ]
+        if not individuals:
+            continue
+        front_one_ids = _front_one_ids_from_population(individuals)
+        display_generation = generation + 1
+        loaded.append((display_generation, individuals, front_one_ids))
+    return loaded
+
+
+def _load_generation_entries_from_logs(run_dir: Path) -> list[tuple[int, list, set[str]]]:
+    """Load population snapshots plus Front-1 ids from generation logs."""
     generation_logs = sorted(run_dir.glob("generation_*_mo.txt"), key=_extract_generation_number)
     loaded = []
     for generation_log in generation_logs:
@@ -102,6 +167,14 @@ def _load_generation_entries(run_dir: Path) -> list[tuple[int, list, set[str]]]:
         flattened = [individual for front in fronts for individual in front]
         loaded.append((generation_number, flattened, front_one_ids))
     return loaded
+
+
+def _load_generation_entries(run_dir: Path) -> list[tuple[int, list, set[str]]]:
+    """Load complete populations for every generation, preferring checkpoints."""
+    from_checkpoints = _load_generation_entries_from_checkpoints(run_dir)
+    if from_checkpoints:
+        return from_checkpoints
+    return _load_generation_entries_from_logs(run_dir)
 
 
 def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
