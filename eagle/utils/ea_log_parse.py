@@ -120,3 +120,48 @@ def parse_individuals_from_ea_log(log_file: str):
         individuals.append(front)
 
     return individuals
+
+
+def parse_population_snapshot_from_ea_log(log_file: str) -> list[Individual]:
+    """Parse the full population snapshot block from one generation log."""
+    with open(log_file, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    in_population_snapshot = False
+    population: list[Individual] = []
+    for raw_line in lines:
+        line = raw_line.strip()
+        if line == "Population Snapshot:":
+            in_population_snapshot = True
+            continue
+        if not in_population_snapshot:
+            continue
+        if not line.startswith("Individual"):
+            continue
+
+        start_idx = line.find("Individual(")
+        end_idx = line.rfind(")")
+        if start_idx == -1 or end_idx == -1:
+            continue
+
+        individual_str = line[start_idx + len("Individual("):end_idx]
+        components = _split_top_level_fields(individual_str)
+        individual_data = {}
+        for component in components:
+            if "=" in component:
+                key, value = component.split("=", 1)
+                individual_data[key.strip()] = _parse_literal(value.strip())
+
+        individual = Individual(**individual_data)
+        fitness_start = line.find("Fitness:")
+        if fitness_start != -1:
+            fitness_segment = line[fitness_start + len("Fitness:"):].strip()
+            eval_mode_start = fitness_segment.find(" - EvalMode:")
+            if eval_mode_start != -1:
+                fitness_segment = fitness_segment[:eval_mode_start].strip()
+            if fitness_segment.startswith("[") and fitness_segment.endswith("]"):
+                individual.fitness = _parse_literal(fitness_segment)
+
+        population.append(individual)
+
+    return population

@@ -120,8 +120,24 @@ class EA:
             generation=-1,
             meta={"completed_generation": -1},
         )
+        self._log_initial_population_snapshot()
         self.save_checkpoint(self.checkpoint)
        
+    def _log_initial_population_snapshot(self) -> None:
+        """Persist one `generation_0_mo.txt` snapshot after initial real evaluation."""
+        if self.current_log_dir is None:
+            return
+        if not hasattr(self, "_assign_rank_and_crowding"):
+            return
+
+        snapshot_path = self.current_log_dir / "generation_0_mo.txt"
+        if snapshot_path.exists():
+            return
+
+        pareto_fronts = self._assign_rank_and_crowding(self.population)
+        self.log_multi_objective_generation(str(self.current_log_dir), -1, pareto_fronts)
+        self.save_component_pool(str(self.current_log_dir))
+
 
     
     def create_log_folder(self) -> str:
@@ -227,6 +243,10 @@ class EA:
                     evaluation_mode = getattr(ind, "evaluation_mode", None) or "unknown"
                     f.write(f"{ind} - Fitness: {ind.fitness} - EvalMode: {evaluation_mode}\n")
                     f.write(f"Prompt:\n{Evaluator(self.component_pool, self.config).construct_prompt(ind)}\n")
+            f.write("\nPopulation Snapshot:\n")
+            for ind in self.population:
+                evaluation_mode = getattr(ind, "evaluation_mode", None) or "unknown"
+                f.write(f"{ind} - Fitness: {ind.fitness} - EvalMode: {evaluation_mode}\n")
             
     def save_component_pool(self, log_dir: str):
         """Store the evolving component pool so later analysis can reproduce runs."""

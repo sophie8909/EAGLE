@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 from ..project import EAGLE_LOGS_DIR, ensure_directory
-from ..utils.ea_log_parse import parse_individuals_from_ea_log
+from ..utils.ea_log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
 
 
 GENERATION_LOG_PATTERN = re.compile(r"generation_(\d+)_mo\.txt$")
@@ -84,50 +84,85 @@ def _clean_axis_label(label: str) -> str:
     return label.split(".")[-1]
 
 
-def _load_generation_fronts(run_dir: Path) -> list[tuple[int, list]]:
-    """Load every saved multi-objective generation log in numeric order."""
+def _load_generation_entries(run_dir: Path) -> list[tuple[int, list, set[str]]]:
+    """Load population snapshots plus Front-1 ids for every saved generation log."""
     generation_logs = sorted(run_dir.glob("generation_*_mo.txt"), key=_extract_generation_number)
     loaded = []
     for generation_log in generation_logs:
         generation_number = _extract_generation_number(generation_log)
         fronts = parse_individuals_from_ea_log(str(generation_log))
-        loaded.append((generation_number, fronts))
+        front_one_ids = {
+            getattr(individual, "id", "")
+            for individual in (fronts[0] if fronts else [])
+        }
+        population = parse_population_snapshot_from_ea_log(str(generation_log))
+        if population:
+            loaded.append((generation_number, population, front_one_ids))
+            continue
+        flattened = [individual for front in fronts for individual in front]
+        loaded.append((generation_number, flattened, front_one_ids))
     return loaded
 
 
 def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
     """Render one combined 2D scatter plot for all generations."""
     plt = _require_matplotlib()
-    generation_fronts = _load_generation_fronts(run_dir)
-    if not generation_fronts:
+    generation_entries = _load_generation_entries(run_dir)
+    if not generation_entries:
         return []
 
     plt.figure(figsize=(10, 8))
-    cmap = plt.get_cmap("viridis", max(1, len(generation_fronts)))
+    cmap = plt.get_cmap("viridis", max(1, len(generation_entries)))
 
-    for color_index, (generation_number, fronts) in enumerate(generation_fronts):
-        individuals = [individual for front in fronts for individual in front]
+    for color_index, (generation_number, individuals, front_one_ids) in enumerate(generation_entries):
         if not individuals:
             continue
 
-        x_values = [_safe_float(individual.fitness[0]) if len(individual.fitness) > 0 else float("nan") for individual in individuals]
-        y_values = [_safe_float(individual.fitness[1]) if len(individual.fitness) > 1 else float("nan") for individual in individuals]
-        valid_pairs = [
-            (x_value, y_value)
-            for x_value, y_value in zip(x_values, y_values)
-            if not math.isnan(x_value) and not math.isnan(y_value)
-        ]
-        if not valid_pairs:
+        color = cmap(color_index)
+        non_front_pairs: list[tuple[float, float]] = []
+        front_one_pairs: list[tuple[float, float]] = []
+        for individual in individuals:
+            x_value = _safe_float(individual.fitness[0]) if len(individual.fitness) > 0 else float("nan")
+            y_value = _safe_float(individual.fitness[1]) if len(individual.fitness) > 1 else float("nan")
+            if math.isnan(x_value) or math.isnan(y_value):
+                continue
+            if getattr(individual, "id", "") in front_one_ids:
+                front_one_pairs.append((x_value, y_value))
+            else:
+                non_front_pairs.append((x_value, y_value))
+
+        if not non_front_pairs and not front_one_pairs:
             continue
 
-        plt.scatter(
-            [pair[0] for pair in valid_pairs],
-            [pair[1] for pair in valid_pairs],
-            color=cmap(color_index),
-            edgecolors="black",
-            alpha=0.8,
-            label=f"Gen {generation_number}",
-        )
+        if non_front_pairs:
+            plt.scatter(
+                [pair[0] for pair in non_front_pairs],
+                [pair[1] for pair in non_front_pairs],
+                color=color,
+                edgecolors="none",
+                alpha=0.8,
+                label=f"Gen {generation_number}",
+            )
+        elif front_one_pairs:
+            plt.scatter(
+                [pair[0] for pair in front_one_pairs],
+                [pair[1] for pair in front_one_pairs],
+                color=color,
+                edgecolors="black",
+                linewidths=1.0,
+                alpha=0.8,
+                label=f"Gen {generation_number}",
+            )
+
+        if front_one_pairs:
+            plt.scatter(
+                [pair[0] for pair in front_one_pairs],
+                [pair[1] for pair in front_one_pairs],
+                color=color,
+                edgecolors="black",
+                linewidths=1.0,
+                alpha=0.95,
+            )
 
     plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
     plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
