@@ -8,6 +8,10 @@ version = "0.1.0"
 description = "EAGLE research code with a vendored MicroRTS environment"
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "matplotlib>=3.8,<4",
+    "requests>=2.31,<3",
+]
 
 [tool.setuptools.packages.find]
 include = ["eagle*", "scripts*"]
