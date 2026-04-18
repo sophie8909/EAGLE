@@ -92,40 +92,50 @@ def _load_generation_fronts(run_dir: Path) -> list[tuple[int, list]]:
 
 
 def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
-    """Render one 2D scatter plot per generation using stored fitness values."""
+    """Render one combined 2D scatter plot for all generations."""
     plt = _require_matplotlib()
-    figure_paths: list[Path] = []
-    for generation_number, fronts in _load_generation_fronts(run_dir):
+    generation_fronts = _load_generation_fronts(run_dir)
+    if not generation_fronts:
+        return []
+
+    plt.figure(figsize=(10, 8))
+    cmap = plt.get_cmap("viridis", max(1, len(generation_fronts)))
+
+    for color_index, (generation_number, fronts) in enumerate(generation_fronts):
         individuals = [individual for front in fronts for individual in front]
         if not individuals:
             continue
 
         x_values = [_safe_float(individual.fitness[0]) if len(individual.fitness) > 0 else float("nan") for individual in individuals]
         y_values = [_safe_float(individual.fitness[1]) if len(individual.fitness) > 1 else float("nan") for individual in individuals]
-        labels = [getattr(individual, "id", f"ind-{idx}") for idx, individual in enumerate(individuals)]
-        ranks = [getattr(individual, "pareto_rank", 0) for individual in individuals]
+        valid_pairs = [
+            (x_value, y_value)
+            for x_value, y_value in zip(x_values, y_values)
+            if not math.isnan(x_value) and not math.isnan(y_value)
+        ]
+        if not valid_pairs:
+            continue
 
-        plt.figure(figsize=(8, 6))
-        scatter = plt.scatter(x_values, y_values, c=ranks, cmap="viridis", edgecolors="black", alpha=0.85)
-        for x_value, y_value, label in zip(x_values, y_values, labels):
-            if math.isnan(x_value) or math.isnan(y_value):
-                continue
-            plt.annotate(label, (x_value, y_value), xytext=(4, 4), textcoords="offset points", fontsize=8)
+        plt.scatter(
+            [pair[0] for pair in valid_pairs],
+            [pair[1] for pair in valid_pairs],
+            color=cmap(color_index),
+            edgecolors="black",
+            alpha=0.8,
+            label=f"Gen {generation_number}",
+        )
 
-        plt.xlabel("Objective 1")
-        plt.ylabel("Objective 2")
-        plt.title(f"Generation {generation_number} Fitness Distribution")
-        plt.grid(alpha=0.25)
-        colorbar = plt.colorbar(scatter)
-        colorbar.set_label("Pareto Rank")
+    plt.xlabel("Objective 1")
+    plt.ylabel("Objective 2")
+    plt.title("Generation Fitness Distribution")
+    plt.grid(alpha=0.25)
+    plt.legend(loc="best", fontsize=8, ncols=2)
 
-        figure_path = output_dir / f"generation_{generation_number:03d}_fitness_scatter.png"
-        plt.tight_layout()
-        plt.savefig(figure_path, dpi=200)
-        plt.close()
-        figure_paths.append(figure_path)
-
-    return figure_paths
+    figure_path = output_dir / "generation_fitness_scatter_all.png"
+    plt.tight_layout()
+    plt.savefig(figure_path, dpi=200)
+    plt.close()
+    return [figure_path]
 
 
 def _collect_final_test_mode_rows(results_payload: dict, interval_mode: str) -> tuple[list[str], list[str], list[list[float]]]:
