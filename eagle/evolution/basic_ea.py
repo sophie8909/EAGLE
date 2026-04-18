@@ -226,7 +226,7 @@ class EA:
         with open(log_path, "w") as f:
                 f.write(f"Generation {generation+1}\n")
                 f.write(f"Best Individual: {best_individual}\n")
-                f.write(f"Prompt:\n{Evaluator(self.component_pool, self.config).construct_prompt(best_individual)}\n")
+                f.write(f"Prompt:\n{self._safe_construct_prompt(best_individual)}\n")
                 f.write(f"Fitness: {best_individual.fitness}\n")
                 f.write("\nPopulation:\n")
                 for ind in self.population:
@@ -242,11 +242,23 @@ class EA:
                 for ind in front:
                     evaluation_mode = getattr(ind, "evaluation_mode", None) or "unknown"
                     f.write(f"{ind} - Fitness: {ind.fitness} - EvalMode: {evaluation_mode}\n")
-                    f.write(f"Prompt:\n{Evaluator(self.component_pool, self.config).construct_prompt(ind)}\n")
+                    f.write(f"Prompt:\n{self._safe_construct_prompt(ind)}\n")
             f.write("\nPopulation Snapshot:\n")
             for ind in self.population:
                 evaluation_mode = getattr(ind, "evaluation_mode", None) or "unknown"
                 f.write(f"{ind} - Fitness: {ind.fitness} - EvalMode: {evaluation_mode}\n")
+
+    def _safe_construct_prompt(self, individual: Individual) -> str:
+        """Render prompts for logs without breaking on legacy invalid component indices."""
+        evaluator = Evaluator(self.component_pool, self.config)
+        try:
+            return evaluator.construct_prompt(individual)
+        except Exception as exc:
+            return (
+                "[Prompt unavailable: failed to render with current component pool]\n"
+                f"Reason: {type(exc).__name__}: {exc}\n"
+                f"Individual: {individual}"
+            )
             
     def save_component_pool(self, log_dir: str):
         """Store the evolving component pool so later analysis can reproduce runs."""
