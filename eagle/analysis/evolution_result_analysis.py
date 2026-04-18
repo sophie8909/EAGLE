@@ -33,6 +33,17 @@ def _require_matplotlib():
     return plt
 
 
+def _require_pillow():
+    """Import Pillow lazily for GIF generation."""
+    try:
+        from PIL import Image  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "Pillow is required for GIF generation. Install requirements.txt before running analysis."
+        ) from exc
+    return Image
+
+
 def _extract_generation_number(path: Path) -> int:
     """Return the one-based generation number encoded in a log filename."""
     match = GENERATION_LOG_PATTERN.match(path.name)
@@ -178,12 +189,13 @@ def _load_generation_entries(run_dir: Path) -> list[tuple[int, list, set[str]]]:
 
 
 def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
-    """Render one combined 2D scatter plot for all generations."""
+    """Render one combined plot plus one per-generation plot."""
     plt = _require_matplotlib()
     generation_entries = _load_generation_entries(run_dir)
     if not generation_entries:
         return []
 
+    figure_paths: list[Path] = []
     plt.figure(figsize=(10, 8))
     cmap = plt.get_cmap("viridis", max(1, len(generation_entries)))
 
@@ -237,6 +249,37 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
                 alpha=0.95,
             )
 
+        plt.figure(figsize=(8, 6))
+        if non_front_pairs:
+            plt.scatter(
+                [pair[0] for pair in non_front_pairs],
+                [pair[1] for pair in non_front_pairs],
+                color=color,
+                edgecolors="none",
+                alpha=0.8,
+                label=f"Gen {generation_number}",
+            )
+        if front_one_pairs:
+            plt.scatter(
+                [pair[0] for pair in front_one_pairs],
+                [pair[1] for pair in front_one_pairs],
+                color=color,
+                edgecolors="black",
+                linewidths=1.0,
+                alpha=0.95,
+                label="Front 1",
+            )
+        plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
+        plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
+        plt.title(f"Generation {generation_number} Fitness Distribution")
+        plt.grid(alpha=0.25)
+        plt.legend(loc="best", fontsize=8)
+        per_generation_path = output_dir / f"generation_{generation_number:03d}_fitness_scatter.png"
+        plt.tight_layout()
+        plt.savefig(per_generation_path, dpi=200)
+        plt.close()
+        figure_paths.append(per_generation_path)
+
     plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
     plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
     plt.title("Generation Fitness Distribution")
@@ -247,7 +290,35 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
     plt.tight_layout()
     plt.savefig(figure_path, dpi=200)
     plt.close()
-    return [figure_path]
+    figure_paths.insert(0, figure_path)
+    return figure_paths
+
+
+def _build_generation_gif(image_paths: list[Path], output_path: Path) -> Path | None:
+    """Build one animated GIF from the per-generation scatter plots."""
+    per_generation_images = [
+        path for path in image_paths
+        if path.name.startswith("generation_") and path.name != "generation_fitness_scatter_all.png"
+    ]
+    if not per_generation_images:
+        return None
+
+    Image = _require_pillow()
+    frames = [Image.open(path).convert("RGBA") for path in per_generation_images]
+    try:
+        first_frame, *remaining_frames = frames
+        first_frame.save(
+            output_path,
+            save_all=True,
+            append_images=remaining_frames,
+            duration=900,
+            loop=0,
+            disposal=2,
+        )
+    finally:
+        for frame in frames:
+            frame.close()
+    return output_path
 
 
 def _collect_final_test_mode_rows(results_payload: dict, interval_mode: str) -> tuple[list[str], list[str], list[list[float]]]:
@@ -317,6 +388,10 @@ def analyze_evolution_run(run_dir: str | Path | None = None, *, latest: bool = F
         resolved_run_dir,
         ensure_directory(output_dir / "generation_fitness"),
     )
+    generation_gif_path = _build_generation_gif(
+        generation_figures,
+        output_dir / "generation_fitness" / "generation_fitness_animation.gif",
+    )
 
     final_test_path = _resolve_final_test_path(resolved_run_dir)
     final_test_figures: dict[str, str] = {}
@@ -335,6 +410,7 @@ def analyze_evolution_run(run_dir: str | Path | None = None, *, latest: bool = F
     summary = {
         "run_dir": str(resolved_run_dir),
         "generation_scatter_figures": [str(path) for path in generation_figures],
+        "generation_animation_gif": str(generation_gif_path) if generation_gif_path is not None else None,
         "final_test_result_path": str(final_test_path) if final_test_path is not None else None,
         "final_test_figures": final_test_figures,
     }
