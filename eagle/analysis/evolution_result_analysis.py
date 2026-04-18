@@ -196,6 +196,30 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
     if not generation_entries:
         return []
 
+    all_x_values: list[float] = []
+    all_y_values: list[float] = []
+    for _, individuals, _ in generation_entries:
+        for individual in individuals:
+            x_value = _safe_float(individual.fitness[0]) if len(individual.fitness) > 0 else float("nan")
+            y_value = _safe_float(individual.fitness[1]) if len(individual.fitness) > 1 else float("nan")
+            if math.isnan(x_value) or math.isnan(y_value):
+                continue
+            all_x_values.append(x_value)
+            all_y_values.append(y_value)
+
+    if not all_x_values or not all_y_values:
+        return []
+
+    x_min = min(all_x_values)
+    x_max = max(all_x_values)
+    y_min = min(all_y_values)
+    y_max = max(all_y_values)
+
+    x_padding = max((x_max - x_min) * 0.08, 1.0)
+    y_padding = max((y_max - y_min) * 0.08, 1.0)
+    x_limits = (x_min - x_padding, x_max + x_padding)
+    y_limits = (y_min - y_padding, y_max + y_padding)
+
     figure_paths: list[Path] = []
     plt.figure(figsize=(10, 8))
     cmap = plt.get_cmap("viridis", max(1, len(generation_entries)))
@@ -274,6 +298,8 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
         plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
         plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
         plt.title(f"Generation {generation_number} Fitness Distribution")
+        plt.xlim(*x_limits)
+        plt.ylim(*y_limits)
         plt.grid(alpha=0.25)
         plt.legend(loc="best", fontsize=8)
         per_generation_path = output_dir / f"generation_{generation_number:03d}_fitness_scatter.png"
@@ -285,6 +311,8 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
     plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
     plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
     plt.title("Generation Fitness Distribution")
+    plt.xlim(*x_limits)
+    plt.ylim(*y_limits)
     plt.grid(alpha=0.25)
     plt.legend(loc="best", fontsize=8, ncols=2)
 
