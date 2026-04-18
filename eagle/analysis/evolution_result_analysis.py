@@ -15,6 +15,10 @@ from ..utils.ea_log_parse import parse_individuals_from_ea_log
 GENERATION_LOG_PATTERN = re.compile(r"generation_(\d+)_mo\.txt$")
 FINAL_TEST_CANDIDATES = ("final_test_results.json", "final_test_result.json")
 FINAL_TEST_MODES = ("interval_1", "interval_10", "java_agent_test")
+EVOLUTION_OBJECTIVE_LABELS = (
+    "Resource Advantage vs LightRush",
+    "Resource Advantage vs HeavyRush",
+)
 
 
 def _require_matplotlib():
@@ -125,8 +129,8 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
             label=f"Gen {generation_number}",
         )
 
-    plt.xlabel("Objective 1")
-    plt.ylabel("Objective 2")
+    plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
+    plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
     plt.title("Generation Fitness Distribution")
     plt.grid(alpha=0.25)
     plt.legend(loc="best", fontsize=8, ncols=2)

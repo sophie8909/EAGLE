@@ -105,9 +105,14 @@ def parse_individuals_from_ea_log(log_file: str):
                 individual_data[key.strip()] = _parse_literal(value.strip())
 
         individual = Individual(**individual_data)
-        fitness_str = line[line.find("Fitness:") + len("Fitness:"):].strip()
-        if fitness_str.startswith("[") and fitness_str.endswith("]"):
-            individual.fitness = _parse_literal(fitness_str)
+        fitness_start = line.find("Fitness:")
+        if fitness_start != -1:
+            fitness_segment = line[fitness_start + len("Fitness:"):].strip()
+            eval_mode_start = fitness_segment.find(" - EvalMode:")
+            if eval_mode_start != -1:
+                fitness_segment = fitness_segment[:eval_mode_start].strip()
+            if fitness_segment.startswith("[") and fitness_segment.endswith("]"):
+                individual.fitness = _parse_literal(fitness_segment)
 
         front.append(individual)
 
