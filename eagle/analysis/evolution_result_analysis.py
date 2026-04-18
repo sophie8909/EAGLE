@@ -154,6 +154,7 @@ def _load_generation_entries_from_checkpoints(run_dir: Path) -> list[tuple[int, 
         ]
         if not individuals:
             continue
+        print(f"Loaded {len(individuals)} individuals from checkpoint for generation {generation+1}")
         front_one_ids = _front_one_ids_from_population(individuals)
         display_generation = generation + 1
         loaded.append((display_generation, individuals, front_one_ids))
@@ -233,6 +234,7 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
         for individual in individuals:
             x_value = _safe_float(individual.fitness[0]) if len(individual.fitness) > 0 else float("nan")
             y_value = _safe_float(individual.fitness[1]) if len(individual.fitness) > 1 else float("nan")
+            print(f"Gen {generation_number} Individual {getattr(individual, 'id', '')}: Fitness = ({x_value}, {y_value})")
             if math.isnan(x_value) or math.isnan(y_value):
                 continue
             if getattr(individual, "id", "") in front_one_ids:

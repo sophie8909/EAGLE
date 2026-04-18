@@ -12,7 +12,7 @@ OPPONENT_LIST = [
     "ai.RandomBiasedAI",
     "ai.abstraction.HeavyRush",
     "ai.abstraction.LightRush",
-    "ai.abstraction.WorkerRush",
+    # "ai.abstraction.WorkerRush",
 ]
 DEFAULT_EA_QUICK_RUN_OPPONENT = "ai.PassiveAI"
 
