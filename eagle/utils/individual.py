@@ -30,6 +30,7 @@ class Individual:
         id: str | None = None,
         game_rule: int = 0,
         strategy: dict[str, int] | None = None,
+        static_components: dict[str, int] | None = None,
         **legacy_components: int,
     ):
         """Create an individual with one game-rule index and a strategy-index map."""
@@ -38,7 +39,9 @@ class Individual:
             self._sync_id_counter(id)
         self.game_rule = game_rule
         self.strategy = self._normalize_strategy(strategy)
-        self.legacy_components = dict(legacy_components)
+        merged_static_components = dict(static_components or {})
+        merged_static_components.update(dict(legacy_components))
+        self.legacy_components = merged_static_components
 
         # Keep backward compatibility when older logs/configs still include
         # decomposed non-strategy component names.
@@ -56,14 +59,21 @@ class Individual:
     def components(self) -> list[ComponentEntry]:
         """Return a deterministic representation used by some legacy code paths."""
         strategy_items = tuple(sorted((self.strategy or {}).items()))
-        return [
+        entries = [
             ComponentEntry("game_rule", self.game_rule),
-            ComponentEntry("strategy", strategy_items),
         ]
+        for name, value in sorted((self.legacy_components or {}).items()):
+            entries.append(ComponentEntry(name, value))
+        entries.append(ComponentEntry("strategy", strategy_items))
+        return entries
 
     def __repr__(self):
         """Return a compact representation suitable for logs and generation dumps."""
-        return f"Individual(game_rule={self.game_rule}, strategy={self.strategy})"
+        return (
+            f"Individual(game_rule={self.game_rule}, "
+            f"static_components={self.legacy_components}, "
+            f"strategy={self.strategy})"
+        )
 
     @staticmethod
     def _normalize_strategy(strategy: dict[str, int] | str | None) -> dict[str, int]:
@@ -98,9 +108,16 @@ class Individual:
                 cls._id_counter = itertools.count(current + 1)
                 return
 
-    def initialize_randomly(self, component_pool: ComponentPool):
-        """Fill the strategy map with random valid indices from the component pool."""
+    def initialize_randomly(
+        self,
+        component_pool: ComponentPool,
+        static_component_keys: list[str] | None = None,
+    ):
+        """Fill the selected static categories and strategy map with random valid indices."""
         self.game_rule = 0
+        self.legacy_components = {}
+        for category in list(static_component_keys or []):
+            self.set_component_index(category, component_pool.get_random_component_index(category))
         self.strategy = {
             strategy_key: component_pool.get_random_strategy_component_index(strategy_key)
             for strategy_key in component_pool.strategy_keys
@@ -127,7 +144,7 @@ class Individual:
         clone = Individual(
             game_rule=self.game_rule,
             strategy=dict(self.strategy or {}),
-            **dict(self.legacy_components),
+            static_components=dict(self.legacy_components),
         )
         clone.fitness = self.fitness.copy() if hasattr(self.fitness, "copy") else self.fitness
         clone.evaluation_mode = self.evaluation_mode

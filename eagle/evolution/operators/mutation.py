@@ -27,6 +27,7 @@ class Mutation:
         "tactical_heuristics",
         "anti_stall_rules",
     ]
+    STATIC_POOL_MUTATION_MODE = "static_pool_replacement"
 
     @classmethod
     def all_strategy_components(cls) -> list[str]:
@@ -90,6 +91,60 @@ class Mutation:
         mutated_individual.strategy = cls._ensure_complete_strategy(strategy, component_pool)
         mutated_individual.ea_llm_call_time += elapsed
         mutated_individual.mutation_metadata = metadata
+        return mutated_individual
+
+    @classmethod
+    def mutate_individual(
+        cls,
+        individual: Individual,
+        component_pool: ComponentPool,
+        config: EAConfig,
+    ) -> Individual:
+        """Mutate either always-on strategy buckets or config-enabled static buckets."""
+        static_targets = component_pool.resolve_evolving_static_keys(config.evolving_prompt_components)
+        strategy_target_count = max(1, len(component_pool.strategy_keys))
+        static_target_count = len(static_targets)
+
+        if static_target_count > 0:
+            mutation_family = random.choices(
+                ["strategy", "static"],
+                weights=[strategy_target_count, static_target_count],
+                k=1,
+            )[0]
+            if mutation_family == "static":
+                return cls.mutate_static_component(individual, component_pool, static_targets)
+
+        return cls.mutate_strategy(individual, component_pool, config)
+
+    @classmethod
+    def mutate_static_component(
+        cls,
+        individual: Individual,
+        component_pool: ComponentPool,
+        static_targets: list[str],
+    ) -> Individual:
+        """Replace one config-enabled static prompt component with another pool candidate."""
+        mutated_individual = individual.copy()
+        target_component = random.choice(list(static_targets))
+        previous_index = (
+            mutated_individual.legacy_components.get(target_component)
+            if getattr(mutated_individual, "legacy_components", None) is not None
+            else None
+        )
+        replacement_index = component_pool.get_random_component_index(target_component)
+        if previous_index is not None:
+            for _ in range(8):
+                if replacement_index != previous_index:
+                    break
+                replacement_index = component_pool.get_random_component_index(target_component)
+        mutated_individual.set_component_index(target_component, replacement_index)
+        mutated_individual.ea_llm_call_time = getattr(mutated_individual, "ea_llm_call_time", 0.0) or 0.0
+        mutated_individual.mutation_metadata = {
+            "mutation_mode": cls.STATIC_POOL_MUTATION_MODE,
+            "changed_components": [target_component],
+            "old_index": previous_index,
+            "new_index": replacement_index,
+        }
         return mutated_individual
 
     @classmethod

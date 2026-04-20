@@ -174,6 +174,7 @@ class Evaluator:
                     "evaluation_time": stats.get("total_eval_time", 0.0),
                     "components": {
                         "game_rule": individual.game_rule,
+                        "static_components": dict(getattr(individual, "legacy_components", {}) or {}),
                         "strategy": individual.strategy,
                     }
                 }
@@ -267,8 +268,9 @@ class Evaluator:
         """Render one individual's selected components into the final strategy prompt."""
         static_prompt_lines = []
         if self.component_pool.has_category("game_rule"):
-            static_prompt_lines = self.component_pool.render_static_prompt_lines(
-                individual.game_rule
+            static_prompt_lines = self.component_pool.render_selected_static_prompt_lines(
+                getattr(individual, "legacy_components", {}),
+                game_rule_index=individual.game_rule,
             )
 
         strategy_prompt_lines = self.component_pool.render_strategy_prompt_lines(
