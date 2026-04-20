@@ -39,3 +39,4 @@ resources/config.properties
 /logs/
 
 third_party/microrts/resources/config.properties
+/batch_logs
