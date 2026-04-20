@@ -84,7 +84,7 @@
     [
       "RAW MOVE FORMAT:",
       "(x,y): unit_type action(args)",
-      "unit_type ∈ worker, light, heavy, ranged, base, barracks"
+      "unit_type: worker, light, heavy, ranged, base, barracks"
     ]
   ],
 
@@ -110,7 +110,7 @@
       "REQUIREMENTS:",
       "- unit_position must match an Ally unit",
       "- unit_type must be valid",
-      "- action_type ∈ move, train, build, harvest, attack, idle",
+      "- action_type: move, train, build, harvest, attack, idle",
       "- raw_move must match the action"
     ]
   ],

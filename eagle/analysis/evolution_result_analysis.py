@@ -341,7 +341,7 @@ def _build_generation_gif(image_paths: list[Path], output_path: Path) -> Path | 
             output_path,
             save_all=True,
             append_images=remaining_frames,
-            duration=900,
+            duration=100,
             loop=0,
             disposal=2,
         )

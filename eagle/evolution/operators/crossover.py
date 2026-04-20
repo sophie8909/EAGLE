@@ -32,14 +32,3 @@ class Crossover:
                 child.strategy[strategy_key] = component_pool.get_random_strategy_component_index(strategy_key)
         return child
     
-    @staticmethod
-    def llm_crossover(component_pool: ComponentPool, parent1: Individual, parent2: Individual) -> Individual:
-        """Temporary placeholder that falls back to uniform crossover until implemented."""
-        # TODO: Implement an LLM-based crossover that writes merged strategy
-        # components back into the component pool and stores valid component
-        # indices on the child. For now we explicitly fall back to the stable
-        # uniform crossover path so this unfinished method cannot corrupt
-        # offspring strategy values.
-        return Crossover.uniform_crossover(component_pool, parent1, parent2)
-
-

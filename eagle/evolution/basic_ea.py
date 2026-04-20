@@ -363,7 +363,6 @@ class EA:
                 if isinstance(parsed_log, dict)
                 else 0.0
             )
-            aggregated_scores.append(raw_score)
             per_opponent_results.append(
                 {
                     "opponent": resolved_opponent,
@@ -375,6 +374,12 @@ class EA:
                     "parsed_summary": last_real_evaluation.get("parsed_summary"),
                 }
             )
+            # win loss bonus
+            if individual.fitness[0] == 1.0:
+                raw_score += 100
+            elif individual.fitness[0] == 0.0:
+                raw_score -= 100
+            aggregated_scores.append(raw_score)
 
         individual.fitness = list(aggregated_scores)
         individual.evaluation_mode = "real"
