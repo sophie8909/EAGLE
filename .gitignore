@@ -38,3 +38,4 @@ resources/config.properties
 *.jsonl
 /logs/
 
+third_party/microrts/resources/config.properties
