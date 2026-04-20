@@ -70,9 +70,15 @@ class EA:
     def initialize_population(self) -> List[Individual]:
         """Create the starting population by sampling strategy indices at random."""
         individuals = []
+        evolving_static_keys = self.component_pool.resolve_evolving_static_keys(
+            self.config.evolving_prompt_components
+        )
         for _ in range(self.config.population_size):
             individual = Individual() 
-            individual.initialize_randomly(self.component_pool)
+            individual.initialize_randomly(
+                self.component_pool,
+                static_component_keys=evolving_static_keys,
+            )
             individuals.append(individual)
         return individuals
     
@@ -327,7 +333,7 @@ class EA:
     
     def mutate(self, individual: Individual) -> Individual:
         """Apply one of the configured mutation strategies to a copied child."""
-        mutated_individual = Mutation.mutate_strategy(
+        mutated_individual = Mutation.mutate_individual(
             individual,
             self.component_pool,
             self.config,

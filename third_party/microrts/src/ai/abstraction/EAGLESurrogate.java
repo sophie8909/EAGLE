@@ -15,7 +15,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Random;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -138,18 +137,18 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         "{\"raw_move\":\"(1,1): worker build((3,3),barracks)\",\"unit_position\":[1,1],\"unit_type\":\"worker\",\"action_type\":\"build\"}",
         "[phase_transition_rule]",
         "PHASE TRANSITION RULE:",
-        "Shift phase when the number of enemy units within a 3-tile radius of our base exceeds 2, or when our economy and production are severely underdeveloped.",
-        "Transition to EARLY GAME PLAN immediately upon detecting first enemy presence near our expansion plans.",
+        "Stay in early game only while our plan is still forming and a missing economic or production piece would change everything.",
+        "Enter mid game when the first meaningful army can be fielded and movement decisions start shaping map control.",
+        "Enter late game when a committed attack, base race, or production collapse is underway or imminent.",
+        "Do not stay in an outdated phase label just because the clock is low or high; respond to the actual battlefield.",
         "EARLY GAME PLAN:",
-        "Initiate with aggressive scouting to identify high-priority targets for swift destruction and resource-rich areas for immediate occupation.",
-        "Construct first barracks as soon as resources permit, then rapidly transition into production of combat units that can maintain continuous pressure on the enemy.",
-        "Prioritize decisive engagement over defensive measures, targeting vulnerable enemy forces that threaten our expansion plans or create opportunities for aggressive growth.",
-        "MID GAME PLAN:",
-        "Prioritize swift conversion of enemy momentum into decisive advantage by aggressively targeting vulnerable positions that disrupt their expansion plans and key infrastructure, such as workers, buildings, and resource collection routes.",
-        "Force the opponent to react with continuous unit production and relentless pressure while maintaining sufficient economy to support escalating aggression.",
+        "Aim for minimal but stable economy first, then convert quickly into the first production structure and first combat units.",
+        "Use one suitable worker as the builder and keep the rest harvesting efficiently.",
+        "Avoid premature full commitment until at least a small force can pressure or defend coherently.",
         "LATE GAME PLAN:",
-        "Conduct an aggressive, all-out assault on enemy base and critical infrastructure to maximize damage and disrupt their initiative.",
-        "Prioritize production of units with high kill efficiency or those capable of disrupting the enemy's economy and resource collection, then focus on swift victory at any cost, even if it means tolerating some short-term economic instability.",
+        "Convert advantage into a finishing attack on enemy base and production rather than drifting into endless small trades.",
+        "Spend accumulated resources aggressively on the units most likely to end the game soon.",
+        "Protect our own remaining production only if doing so does not throw away a realistic winning push.",
         "DECISION PRIORITY:",
         "1. Immediately prioritize actions that disrupt the enemy's development and initiative, such as targeting exposed workers, unfinished buildings, and isolated units.",
         "2. Adapt the current phase plan to transition between phases if it is no longer coherent with the state.",
@@ -157,16 +156,20 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         "4. Avoid idle production and resource float by focusing on key tasks that advance our strategic goals.",
         "5. Prioritize actions that force the opponent to react, such as targeting vulnerable infrastructure or disrupting their economy.",
         "TACTICAL HEURISTICS:",
-        "Heavy or durable units should lead contact when possible.",
-        "Ranged or fragile units should attack from safer positions and avoid taking the first melee hit.",
-        "Use local formation logic to stabilize fights, but do not let it override the global plan."
+        "If an enemy is already in range, attack immediately unless a higher-priority survival rule forbids it.",
+        "Prefer finishing low-health enemies when that removes damage or clears the path to a high-value objective.",
+        "Do not retreat from a favorable engagement just to reposition decoratively.",
+        "ANTI-STALL RULES:",
+        "When combat units exist and no urgent home defense is needed, give them a concrete job: pressure, regroup for contact, defend a key point, or finish a target.",
+        "When economy is stable, extra resources should accelerate the chosen win path rather than sit unused.",
+        "When economy is unstable, fix it with the minimum action needed and then resume the broader plan."
     };
     // SURROGATE_PROMPT_END
 
-    private static final double P_FAIL_WORKER = 0.10;
-    private static final double P_FAIL_BUILD = 0.15;
-    private static final double P_FAIL_TRAIN = 0.10;
-    private static final double P_FAIL_COMBAT = 0.15;
+    private static final double P_FAIL_WORKER = 0.0;
+    private static final double P_FAIL_BUILD = 0.0;
+    private static final double P_FAIL_TRAIN = 0.0;
+    private static final double P_FAIL_COMBAT = 0.0;
     private static final int ATTACK_RADIUS_LIMIT = 5;
     private static final int TARGET_TOP_K = 3;
 
@@ -175,7 +178,6 @@ public class EAGLESurrogate extends AbstractionLayerAI {
     private boolean logsInitialized = false;
     private boolean endGameMetricsLogged = false;
     private final StringBuilder moveLogBuffer = new StringBuilder();
-    private final Random rng = new Random();
 
     public EAGLESurrogate(UnitTypeTable a_utt) {
         this(a_utt, new AStarPathFinding());
@@ -393,7 +395,19 @@ public class EAGLESurrogate extends AbstractionLayerAI {
     }
 
     private boolean shouldSkip(double probability) {
-        return rng.nextDouble() < probability;
+        return false;
+    }
+
+    private String formatPosition(int x, int y) {
+        return "@(" + x + "," + y + ")";
+    }
+
+    private Build getCurrentBuild(Unit unit, UnitType expectedType) {
+        AbstractAction action = getAbstractAction(unit);
+        if (action instanceof Build && ((Build) action).type == expectedType) {
+            return (Build) action;
+        }
+        return null;
     }
 
     private String unitActionToString(UnitAction action) {
@@ -681,9 +695,28 @@ public class EAGLESurrogate extends AbstractionLayerAI {
             if (shouldSkip(P_FAIL_BUILD)) {
                 logMove("SKIPPED", builder, "build", baseType.name + " [dropout]");
             } else {
-                buildIfNotAlreadyBuilding(builder, baseType, builder.getX(), builder.getY(), reservedPositions, player, pgs);
-                logMove("APPLIED", builder, "build", baseType.name + " @(" + builder.getX() + "," + builder.getY() + ")");
-                resourcesUsed += baseType.cost;
+                Build pendingBuild = getCurrentBuild(builder, baseType);
+                if (pendingBuild != null) {
+                    logMove("PENDING", builder, "build", baseType.name + " " + formatPosition(pendingBuild.x, pendingBuild.y));
+                    return;
+                }
+                int buildPos = findBuildingPosition(reservedPositions, builder.getX(), builder.getY(), player, pgs);
+                if (buildPos >= 0
+                        && buildIfNotAlreadyBuilding(
+                            builder,
+                            baseType,
+                            builder.getX(),
+                            builder.getY(),
+                            reservedPositions,
+                            player,
+                            pgs)) {
+                    int buildX = buildPos % pgs.getWidth();
+                    int buildY = buildPos / pgs.getWidth();
+                    logMove("APPLIED", builder, "build", baseType.name + " " + formatPosition(buildX, buildY));
+                    resourcesUsed += baseType.cost;
+                } else {
+                    logMove("SKIPPED", builder, "build", baseType.name + " [no_valid_position]");
+                }
             }
         }
 
@@ -694,10 +727,34 @@ public class EAGLESurrogate extends AbstractionLayerAI {
             if (shouldSkip(P_FAIL_BUILD)) {
                 logMove("SKIPPED", builder, "build", barracksType.name + " [dropout]");
             } else {
-                buildIfNotAlreadyBuilding(builder, barracksType, builder.getX(), builder.getY(), reservedPositions, player, pgs);
-                logMove("APPLIED", builder, "build", barracksType.name + " @(" + builder.getX() + "," + builder.getY() + ")");
-                resourcesUsed += barracksType.cost;
-                barracksCount++;
+                Build pendingBuild = getCurrentBuild(builder, barracksType);
+                if (pendingBuild != null) {
+                    logMove(
+                        "PENDING",
+                        builder,
+                        "build",
+                        barracksType.name + " " + formatPosition(pendingBuild.x, pendingBuild.y));
+                    barracksCount++;
+                    continue;
+                }
+                int buildPos = findBuildingPosition(reservedPositions, builder.getX(), builder.getY(), player, pgs);
+                if (buildPos >= 0
+                        && buildIfNotAlreadyBuilding(
+                            builder,
+                            barracksType,
+                            builder.getX(),
+                            builder.getY(),
+                            reservedPositions,
+                            player,
+                            pgs)) {
+                    int buildX = buildPos % pgs.getWidth();
+                    int buildY = buildPos / pgs.getWidth();
+                    logMove("APPLIED", builder, "build", barracksType.name + " " + formatPosition(buildX, buildY));
+                    resourcesUsed += barracksType.cost;
+                    barracksCount++;
+                } else {
+                    logMove("SKIPPED", builder, "build", barracksType.name + " [no_valid_position]");
+                }
             }
         }
 
@@ -817,22 +874,7 @@ public class EAGLESurrogate extends AbstractionLayerAI {
         }
 
         if (!topCandidates.isEmpty()) {
-            double roll = rng.nextDouble();
-            int index;
-            if (topCandidates.size() == 1) {
-                index = 0;
-            } else if (topCandidates.size() == 2) {
-                index = roll < 0.75 ? 0 : 1;
-            } else {
-                if (roll < 0.70) {
-                    index = 0;
-                } else if (roll < 0.90) {
-                    index = 1;
-                } else {
-                    index = 2;
-                }
-            }
-            return topCandidates.get(index);
+            return topCandidates.get(0);
         }
 
         Unit bestFallback = null;

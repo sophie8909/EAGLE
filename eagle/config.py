@@ -84,6 +84,9 @@ class EAConfig:
     include_strategy_identity_in_prompt: bool = field(
         default_factory=lambda: bool(_default_config_value("include_strategy_identity_in_prompt"))
     )
+    evolving_prompt_components: list[str] = field(
+        default_factory=lambda: list(_default_config_value("evolving_prompt_components"))
+    )
 
     run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
     real_eval_rate: float = field(default_factory=lambda: float(_default_config_value("real_eval_rate")))
@@ -124,6 +127,10 @@ class EAConfig:
 
         if self.reflection_max_components_to_rewrite < 1:
             raise ValueError("reflection_max_components_to_rewrite must be >= 1.")
+
+        if not isinstance(self.evolving_prompt_components, list):
+            raise ValueError("evolving_prompt_components must be a list of component keys.")
+        self.evolving_prompt_components = [str(key) for key in self.evolving_prompt_components]
 
         if self.crossover != "uniform":
             raise ValueError(
@@ -204,6 +211,7 @@ class EAConfig:
             "steady_state_surrogate_selection_metric": self.steady_state_surrogate_selection_metric,
             "final_test_max_front": self.final_test_max_front,
             "include_strategy_identity_in_prompt": self.include_strategy_identity_in_prompt,
+            "evolving_prompt_components": list(self.evolving_prompt_components),
             "real_eval_opponents": list(self.real_eval_opponents),
         }
 

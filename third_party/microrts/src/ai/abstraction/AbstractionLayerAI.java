@@ -242,6 +242,9 @@ public abstract class AbstractionLayerAI extends AIWithComputationBudget {
 //        System.out.println("buildIfNotAlreadyBuilding: action = " + action);
         if (!(action instanceof Build) || ((Build) action).type != type) {
             int pos = findBuildingPosition(reservedPositions, desiredX, desiredY, p, pgs);
+            if (pos < 0) {
+                return false;
+            }
             
 //            System.out.println("pos = " + (pos % pgs.getWidth()) + "," + (pos / pgs.getWidth()));
             

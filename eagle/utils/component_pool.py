@@ -12,6 +12,14 @@ import json
 from typing import Any, Dict, List
 
 class ComponentPool:
+    NON_EVOLVING_STATIC_KEYS = {
+        "actions",
+        "raw_move_format",
+        "json_schema",
+        "field_requirements",
+        "field_requirement",
+        "examples",
+    }
     """
         A pool of prompt components loaded from a JSON file.
 
@@ -97,6 +105,10 @@ class ComponentPool:
                 for component in component_groups:
                     merged_lines.extend(component)
             self.game_rule_components = [merged_lines] if merged_lines else []
+        self.static_component_keys = [
+            key for key in self.game_rule_source_keys
+            if key != "game_rule"
+        ]
         
 
     @classmethod
@@ -196,13 +208,39 @@ class ComponentPool:
 
     def render_static_prompt_lines(self, game_rule_index: int = 0) -> List[str]:
         """Render the non-strategy prompt prefix from the current component schema."""
+        return self.render_selected_static_prompt_lines({}, game_rule_index=game_rule_index)
+
+    def render_selected_static_prompt_lines(
+        self,
+        selected_indices: Dict[str, int] | None,
+        game_rule_index: int = 0,
+    ) -> List[str]:
+        """Render the non-strategy prompt prefix with explicit per-category selection."""
+        selected_indices = dict(selected_indices or {})
         source_blocks: List[List[str]] = []
         can_render_from_source = all(
             len(self.components.get(key, [])) <= 1
             for key in self.game_rule_source_keys
         )
+        has_selected_static_indices = any(
+            key in selected_indices
+            for key in self.static_component_keys
+        )
 
-        if can_render_from_source:
+        if has_selected_static_indices:
+            for key in self.game_rule_source_keys:
+                if key == "game_rule":
+                    continue
+                component_groups = self.components.get(key, [])
+                if not component_groups:
+                    continue
+                selected_index = int(selected_indices.get(key, 0))
+                if selected_index < 0 or selected_index >= len(component_groups):
+                    selected_index = 0
+                normalized_lines = self._normalize_component_lines(component_groups[selected_index])
+                if normalized_lines:
+                    source_blocks.append(normalized_lines)
+        elif can_render_from_source:
             for key in self.game_rule_source_keys:
                 for component in self.components.get(key, []):
                     normalized_lines = self._normalize_component_lines(component)
@@ -221,6 +259,14 @@ class ComponentPool:
                 rendered_lines.append("")
             rendered_lines.extend(block)
         return rendered_lines
+
+    def resolve_evolving_static_keys(self, configured_keys: List[str] | None) -> List[str]:
+        """Return config-enabled static categories that actually exist in the pool."""
+        configured = [str(key) for key in (configured_keys or [])]
+        return [
+            key for key in self.static_component_keys
+            if key in configured and key not in self.NON_EVOLVING_STATIC_KEYS
+        ]
 
     def render_strategy_prompt_lines(
         self,
