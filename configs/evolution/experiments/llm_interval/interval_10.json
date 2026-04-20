@@ -1,7 +1,7 @@
 {
   "algorithm": "steady_state_nsga2",
   "population_size": 10,
-  "num_generations": 500,
+  "num_generations": 100,
   "convergence_generations": 100,
   "reproduction_operator_probs": {
     "crossover": 0.45,
@@ -36,7 +36,7 @@
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"
   ],
-  "llm_interval": 1,
+  "llm_interval": 10,
   "resource_advantage_alpha": 2.0,
   "resource_advantage_weights": {
     "base": 10.0,
