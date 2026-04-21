@@ -257,10 +257,10 @@ class EA:
                 f.write(f"Generation {generation+1}\n")
                 f.write(f"Best Individual: {best_individual}\n")
                 f.write(f"Prompt:\n{self._safe_construct_prompt(best_individual)}\n")
-                f.write(f"Fitness: {best_individual.fitness}\n")
+                f.write(f"Fitness: {self._display_fitness(best_individual)}\n")
                 f.write("\nPopulation:\n")
                 for ind in self.population:
-                    f.write(f"{ind} - Fitness: {ind.fitness}\n")
+                    f.write(f"{ind} - Fitness: {self._display_fitness(ind)}\n")
 
     def log_multi_objective_generation(self, log_dir: str, generation: int, pareto_fronts: List[List[Individual]]):
         """Write a human-readable Pareto-front snapshot for the NSGA-II workflow."""
@@ -271,12 +271,29 @@ class EA:
                 f.write(f"\nPareto Front {i+1}:\n")
                 for ind in front:
                     evaluation_mode = getattr(ind, "evaluation_mode", None) or "unknown"
-                    f.write(f"{ind} - Fitness: {ind.fitness} - EvalMode: {evaluation_mode}\n")
+                    f.write(
+                        f"{ind} - Fitness: {self._display_fitness(ind)} - EvalMode: {evaluation_mode}\n"
+                    )
                     f.write(f"Prompt:\n{self._safe_construct_prompt(ind)}\n")
             f.write("\nPopulation Snapshot:\n")
             for ind in self.population:
                 evaluation_mode = getattr(ind, "evaluation_mode", None) or "unknown"
-                f.write(f"{ind} - Fitness: {ind.fitness} - EvalMode: {evaluation_mode}\n")
+                f.write(
+                    f"{ind} - Fitness: {self._display_fitness(ind)} - EvalMode: {evaluation_mode}\n"
+                )
+
+    def _display_fitness(self, individual: Individual) -> list[float] | Any:
+        """Return the most current full fitness for human-readable experiment logs."""
+        last_surrogate_evaluation = getattr(individual, "last_surrogate_evaluation", None)
+        if isinstance(last_surrogate_evaluation, dict):
+            aggregated_surrogate = last_surrogate_evaluation.get("aggregated_fitness")
+            if isinstance(aggregated_surrogate, list) and aggregated_surrogate:
+                return aggregated_surrogate
+
+        fitness = getattr(individual, "fitness", None)
+        if fitness is not None:
+            return fitness
+        return []
 
     def _safe_construct_prompt(self, individual: Individual) -> str:
         """Render prompts for logs without breaking on legacy invalid component indices."""
