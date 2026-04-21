@@ -224,19 +224,23 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
     plt.figure(figsize=(10, 8))
     cmap = plt.get_cmap("viridis", max(1, len(generation_entries)))
 
+    max_gen = max(g[0] for g in generation_entries)
+
     for color_index, (generation_number, individuals, front_one_ids) in enumerate(generation_entries):
         if not individuals:
             continue
 
         color = cmap(color_index)
-        non_front_pairs: list[tuple[float, float]] = []
-        front_one_pairs: list[tuple[float, float]] = []
+        non_front_pairs = []
+        front_one_pairs = []
+
         for individual in individuals:
             x_value = _safe_float(individual.fitness[0]) if len(individual.fitness) > 0 else float("nan")
             y_value = _safe_float(individual.fitness[1]) if len(individual.fitness) > 1 else float("nan")
-            print(f"Gen {generation_number} Individual {getattr(individual, 'id', '')}: Fitness = ({x_value}, {y_value})")
+
             if math.isnan(x_value) or math.isnan(y_value):
                 continue
+
             if getattr(individual, "id", "") in front_one_ids:
                 front_one_pairs.append((x_value, y_value))
             else:
@@ -245,81 +249,85 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
         if not non_front_pairs and not front_one_pairs:
             continue
 
+        # 10 generation intervals with labels in the combined plot
+        label = f"Gen {generation_number}" if generation_number % 10 == 0 else None
+
         if non_front_pairs:
             plt.scatter(
-                [pair[0] for pair in non_front_pairs],
-                [pair[1] for pair in non_front_pairs],
+                [p[0] for p in non_front_pairs],
+                [p[1] for p in non_front_pairs],
                 color=color,
                 edgecolors="none",
                 alpha=0.8,
-                label=f"Gen {generation_number}",
-            )
-        elif front_one_pairs:
-            plt.scatter(
-                [pair[0] for pair in front_one_pairs],
-                [pair[1] for pair in front_one_pairs],
-                color=color,
-                edgecolors="black",
-                linewidths=1.0,
-                alpha=0.8,
-                label=f"Gen {generation_number}",
+                label=label,
             )
 
+        #  Front 1（
         if front_one_pairs:
+            front_label = "Front 1" if generation_number == max_gen else None
             plt.scatter(
-                [pair[0] for pair in front_one_pairs],
-                [pair[1] for pair in front_one_pairs],
+                [p[0] for p in front_one_pairs],
+                [p[1] for p in front_one_pairs],
                 color=color,
                 edgecolors="black",
                 linewidths=1.0,
                 alpha=0.95,
+                label=front_label,
             )
 
+        # ===== per-generation plot =====
         plt.figure(figsize=(8, 6))
+
         if non_front_pairs:
             plt.scatter(
-                [pair[0] for pair in non_front_pairs],
-                [pair[1] for pair in non_front_pairs],
+                [p[0] for p in non_front_pairs],
+                [p[1] for p in non_front_pairs],
                 color=color,
                 edgecolors="none",
                 alpha=0.8,
-                label=f"Gen {generation_number}",
             )
+
         if front_one_pairs:
             plt.scatter(
-                [pair[0] for pair in front_one_pairs],
-                [pair[1] for pair in front_one_pairs],
+                [p[0] for p in front_one_pairs],
+                [p[1] for p in front_one_pairs],
                 color=color,
                 edgecolors="black",
                 linewidths=1.0,
                 alpha=0.95,
                 label="Front 1",
             )
+
         plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
         plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
         plt.title(f"Generation {generation_number} Fitness Distribution")
         plt.xlim(*x_limits)
         plt.ylim(*y_limits)
         plt.grid(alpha=0.25)
+
         plt.legend(loc="best", fontsize=8)
+
         per_generation_path = output_dir / f"generation_{generation_number:03d}_fitness_scatter.png"
         plt.tight_layout()
         plt.savefig(per_generation_path, dpi=200)
         plt.close()
         figure_paths.append(per_generation_path)
 
+    # ===== combined plot =====
     plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
     plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
     plt.title("Generation Fitness Distribution")
     plt.xlim(*x_limits)
     plt.ylim(*y_limits)
     plt.grid(alpha=0.25)
+
     plt.legend(loc="best", fontsize=8, ncols=2)
 
     figure_path = output_dir / "generation_fitness_scatter_all.png"
     plt.tight_layout()
     plt.savefig(figure_path, dpi=200)
     plt.close()
+
     figure_paths.insert(0, figure_path)
     return figure_paths
 

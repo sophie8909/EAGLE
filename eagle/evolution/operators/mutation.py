@@ -216,6 +216,22 @@ class Mutation:
         )
         return updated_strategy, metadata, elapsed
 
+    @staticmethod
+    def rewrite_component_with_llm(component: str, rewrite_instruction: str) -> tuple[str, float]:
+        """Rewrite one strategy component through the LLM and time the call."""
+        start = time.perf_counter()
+        try:
+            rewritten_component = LLM.ollama_rewrite_component(
+                original_text=component,
+                instruction=rewrite_instruction,
+                model="llama3.1:8b",
+            )
+        except Exception:
+            rewritten_component = component
+        elapsed = time.perf_counter() - start
+        return rewritten_component, elapsed
+
+
     @classmethod
     def apply_identity_shift_rewrite(
         cls,
