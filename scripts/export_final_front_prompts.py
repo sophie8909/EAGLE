@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import json
 import sys
 from pathlib import Path
@@ -48,6 +49,96 @@ def load_final_fronts(log_dir: Path) -> tuple[list[list], str]:
     )
 
 
+def _copy_candidates_by_indices(candidates: list[list[str]], indices: set[int]) -> tuple[list[list[str]], dict[int, int]]:
+    """Copy selected candidate blocks and return old->new index mapping."""
+    sorted_indices = sorted(index for index in indices if 0 <= int(index) < len(candidates))
+    if not sorted_indices and candidates:
+        sorted_indices = [0]
+
+    copied_candidates: list[list[str]] = []
+    index_map: dict[int, int] = {}
+    for new_index, old_index in enumerate(sorted_indices):
+        copied_candidates.append(list(candidates[old_index]))
+        index_map[old_index] = new_index
+    return copied_candidates, index_map
+
+
+def build_next_experiment_bundle(
+    component_pool: ComponentPool,
+    individuals: list,
+    *,
+    source_config_payload: dict,
+) -> dict[str, object]:
+    """Build one reduced component pool plus remapped seeds for the exported individuals."""
+    reduced_components = deepcopy(component_pool.components)
+    remapped_seeds: list[dict[str, object]] = []
+    static_index_maps: dict[str, dict[int, int]] = {}
+    strategy_index_maps: dict[str, dict[int, int]] = {}
+
+    for category in component_pool.static_component_keys:
+        candidates = list(component_pool.components.get(category, []))
+        if not candidates:
+            continue
+        if category in component_pool.NON_EVOLVING_STATIC_KEYS:
+            reduced_components[category] = deepcopy(candidates)
+            static_index_maps[category] = {index: index for index in range(len(candidates))}
+            continue
+
+        used_indices = {
+            int(getattr(individual, "legacy_components", {}).get(category, 0))
+            for individual in individuals
+        }
+        reduced_components[category], static_index_maps[category] = _copy_candidates_by_indices(candidates, used_indices)
+
+    reduced_strategy = deepcopy(component_pool.components.get("strategy", {}))
+    for strategy_key in component_pool.strategy_keys:
+        candidates = list(component_pool.components.get("strategy", {}).get(strategy_key, []))
+        if not candidates:
+            continue
+        used_indices = {
+            int(getattr(individual, "strategy", {}).get(strategy_key, 0))
+            for individual in individuals
+            if strategy_key in getattr(individual, "strategy", {})
+        }
+        reduced_strategy[strategy_key], strategy_index_maps[strategy_key] = _copy_candidates_by_indices(candidates, used_indices)
+    reduced_components["strategy"] = reduced_strategy
+
+    for individual in individuals:
+        remapped_static_components = {}
+        for category, old_index in dict(getattr(individual, "legacy_components", {}) or {}).items():
+            if category not in static_index_maps:
+                continue
+            remapped_static_components[category] = static_index_maps[category].get(int(old_index), 0)
+
+        remapped_strategy = {}
+        for strategy_key, old_index in dict(getattr(individual, "strategy", {}) or {}).items():
+            if strategy_key not in strategy_index_maps:
+                continue
+            remapped_strategy[strategy_key] = strategy_index_maps[strategy_key].get(int(old_index), 0)
+
+        remapped_seeds.append(
+            {
+                "id": getattr(individual, "id", None),
+                "game_rule": 0,
+                "static_components": remapped_static_components,
+                "strategy": remapped_strategy,
+            }
+        )
+
+    next_config_payload = deepcopy(source_config_payload)
+    next_config_payload["initial_population_seeds"] = remapped_seeds
+    next_config_payload["population_size"] = max(
+        int(next_config_payload.get("population_size", len(remapped_seeds) or 1)),
+        len(remapped_seeds),
+    )
+
+    return {
+        "components": reduced_components,
+        "initial_population_seeds": remapped_seeds,
+        "next_experiment_config": next_config_payload,
+    }
+
+
 def export_front(
     *,
     log_dir: Path,
@@ -63,8 +154,14 @@ def export_front(
 
     component_pool = ComponentPool.from_json(str(component_pool_path))
     evaluator = Evaluator(component_pool, config=load_config_from_json(log_dir))
+    source_config_payload = json.loads((log_dir / "config.json").read_text(encoding="utf-8")) if (log_dir / "config.json").exists() else {}
     fronts, source_name = load_final_fronts(log_dir)
     selected_fronts = fronts[:max_front]
+    selected_individuals = [
+        individual
+        for front in selected_fronts
+        for individual in front
+    ]
     export_dir = output_root / log_dir.name / f"front_1_to_{max_front}"
     export_dir.mkdir(parents=True, exist_ok=True)
 
@@ -72,7 +169,7 @@ def export_front(
         "log_dir": str(log_dir),
         "source": source_name,
         "front_count": len(selected_fronts),
-        "individual_count": sum(len(front) for front in selected_fronts),
+        "individual_count": len(selected_individuals),
         "fronts": [],
     }
 
@@ -122,6 +219,23 @@ def export_front(
 
     (export_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    next_experiment_bundle = build_next_experiment_bundle(
+        component_pool,
+        selected_individuals,
+        source_config_payload=source_config_payload,
+    )
+    (export_dir / "components.json").write_text(
+        json.dumps(next_experiment_bundle["components"], indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    (export_dir / "initial_population_seeds.json").write_text(
+        json.dumps(next_experiment_bundle["initial_population_seeds"], indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    (export_dir / "next_experiment_config.json").write_text(
+        json.dumps(next_experiment_bundle["next_experiment_config"], indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
     return export_dir

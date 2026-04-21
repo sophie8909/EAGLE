@@ -1,0 +1,55 @@
+{
+  "algorithm": "steady_state_nsga2",
+  "population_size": 10,
+  "num_generations": 500,
+  "convergence_generations": 100,
+  "reproduction_operator_probs": {
+    "crossover": 0.45,
+    "mutation": 0.45,
+    "reflection": 0.1
+  },
+  "enable_reflection_operator": true,
+  "reflection_max_components_to_rewrite": 1,
+  "strategy_mutation": {
+    "pool_replacement": 0.4,
+    "identity_preserving_rewrite": 0.35,
+    "identity_shift_rewrite": 0.25
+  },
+  "selection_method": "random",
+  "tournament_size": 3,
+  "crossover": "uniform",
+  "crossover_repair_enabled": true,
+  "environment_selection_method": "elitism",
+  "steady_state_surrogate_offspring_count": 8,
+  "final_test_max_front": 1,
+  "include_strategy_identity_in_prompt": false,
+  "evolving_prompt_components": [
+    "role",
+    "game_rules",
+    "unit_types",
+    "building_types",
+    "game_state_format"
+  ],
+  "initial_population_seeds": [],
+  "run_time_per_game_sec": 500,
+  "real_eval_rate": 0.25,
+  "real_eval_opponents": [
+    "ai.abstraction.LightRush",
+    "ai.abstraction.HeavyRush"
+  ],
+  "llm_interval": 1,
+  "resource_advantage_alpha": 2.0,
+  "resource_advantage_weights": {
+    "base": 10.0,
+    "worker": 1.0,
+    "light": 2.0,
+    "heavy": 2.0,
+    "ranged": 2.0,
+    "resource": 1.0
+  },
+  "surrogate_version": "policy",
+  "surrogate_mode": "all_avg", 
+  "surrogate_recent_match_window": 10,
+  "surrogate_round_samples_per_match": 10,
+  "surrogate_log_dir": "logs/microrts"
+}
