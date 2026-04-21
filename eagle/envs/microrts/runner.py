@@ -25,9 +25,12 @@ def _prompt_path(project_root: Path | None = None) -> Path:
     return locate_microrts_root(project_root) / "prompt.txt"
 
 
-def _runtime_logs_dir(project_root: Path | None = None) -> Path:
+def _runtime_logs_dir(project_root: Path | None = None, runtime_logs_dir: Path | None = None) -> Path:
     """Return the MicroRTS runtime log directory."""
     ensure_project_directories()
+    if runtime_logs_dir is not None:
+        runtime_logs_dir.mkdir(parents=True, exist_ok=True)
+        return runtime_logs_dir
     return MICRORTS_LOGS_DIR if project_root is None else (project_root or PROJECT_ROOT).resolve() / "logs" / "microrts"
 
 
@@ -90,9 +93,13 @@ def _target_agent_name(ai1_class: str | None) -> str:
     return str(ai1_class).split(".")[-1]
 
 
-def _make_log_path(project_root: Path | None = None, prefix: str = "run") -> Path:
+def _make_log_path(
+    project_root: Path | None = None,
+    prefix: str = "run",
+    runtime_logs_dir: Path | None = None,
+) -> Path:
     """Create a timestamped runtime log path under the shared log directory."""
-    logs_dir = _runtime_logs_dir(project_root)
+    logs_dir = _runtime_logs_dir(project_root, runtime_logs_dir=runtime_logs_dir)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     normalized_prefix = str(prefix or "run").strip().lower()
     if normalized_prefix == "run":
@@ -168,6 +175,7 @@ def run_java_agent_game(
     prompt: str | None = None,
     compile_first: bool = True,
     log_prefix: str = "run",
+    runtime_logs_dir: Path | None = None,
 ) -> tuple[list[float], dict[str, Any]]:
     """Run one MicroRTS game with explicit Java agent classes."""
     project_root = (project_root or PROJECT_ROOT).resolve()
@@ -184,7 +192,7 @@ def run_java_agent_game(
             set_opponent(project_root, opponent)
         set_llm_interval(project_root, config.llm_interval)
 
-        log_path = _make_log_path(project_root, prefix=log_prefix)
+        log_path = _make_log_path(project_root, prefix=log_prefix, runtime_logs_dir=runtime_logs_dir)
         exit_code, timed_out, log_path_str, game_time_sec = launch_java_match(
             project_root=project_root,
             run_time_per_game_sec=int(config.run_time_per_game_sec),
@@ -220,6 +228,7 @@ def run_prompt_based_game(
     prompt: str,
     opponent: str | None,
     test: bool = False,
+    runtime_logs_dir: Path | None = None,
 ) -> tuple[list[float], dict[str, Any]]:
     """Run one real EAGLE-vs-opponent match driven by the prompt file."""
     return run_java_agent_game(
@@ -230,4 +239,5 @@ def run_prompt_based_game(
         prompt=prompt,
         compile_first=True,
         log_prefix="run" if not test else "run_test",
+        runtime_logs_dir=runtime_logs_dir,
     )

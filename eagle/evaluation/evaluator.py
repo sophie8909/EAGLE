@@ -49,11 +49,18 @@ from ..project import PROJECT_ROOT
 
 
 class Evaluator:
-    def __init__(self, component_pool: ComponentPool, config: EAConfig | None = None):
+    def __init__(
+        self,
+        component_pool: ComponentPool,
+        config: EAConfig | None = None,
+        runtime_logs_dir: str | Path | None = None,
+    ):
         """Store shared dependencies used by both real and surrogate evaluation."""
         self.component_pool = component_pool
         self.config = config or EAConfig()
         self.repo_root = PROJECT_ROOT
+        self.runtime_logs_dir = Path(runtime_logs_dir) if runtime_logs_dir is not None else None
+        setattr(self.config, "runtime_logs_dir", self.runtime_logs_dir)
 
     def _parse_winner_info(self, log_content: str) -> dict[str, Any]:
         """Delegate winner extraction to the shared fitness calculator helper."""
@@ -335,6 +342,7 @@ class Evaluator:
 
     def set_llm_interval(self, llm_interval: int) -> None:
         """Update the MicroRTS config so the next run uses the requested LLM interval."""
+        self.config.llm_interval = int(llm_interval)
         set_llm_interval(self.repo_root, llm_interval)
 
     def launch_simulation(self, test: bool=False):
@@ -372,6 +380,7 @@ class Evaluator:
             if (self.repo_root / "third_party" / "microrts" / "prompt.txt").exists()
             else "",
             opponent=opponent,
+            runtime_logs_dir=self.runtime_logs_dir,
         )
 
     def surrogate_evaluation(

@@ -635,6 +635,7 @@ def _run_eagle_match(
         prompt=prompt,
         opponent=opponent,
         test=True,
+        runtime_logs_dir=evaluator.runtime_logs_dir,
     )
     elapsed = time.perf_counter() - started
     evaluator.config.llm_interval = original_interval
@@ -736,7 +737,7 @@ def run_surrogate_validation_experiment(
     config = config or EAConfig()
     log_dir = _make_experiment_log_dir()
     component_pool = ComponentPool.from_json(_resolve_component_pool_path())
-    evaluator = Evaluator(component_pool, config)
+    evaluator = Evaluator(component_pool, config, runtime_logs_dir=log_dir / "microrts")
     recorder = FitnessRecorder(log_dir, config)
 
     opponents = list(opponents or OPPONENT_LIST)

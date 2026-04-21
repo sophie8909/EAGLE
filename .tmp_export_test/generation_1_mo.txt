@@ -1,0 +1,6 @@
+﻿Generation 1 - Multi-objective Optimization
+
+Pareto Front 1:
+Individual(id=ind-42, game_rule=0, static_components={'role': 0}, strategy={'strategy_identity': 1, 'phase_transition_rule': 0, 'early_game_plan': 1, 'mid_game_plan': 0, 'late_game_plan': 0, 'decision_priority': 0, 'tactical_heuristics': 0, 'anti_stall_rules': 0}) - Fitness: [1.0, 0.5, 0.2] - EvalMode: real
+Prompt:
+placeholder

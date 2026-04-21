@@ -51,6 +51,7 @@ def simulate_games(
             else "",
             opponent=opponent,
             test=test,
+            runtime_logs_dir=getattr(config, "runtime_logs_dir", None),
         )
 
 
@@ -75,6 +76,7 @@ def simulate_surrogate_games(
             ai1_class=ai1_class,
             surrogate_spec=surrogate_spec,
             test=test,
+            runtime_logs_dir=getattr(config, "runtime_logs_dir", None),
         )
 
 

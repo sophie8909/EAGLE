@@ -21,7 +21,7 @@ def _resolve_final_test_max_front(config: EAConfig) -> int | None:
     if configured_value is None:
         return 1
     if int(configured_value) < 1:
-        return None
+        return 0
     return int(configured_value)
 
 
@@ -122,8 +122,25 @@ def run_final_test_suite(
     evaluator = Evaluator(
         ComponentPool.from_json(str(experiment_log_dir / "component_pool.json")),
         runtime_config,
+        runtime_logs_dir=experiment_log_dir / "microrts",
     )
     final_test_max_front = _resolve_final_test_max_front(base_config)
+    if final_test_max_front == 0:
+        print("[Final Test] skipped because final_test_max_front=0", flush=True)
+        return {
+            "generation": None,
+            "generation_log": None,
+            "selected_individual_count": 0,
+            "selection_rule": "skipped_final_test_max_front_0",
+            "test_config_path": str(
+                Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
+            ),
+            "run_time_per_game_sec": int(runtime_config.run_time_per_game_sec),
+            "interval_runs": [],
+            "results": {},
+            "skipped": True,
+            "skip_reason": "final_test_max_front=0",
+        }
 
     generation_log_path = _resolve_final_generation_log_path(experiment_log_dir, last_gen)
     individuals_by_front = parse_individuals_from_ea_log(str(generation_log_path))
@@ -166,18 +183,41 @@ def run_final_test_suite(
         "results": {},
     }
 
-    for individual in selected_individuals:
+    print(
+        "[Final Test] start: "
+        f"generation={generation_number}, "
+        f"selected_individuals={len(selected_individuals)}, "
+        f"interval_runs={len(interval_runs)}",
+        flush=True,
+    )
+
+    for individual_index, individual in enumerate(selected_individuals, start=1):
+        print(
+            f"[Final Test] individual {individual_index}/{len(selected_individuals)} "
+            f"(id={individual.id})",
+            flush=True,
+        )
         prompt = evaluator.construct_prompt(individual)
         evaluator.save_prompt(prompt)
 
-        for interval_run in interval_runs:
+        for interval_index, interval_run in enumerate(interval_runs, start=1):
             llm_interval = int(interval_run["llm_interval"])
+            print(
+                f"[Final Test] individual {individual_index}/{len(selected_individuals)} "
+                f"interval {interval_index}/{len(interval_runs)} "
+                f"({interval_run['label']}, llm_interval={llm_interval})",
+                flush=True,
+            )
             evaluator.set_llm_interval(llm_interval)
 
-            for opponent in OPPONENT_LIST:
+            for opponent_index, opponent in enumerate(OPPONENT_LIST, start=1):
                 print(
-                    "Testing against opponent: "
-                    f"{opponent} (mode={interval_run['label']}, llm_interval={llm_interval})"
+                    "[Final Test] "
+                    f"individual {individual_index}/{len(selected_individuals)} "
+                    f"interval {interval_index}/{len(interval_runs)} "
+                    f"opponent {opponent_index}/{len(OPPONENT_LIST)}: "
+                    f"{opponent} (mode={interval_run['label']}, llm_interval={llm_interval})",
+                    flush=True,
                 )
                 evaluator.set_opponent(opponent)
                 fitness_score, metadata = evaluator.simulate_games(opponent, {})
@@ -196,4 +236,5 @@ def run_final_test_suite(
                 with open(experiment_log_dir / "final_test_results.json", "w", encoding="utf-8") as f:
                     json.dump(results, f, indent=4)
 
+    print("[Final Test] complete", flush=True)
     return results

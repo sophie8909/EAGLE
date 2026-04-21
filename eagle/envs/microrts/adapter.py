@@ -31,6 +31,7 @@ def run_surrogate_validation_case(
     ai1_class: str = "ai.abstraction.EAGLESurrogate",
     surrogate_spec: dict[str, object] | None = None,
     test: bool = False,
+    runtime_logs_dir: Path | None = None,
 ) -> tuple[list[float], dict[str, Any]]:
     """Render one surrogate Java agent and run a validation match."""
     root = (project_root or PROJECT_ROOT).resolve()
@@ -44,6 +45,7 @@ def run_surrogate_validation_case(
         prompt=prompt,
         compile_first=True,
         log_prefix="run_surrogate" if not test else "run_test_surrogate",
+        runtime_logs_dir=runtime_logs_dir,
     )
 
 

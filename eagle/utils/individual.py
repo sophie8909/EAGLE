@@ -123,6 +123,57 @@ class Individual:
             for strategy_key in component_pool.strategy_keys
         }
 
+    def initialize_from_seed(
+        self,
+        component_pool: ComponentPool,
+        seed: dict[str, Any],
+        *,
+        static_component_keys: list[str] | None = None,
+        fill_missing_random: bool = True,
+    ) -> None:
+        """Initialize one individual from a partial seed and fill the rest from the pool."""
+        seed_payload = dict(seed or {})
+        reserved_keys = {"id", "game_rule", "static_components", "strategy"}
+        direct_static_indices = {
+            key: value
+            for key, value in seed_payload.items()
+            if key not in reserved_keys and key in component_pool.static_component_keys
+        }
+        static_indices = dict(seed_payload.get("static_components") or {})
+        static_indices.update(direct_static_indices)
+        strategy_indices = dict(seed_payload.get("strategy") or {})
+
+        self.game_rule = int(seed_payload.get("game_rule", 0))
+        component_pool.get_component("game_rule", self.game_rule)
+
+        self.legacy_components = {}
+        selected_static_keys = set(component_pool.static_component_keys)
+        selected_static_keys.update(str(key) for key in (static_component_keys or []))
+        selected_static_keys.update(str(key) for key in static_indices.keys())
+
+        for category in sorted(selected_static_keys):
+            if category not in component_pool.static_component_keys:
+                continue
+            if category in static_indices:
+                component_index = int(static_indices[category])
+            elif fill_missing_random:
+                component_index = component_pool.get_random_component_index(category)
+            else:
+                continue
+            component_pool.get_component(category, component_index)
+            self.set_component_index(category, component_index)
+
+        self.strategy = {}
+        for strategy_key in component_pool.strategy_keys:
+            if strategy_key in strategy_indices:
+                component_index = int(strategy_indices[strategy_key])
+            elif fill_missing_random:
+                component_index = component_pool.get_random_strategy_component_index(strategy_key)
+            else:
+                continue
+            component_pool.get_strategy_component(strategy_key, component_index)
+            self.strategy[strategy_key] = component_index
+
     def get_component_index(self, category: str) -> int:
         """Read one component index using either the new or legacy storage layout."""
         if category == "game_rule":

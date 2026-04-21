@@ -9,6 +9,7 @@ mutation and crossover can recombine higher-level plans more cleanly.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Dict, List
 
 class ComponentPool:
@@ -295,3 +296,53 @@ class ComponentPool:
             rendered_lines.extend(normalized_lines)
 
         return rendered_lines
+
+    def describe_individual_components(
+        self,
+        individual,
+        *,
+        include_strategy_identity: bool = True,
+    ) -> Dict[str, Any]:
+        """Return the concrete component text selected by one individual."""
+        static_payload: Dict[str, Any] = {}
+        for key in self.game_rule_source_keys:
+            if key == "game_rule":
+                static_payload[key] = {
+                    "index": int(getattr(individual, "game_rule", 0)),
+                    "lines": list(self.get_component("game_rule", int(getattr(individual, "game_rule", 0)))),
+                    "text": self.get_component_str("game_rule", int(getattr(individual, "game_rule", 0))),
+                }
+                continue
+
+            candidates = self.components.get(key, [])
+            if not candidates:
+                continue
+            selected_index = int(getattr(individual, "legacy_components", {}).get(key, 0))
+            lines = list(self.get_component(key, selected_index))
+            static_payload[key] = {
+                "index": selected_index,
+                "lines": lines,
+                "text": "\n".join(lines),
+            }
+
+        strategy_payload: Dict[str, Any] = {}
+        strategy_indices = dict(getattr(individual, "strategy", {}) or {})
+        for strategy_key in self.strategy_keys:
+            if strategy_key == "strategy_identity" and not include_strategy_identity:
+                continue
+            if strategy_key not in strategy_indices:
+                continue
+            selected_index = int(strategy_indices[strategy_key])
+            lines = list(self.get_strategy_component(strategy_key, selected_index))
+            strategy_payload[strategy_key] = {
+                "index": selected_index,
+                "lines": lines,
+                "text": "\n".join(lines),
+            }
+
+        return {
+            "individual_id": getattr(individual, "id", None),
+            "game_rule_source_keys": list(self.game_rule_source_keys),
+            "static_components": static_payload,
+            "strategy_components": strategy_payload,
+        }

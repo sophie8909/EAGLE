@@ -73,12 +73,27 @@ class EA:
         evolving_static_keys = self.component_pool.resolve_evolving_static_keys(
             self.config.evolving_prompt_components
         )
-        for _ in range(self.config.population_size):
-            individual = Individual() 
-            individual.initialize_randomly(
-                self.component_pool,
-                static_component_keys=evolving_static_keys,
+        initial_population_seeds = list(getattr(self.config, "initial_population_seeds", []) or [])
+        if len(initial_population_seeds) > self.config.population_size:
+            raise ValueError(
+                "initial_population_seeds cannot exceed population_size: "
+                f"{len(initial_population_seeds)} > {self.config.population_size}"
             )
+
+        for index in range(self.config.population_size):
+            seed = initial_population_seeds[index] if index < len(initial_population_seeds) else None
+            individual = Individual(id=seed.get("id") if isinstance(seed, dict) else None)
+            if seed is not None:
+                individual.initialize_from_seed(
+                    self.component_pool,
+                    seed,
+                    static_component_keys=evolving_static_keys,
+                )
+            else:
+                individual.initialize_randomly(
+                    self.component_pool,
+                    static_component_keys=evolving_static_keys,
+                )
             individuals.append(individual)
         return individuals
     
@@ -94,6 +109,10 @@ class EA:
                 with timer("initial_population_evaluation_time", {}):
                     for index in range(start_initial, len(self.population)):
                         individual = self.population[index]
+                        print(
+                            f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
+                            flush=True,
+                        )
                         self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
                         self.save_checkpoint(
                             self.build_checkpoint_state(
@@ -106,6 +125,10 @@ class EA:
             # Phase 0b: fresh run; fully evaluate generation -1 before evolution starts.
             with timer("initial_population_evaluation_time", {}):
                 for index, individual in enumerate(self.population):
+                    print(
+                        f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
+                        flush=True,
+                    )
                     self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
                     # Checkpoint meaning:
                     # - phase="initial_population" means generation -1 is still
@@ -126,6 +149,7 @@ class EA:
             generation=-1,
             meta={"completed_generation": -1},
         )
+        print("[Initial Population] complete", flush=True)
         self._log_initial_population_snapshot()
         self.save_checkpoint(self.checkpoint)
        
@@ -342,7 +366,8 @@ class EA:
     
     def real_evaluation(self, individual: Individual, opponent: str, generation: int | None = None):
         """Run the selected child against all configured real-eval opponents."""
-        evaluator = Evaluator(self.component_pool, self.config)
+        runtime_logs_dir = (self.current_log_dir / "microrts") if self.current_log_dir is not None else None
+        evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
         configured_opponents = list(getattr(self.config, "real_eval_opponents", []) or [])
         real_eval_opponents = configured_opponents or list(DEFAULT_REAL_EVAL_OPPONENTS)
 
@@ -399,7 +424,8 @@ class EA:
     
     def surrogate_evaluation(self, individual: Individual, generation: int | None = None):
         """Run the configured cheap evaluator instead of a full game simulation."""
-        evaluator = Evaluator(self.component_pool, self.config)
+        runtime_logs_dir = (self.current_log_dir / "microrts") if self.current_log_dir is not None else None
+        evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
         surrogate_mode = str(self.config.surrogate_mode).strip().lower()
 
         if surrogate_mode == "random":
@@ -482,5 +508,8 @@ class EA:
     
     def run_final_test(self):
         """Replay the last saved generation against the configured final-test opponents."""
+        if self.config.final_test_max_front is not None and int(self.config.final_test_max_front) < 1:
+            print("[Final Test] skipped because final_test_max_front=0", flush=True)
+            return
         run_final_test_suite(self.current_log_dir, self.current_generation, self.config)
 

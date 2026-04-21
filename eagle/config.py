@@ -87,6 +87,9 @@ class EAConfig:
     evolving_prompt_components: list[str] = field(
         default_factory=lambda: list(_default_config_value("evolving_prompt_components"))
     )
+    initial_population_seeds: list[dict[str, Any]] = field(
+        default_factory=lambda: list(_default_config_value("initial_population_seeds"))
+    )
 
     run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
     real_eval_rate: float = field(default_factory=lambda: float(_default_config_value("real_eval_rate")))
@@ -131,6 +134,14 @@ class EAConfig:
         if not isinstance(self.evolving_prompt_components, list):
             raise ValueError("evolving_prompt_components must be a list of component keys.")
         self.evolving_prompt_components = [str(key) for key in self.evolving_prompt_components]
+        if not isinstance(self.initial_population_seeds, list):
+            raise ValueError("initial_population_seeds must be a list of seed objects.")
+        normalized_seeds: list[dict[str, Any]] = []
+        for seed in self.initial_population_seeds:
+            if not isinstance(seed, dict):
+                raise ValueError("Each initial_population_seeds entry must be a dict.")
+            normalized_seeds.append(dict(seed))
+        self.initial_population_seeds = normalized_seeds
 
         if self.crossover != "uniform":
             raise ValueError(
@@ -212,6 +223,7 @@ class EAConfig:
             "final_test_max_front": self.final_test_max_front,
             "include_strategy_identity_in_prompt": self.include_strategy_identity_in_prompt,
             "evolving_prompt_components": list(self.evolving_prompt_components),
+            "initial_population_seeds": deepcopy(self.initial_population_seeds),
             "real_eval_opponents": list(self.real_eval_opponents),
         }
 

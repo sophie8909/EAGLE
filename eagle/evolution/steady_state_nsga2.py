@@ -262,6 +262,10 @@ class SteadyStateNSGA2(NSGA2):
         )
 
         for generation in range(start_generation, self.config.num_generations):
+            print(
+                f"[Generation {generation + 1}/{self.config.num_generations}] start",
+                flush=True,
+            )
             # Phase 1: one steady-state generation = one single-child update.
             generation_stats: dict[str, float] = {}
             same_generation_checkpoint = self.checkpoint.get("generation") == generation
@@ -290,12 +294,21 @@ class SteadyStateNSGA2(NSGA2):
                     candidates=candidate_offspring,
                 )
                 candidate_count_for_checkpoint = len(candidate_offspring)
+                print(
+                    f"[Generation {generation + 1}] surrogate candidates ready: "
+                    f"{candidate_count_for_checkpoint}",
+                    flush=True,
+                )
                 child_candidate = self._select_best_half_candidate(candidate_offspring)
                 print(child_candidate)
                 child = random.choice(child_candidate)
                 offspring = [child]
 
                 # Step 2: only the best surrogate candidate receives real evaluation.
+                print(
+                    f"[Generation {generation + 1}] running real evaluation for selected child",
+                    flush=True,
+                )
                 with timer("offspring_evaluation_time", generation_stats):
                     self.real_evaluation(
                         child,
@@ -354,6 +367,10 @@ class SteadyStateNSGA2(NSGA2):
             pareto_fronts = self._assign_rank_and_crowding(self.population)
 
             self._log_generation(generation, generation_stats, offspring, pareto_fronts, log_dir)
+            print(
+                f"[Generation {generation + 1}] logged and checkpointed",
+                flush=True,
+            )
 
             # Phase 3: mark this outer generation as fully completed.
             self.save_checkpoint(
