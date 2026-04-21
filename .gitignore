@@ -40,3 +40,5 @@ resources/config.properties
 
 third_party/microrts/resources/config.properties
 /batch_logs
+/prompt
+/prompt

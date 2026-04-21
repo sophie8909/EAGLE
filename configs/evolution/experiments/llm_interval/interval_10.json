@@ -1,8 +1,8 @@
 {
   "algorithm": "steady_state_nsga2",
   "population_size": 10,
-  "num_generations": 100,
-  "convergence_generations": 100,
+  "num_generations": 20,
+  "convergence_generations": 20,
   "reproduction_operator_probs": {
     "crossover": 0.45,
     "mutation": 0.45,
@@ -20,7 +20,7 @@
   "crossover": "uniform",
   "crossover_repair_enabled": true,
   "environment_selection_method": "elitism",
-  "steady_state_surrogate_offspring_count": 8,
+  "steady_state_surrogate_offspring_count": 4,
   "final_test_max_front": 1,
   "include_strategy_identity_in_prompt": false,
   "evolving_prompt_components": [
@@ -47,8 +47,73 @@
     "resource": 1.0
   },
   "surrogate_version": "policy",
-  "surrogate_mode": "all_avg", 
+  "surrogate_mode": "all_avg",
   "surrogate_recent_match_window": 10,
   "surrogate_round_samples_per_match": 10,
-  "surrogate_log_dir": "logs/microrts"
+  "surrogate_log_dir": "logs/microrts",
+  "initial_population_seeds": [
+    {
+      "id": "ind-0",
+      "game_rule": 0,
+      "static_components": {
+        "building_types": 0,
+        "game_rules": 0,
+        "game_state_format": 0,
+        "role": 0,
+        "unit_types": 0
+      },
+      "strategy": {
+        "phase_transition_rule": 0,
+        "early_game_plan": 0,
+        "mid_game_plan": 0,
+        "late_game_plan": 0,
+        "decision_priority": 0,
+        "tactical_heuristics": 1,
+        "anti_stall_rules": 0,
+        "strategy_identity": 0
+      }
+    },
+    {
+      "id": "ind-1",
+      "game_rule": 0,
+      "static_components": {
+        "role": 0,
+        "game_rules": 0,
+        "unit_types": 0,
+        "building_types": 0,
+        "game_state_format": 0
+      },
+      "strategy": {
+        "phase_transition_rule": 1,
+        "early_game_plan": 1,
+        "mid_game_plan": 1,
+        "late_game_plan": 1,
+        "decision_priority": 1,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 0,
+        "strategy_identity": 1
+      }
+    },
+    {
+      "id": "ind-2",
+      "game_rule": 0,
+      "static_components": {
+        "building_types": 0,
+        "game_rules": 0,
+        "game_state_format": 0,
+        "role": 0,
+        "unit_types": 0
+      },
+      "strategy": {
+        "phase_transition_rule": 2,
+        "early_game_plan": 2,
+        "mid_game_plan": 2,
+        "late_game_plan": 2,
+        "decision_priority": 2,
+        "tactical_heuristics": 0,
+        "anti_stall_rules": 0,
+        "strategy_identity": 1
+      }
+    }
+  ]
 }
