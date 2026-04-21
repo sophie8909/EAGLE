@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from .config import EAConfig, load_config_from_json
+from pathlib import Path
+
+from .config import EAConfig, load_config_from_json, resolve_component_pool_path
 from .project import DEFAULT_EVOLUTION_CONFIG_PATH, EAGLE_LOGS_DIR, PROMPTS_DIR
 from .utils.component_pool import ComponentPool
 
@@ -33,6 +35,15 @@ def _resolve_component_pool_path() -> str:
     """Resolve the prompt component JSON relative to the repository root."""
     component_pool_path = PROMPTS_DIR / "components.json"
     return str(component_pool_path)
+
+
+def _resolve_component_pool_path_from_config(config: EAConfig, args, resume_log_dir: str | None) -> str:
+    """Resolve the component-pool path from runtime config with sensible relative-path bases."""
+    if args.config:
+        return str(resolve_component_pool_path(config, base_dir=Path(args.config).resolve().parent))
+    if resume_log_dir:
+        return str(resolve_component_pool_path(config, base_dir=resume_log_dir))
+    return str(resolve_component_pool_path(config))
 
 
 def _resolve_base_config(args, resume_log_dir: str | None) -> EAConfig:
@@ -136,7 +147,9 @@ def main() -> None:
     config = _build_runtime_config(args, resume_log_dir)
     opponent_list = _resolve_opponent_list(args)
     should_run_final_test = _should_run_final_test(args, config)
-    component_pool = ComponentPool.from_json(_resolve_component_pool_path())
+    component_pool = ComponentPool.from_json(
+        _resolve_component_pool_path_from_config(config, args, resume_log_dir)
+    )
     if config.algorithm == "ga":
         from .evolution.ga import GA
 

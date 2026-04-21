@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from .project import DEFAULT_EVOLUTION_CONFIG_PATH
+from .project import DEFAULT_EVOLUTION_CONFIG_PATH, PROJECT_ROOT
 
 
 @lru_cache(maxsize=1)
@@ -87,6 +87,7 @@ class EAConfig:
     evolving_prompt_components: list[str] = field(
         default_factory=lambda: list(_default_config_value("evolving_prompt_components"))
     )
+    component_pool_path: str = field(default_factory=lambda: str(_default_config_value("component_pool_path")))
     initial_population_seeds: list[dict[str, Any]] = field(
         default_factory=lambda: list(_default_config_value("initial_population_seeds"))
     )
@@ -134,6 +135,9 @@ class EAConfig:
         if not isinstance(self.evolving_prompt_components, list):
             raise ValueError("evolving_prompt_components must be a list of component keys.")
         self.evolving_prompt_components = [str(key) for key in self.evolving_prompt_components]
+        self.component_pool_path = str(self.component_pool_path or "").strip()
+        if not self.component_pool_path:
+            raise ValueError("component_pool_path must be a non-empty path.")
         if not isinstance(self.initial_population_seeds, list):
             raise ValueError("initial_population_seeds must be a list of seed objects.")
         normalized_seeds: list[dict[str, Any]] = []
@@ -223,6 +227,7 @@ class EAConfig:
             "final_test_max_front": self.final_test_max_front,
             "include_strategy_identity_in_prompt": self.include_strategy_identity_in_prompt,
             "evolving_prompt_components": list(self.evolving_prompt_components),
+            "component_pool_path": self.component_pool_path,
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
             "real_eval_opponents": list(self.real_eval_opponents),
         }
@@ -360,6 +365,18 @@ def clone_config(config: EAConfig) -> EAConfig:
         for field_name in config.__dataclass_fields__
     }
     return load_config_payload(payload)
+
+
+def resolve_component_pool_path(config: EAConfig, *, base_dir: str | Path | None = None) -> Path:
+    """Resolve the configured component pool path against one base directory or the repo root."""
+    configured_path = Path(str(config.component_pool_path))
+    if configured_path.is_absolute():
+        return configured_path
+    if base_dir is not None:
+        base_candidate = Path(base_dir).resolve() / configured_path
+        if base_candidate.exists():
+            return base_candidate
+    return PROJECT_ROOT / configured_path
 
 
 def load_config_from_optional_json(path_or_dir: str | Path | None) -> EAConfig:

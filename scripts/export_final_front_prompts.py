@@ -221,11 +221,13 @@ def export_front(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+    exported_component_pool_relative_path = str((export_dir / "components.json").relative_to(PROJECT_ROOT)).replace("\\", "/")
     next_experiment_bundle = build_next_experiment_bundle(
         component_pool,
         selected_individuals,
         source_config_payload=source_config_payload,
     )
+    next_experiment_bundle["next_experiment_config"]["component_pool_path"] = exported_component_pool_relative_path
     (export_dir / "components.json").write_text(
         json.dumps(next_experiment_bundle["components"], indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
