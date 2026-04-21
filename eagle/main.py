@@ -77,6 +77,15 @@ def _resolve_opponent_list(args) -> list[str]:
     return list(OPPONENT_LIST)
 
 
+def _should_run_final_test(args, config: EAConfig) -> bool:
+    """Return whether the configured run should enter the final-test stage."""
+    if args.skip_final_test:
+        return False
+    if config.final_test_max_front is not None and int(config.final_test_max_front) < 1:
+        return False
+    return True
+
+
 def main() -> None:
     """Run or resume the configured EAGLE evolutionary search."""
     import argparse
@@ -126,6 +135,7 @@ def main() -> None:
 
     config = _build_runtime_config(args, resume_log_dir)
     opponent_list = _resolve_opponent_list(args)
+    should_run_final_test = _should_run_final_test(args, config)
     component_pool = ComponentPool.from_json(_resolve_component_pool_path())
     if config.algorithm == "ga":
         from .evolution.ga import GA
@@ -143,9 +153,11 @@ def main() -> None:
             nsga2.attach_log_dir(resume_log_dir)
         nsga2.save_config(nsga2.create_log_folder())
         nsga2.run()
-        if not args.skip_final_test:
+        if should_run_final_test:
             print("Running final test for NSGA2...")
             nsga2.run_final_test()
+        else:
+            print("Skipping final test.")
     elif config.algorithm == "steady_state_nsga2":
         from .evolution.steady_state_nsga2 import SteadyStateNSGA2
 
@@ -154,9 +166,11 @@ def main() -> None:
             steady_state_nsga2.attach_log_dir(resume_log_dir)
         steady_state_nsga2.save_config(steady_state_nsga2.create_log_folder())
         steady_state_nsga2.run()
-        if not args.skip_final_test:
+        if should_run_final_test:
             print("Running final test for Steady-State NSGA2...")
             steady_state_nsga2.run_final_test()
+        else:
+            print("Skipping final test.")
     else:
         raise ValueError(f"Unsupported algorithm: {config.algorithm}")
 
