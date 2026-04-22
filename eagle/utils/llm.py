@@ -67,6 +67,36 @@ class LLM:
             return None
 
     @staticmethod
+    def ollama_generate_strict_json(
+        prompt: str,
+        model: str = "llama3.1:8b",
+        temperature: float = 0.1,
+    ) -> dict | None:
+        """Ask Ollama for one strict JSON object and return the parsed mapping."""
+        try:
+            response = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json",
+                    "options": {
+                        "temperature": temperature,
+                    },
+                },
+                timeout=120,
+            )
+            response.raise_for_status()
+            data = response.json()
+            raw_output = data.get("response", "").strip()
+            if not raw_output:
+                return None
+            return LLM._extract_first_json_object(raw_output)
+        except Exception:
+            return None
+
+    @staticmethod
     def ollama_generate_surrogate_strategy_spec(
         strategy_prompt: str,
         model: str = "llama3.1:8b",

@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
-from ...utils.llm import LLM
+from ...envs.microrts.runner import run_java_agent_game
+from ...project import PROJECT_ROOT
 from ...utils.log_parse import sample_recent_dynamic_prompts
 from ...utils.fitness_utils import normalize_fitness
+from ..java.compiler import compile_java_agent
+from ..java.renderer import render_java_agent
+from ..strategy.extractor import extract_strategy
 from .single_round import evaluate_eagle_single_round
 
 # The original prompt-only LLM surrogate path is intentionally disabled.
@@ -152,22 +157,93 @@ def surrogate_evaluation_policy(
     simulate_policy_surrogate_games_fn,
 ) -> list[float]:
     """Score a prompt with policy Java-agent win/resource signals plus LLM round accuracy."""
-    java_fitness, metadata = simulate_policy_surrogate_games_fn(
-        repo_root,
-        config,
+    fitness = evaluate_with_java_surrogate(
         prompt,
-        opponent,
-        {},
+        repo_root=repo_root,
+        config=config,
+        opponent=opponent,
     )
-    fitness = compose_three_part_surrogate_fitness(prompt, repo_root, config, java_fitness)
-    compiled_policy = metadata.get("compiled_policy") if metadata else None
     print(
         "Surrogate policy-agent evaluation: "
-        f"policy={compiled_policy}, "
         f"win_score={fitness[0] if fitness else 0.0}, "
         f"game_round_score={fitness[1] if len(fitness) > 1 else 0.0}, "
         f"resource_advantage_score={fitness[2] if len(fitness) > 2 else 0.0}, "
-        f"log={metadata.get('log_path') if metadata else None}"
+        "log=java_template_pipeline"
     )
     return fitness
+
+
+_COMPILED_AGENT_CACHE: dict[str, dict[str, str]] = {}
+
+
+def very_low_fitness() -> list[float]:
+    """Return the worst surrogate fitness used for fail-closed execution."""
+    return [0.0, 0.0, 0.0]
+
+
+def generate_unique_class_name(prompt: str) -> str:
+    """Build one deterministic generated class name from the prompt contents."""
+    digest = hashlib.sha1(prompt.encode("utf-8")).hexdigest()[:12]
+    return f"EAGLETemplateAgent_{digest}"
+
+
+def _cache_root(repo_root: Path) -> Path:
+    """Return the filesystem location used for generated Java agent caching."""
+    cache_root = repo_root / "logs" / "surrogate_java_cache"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    return cache_root
+
+
+def _cached_class_available(repo_root: Path, class_name: str) -> bool:
+    """Return whether the compiled class already exists in the MicroRTS output tree."""
+    class_file = repo_root / "third_party" / "microrts" / "bin" / "ai" / "abstraction" / f"{class_name}.class"
+    return class_file.exists()
+
+
+def evaluate_with_java_surrogate(
+    prompt: str,
+    repo_root: Path | None = None,
+    config=None,
+    opponent: str | None = None,
+) -> list[float]:
+    """
+    Full pipeline:
+    prompt → strategy → Java → compile → run → fitness
+    """
+    resolved_repo_root = (repo_root or PROJECT_ROOT).resolve()
+    cache_key = hashlib.sha1(prompt.encode("utf-8")).hexdigest()
+    cache_root = _cache_root(resolved_repo_root)
+
+    try:
+        cached_entry = _COMPILED_AGENT_CACHE.get(cache_key)
+        if cached_entry is not None and _cached_class_available(resolved_repo_root, cached_entry["class_name"]):
+            class_name = cached_entry["class_name"]
+        else:
+            strategy = extract_strategy(prompt)
+            class_name = generate_unique_class_name(prompt)
+            java_code = render_java_agent(strategy, class_name)
+            tmp_dir = cache_root / cache_key
+            success = compile_java_agent(java_code, class_name, str(tmp_dir))
+            if not success:
+                return very_low_fitness()
+            _COMPILED_AGENT_CACHE[cache_key] = {
+                "class_name": class_name,
+                "tmp_dir": str(tmp_dir),
+            }
+
+        java_fitness, metadata = run_java_agent_game(
+            project_root=resolved_repo_root,
+            config=config,
+            ai1_class=f"ai.abstraction.{class_name}",
+            opponent=opponent,
+            prompt=prompt,
+            compile_first=False,
+            log_prefix="run_surrogate",
+            runtime_logs_dir=getattr(config, "runtime_logs_dir", None),
+        )
+        if metadata.get("exit_code", 1) != 0:
+            return very_low_fitness()
+        return compose_three_part_surrogate_fitness(prompt, resolved_repo_root, config, normalize_fitness(java_fitness))
+    except Exception:
+        return very_low_fitness()
 

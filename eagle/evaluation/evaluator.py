@@ -36,11 +36,11 @@ from ..utils.fitness_calculator import (
     win_loss_evaluation,
 )
 from ..surrogate.eval.evaluator import (
+    evaluate_with_java_surrogate,
     surrogate_evaluation_game_round,
-    surrogate_evaluation_policy,
 )
 from ..evolution.operators.reflection import Reflection, read_max_turn_hint
-from ..utils.simulation_runner import simulate_policy_surrogate_games, simulate_surrogate_games
+from ..utils.simulation_runner import simulate_surrogate_games
 from ..utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
 from ..utils.fitness_recorder import FitnessRecorder
 from ..utils.fitness_utils import normalize_fitness
@@ -427,11 +427,10 @@ class Evaluator:
         opponent: str | None = None,
     ) -> list[float]:
         """Evaluate a prompt by compiling it into a fixed-policy surrogate agent."""
-        return surrogate_evaluation_policy(
+        return evaluate_with_java_surrogate(
             prompt,
             repo_root=self.repo_root,
             config=self.config,
             opponent=opponent,
-            simulate_policy_surrogate_games_fn=simulate_policy_surrogate_games,
         )
 
