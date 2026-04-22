@@ -1,4 +1,5 @@
 {
   "run_time_per_game_sec": 5000,
-  "llm_intervals": [1, 10]
+  "llm_intervals": [1, 10],
+  "save_trace_on_test": true
 }

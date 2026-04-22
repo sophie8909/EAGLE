@@ -596,6 +596,8 @@ def _record_match(
         "runner_script": runner_script,
         "ai1": ai1,
         "ai2": ai2,
+        "trace_xml_path": metadata.get("trace_xml_path"),
+        "trace_json_path": metadata.get("trace_json_path"),
         "cached": False,
     }
     if isinstance(extra, dict):

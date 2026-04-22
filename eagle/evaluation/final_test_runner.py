@@ -79,6 +79,8 @@ def _resolve_final_test_config(
         resolved.run_time_per_game_sec = int(payload["run_time_per_game_sec"])
     if "llm_interval" in payload:
         resolved.llm_interval = int(payload["llm_interval"])
+    if "save_trace_on_test" in payload:
+        resolved.save_trace_on_test = bool(payload["save_trace_on_test"])
     resolved.validate()
     return resolved
 
@@ -226,6 +228,8 @@ def run_final_test_suite(
                     opponent,
                     fitness_score,
                     str(metadata.get("log_path")),
+                    trace_xml_path=str(metadata.get("trace_xml_path")) if metadata.get("trace_xml_path") else None,
+                    trace_json_path=str(metadata.get("trace_json_path")) if metadata.get("trace_json_path") else None,
                 )
                 result_record["interval_mode"] = str(interval_run["label"])
                 result_record["llm_interval"] = llm_interval

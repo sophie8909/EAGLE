@@ -54,6 +54,8 @@ def load_run_config(log_dir: str | Path, config_path: str | Path | None = None) 
         resolved.run_time_per_game_sec = int(payload["run_time_per_game_sec"])
     if "llm_interval" in payload:
         resolved.llm_interval = int(payload["llm_interval"])
+    if "save_trace_on_test" in payload:
+        resolved.save_trace_on_test = bool(payload["save_trace_on_test"])
     resolved.validate()
     return resolved
 
@@ -134,6 +136,8 @@ def build_result_record(
     opponent: str,
     fitness_score: list[float],
     log_path: str,
+    trace_xml_path: str | None = None,
+    trace_json_path: str | None = None,
 ) -> dict:
     """Convert one replay result into the JSON-friendly output schema."""
     if fitness_score[0] == 1.0:
@@ -152,6 +156,8 @@ def build_result_record(
         "game_round_score": fitness_score[1] if len(fitness_score) > 1 else 0.0,
         "resource_advantage_score": fitness_score[2] if len(fitness_score) > 2 else 0.0,
         "log_path": log_path,
+        "trace_xml_path": trace_xml_path,
+        "trace_json_path": trace_json_path,
     }
 
 
@@ -251,6 +257,8 @@ def run_generation_result_test(
                     opponent,
                     fitness_score,
                     str(metadata.get("log_path")),
+                    trace_xml_path=str(metadata.get("trace_xml_path")) if metadata.get("trace_xml_path") else None,
+                    trace_json_path=str(metadata.get("trace_json_path")) if metadata.get("trace_json_path") else None,
                 )
                 result_record["interval_mode"] = str(interval_run["label"])
                 result_record["llm_interval"] = llm_interval
@@ -310,6 +318,8 @@ def run_generation_result_test(
                 opponent,
                 fitness_score,
                 str(metadata.get("log_path")),
+                trace_xml_path=str(metadata.get("trace_xml_path")) if metadata.get("trace_xml_path") else None,
+                trace_json_path=str(metadata.get("trace_json_path")) if metadata.get("trace_json_path") else None,
             )
             result_record["interval_mode"] = "java_agent_test"
             result_record["llm_interval"] = None

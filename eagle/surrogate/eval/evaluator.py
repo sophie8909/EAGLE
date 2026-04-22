@@ -240,6 +240,7 @@ def evaluate_with_java_surrogate(
             compile_first=False,
             log_prefix="run_surrogate",
             runtime_logs_dir=getattr(config, "runtime_logs_dir", None),
+            record_trace=bool(getattr(config, "save_trace_on_test", False)),
         )
         if metadata.get("exit_code", 1) != 0:
             return very_low_fitness()

@@ -46,6 +46,7 @@ def run_surrogate_validation_case(
         compile_first=True,
         log_prefix="run_surrogate" if not test else "run_test_surrogate",
         runtime_logs_dir=runtime_logs_dir,
+        record_trace=bool(test and getattr(config, "save_trace_on_test", False)),
     )
 
 

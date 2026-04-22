@@ -34,6 +34,14 @@ def _runtime_logs_dir(project_root: Path | None = None, runtime_logs_dir: Path |
     return MICRORTS_LOGS_DIR if project_root is None else (project_root or PROJECT_ROOT).resolve() / "logs" / "microrts"
 
 
+def _trace_logs_dir(project_root: Path | None = None, runtime_logs_dir: Path | None = None) -> Path:
+    """Return the directory used for saved trace artifacts."""
+    base_dir = _runtime_logs_dir(project_root, runtime_logs_dir=runtime_logs_dir)
+    trace_dir = base_dir / "traces"
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    return trace_dir
+
+
 def save_prompt(project_root: Path | None, prompt: str) -> Path:
     """Write the rendered EAGLE prompt for the next MicroRTS run."""
     prompt_path = _prompt_path(project_root)
@@ -115,6 +123,18 @@ def _make_log_path(
     return logs_dir / filename
 
 
+def _make_trace_prefix(
+    project_root: Path | None = None,
+    prefix: str = "run_test",
+    runtime_logs_dir: Path | None = None,
+) -> Path:
+    """Create a timestamped output prefix for one recorded trace."""
+    trace_dir = _trace_logs_dir(project_root, runtime_logs_dir=runtime_logs_dir)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    normalized_prefix = str(prefix or "run_test").strip().lower()
+    return trace_dir / f"{normalized_prefix}_{timestamp}"
+
+
 def launch_java_match(
     *,
     project_root: Path | None,
@@ -153,6 +173,52 @@ def launch_java_match(
     return exit_code, timed_out, str(log_path), elapsed
 
 
+def record_java_match_trace(
+    *,
+    project_root: Path | None,
+    ai1_class: str,
+    ai2_class: str,
+    output_prefix: Path,
+    max_cycles: int,
+    map_location: str,
+) -> dict[str, str] | None:
+    """Record one additional trace file for later GUI replay."""
+    microrts_root = locate_microrts_root(project_root)
+    bin_dir = microrts_root / "bin"
+    lib_dir = microrts_root / "lib"
+    classpath = f"{lib_dir / '*'}{os.pathsep}{bin_dir}"
+    command = [
+        "java",
+        "-cp",
+        classpath,
+        "tests.trace.RecordLLMGame",
+        ai1_class,
+        ai2_class,
+        str(output_prefix),
+        str(int(max_cycles)),
+        str(map_location),
+    ]
+    try:
+        subprocess.run(
+            command,
+            cwd=microrts_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+
+    xml_path = output_prefix.with_suffix(".xml")
+    json_path = output_prefix.with_suffix(".json")
+    result: dict[str, str] = {}
+    if xml_path.exists():
+        result["trace_xml_path"] = str(xml_path)
+    if json_path.exists():
+        result["trace_json_path"] = str(json_path)
+    return result or None
+
+
 def detect_timeout(log_content: str) -> bool:
     """Heuristically detect whether the match log indicates timeout termination."""
     lowered = log_content.lower()
@@ -176,6 +242,7 @@ def run_java_agent_game(
     compile_first: bool = True,
     log_prefix: str = "run",
     runtime_logs_dir: Path | None = None,
+    record_trace: bool = False,
 ) -> tuple[list[float], dict[str, Any]]:
     """Run one MicroRTS game with explicit Java agent classes."""
     project_root = (project_root or PROJECT_ROOT).resolve()
@@ -216,6 +283,22 @@ def run_java_agent_game(
             "game_time_sec": game_time_sec,
             "microrts_root": str(microrts_root),
         }
+        if record_trace:
+            config_properties = read_config_properties(project_root)
+            trace_info = record_java_match_trace(
+                project_root=project_root,
+                ai1_class=ai1_class,
+                ai2_class=str(opponent or config_properties.get("AI2", "ai.RandomAI")),
+                output_prefix=_make_trace_prefix(
+                    project_root,
+                    prefix=log_prefix,
+                    runtime_logs_dir=runtime_logs_dir,
+                ),
+                max_cycles=int(config_properties.get("max_cycles", 5000)),
+                map_location=str(config_properties.get("map_location", "maps/8x8/basesWorkers8x8.xml")),
+            )
+            if trace_info is not None:
+                metadata.update(trace_info)
         return fitness, metadata
     finally:
         _config_path(project_root).write_text(original_config, encoding="utf-8")
@@ -240,4 +323,5 @@ def run_prompt_based_game(
         compile_first=True,
         log_prefix="run" if not test else "run_test",
         runtime_logs_dir=runtime_logs_dir,
+        record_trace=bool(test and getattr(config, "save_trace_on_test", False)),
     )

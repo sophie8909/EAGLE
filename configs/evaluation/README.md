@@ -6,6 +6,11 @@ Current active file:
 - `final_test.json`: the replay/final-test override used by `python -m scripts.run_prompt_eval`
   and by final benchmark replays after EA runs
 
+Notable final-test override keys:
+
+- `save_trace_on_test`: when `true`, replay/final-test matches also save MicroRTS trace files
+  for later GUI visualization
+
 You can override it with:
 
 ```bash

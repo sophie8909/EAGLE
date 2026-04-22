@@ -96,6 +96,7 @@ class EAConfig:
     real_eval_rate: float = field(default_factory=lambda: float(_default_config_value("real_eval_rate")))
     real_eval_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("real_eval_opponents")))
     llm_interval: int = field(default_factory=lambda: int(_default_config_value("llm_interval")))
+    save_trace_on_test: bool = field(default_factory=lambda: bool(_default_config_value("save_trace_on_test")))
 
     resource_advantage_alpha: float = field(
         default_factory=lambda: float(_default_config_value("resource_advantage_alpha"))
