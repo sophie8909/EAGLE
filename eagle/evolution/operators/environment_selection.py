@@ -1,4 +1,4 @@
-﻿"""Environment selection methods for the genetic algorithm."""
+"""Environment selection methods for the genetic algorithm."""
 
 from __future__ import annotations
 from ...utils.individual import Individual

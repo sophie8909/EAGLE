@@ -1,4 +1,4 @@
-﻿"""
+"""
 Genetic Algorithm implementation for evolving prompt components.
 This module defines the GA class, which implements a genetic algorithm to optimize prompt components for guiding agent behavior in MicroRTS. The GA class initializes a population of candidate solutions, evaluates their fitness based on performance in MicroRTS, and applies selection, crossover, and mutation operations to evolve better solutions over multiple generations. The GA can be configured with various parameters such as population size, number of generations, mutation rate, and selection method.
 """

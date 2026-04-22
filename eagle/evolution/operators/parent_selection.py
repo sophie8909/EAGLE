@@ -1,4 +1,4 @@
-﻿"""Parent selection methods for the genetic algorithm."""
+"""Parent selection methods for the genetic algorithm."""
 
 from __future__ import annotations
 

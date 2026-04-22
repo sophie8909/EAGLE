@@ -1,4 +1,4 @@
-﻿"""Crossover methods for the genetic algorithm."""
+"""Crossover methods for the genetic algorithm."""
 
 from __future__ import annotations
 
@@ -17,22 +17,22 @@ class Crossover:
         p1_strategy = parent1.strategy or {}
         p2_strategy = parent2.strategy or {}
         child.game_rule = parent1.game_rule
-        child.legacy_components = {}
+        child.static_components = {}
 
         static_keys = sorted(
-            set((parent1.legacy_components or {}).keys()) | set((parent2.legacy_components or {}).keys())
+            set((parent1.static_components or {}).keys()) | set((parent2.static_components or {}).keys())
         )
         for category in static_keys:
-            p1_has = category in (parent1.legacy_components or {})
-            p2_has = category in (parent2.legacy_components or {})
+            p1_has = category in (parent1.static_components or {})
+            p2_has = category in (parent2.static_components or {})
             if p1_has and p2_has:
                 selected_value = random.choice(
-                    [parent1.legacy_components[category], parent2.legacy_components[category]]
+                    [parent1.static_components[category], parent2.static_components[category]]
                 )
             elif p1_has:
-                selected_value = parent1.legacy_components[category]
+                selected_value = parent1.static_components[category]
             elif p2_has:
-                selected_value = parent2.legacy_components[category]
+                selected_value = parent2.static_components[category]
             else:
                 selected_value = component_pool.get_random_component_index(category)
             child.set_component_index(category, selected_value)

@@ -1,4 +1,4 @@
-﻿"""Utilities for replaying and evaluating one saved generation on demand."""
+"""Utilities for replaying and evaluating one saved generation on demand."""
 
 from __future__ import annotations
 
@@ -153,8 +153,7 @@ def build_result_record(
         "result": result,
         "fitness": fitness_score,
         "win_score": fitness_score[0] if len(fitness_score) > 0 else 0.0,
-        "game_round_score": fitness_score[1] if len(fitness_score) > 1 else 0.0,
-        "resource_advantage_score": fitness_score[2] if len(fitness_score) > 2 else 0.0,
+        "resource_advantage_score": fitness_score[1] if len(fitness_score) > 1 else 0.0,
         "log_path": log_path,
         "trace_xml_path": trace_xml_path,
         "trace_json_path": trace_json_path,
@@ -238,19 +237,21 @@ def run_generation_result_test(
 
     for individual in selected_individuals:
         prompt = evaluator.construct_prompt(individual)
-        evaluator.save_prompt(prompt)
 
         for interval_run in interval_runs:
             llm_interval = int(interval_run["llm_interval"])
-            evaluator.set_llm_interval(llm_interval)
 
             for opponent in resolved_opponents:
                 print(
                     f"Testing generation {generation}, individual {individual.id} "
                     f"against opponent: {opponent} (llm_interval={llm_interval})"
                 )
-                evaluator.set_opponent(opponent)
-                fitness_score, metadata = evaluator.simulate_games(opponent, {})
+                fitness_score, metadata = evaluator.run_prompt_match(
+                    prompt,
+                    opponent,
+                    llm_interval=llm_interval,
+                    test=True,
+                )
                 results["results"].setdefault(individual.id, [])
                 result_record = build_result_record(
                     individual,
@@ -278,39 +279,15 @@ def run_generation_result_test(
                 f"Testing generation {generation}, individual {individual.id} "
                 f"against opponent: {opponent} (java agent test)"
             )
-                        # run surrogate java agent (same as validation pipeline)
-
             stats: dict[str, float] = {}
-
-            from ..utils.simulation_runner import simulate_surrogate_games
-            from ..surrogate.eval.evaluator import estimate_llm_game_round_score
-            from ..envs.microrts.adapter import set_ai1
-
-            # use surrogate agent
-            set_ai1(evaluator.repo_root, "ai.abstraction.EAGLESurrogate")
-
-            java_fitness, metadata = simulate_surrogate_games(
-                repo_root=evaluator.repo_root,
-                config=evaluator.config,
+            java_fitness, metadata = evaluator.run_surrogate_match(
                 prompt=prompt,
                 opponent=opponent,
                 stats=stats,
                 test=True,
             )
 
-            # LLM round score (same design as surrogate_validation)
-            llm_round_score = estimate_llm_game_round_score(
-                prompt=prompt,
-                repo_root=evaluator.repo_root,
-                config=evaluator.config,
-            )
-
-            # combine into final fitness (important: same schema)
-            fitness_score = [
-                float(java_fitness[0]) if len(java_fitness) > 0 else 0.0,
-                float(llm_round_score),
-                float(java_fitness[2]) if len(java_fitness) > 2 else 0.0,
-            ]
+            fitness_score = list(java_fitness)
 
             results["results"].setdefault(individual.id, [])
             result_record = build_result_record(

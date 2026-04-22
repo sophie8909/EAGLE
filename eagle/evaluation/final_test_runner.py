@@ -1,4 +1,4 @@
-﻿"""Replay saved individuals for final benchmark evaluation and result logging."""
+"""Replay saved individuals for final benchmark evaluation and result logging."""
 
 from __future__ import annotations
 
@@ -200,7 +200,6 @@ def run_final_test_suite(
             flush=True,
         )
         prompt = evaluator.construct_prompt(individual)
-        evaluator.save_prompt(prompt)
 
         for interval_index, interval_run in enumerate(interval_runs, start=1):
             llm_interval = int(interval_run["llm_interval"])
@@ -210,8 +209,6 @@ def run_final_test_suite(
                 f"({interval_run['label']}, llm_interval={llm_interval})",
                 flush=True,
             )
-            evaluator.set_llm_interval(llm_interval)
-
             for opponent_index, opponent in enumerate(OPPONENT_LIST, start=1):
                 print(
                     "[Final Test] "
@@ -221,8 +218,12 @@ def run_final_test_suite(
                     f"{opponent} (mode={interval_run['label']}, llm_interval={llm_interval})",
                     flush=True,
                 )
-                evaluator.set_opponent(opponent)
-                fitness_score, metadata = evaluator.simulate_games(opponent, {})
+                fitness_score, metadata = evaluator.run_prompt_match(
+                    prompt,
+                    opponent,
+                    llm_interval=llm_interval,
+                    test=True,
+                )
                 result_record = build_result_record(
                     individual,
                     opponent,

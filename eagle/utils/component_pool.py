@@ -317,7 +317,7 @@ class ComponentPool:
             candidates = self.components.get(key, [])
             if not candidates:
                 continue
-            selected_index = int(getattr(individual, "legacy_components", {}).get(key, 0))
+            selected_index = int(getattr(individual, "static_components", {}).get(key, 0))
             lines = list(self.get_component(key, selected_index))
             static_payload[key] = {
                 "index": selected_index,

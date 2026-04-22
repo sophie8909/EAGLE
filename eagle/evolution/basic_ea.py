@@ -1,4 +1,4 @@
-﻿"""
+"""
 Base class for evolutionary algorithms.
 """
 
@@ -97,7 +97,8 @@ class EA:
             individuals.append(individual)
         return individuals
     
-    def _evaluate_initial_population(self):
+    def _evaluate_initial_population(self, checkpoint: dict[str, Any] | None = None):
+        self.checkpoint = checkpoint
         # Phase 0: restore runtime state if a checkpoint exists.
         if self.checkpoint:
             self.population = self.deserialize_population(self.checkpoint.get("population"))
@@ -284,12 +285,6 @@ class EA:
 
     def _display_fitness(self, individual: Individual) -> list[float] | Any:
         """Return the most current full fitness for human-readable experiment logs."""
-        last_surrogate_evaluation = getattr(individual, "last_surrogate_evaluation", None)
-        if isinstance(last_surrogate_evaluation, dict):
-            aggregated_surrogate = last_surrogate_evaluation.get("aggregated_fitness")
-            if isinstance(aggregated_surrogate, list) and aggregated_surrogate:
-                return aggregated_surrogate
-
         fitness = getattr(individual, "fitness", None)
         if fitness is not None:
             return fitness
@@ -380,6 +375,30 @@ class EA:
             self.config,
         )
         return mutated_individual
+
+    @staticmethod
+    def _combined_match_score(fitness: list[float] | None) -> float:
+        """Collapse one per-match fitness vector into one opponent-level scalar score."""
+        normalized = normalize_fitness(fitness)
+        return float(normalized[0]) + float(normalized[1])
+
+    def _build_opponent_score_vector(
+        self,
+        opponent_scores: list[tuple[str | None, float]],
+        configured_opponents: list[str | None],
+    ) -> list[float]:
+        """Build one fixed-width fitness vector where each slot maps to one opponent."""
+        if not configured_opponents:
+            configured_opponents = [None]
+
+        score_by_opponent = {opponent: score for opponent, score in opponent_scores}
+        values = [
+            float(score_by_opponent.get(opponent, 0.0))
+            for opponent in configured_opponents[:2]
+        ]
+        while len(values) < 2:
+            values.append(0.0)
+        return values
     
     def real_evaluation(self, individual: Individual, opponent: str, generation: int | None = None):
         """Run the selected child against all configured real-eval opponents."""
@@ -388,7 +407,7 @@ class EA:
         configured_opponents = list(getattr(self.config, "real_eval_opponents", []) or [])
         real_eval_opponents = configured_opponents or list(DEFAULT_REAL_EVAL_OPPONENTS)
 
-        aggregated_scores: list[float] = []
+        opponent_scores: list[tuple[str | None, float]] = []
         per_opponent_results: list[dict[str, Any]] = []
 
         for resolved_opponent in real_eval_opponents:
@@ -401,6 +420,9 @@ class EA:
                 generation=generation,
                 fitness_recorder=self.fitness_recorder,
             )
+            normalized_fitness = normalize_fitness(individual.fitness)
+            combined_score = self._combined_match_score(normalized_fitness)
+            opponent_scores.append((resolved_opponent, combined_score))
             last_real_evaluation = getattr(individual, "last_real_evaluation", {}) or {}
             parsed_log = last_real_evaluation.get("parsed_log")
             raw_score = (
@@ -414,7 +436,8 @@ class EA:
             per_opponent_results.append(
                 {
                     "opponent": resolved_opponent,
-                    "fitness": list(individual.fitness) if isinstance(individual.fitness, list) else individual.fitness,
+                    "fitness": list(normalized_fitness),
+                    "combined_score": combined_score,
                     "raw_resource_advantage_score": raw_score,
                     "winner": last_real_evaluation.get("winner"),
                     "timeout": last_real_evaluation.get("timeout"),
@@ -422,20 +445,16 @@ class EA:
                     "parsed_summary": last_real_evaluation.get("parsed_summary"),
                 }
             )
-            # win loss bonus
-            if individual.fitness[0] == 1.0:
-                raw_score += 100
-            elif individual.fitness[0] == 0.0:
-                raw_score -= 100
-            aggregated_scores.append(raw_score)
 
-        individual.fitness = list(aggregated_scores)
+        individual.fitness = self._build_opponent_score_vector(opponent_scores, real_eval_opponents)
         individual.evaluation_mode = "real"
+        if hasattr(individual, "last_surrogate_evaluation"):
+            delattr(individual, "last_surrogate_evaluation")
         individual.last_real_evaluation = {
-            "mode": "multi_opponent_resource_dual_objective",
+            "mode": "multi_opponent_opponent_vector",
             "opponents": real_eval_opponents,
             "per_opponent": per_opponent_results,
-            "aggregated_fitness": list(aggregated_scores),
+            "aggregated_fitness": list(individual.fitness),
         }
 
     
@@ -455,9 +474,13 @@ class EA:
                 generation=generation,
                 fitness_recorder=self.fitness_recorder,
             )
-            raw_fitness = list(individual.fitness)
-            selection_score = raw_fitness[2] if len(raw_fitness) > 2 else (raw_fitness[0] if raw_fitness else 0.0)
-            individual.fitness = [selection_score, 0.0, 0.0]
+            raw_fitness = normalize_fitness(individual.fitness)
+            configured_opponents = list(self.opponent_list) if self.opponent_list else [surrogate_opponent]
+            combined_score = self._combined_match_score(raw_fitness)
+            individual.fitness = self._build_opponent_score_vector(
+                [(surrogate_opponent, combined_score)],
+                configured_opponents,
+            )
             individual.last_surrogate_evaluation = {
                 "mode": "random",
                 "opponents": [surrogate_opponent],
@@ -465,17 +488,17 @@ class EA:
                     {
                         "opponent": surrogate_opponent,
                         "fitness": raw_fitness,
+                        "combined_score": combined_score,
                     }
                 ],
-                "aggregated_fitness": raw_fitness,
-                "selection_fitness": list(individual.fitness),
+                "aggregated_fitness": list(individual.fitness),
             }
+            individual.evaluation_mode = "surrogate"
             return
 
         if surrogate_mode == "all_avg":
             opponents = list(self.opponent_list) if self.opponent_list else [None]
-            fitness_samples: list[list[float]] = []
-            original_mode = getattr(individual, "evaluation_mode", None)
+            opponent_scores: list[tuple[str | None, float]] = []
             per_opponent_scores: list[dict[str, object]] = []
 
             for surrogate_opponent in opponents:
@@ -488,35 +511,24 @@ class EA:
                     fitness_recorder=None,
                 )
                 sampled_fitness = list(individual.fitness)
-                fitness_samples.append(sampled_fitness)
+                combined_score = self._combined_match_score(sampled_fitness)
+                opponent_scores.append((surrogate_opponent, combined_score))
                 per_opponent_scores.append(
                     {
                         "opponent": surrogate_opponent,
                         "fitness": sampled_fitness,
+                        "combined_score": combined_score,
                     }
                 )
 
-            if not fitness_samples:
-                aggregated_fitness = [0.0, 0.0, 0.0]
-            else:
-                objective_count = len(fitness_samples[0])
-                aggregated_fitness = [
-                    sum(sample[idx] for sample in fitness_samples) / len(fitness_samples)
-                    for idx in range(objective_count)
-                ]
-            selection_score = (
-                aggregated_fitness[2]
-                if len(aggregated_fitness) > 2
-                else (aggregated_fitness[0] if aggregated_fitness else 0.0)
-            )
-            individual.fitness = [selection_score, 0.0, 0.0]
-            individual.evaluation_mode = original_mode or "surrogate"
+            aggregated_fitness = self._build_opponent_score_vector(opponent_scores, opponents)
+            individual.fitness = list(aggregated_fitness)
+            individual.evaluation_mode = "surrogate"
             individual.last_surrogate_evaluation = {
                 "mode": "all_avg",
                 "opponents": opponents,
                 "scores": per_opponent_scores,
                 "aggregated_fitness": aggregated_fitness,
-                "selection_fitness": list(individual.fitness),
             }
             return
 
@@ -529,4 +541,3 @@ class EA:
             print("[Final Test] skipped because final_test_max_front=0", flush=True)
             return
         run_final_test_suite(self.current_log_dir, self.current_generation, self.config)
-

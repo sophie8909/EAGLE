@@ -31,7 +31,6 @@ class Individual:
         game_rule: int = 0,
         strategy: dict[str, int] | None = None,
         static_components: dict[str, int] | None = None,
-        **legacy_components: int,
     ):
         """Create an individual with one game-rule index and a strategy-index map."""
         self.id = id or f"ind-{next(self._id_counter)}"
@@ -39,19 +38,14 @@ class Individual:
             self._sync_id_counter(id)
         self.game_rule = game_rule
         self.strategy = self._normalize_strategy(strategy)
-        merged_static_components = dict(static_components or {})
-        merged_static_components.update(dict(legacy_components))
-        self.legacy_components = merged_static_components
-
-        # Keep backward compatibility when older logs/configs still include
-        # decomposed non-strategy component names.
-        for name, value in self.legacy_components.items():
+        self.static_components = dict(static_components or {})
+        for name, value in self.static_components.items():
             setattr(self, name, value)
 
         self.stable_components = [self.game_rule]
         self.evolving_components: list[int] = []
 
-        # fitness = [win_score, instruction_accuracy_score, resource_advantage_score]
+        # fitness = [opponent_1_score, opponent_2_score]
         self.fitness = DEFAULT_FITNESS.copy()
         self.evaluation_mode: str | None = None
 
@@ -62,7 +56,7 @@ class Individual:
         entries = [
             ComponentEntry("game_rule", self.game_rule),
         ]
-        for name, value in sorted((self.legacy_components or {}).items()):
+        for name, value in sorted((self.static_components or {}).items()):
             entries.append(ComponentEntry(name, value))
         entries.append(ComponentEntry("strategy", strategy_items))
         return entries
@@ -71,7 +65,7 @@ class Individual:
         """Return a compact representation suitable for logs and generation dumps."""
         return (
             f"Individual(game_rule={self.game_rule}, "
-            f"static_components={self.legacy_components}, "
+            f"static_components={self.static_components}, "
             f"strategy={self.strategy})"
         )
 
@@ -115,7 +109,7 @@ class Individual:
     ):
         """Fill the selected static categories and strategy map with random valid indices."""
         self.game_rule = 0
-        self.legacy_components = {}
+        self.static_components = {}
         for category in list(static_component_keys or []):
             self.set_component_index(category, component_pool.get_random_component_index(category))
         self.strategy = {
@@ -146,7 +140,7 @@ class Individual:
         self.game_rule = int(seed_payload.get("game_rule", 0))
         component_pool.get_component("game_rule", self.game_rule)
 
-        self.legacy_components = {}
+        self.static_components = {}
         selected_static_keys = set(component_pool.static_component_keys)
         selected_static_keys.update(str(key) for key in (static_component_keys or []))
         selected_static_keys.update(str(key) for key in static_indices.keys())
@@ -178,16 +172,16 @@ class Individual:
         """Read one component index using either the new or legacy storage layout."""
         if category == "game_rule":
             return self.game_rule
-        if category in self.legacy_components:
-            return self.legacy_components[category]
+        if category in self.static_components:
+            return self.static_components[category]
         return getattr(self, category)
 
     def set_component_index(self, category: str, value: int) -> None:
-        """Write one component index while preserving backward compatibility."""
+        """Write one selected static component index."""
         if category == "game_rule":
             self.game_rule = value
             return
-        self.legacy_components[category] = value
+        self.static_components[category] = value
         setattr(self, category, value)
 
     def copy(self) -> "Individual":
@@ -195,7 +189,7 @@ class Individual:
         clone = Individual(
             game_rule=self.game_rule,
             strategy=dict(self.strategy or {}),
-            static_components=dict(self.legacy_components),
+            static_components=dict(self.static_components),
         )
         clone.fitness = self.fitness.copy() if hasattr(self.fitness, "copy") else self.fitness
         clone.evaluation_mode = self.evaluation_mode

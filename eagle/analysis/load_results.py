@@ -44,7 +44,6 @@ BEHAVIOR_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
 RESULT_COMPONENT_ALIASES: dict[str, tuple[str, ...]] = {
     "win": ("win_score", "win_rate", "score", "outcome_score"),
     "resource": ("resource_advantage_score", "resource_score", "resource_advantage", "resource"),
-    "accuracy": ("game_round_score", "accuracy", "instruction_accuracy", "round_accuracy"),
 }
 
 
@@ -132,7 +131,6 @@ def normalize_result_rows(rows: list[dict[str, str]], source_name: str) -> list[
         component_values = {
             "win": _parse_float(_first_present_value(row, RESULT_COMPONENT_ALIASES["win"])),
             "resource": _parse_float(_first_present_value(row, RESULT_COMPONENT_ALIASES["resource"])),
-            "accuracy": _parse_float(_first_present_value(row, RESULT_COMPONENT_ALIASES["accuracy"])),
         }
         normalized.append(
             {
@@ -211,10 +209,8 @@ def merge_result_rows(prompt_rows: list[dict[str, Any]], java_rows: list[dict[st
                 "java_score": float(java_row["score"]),
                 "prompt_win": dict(prompt_row.get("components") or {}).get("win"),
                 "prompt_resource": dict(prompt_row.get("components") or {}).get("resource"),
-                "prompt_accuracy": dict(prompt_row.get("components") or {}).get("accuracy"),
                 "java_win": dict(java_row.get("components") or {}).get("win"),
                 "java_resource": dict(java_row.get("components") or {}).get("resource"),
-                "java_accuracy": dict(java_row.get("components") or {}).get("accuracy"),
                 "prompt_sample_count": int(prompt_row.get("sample_count", 1)),
                 "java_sample_count": int(java_row.get("sample_count", 1)),
             }

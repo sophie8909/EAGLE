@@ -1,3 +1,5 @@
-﻿"""Backward-compatible wrapper for the canonical `evaluator` module."""
+"""Backward-compatible import shim for the canonical evaluation entry point."""
 
-from .evaluator import *  # noqa: F401,F403
+from .evaluator import Evaluator
+
+__all__ = ["Evaluator"]

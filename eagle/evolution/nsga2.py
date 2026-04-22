@@ -1,4 +1,4 @@
-﻿"""
+"""
 NSGA-II implementation for multi-objective optimization of prompt components.
 """
 
@@ -13,6 +13,27 @@ from ..utils.component_pool import ComponentPool
 from ..utils.individual import Individual
 from ..config import EAConfig
 from ..utils.profiler import build_base_record, timer, write_jsonl
+
+
+def _normalize_two_objective_fitness(fitness) -> list[float]:
+    """Normalize any fitness payload into a fixed-width two-objective vector."""
+    if fitness is None:
+        return [0.0, 0.0]
+    if isinstance(fitness, (int, float)):
+        return [float(fitness), 0.0]
+    values: list[float] = []
+    try:
+        iterable = list(fitness)
+    except TypeError:
+        return [0.0, 0.0]
+    for value in iterable[:2]:
+        try:
+            values.append(float(value))
+        except (TypeError, ValueError):
+            values.append(0.0)
+    while len(values) < 2:
+        values.append(0.0)
+    return values
 
 
 class NSGA2(EA):
@@ -45,15 +66,13 @@ class NSGA2(EA):
                 setattr(ind, "pareto_rank", rank)
         return fronts
 
-    def _sort_by_game_round_score(self, population: List[Individual]) -> List[Individual]:
-        """Order offspring by the surrogate game-round objective before real evaluation."""
-        # Before real evaluation, game_round surrogate information lives in the
-        # second objective, so we rank offspring directly by that signal first.
+    def _sort_by_surrogate_fitness(self, population: List[Individual]) -> List[Individual]:
+        """Order offspring by surrogate win score first, then resource score."""
         return sorted(
             population,
             key=lambda ind: (
-                ind.fitness[1] if ind.fitness and len(ind.fitness) > 1 else float("-inf"),
                 ind.fitness[0] if ind.fitness and len(ind.fitness) > 0 else float("-inf"),
+                ind.fitness[1] if ind.fitness and len(ind.fitness) > 1 else float("-inf"),
             ),
             reverse=True,
         )
@@ -111,8 +130,10 @@ class NSGA2(EA):
             raise ValueError("Both individuals must be evaluated before dominance comparison.")
 
         better_in_at_least_one = False
+        fitness1 = _normalize_two_objective_fitness(ind1.fitness)
+        fitness2 = _normalize_two_objective_fitness(ind2.fitness)
 
-        for f1, f2 in zip(ind1.fitness, ind2.fitness):
+        for f1, f2 in zip(fitness1, fitness2):
             if f1 < f2:
                 return False
             if f1 > f2:
@@ -194,19 +215,20 @@ class NSGA2(EA):
             setattr(front[1], "crowding_distance", float("inf"))
             return [float("inf"), float("inf")]
 
-        num_objectives = len(front[0].fitness)
+        normalized_front = {ind: _normalize_two_objective_fitness(ind.fitness) for ind in front}
+        num_objectives = len(next(iter(normalized_front.values())))
         distance_map = {ind: 0.0 for ind in front}
 
         # Compute distance objective by objective.
         for m in range(num_objectives):
-            sorted_front = sorted(front, key=lambda ind: ind.fitness[m])
+            sorted_front = sorted(front, key=lambda ind: normalized_front[ind][m])
 
             # Boundary points are always preserved.
             distance_map[sorted_front[0]] = float("inf")
             distance_map[sorted_front[-1]] = float("inf")
 
-            min_value = sorted_front[0].fitness[m]
-            max_value = sorted_front[-1].fitness[m]
+            min_value = normalized_front[sorted_front[0]][m]
+            max_value = normalized_front[sorted_front[-1]][m]
             denominator = max_value - min_value
 
             # If all individuals have the same value on this objective,
@@ -220,8 +242,8 @@ class NSGA2(EA):
                 if math.isinf(distance_map[sorted_front[i]]):
                     continue
 
-                prev_value = sorted_front[i - 1].fitness[m]
-                next_value = sorted_front[i + 1].fitness[m]
+                prev_value = normalized_front[sorted_front[i - 1]][m]
+                next_value = normalized_front[sorted_front[i + 1]][m]
 
                 distance_map[sorted_front[i]] += (next_value - prev_value) / denominator
 
@@ -411,8 +433,8 @@ class NSGA2(EA):
         return offspring[: self.config.population_size]
 
     def _rank_offspring_for_real_evaluation(self, offspring: List[Individual]) -> List[Individual]:
-        """Rank offspring by surrogate game-round score for the real-eval budget."""
-        return self._sort_by_game_round_score(offspring)
+        """Rank offspring by surrogate fitness for the real-eval budget."""
+        return self._sort_by_surrogate_fitness(offspring)
 
     def _real_evaluate_ranked_offspring(
         self,

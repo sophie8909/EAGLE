@@ -1,4 +1,4 @@
-﻿"""Strategy mutation methods for the genetic algorithm."""
+"""Strategy mutation methods for the genetic algorithm."""
 
 from __future__ import annotations
 
@@ -111,11 +111,7 @@ class Mutation:
         """Replace one config-enabled static prompt component with another pool candidate."""
         mutated_individual = individual.copy()
         target_component = random.choice(list(static_targets))
-        previous_index = (
-            mutated_individual.legacy_components.get(target_component)
-            if getattr(mutated_individual, "legacy_components", None) is not None
-            else None
-        )
+        previous_index = mutated_individual.static_components.get(target_component)
         replacement_index = component_pool.get_random_component_index(target_component)
         if previous_index is not None:
             for _ in range(8):

@@ -1,4 +1,4 @@
-﻿"""Run prompt-level benchmark batches comparing EAGLE vs surrogate Java-agent matches."""
+"""Run prompt-level benchmark batches comparing EAGLE vs surrogate Java-agent matches."""
 
 from __future__ import annotations
 
@@ -19,14 +19,7 @@ from ..surrogate.compiler import compile_prompt_to_surrogate_spec
 from ..utils.component_pool import ComponentPool
 from ..utils.fitness_recorder import FitnessRecorder
 from ..utils.individual import Individual
-from ..envs.microrts.adapter import (
-    set_ai1,
-)
-from ..envs.microrts.runner import run_prompt_based_game
-from ..utils.simulation_runner import simulate_surrogate_games
 from .evaluator import Evaluator
-from ..surrogate.eval.evaluator import estimate_llm_game_round_score
-
 DEFAULT_SURROGATE_VALIDATION_TIMEOUT_SEC = 60
 DEFAULT_QUICK_RUN_OPPONENT = "ai.PassiveAI"
 
@@ -104,7 +97,6 @@ def _build_mode_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
             "match_count": 0,
             "cached_match_count": 0,
             "avg_win_score": None,
-            "avg_game_round_score": None,
             "avg_resource_advantage_score": None,
             "avg_game_time_sec": None,
             "avg_final_tick": None,
@@ -117,7 +109,6 @@ def _build_mode_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "match_count": len(records),
         "cached_match_count": sum(1 for record in records if record.get("cached")),
         "avg_win_score": _average([float(record.get("win_score", 0.0)) for record in records]),
-        "avg_game_round_score": _average([float(record.get("game_round_score", 0.0)) for record in records]),
         "avg_resource_advantage_score": _average(
             [float(record.get("resource_advantage_score", 0.0)) for record in records]
         ),
@@ -160,7 +151,6 @@ def _collect_match_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
                         "opponent": record.get("opponent"),
                         "result": record.get("result"),
                         "win_score": record.get("win_score"),
-                        "game_round_score": record.get("game_round_score"),
                         "resource_advantage_score": record.get("resource_advantage_score"),
                         "game_time_sec": record.get("game_time_sec"),
                         "final_tick": record.get("final_tick"),
@@ -174,9 +164,7 @@ def _collect_match_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
                         "ai1": record.get("ai1"),
                         "ai2": record.get("ai2"),
                         "java_match_win_score": record.get("java_match_win_score"),
-                        "java_match_game_round_score": record.get("java_match_game_round_score"),
                         "java_match_resource_advantage_score": record.get("java_match_resource_advantage_score"),
-                        "llm_round_score_source": record.get("llm_round_score_source"),
                         "cached": record.get("cached"),
                         "log_path": record.get("log_path"),
                     }
@@ -198,7 +186,6 @@ def _write_match_results_csv(log_dir: Path, results: dict[str, Any]) -> None:
         "opponent",
         "result",
         "win_score",
-        "game_round_score",
         "resource_advantage_score",
         "game_time_sec",
         "final_tick",
@@ -212,9 +199,7 @@ def _write_match_results_csv(log_dir: Path, results: dict[str, Any]) -> None:
         "ai1",
         "ai2",
         "java_match_win_score",
-        "java_match_game_round_score",
         "java_match_resource_advantage_score",
-        "llm_round_score_source",
         "cached",
         "log_path",
     ]
@@ -239,7 +224,6 @@ def _write_mode_summary_csv(log_dir: Path, results: dict[str, Any]) -> None:
         "cached_match_count",
         "runner_script",
         "avg_win_score",
-        "avg_game_round_score",
         "avg_resource_advantage_score",
         "avg_game_time_sec",
         "avg_final_tick",
@@ -289,16 +273,13 @@ def _build_alignment_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
             eagle_fitness = list(eagle_record.get("fitness") or [])
             surrogate_fitness = list(surrogate_record.get("fitness") or [])
             win_gap = None
-            round_gap = None
             resource_gap = None
             if eagle_fitness and surrogate_fitness:
                 if len(eagle_fitness) > 0 and len(surrogate_fitness) > 0:
                     win_gap = abs(float(eagle_fitness[0]) - float(surrogate_fitness[0]))
                 if len(eagle_fitness) > 1 and len(surrogate_fitness) > 1:
-                    round_gap = abs(float(eagle_fitness[1]) - float(surrogate_fitness[1]))
-                if len(eagle_fitness) > 2 and len(surrogate_fitness) > 2:
-                    resource_gap = abs(float(eagle_fitness[2]) - float(surrogate_fitness[2]))
-            gap_values = [value for value in [win_gap, round_gap, resource_gap] if value is not None]
+                    resource_gap = abs(float(eagle_fitness[1]) - float(surrogate_fitness[1]))
+            gap_values = [value for value in [win_gap, resource_gap] if value is not None]
             rows.append(
                 {
                     "experiment_type": results.get("experiment_type"),
@@ -310,12 +291,9 @@ def _build_alignment_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
                     "surrogate_result": surrogate_record.get("result"),
                     "eagle_win_score": eagle_record.get("win_score"),
                     "surrogate_win_score": surrogate_record.get("win_score"),
-                    "eagle_game_round_score": eagle_record.get("game_round_score"),
-                    "surrogate_game_round_score": surrogate_record.get("game_round_score"),
                     "eagle_resource_advantage_score": eagle_record.get("resource_advantage_score"),
                     "surrogate_resource_advantage_score": surrogate_record.get("resource_advantage_score"),
                     "win_score_abs_gap": win_gap,
-                    "game_round_score_abs_gap": round_gap,
                     "resource_advantage_score_abs_gap": resource_gap,
                     "mean_abs_gap": _average(gap_values),
                     "same_result_label": eagle_record.get("result") == surrogate_record.get("result")
@@ -339,12 +317,9 @@ def _write_alignment_csv(log_dir: Path, results: dict[str, Any]) -> None:
         "surrogate_result",
         "eagle_win_score",
         "surrogate_win_score",
-        "eagle_game_round_score",
-        "surrogate_game_round_score",
         "eagle_resource_advantage_score",
         "surrogate_resource_advantage_score",
         "win_score_abs_gap",
-        "game_round_score_abs_gap",
         "resource_advantage_score_abs_gap",
         "mean_abs_gap",
         "same_result_label",
@@ -363,7 +338,6 @@ def _build_alignment_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "pair_count": 0,
             "same_result_rate": None,
             "avg_win_score_abs_gap": None,
-            "avg_game_round_score_abs_gap": None,
             "avg_resource_advantage_score_abs_gap": None,
             "avg_mean_abs_gap": None,
         }
@@ -373,9 +347,6 @@ def _build_alignment_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "same_result_rate": _average([1.0 if flag else 0.0 for flag in same_result_flags]) if same_result_flags else None,
         "avg_win_score_abs_gap": _average(
             [value for value in [_safe_float(row.get("win_score_abs_gap")) for row in rows] if value is not None]
-        ),
-        "avg_game_round_score_abs_gap": _average(
-            [value for value in [_safe_float(row.get("game_round_score_abs_gap")) for row in rows] if value is not None]
         ),
         "avg_resource_advantage_score_abs_gap": _average(
             [value for value in [_safe_float(row.get("resource_advantage_score_abs_gap")) for row in rows] if value is not None]
@@ -475,15 +446,14 @@ def _history_record_to_result(
     history_record: dict[str, Any],
 ) -> dict[str, Any]:
     """Convert one cached history row into the experiment result schema."""
-    fitness = list(history_record.get("fitness_score") or [0.0, 0.0, 0.0])
+    fitness = list(history_record.get("fitness_score") or [0.0, 0.0])
     return {
         "opponent": opponent,
         "benchmark_mode": benchmark_mode,
         "fitness": fitness,
         "result": _result_label_from_fitness(fitness),
         "win_score": fitness[0] if len(fitness) > 0 else 0.0,
-        "game_round_score": fitness[1] if len(fitness) > 1 else 0.0,
-        "resource_advantage_score": fitness[2] if len(fitness) > 2 else 0.0,
+        "resource_advantage_score": fitness[1] if len(fitness) > 1 else 0.0,
         "game_time_sec": history_record.get("game_time_sec"),
         "log_path": history_record.get("log_path"),
         "winner": history_record.get("winner"),
@@ -580,8 +550,7 @@ def _record_match(
         "fitness": list(fitness),
         "result": _result_label_from_fitness(fitness),
         "win_score": fitness[0] if len(fitness) > 0 else 0.0,
-        "game_round_score": fitness[1] if len(fitness) > 1 else 0.0,
-        "resource_advantage_score": fitness[2] if len(fitness) > 2 else 0.0,
+        "resource_advantage_score": fitness[1] if len(fitness) > 1 else 0.0,
         "game_time_sec": float(game_time_sec),
         "final_tick": final_tick,
         "max_cycles": parsed_summary.get("max_cycles") if isinstance(parsed_summary, dict) else None,
@@ -625,22 +594,16 @@ def _run_eagle_match(
     if cached is not None:
         return cached
 
-    evaluator.save_prompt(prompt)
-    original_interval = evaluator.config.llm_interval
-    evaluator.config.llm_interval = llm_interval
     stats: dict[str, float] = {}
     started = time.perf_counter()
-    set_ai1(evaluator.repo_root, ai1)
-    fitness, metadata = run_prompt_based_game(
-        project_root=evaluator.repo_root,
-        config=evaluator.config,
+    fitness, metadata = evaluator.run_prompt_match(
         prompt=prompt,
         opponent=opponent,
+        llm_interval=llm_interval,
         test=True,
-        runtime_logs_dir=evaluator.runtime_logs_dir,
+        stats=stats,
     )
     elapsed = time.perf_counter() - started
-    evaluator.config.llm_interval = original_interval
     log_path = metadata.get("log_path")
 
     return _record_match(
@@ -679,32 +642,17 @@ def _run_surrogate_java_match(
     if cached is not None:
         return cached
 
-    original_interval = evaluator.config.llm_interval
-    evaluator.config.llm_interval = llm_interval
     stats: dict[str, float] = {}
     started = time.perf_counter()
-    set_ai1(evaluator.repo_root, ai1)
-    java_fitness, metadata = simulate_surrogate_games(
-        repo_root=evaluator.repo_root,
-        config=evaluator.config,
+    java_fitness, metadata = evaluator.run_surrogate_match(
         prompt=prompt,
         opponent=opponent,
+        llm_interval=llm_interval,
         stats=stats,
         test=True,
     )
     elapsed = time.perf_counter() - started
-    evaluator.config.llm_interval = original_interval
-
-    llm_round_score = estimate_llm_game_round_score(
-        prompt=prompt,
-        repo_root=evaluator.repo_root,
-        config=evaluator.config,
-    )
-    fitness = [
-        float(java_fitness[0]) if len(java_fitness) > 0 else 0.0,
-        float(llm_round_score),
-        float(java_fitness[2]) if len(java_fitness) > 2 else 0.0,
-    ]
+    fitness = list(java_fitness)
 
     return _record_match(
         recorder,
@@ -722,9 +670,7 @@ def _run_surrogate_java_match(
         extra={
             "java_match_fitness": list(java_fitness),
             "java_match_win_score": float(java_fitness[0]) if len(java_fitness) > 0 else 0.0,
-            "java_match_game_round_score": float(java_fitness[1]) if len(java_fitness) > 1 else 0.0,
-            "java_match_resource_advantage_score": float(java_fitness[2]) if len(java_fitness) > 2 else 0.0,
-            "llm_round_score_source": "eagle_single_round_helper",
+            "java_match_resource_advantage_score": float(java_fitness[1]) if len(java_fitness) > 1 else 0.0,
         },
     )
 
@@ -754,7 +700,6 @@ def run_surrogate_validation_experiment(
         "population_size": int(config.population_size),
         "num_generations": int(config.num_generations),
         "num_individuals": int(num_individuals),
-        "surrogate_version": str(config.surrogate_version),
         "component_pool_path": _resolve_component_pool_path(),
         "opponents": opponents,
         "history_cache_schema_version": 4,
@@ -930,4 +875,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

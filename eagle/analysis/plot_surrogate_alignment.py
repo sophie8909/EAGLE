@@ -13,12 +13,9 @@ import matplotlib.pyplot as plt
 NUMERIC_FIELDS = {
     "eagle_win_score",
     "surrogate_win_score",
-    "eagle_game_round_score",
-    "surrogate_game_round_score",
     "eagle_resource_advantage_score",
     "surrogate_resource_advantage_score",
     "win_score_abs_gap",
-    "game_round_score_abs_gap",
     "resource_advantage_score_abs_gap",
     "mean_abs_gap",
 }

@@ -17,7 +17,7 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
         "game_rule": individual.game_rule,
         "strategy": dict(individual.strategy or {}),
         "fitness": list(individual.fitness) if isinstance(individual.fitness, (list, tuple)) else individual.fitness,
-        "legacy_components": dict(getattr(individual, "legacy_components", {}) or {}),
+        "static_components": dict(getattr(individual, "static_components", {}) or {}),
     }
 
     operator_profile = getattr(individual, "operator_profile", None)
@@ -45,12 +45,11 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
 
 def deserialize_individual(payload: dict[str, Any]) -> Individual:
     """Restore one individual from a checkpoint record."""
-    legacy_components = dict(payload.get("legacy_components") or {})
     individual = Individual(
         id=payload.get("id"),
         game_rule=payload.get("game_rule", 0),
         strategy=payload.get("strategy"),
-        **legacy_components,
+        static_components=dict(payload.get("static_components") or {}),
     )
 
     fitness = payload.get("fitness")

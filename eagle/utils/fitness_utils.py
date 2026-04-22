@@ -1,11 +1,11 @@
-"""Utilities for working with the project's fitness vectors."""
+"""Utilities for working with the project's two-objective fitness vectors."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 
-FITNESS_DIMENSIONS = 3
-DEFAULT_FITNESS = [0.0, 0.0, 0.0]
+FITNESS_DIMENSIONS = 2
+DEFAULT_FITNESS = [0.0, 0.0]
 
 
 def normalize_fitness(fitness) -> list[float]:
@@ -21,7 +21,7 @@ def normalize_fitness(fitness) -> list[float]:
         return DEFAULT_FITNESS.copy()
 
     if isinstance(fitness, (int, float)):
-        return [float(fitness), 0.0, 0.0]
+        return [float(fitness), 0.0]
 
     if isinstance(fitness, Sequence) and not isinstance(fitness, (str, bytes)):
         values = []
@@ -37,12 +37,9 @@ def normalize_fitness(fitness) -> list[float]:
     return DEFAULT_FITNESS.copy()
 
 
-def fitness_key(fitness) -> tuple[float, float, float]:
+def fitness_key(fitness) -> tuple[float, float]:
     """
-    Comparable key for legacy single-objective operators.
-
-    We keep lexicographic ordering so win score remains the primary signal,
-    then in-game instruction accuracy, then resource advantage.
+    Comparable key for fixed-width two-objective ranking.
     """
     normalized = normalize_fitness(fitness)
     return tuple(normalized)

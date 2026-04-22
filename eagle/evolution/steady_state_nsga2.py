@@ -1,4 +1,4 @@
-﻿"""
+"""
 Steady-State NSGA-II implementation for multi-objective optimization.
 """
 
@@ -229,7 +229,7 @@ class SteadyStateNSGA2(NSGA2):
         return candidates
 
     def _select_best_half_candidate(self, candidates: List[Individual]) -> Individual:
-        """Pick the candidate with the highest surrogate game-round score."""
+        """Pick the strongest candidates under the current surrogate fitness."""
         if not candidates:
             raise ValueError("steady-state candidate batch cannot be empty")
 
@@ -246,7 +246,7 @@ class SteadyStateNSGA2(NSGA2):
         In steady-state mode, one generation means exactly one update:
         1. generates multiple candidate children,
         2. surrogate-evaluates them,
-        3. picks the highest game-round-score candidate,
+        3. picks one candidate from the top surrogate-ranked subset,
         4. runs real evaluation on that chosen child,
         5. immediately inserts it into the population.
         """
@@ -287,7 +287,7 @@ class SteadyStateNSGA2(NSGA2):
                     candidate_offspring = []
 
                 # Step 1: generate multiple candidates and use surrogate evaluation
-                # to rank them by game_round_score.
+                # to rank them by the active two-objective surrogate fitness.
                 candidate_offspring = self._generate_candidate_offspring_batch(
                     generation,
                     generation_stats,

@@ -1,4 +1,4 @@
-﻿"""Single-round surrogate helpers that mirror EAGLE.java's LLM call shape."""
+"""Single-round surrogate helpers that mirror EAGLE.java's LLM call shape."""
 
 from __future__ import annotations
 
@@ -33,12 +33,12 @@ def evaluate_eagle_single_round(
     base_prompt: str,
     dynamic_prompt_text: str,
 ) -> dict[str, Any]:
-    """Run one EAGLE-style single-round surrogate call and score its move quality."""
+    """Run one EAGLE-style single-round helper call and score its move quality."""
     llm_response = generate_eagle_round_response(base_prompt, dynamic_prompt_text)
     score = score_game_round_response(llm_response, dynamic_prompt_text)
     return {
         "final_prompt": build_eagle_round_prompt(base_prompt, dynamic_prompt_text),
         "llm_response": llm_response,
-        "game_round_score": float(score),
+        "response_score": float(score),
     }
 

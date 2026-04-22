@@ -1,4 +1,4 @@
-﻿"""Reflection-based offspring generation helpers."""
+"""Reflection-based offspring generation helpers."""
 
 from __future__ import annotations
 

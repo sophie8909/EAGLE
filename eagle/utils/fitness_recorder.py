@@ -159,7 +159,7 @@ class FitnessRecorder:
         {
             "individual_id": "ind-0",
             "generation": 1,
-            "fitness_score": [0.8, 0.5, 0.3],
+            "fitness_score": [0.8, 0.3],
             "opponent": "SimpleBot",
             "evaluation_time": 12.5,
             "components": {
@@ -173,7 +173,6 @@ class FitnessRecorder:
                     "resource_gathering": 1,
                     "unit_production": 0,
                     "combat_strategy": 2
-                    ...
                 }
             }
         }

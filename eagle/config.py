@@ -1,10 +1,4 @@
-"""Configuration objects for the EA pipeline.
-
-The public API intentionally stays flat so existing call sites can continue to
-use `config.population_size` or `config.surrogate_version` directly, while this
-file groups related settings and exposes a few helper accessors for cleaner use
-inside refactored modules.
-"""
+"""Configuration objects for the current EA pipeline."""
 
 from __future__ import annotations
 
@@ -38,15 +32,6 @@ def _default_config_value(key: str) -> Any:
             f"Missing required default config key {key!r} in {DEFAULT_EVOLUTION_CONFIG_PATH}."
         )
     return deepcopy(payload[key])
-
-
-def _legacy_reproduction_operator_probs() -> dict[str, float]:
-    """Return the pre-reflection fallback distribution for older saved runs."""
-    return {
-        "crossover": 0.50,
-        "mutation": 0.50,
-        "reflection": 0.0,
-    }
 
 
 @dataclass
@@ -118,7 +103,6 @@ class EAConfig:
 
     def __post_init__(self) -> None:
         """Normalize aliases and validate the config surface eagerly."""
-        self._legacy_missing_reproduction_operator_probs = False
         self._normalize_crossover()
         self.validate()
 
@@ -224,7 +208,6 @@ class EAConfig:
             "crossover_repair_enabled": self.crossover_repair_enabled,
             "environment_selection_method": self.environment_selection_method,
             "steady_state_surrogate_offspring_count": self.steady_state_surrogate_offspring_count,
-            "steady_state_surrogate_selection_metric": self.steady_state_surrogate_selection_metric,
             "final_test_max_front": self.final_test_max_front,
             "include_strategy_identity_in_prompt": self.include_strategy_identity_in_prompt,
             "evolving_prompt_components": list(self.evolving_prompt_components),
@@ -243,17 +226,11 @@ class EAConfig:
     def surrogate_settings(self) -> dict[str, object]:
         """Return the subset of fields used by surrogate evaluators."""
         return {
-            "surrogate_version": self.surrogate_version,
             "surrogate_mode": self.surrogate_mode,
             "surrogate_recent_match_window": self.surrogate_recent_match_window,
             "surrogate_round_samples_per_match": self.surrogate_round_samples_per_match,
             "surrogate_log_dir": self.surrogate_log_dir,
         }
-
-    @property
-    def normalized_surrogate_version(self) -> str:
-        """Expose the surrogate mode in normalized lowercase form."""
-        return str(self.surrogate_version).strip().lower()
 
     def real_eval_count(self, candidate_count: int | None = None) -> int:
         """Convert `real_eval_rate` into an integer evaluation budget."""
@@ -309,41 +286,10 @@ def load_config_payload(payload: dict[str, Any] | None) -> EAConfig:
     config = EAConfig()
     valid_fields = set(config.__dataclass_fields__.keys())
 
-    if "reproduction_operator_probs" not in payload:
-        config.reproduction_operator_probs = _legacy_reproduction_operator_probs()
-        config._legacy_missing_reproduction_operator_probs = True
-
-    legacy_strategy_mutation = {
-        "pool_replacement": payload.get("strategy_mutation_pool_replacement_prob"),
-        "identity_preserving_rewrite": payload.get("strategy_mutation_identity_preserving_rewrite_prob"),
-        "identity_shift_rewrite": payload.get("strategy_mutation_identity_shift_rewrite_prob"),
-    }
-    if "strategy_mutation" not in payload and any(value is not None for value in legacy_strategy_mutation.values()):
-        config.strategy_mutation = {
-            key: float(value)
-            for key, value in legacy_strategy_mutation.items()
-            if value is not None
-        }
-
-    legacy_crossover_repair_prob = payload.get("strategy_mutation_crossover_repair_rewrite_prob")
-    if "crossover_repair_enabled" not in payload and legacy_crossover_repair_prob is not None:
-        config.crossover_repair_enabled = float(legacy_crossover_repair_prob) > 0.0
-
-    if "surrogate_recent_match_window" not in payload and "surrogate_recent_log_window" in payload:
-        config.surrogate_recent_match_window = int(payload["surrogate_recent_log_window"])
-    if "surrogate_round_samples_per_match" not in payload and "surrogate_game_round_samples" in payload:
-        config.surrogate_round_samples_per_match = int(payload["surrogate_game_round_samples"])
-
     for key, value in payload.items():
         if key not in valid_fields:
             continue
         setattr(config, key, value)
-
-    if "crossover" not in payload:
-        if "crossover_mode" in payload:
-            config.crossover = str(payload["crossover_mode"])
-        elif "crossover_method" in payload:
-            config.crossover = str(payload["crossover_method"])
 
     config.validate()
     return config
