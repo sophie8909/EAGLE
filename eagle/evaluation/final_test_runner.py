@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
-from ..config import EAConfig, clone_config
+from ..config import EAConfig
 from ..main import OPPONENT_LIST
 from ..project import DEFAULT_FINAL_TEST_CONFIG_PATH
 from ..utils.component_pool import ComponentPool
 from ..utils.ea_log_parse import parse_individuals_from_ea_log
 from .evaluator import Evaluator
 from .generation_replay import build_result_record, extract_individual_ids_up_to_front
+from .replay_common import apply_runtime_overrides, build_interval_runs, write_results_snapshot
 
 
 def _resolve_final_test_max_front(config: EAConfig) -> int | None:
@@ -59,56 +59,12 @@ def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: in
 
     return _resolve_latest_generation_log_path(log_dir)
 
-
-def _load_final_test_override_payload(config_path: str | Path | None = None) -> dict:
-    """Load the optional final-test override JSON payload."""
-    candidate_path = Path(config_path) if config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
-    if not candidate_path.exists():
-        return {}
-    return json.loads(candidate_path.read_text(encoding="utf-8"))
-
-
 def _resolve_final_test_config(
     base_config: EAConfig,
     config_path: str | Path | None = None,
 ) -> EAConfig:
     """Apply final-test-specific runtime overrides onto the saved run config."""
-    payload = _load_final_test_override_payload(config_path)
-    resolved = clone_config(base_config)
-    if "run_time_per_game_sec" in payload:
-        resolved.run_time_per_game_sec = int(payload["run_time_per_game_sec"])
-    if "llm_interval" in payload:
-        resolved.llm_interval = int(payload["llm_interval"])
-    if "save_trace_on_test" in payload:
-        resolved.save_trace_on_test = bool(payload["save_trace_on_test"])
-    resolved.validate()
-    return resolved
-
-
-def _build_final_test_interval_runs(
-    runtime_config: EAConfig,
-    config_path: str | Path | None = None,
-) -> list[dict[str, int | str]]:
-    """Return the configured final-test llm-interval sweep."""
-    payload = _load_final_test_override_payload(config_path)
-    configured_intervals = payload.get("llm_intervals")
-    if configured_intervals is None:
-        configured_intervals = [int(runtime_config.llm_interval)]
-
-    interval_runs: list[dict[str, int | str]] = []
-    seen_intervals: set[int] = set()
-    for llm_interval in configured_intervals:
-        interval_value = int(llm_interval)
-        if interval_value in seen_intervals:
-            continue
-        seen_intervals.add(interval_value)
-        interval_runs.append(
-            {
-                "label": f"interval_{interval_value}",
-                "llm_interval": interval_value,
-            }
-        )
-    return interval_runs
+    return apply_runtime_overrides(base_config, config_path)
 
 
 def run_final_test_suite(
@@ -166,7 +122,7 @@ def run_final_test_suite(
     else:
         selected_individuals = flattened_individuals
 
-    interval_runs = _build_final_test_interval_runs(runtime_config, final_test_config_path)
+    interval_runs = build_interval_runs(final_test_config_path, runtime_config.llm_interval)
     generation_number = _extract_generation_number(generation_log_path)
     results = {
         "generation": generation_number,
@@ -238,8 +194,7 @@ def run_final_test_suite(
                 results["results"].setdefault(individual.id, [])
                 results["results"][individual.id].append(result_record)
 
-                with open(experiment_log_dir / "final_test_results.json", "w", encoding="utf-8") as f:
-                    json.dump(results, f, indent=4)
+                write_results_snapshot(results, experiment_log_dir / "final_test_results.json")
 
     print("[Final Test] complete", flush=True)
     return results

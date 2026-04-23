@@ -294,13 +294,6 @@ class Evaluator:
         prompt: str,
         opponent: str | None = None,
     ) -> list[float]:
-        return self.surrogate_evaluation_policy(prompt, opponent=opponent)
-
-    def surrogate_evaluation_policy(
-        self,
-        prompt: str,
-        opponent: str | None = None,
-    ) -> list[float]:
         return evaluate_with_java_surrogate(
             prompt,
             repo_root=self.repo_root,

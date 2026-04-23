@@ -15,38 +15,6 @@ from ..strategy.extractor import extract_strategy
 _COMPILED_AGENT_CACHE: dict[str, dict[str, str]] = {}
 
 
-def surrogate_evaluation_game_round(
-    prompt: str,
-    repo_root: Path,
-    config,
-    opponent: str | None,
-    *,
-    simulate_surrogate_games_fn=None,
-) -> list[float]:
-    """Compatibility wrapper that now forwards to the Java surrogate pipeline."""
-    return evaluate_with_java_surrogate(
-        prompt,
-        repo_root=repo_root,
-        config=config,
-        opponent=opponent,
-    )
-
-
-def surrogate_evaluation_policy(
-    prompt: str,
-    repo_root: Path,
-    config,
-    opponent: str | None = None,
-) -> list[float]:
-    """Compatibility wrapper for callers that still use the old policy entry point."""
-    return evaluate_with_java_surrogate(
-        prompt,
-        repo_root=repo_root,
-        config=config,
-        opponent=opponent,
-    )
-
-
 def very_low_fitness() -> list[float]:
     """Return the worst surrogate fitness used for fail-closed execution."""
     return [0.0, 0.0]

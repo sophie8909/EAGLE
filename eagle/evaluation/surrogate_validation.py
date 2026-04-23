@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import json
 import time
@@ -20,6 +19,7 @@ from ..utils.component_pool import ComponentPool
 from ..utils.fitness_recorder import FitnessRecorder
 from ..utils.individual import Individual
 from .evaluator import Evaluator
+from .surrogate_validation_outputs import refresh_experiment_outputs
 DEFAULT_SURROGATE_VALIDATION_TIMEOUT_SEC = 60
 DEFAULT_QUICK_RUN_OPPONENT = "ai.PassiveAI"
 
@@ -47,27 +47,18 @@ def _make_smoke_log_dir() -> Path:
     return log_dir
 
 
+def _individual_payload(individual: Individual) -> dict[str, Any]:
+    """Serialize one individual's identifying fields for JSON outputs."""
+    return {
+        "id": individual.id,
+        "game_rule": individual.game_rule,
+        "strategy": dict(individual.strategy),
+    }
+
+
 def _prompt_digest(prompt: str) -> str:
     """Build a stable digest for the rendered prompt text."""
     return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
-
-
-def _average(values: list[float]) -> float | None:
-    """Return the arithmetic mean when at least one value is present."""
-    if not values:
-        return None
-    return sum(values) / len(values)
-
-
-def _safe_float(value: Any) -> float | None:
-    """Convert one optional numeric-ish value into float."""
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
 
 def _infer_final_tick(parsed_log: dict[str, Any] | None) -> int | None:
     """Infer the last observed game tick from parsed log structures."""
@@ -89,41 +80,6 @@ def _infer_final_tick(parsed_log: dict[str, Any] | None) -> int | None:
             candidates.append(current_time)
     return max(candidates) if candidates else None
 
-
-def _build_mode_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregate one benchmark mode into compact summary statistics."""
-    if not records:
-        return {
-            "match_count": 0,
-            "cached_match_count": 0,
-            "avg_win_score": None,
-            "avg_resource_advantage_score": None,
-            "avg_game_time_sec": None,
-            "avg_final_tick": None,
-            "win_count": 0,
-            "draw_count": 0,
-            "loss_count": 0,
-        }
-
-    return {
-        "match_count": len(records),
-        "cached_match_count": sum(1 for record in records if record.get("cached")),
-        "avg_win_score": _average([float(record.get("win_score", 0.0)) for record in records]),
-        "avg_resource_advantage_score": _average(
-            [float(record.get("resource_advantage_score", 0.0)) for record in records]
-        ),
-        "avg_game_time_sec": _average(
-            [float(record.get("game_time_sec", 0.0)) for record in records if record.get("game_time_sec") is not None]
-        ),
-        "avg_final_tick": _average(
-            [float(record.get("final_tick", 0.0)) for record in records if record.get("final_tick") is not None]
-        ),
-        "win_count": sum(1 for record in records if record.get("result") == "Win"),
-        "draw_count": sum(1 for record in records if record.get("result") == "Draw"),
-        "loss_count": sum(1 for record in records if record.get("result") == "Loss"),
-    }
-
-
 def _result_label_from_fitness(fitness: list[float]) -> str:
     """Map the first objective to the familiar Win/Draw/Loss labels."""
     if fitness and fitness[0] == 1.0:
@@ -132,229 +88,6 @@ def _result_label_from_fitness(fitness: list[float]) -> str:
         return "Loss"
     return "Draw"
 
-
-def _collect_match_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
-    """Flatten all individual/mode match results into one table."""
-    rows: list[dict[str, Any]] = []
-    for individual_result in list(results.get("individual_results") or []):
-        individual_info = dict(individual_result.get("individual") or {})
-        for mode_name, records in dict(individual_result.get("modes") or {}).items():
-            for record in records:
-                rows.append(
-                    {
-                        "experiment_type": results.get("experiment_type"),
-                        "timestamp": results.get("timestamp"),
-                        "prompt_digest": individual_result.get("prompt_digest"),
-                        "individual_id": individual_info.get("id"),
-                        "mode": mode_name,
-                        "benchmark_mode": record.get("benchmark_mode"),
-                        "opponent": record.get("opponent"),
-                        "result": record.get("result"),
-                        "win_score": record.get("win_score"),
-                        "resource_advantage_score": record.get("resource_advantage_score"),
-                        "game_time_sec": record.get("game_time_sec"),
-                        "final_tick": record.get("final_tick"),
-                        "max_cycles": record.get("max_cycles"),
-                        "winner": record.get("winner"),
-                        "timeout": record.get("timeout"),
-                        "llm_calls": record.get("llm_calls"),
-                        "llm_interval": record.get("llm_interval"),
-                        "run_time_per_game_sec": record.get("run_time_per_game_sec"),
-                        "runner_script": record.get("runner_script"),
-                        "ai1": record.get("ai1"),
-                        "ai2": record.get("ai2"),
-                        "java_match_win_score": record.get("java_match_win_score"),
-                        "java_match_resource_advantage_score": record.get("java_match_resource_advantage_score"),
-                        "cached": record.get("cached"),
-                        "log_path": record.get("log_path"),
-                    }
-                )
-    return rows
-
-
-def _write_match_results_csv(log_dir: Path, results: dict[str, Any]) -> None:
-    """Write one flat per-match CSV for downstream plotting and spreadsheet analysis."""
-    rows = _collect_match_rows(results)
-
-    fieldnames = [
-        "experiment_type",
-        "timestamp",
-        "prompt_digest",
-        "individual_id",
-        "mode",
-        "benchmark_mode",
-        "opponent",
-        "result",
-        "win_score",
-        "resource_advantage_score",
-        "game_time_sec",
-        "final_tick",
-        "max_cycles",
-        "winner",
-        "timeout",
-        "llm_calls",
-        "llm_interval",
-        "run_time_per_game_sec",
-        "runner_script",
-        "ai1",
-        "ai2",
-        "java_match_win_score",
-        "java_match_resource_advantage_score",
-        "cached",
-        "log_path",
-    ]
-
-    output_path = log_dir / "surrogate_validation_matches.csv"
-    with output_path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def _write_mode_summary_csv(log_dir: Path, results: dict[str, Any]) -> None:
-    """Write one compact per-mode summary CSV for quick experiment comparison."""
-    summaries = dict(results.get("mode_summaries") or {})
-    fieldnames = [
-        "experiment_type",
-        "timestamp",
-        "prompt_digest",
-        "individual_id",
-        "mode",
-        "match_count",
-        "cached_match_count",
-        "runner_script",
-        "avg_win_score",
-        "avg_resource_advantage_score",
-        "avg_game_time_sec",
-        "avg_final_tick",
-        "win_count",
-        "draw_count",
-        "loss_count",
-    ]
-    output_path = log_dir / "surrogate_validation_mode_summary.csv"
-    with output_path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for individual_result in list(results.get("individual_results") or []):
-            summaries = dict(individual_result.get("mode_summaries") or {})
-            individual_info = dict(individual_result.get("individual") or {})
-            for mode_name, summary in summaries.items():
-                writer.writerow(
-                    {
-                        "experiment_type": results.get("experiment_type"),
-                        "timestamp": results.get("timestamp"),
-                        "prompt_digest": individual_result.get("prompt_digest"),
-                        "individual_id": individual_info.get("id"),
-                        "mode": mode_name,
-                        "runner_script": "RunLoop_5000.sh",
-                        **summary,
-                    }
-                )
-
-
-def _build_alignment_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
-    """Build per-individual/per-opponent Java-vs-surrogate alignment rows."""
-    rows: list[dict[str, Any]] = []
-    for individual_result in list(results.get("individual_results") or []):
-        individual_info = dict(individual_result.get("individual") or {})
-        eagle_by_opponent = {
-            row.get("opponent"): row
-            for row in list(dict(individual_result.get("modes") or {}).get("eagle_final_test") or [])
-            if row.get("opponent")
-        }
-        surrogate_by_opponent = {
-            row.get("opponent"): row
-            for row in list(dict(individual_result.get("modes") or {}).get("surrogate_java_final_test") or [])
-            if row.get("opponent")
-        }
-        for opponent in sorted(set(eagle_by_opponent) | set(surrogate_by_opponent)):
-            eagle_record = eagle_by_opponent.get(opponent, {})
-            surrogate_record = surrogate_by_opponent.get(opponent, {})
-            eagle_fitness = list(eagle_record.get("fitness") or [])
-            surrogate_fitness = list(surrogate_record.get("fitness") or [])
-            win_gap = None
-            resource_gap = None
-            if eagle_fitness and surrogate_fitness:
-                if len(eagle_fitness) > 0 and len(surrogate_fitness) > 0:
-                    win_gap = abs(float(eagle_fitness[0]) - float(surrogate_fitness[0]))
-                if len(eagle_fitness) > 1 and len(surrogate_fitness) > 1:
-                    resource_gap = abs(float(eagle_fitness[1]) - float(surrogate_fitness[1]))
-            gap_values = [value for value in [win_gap, resource_gap] if value is not None]
-            rows.append(
-                {
-                    "experiment_type": results.get("experiment_type"),
-                    "timestamp": results.get("timestamp"),
-                    "prompt_digest": individual_result.get("prompt_digest"),
-                    "individual_id": individual_info.get("id"),
-                    "opponent": opponent,
-                    "eagle_result": eagle_record.get("result"),
-                    "surrogate_result": surrogate_record.get("result"),
-                    "eagle_win_score": eagle_record.get("win_score"),
-                    "surrogate_win_score": surrogate_record.get("win_score"),
-                    "eagle_resource_advantage_score": eagle_record.get("resource_advantage_score"),
-                    "surrogate_resource_advantage_score": surrogate_record.get("resource_advantage_score"),
-                    "win_score_abs_gap": win_gap,
-                    "resource_advantage_score_abs_gap": resource_gap,
-                    "mean_abs_gap": _average(gap_values),
-                    "same_result_label": eagle_record.get("result") == surrogate_record.get("result")
-                    if eagle_record and surrogate_record
-                    else None,
-                }
-            )
-    return rows
-
-
-def _write_alignment_csv(log_dir: Path, results: dict[str, Any]) -> None:
-    """Write per-individual/per-opponent Java-vs-surrogate alignment rows."""
-    rows = _build_alignment_rows(results)
-    fieldnames = [
-        "experiment_type",
-        "timestamp",
-        "prompt_digest",
-        "individual_id",
-        "opponent",
-        "eagle_result",
-        "surrogate_result",
-        "eagle_win_score",
-        "surrogate_win_score",
-        "eagle_resource_advantage_score",
-        "surrogate_resource_advantage_score",
-        "win_score_abs_gap",
-        "resource_advantage_score_abs_gap",
-        "mean_abs_gap",
-        "same_result_label",
-    ]
-    output_path = log_dir / "surrogate_validation_alignment.csv"
-    with output_path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def _build_alignment_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregate alignment quality across all individuals and opponents."""
-    if not rows:
-        return {
-            "pair_count": 0,
-            "same_result_rate": None,
-            "avg_win_score_abs_gap": None,
-            "avg_resource_advantage_score_abs_gap": None,
-            "avg_mean_abs_gap": None,
-        }
-    same_result_flags = [bool(row.get("same_result_label")) for row in rows if row.get("same_result_label") is not None]
-    return {
-        "pair_count": len(rows),
-        "same_result_rate": _average([1.0 if flag else 0.0 for flag in same_result_flags]) if same_result_flags else None,
-        "avg_win_score_abs_gap": _average(
-            [value for value in [_safe_float(row.get("win_score_abs_gap")) for row in rows] if value is not None]
-        ),
-        "avg_resource_advantage_score_abs_gap": _average(
-            [value for value in [_safe_float(row.get("resource_advantage_score_abs_gap")) for row in rows] if value is not None]
-        ),
-        "avg_mean_abs_gap": _average(
-            [value for value in [_safe_float(row.get("mean_abs_gap")) for row in rows] if value is not None]
-        ),
-    }
 
 
 def run_surrogate_validation_smoke_test(
@@ -399,11 +132,7 @@ def run_surrogate_validation_smoke_test(
         )
         (individual_dir / "individual.json").write_text(
             json.dumps(
-                {
-                    "id": individual.id,
-                    "game_rule": individual.game_rule,
-                    "strategy": dict(individual.strategy),
-                },
+                _individual_payload(individual),
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -415,11 +144,7 @@ def run_surrogate_validation_smoke_test(
                 "individual_index": individual_index,
                 "prompt_digest": _prompt_digest(prompt),
                 "prompt_line_count": len(prompt.splitlines()),
-                "individual": {
-                    "id": individual.id,
-                    "game_rule": individual.game_rule,
-                    "strategy": dict(individual.strategy),
-                },
+                "individual": _individual_payload(individual),
                 "compiled_policy": policy,
                 "surrogate_spec": surrogate_spec,
                 "checks": {
@@ -714,11 +439,7 @@ def run_surrogate_validation_experiment(
             "prompt": prompt,
             "prompt_digest": _prompt_digest(prompt),
             "prompt_line_count": len(prompt.splitlines()),
-            "individual": {
-                "id": individual.id,
-                "game_rule": individual.game_rule,
-                "strategy": dict(individual.strategy),
-            },
+            "individual": _individual_payload(individual),
             "modes": {
                 "eagle_final_test": [],
                 "surrogate_java_final_test": [],
@@ -754,29 +475,9 @@ def run_surrogate_validation_experiment(
                     llm_interval=llm_interval,
                 )
             )
-            individual_result["mode_summaries"] = {
-                mode_name: _build_mode_summary(mode_records)
-                for mode_name, mode_records in individual_result["modes"].items()
-            }
-            alignment_rows = _build_alignment_rows(results)
-            results["alignment_summary"] = _build_alignment_summary(alignment_rows)
-            (log_dir / "surrogate_validation_results.json").write_text(
-                json.dumps(results, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            _write_match_results_csv(log_dir, results)
-            _write_mode_summary_csv(log_dir, results)
-            _write_alignment_csv(log_dir, results)
+            _refresh_experiment_outputs(log_dir, results, individual_result)
 
-        alignment_rows = _build_alignment_rows(results)
-        results["alignment_summary"] = _build_alignment_summary(alignment_rows)
-        (log_dir / "surrogate_validation_results.json").write_text(
-            json.dumps(results, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        _write_match_results_csv(log_dir, results)
-        _write_mode_summary_csv(log_dir, results)
-        _write_alignment_csv(log_dir, results)
+        _refresh_experiment_outputs(log_dir, results, individual_result)
 
     return results
 

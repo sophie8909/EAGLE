@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 from typing import Iterable
 
-from ..config import EAConfig, clone_config, load_config_from_json
 from ..main import OPPONENT_LIST
 from ..project import DEFAULT_FINAL_TEST_CONFIG_PATH
 from ..utils.component_pool import ComponentPool
 from ..utils.ea_log_parse import parse_individuals_from_ea_log
 from .evaluator import Evaluator
+from .replay_common import build_interval_runs, load_runtime_config, write_results_snapshot
 
 # CLI examples:
 # `py -m eagle.evaluation.generation_replay --log-dir logs/eagle/20260409_123456 --generation 20`
@@ -35,53 +34,6 @@ def resolve_generation_log_path(log_dir: str | Path, generation: int) -> Path:
     """Resolve the saved generation log path for one NSGA-II generation."""
     log_dir_path = Path(log_dir)
     return log_dir_path / f"generation_{generation}_mo.txt"
-
-
-def _load_final_test_override_payload(config_path: str | Path | None = None) -> dict:
-    """Load the optional replay/final-test override JSON payload."""
-    candidate_path = Path(config_path) if config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
-    if not candidate_path.exists():
-        return {}
-    return json.loads(candidate_path.read_text(encoding="utf-8"))
-
-
-def load_run_config(log_dir: str | Path, config_path: str | Path | None = None) -> EAConfig:
-    """Load the saved run config and then overlay test-specific runtime settings."""
-    run_config = load_config_from_json(log_dir)
-    payload = _load_final_test_override_payload(config_path)
-    resolved = clone_config(run_config)
-    if "run_time_per_game_sec" in payload:
-        resolved.run_time_per_game_sec = int(payload["run_time_per_game_sec"])
-    if "llm_interval" in payload:
-        resolved.llm_interval = int(payload["llm_interval"])
-    if "save_trace_on_test" in payload:
-        resolved.save_trace_on_test = bool(payload["save_trace_on_test"])
-    resolved.validate()
-    return resolved
-
-
-def build_interval_runs(config_path: str | Path | None, fallback_llm_interval: int) -> list[dict[str, int | str]]:
-    """Resolve the replay llm-interval sweep from config or fallback value."""
-    payload = _load_final_test_override_payload(config_path)
-    configured_intervals = payload.get("llm_intervals")
-    if configured_intervals is None:
-        configured_intervals = [int(fallback_llm_interval)]
-
-    interval_runs: list[dict[str, int | str]] = []
-    seen_intervals: set[int] = set()
-    for llm_interval in configured_intervals:
-        interval_value = int(llm_interval)
-        if interval_value in seen_intervals:
-            continue
-        seen_intervals.add(interval_value)
-        interval_runs.append(
-            {
-                "label": f"interval_{interval_value}",
-                "llm_interval": interval_value,
-            }
-        )
-    return interval_runs
-
 
 def extract_individual_ids_up_to_front(
     generation_log_path: str | Path,
@@ -160,6 +112,12 @@ def build_result_record(
     }
 
 
+def _append_result(results: dict, individual_id: str, result_record: dict) -> None:
+    """Append one replay result row under the target individual id."""
+    results["results"].setdefault(individual_id, [])
+    results["results"][individual_id].append(result_record)
+
+
 def filter_individuals(
     individuals,
     *,
@@ -194,7 +152,7 @@ def run_generation_result_test(
     if not component_pool_path.exists():
         raise FileNotFoundError(f"Component pool not found: {component_pool_path}")
 
-    runtime_config = load_run_config(log_dir_path, config_path)
+    runtime_config = load_runtime_config(log_dir_path, config_path)
     evaluator = Evaluator(
         ComponentPool.from_json(str(component_pool_path)),
         runtime_config,
@@ -252,7 +210,6 @@ def run_generation_result_test(
                     llm_interval=llm_interval,
                     test=True,
                 )
-                results["results"].setdefault(individual.id, [])
                 result_record = build_result_record(
                     individual,
                     opponent,
@@ -263,15 +220,14 @@ def run_generation_result_test(
                 )
                 result_record["interval_mode"] = str(interval_run["label"])
                 result_record["llm_interval"] = llm_interval
-                results["results"][individual.id].append(result_record)
+                _append_result(results, individual.id, result_record)
 
                 destination = (
                     Path(output_path)
                     if output_path is not None
                     else log_dir_path / f"generation_{generation}_front_{max_front if max_front is not None else 'all'}_result_test.json"
                 )
-                with open(destination, "w", encoding="utf-8") as f:
-                    json.dump(results, f, indent=4)
+                write_results_snapshot(results, destination)
     
         # java agent test final result
         for opponent in resolved_opponents:
@@ -289,7 +245,6 @@ def run_generation_result_test(
 
             fitness_score = list(java_fitness)
 
-            results["results"].setdefault(individual.id, [])
             result_record = build_result_record(
                 individual,
                 opponent,
@@ -300,15 +255,14 @@ def run_generation_result_test(
             )
             result_record["interval_mode"] = "java_agent_test"
             result_record["llm_interval"] = None
-            results["results"][individual.id].append(result_record)
+            _append_result(results, individual.id, result_record)
 
             destination = (
                 Path(output_path)
                 if output_path is not None
                 else log_dir_path / f"generation_{generation}_front_{max_front if max_front is not None else 'all'}_result_test.json"
             )
-            with open(destination, "w", encoding="utf-8") as f:
-                json.dump(results, f, indent=4)
+            write_results_snapshot(results, destination)
 
     return results
 
