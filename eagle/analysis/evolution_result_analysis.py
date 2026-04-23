@@ -96,6 +96,19 @@ def _clean_axis_label(label: str) -> str:
     return label.split(".")[-1]
 
 
+def _compose_plot_title(default_title: str, custom_title: str | None) -> str:
+    """Compose a plot title with an optional custom prefix."""
+    if not custom_title:
+        return default_title
+    return f"{default_title} - {custom_title}"
+
+
+def _debug_print(debug: bool, *values: object) -> None:
+    """Print only when debug mode is enabled."""
+    if debug:
+        print(*values)
+
+
 def _dominates(left_fitness: list[float], right_fitness: list[float]) -> bool:
     """Return whether one fitness vector Pareto-dominates another."""
     better_in_any = False
@@ -125,7 +138,7 @@ def _front_one_ids_from_population(individuals: list) -> set[str]:
     return {getattr(individual, "id", "") for individual in front_one}
 
 
-def _load_generation_entries_from_checkpoints(run_dir: Path) -> list[tuple[int, list, set[str]]]:
+def _load_generation_entries_from_checkpoints(run_dir: Path, debug: bool = False) -> list[tuple[int, list, set[str]]]:
     """Load complete generation populations from checkpoints when available."""
     checkpoints_path = run_dir / "checkpoints.jsonl"
     if not checkpoints_path.exists():
@@ -154,7 +167,7 @@ def _load_generation_entries_from_checkpoints(run_dir: Path) -> list[tuple[int, 
         ]
         if not individuals:
             continue
-        print(f"Loaded {len(individuals)} individuals from checkpoint for generation {generation+1}")
+        _debug_print(debug, f"Loaded {len(individuals)} individuals from checkpoint for generation {generation+1}")
         front_one_ids = _front_one_ids_from_population(individuals)
         display_generation = generation + 1
         loaded.append((display_generation, individuals, front_one_ids))
@@ -181,18 +194,23 @@ def _load_generation_entries_from_logs(run_dir: Path) -> list[tuple[int, list, s
     return loaded
 
 
-def _load_generation_entries(run_dir: Path) -> list[tuple[int, list, set[str]]]:
+def _load_generation_entries(run_dir: Path, debug: bool = False) -> list[tuple[int, list, set[str]]]:
     """Load complete populations for every generation, preferring checkpoints."""
-    from_checkpoints = _load_generation_entries_from_checkpoints(run_dir)
+    from_checkpoints = _load_generation_entries_from_checkpoints(run_dir, debug=debug)
     if from_checkpoints:
         return from_checkpoints
     return _load_generation_entries_from_logs(run_dir)
 
 
-def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
+def _plot_generation_scatter(
+    run_dir: Path,
+    output_dir: Path,
+    custom_title: str | None = None,
+    debug: bool = False,
+) -> list[Path]:
     """Render one combined plot plus one per-generation plot."""
     plt = _require_matplotlib()
-    generation_entries = _load_generation_entries(run_dir)
+    generation_entries = _load_generation_entries(run_dir, debug=debug)
     if not generation_entries:
         return []
 
@@ -237,7 +255,7 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
         for individual in individuals:
             x_value = _safe_float(individual.fitness[0]) if len(individual.fitness) > 0 else float("nan")
             y_value = _safe_float(individual.fitness[1]) if len(individual.fitness) > 1 else float("nan")
-
+            print(f"Gen {generation_number} - Individual {getattr(individual, 'id', '')}: Fitness = ({x_value}, {y_value}), Front 1 = {getattr(individual, 'id', '') in front_one_ids}")
             if math.isnan(x_value) or math.isnan(y_value):
                 continue
 
@@ -300,7 +318,7 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
 
         plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
         plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
-        plt.title(f"Generation {generation_number} Fitness Distribution")
+        plt.title(_compose_plot_title(f"Generation {generation_number} Fitness Distribution", custom_title))
         plt.xlim(*x_limits)
         plt.ylim(*y_limits)
         plt.grid(alpha=0.25)
@@ -316,7 +334,7 @@ def _plot_generation_scatter(run_dir: Path, output_dir: Path) -> list[Path]:
     # ===== combined plot =====
     plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
     plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
-    plt.title("Generation Fitness Distribution")
+    plt.title(_compose_plot_title("Generation Fitness Distribution", custom_title))
     plt.xlim(*x_limits)
     plt.ylim(*y_limits)
     plt.grid(alpha=0.25)
@@ -385,7 +403,13 @@ def _collect_final_test_mode_rows(results_payload: dict, interval_mode: str) -> 
     return individual_ids, opponent_names, matrix
 
 
-def _plot_final_test_mode(run_dir: Path, output_dir: Path, final_test_path: Path, interval_mode: str) -> Path | None:
+def _plot_final_test_mode(
+    run_dir: Path,
+    output_dir: Path,
+    final_test_path: Path,
+    interval_mode: str,
+    custom_title: str | None = None,
+) -> Path | None:
     """Render one heatmap for one final-test mode."""
     plt = _require_matplotlib()
     payload = json.loads(final_test_path.read_text(encoding="utf-8"))
@@ -400,7 +424,7 @@ def _plot_final_test_mode(run_dir: Path, output_dir: Path, final_test_path: Path
     plt.yticks(range(len(individual_ids)), individual_ids)
     plt.xlabel("Opponent")
     plt.ylabel("Individual")
-    plt.title(f"Final Test Resource Advantage: {interval_mode}")
+    plt.title(_compose_plot_title(f"Final Test Resource Advantage: {interval_mode}", custom_title))
     colorbar = plt.colorbar(image)
     colorbar.set_label("Resource Advantage Score")
 
@@ -417,7 +441,13 @@ def _plot_final_test_mode(run_dir: Path, output_dir: Path, final_test_path: Path
     return figure_path
 
 
-def analyze_evolution_run(run_dir: str | Path | None = None, *, latest: bool = False) -> dict[str, object]:
+def analyze_evolution_run(
+    run_dir: str | Path | None = None,
+    *,
+    latest: bool = False,
+    title: str | None = None,
+    debug: bool = False,
+) -> dict[str, object]:
     """Generate evolution scatter plots and final-test resource heatmaps."""
     resolved_run_dir = _resolve_run_dir(run_dir, latest)
     output_dir = ensure_directory(resolved_run_dir / "analysis" / "evolution")
@@ -425,6 +455,8 @@ def analyze_evolution_run(run_dir: str | Path | None = None, *, latest: bool = F
     generation_figures = _plot_generation_scatter(
         resolved_run_dir,
         ensure_directory(output_dir / "generation_fitness"),
+        custom_title=title,
+        debug=debug,
     )
     generation_gif_path = _build_generation_gif(
         generation_figures,
@@ -441,6 +473,7 @@ def analyze_evolution_run(run_dir: str | Path | None = None, *, latest: bool = F
                 final_test_output_dir,
                 final_test_path,
                 interval_mode,
+                custom_title=title,
             )
             if figure_path is not None:
                 final_test_figures[interval_mode] = str(figure_path)
@@ -451,6 +484,8 @@ def analyze_evolution_run(run_dir: str | Path | None = None, *, latest: bool = F
         "generation_animation_gif": str(generation_gif_path) if generation_gif_path is not None else None,
         "final_test_result_path": str(final_test_path) if final_test_path is not None else None,
         "final_test_figures": final_test_figures,
+        "title": title,
+        "debug": debug,
     }
     summary_path = output_dir / "analysis_summary.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -463,6 +498,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Plot EAGLE evolution fitness and final-test resource results.")
     parser.add_argument("--run-dir", default=None, help="Target EAGLE run directory under logs/eagle.")
     parser.add_argument("--latest", action="store_true", help="Analyze the latest run with generation logs.")
+    parser.add_argument("--title", default=None, help="Custom title for the generated plots.")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode and print debug output.")
     return parser
 
 
@@ -470,8 +507,8 @@ def main() -> None:
     """CLI entry point for evolution-result analysis."""
     parser = build_argument_parser()
     args = parser.parse_args()
-    summary = analyze_evolution_run(run_dir=args.run_dir, latest=args.latest)
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    summary = analyze_evolution_run(run_dir=args.run_dir, latest=args.latest, title=args.title, debug=args.debug)
+    _debug_print(args.debug, json.dumps(summary, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

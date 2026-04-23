@@ -42,3 +42,4 @@ third_party/microrts/resources/config.properties
 /batch_logs
 /prompt
 /prompt
+*.xml
