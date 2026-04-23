@@ -80,7 +80,7 @@ class EAConfig:
     run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
     real_eval_rate: float = field(default_factory=lambda: float(_default_config_value("real_eval_rate")))
     real_eval_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("real_eval_opponents")))
-    llm_interval: int = field(default_factory=lambda: int(_default_config_value("llm_interval")))
+    llm_interval: list[int] = field(default_factory=lambda: list(_default_config_value("llm_interval")))
     save_trace_on_test: bool = field(default_factory=lambda: bool(_default_config_value("save_trace_on_test")))
 
     resource_advantage_alpha: float = field(
@@ -191,6 +191,7 @@ class EAConfig:
                 "Use 'random' or 'all_avg'."
             )
         self.surrogate_mode = normalized_surrogate_mode
+        self.llm_interval = self._normalized_llm_interval_input(self.llm_interval)
 
     def evolution_settings(self) -> dict[str, object]:
         """Return the subset of fields that control population search behavior."""
@@ -240,6 +241,36 @@ class EAConfig:
             return 1
         return max(0, budget)
 
+    def llm_interval_for_generation(self, generation: int | None) -> int:
+        """Return the scheduled LLM interval for one zero-based generation."""
+        schedule = self._normalized_llm_interval_input(self.llm_interval)
+        if generation is None or generation < 0:
+            return schedule[0]
+        if self.num_generations <= 0:
+            return schedule[-1]
+        schedule_index = min(
+            len(schedule) - 1,
+            max(0, int(generation) * len(schedule) // int(self.num_generations)),
+        )
+        return schedule[schedule_index]
+
+    def set_active_llm_interval_for_generation(self, generation: int | None) -> int:
+        """Select and store the runtime LLM interval for the active generation."""
+        interval = self.llm_interval_for_generation(generation)
+        self._active_llm_interval = interval
+        return interval
+
+    def set_active_llm_interval(self, interval: int | None) -> None:
+        """Set or clear an explicit runtime LLM interval override."""
+        self._active_llm_interval = None if interval is None else int(interval)
+
+    def active_llm_interval(self) -> int:
+        """Return the runtime LLM interval currently used by MicroRTS launches."""
+        active_interval = getattr(self, "_active_llm_interval", None)
+        if active_interval is not None:
+            return int(active_interval)
+        return self.llm_interval_for_generation(None)
+
     def strategy_mutation_mode_weights(self) -> dict[str, float]:
         """Return normalized sampling weights for strategy-mutation dispatch."""
         weights = self._normalized_strategy_mutation_input(self.strategy_mutation)
@@ -278,6 +309,19 @@ class EAConfig:
         """Convert strategy-mutation weights into a plain float dictionary."""
         strategy_mutation = dict(raw_strategy_mutation or {})
         return {str(key): float(value) for key, value in strategy_mutation.items()}
+
+    @staticmethod
+    def _normalized_llm_interval_input(raw_interval: int | list[int] | tuple[int, ...]) -> list[int]:
+        """Normalize the LLM interval schedule into a non-empty integer list."""
+        if isinstance(raw_interval, (list, tuple)):
+            values = [int(value) for value in raw_interval]
+        else:
+            values = [int(raw_interval)]
+        if not values:
+            raise ValueError("llm_interval must contain at least one interval value.")
+        if any(value < 1 for value in values):
+            raise ValueError("All llm_interval values must be >= 1.")
+        return values
 
 
 def load_config_payload(payload: dict[str, Any] | None) -> EAConfig:

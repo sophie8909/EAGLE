@@ -38,7 +38,7 @@
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"
   ],
-  "llm_interval": 1,
+  "llm_interval": [1],
   "save_trace_on_test": false,
   "resource_advantage_alpha": 2.0,
   "resource_advantage_weights": {

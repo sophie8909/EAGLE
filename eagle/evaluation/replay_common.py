@@ -33,19 +33,19 @@ def apply_runtime_overrides(
     if "run_time_per_game_sec" in payload:
         resolved.run_time_per_game_sec = int(payload["run_time_per_game_sec"])
     if "llm_interval" in payload:
-        resolved.llm_interval = int(payload["llm_interval"])
+        resolved.llm_interval = payload["llm_interval"]
     if "save_trace_on_test" in payload:
         resolved.save_trace_on_test = bool(payload["save_trace_on_test"])
     resolved.validate()
     return resolved
 
 
-def build_interval_runs(config_path: str | Path | None, fallback_llm_interval: int) -> list[dict[str, int | str]]:
+def build_interval_runs(config_path: str | Path | None, fallback_llm_interval: int | list[int]) -> list[dict[str, int | str]]:
     """Resolve the replay llm-interval sweep from config or fallback value."""
     payload = load_override_payload(config_path)
     configured_intervals = payload.get("llm_intervals")
     if configured_intervals is None:
-        configured_intervals = [int(fallback_llm_interval)]
+        configured_intervals = fallback_llm_interval if isinstance(fallback_llm_interval, list) else [fallback_llm_interval]
 
     interval_runs: list[dict[str, int | str]] = []
     seen_intervals: set[int] = set()

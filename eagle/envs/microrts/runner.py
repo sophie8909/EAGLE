@@ -257,7 +257,7 @@ def run_java_agent_game(
         set_ai1(project_root, ai1_class)
         if opponent is not None:
             set_opponent(project_root, opponent)
-        set_llm_interval(project_root, config.llm_interval)
+        set_llm_interval(project_root, config.active_llm_interval())
 
         log_path = _make_log_path(project_root, prefix=log_prefix, runtime_logs_dir=runtime_logs_dir)
         exit_code, timed_out, log_path_str, game_time_sec = launch_java_match(

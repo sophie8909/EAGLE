@@ -402,6 +402,7 @@ class EA:
     
     def real_evaluation(self, individual: Individual, opponent: str, generation: int | None = None):
         """Run the selected child against all configured real-eval opponents."""
+        active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         runtime_logs_dir = (self.current_log_dir / "microrts") if self.current_log_dir is not None else None
         evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
         configured_opponents = list(getattr(self.config, "real_eval_opponents", []) or [])
@@ -453,6 +454,7 @@ class EA:
         individual.last_real_evaluation = {
             "mode": "multi_opponent_opponent_vector",
             "opponents": real_eval_opponents,
+            "llm_interval": active_llm_interval,
             "per_opponent": per_opponent_results,
             "aggregated_fitness": list(individual.fitness),
         }
@@ -460,6 +462,7 @@ class EA:
     
     def surrogate_evaluation(self, individual: Individual, generation: int | None = None):
         """Run the configured cheap evaluator instead of a full game simulation."""
+        active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         runtime_logs_dir = (self.current_log_dir / "microrts") if self.current_log_dir is not None else None
         evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
         surrogate_mode = str(self.config.surrogate_mode).strip().lower()
@@ -484,6 +487,7 @@ class EA:
             individual.last_surrogate_evaluation = {
                 "mode": "random",
                 "opponents": [surrogate_opponent],
+                "llm_interval": active_llm_interval,
                 "scores": [
                     {
                         "opponent": surrogate_opponent,
@@ -527,6 +531,7 @@ class EA:
             individual.last_surrogate_evaluation = {
                 "mode": "all_avg",
                 "opponents": opponents,
+                "llm_interval": active_llm_interval,
                 "scores": per_opponent_scores,
                 "aggregated_fitness": aggregated_fitness,
             }

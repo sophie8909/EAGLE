@@ -414,7 +414,7 @@ def run_surrogate_validation_experiment(
     recorder = FitnessRecorder(log_dir, config)
 
     opponents = list(opponents or OPPONENT_LIST)
-    llm_interval = int(config.llm_interval)
+    llm_interval = int(config.active_llm_interval())
 
     results = {
         "experiment_type": "surrogate_validation",

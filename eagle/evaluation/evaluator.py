@@ -203,9 +203,9 @@ class Evaluator:
         stats: dict[str, float] | None = None,
     ) -> tuple[list[float], dict[str, Any]]:
         """Run one real EAGLE match for an already-rendered prompt."""
-        original_interval = int(self.config.llm_interval)
+        original_interval = getattr(self.config, "_active_llm_interval", None)
         if llm_interval is not None:
-            self.config.llm_interval = int(llm_interval)
+            self.config.set_active_llm_interval(int(llm_interval))
         try:
             if stats is None:
                 return run_prompt_based_game(
@@ -226,7 +226,7 @@ class Evaluator:
                     runtime_logs_dir=self.runtime_logs_dir,
                 )
         finally:
-            self.config.llm_interval = original_interval
+            self.config.set_active_llm_interval(original_interval)
 
     def run_individual_match(
         self,
@@ -258,9 +258,9 @@ class Evaluator:
         stats: dict[str, float] | None = None,
     ) -> tuple[list[float], dict[str, Any]]:
         """Run one generated Java surrogate match for an already-rendered prompt."""
-        original_interval = int(self.config.llm_interval)
+        original_interval = getattr(self.config, "_active_llm_interval", None)
         if llm_interval is not None:
-            self.config.llm_interval = int(llm_interval)
+            self.config.set_active_llm_interval(int(llm_interval))
         try:
             if stats is None:
                 return run_java_agent_game(
@@ -287,7 +287,7 @@ class Evaluator:
                     record_trace=bool(test and getattr(self.config, "save_trace_on_test", False)),
                 )
         finally:
-            self.config.llm_interval = original_interval
+            self.config.set_active_llm_interval(original_interval)
 
     def surrogate_evaluation(
         self,

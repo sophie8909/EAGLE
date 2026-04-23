@@ -79,5 +79,8 @@ def compile_microrts(project_root: Path | None = None) -> Path:
                 f"Details:\n{detail}"
             ) from exc
     finally:
-        argfile_path.unlink(missing_ok=True)
+        try:
+            argfile_path.unlink(missing_ok=True)
+        except PermissionError:
+            pass
     return bin_dir

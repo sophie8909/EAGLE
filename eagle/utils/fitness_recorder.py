@@ -69,7 +69,7 @@ class FitnessRecorder:
             "resource_advantage_weights": dict(self.config.resource_advantage_weights),
             "map_location": properties.get("map_location"),
             "max_cycles": properties.get("max_cycles"),
-            "eagle_llm_interval": int(self.config.llm_interval),
+            "eagle_llm_interval": int(self.config.active_llm_interval()),
             "ai1": properties.get("AI1"),
             "ai2": properties.get("AI2"),
         }
