@@ -249,6 +249,7 @@ public class EAGLE extends AbstractionLayerAI {
 
         try {
             PROMPT = java.nio.file.Files.readString(p, java.nio.charset.StandardCharsets.UTF_8);
+            System.out.println(PROMPT);
             // 防呆：空檔案也當作失敗
             if (PROMPT == null || PROMPT.trim().isEmpty()) {
                 System.err.println("⚠️ Prompt file is empty: " + p.toAbsolutePath() + " -> fallback DEFAULT_PROMPT");
