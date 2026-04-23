@@ -572,7 +572,7 @@ class NSGA2(EA):
             The final population.
         """
         log_dir = self.create_log_folder()
-        checkpoint = self.load_checkpoint()
+        checkpoint = self.load_checkpoint() or {}
 
         self._evaluate_initial_population(checkpoint)
 
@@ -633,4 +633,3 @@ class NSGA2(EA):
             )
 
         return self.population
-

@@ -251,10 +251,10 @@ class SteadyStateNSGA2(NSGA2):
         5. immediately inserts it into the population.
         """
         log_dir = self.create_log_folder()
-        self.checkpoint = self.load_checkpoint()
+        self.checkpoint = self.load_checkpoint() or {}
 
         """Run full evaluation on the initial population before evolutionary steps."""
-        self._evaluate_initial_population()
+        self._evaluate_initial_population(self.checkpoint)
 
         past_front_signatures: List[List[Tuple]] = []
         start_generation = self.checkpoint.get("generation", 0) + (
@@ -392,4 +392,3 @@ class SteadyStateNSGA2(NSGA2):
             )
 
         return self.population
-
