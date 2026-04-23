@@ -158,7 +158,9 @@ public class FEStatePane extends JPanel {
                    LLM_DeepseekR1.class, // LLM_DeepseekR1 for response
                    LLM_Gemini.class, // LLM_Gemini for response
                    ollama.class, // for ollama one
-                   mistral.class //for Mistral
+                   mistral.class, //for Mistral
+                   EAGLE.class, // for EAGLE
+                   EAGLESurrogate.class, // for EAGLE surrogate
                   };
 
     
@@ -577,6 +579,9 @@ public class FEStatePane extends JPanel {
                                     LLM_Gemini llmGemini = new LLM_Gemini(currentUtt, aiName1, aiName2);
                                     // ollama
                                     ollama ollama = new ollama(currentUtt, aiName1, aiName2);
+                                    
+                                    EAGLE eagle = new EAGLE(currentUtt, aiName1, aiName2);
+                                    
 
                                     //mistral
                                     mistral mistral = new mistral(currentUtt, aiName1, aiName2);
