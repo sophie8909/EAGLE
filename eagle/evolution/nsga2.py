@@ -585,10 +585,10 @@ class NSGA2(EA):
                         f"{index + 1}/{len(offspring)} id={child.id}",
                         flush=True,
                     )
-                    evaluator.evaluate_surrogate_individual(
+                    evaluator.surrogate(
                         child,
-                        opponent_list=self.opponent_list,
                         generation=generation,
+                        opponents=self.opponent_list,
                     )
                     print(
                         f"[Generation {generation + 1}] surrogate result "
@@ -638,11 +638,12 @@ class NSGA2(EA):
                         f"{index + 1}/{real_eval_budget} id={child.id}",
                         flush=True,
                     )
-                    evaluator.evaluate_real_individual(
+                    evaluator.evaluate(
                         child,
                         generation=generation,
                         profile_output_path=self.get_profile_log_path(),
                         fitness_recorder=self.fitness_recorder,
+                        allow_history_reuse=False,
                     )
                     print(
                         f"[Generation {generation + 1}] real result "

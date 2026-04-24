@@ -111,11 +111,12 @@ class EA:
                             f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
                             flush=True,
                         )
-                        evaluator.evaluate_real_individual(
+                        evaluator.evaluate(
                             individual,
                             generation=-1,
                             profile_output_path=self.get_profile_log_path(),
                             fitness_recorder=self.fitness_recorder,
+                            allow_history_reuse=True,
                         )
                         self.save_checkpoint(
                             self.build_checkpoint_state(
@@ -132,11 +133,12 @@ class EA:
                         f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
                         flush=True,
                     )
-                    evaluator.evaluate_real_individual(
+                    evaluator.evaluate(
                         individual,
                         generation=-1,
                         profile_output_path=self.get_profile_log_path(),
                         fitness_recorder=self.fitness_recorder,
+                        allow_history_reuse=True,
                     )
                     # Checkpoint meaning:
                     # - phase="initial_population" means generation -1 is still
@@ -319,7 +321,7 @@ class EA:
         """Render prompts for logs without breaking on legacy invalid component indices."""
         evaluator = Evaluator(self.component_pool, self.config)
         try:
-            return evaluator.construct_prompt(individual)
+            return evaluator._construct_prompt(individual)
         except Exception as exc:
             return (
                 "[Prompt unavailable: failed to render with current component pool]\n"
@@ -343,7 +345,7 @@ class EA:
             return self.population[idx1], self.population[idx2]
 
         if self.config.selection_method == "tournament":
-            fitnesses = [normalize_fitness(ind.fitness) for ind in self.population]
+            fitnesses = [list(ind.fitness) if ind.fitness is not None else [0.0, 0.0] for ind in self.population]
             idx1 = ParentSelection.tournament_selection(
                 self.population,
                 fitnesses,
@@ -364,7 +366,7 @@ class EA:
             return self.population[ParentSelection.random_selection(self.population)]
 
         if self.config.selection_method == "tournament":
-            fitnesses = [normalize_fitness(ind.fitness) for ind in self.population]
+            fitnesses = [list(ind.fitness) if ind.fitness is not None else [0.0, 0.0] for ind in self.population]
             idx = ParentSelection.tournament_selection(
                 self.population,
                 fitnesses,
