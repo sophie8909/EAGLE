@@ -66,6 +66,7 @@ class FitnessRecorder:
             "opponent": opponent,
             "run_time_per_game_sec": int(self.config.run_time_per_game_sec),
             "resource_advantage_alpha": float(self.config.resource_advantage_alpha),
+            "win_bonus": float(self.config.win_bonus),
             "resource_advantage_weights": dict(self.config.resource_advantage_weights),
             "map_location": properties.get("map_location"),
             "max_cycles": properties.get("max_cycles"),

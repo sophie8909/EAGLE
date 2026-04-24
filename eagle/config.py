@@ -86,6 +86,9 @@ class EAConfig:
     resource_advantage_alpha: float = field(
         default_factory=lambda: float(_default_config_value("resource_advantage_alpha"))
     )
+    win_bonus: float = field(
+        default_factory=lambda: float(_default_config_value("win_bonus"))
+    )
     resource_advantage_weights: dict[str, float] = field(
         default_factory=lambda: dict(_default_config_value("resource_advantage_weights"))
     )
@@ -221,6 +224,7 @@ class EAConfig:
         """Return the subset of fields that affect fitness computation only."""
         return {
             "resource_advantage_alpha": self.resource_advantage_alpha,
+            "win_bonus": self.win_bonus,
             "resource_advantage_weights": dict(self.resource_advantage_weights),
         }
 

@@ -148,7 +148,7 @@ def resource_advantage_evaluation(
 def combined_match_fitness_score(
     fitness: list[float] | tuple[float, float] | None,
     *,
-    resource_advantage_alpha: float,
+    win_bonus: float,
 ) -> float:
     """
     Collapse one raw match fitness into one scalar score for one opponent slot.
@@ -158,7 +158,7 @@ def combined_match_fitness_score(
     - `resource_score` is the weighted resource/material advantage in [-1, 1]
 
     EA-level fitness for NSGA-II/GA uses one scalar per configured opponent:
-    `resource_score + resource_advantage_alpha * win_score`
+    `resource_score + win_bonus * win_score`
     """
     if not fitness:
         return 0.0
@@ -172,7 +172,7 @@ def combined_match_fitness_score(
     except (TypeError, ValueError):
         resource_score = 0.0
 
-    return resource_score + float(resource_advantage_alpha) * win_score
+    return resource_score + float(win_bonus) * win_score
 
 
 def calculate_fitness_score(

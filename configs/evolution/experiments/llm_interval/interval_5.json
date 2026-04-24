@@ -38,6 +38,7 @@
   ],
   "llm_interval": 5,
   "resource_advantage_alpha": 2.0,
+  "win_bonus": 2.0,
   "resource_advantage_weights": {
     "base": 10.0,
     "worker": 1.0,

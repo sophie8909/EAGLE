@@ -395,12 +395,18 @@ class EA:
         return mutated_individual
 
     @staticmethod
-    def _combined_match_score(fitness: list[float] | None, resource_advantage_alpha: float) -> float:
-        """Collapse raw match fitness into one scalar: resource score plus win bonus."""
+    def _combined_match_score(
+        fitness: list[float] | None,
+        win_bonus: float,
+        raw_resource_score: float | None = None,
+    ) -> float:
+        """Collapse raw match fitness into one scalar: weighted resource plus win bonus."""
         normalized = normalize_fitness(fitness)
+        if raw_resource_score is not None:
+            return float(raw_resource_score) + float(win_bonus) * float(normalized[0])
         return combined_match_fitness_score(
             normalized,
-            resource_advantage_alpha=resource_advantage_alpha,
+            win_bonus=win_bonus,
         )
 
     def _build_opponent_score_vector(
@@ -443,11 +449,6 @@ class EA:
                 fitness_recorder=self.fitness_recorder,
             )
             normalized_fitness = normalize_fitness(individual.fitness)
-            combined_score = self._combined_match_score(
-                normalized_fitness,
-                self.config.resource_advantage_alpha,
-            )
-            opponent_scores.append((resolved_opponent, combined_score))
             last_real_evaluation = getattr(individual, "last_real_evaluation", {}) or {}
             parsed_log = last_real_evaluation.get("parsed_log")
             raw_score = (
@@ -458,6 +459,12 @@ class EA:
                 if isinstance(parsed_log, dict)
                 else 0.0
             )
+            combined_score = self._combined_match_score(
+                normalized_fitness,
+                self.config.win_bonus,
+                raw_resource_score=raw_score,
+            )
+            opponent_scores.append((resolved_opponent, combined_score))
             per_opponent_results.append(
                 {
                     "opponent": resolved_opponent,
@@ -485,27 +492,34 @@ class EA:
 
     
     def surrogate_evaluation(self, individual: Individual, generation: int | None = None):
-        """Run the configured cheap evaluator instead of a full game simulation."""
+        """Run explicit surrogate matches and aggregate them into EA fitness."""
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         runtime_logs_dir = (self.current_log_dir / "microrts") if self.current_log_dir is not None else None
         evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
         surrogate_mode = str(self.config.surrogate_mode).strip().lower()
+        prompt = evaluator.construct_prompt(individual)
 
         if surrogate_mode == "random":
             surrogate_opponent = random.choice(self.opponent_list) if self.opponent_list else None
-            evaluator.evaluate(
-                individual,
-                use_real_evaluation=False,
+            match_score, metadata = evaluator.run_surrogate_match(
+                prompt=prompt,
                 opponent=surrogate_opponent,
-                profile_output_path=self.get_profile_log_path(),
-                generation=generation,
-                fitness_recorder=self.fitness_recorder,
             )
-            raw_fitness = normalize_fitness(individual.fitness)
+            raw_fitness = normalize_fitness(match_score)
+            parsed_log = metadata.get("parsed_log") if isinstance(metadata, dict) else None
+            raw_score = (
+                raw_resource_advantage_score(
+                    parsed_log,
+                    self.config.resource_advantage_weights,
+                )
+                if isinstance(parsed_log, dict)
+                else None
+            )
             configured_opponents = list(self.opponent_list) if self.opponent_list else [surrogate_opponent]
             combined_score = self._combined_match_score(
                 raw_fitness,
-                self.config.resource_advantage_alpha,
+                self.config.win_bonus,
+                raw_resource_score=raw_score,
             )
             individual.fitness = self._build_opponent_score_vector(
                 [(surrogate_opponent, combined_score)],
@@ -520,6 +534,7 @@ class EA:
                         "opponent": surrogate_opponent,
                         "fitness": raw_fitness,
                         "combined_score": combined_score,
+                        "raw_resource_advantage_score": raw_score,
                     }
                 ],
                 "aggregated_fitness": list(individual.fitness),
@@ -533,18 +548,24 @@ class EA:
             per_opponent_scores: list[dict[str, object]] = []
 
             for surrogate_opponent in opponents:
-                evaluator.evaluate(
-                    individual,
-                    use_real_evaluation=False,
+                match_score, metadata = evaluator.run_surrogate_match(
+                    prompt=prompt,
                     opponent=surrogate_opponent,
-                    profile_output_path=None,
-                    generation=generation,
-                    fitness_recorder=None,
                 )
-                sampled_fitness = list(individual.fitness)
+                sampled_fitness = normalize_fitness(match_score)
+                parsed_log = metadata.get("parsed_log") if isinstance(metadata, dict) else None
+                raw_score = (
+                    raw_resource_advantage_score(
+                        parsed_log,
+                        self.config.resource_advantage_weights,
+                    )
+                    if isinstance(parsed_log, dict)
+                    else None
+                )
                 combined_score = self._combined_match_score(
                     sampled_fitness,
-                    self.config.resource_advantage_alpha,
+                    self.config.win_bonus,
+                    raw_resource_score=raw_score,
                 )
                 opponent_scores.append((surrogate_opponent, combined_score))
                 per_opponent_scores.append(
@@ -552,6 +573,7 @@ class EA:
                         "opponent": surrogate_opponent,
                         "fitness": sampled_fitness,
                         "combined_score": combined_score,
+                        "raw_resource_advantage_score": raw_score,
                     }
                 )
 

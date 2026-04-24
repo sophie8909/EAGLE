@@ -348,7 +348,7 @@ class NSGA2(EA):
 
     
     def _generate_offspring(self, generation: int, generation_stats: dict[str, float]) -> List[Individual]:
-        """Create and surrogate-evaluate one full offspring population."""
+        """Create one full offspring population without evaluating it yet."""
         offspring: List[Individual] = []
         target_count = self.config.population_size
 
@@ -372,26 +372,22 @@ class NSGA2(EA):
                 "ea_llm_call_time": getattr(child, "ea_llm_call_time", 0.0),
             }
 
-            # Step A2: every child gets surrogate evaluation before any real eval.
-            with timer("offspring_evaluation_time", generation_stats):
-                self.surrogate_evaluation(child, generation=generation)
             offspring.append(child)
             print(
-                f"[Generation {generation + 1}] surrogate offspring "
+                f"[Generation {generation + 1}] generated offspring "
                 f"{len(offspring)}/{target_count}",
                 flush=True,
             )
 
             # Checkpoint meaning:
-            # - phase="generation_surrogate" means this generation is still in
-            #   the batch-offspring construction stage
-            # - offspring stores the children already surrogate-evaluated
+            # - phase="generation_generation" means this generation is still in
+            #   the offspring-construction stage
             self.save_checkpoint(
                 self.build_checkpoint_state(
-                    phase="generation_surrogate",
+                    phase="generation_generation",
                     generation=generation,
                     offspring=offspring,
-                    meta={"evaluated_offspring_count": len(offspring)},
+                    meta={"generated_offspring_count": len(offspring)},
                 )
             )
 
@@ -405,7 +401,6 @@ class NSGA2(EA):
     ) -> List[Individual]:
         """Continue offspring generation from a partially completed checkpoint."""
         target_count = self.config.population_size
-        # Resume point for phase="generation_surrogate".
         while len(offspring) < target_count:
             with timer("parent_selection_time", generation_stats):
                 parent1, parent2 = self.select_parents()
@@ -424,25 +419,54 @@ class NSGA2(EA):
                 "ea_llm_call_time": getattr(child, "ea_llm_call_time", 0.0),
             }
 
-            with timer("offspring_evaluation_time", generation_stats):
-                self.surrogate_evaluation(child, generation=generation)
             offspring.append(child)
             print(
-                f"[Generation {generation + 1}] surrogate offspring "
+                f"[Generation {generation + 1}] generated offspring "
                 f"{len(offspring)}/{target_count}",
                 flush=True,
             )
 
-            # Keep the same checkpoint contract as _generate_offspring().
             self.save_checkpoint(
                 self.build_checkpoint_state(
-                    phase="generation_surrogate",
+                    phase="generation_generation",
                     generation=generation,
                     offspring=offspring,
-                    meta={"evaluated_offspring_count": len(offspring)},
+                    meta={"generated_offspring_count": len(offspring)},
                 )
             )
         return offspring[:target_count]
+
+    def _surrogate_evaluate_offspring(
+        self,
+        offspring: List[Individual],
+        generation: int,
+        generation_stats: dict[str, float],
+        start_index: int = 0,
+    ) -> None:
+        """Run surrogate evaluation as an explicit main-loop phase."""
+        with timer("offspring_evaluation_time", generation_stats):
+            for index, child in enumerate(offspring):
+                if index < start_index:
+                    continue
+                print(
+                    f"[Generation {generation + 1}] surrogate evaluation "
+                    f"{index + 1}/{len(offspring)} id={child.id}",
+                    flush=True,
+                )
+                self.surrogate_evaluation(child, generation=generation)
+                print(
+                    f"[Generation {generation + 1}] surrogate result "
+                    f"id={child.id} fitness={child.fitness}",
+                    flush=True,
+                )
+                self.save_checkpoint(
+                    self.build_checkpoint_state(
+                        phase="generation_surrogate",
+                        generation=generation,
+                        offspring=offspring,
+                        meta={"evaluated_offspring_count": index + 1},
+                    )
+                )
 
     def _rank_offspring_for_real_evaluation(self, offspring: List[Individual]) -> List[Individual]:
         """Rank offspring by surrogate fitness for the real-eval budget."""
@@ -474,10 +498,15 @@ class NSGA2(EA):
                     break
                 print(
                     f"[Generation {generation + 1}] real evaluation "
-                    f"{index + 1}/{real_eval_budget}",
+                    f"{index + 1}/{real_eval_budget} id={child.id}",
                     flush=True,
                 )
                 self.real_evaluation(child, random.choice(self.opponent_list), generation=generation)
+                print(
+                    f"[Generation {generation + 1}] real result "
+                    f"id={child.id} fitness={child.fitness}",
+                    flush=True,
+                )
 
                 # Checkpoint meaning:
                 # - phase="generation_real_eval" means offspring generation is
@@ -610,11 +639,32 @@ class NSGA2(EA):
             )
             # Phase 1: build or resume the full surrogate-evaluated offspring batch.
             generation_stats: dict[str, float] = {}
-            if checkpoint.get("generation") == generation and checkpoint.get("phase") in {"generation_surrogate", "generation_real_eval"}:
+            checkpoint_phase = checkpoint.get("phase") if checkpoint.get("generation") == generation else None
+            if checkpoint.get("generation") == generation and checkpoint_phase in {
+                "generation_generation",
+                "generation_surrogate",
+                "generation_real_eval",
+            }:
                 offspring = self.deserialize_population(checkpoint.get("offspring"))
                 offspring = self._resume_offspring_generation(generation, generation_stats, offspring)
             else:
                 offspring = self._generate_offspring(generation, generation_stats)
+            print(
+                f"[Generation {generation + 1}] generated offspring ready: {len(offspring)}",
+                flush=True,
+            )
+
+            surrogate_start_index = 0
+            if checkpoint_phase == "generation_surrogate":
+                surrogate_start_index = checkpoint.get("meta", {}).get("evaluated_offspring_count", 0)
+            elif checkpoint_phase == "generation_real_eval":
+                surrogate_start_index = len(offspring)
+            self._surrogate_evaluate_offspring(
+                offspring,
+                generation,
+                generation_stats,
+                start_index=surrogate_start_index,
+            )
             print(
                 f"[Generation {generation + 1}] surrogate offspring ready: {len(offspring)}",
                 flush=True,
