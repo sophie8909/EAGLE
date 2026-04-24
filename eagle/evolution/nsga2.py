@@ -642,7 +642,7 @@ class NSGA2(EA):
                         child,
                         generation=generation,
                         profile_output_path=self.get_profile_log_path(),
-                        fitness_recorder=self.fitness_recorder,
+                        match_score_recorder=self.match_score_recorder,
                         allow_history_reuse=False,
                     )
                     print(

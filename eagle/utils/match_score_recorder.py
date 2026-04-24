@@ -1,8 +1,4 @@
-"""
-Record fitness evaluation results and related metadata for each evaluated
-individual in a structured format (e.g., JSONL) for later analysis and
-visualization.
-"""
+"""Persist per-match score records and prompt-keyed history for reuse."""
 
 from __future__ import annotations
 
@@ -16,34 +12,30 @@ from ..envs.microrts.compiler import locate_microrts_root
 from ..project import HISTORY_DIR, PROJECT_ROOT
 
 
-class FitnessRecorder:
-    """Keep recent evaluation records on disk and a compact prompt-key history."""
+class MatchScoreRecorder:
+    """Keep recent match-score records on disk and a compact prompt-key history."""
 
     def __init__(self, log_folder: Path, config: EAConfig):
-        """Initialize per-run and cross-run history storage."""
-        self.log_path = log_folder / "fitness_records.jsonl"
+        self.log_path = log_folder / "match_score_records.jsonl"
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        self.records = []
+        self.records: list[dict[str, Any]] = []
         self.repo_root = PROJECT_ROOT
-        self.history_records_path = str(HISTORY_DIR / "fitness_history.jsonl")
-        self.history = []
+        self.history_records_path = str(HISTORY_DIR / "match_score_history.jsonl")
+        self.history: list[dict[str, Any]] = []
         self.config = config
         self._load_existing_run_records()
         self.init_from_history()
 
     def _canonical_prompt_text(self, prompt: Any) -> str:
-        """Serialize a prompt into a stable string before hashing."""
         if isinstance(prompt, str):
             return prompt
         return json.dumps(prompt, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
     def _stable_prompt_digest(self, prompt: Any) -> str:
-        """Return a cross-run-stable digest for one rendered prompt."""
         prompt_text = self._canonical_prompt_text(prompt)
         return hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
 
     def _read_properties_file(self) -> dict[str, str]:
-        """Load the MicroRTS properties file for runtime-context cache keys."""
         properties_path = locate_microrts_root(self.repo_root) / "resources" / "config.properties"
         properties: dict[str, str] = {}
         if not properties_path.exists():
@@ -59,10 +51,9 @@ class FitnessRecorder:
         return properties
 
     def _history_key_context(self, opponent: str | None) -> dict[str, Any]:
-        """Build the non-prompt context that must match for safe cache reuse."""
         properties = self._read_properties_file()
         return {
-            "history_schema_version": 4,
+            "history_schema_version": 5,
             "opponent": opponent,
             "run_time_per_game_sec": int(self.config.run_time_per_game_sec),
             "resource_advantage_alpha": float(self.config.resource_advantage_alpha),
@@ -76,14 +67,12 @@ class FitnessRecorder:
         }
 
     def build_history_key(self, prompt: Any, opponent: str | None) -> dict[str, Any]:
-        """Return the full stable cache key for one prompt/evaluation context."""
         return {
             "prompt_digest": self._stable_prompt_digest(prompt),
             "context": self._history_key_context(opponent),
         }
 
     def _load_existing_run_records(self) -> None:
-        """Load existing per-run records so resumed runs keep recent context."""
         if not self.log_path.exists():
             return
 
@@ -98,12 +87,10 @@ class FitnessRecorder:
                     continue
                 self.records.append(record)
         self.records = self.records[-50:]
-    
-    def init_from_history(self) -> None:
-        """Load previously seen prompt keys so surrogate lookup can reuse them."""
-        path = Path(self.history_records_path)
-        self.history: list[dict[str, Any]] = []
 
+    def init_from_history(self) -> None:
+        path = Path(self.history_records_path)
+        self.history = []
         if not path.exists():
             return
 
@@ -112,80 +99,58 @@ class FitnessRecorder:
                 line = line.strip()
                 if not line:
                     continue
-
                 try:
                     record = json.loads(line)
-                except json.JSONDecodeError as e:
-                    print(f"Warning: invalid JSON at line {line_no} in {path}: {e}")
+                except json.JSONDecodeError as exc:
+                    print(f"Warning: invalid JSON at line {line_no} in {path}: {exc}")
                     continue
-
                 if not isinstance(record, dict):
                     print(f"Warning: line {line_no} is not a JSON object in {path}")
                     continue
-
                 self.history.append(record)
-    
-    def add_history_record(self, record: dict[str, Any]):
-        """Append a compact history entry to the cross-run history file."""
+
+    def add_history_record(self, record: dict[str, Any]) -> None:
         self.history.append(record)
         with Path(self.history_records_path).open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    def record_to_history_entry(self, record: dict[str, Any]):
-        """Reduce a full evaluation record to a compact deduplication entry."""
+    def record_to_history_entry(self, record: dict[str, Any]) -> dict[str, Any]:
         history_key = self.build_history_key(record["prompt"], record.get("opponent"))
-        history_record = {
+        return {
             "history_key": history_key,
-            "match_score": record.get("match_score", record["fitness_score"]),
-            "fitness_score": record["fitness_score"],
+            "match_score": dict(record["match_score"]),
             "evaluation_mode": record.get("evaluation_mode"),
             "opponent": record.get("opponent"),
             "game_time_sec": record.get("game_time_sec"),
             "benchmark_mode": record.get("benchmark_mode"),
             "log_path": record.get("log_path"),
+            "winner": record.get("winner"),
+            "timeout": record.get("timeout"),
+            "llm_calls": record.get("llm_calls"),
+            "parsed_summary": record.get("parsed_summary"),
+            "stats": record.get("stats"),
+            "llm_interval": record.get("llm_interval"),
+            "run_time_per_game_sec": record.get("run_time_per_game_sec"),
+            "runner_script": record.get("runner_script"),
+            "ai1": record.get("ai1"),
+            "ai2": record.get("ai2"),
         }
-        return history_record
 
     def find_matching_history(self, prompt: Any, opponent: str | None) -> list[dict[str, Any]]:
-        """Return prior history rows for the same prompt/context combination."""
         history_key = self.build_history_key(prompt, opponent)
-        similar_records = []
-        for record in self.history:
-            if record.get("history_key") == history_key:
-                similar_records.append(record)
-        return similar_records
+        return [record for record in self.history if record.get("history_key") == history_key]
 
-    def record_fitness(self, record: dict[str, Any]):
-        """Persist one evaluation record and update the compact history cache."""
-        """Example record structure:
-        {
-            "individual_id": "ind-0",
-            "generation": 1,
-            "fitness_score": [0.8, 0.3],
-            "opponent": "SimpleBot",
-            "evaluation_time": 12.5,
-            "components": {
-                "critical_rules": 2,
-                "actions": 1,
-                "json_schema": 0,
-                "field_requirements": 3,
-                "examples": 1,
-                "role": 0,
-                "strategy": {
-                    "resource_gathering": 1,
-                    "unit_production": 0,
-                    "combat_strategy": 2
-                }
-            }
-        }
-        """
-        self.records.append(record)
-        
-        self.records = self.records[-50:]  # Keep only the most recent rows for local examples.
-        
+    def record_match_score(self, record: dict[str, Any]) -> None:
+        if "match_score" not in record:
+            raise KeyError("record_match_score requires 'match_score'")
+
+        normalized_record = dict(record)
+        normalized_record["match_score"] = dict(record["match_score"])
+        self.records.append(normalized_record)
+        self.records = self.records[-50:]
+
         with self.log_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            f.write(json.dumps(normalized_record, ensure_ascii=False) + "\n")
 
-        if record.get("evaluation_mode") == "real":
-            self.add_history_record(self.record_to_history_entry(record))
-
+        if normalized_record.get("evaluation_mode") == "real":
+            self.add_history_record(self.record_to_history_entry(normalized_record))

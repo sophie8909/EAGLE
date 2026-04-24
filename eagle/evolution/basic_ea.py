@@ -18,7 +18,7 @@ from ..evolution.operators.parent_selection import ParentSelection
 from ..evolution.operators.crossover import Crossover
 from ..evolution.operators.mutation import Mutation
 from ..evolution.operators.environment_selection import EnvironmentSelection
-from ..utils.fitness_recorder import FitnessRecorder
+from ..utils.match_score_recorder import MatchScoreRecorder
 from ..evaluation.final_test_runner import run_final_test_suite
 from ..utils.profiler import build_base_record, timer, write_jsonl
 
@@ -38,7 +38,7 @@ class EA:
         self.opponent_list = opponent_list
         self.population = self.initialize_population()
         self.current_log_dir: Path | None = None
-        self.fitness_recorder: FitnessRecorder | None = None
+        self.match_score_recorder: MatchScoreRecorder | None = None
         self.checkpoint_manager: CheckpointManager | None = None
         self.current_generation = 0
         self.checkpoint = None
@@ -115,7 +115,7 @@ class EA:
                             individual,
                             generation=-1,
                             profile_output_path=self.get_profile_log_path(),
-                            fitness_recorder=self.fitness_recorder,
+                            match_score_recorder=self.match_score_recorder,
                             allow_history_reuse=True,
                         )
                         self.save_checkpoint(
@@ -137,7 +137,7 @@ class EA:
                         individual,
                         generation=-1,
                         profile_output_path=self.get_profile_log_path(),
-                        fitness_recorder=self.fitness_recorder,
+                        match_score_recorder=self.match_score_recorder,
                         allow_history_reuse=True,
                     )
                     # Checkpoint meaning:
@@ -193,7 +193,7 @@ class EA:
         log_dir = EAGLE_LOGS_DIR / timestamp
         log_dir.mkdir(parents=True, exist_ok=True)
         self.current_log_dir = log_dir
-        self.fitness_recorder = FitnessRecorder(self.current_log_dir, self.config)
+        self.match_score_recorder = MatchScoreRecorder(self.current_log_dir, self.config)
         self.checkpoint_manager = CheckpointManager(self.current_log_dir)
         return str(log_dir)
 
@@ -201,7 +201,7 @@ class EA:
         """Bind this EA instance to an existing log directory for resuming."""
         self.current_log_dir = Path(log_dir)
         self.current_log_dir.mkdir(parents=True, exist_ok=True)
-        self.fitness_recorder = FitnessRecorder(self.current_log_dir, self.config)
+        self.match_score_recorder = MatchScoreRecorder(self.current_log_dir, self.config)
         self.checkpoint_manager = CheckpointManager(self.current_log_dir)
         return str(self.current_log_dir)
 

@@ -83,17 +83,17 @@ class GA(EA):
                 for index in range(start_idx, len(new_population)):
                     individual = new_population[index]
                     if random.random() < 0.5:
-                        evaluator.evaluate_real_individual(
+                        evaluator.evaluate(
                             individual,
                             generation=generation,
                             profile_output_path=self.get_profile_log_path(),
-                            fitness_recorder=self.fitness_recorder,
+                            match_score_recorder=self.match_score_recorder,
                         )
                     else:
-                        evaluator.evaluate_surrogate_individual(
+                        evaluator.surrogate(
                             individual,
-                            opponent_list=self.opponent_list,
                             generation=generation,
+                            opponents=self.opponent_list,
                         )
                     self.save_checkpoint(
                         self.build_checkpoint_state(

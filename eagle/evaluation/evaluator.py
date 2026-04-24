@@ -11,8 +11,8 @@ from ..envs.microrts.runner import run_java_agent_game, run_prompt_based_game
 from ..evolution.operators.reflection import Reflection, read_max_turn_hint
 from ..project import PROJECT_ROOT
 from ..utils.component_pool import ComponentPool
-from ..utils.fitness_calculator import combined_match_score, raw_resource_advantage_score
-from ..utils.fitness_recorder import FitnessRecorder
+from ..utils.fitness_calculator import combined_match_score
+from ..utils.match_score_recorder import MatchScoreRecorder
 from ..utils.individual import Individual
 from ..utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
 
@@ -43,7 +43,7 @@ class Evaluator:
         *,
         generation: int | None = None,
         profile_output_path: str | Path | None = None,
-        fitness_recorder: FitnessRecorder | None = None,
+        match_score_recorder: MatchScoreRecorder | None = None,
         opponents: list[str] | None = None,
         allow_history_reuse: bool = False,
     ) -> dict[str, Any]:
@@ -63,10 +63,10 @@ class Evaluator:
                 opponent=opponent,
                 generation=generation,
                 profile_output_path=profile_output_path,
-                fitness_recorder=fitness_recorder,
+                match_score_recorder=match_score_recorder,
                 allow_history_reuse=allow_history_reuse,
             )
-            match_score = list(result["match_score"])
+            match_score = dict(result["match_score"])
             simulation_meta = dict(result.get("simulation_meta") or {})
             evaluation_mode = str(result.get("evaluation_mode") or "real")
             evaluation_modes.append(evaluation_mode)
@@ -79,7 +79,7 @@ class Evaluator:
                 evaluation_mode=evaluation_mode,
                 generation=generation,
                 stats=result.get("stats", {}),
-                fitness_recorder=fitness_recorder,
+                match_score_recorder=match_score_recorder,
             )
 
             if evaluation_mode == "real":
@@ -90,16 +90,8 @@ class Evaluator:
                 )
 
             parsed_log = simulation_meta.get("parsed_log")
-            raw_score = (
-                raw_resource_advantage_score(parsed_log, self.config.resource_advantage_weights)
-                if isinstance(parsed_log, dict)
-                else 0.0
-            )
-            combined_score = self._combined_match_score(
-                match_score,
-                win_bonus=self.config.win_bonus,
-                raw_resource_score=raw_score,
-            )
+            raw_score = self._raw_resource_advantage_score(match_score)
+            combined_score = self._combined_match_score(match_score, win_bonus=self.config.win_bonus)
             opponent_scores.append((opponent, combined_score))
             per_opponent_results.append(
                 {
@@ -158,18 +150,9 @@ class Evaluator:
                 prompt=prompt,
                 opponent=opponent,
             )
-            match_score = list(result["match_score"])
-            parsed_log = result["simulation_meta"].get("parsed_log")
-            raw_score = (
-                raw_resource_advantage_score(parsed_log, self.config.resource_advantage_weights)
-                if isinstance(parsed_log, dict)
-                else None
-            )
-            combined_score = self._combined_match_score(
-                match_score,
-                win_bonus=self.config.win_bonus,
-                raw_resource_score=raw_score,
-            )
+            match_score = dict(result["match_score"])
+            raw_score = self._raw_resource_advantage_score(match_score)
+            combined_score = self._combined_match_score(match_score, win_bonus=self.config.win_bonus)
             opponent_scores.append((opponent, combined_score))
             per_opponent_scores.append(
                 {
@@ -205,7 +188,7 @@ class Evaluator:
         opponent: str | None = None,
         generation: int | None = None,
         profile_output_path: str | Path | None = None,
-        fitness_recorder: FitnessRecorder | None = None,
+        match_score_recorder: MatchScoreRecorder | None = None,
         allow_history_reuse: bool = False,
         llm_interval: int | None = None,
         test: bool = False,
@@ -218,12 +201,12 @@ class Evaluator:
             prompt=rendered_prompt,
             opponent=opponent,
             allow_history_reuse=allow_history_reuse,
-            fitness_recorder=fitness_recorder,
+            match_score_recorder=match_score_recorder,
         )
         if history_match_score is not None:
             return {
                 "prompt": rendered_prompt,
-                "match_score": list(history_match_score),
+                "match_score": dict(history_match_score),
                 "simulation_meta": {},
                 "stats": stats,
                 "evaluation_mode": "history_reuse",
@@ -244,7 +227,7 @@ class Evaluator:
                 generation=generation,
                 prompt=rendered_prompt,
                 opponent=opponent,
-                match_score=list(match_score),
+                match_score=dict(match_score),
                 stats=stats,
                 simulation_meta=simulation_meta,
                 profile_output_path=profile_output_path,
@@ -252,7 +235,7 @@ class Evaluator:
 
         return {
             "prompt": rendered_prompt,
-            "match_score": list(match_score),
+            "match_score": dict(match_score),
             "simulation_meta": simulation_meta,
             "stats": stats,
             "evaluation_mode": "real",
@@ -282,7 +265,7 @@ class Evaluator:
         summarize_total_eval_time(stats)
         return {
             "prompt": rendered_prompt,
-            "match_score": list(match_score),
+            "match_score": dict(match_score),
             "simulation_meta": simulation_meta,
             "stats": stats,
             "evaluation_mode": "surrogate",
@@ -312,12 +295,12 @@ class Evaluator:
         *,
         llm_interval: int | None = None,
         test: bool = False,
-    ) -> tuple[list[float], dict[str, Any]]:
+    ) -> tuple[dict[str, float], dict[str, Any]]:
         original_interval = getattr(self.config, "_active_llm_interval", None)
         if llm_interval is not None:
             self.config.set_active_llm_interval(int(llm_interval))
         try:
-            return run_prompt_based_game(
+            match_score, simulation_meta = run_prompt_based_game(
                 project_root=self.repo_root,
                 config=self.config,
                 prompt=prompt,
@@ -325,6 +308,7 @@ class Evaluator:
                 test=test,
                 runtime_logs_dir=self.runtime_logs_dir,
             )
+            return self._normalize_match_score(match_score), simulation_meta
         finally:
             self.config.set_active_llm_interval(original_interval)
 
@@ -336,12 +320,12 @@ class Evaluator:
         ai1_class: str,
         llm_interval: int | None = None,
         test: bool = False,
-    ) -> tuple[list[float], dict[str, Any]]:
+    ) -> tuple[dict[str, float], dict[str, Any]]:
         original_interval = getattr(self.config, "_active_llm_interval", None)
         if llm_interval is not None:
             self.config.set_active_llm_interval(int(llm_interval))
         try:
-            return run_java_agent_game(
+            match_score, simulation_meta = run_java_agent_game(
                 project_root=self.repo_root,
                 config=self.config,
                 ai1_class=ai1_class,
@@ -352,6 +336,7 @@ class Evaluator:
                 runtime_logs_dir=self.runtime_logs_dir,
                 record_trace=bool(test and getattr(self.config, "save_trace_on_test", False)),
             )
+            return self._normalize_match_score(match_score), simulation_meta
         finally:
             self.config.set_active_llm_interval(original_interval)
 
@@ -365,38 +350,36 @@ class Evaluator:
         prompt: str,
         opponent: str | None,
         allow_history_reuse: bool,
-        fitness_recorder: FitnessRecorder | None,
-    ) -> list[float] | None:
-        if fitness_recorder is None or not allow_history_reuse:
+        match_score_recorder: MatchScoreRecorder | None,
+    ) -> dict[str, float] | None:
+        if match_score_recorder is None or not allow_history_reuse:
             return None
-        matches = fitness_recorder.find_matching_history(prompt, opponent)
+        matches = match_score_recorder.find_matching_history(prompt, opponent)
         if not matches:
             return None
         cached_match = matches[random.randint(0, len(matches) - 1)]
-        return list(cached_match.get("match_score", cached_match.get("fitness_score", [0.0, 0.0])))
+        return self._normalize_match_score(cached_match.get("match_score"))
 
     def _record_match_score(
         self,
         *,
         individual: Individual,
         prompt: str,
-        match_score: list[float],
+        match_score: dict[str, float],
         opponent: str | None,
         evaluation_mode: str,
         generation: int | None,
         stats: dict[str, float],
-        fitness_recorder: FitnessRecorder | None,
+        match_score_recorder: MatchScoreRecorder | None,
     ) -> None:
-        if fitness_recorder is None:
+        if match_score_recorder is None:
             return
-        fitness_recorder.record_fitness(
+        match_score_recorder.record_match_score(
             {
                 "individual_id": getattr(individual, "id", None),
                 "generation": generation,
                 "prompt": prompt,
-                "match_score": list(match_score),
-                "fitness": list(match_score),
-                "fitness_score": list(match_score),
+                "match_score": dict(match_score),
                 "opponent": opponent,
                 "evaluation_mode": evaluation_mode,
                 "evaluation_time": stats.get("total_eval_time", 0.0),
@@ -412,7 +395,7 @@ class Evaluator:
         self,
         *,
         individual: Individual,
-        match_score: list[float],
+        match_score: dict[str, float],
         simulation_meta: dict[str, Any],
     ) -> None:
         parsed_log = simulation_meta.get("parsed_log")
@@ -430,11 +413,7 @@ class Evaluator:
                 timeout=timeout,
                 max_turn_hint=read_max_turn_hint(self.repo_root),
             ),
-            "raw_resource_advantage_score": (
-                raw_resource_advantage_score(parsed_log, self.config.resource_advantage_weights)
-                if isinstance(parsed_log, dict)
-                else 0.0
-            ),
+            "raw_resource_advantage_score": self._raw_resource_advantage_score(match_score),
         }
 
     def _write_real_match_profile(
@@ -444,7 +423,7 @@ class Evaluator:
         generation: int | None,
         prompt: str,
         opponent: str | None,
-        match_score: list[float],
+        match_score: dict[str, float],
         stats: dict[str, float],
         simulation_meta: dict[str, Any],
         profile_output_path: str | Path,
@@ -468,8 +447,7 @@ class Evaluator:
                 "max_llm_call_time": None,
                 "game_llm_call_time": None,
                 "ea_llm_call_time": 0.0,
-                "match_score": list(match_score),
-                "fitness": list(match_score),
+                "match_score": dict(match_score),
                 "log_path": simulation_meta.get("log_path"),
             }
         )
@@ -494,15 +472,39 @@ class Evaluator:
 
     @staticmethod
     def _combined_match_score(
-        match_score: list[float] | None,
+        match_score: dict[str, Any] | None,
         *,
         win_bonus: float,
-        raw_resource_score: float | None = None,
     ) -> float:
-        win_score = float(match_score[0]) if match_score and len(match_score) > 0 else 0.0
-        if raw_resource_score is not None:
-            return float(raw_resource_score) + float(win_bonus) * win_score
         return combined_match_score(match_score, win_bonus=win_bonus)
+
+    @staticmethod
+    def _normalize_match_score(match_score: Any) -> dict[str, float]:
+        if isinstance(match_score, dict):
+            return {
+                "win_score": float(match_score.get("win_score", 0.0)),
+                "raw_resource_advantage_score": float(match_score.get("raw_resource_advantage_score", 0.0)),
+            }
+        if isinstance(match_score, (list, tuple)):
+            win_score = float(match_score[0]) if len(match_score) > 0 else 0.0
+            raw_resource_score = float(match_score[1]) if len(match_score) > 1 else 0.0
+            return {
+                "win_score": win_score,
+                "raw_resource_advantage_score": raw_resource_score,
+            }
+        return {
+            "win_score": 0.0,
+            "raw_resource_advantage_score": 0.0,
+        }
+
+    @staticmethod
+    def _raw_resource_advantage_score(match_score: dict[str, Any] | None) -> float:
+        if not isinstance(match_score, dict):
+            return 0.0
+        try:
+            return float(match_score.get("raw_resource_advantage_score", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
 
     @staticmethod
     def _build_opponent_score_vector(

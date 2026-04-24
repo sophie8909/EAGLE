@@ -76,29 +76,29 @@ def raw_resource_advantage_score(
 
 
 def combined_match_score(
-    fitness: list[float] | tuple[float, float] | None,
+    match_score: dict[str, Any] | None,
     *,
     win_bonus: float,
 ) -> float:
     """
-    Collapse one raw match fitness into one scalar score for one opponent slot.
+    Collapse one raw match score into one scalar score for one opponent slot.
 
-    Raw match score stays `[win_score, resource_score]`, where:
-    - `win_score` is typically 1.0 / 0.5 / 0.0
-    - `resource_score` is the weighted resource/material advantage in [-1, 1]
+    Raw match score stays as:
+    - `win_score`
+    - `raw_resource_advantage_score`
 
     EA-level fitness for NSGA-II/GA uses one scalar per configured opponent:
-    `resource_score + win_bonus * win_score`
+    `raw_resource_advantage_score + win_bonus * win_score`
     """
-    if not fitness:
+    if not match_score:
         return 0.0
 
     try:
-        win_score = float(fitness[0]) if len(fitness) > 0 else 0.0
+        win_score = float(match_score.get("win_score", 0.0))
     except (TypeError, ValueError):
         win_score = 0.0
     try:
-        resource_score = float(fitness[1]) if len(fitness) > 1 else 0.0
+        resource_score = float(match_score.get("raw_resource_advantage_score", 0.0))
     except (TypeError, ValueError):
         resource_score = 0.0
 
@@ -109,9 +109,12 @@ def calculate_match_score(
     log_content: str,
     resource_advantage_weights: dict[str, float],
     parsed_log: dict[str, Any] | None = None,
-) -> list[float]:
-    """Assemble the raw per-match score vector `[win_score, resource_score]`."""
+) -> dict[str, float]:
+    """Assemble one raw per-match score dict with stable named fields."""
     winner_info = parsed_log or parse_winner_info(log_content)["parsed_log"]
     winning_score = win_loss_evaluation(log_content, parsed_log=winner_info)
     resource_score = raw_resource_advantage_score(winner_info, resource_advantage_weights)
-    return [winning_score, resource_score]
+    return {
+        "win_score": winning_score,
+        "raw_resource_advantage_score": resource_score,
+    }
