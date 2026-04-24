@@ -11,10 +11,7 @@ from ..envs.microrts.runner import run_java_agent_game, run_prompt_based_game
 from ..evolution.operators.reflection import Reflection, read_max_turn_hint
 from ..project import PROJECT_ROOT
 from ..utils.component_pool import ComponentPool
-from ..utils.fitness_calculator import (
-    combined_match_score,
-    raw_resource_advantage_score,
-)
+from ..utils.fitness_calculator import combined_match_score, raw_resource_advantage_score
 from ..utils.fitness_recorder import FitnessRecorder
 from ..utils.individual import Individual
 from ..utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
@@ -26,7 +23,7 @@ DEFAULT_REAL_EVAL_OPPONENTS = [
 
 
 class Evaluator:
-    """Evaluate individuals with either real MicroRTS matches or the Java surrogate."""
+    """Evaluate one individual through either real or surrogate matches."""
 
     def __init__(
         self,
@@ -43,139 +40,363 @@ class Evaluator:
     def evaluate(
         self,
         individual: Individual,
-        use_real_evaluation: bool,
-        opponent: str | None,
-        allow_history_reuse_for_real: bool = False,
-        profile_output_path: str | Path | None = None,
+        *,
         generation: int | None = None,
+        profile_output_path: str | Path | None = None,
         fitness_recorder: FitnessRecorder | None = None,
-    ) -> None:
-        """Evaluate one individual and write the normalized raw match score back.
+        opponents: list[str] | None = None,
+        allow_history_reuse: bool = False,
+    ) -> dict[str, Any]:
+        """Run real evaluation across opponents and aggregate EA fitness."""
+        active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
+        prompt = self._construct_prompt(individual)
+        resolved_opponents = list(opponents) if opponents is not None else self._configured_real_eval_opponents()
 
-        The evaluation path is intentionally staged in this order:
-        1. Render the prompt once from the current individual.
-        2. Try to reuse one cached historical match when allowed.
-        3. Otherwise run one real MicroRTS match.
-        4. Normalize and persist the resulting single-match score.
+        opponent_scores: list[tuple[str | None, float]] = []
+        per_opponent_results: list[dict[str, Any]] = []
+        evaluation_modes: list[str] = []
 
-        This function only manages one match against one opponent. Higher-level EA
-        code is responsible for combining per-opponent match scores into EA fitness.
-        """
-        if not use_real_evaluation:
-            raise ValueError(
-                "Evaluator.evaluate() now only supports real evaluation. "
-                "Use Evaluator.evaluate_surrogate_individual() or Evaluator.run_surrogate_match() for surrogate paths."
-            )
-
-        stats: dict[str, float] = {}
-
-        with timer("prompt_render_time", stats):
-            prompt = self.construct_prompt(individual)
-
-        # Prefer cached history when the caller allows it. This keeps repeated
-        # surrogate passes cheap and optionally lets "real" requests reuse an
-        # identical prompt/opponent match if the caller opted in.
-        requested_real_evaluation = bool(use_real_evaluation)
-        history_match_score = self._lookup_history_match_score(
-            prompt=prompt,
-            opponent=opponent,
-            requested_real_evaluation=requested_real_evaluation,
-            allow_history_reuse_for_real=allow_history_reuse_for_real,
-            fitness_recorder=fitness_recorder,
-        )
-
-        simulation_meta: dict[str, Any] = {}
-        if history_match_score is not None:
-            fitness = history_match_score
-            evaluation_mode = "history_reuse"
-        else:
-            fitness, simulation_meta = self.run_prompt_match(prompt, opponent, stats=stats)
-            evaluation_mode = "real"
-
-        self._record_match_score(
-            individual=individual,
-            prompt=prompt,
-            fitness=fitness,
-            opponent=opponent,
-            evaluation_mode=evaluation_mode,
-            generation=generation,
-            stats=stats,
-            fitness_recorder=fitness_recorder,
-        )
-
-        individual.fitness = fitness
-        individual.evaluation_mode = evaluation_mode
-
-        # Only real matches carry replayable logs and reflection context.
-        if evaluation_mode == "real":
-            self._store_real_evaluation(individual=individual, fitness=fitness, simulation_meta=simulation_meta)
-
-        summarize_total_eval_time(stats)
-        operator_profile = getattr(individual, "operator_profile", None)
-        if isinstance(operator_profile, dict):
-            for key in ("crossover_time", "mutation_time", "EA_operator_time"):
-                stats[key] = stats.get(key, 0.0) + operator_profile.get(key, 0.0)
-            summarize_total_eval_time(stats)
-
-        if profile_output_path is not None and evaluation_mode == "real":
-            self._write_real_evaluation_profile(
+        for opponent in resolved_opponents:
+            result = self.run_prompt_based_agent(
                 individual=individual,
-                generation=generation,
                 prompt=prompt,
                 opponent=opponent,
-                fitness=fitness,
+                generation=generation,
+                profile_output_path=profile_output_path,
+                fitness_recorder=fitness_recorder,
+                allow_history_reuse=allow_history_reuse,
+            )
+            match_score = list(result["match_score"])
+            simulation_meta = dict(result.get("simulation_meta") or {})
+            evaluation_mode = str(result.get("evaluation_mode") or "real")
+            evaluation_modes.append(evaluation_mode)
+
+            self._record_match_score(
+                individual=individual,
+                prompt=prompt,
+                match_score=match_score,
+                opponent=opponent,
+                evaluation_mode=evaluation_mode,
+                generation=generation,
+                stats=result.get("stats", {}),
+                fitness_recorder=fitness_recorder,
+            )
+
+            if evaluation_mode == "real":
+                self._store_real_match_metadata(
+                    individual=individual,
+                    match_score=match_score,
+                    simulation_meta=simulation_meta,
+                )
+
+            parsed_log = simulation_meta.get("parsed_log")
+            raw_score = (
+                raw_resource_advantage_score(parsed_log, self.config.resource_advantage_weights)
+                if isinstance(parsed_log, dict)
+                else 0.0
+            )
+            combined_score = self._combined_match_score(
+                match_score,
+                win_bonus=self.config.win_bonus,
+                raw_resource_score=raw_score,
+            )
+            opponent_scores.append((opponent, combined_score))
+            per_opponent_results.append(
+                {
+                    "opponent": opponent,
+                    "match_score": match_score,
+                    "combined_score": combined_score,
+                    "raw_resource_advantage_score": raw_score,
+                    "winner": simulation_meta.get("winner"),
+                    "timeout": simulation_meta.get("timeout"),
+                    "log_path": simulation_meta.get("log_path"),
+                    "parsed_summary": (parsed_log or {}).get("summary", {}) if isinstance(parsed_log, dict) else {},
+                    "evaluation_mode": evaluation_mode,
+                }
+            )
+
+        aggregated_fitness = self._build_opponent_score_vector(opponent_scores, resolved_opponents)
+        individual.fitness = list(aggregated_fitness)
+        individual.evaluation_mode = (
+            "history_reuse"
+            if evaluation_modes and all(mode == "history_reuse" for mode in evaluation_modes)
+            else "real"
+        )
+        if hasattr(individual, "last_surrogate_evaluation"):
+            delattr(individual, "last_surrogate_evaluation")
+        individual.last_real_evaluation = {
+            "mode": "multi_opponent_opponent_vector",
+            "opponents": resolved_opponents,
+            "llm_interval": active_llm_interval,
+            "per_opponent": per_opponent_results,
+            "aggregated_fitness": list(aggregated_fitness),
+        }
+        return {
+            "prompt": prompt,
+            "fitness": list(aggregated_fitness),
+            "evaluation_mode": individual.evaluation_mode,
+            "scores": per_opponent_results,
+        }
+
+    def surrogate(
+        self,
+        individual: Individual,
+        *,
+        generation: int | None = None,
+        opponents: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Run surrogate evaluation across opponents and aggregate EA fitness."""
+        active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
+        prompt = self._construct_prompt(individual)
+        resolved_opponents = list(opponents) if opponents is not None else self._configured_real_eval_opponents()
+
+        opponent_scores: list[tuple[str | None, float]] = []
+        per_opponent_scores: list[dict[str, object]] = []
+        for opponent in resolved_opponents:
+            result = self.run_java_based_agent(
+                individual=individual,
+                prompt=prompt,
+                opponent=opponent,
+            )
+            match_score = list(result["match_score"])
+            parsed_log = result["simulation_meta"].get("parsed_log")
+            raw_score = (
+                raw_resource_advantage_score(parsed_log, self.config.resource_advantage_weights)
+                if isinstance(parsed_log, dict)
+                else None
+            )
+            combined_score = self._combined_match_score(
+                match_score,
+                win_bonus=self.config.win_bonus,
+                raw_resource_score=raw_score,
+            )
+            opponent_scores.append((opponent, combined_score))
+            per_opponent_scores.append(
+                {
+                    "opponent": opponent,
+                    "match_score": match_score,
+                    "combined_score": combined_score,
+                    "raw_resource_advantage_score": raw_score,
+                }
+            )
+
+        aggregated_fitness = self._build_opponent_score_vector(opponent_scores, resolved_opponents)
+        individual.fitness = list(aggregated_fitness)
+        individual.evaluation_mode = "surrogate"
+        individual.last_surrogate_evaluation = {
+            "mode": "multi_opponent_opponent_vector",
+            "opponents": resolved_opponents,
+            "llm_interval": active_llm_interval,
+            "scores": per_opponent_scores,
+            "aggregated_fitness": list(aggregated_fitness),
+        }
+        return {
+            "prompt": prompt,
+            "fitness": list(aggregated_fitness),
+            "evaluation_mode": "surrogate",
+            "scores": per_opponent_scores,
+        }
+
+    def run_prompt_based_agent(
+        self,
+        *,
+        individual: Individual | None = None,
+        prompt: str | None = None,
+        opponent: str | None = None,
+        generation: int | None = None,
+        profile_output_path: str | Path | None = None,
+        fitness_recorder: FitnessRecorder | None = None,
+        allow_history_reuse: bool = False,
+        llm_interval: int | None = None,
+        test: bool = False,
+    ) -> dict[str, Any]:
+        """Run one real EAGLE match and return the raw single-match payload."""
+        rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
+        stats: dict[str, float] = {}
+
+        history_match_score = self._lookup_history_match_score(
+            prompt=rendered_prompt,
+            opponent=opponent,
+            allow_history_reuse=allow_history_reuse,
+            fitness_recorder=fitness_recorder,
+        )
+        if history_match_score is not None:
+            return {
+                "prompt": rendered_prompt,
+                "match_score": list(history_match_score),
+                "simulation_meta": {},
+                "stats": stats,
+                "evaluation_mode": "history_reuse",
+            }
+
+        with timer("game_play_time", stats):
+            match_score, simulation_meta = self._run_prompt_match(
+                rendered_prompt,
+                opponent,
+                llm_interval=llm_interval,
+                test=test,
+            )
+        summarize_total_eval_time(stats)
+
+        if profile_output_path is not None:
+            self._write_real_match_profile(
+                individual=individual,
+                generation=generation,
+                prompt=rendered_prompt,
+                opponent=opponent,
+                match_score=list(match_score),
                 stats=stats,
-                operator_profile=operator_profile if isinstance(operator_profile, dict) else None,
                 simulation_meta=simulation_meta,
                 profile_output_path=profile_output_path,
             )
+
+        return {
+            "prompt": rendered_prompt,
+            "match_score": list(match_score),
+            "simulation_meta": simulation_meta,
+            "stats": stats,
+            "evaluation_mode": "real",
+        }
+
+    def run_java_based_agent(
+        self,
+        *,
+        individual: Individual | None = None,
+        prompt: str | None = None,
+        opponent: str | None = None,
+        ai1_class: str = "ai.abstraction.EAGLESurrogate",
+        llm_interval: int | None = None,
+        test: bool = False,
+    ) -> dict[str, Any]:
+        """Run one surrogate Java-agent match and return the raw single-match payload."""
+        rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
+        stats: dict[str, float] = {}
+        with timer("game_play_time", stats):
+            match_score, simulation_meta = self._run_java_match(
+                rendered_prompt,
+                opponent,
+                ai1_class=ai1_class,
+                llm_interval=llm_interval,
+                test=test,
+            )
+        summarize_total_eval_time(stats)
+        return {
+            "prompt": rendered_prompt,
+            "match_score": list(match_score),
+            "simulation_meta": simulation_meta,
+            "stats": stats,
+            "evaluation_mode": "surrogate",
+        }
+
+    def _construct_prompt(self, individual: Individual) -> str:
+        static_prompt_lines = []
+        if self.component_pool.has_category("game_rule"):
+            static_prompt_lines = self.component_pool.render_selected_static_prompt_lines(
+                individual.static_components,
+                game_rule_index=individual.game_rule,
+            )
+        strategy_prompt_lines = self.component_pool.render_strategy_prompt_lines(
+            individual.strategy,
+            include_strategy_identity=self.config.include_strategy_identity_in_prompt,
+        )
+        prompt_lines = static_prompt_lines.copy()
+        if prompt_lines and strategy_prompt_lines:
+            prompt_lines.append("")
+        prompt_lines.extend(strategy_prompt_lines)
+        return "\n".join(prompt_lines)
+
+    def _run_prompt_match(
+        self,
+        prompt: str,
+        opponent: str | None,
+        *,
+        llm_interval: int | None = None,
+        test: bool = False,
+    ) -> tuple[list[float], dict[str, Any]]:
+        original_interval = getattr(self.config, "_active_llm_interval", None)
+        if llm_interval is not None:
+            self.config.set_active_llm_interval(int(llm_interval))
+        try:
+            return run_prompt_based_game(
+                project_root=self.repo_root,
+                config=self.config,
+                prompt=prompt,
+                opponent=opponent,
+                test=test,
+                runtime_logs_dir=self.runtime_logs_dir,
+            )
+        finally:
+            self.config.set_active_llm_interval(original_interval)
+
+    def _run_java_match(
+        self,
+        prompt: str,
+        opponent: str | None,
+        *,
+        ai1_class: str,
+        llm_interval: int | None = None,
+        test: bool = False,
+    ) -> tuple[list[float], dict[str, Any]]:
+        original_interval = getattr(self.config, "_active_llm_interval", None)
+        if llm_interval is not None:
+            self.config.set_active_llm_interval(int(llm_interval))
+        try:
+            return run_java_agent_game(
+                project_root=self.repo_root,
+                config=self.config,
+                ai1_class=ai1_class,
+                opponent=opponent,
+                prompt=prompt,
+                compile_first=True,
+                log_prefix="run_surrogate" if not test else "run_test_surrogate",
+                runtime_logs_dir=self.runtime_logs_dir,
+                record_trace=bool(test and getattr(self.config, "save_trace_on_test", False)),
+            )
+        finally:
+            self.config.set_active_llm_interval(original_interval)
+
+    def _configured_real_eval_opponents(self) -> list[str]:
+        configured_opponents = list(getattr(self.config, "real_eval_opponents", []) or [])
+        return configured_opponents or list(DEFAULT_REAL_EVAL_OPPONENTS)
 
     def _lookup_history_match_score(
         self,
         *,
         prompt: str,
         opponent: str | None,
-        requested_real_evaluation: bool,
-        allow_history_reuse_for_real: bool,
+        allow_history_reuse: bool,
         fitness_recorder: FitnessRecorder | None,
     ) -> list[float] | None:
-        """Return one cached match score when history reuse is enabled for this call."""
-        if fitness_recorder is None:
+        if fitness_recorder is None or not allow_history_reuse:
             return None
-        if requested_real_evaluation and not allow_history_reuse_for_real:
-            return None
-
         matches = fitness_recorder.find_matching_history(prompt, opponent)
         if not matches:
             return None
-
         cached_match = matches[random.randint(0, len(matches) - 1)]
-        return cached_match.get("match_score", cached_match.get("fitness_score", [0.0, 0.0]))
+        return list(cached_match.get("match_score", cached_match.get("fitness_score", [0.0, 0.0])))
 
     def _record_match_score(
         self,
         *,
         individual: Individual,
         prompt: str,
-        fitness: list[float],
+        match_score: list[float],
         opponent: str | None,
         evaluation_mode: str,
         generation: int | None,
         stats: dict[str, float],
         fitness_recorder: FitnessRecorder | None,
     ) -> None:
-        """Persist one normalized single-match score into the history recorder."""
         if fitness_recorder is None:
             return
-
         fitness_recorder.record_fitness(
             {
                 "individual_id": getattr(individual, "id", None),
                 "generation": generation,
                 "prompt": prompt,
-                "match_score": fitness,
-                "fitness": fitness,
-                "fitness_score": fitness,
+                "match_score": list(match_score),
+                "fitness": list(match_score),
+                "fitness_score": list(match_score),
                 "opponent": opponent,
                 "evaluation_mode": evaluation_mode,
                 "evaluation_time": stats.get("total_eval_time", 0.0),
@@ -187,19 +408,17 @@ class Evaluator:
             }
         )
 
-    def _store_real_evaluation(
+    def _store_real_match_metadata(
         self,
         *,
         individual: Individual,
-        fitness: list[float],
+        match_score: list[float],
         simulation_meta: dict[str, Any],
     ) -> None:
-        """Attach rich real-match metadata used by reflection and later analysis."""
         parsed_log = simulation_meta.get("parsed_log")
         timeout = bool(simulation_meta.get("timeout", False))
         summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else {}
         individual.last_real_evaluation = {
-            "fitness": list(fitness),
             "winner": simulation_meta.get("winner"),
             "timeout": timeout,
             "log_path": simulation_meta.get("log_path"),
@@ -207,7 +426,7 @@ class Evaluator:
             "parsed_summary": summary,
             "reflection_context": Reflection.build_compact_reflection_context(
                 parsed_log=parsed_log,
-                fitness=fitness,
+                fitness=match_score,
                 timeout=timeout,
                 max_turn_hint=read_max_turn_hint(self.repo_root),
             ),
@@ -218,26 +437,23 @@ class Evaluator:
             ),
         }
 
-    def _write_real_evaluation_profile(
+    def _write_real_match_profile(
         self,
         *,
-        individual: Individual,
+        individual: Individual | None,
         generation: int | None,
         prompt: str,
         opponent: str | None,
-        fitness: list[float],
+        match_score: list[float],
         stats: dict[str, float],
-        operator_profile: dict[str, Any] | None,
         simulation_meta: dict[str, Any],
         profile_output_path: str | Path,
     ) -> None:
-        """Write one profile record for a real match evaluation."""
         parsed_log = simulation_meta.get("parsed_log")
         llm_calls = simulation_meta.get("llm_calls", 0)
-
         record = build_base_record(
             generation=generation,
-            individual_id=getattr(individual, "id", None),
+            individual_id=getattr(individual, "id", None) if individual is not None else None,
             record_type="evaluation",
         )
         record.update(
@@ -251,10 +467,9 @@ class Evaluator:
                 "avg_llm_call_time": None,
                 "max_llm_call_time": None,
                 "game_llm_call_time": None,
-                "ea_llm_call_time": stats.get("surrogate_time", 0.0)
-                + ((operator_profile or {}).get("ea_llm_call_time", 0.0)),
-                "match_score": fitness,
-                "fitness": fitness,
+                "ea_llm_call_time": 0.0,
+                "match_score": list(match_score),
+                "fitness": list(match_score),
                 "log_path": simulation_meta.get("log_path"),
             }
         )
@@ -279,268 +494,25 @@ class Evaluator:
 
     @staticmethod
     def _combined_match_score(
-        fitness: list[float] | None,
+        match_score: list[float] | None,
         *,
         win_bonus: float,
         raw_resource_score: float | None = None,
     ) -> float:
-        """Collapse one raw match score into one EA scalar slot."""
-        if not fitness:
-            return raw_resource_score or 0.0
-
-        win_score = float(fitness[0])
-        if win_score == 1.0:
-            return win_bonus + (raw_resource_score or 0.0)
-        elif win_score == 0.0:
-            return -win_bonus + (raw_resource_score or 0.0)
-        else:
-            return raw_resource_score or 0.0
+        win_score = float(match_score[0]) if match_score and len(match_score) > 0 else 0.0
+        if raw_resource_score is not None:
+            return float(raw_resource_score) + float(win_bonus) * win_score
+        return combined_match_score(match_score, win_bonus=win_bonus)
 
     @staticmethod
     def _build_opponent_score_vector(
         opponent_scores: list[tuple[str | None, float]],
         configured_opponents: list[str | None],
     ) -> list[float]:
-        """Build the fixed-width EA fitness vector aligned to configured opponent order."""
         if not configured_opponents:
             configured_opponents = [None]
-
         score_by_opponent = {opponent: score for opponent, score in opponent_scores}
-        values = [
-            float(score_by_opponent.get(opponent, 0.0))
-            for opponent in configured_opponents[:2]
-        ]
+        values = [float(score_by_opponent.get(opponent, 0.0)) for opponent in configured_opponents[:2]]
         while len(values) < 2:
             values.append(0.0)
         return values
-
-    def configured_real_eval_opponents(self) -> list[str]:
-        """Return the ordered real-evaluation opponents that define EA fitness slots."""
-        configured_opponents = list(getattr(self.config, "real_eval_opponents", []) or [])
-        return configured_opponents or list(DEFAULT_REAL_EVAL_OPPONENTS)
-
-    def evaluate_real_individual(
-        self,
-        individual: Individual,
-        *,
-        generation: int | None = None,
-        profile_output_path: str | Path | None = None,
-        fitness_recorder: FitnessRecorder | None = None,
-        opponents: list[str] | None = None,
-    ) -> list[float]:
-        """Run the ordered real-opponent sweep and overwrite EA fitness on the individual."""
-        active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
-        real_eval_opponents = list(opponents or self.configured_real_eval_opponents())
-
-        opponent_scores: list[tuple[str | None, float]] = []
-        per_opponent_results: list[dict[str, Any]] = []
-
-        for resolved_opponent in real_eval_opponents:
-            self.evaluate(
-                individual,
-                use_real_evaluation=True,
-                allow_history_reuse_for_real=bool(generation == -1),
-                opponent=resolved_opponent,
-                profile_output_path=profile_output_path,
-                generation=generation,
-                fitness_recorder=fitness_recorder,
-            )
-            
-            last_real_evaluation = getattr(individual, "last_real_evaluation", {}) or {}
-            parsed_log = last_real_evaluation.get("parsed_log")
-            raw_score = (
-                raw_resource_advantage_score(
-                    parsed_log,
-                    self.config.resource_advantage_weights,
-                )
-                if isinstance(parsed_log, dict)
-                else 0.0
-            )
-            print(f"Evaluated against opponent '{resolved_opponent}' with fitness {last_real_evaluation.get('fitness')} and raw resource advantage score {raw_score}")
-            print(f"Real evaluation against opponent '{resolved_opponent}' resource advantage score: {raw_score} win score: {last_real_evaluation.get('fitness', [0.0, 0.0])[0]}")
-            combined_score = self._combined_match_score(
-                fitness=last_real_evaluation.get("fitness"),
-                win_bonus=self.config.win_bonus,
-                raw_resource_score=raw_score,
-            )
-            opponent_scores.append((resolved_opponent, combined_score))
-            per_opponent_results.append(
-                {
-                    "opponent": resolved_opponent,
-                    "fitness": last_real_evaluation.get("fitness"),
-                    "combined_score": combined_score,
-                    "raw_resource_advantage_score": raw_score,
-                    "winner": last_real_evaluation.get("winner"),
-                    "timeout": last_real_evaluation.get("timeout"),
-                    "log_path": last_real_evaluation.get("log_path"),
-                    "parsed_summary": last_real_evaluation.get("parsed_summary"),
-                }
-            )
-
-        individual.fitness = self._build_opponent_score_vector(opponent_scores, real_eval_opponents)
-        individual.evaluation_mode = "real"
-        if hasattr(individual, "last_surrogate_evaluation"):
-            delattr(individual, "last_surrogate_evaluation")
-        individual.last_real_evaluation = {
-            "mode": "multi_opponent_opponent_vector",
-            "opponents": real_eval_opponents,
-            "llm_interval": active_llm_interval,
-            "per_opponent": per_opponent_results,
-            "aggregated_fitness": list(individual.fitness),
-        }
-        return list(individual.fitness)
-
-    def evaluate_surrogate_individual(
-        self,
-        individual: Individual,
-        *,
-        opponent_list: list[str] | None = None,
-        generation: int | None = None,
-    ) -> list[float]:
-        """Run explicit surrogate matches and aggregate them into EA fitness."""
-        active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
-        surrogate_mode = str(self.config.surrogate_mode).strip().lower()
-        prompt = self.construct_prompt(individual)
-
-        if surrogate_mode == "light_rush_and_heavy_rush":
-            opponents = list(opponent_list) if opponent_list else [None]
-            opponent_scores: list[tuple[str | None, float]] = []
-            per_opponent_scores: list[dict[str, object]] = []
-
-            for surrogate_opponent in opponents:
-                match_score, metadata = self.run_surrogate_match(
-                    prompt=prompt,
-                    opponent=surrogate_opponent,
-                )
-
-                parsed_log = metadata.get("parsed_log") if isinstance(metadata, dict) else None
-                raw_score = (
-                    raw_resource_advantage_score(
-                        parsed_log,
-                        self.config.resource_advantage_weights,
-                    )
-                    if isinstance(parsed_log, dict)
-                    else None
-                )
-                combined_score = self._combined_match_score(
-                    fitness=match_score,
-                    win_bonus=self.config.win_bonus,
-                    raw_resource_score=raw_score,
-                )
-                opponent_scores.append((surrogate_opponent, combined_score))
-                per_opponent_scores.append(
-                    {
-                        "opponent": surrogate_opponent,
-                        "fitness": match_score,
-                        "combined_score": combined_score,
-                        "raw_resource_advantage_score": raw_score,
-                    }
-                )
-
-            aggregated_fitness = self._build_opponent_score_vector(opponent_scores, opponents)
-            individual.fitness = list(aggregated_fitness)
-            individual.evaluation_mode = "surrogate"
-            individual.last_surrogate_evaluation = {
-                "mode": "light_rush_and_heavy_rush",
-                "opponents": opponents,
-                "llm_interval": active_llm_interval,
-                "scores": per_opponent_scores,
-                "aggregated_fitness": aggregated_fitness,
-            }
-            return list(individual.fitness)
-
-        raise ValueError(f"Unsupported surrogate_mode: {self.config.surrogate_mode}")
-
-    def construct_prompt(self, individual: Individual) -> str:
-        static_prompt_lines = []
-        if self.component_pool.has_category("game_rule"):
-            static_prompt_lines = self.component_pool.render_selected_static_prompt_lines(
-                individual.static_components,
-                game_rule_index=individual.game_rule,
-            )
-        strategy_prompt_lines = self.component_pool.render_strategy_prompt_lines(
-            individual.strategy,
-            include_strategy_identity=self.config.include_strategy_identity_in_prompt,
-        )
-        prompt_lines = static_prompt_lines.copy()
-        if prompt_lines and strategy_prompt_lines:
-            prompt_lines.append("")
-        prompt_lines.extend(strategy_prompt_lines)
-        return "\n".join(prompt_lines)
-
-    def run_prompt_match(
-        self,
-        prompt: str,
-        opponent: str | None,
-        *,
-        llm_interval: int | None = None,
-        test: bool = False,
-        stats: dict[str, float] | None = None,
-    ) -> tuple[list[float], dict[str, Any]]:
-        """Run one real EAGLE match for an already-rendered prompt."""
-        original_interval = getattr(self.config, "_active_llm_interval", None)
-        if llm_interval is not None:
-            self.config.set_active_llm_interval(int(llm_interval))
-        try:
-            if stats is None:
-                return run_prompt_based_game(
-                    project_root=self.repo_root,
-                    config=self.config,
-                    prompt=prompt,
-                    opponent=opponent,
-                    test=test,
-                    runtime_logs_dir=self.runtime_logs_dir,
-                )
-            with timer("game_play_time", stats):
-                return run_prompt_based_game(
-                    project_root=self.repo_root,
-                    config=self.config,
-                    prompt=prompt,
-                    opponent=opponent,
-                    test=test,
-                    runtime_logs_dir=self.runtime_logs_dir,
-                )
-        finally:
-            self.config.set_active_llm_interval(original_interval)
-
-    def run_surrogate_match(
-        self,
-        prompt: str,
-        opponent: str | None,
-        *,
-        ai1_class: str = "ai.abstraction.EAGLESurrogate",
-        llm_interval: int | None = None,
-        test: bool = False,
-        stats: dict[str, float] | None = None,
-    ) -> tuple[list[float], dict[str, Any]]:
-        """Run one generated Java surrogate match for an already-rendered prompt."""
-        original_interval = getattr(self.config, "_active_llm_interval", None)
-        if llm_interval is not None:
-            self.config.set_active_llm_interval(int(llm_interval))
-        try:
-            if stats is None:
-                return run_java_agent_game(
-                    project_root=self.repo_root,
-                    config=self.config,
-                    ai1_class=ai1_class,
-                    opponent=opponent,
-                    prompt=prompt,
-                    compile_first=True,
-                    log_prefix="run_surrogate" if not test else "run_test_surrogate",
-                    runtime_logs_dir=self.runtime_logs_dir,
-                    record_trace=bool(test and getattr(self.config, "save_trace_on_test", False)),
-                )
-            with timer("game_play_time", stats):
-                return run_java_agent_game(
-                    project_root=self.repo_root,
-                    config=self.config,
-                    ai1_class=ai1_class,
-                    opponent=opponent,
-                    prompt=prompt,
-                    compile_first=True,
-                    log_prefix="run_surrogate" if not test else "run_test_surrogate",
-                    runtime_logs_dir=self.runtime_logs_dir,
-                    record_trace=bool(test and getattr(self.config, "save_trace_on_test", False)),
-                )
-        finally:
-            self.config.set_active_llm_interval(original_interval)
