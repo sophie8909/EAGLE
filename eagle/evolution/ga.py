@@ -126,6 +126,7 @@ class GA(EA):
 
             self.log_single_objective_generation(log_dir, generation, best_individual)
             self.current_generation = generation
+            self.print_population_snapshot(f"generation {generation + 1} survivors")
             self.save_checkpoint(
                 self.build_checkpoint_state(
                     phase="generation_complete",
@@ -149,4 +150,3 @@ class GA(EA):
 
         # Store the components_pool in a file for later analysis
         self.save_component_pool(log_dir)
-

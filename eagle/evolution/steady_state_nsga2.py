@@ -367,6 +367,7 @@ class SteadyStateNSGA2(NSGA2):
             pareto_fronts = self._assign_rank_and_crowding(self.population)
 
             self._log_generation(generation, generation_stats, offspring, pareto_fronts, log_dir)
+            self.print_population_snapshot(f"generation {generation + 1} survivors")
             print(
                 f"[Generation {generation + 1}] logged and checkpointed",
                 flush=True,

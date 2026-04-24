@@ -195,11 +195,18 @@ def _load_generation_entries_from_logs(run_dir: Path) -> list[tuple[int, list, s
 
 
 def _load_generation_entries(run_dir: Path, debug: bool = False) -> list[tuple[int, list, set[str]]]:
-    """Load complete populations for every generation, preferring checkpoints."""
+    """Load complete populations for every generation, preferring generation logs."""
+    from_logs = _load_generation_entries_from_logs(run_dir)
+    if from_logs:
+        _debug_print(debug, f"Loaded {len(from_logs)} generations from generation_*_mo.txt logs")
+        return from_logs
+
     from_checkpoints = _load_generation_entries_from_checkpoints(run_dir, debug=debug)
     if from_checkpoints:
+        _debug_print(debug, f"Loaded {len(from_checkpoints)} generations from checkpoints fallback")
         return from_checkpoints
-    return _load_generation_entries_from_logs(run_dir)
+
+    return []
 
 
 def _plot_generation_scatter(

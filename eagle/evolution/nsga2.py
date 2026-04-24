@@ -647,6 +647,7 @@ class NSGA2(EA):
                 self.population = self.select_next_generation(self.population, offspring)
 
             self._log_generation(generation, generation_stats, offspring, pareto_fronts, log_dir)
+            self.print_population_snapshot(f"generation {generation + 1} survivors")
             print(
                 f"[Generation {generation + 1}] logged and checkpointed",
                 flush=True,

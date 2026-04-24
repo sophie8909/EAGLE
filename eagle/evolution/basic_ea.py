@@ -151,6 +151,7 @@ class EA:
             meta={"completed_generation": -1},
         )
         print("[Initial Population] complete", flush=True)
+        self.print_population_snapshot("initial population")
         self._log_initial_population_snapshot()
         self.save_checkpoint(self.checkpoint)
        
@@ -289,6 +290,23 @@ class EA:
         if fitness is not None:
             return fitness
         return []
+
+    def print_population_snapshot(
+        self,
+        label: str,
+        population: List[Individual] | None = None,
+    ) -> None:
+        """Print every individual's current fitness to stdout for live debugging."""
+        snapshot = list(population if population is not None else self.population)
+        print(f"[Population] {label} ({len(snapshot)} individuals)", flush=True)
+        for index, individual in enumerate(snapshot, start=1):
+            evaluation_mode = getattr(individual, "evaluation_mode", None) or "unknown"
+            print(
+                f"  [{index}] id={getattr(individual, 'id', None)} "
+                f"fitness={self._display_fitness(individual)} "
+                f"eval_mode={evaluation_mode}",
+                flush=True,
+            )
 
     def _safe_construct_prompt(self, individual: Individual) -> str:
         """Render prompts for logs without breaking on legacy invalid component indices."""
