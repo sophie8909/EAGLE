@@ -12,6 +12,7 @@ from .basic_ea import EA
 from ..utils.component_pool import ComponentPool
 from ..utils.individual import Individual
 from ..config import EAConfig
+from ..evaluation.evaluator import Evaluator
 from ..evolution.operators.environment_selection import EnvironmentSelection
 from ..utils.fitness_utils import fitness_key
 from ..utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
@@ -37,10 +38,12 @@ class GA(EA):
         """Run the standard GA loop from initialization through early stopping."""
         log_dir = self.create_log_folder()
         checkpoint = self.load_checkpoint()
+        runtime_logs_dir = self.current_log_dir / "microrts" if self.current_log_dir is not None else None
+        evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
 
         last_5_fitness = []
 
-        self._evaluate_initial_population(checkpoint)
+        self._evaluate_initial_population(evaluator, checkpoint)
 
         start_generation = checkpoint.get("generation", 0) + (1 if checkpoint.get("phase") == "generation_complete" else 0)
 
@@ -80,9 +83,18 @@ class GA(EA):
                 for index in range(start_idx, len(new_population)):
                     individual = new_population[index]
                     if random.random() < 0.5:
-                        self.real_evaluation(individual, generation=generation)
+                        evaluator.evaluate_real_individual(
+                            individual,
+                            generation=generation,
+                            profile_output_path=self.get_profile_log_path(),
+                            fitness_recorder=self.fitness_recorder,
+                        )
                     else:
-                        self.surrogate_evaluation(individual, generation=generation)
+                        evaluator.evaluate_surrogate_individual(
+                            individual,
+                            opponent_list=self.opponent_list,
+                            generation=generation,
+                        )
                     self.save_checkpoint(
                         self.build_checkpoint_state(
                             phase="generation_evaluation",

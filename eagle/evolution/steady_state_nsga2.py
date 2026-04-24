@@ -10,6 +10,7 @@ from typing import Any, List, Tuple
 from ..utils.component_pool import ComponentPool
 from ..config import EAConfig
 from ..utils.individual import Individual
+from ..evaluation.evaluator import Evaluator
 from ..evolution.operators.reflection import Reflection
 from .nsga2 import NSGA2
 from ..utils.profiler import timer
@@ -226,39 +227,6 @@ class SteadyStateNSGA2(NSGA2):
 
         return candidates
 
-    def _surrogate_evaluate_candidate_batch(
-        self,
-        candidates: List[Individual],
-        generation: int,
-        generation_stats: dict[str, float],
-        start_index: int = 0,
-    ) -> List[Individual]:
-        """Run surrogate evaluation as an explicit phase in the steady-state loop."""
-        with timer("offspring_evaluation_time", generation_stats):
-            for index, child in enumerate(candidates):
-                if index < start_index:
-                    continue
-                print(
-                    f"[Generation {generation + 1}] surrogate candidate "
-                    f"{index + 1}/{len(candidates)} id={child.id}",
-                    flush=True,
-                )
-                self.surrogate_evaluation(child, generation=generation)
-                print(
-                    f"[Generation {generation + 1}] surrogate result "
-                    f"id={child.id} fitness={child.fitness}",
-                    flush=True,
-                )
-                self.save_checkpoint(
-                    self.build_checkpoint_state(
-                        phase="generation_surrogate",
-                        generation=generation,
-                        offspring=candidates,
-                        meta={"evaluated_candidate_count": index + 1},
-                    )
-                )
-        return candidates
-
     def _select_best_half_candidate(self, candidates: List[Individual]) -> Individual:
         """Pick the strongest candidates under the current surrogate fitness."""
         if not candidates:
@@ -283,9 +251,11 @@ class SteadyStateNSGA2(NSGA2):
         """
         log_dir = self.create_log_folder()
         self.checkpoint = self.load_checkpoint() or {}
+        runtime_logs_dir = self.current_log_dir / "microrts" if self.current_log_dir is not None else None
+        evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
 
         """Run full evaluation on the initial population before evolutionary steps."""
-        self._evaluate_initial_population(self.checkpoint)
+        self._evaluate_initial_population(evaluator, self.checkpoint)
 
         past_front_signatures: List[List[Tuple]] = []
         start_generation = self.checkpoint.get("generation", 0) + (
@@ -328,12 +298,33 @@ class SteadyStateNSGA2(NSGA2):
                     surrogate_start_index = self.checkpoint.get("meta", {}).get("evaluated_candidate_count", 0)
                 elif same_generation_checkpoint and checkpoint_phase == "generation_real_eval":
                     surrogate_start_index = len(candidate_offspring)
-                candidate_offspring = self._surrogate_evaluate_candidate_batch(
-                    candidate_offspring,
-                    generation,
-                    generation_stats,
-                    start_index=surrogate_start_index,
-                )
+                with timer("offspring_evaluation_time", generation_stats):
+                    for index, child in enumerate(candidate_offspring):
+                        if index < surrogate_start_index:
+                            continue
+                        print(
+                            f"[Generation {generation + 1}] surrogate candidate "
+                            f"{index + 1}/{len(candidate_offspring)} id={child.id}",
+                            flush=True,
+                        )
+                        evaluator.evaluate_surrogate_individual(
+                            child,
+                            opponent_list=self.opponent_list,
+                            generation=generation,
+                        )
+                        print(
+                            f"[Generation {generation + 1}] surrogate result "
+                            f"id={child.id} fitness={child.fitness}",
+                            flush=True,
+                        )
+                        self.save_checkpoint(
+                            self.build_checkpoint_state(
+                                phase="generation_surrogate",
+                                generation=generation,
+                                offspring=candidate_offspring,
+                                meta={"evaluated_candidate_count": index + 1},
+                            )
+                        )
                 candidate_count_for_checkpoint = len(candidate_offspring)
                 print(
                     f"[Generation {generation + 1}] surrogate candidates ready: "
@@ -351,9 +342,11 @@ class SteadyStateNSGA2(NSGA2):
                     flush=True,
                 )
                 with timer("offspring_evaluation_time", generation_stats):
-                    self.real_evaluation(
+                    evaluator.evaluate_real_individual(
                         child,
                         generation=generation,
+                        profile_output_path=self.get_profile_log_path(),
+                        fitness_recorder=self.fitness_recorder,
                     )
                 print(
                     f"[Generation {generation + 1}] real result "

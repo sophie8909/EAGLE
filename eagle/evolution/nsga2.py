@@ -9,6 +9,7 @@ import random
 from typing import List, Tuple
 
 from .basic_ea import EA
+from ..evaluation.evaluator import Evaluator
 from ..utils.component_pool import ComponentPool
 from ..utils.individual import Individual
 from ..config import EAConfig
@@ -436,95 +437,9 @@ class NSGA2(EA):
             )
         return offspring[:target_count]
 
-    def _surrogate_evaluate_offspring(
-        self,
-        offspring: List[Individual],
-        generation: int,
-        generation_stats: dict[str, float],
-        start_index: int = 0,
-    ) -> None:
-        """Run surrogate evaluation as an explicit main-loop phase."""
-        with timer("offspring_evaluation_time", generation_stats):
-            for index, child in enumerate(offspring):
-                if index < start_index:
-                    continue
-                print(
-                    f"[Generation {generation + 1}] surrogate evaluation "
-                    f"{index + 1}/{len(offspring)} id={child.id}",
-                    flush=True,
-                )
-                self.surrogate_evaluation(child, generation=generation)
-                print(
-                    f"[Generation {generation + 1}] surrogate result "
-                    f"id={child.id} fitness={child.fitness}",
-                    flush=True,
-                )
-                self.save_checkpoint(
-                    self.build_checkpoint_state(
-                        phase="generation_surrogate",
-                        generation=generation,
-                        offspring=offspring,
-                        meta={"evaluated_offspring_count": index + 1},
-                    )
-                )
-
     def _rank_offspring_for_real_evaluation(self, offspring: List[Individual]) -> List[Individual]:
         """Rank offspring by surrogate fitness for the real-eval budget."""
         return self._sort_by_surrogate_fitness(offspring)
-
-    def _real_evaluate_ranked_offspring(
-        self,
-        candidate_order: List[Individual],
-        generation: int,
-        generation_stats: dict[str, float],
-        start_index: int = 0,
-    ) -> None:
-        """Spend the configured real-evaluation budget on the best-ranked offspring."""
-        with timer("offspring_evaluation_time", generation_stats):
-            real_eval_budget = self.config.real_eval_count(self.config.population_size)
-            if real_eval_budget > 0:
-                print(
-                    f"[Generation {generation + 1}] running real evaluation "
-                    f"for top {real_eval_budget} offspring",
-                    flush=True,
-                )
-
-            # Generational phase B: after all offspring exist, real-evaluate only
-            # the top-ranked children under the configured budget.
-            for index, child in enumerate(candidate_order):
-                if index < start_index:
-                    continue
-                if index >= real_eval_budget:
-                    break
-                print(
-                    f"[Generation {generation + 1}] real evaluation "
-                    f"{index + 1}/{real_eval_budget} id={child.id}",
-                    flush=True,
-                )
-                self.real_evaluation(child, generation=generation)
-                print(
-                    f"[Generation {generation + 1}] real result "
-                    f"id={child.id} fitness={child.fitness}",
-                    flush=True,
-                )
-
-                # Checkpoint meaning:
-                # - phase="generation_real_eval" means offspring generation is
-                #   done, but budgeted real evaluation is still in progress
-                # - candidate_order_ids freezes the ranking order for resume()
-                # - next_real_eval_index tells resume() which ranked child is next
-                self.save_checkpoint(
-                    self.build_checkpoint_state(
-                        phase="generation_real_eval",
-                        generation=generation,
-                        offspring=candidate_order,
-                        meta={
-                            "candidate_order_ids": [ind.id for ind in candidate_order],
-                            "next_real_eval_index": index + 1,
-                            "real_eval_budget": real_eval_budget,
-                        },
-                    )
-                )
 
     def _build_generation_record(
         self,
@@ -625,8 +540,10 @@ class NSGA2(EA):
         """
         log_dir = self.create_log_folder()
         checkpoint = self.load_checkpoint() or {}
+        runtime_logs_dir = self.current_log_dir / "microrts" if self.current_log_dir is not None else None
+        evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
 
-        self._evaluate_initial_population(checkpoint)
+        self._evaluate_initial_population(evaluator, checkpoint)
 
         past_front_signatures: List[List[Tuple]] = []
 
@@ -659,12 +576,33 @@ class NSGA2(EA):
                 surrogate_start_index = checkpoint.get("meta", {}).get("evaluated_offspring_count", 0)
             elif checkpoint_phase == "generation_real_eval":
                 surrogate_start_index = len(offspring)
-            self._surrogate_evaluate_offspring(
-                offspring,
-                generation,
-                generation_stats,
-                start_index=surrogate_start_index,
-            )
+            with timer("offspring_evaluation_time", generation_stats):
+                for index, child in enumerate(offspring):
+                    if index < surrogate_start_index:
+                        continue
+                    print(
+                        f"[Generation {generation + 1}] surrogate evaluation "
+                        f"{index + 1}/{len(offspring)} id={child.id}",
+                        flush=True,
+                    )
+                    evaluator.evaluate_surrogate_individual(
+                        child,
+                        opponent_list=self.opponent_list,
+                        generation=generation,
+                    )
+                    print(
+                        f"[Generation {generation + 1}] surrogate result "
+                        f"id={child.id} fitness={child.fitness}",
+                        flush=True,
+                    )
+                    self.save_checkpoint(
+                        self.build_checkpoint_state(
+                            phase="generation_surrogate",
+                            generation=generation,
+                            offspring=offspring,
+                            meta={"evaluated_offspring_count": index + 1},
+                        )
+                    )
             print(
                 f"[Generation {generation + 1}] surrogate offspring ready: {len(offspring)}",
                 flush=True,
@@ -681,7 +619,48 @@ class NSGA2(EA):
 
             # Phase 3: resume or execute the budgeted real-evaluation pass.
             start_real_eval_index = checkpoint.get("meta", {}).get("next_real_eval_index", 0) if checkpoint.get("generation") == generation else 0
-            self._real_evaluate_ranked_offspring(candidate_order, generation, generation_stats, start_index=start_real_eval_index)
+            with timer("offspring_evaluation_time", generation_stats):
+                real_eval_budget = self.config.real_eval_count(self.config.population_size)
+                if real_eval_budget > 0:
+                    print(
+                        f"[Generation {generation + 1}] running real evaluation "
+                        f"for top {real_eval_budget} offspring",
+                        flush=True,
+                    )
+
+                for index, child in enumerate(candidate_order):
+                    if index < start_real_eval_index:
+                        continue
+                    if index >= real_eval_budget:
+                        break
+                    print(
+                        f"[Generation {generation + 1}] real evaluation "
+                        f"{index + 1}/{real_eval_budget} id={child.id}",
+                        flush=True,
+                    )
+                    evaluator.evaluate_real_individual(
+                        child,
+                        generation=generation,
+                        profile_output_path=self.get_profile_log_path(),
+                        fitness_recorder=self.fitness_recorder,
+                    )
+                    print(
+                        f"[Generation {generation + 1}] real result "
+                        f"id={child.id} fitness={child.fitness}",
+                        flush=True,
+                    )
+                    self.save_checkpoint(
+                        self.build_checkpoint_state(
+                            phase="generation_real_eval",
+                            generation=generation,
+                            offspring=candidate_order,
+                            meta={
+                                "candidate_order_ids": [ind.id for ind in candidate_order],
+                                "next_real_eval_index": index + 1,
+                                "real_eval_budget": real_eval_budget,
+                            },
+                        )
+                    )
 
             # Phase 4: combine parent population and completed offspring batch.
             # Pareto fronts here are computed on the union, before survivor truncation.

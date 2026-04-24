@@ -14,7 +14,6 @@ from ..project import EAGLE_LOGS_DIR
 from ..utils.component_pool import ComponentPool
 from ..utils.individual import Individual
 from ..evaluation.evaluator import Evaluator
-from ..utils.fitness_calculator import combined_match_fitness_score, raw_resource_advantage_score
 from ..evolution.operators.parent_selection import ParentSelection
 from ..evolution.operators.crossover import Crossover
 from ..evolution.operators.mutation import Mutation
@@ -23,11 +22,6 @@ from ..utils.fitness_recorder import FitnessRecorder
 from ..utils.fitness_utils import normalize_fitness
 from ..evaluation.final_test_runner import run_final_test_suite
 from ..utils.profiler import build_base_record, timer, write_jsonl
-
-DEFAULT_REAL_EVAL_OPPONENTS = [
-    "ai.abstraction.LightRush",
-    "ai.abstraction.HeavyRush",
-]
 
 class EA:
     """Shared scaffolding for the single- and multi-objective EA variants.
@@ -67,11 +61,6 @@ class EA:
                 indent=4,
             )
 
-    def configured_real_eval_opponents(self) -> list[str]:
-        """Return the ordered real-evaluation opponents that define EA fitness slots."""
-        configured_opponents = list(getattr(self.config, "real_eval_opponents", []) or [])
-        return configured_opponents or list(DEFAULT_REAL_EVAL_OPPONENTS)
-
     def initialize_population(self) -> List[Individual]:
         """Create the starting population by sampling strategy indices at random."""
         individuals = []
@@ -102,7 +91,11 @@ class EA:
             individuals.append(individual)
         return individuals
     
-    def _evaluate_initial_population(self, checkpoint: dict[str, Any] | None = None):
+    def _evaluate_initial_population(
+        self,
+        evaluator: Evaluator,
+        checkpoint: dict[str, Any] | None = None,
+    ):
         self.checkpoint = checkpoint
         # Phase 0: restore runtime state if a checkpoint exists.
         if self.checkpoint:
@@ -119,7 +112,12 @@ class EA:
                             f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
                             flush=True,
                         )
-                        self.real_evaluation(individual, generation=-1)
+                        evaluator.evaluate_real_individual(
+                            individual,
+                            generation=-1,
+                            profile_output_path=self.get_profile_log_path(),
+                            fitness_recorder=self.fitness_recorder,
+                        )
                         self.save_checkpoint(
                             self.build_checkpoint_state(
                                 phase="initial_population",
@@ -135,7 +133,12 @@ class EA:
                         f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
                         flush=True,
                     )
-                    self.real_evaluation(individual, generation=-1)
+                    evaluator.evaluate_real_individual(
+                        individual,
+                        generation=-1,
+                        profile_output_path=self.get_profile_log_path(),
+                        fitness_recorder=self.fitness_recorder,
+                    )
                     # Checkpoint meaning:
                     # - phase="initial_population" means generation -1 is still
                     #   being evaluated
@@ -399,203 +402,6 @@ class EA:
         )
         return mutated_individual
 
-    @staticmethod
-    def _combined_match_score(
-        fitness: list[float] | None,
-        win_bonus: float,
-        raw_resource_score: float | None = None,
-    ) -> float:
-        """Collapse raw match fitness into one scalar: weighted resource plus win bonus."""
-        normalized = normalize_fitness(fitness)
-        if raw_resource_score is not None:
-            return float(raw_resource_score) + float(win_bonus) * float(normalized[0])
-        return combined_match_fitness_score(
-            normalized,
-            win_bonus=win_bonus,
-        )
-
-    def _build_opponent_score_vector(
-        self,
-        opponent_scores: list[tuple[str | None, float]],
-        configured_opponents: list[str | None],
-    ) -> list[float]:
-        """Build one fixed-width fitness vector where each slot maps to one opponent."""
-        if not configured_opponents:
-            configured_opponents = [None]
-
-        score_by_opponent = {opponent: score for opponent, score in opponent_scores}
-        values = [
-            float(score_by_opponent.get(opponent, 0.0))
-            for opponent in configured_opponents[:2]
-        ]
-        while len(values) < 2:
-            values.append(0.0)
-        return values
-    
-    def real_evaluation(self, individual: Individual, generation: int | None = None):
-        """Run one individual against the fixed ordered real-eval opponents from config."""
-        active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
-        runtime_logs_dir = (self.current_log_dir / "microrts") if self.current_log_dir is not None else None
-        evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
-        real_eval_opponents = self.configured_real_eval_opponents()
-
-        opponent_scores: list[tuple[str | None, float]] = []
-        per_opponent_results: list[dict[str, Any]] = []
-
-        for resolved_opponent in real_eval_opponents:
-            evaluator.evaluate(
-                individual,
-                use_real_evaluation=True,
-                allow_history_reuse_for_real=bool(generation == -1),
-                opponent=resolved_opponent,
-                profile_output_path=self.get_profile_log_path(),
-                generation=generation,
-                fitness_recorder=self.fitness_recorder,
-            )
-            normalized_fitness = normalize_fitness(individual.fitness)
-            last_real_evaluation = getattr(individual, "last_real_evaluation", {}) or {}
-            parsed_log = last_real_evaluation.get("parsed_log")
-            raw_score = (
-                raw_resource_advantage_score(
-                    parsed_log,
-                    self.config.resource_advantage_weights,
-                )
-                if isinstance(parsed_log, dict)
-                else 0.0
-            )
-            combined_score = self._combined_match_score(
-                normalized_fitness,
-                self.config.win_bonus,
-                raw_resource_score=raw_score,
-            )
-            opponent_scores.append((resolved_opponent, combined_score))
-            per_opponent_results.append(
-                {
-                    "opponent": resolved_opponent,
-                    "fitness": list(normalized_fitness),
-                    "combined_score": combined_score,
-                    "raw_resource_advantage_score": raw_score,
-                    "winner": last_real_evaluation.get("winner"),
-                    "timeout": last_real_evaluation.get("timeout"),
-                    "log_path": last_real_evaluation.get("log_path"),
-                    "parsed_summary": last_real_evaluation.get("parsed_summary"),
-                }
-            )
-
-        individual.fitness = self._build_opponent_score_vector(opponent_scores, real_eval_opponents)
-        individual.evaluation_mode = "real"
-        if hasattr(individual, "last_surrogate_evaluation"):
-            delattr(individual, "last_surrogate_evaluation")
-        individual.last_real_evaluation = {
-            "mode": "multi_opponent_opponent_vector",
-            "opponents": real_eval_opponents,
-            "llm_interval": active_llm_interval,
-            "per_opponent": per_opponent_results,
-            "aggregated_fitness": list(individual.fitness),
-        }
-
-    
-    def surrogate_evaluation(self, individual: Individual, generation: int | None = None):
-        """Run explicit surrogate matches and aggregate them into EA fitness."""
-        active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
-        runtime_logs_dir = (self.current_log_dir / "microrts") if self.current_log_dir is not None else None
-        evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
-        surrogate_mode = str(self.config.surrogate_mode).strip().lower()
-        prompt = evaluator.construct_prompt(individual)
-
-        if surrogate_mode == "random":
-            surrogate_opponent = random.choice(self.opponent_list) if self.opponent_list else None
-            match_score, metadata = evaluator.run_surrogate_match(
-                prompt=prompt,
-                opponent=surrogate_opponent,
-            )
-            raw_fitness = normalize_fitness(match_score)
-            parsed_log = metadata.get("parsed_log") if isinstance(metadata, dict) else None
-            raw_score = (
-                raw_resource_advantage_score(
-                    parsed_log,
-                    self.config.resource_advantage_weights,
-                )
-                if isinstance(parsed_log, dict)
-                else None
-            )
-            configured_opponents = list(self.opponent_list) if self.opponent_list else [surrogate_opponent]
-            combined_score = self._combined_match_score(
-                raw_fitness,
-                self.config.win_bonus,
-                raw_resource_score=raw_score,
-            )
-            individual.fitness = self._build_opponent_score_vector(
-                [(surrogate_opponent, combined_score)],
-                configured_opponents,
-            )
-            individual.last_surrogate_evaluation = {
-                "mode": "random",
-                "opponents": [surrogate_opponent],
-                "llm_interval": active_llm_interval,
-                "scores": [
-                    {
-                        "opponent": surrogate_opponent,
-                        "fitness": raw_fitness,
-                        "combined_score": combined_score,
-                        "raw_resource_advantage_score": raw_score,
-                    }
-                ],
-                "aggregated_fitness": list(individual.fitness),
-            }
-            individual.evaluation_mode = "surrogate"
-            return
-
-        if surrogate_mode == "all_avg":
-            opponents = list(self.opponent_list) if self.opponent_list else [None]
-            opponent_scores: list[tuple[str | None, float]] = []
-            per_opponent_scores: list[dict[str, object]] = []
-
-            for surrogate_opponent in opponents:
-                match_score, metadata = evaluator.run_surrogate_match(
-                    prompt=prompt,
-                    opponent=surrogate_opponent,
-                )
-                sampled_fitness = normalize_fitness(match_score)
-                parsed_log = metadata.get("parsed_log") if isinstance(metadata, dict) else None
-                raw_score = (
-                    raw_resource_advantage_score(
-                        parsed_log,
-                        self.config.resource_advantage_weights,
-                    )
-                    if isinstance(parsed_log, dict)
-                    else None
-                )
-                combined_score = self._combined_match_score(
-                    sampled_fitness,
-                    self.config.win_bonus,
-                    raw_resource_score=raw_score,
-                )
-                opponent_scores.append((surrogate_opponent, combined_score))
-                per_opponent_scores.append(
-                    {
-                        "opponent": surrogate_opponent,
-                        "fitness": sampled_fitness,
-                        "combined_score": combined_score,
-                        "raw_resource_advantage_score": raw_score,
-                    }
-                )
-
-            aggregated_fitness = self._build_opponent_score_vector(opponent_scores, opponents)
-            individual.fitness = list(aggregated_fitness)
-            individual.evaluation_mode = "surrogate"
-            individual.last_surrogate_evaluation = {
-                "mode": "all_avg",
-                "opponents": opponents,
-                "llm_interval": active_llm_interval,
-                "scores": per_opponent_scores,
-                "aggregated_fitness": aggregated_fitness,
-            }
-            return
-
-        raise ValueError(f"Unsupported surrogate_mode: {self.config.surrogate_mode}")
-
-    
     def run_final_test(self):
         """Replay the last saved generation against the configured final-test opponents."""
         if self.config.final_test_max_front is not None and int(self.config.final_test_max_front) < 1:
