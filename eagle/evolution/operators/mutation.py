@@ -28,6 +28,7 @@ class Mutation:
         "anti_stall_rules",
     ]
     STATIC_POOL_MUTATION_MODE = "static_pool_replacement"
+    STATIC_REWRITE_MUTATION_MODE = "static_rewrite"
 
     @classmethod
     def all_strategy_components(cls) -> list[str]:
@@ -108,9 +109,13 @@ class Mutation:
         component_pool: ComponentPool,
         static_targets: list[str],
     ) -> Individual:
-        """Replace one config-enabled static prompt component with another pool candidate."""
+        """Mutate one config-enabled static component via pool replacement or LLM rewrite."""
         mutated_individual = individual.copy()
         target_component = random.choice(list(static_targets))
+        can_rewrite = component_pool.is_rewriteable_static_key(target_component)
+        if can_rewrite:
+            return cls.rewrite_static_component(mutated_individual, component_pool, target_component)
+
         previous_index = mutated_individual.static_components.get(target_component)
         replacement_index = component_pool.get_random_component_index(target_component)
         if previous_index is not None:
@@ -125,6 +130,35 @@ class Mutation:
             "changed_components": [target_component],
             "old_index": previous_index,
             "new_index": replacement_index,
+        }
+        return mutated_individual
+
+    @classmethod
+    def rewrite_static_component(
+        cls,
+        individual: Individual,
+        component_pool: ComponentPool,
+        target_component: str,
+    ) -> Individual:
+        """Rewrite one non-strategy component while keeping the rest of the prompt stable."""
+        mutated_individual = individual.copy()
+        previous_index = mutated_individual.static_components.get(target_component, 0)
+        current_text = component_pool.get_component_str(target_component, previous_index)
+        instruction = cls._build_static_rewrite_instruction(
+            individual=mutated_individual,
+            component_pool=component_pool,
+            target_component=target_component,
+        )
+        rewritten_text, elapsed = cls.rewrite_component_with_llm(current_text, instruction)
+        rewritten_component = component_pool.parse_component_str(rewritten_text)
+        new_index = component_pool.add_component(target_component, rewritten_component)
+        mutated_individual.set_component_index(target_component, new_index)
+        mutated_individual.ea_llm_call_time = (getattr(mutated_individual, "ea_llm_call_time", 0.0) or 0.0) + elapsed
+        mutated_individual.mutation_metadata = {
+            "mutation_mode": cls.STATIC_REWRITE_MUTATION_MODE,
+            "changed_components": [target_component],
+            "old_index": previous_index,
+            "new_index": new_index,
         }
         return mutated_individual
 
@@ -333,38 +367,6 @@ class Mutation:
         return repaired_individual
 
     @classmethod
-    def mutate_component_from_pool(
-        cls,
-        individual: Individual,
-        component_pool: ComponentPool,
-    ) -> Individual:
-        """Backward-compatible wrapper for the cheap discrete pool mutation."""
-        config = EAConfig(
-            strategy_mutation={
-                "pool_replacement": 1.0,
-                "identity_preserving_rewrite": 0.0,
-                "identity_shift_rewrite": 0.0,
-            },
-        )
-        return cls.mutate_strategy(individual, component_pool, config, mode="pool_replacement")
-
-    @classmethod
-    def mutate_component_with_llm(
-        cls,
-        individual: Individual,
-        component_pool: ComponentPool,
-    ) -> Individual:
-        """Backward-compatible wrapper that samples among the rewrite-based modes."""
-        config = EAConfig(
-            strategy_mutation={
-                "pool_replacement": 0.0,
-                "identity_preserving_rewrite": 0.70,
-                "identity_shift_rewrite": 0.30,
-            },
-        )
-        return cls.mutate_strategy(individual, component_pool, config)
-
-    @classmethod
     def _sample_mutation_mode(cls, config: EAConfig) -> str:
         """Sample one mutation mode from the configured strategy-mutation weights."""
         weights = config.strategy_mutation_mode_weights()
@@ -502,6 +504,36 @@ class Mutation:
         )
 
     @classmethod
+    def _build_static_rewrite_instruction(
+        cls,
+        *,
+        individual: Individual,
+        component_pool: ComponentPool,
+        target_component: str,
+    ) -> str:
+        """Assemble the rewrite prompt for one non-strategy component."""
+        static_snapshot = cls._format_static_snapshot(individual, component_pool, exclude={target_component})
+        strategy_snapshot = cls._format_strategy_snapshot(individual.strategy, component_pool)
+        current_text = component_pool.get_component_str(
+            target_component,
+            int(individual.static_components.get(target_component, 0)),
+        )
+        return (
+            "Mutation mode: static_rewrite\n"
+            f"Rewrite target: {target_component}\n\n"
+            "Goal:\n"
+            "- Rewrite only the named non-strategy component.\n"
+            "- Keep the overall agent style and intent consistent with the current strategy components.\n"
+            "- Preserve compatibility with the rest of the prompt.\n"
+            "- Do not rewrite examples or field requirement sections.\n"
+            "- Keep the result concrete and operational rather than generic.\n\n"
+            f"Current target text:\n[{target_component}]\n{current_text}\n\n"
+            f"Other static components to stay consistent with:\n{static_snapshot}\n\n"
+            f"Current strategy snapshot:\n{strategy_snapshot}\n\n"
+            f"Return only the rewritten text for [{target_component}] with no explanation."
+        )
+
+    @classmethod
     def _format_strategy_snapshot(
         cls,
         strategy: dict[str, int],
@@ -511,6 +543,26 @@ class Mutation:
         blocks = []
         for key in component_pool.strategy_keys:
             blocks.append(f"[{key}]\n{cls._component_text(component_pool, strategy, key)}")
+        return "\n\n".join(blocks)
+
+    @classmethod
+    def _format_static_snapshot(
+        cls,
+        individual: Individual,
+        component_pool: ComponentPool,
+        *,
+        exclude: set[str] | None = None,
+    ) -> str:
+        """Render selected non-strategy components into a readable rewrite context."""
+        excluded = set(exclude or set())
+        blocks: list[str] = []
+        for key in component_pool.static_component_keys:
+            if key in excluded:
+                continue
+            if key not in individual.static_components:
+                continue
+            component_index = int(individual.static_components[key])
+            blocks.append(f"[{key}]\n{component_pool.get_component_str(key, component_index)}")
         return "\n\n".join(blocks)
 
     @classmethod
@@ -550,5 +602,3 @@ class Mutation:
             "repair_triggered": repair_triggered,
             "rewrite_prompt_summary": rewrite_prompt_summary,
         }
-
-

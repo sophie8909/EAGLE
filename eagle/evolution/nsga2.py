@@ -501,7 +501,7 @@ class NSGA2(EA):
                     f"{index + 1}/{real_eval_budget} id={child.id}",
                     flush=True,
                 )
-                self.real_evaluation(child, random.choice(self.opponent_list), generation=generation)
+                self.real_evaluation(child, generation=generation)
                 print(
                     f"[Generation {generation + 1}] real result "
                     f"id={child.id} fitness={child.fitness}",

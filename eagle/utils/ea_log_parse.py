@@ -7,29 +7,6 @@ import ast
 from .individual import Individual
 
 
-def extract_prompts_from_ea_log(log_file: str):
-    """Extract prompt text blocks from a generation log file."""
-    with open(log_file, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-
-    prompts = []
-    prompt = []
-    in_prompt_section = False
-
-    for line in lines:
-        line = line.strip()
-        if line.startswith("Prompt:"):
-            in_prompt_section = True
-        elif line.startswith("Individual") or line.startswith("Pareto Front"):
-            if prompt:
-                prompts.append("\n".join(prompt))
-                prompt = []
-        elif in_prompt_section and line:
-            prompt.append(line)
-
-    return prompts
-
-
 def _split_top_level_fields(individual_str: str) -> list[str]:
     """Split a serialized Individual(...) payload without breaking nested dicts."""
     fields = []

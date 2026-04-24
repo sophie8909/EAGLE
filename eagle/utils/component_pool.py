@@ -14,9 +14,6 @@ from typing import Any, Dict, List
 
 class ComponentPool:
     NON_EVOLVING_STATIC_KEYS = {
-        "actions",
-        "raw_move_format",
-        "json_schema",
         "field_requirements",
         "field_requirement",
         "examples",
@@ -172,17 +169,17 @@ class ComponentPool:
         if not candidates:
             raise ValueError(f"No candidates found for component category: {category}")
         return random.randint(0, len(candidates) - 1)
-    
+
     def add_component(self, category: str, component: List[str]) -> int:
-        """Append a newly generated component and return its stored index."""
+        """Append a newly generated non-strategy component and return its stored index."""
         if category == "game_rule":
             self.game_rule_components.append(component)
             return len(self.game_rule_components) - 1
         if category not in self.components:
             raise KeyError(f"Component category not found: {category}")
         self.components[category].append(component)
-        return len(self.components[category]) - 1  # Return the index of the newly added component
-
+        return len(self.components[category]) - 1
+    
     def add_strategy_component(self, strategy: str, component: List[str]) -> int:
         """Append a newly generated strategy component and return its stored index."""
         if strategy not in self.components["strategy"]:
@@ -206,10 +203,6 @@ class ComponentPool:
     def _normalize_component_lines(component_lines: List[str]) -> List[str]:
         """Drop empty placeholder lines while preserving original text order."""
         return [str(line) for line in component_lines if str(line).strip()]
-
-    def render_static_prompt_lines(self, game_rule_index: int = 0) -> List[str]:
-        """Render the non-strategy prompt prefix from the current component schema."""
-        return self.render_selected_static_prompt_lines({}, game_rule_index=game_rule_index)
 
     def render_selected_static_prompt_lines(
         self,
@@ -268,6 +261,10 @@ class ComponentPool:
             key for key in self.static_component_keys
             if key in configured and key not in self.NON_EVOLVING_STATIC_KEYS
         ]
+
+    def is_rewriteable_static_key(self, category: str) -> bool:
+        """Return whether one static category may be rewritten by LLM operators."""
+        return category in self.static_component_keys and category not in self.NON_EVOLVING_STATIC_KEYS
 
     def render_strategy_prompt_lines(
         self,

@@ -54,17 +54,6 @@ def load_alignment_rows(csv_path: Path) -> list[dict[str, object]]:
     return rows
 
 
-def _sanitize_filename(name: str) -> str:
-    """Convert a plot title or key into a filesystem-safe stem."""
-    safe = []
-    for ch in name:
-        if ch.isalnum() or ch in {"-", "_"}:
-            safe.append(ch)
-        else:
-            safe.append("_")
-    return "".join(safe).strip("_") or "plot"
-
-
 def plot_mean_gap_by_opponent(rows: list[dict[str, object]], output_dir: Path) -> Path:
     """Plot average mean absolute gap for each opponent."""
     grouped: dict[str, list[float]] = defaultdict(list)

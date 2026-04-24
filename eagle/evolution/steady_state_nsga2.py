@@ -353,7 +353,6 @@ class SteadyStateNSGA2(NSGA2):
                 with timer("offspring_evaluation_time", generation_stats):
                     self.real_evaluation(
                         child,
-                        random.choice(self.opponent_list),
                         generation=generation,
                     )
                 print(

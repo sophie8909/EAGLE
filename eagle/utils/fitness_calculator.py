@@ -19,30 +19,6 @@ def parse_winner_info(log_content: str, target_agent: str = "EAGLE") -> dict[str
     }
 
 
-def game_round_execution_score(
-    log_content: str,
-    parsed_log: dict[str, Any] | None = None,
-) -> float:
-    """Score move execution quality from counters extracted out of the log summary."""
-    parsed_log = parsed_log or parse_log(log_content)
-    summary = parsed_log["summary"]
-    llm_moves = summary["llm_move_count"]
-    direct_failure_count = summary["direct_failure_count"]
-    duplicate_skipped_count = summary["duplicate_skipped_count"]
-    applied_failure_count = summary["applied_failure_count"]
-    applied_success_count = summary["applied_success_count"]
-
-    if llm_moves == 0:
-        return 0.0
-
-    return (
-        applied_success_count
-        + 0.5 * applied_failure_count
-        - 0.1 * duplicate_skipped_count
-        - 0.3 * direct_failure_count
-    ) / llm_moves
-
-
 def win_loss_evaluation(log_content: str, parsed_log: dict[str, Any] | None = None) -> float:
     """Convert winner information into the primary win/loss objective."""
     winning_score = 0.5
@@ -53,20 +29,6 @@ def win_loss_evaluation(log_content: str, parsed_log: dict[str, Any] | None = No
     if winner is not None and target_side is not None:
         winning_score = 1.0 if str(winner) == str(target_side) else 0.0
     return winning_score
-
-
-def turn_count_score(log_content: str) -> float:
-    """Normalize the last observed game turn into a small auxiliary score."""
-    number_of_turns = 0
-    for line in log_content.splitlines():
-        if "current time" in line:
-            parts = line.split()
-            try:
-                number_of_turns = int(parts[2])
-            except ValueError:
-                pass
-
-    return number_of_turns / 1000.0
 
 
 def material_total(snapshot: dict[str, Any], resource_advantage_weights: dict[str, float]) -> float:

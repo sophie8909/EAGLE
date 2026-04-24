@@ -8,16 +8,6 @@ from typing import Any
 from .log_parse import parse_dynamic_prompt_state
 
 
-def combine_prompt_with_dynamic(prompt: str, dynamic_prompt_text: str) -> str:
-    """Join a static strategy prompt with one sampled Dynamic Prompt block."""
-    return (
-        f"{prompt}\n\n"
-        "=== Dynamic Prompt ===\n"
-        f"{dynamic_prompt_text}\n"
-        "========================"
-    )
-
-
 def is_in_bounds(x: int, y: int, state: dict[str, Any]) -> bool:
     """Return whether a coordinate lies inside the parsed map rectangle."""
     width = state.get("map_width")

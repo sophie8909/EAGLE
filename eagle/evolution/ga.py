@@ -80,8 +80,7 @@ class GA(EA):
                 for index in range(start_idx, len(new_population)):
                     individual = new_population[index]
                     if random.random() < 0.5:
-                        random_opponent = random.choice(self.opponent_list)
-                        self.real_evaluation(individual, random_opponent, generation=generation)
+                        self.real_evaluation(individual, generation=generation)
                     else:
                         self.surrogate_evaluation(individual, generation=generation)
                     self.save_checkpoint(

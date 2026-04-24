@@ -8,6 +8,7 @@ import math
 import re
 from pathlib import Path
 
+from ..config import load_config_from_json
 from ..project import EAGLE_LOGS_DIR, ensure_directory
 from ..utils.checkpoint import deserialize_individual
 from ..utils.ea_log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
@@ -16,10 +17,6 @@ from ..utils.ea_log_parse import parse_individuals_from_ea_log, parse_population
 GENERATION_LOG_PATTERN = re.compile(r"generation_(\d+)_mo\.txt$")
 FINAL_TEST_CANDIDATES = ("final_test_results.json", "final_test_result.json")
 FINAL_TEST_MODES = ("interval_1", "interval_10", "java_agent_test")
-EVOLUTION_OBJECTIVE_LABELS = (
-    "LightRush Combined Score",
-    "HeavyRush Combined Score",
-)
 
 
 def _require_matplotlib():
@@ -94,6 +91,16 @@ def _safe_float(value: object) -> float:
 def _clean_axis_label(label: str) -> str:
     """Shorten fully qualified Java class names for plot labels."""
     return label.split(".")[-1]
+
+
+def _evolution_objective_labels(run_dir: Path) -> tuple[str, str]:
+    """Build axis labels from the run config's ordered real-eval opponents."""
+    config = load_config_from_json(run_dir)
+    opponents = list(getattr(config, "real_eval_opponents", []) or [])
+    labels = [_clean_axis_label(opponent) for opponent in opponents[:2]]
+    while len(labels) < 2:
+        labels.append(f"Objective {len(labels) + 1}")
+    return (f"{labels[0]} Combined Score", f"{labels[1]} Combined Score")
 
 
 def _compose_plot_title(default_title: str, custom_title: str | None) -> str:
@@ -218,6 +225,7 @@ def _plot_generation_scatter(
     """Render one combined plot plus one per-generation plot."""
     plt = _require_matplotlib()
     generation_entries = _load_generation_entries(run_dir, debug=debug)
+    evolution_objective_labels = _evolution_objective_labels(run_dir)
     if not generation_entries:
         return []
 
@@ -323,8 +331,8 @@ def _plot_generation_scatter(
                 label="Front 1",
             )
 
-        plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
-        plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
+        plt.xlabel(evolution_objective_labels[0])
+        plt.ylabel(evolution_objective_labels[1])
         plt.title(_compose_plot_title(f"Generation {generation_number} Fitness Distribution", custom_title))
         plt.xlim(*x_limits)
         plt.ylim(*y_limits)
@@ -339,8 +347,8 @@ def _plot_generation_scatter(
         figure_paths.append(per_generation_path)
 
     # ===== combined plot =====
-    plt.xlabel(EVOLUTION_OBJECTIVE_LABELS[0])
-    plt.ylabel(EVOLUTION_OBJECTIVE_LABELS[1])
+    plt.xlabel(evolution_objective_labels[0])
+    plt.ylabel(evolution_objective_labels[1])
     plt.title(_compose_plot_title("Generation Fitness Distribution", custom_title))
     plt.xlim(*x_limits)
     plt.ylim(*y_limits)

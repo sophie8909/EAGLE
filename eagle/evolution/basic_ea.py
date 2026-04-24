@@ -67,6 +67,11 @@ class EA:
                 indent=4,
             )
 
+    def configured_real_eval_opponents(self) -> list[str]:
+        """Return the ordered real-evaluation opponents that define EA fitness slots."""
+        configured_opponents = list(getattr(self.config, "real_eval_opponents", []) or [])
+        return configured_opponents or list(DEFAULT_REAL_EVAL_OPPONENTS)
+
     def initialize_population(self) -> List[Individual]:
         """Create the starting population by sampling strategy indices at random."""
         individuals = []
@@ -114,7 +119,7 @@ class EA:
                             f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
                             flush=True,
                         )
-                        self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
+                        self.real_evaluation(individual, generation=-1)
                         self.save_checkpoint(
                             self.build_checkpoint_state(
                                 phase="initial_population",
@@ -130,7 +135,7 @@ class EA:
                         f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
                         flush=True,
                     )
-                    self.real_evaluation(individual, random.choice(self.opponent_list), generation=-1)
+                    self.real_evaluation(individual, generation=-1)
                     # Checkpoint meaning:
                     # - phase="initial_population" means generation -1 is still
                     #   being evaluated
@@ -427,13 +432,12 @@ class EA:
             values.append(0.0)
         return values
     
-    def real_evaluation(self, individual: Individual, opponent: str, generation: int | None = None):
-        """Run the selected child against all configured real-eval opponents."""
+    def real_evaluation(self, individual: Individual, generation: int | None = None):
+        """Run one individual against the fixed ordered real-eval opponents from config."""
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         runtime_logs_dir = (self.current_log_dir / "microrts") if self.current_log_dir is not None else None
         evaluator = Evaluator(self.component_pool, self.config, runtime_logs_dir=runtime_logs_dir)
-        configured_opponents = list(getattr(self.config, "real_eval_opponents", []) or [])
-        real_eval_opponents = configured_opponents or list(DEFAULT_REAL_EVAL_OPPONENTS)
+        real_eval_opponents = self.configured_real_eval_opponents()
 
         opponent_scores: list[tuple[str | None, float]] = []
         per_opponent_results: list[dict[str, Any]] = []

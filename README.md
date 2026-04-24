@@ -150,10 +150,12 @@ Fitness conventions:
 - `resource_score` is the weighted final resource/material advantage from that same match.
 - Some result files still keep legacy `fitness` / `fitness_score` aliases for backward compatibility, but new code should treat these as `match_score`.
 - EA-level search fitness used by `ga`, `nsga2`, and `steady_state_nsga2` stores one scalar per configured opponent slot.
+- The slot order is read from `real_eval_opponents` in the run config.
 - With the default config, EA-level fitness is `[LightRush_score, HeavyRush_score]`.
 - Each opponent score is computed as `raw_resource_advantage_score + win_bonus * win_score`.
 - `resource_advantage_alpha` remains the separate parameter used inside resource-advantage scoring.
 - `win_bonus` is the win bonus weight inside the EA search objective.
+- Real evaluation always uses the full ordered `real_eval_opponents` list from config; it does not sample a random opponent.
 
 ### 2. `scripts.run_surrogate_validation`
 

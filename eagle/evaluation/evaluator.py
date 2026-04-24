@@ -231,25 +231,6 @@ class Evaluator:
         finally:
             self.config.set_active_llm_interval(original_interval)
 
-    def run_individual_match(
-        self,
-        individual: Individual,
-        opponent: str | None,
-        *,
-        llm_interval: int | None = None,
-        test: bool = False,
-        stats: dict[str, float] | None = None,
-    ) -> tuple[list[float], dict[str, Any]]:
-        """Render one individual's prompt and run a real EAGLE match."""
-        prompt = self.construct_prompt(individual)
-        return self.run_prompt_match(
-            prompt,
-            opponent,
-            llm_interval=llm_interval,
-            test=test,
-            stats=stats,
-        )
-
     def run_surrogate_match(
         self,
         prompt: str,
