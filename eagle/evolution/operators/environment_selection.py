@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 from ...utils.individual import Individual
-from ...utils.fitness_utils import fitness_key
 
 class EnvironmentSelection:
     """Legacy survivor-selection helpers for the single-objective GA path."""
@@ -10,7 +9,7 @@ class EnvironmentSelection:
     @staticmethod
     def sort_by_fitness(population: list[Individual]) -> list[Individual]:
         """Sort individuals by the project's lexicographic fitness key."""
-        sorted_population = sorted(population, key=lambda ind: fitness_key(ind.fitness), reverse=True)
+        sorted_population = sorted(population, key=lambda ind: ind.fitness, reverse=True)
         return sorted_population
 
     @staticmethod

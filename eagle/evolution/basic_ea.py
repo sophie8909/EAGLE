@@ -19,7 +19,6 @@ from ..evolution.operators.crossover import Crossover
 from ..evolution.operators.mutation import Mutation
 from ..evolution.operators.environment_selection import EnvironmentSelection
 from ..utils.fitness_recorder import FitnessRecorder
-from ..utils.fitness_utils import normalize_fitness
 from ..evaluation.final_test_runner import run_final_test_suite
 from ..utils.profiler import build_base_record, timer, write_jsonl
 

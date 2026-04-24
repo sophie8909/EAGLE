@@ -8,7 +8,6 @@ import re
 import ast
 import json
 
-from .fitness_utils import normalize_fitness
 
 class LLM:
     """Thin wrappers around the local Ollama endpoints used by the EA pipeline."""

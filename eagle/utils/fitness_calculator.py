@@ -21,13 +21,13 @@ def parse_winner_info(log_content: str, target_agent: str = "EAGLE") -> dict[str
 
 def win_loss_evaluation(log_content: str, parsed_log: dict[str, Any] | None = None) -> float:
     """Convert winner information into the primary win/loss objective."""
-    winning_score = 0.5
+    winning_score = 0.0
     winner_info = parsed_log or parse_winner_info(log_content)["parsed_log"]
     summary = winner_info.get("summary", {})
     winner = summary.get("winner")
     target_side = summary.get("target_side")
     if winner is not None and target_side is not None:
-        winning_score = 1.0 if str(winner) == str(target_side) else 0.0
+        winning_score = 1.0 if str(winner) == str(target_side) else -1.0
     return winning_score
 
 
@@ -49,11 +49,13 @@ def raw_resource_advantage_score(
     feature_history = parsed_log.get("feature_history", [])
     resource_history = parsed_log.get("resource_history", [])
 
+    ally_total = 0.0
+    enemy_total = 0.0
+
     if feature_history:
         final_row = feature_history[-1]
-        ally_total = material_total(final_row.get("ally", {}), resource_advantage_weights)
-        enemy_total = material_total(final_row.get("enemy", {}), resource_advantage_weights)
-        return ally_total - enemy_total
+        ally_total += material_total(final_row.get("ally", {}), resource_advantage_weights)
+        enemy_total += material_total(final_row.get("enemy", {}), resource_advantage_weights)
 
     if resource_history:
         final_row = resource_history[-1]
@@ -66,48 +68,14 @@ def raw_resource_advantage_score(
         else:
             ally_resources = p0_resources * resource_weight
             enemy_resources = p1_resources * resource_weight
-        return ally_resources - enemy_resources
+        
+        ally_total += ally_resources
+        enemy_total += enemy_resources
 
-    return 0.0
-
-
-def resource_advantage_evaluation(
-    parsed_log: dict[str, Any],
-    resource_advantage_alpha: float,
-    resource_advantage_weights: dict[str, float],
-    eps: float = 1e-9,
-) -> float:
-    """Compute the final weighted resource/material difference score in [-1, 1]."""
-    summary = parsed_log.get("summary", {})
-    target_side = summary.get("target_side")
-    feature_history = parsed_log.get("feature_history", [])
-    resource_history = parsed_log.get("resource_history", [])
-
-    if feature_history:
-        final_row = feature_history[-1]
-        ally_total = material_total(final_row.get("ally", {}), resource_advantage_weights)
-        enemy_total = material_total(final_row.get("enemy", {}), resource_advantage_weights)
-        denominator = ally_total + enemy_total + eps
-        return (ally_total - enemy_total) / denominator if denominator > 0 else 0.0
-
-    if resource_history:
-        final_row = resource_history[-1]
-        p0_resources = float(final_row.get("p0_resources", 0.0))
-        p1_resources = float(final_row.get("p1_resources", 0.0))
-        resource_weight = float(resource_advantage_weights.get("resource", 1.0))
-        if str(target_side) == "1":
-            ally_resources = p1_resources * resource_weight
-            enemy_resources = p0_resources * resource_weight
-        else:
-            ally_resources = p0_resources * resource_weight
-            enemy_resources = p1_resources * resource_weight
-        denominator = ally_resources + enemy_resources + eps
-        return (ally_resources - enemy_resources) / denominator if denominator > 0 else 0.0
-
-    return 0.0
+    return ally_total - enemy_total
 
 
-def combined_match_fitness_score(
+def combined_match_score(
     fitness: list[float] | tuple[float, float] | None,
     *,
     win_bonus: float,
@@ -137,18 +105,13 @@ def combined_match_fitness_score(
     return resource_score + float(win_bonus) * win_score
 
 
-def calculate_fitness_score(
+def calculate_match_score(
     log_content: str,
-    resource_advantage_alpha: float,
     resource_advantage_weights: dict[str, float],
     parsed_log: dict[str, Any] | None = None,
 ) -> list[float]:
     """Assemble the raw per-match score vector `[win_score, resource_score]`."""
     winner_info = parsed_log or parse_winner_info(log_content)["parsed_log"]
     winning_score = win_loss_evaluation(log_content, parsed_log=winner_info)
-    resource_score = resource_advantage_evaluation(
-        winner_info,
-        resource_advantage_alpha=resource_advantage_alpha,
-        resource_advantage_weights=resource_advantage_weights,
-    )
+    resource_score = raw_resource_advantage_score(winner_info, resource_advantage_weights)
     return [winning_score, resource_score]

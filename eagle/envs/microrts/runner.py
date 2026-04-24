@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ...project import MICRORTS_LOGS_DIR, PROJECT_ROOT, ensure_project_directories
-from ...utils.fitness_calculator import calculate_fitness_score
+from ...utils.fitness_calculator import calculate_match_score
 from .compiler import compile_microrts, locate_microrts_root
 from .parser import parse_game_log
 
@@ -267,7 +267,7 @@ def run_java_agent_game(
         )
         log_content = Path(log_path_str).read_text(encoding="utf-8", errors="replace")
         parsed_log = parse_game_log(log_content, target_agent=_target_agent_name(ai1_class))
-        fitness = calculate_fitness_score(
+        fitness = calculate_match_score(
             log_content,
             resource_advantage_alpha=config.resource_advantage_alpha,
             resource_advantage_weights=config.resource_advantage_weights,
