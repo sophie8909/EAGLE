@@ -167,7 +167,7 @@ def run_final_test_suite(
             f"(id={individual.id})",
             flush=True,
         )
-        prompt = evaluator.construct_prompt(individual)
+        prompt = evaluator._construct_prompt(individual)
 
         for interval_index, interval_run in enumerate(interval_runs, start=1):
             llm_interval = int(interval_run["llm_interval"])
@@ -186,12 +186,14 @@ def run_final_test_suite(
                     f"{opponent} (mode={interval_run['label']}, llm_interval={llm_interval})",
                     flush=True,
                 )
-                match_score, metadata = evaluator.run_prompt_match(
-                    prompt,
-                    opponent,
+                result = evaluator.run_prompt_based_agent(
+                    prompt=prompt,
+                    opponent=opponent,
                     llm_interval=llm_interval,
                     test=True,
                 )
+                match_score = dict(result["match_score"])
+                metadata = dict(result.get("simulation_meta") or {})
                 result_record = build_result_record(
                     individual,
                     opponent,

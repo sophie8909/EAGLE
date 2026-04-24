@@ -409,7 +409,7 @@ class Evaluator:
             "parsed_summary": summary,
             "reflection_context": Reflection.build_compact_reflection_context(
                 parsed_log=parsed_log,
-                fitness=match_score,
+                match_score=match_score,
                 timeout=timeout,
                 max_turn_hint=read_max_turn_hint(self.repo_root),
             ),

@@ -16,6 +16,16 @@ def _normalize_result(record: dict[str, Any]) -> str:
         return result.capitalize()
 
     match_score = record.get("match_score", record.get("fitness"))
+    if isinstance(match_score, dict):
+        try:
+            win_score = float(match_score.get("win_score", 0.0))
+        except (TypeError, ValueError):
+            return "Unknown"
+        if win_score == 1.0:
+            return "Win"
+        if win_score == 0.0:
+            return "Loss"
+        return "Draw"
     if isinstance(match_score, list) and match_score:
         try:
             win_score = float(match_score[0])

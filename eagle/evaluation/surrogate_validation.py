@@ -16,7 +16,7 @@ from ..main import OPPONENT_LIST, _resolve_component_pool_path
 from ..project import DEFAULT_SURROGATE_VALIDATION_CONFIG_PATH, EAGLE_LOGS_DIR
 from ..surrogate.compiler import compile_prompt_to_surrogate_spec
 from ..utils.component_pool import ComponentPool
-from ..utils.fitness_recorder import FitnessRecorder
+from ..utils.match_score_recorder import MatchScoreRecorder
 from ..utils.individual import Individual
 from .evaluator import Evaluator
 from .surrogate_validation_outputs import refresh_experiment_outputs
@@ -29,7 +29,7 @@ def _build_random_prompt_artifacts(component_pool: ComponentPool, config: EAConf
     individual = Individual()
     individual.initialize_randomly(component_pool)
     evaluator = Evaluator(component_pool, config)
-    prompt = evaluator.construct_prompt(individual)
+    prompt = evaluator._construct_prompt(individual)
     return individual, prompt
 
 
@@ -80,11 +80,47 @@ def _infer_final_tick(parsed_log: dict[str, Any] | None) -> int | None:
             candidates.append(current_time)
     return max(candidates) if candidates else None
 
-def _result_label_from_match_score(match_score: list[float]) -> str:
+def _match_win_score(match_score: Any) -> float:
+    if isinstance(match_score, dict):
+        try:
+            return float(match_score.get("win_score", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+    if isinstance(match_score, list) and match_score:
+        try:
+            return float(match_score[0])
+        except (TypeError, ValueError):
+            return 0.0
+    return 0.0
+
+
+def _match_resource_advantage_score(match_score: Any) -> float:
+    if isinstance(match_score, dict):
+        try:
+            return float(match_score.get("raw_resource_advantage_score", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+    if isinstance(match_score, list) and len(match_score) > 1:
+        try:
+            return float(match_score[1])
+        except (TypeError, ValueError):
+            return 0.0
+    return 0.0
+
+
+def _normalize_match_score(match_score: Any) -> dict[str, float]:
+    return {
+        "win_score": _match_win_score(match_score),
+        "raw_resource_advantage_score": _match_resource_advantage_score(match_score),
+    }
+
+
+def _result_label_from_match_score(match_score: Any) -> str:
     """Map the first objective to the familiar Win/Draw/Loss labels."""
-    if match_score and match_score[0] == 1.0:
+    win_score = _match_win_score(match_score)
+    if win_score == 1.0:
         return "Win"
-    if match_score and match_score[0] == 0.0:
+    if win_score == 0.0:
         return "Loss"
     return "Draw"
 
@@ -171,15 +207,15 @@ def _history_record_to_result(
     history_record: dict[str, Any],
 ) -> dict[str, Any]:
     """Convert one cached history row into the experiment result schema."""
-    match_score = list(history_record.get("match_score") or history_record.get("fitness_score") or [0.0, 0.0])
+    match_score = _normalize_match_score(history_record.get("match_score") or history_record.get("fitness_score"))
     return {
         "opponent": opponent,
         "benchmark_mode": benchmark_mode,
         "match_score": match_score,
         "fitness": match_score,
         "result": _result_label_from_match_score(match_score),
-        "win_score": match_score[0] if len(match_score) > 0 else 0.0,
-        "resource_advantage_score": match_score[1] if len(match_score) > 1 else 0.0,
+        "win_score": _match_win_score(match_score),
+        "resource_advantage_score": _match_resource_advantage_score(match_score),
         "game_time_sec": history_record.get("game_time_sec"),
         "log_path": history_record.get("log_path"),
         "winner": history_record.get("winner"),
@@ -198,7 +234,7 @@ def _history_record_to_result(
 
 
 def _maybe_reuse_cached_match(
-    recorder: FitnessRecorder,
+    recorder: MatchScoreRecorder,
     *,
     prompt: str,
     opponent: str,
@@ -220,12 +256,12 @@ def _maybe_reuse_cached_match(
 
 
 def _record_match(
-    recorder: FitnessRecorder,
+    recorder: MatchScoreRecorder,
     *,
     prompt: str,
     opponent: str,
     benchmark_mode: str,
-    match_score: list[float],
+    match_score: dict[str, float],
     game_time_sec: float,
     log_path: str | None,
     metadata: dict[str, Any] | None = None,
@@ -245,9 +281,7 @@ def _record_match(
         "individual_id": None,
         "generation": None,
         "prompt": prompt,
-        "match_score": list(match_score),
-        "fitness": list(match_score),
-        "fitness_score": list(match_score),
+        "match_score": dict(match_score),
         "opponent": opponent,
         "evaluation_mode": "real",
         "benchmark_mode": benchmark_mode,
@@ -270,15 +304,15 @@ def _record_match(
     }
     if isinstance(extra, dict):
         record.update(extra)
-    recorder.record_fitness(record)
+    recorder.record_match_score(record)
     result = {
         "opponent": opponent,
         "benchmark_mode": benchmark_mode,
-        "match_score": list(match_score),
-        "fitness": list(match_score),
+        "match_score": dict(match_score),
+        "fitness": dict(match_score),
         "result": _result_label_from_match_score(match_score),
-        "win_score": match_score[0] if len(match_score) > 0 else 0.0,
-        "resource_advantage_score": match_score[1] if len(match_score) > 1 else 0.0,
+        "win_score": _match_win_score(match_score),
+        "resource_advantage_score": _match_resource_advantage_score(match_score),
         "game_time_sec": float(game_time_sec),
         "final_tick": final_tick,
         "max_cycles": parsed_summary.get("max_cycles") if isinstance(parsed_summary, dict) else None,
@@ -304,7 +338,7 @@ def _record_match(
 
 def _run_eagle_match(
     evaluator: Evaluator,
-    recorder: FitnessRecorder,
+    recorder: MatchScoreRecorder,
     *,
     prompt: str,
     opponent: str,
@@ -324,13 +358,14 @@ def _run_eagle_match(
 
     stats: dict[str, float] = {}
     started = time.perf_counter()
-    match_score, metadata = evaluator.run_prompt_match(
+    result = evaluator.run_prompt_based_agent(
         prompt=prompt,
         opponent=opponent,
         llm_interval=llm_interval,
         test=True,
-        stats=stats,
     )
+    match_score = dict(result["match_score"])
+    metadata = dict(result.get("simulation_meta") or {})
     elapsed = time.perf_counter() - started
     log_path = metadata.get("log_path")
 
@@ -352,7 +387,7 @@ def _run_eagle_match(
 
 def _run_surrogate_java_match(
     evaluator: Evaluator,
-    recorder: FitnessRecorder,
+    recorder: MatchScoreRecorder,
     *,
     prompt: str,
     opponent: str,
@@ -372,15 +407,16 @@ def _run_surrogate_java_match(
 
     stats: dict[str, float] = {}
     started = time.perf_counter()
-    java_fitness, metadata = evaluator.run_surrogate_match(
+    result = evaluator.run_java_based_agent(
         prompt=prompt,
         opponent=opponent,
         llm_interval=llm_interval,
-        stats=stats,
         test=True,
     )
+    java_fitness = dict(result["match_score"])
+    metadata = dict(result.get("simulation_meta") or {})
     elapsed = time.perf_counter() - started
-    match_score = list(java_fitness)
+    match_score = dict(java_fitness)
 
     return _record_match(
         recorder,
@@ -396,9 +432,9 @@ def _run_surrogate_java_match(
         ai1=ai1,
         runner_script="RunLoop_5000.sh",
         extra={
-            "java_match_fitness": list(java_fitness),
-            "java_match_win_score": float(java_fitness[0]) if len(java_fitness) > 0 else 0.0,
-            "java_match_resource_advantage_score": float(java_fitness[1]) if len(java_fitness) > 1 else 0.0,
+            "java_match_fitness": dict(java_fitness),
+            "java_match_win_score": _match_win_score(java_fitness),
+            "java_match_resource_advantage_score": _match_resource_advantage_score(java_fitness),
         },
     )
 
@@ -414,7 +450,7 @@ def run_surrogate_validation_experiment(
     log_dir = _make_experiment_log_dir()
     component_pool = ComponentPool.from_json(_resolve_component_pool_path())
     evaluator = Evaluator(component_pool, config, runtime_logs_dir=log_dir / "microrts")
-    recorder = FitnessRecorder(log_dir, config)
+    recorder = MatchScoreRecorder(log_dir, config)
 
     opponents = list(opponents or OPPONENT_LIST)
     llm_interval = int(config.active_llm_interval())
@@ -430,7 +466,7 @@ def run_surrogate_validation_experiment(
         "num_individuals": int(num_individuals),
         "component_pool_path": _resolve_component_pool_path(),
         "opponents": opponents,
-        "history_cache_schema_version": 4,
+        "history_cache_schema_version": 5,
         "individual_results": [],
         "alignment_summary": {},
     }

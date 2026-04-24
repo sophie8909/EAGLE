@@ -151,8 +151,7 @@ class SteadyStateNSGA2(NSGA2):
             if isinstance(reflection_context, dict):
                 return dict(reflection_context)
 
-        fitness = parent.fitness if isinstance(parent.fitness, list) else None
-        return Reflection.safe_fallback_context(fitness=fitness)
+        return Reflection.safe_fallback_context()
 
     def generate_child_by_reflection(
         self,

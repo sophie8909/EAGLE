@@ -99,15 +99,17 @@ def load_generation_individuals(log_dir: str | Path, generation: int):
 def build_result_record(
     individual,
     opponent: str,
-    match_score: list[float],
+    match_score: dict,
     log_path: str,
     trace_xml_path: str | None = None,
     trace_json_path: str | None = None,
 ) -> dict:
     """Convert one replay result into the JSON-friendly output schema."""
-    if match_score[0] == 1.0:
+    win_score = _match_win_score(match_score)
+    resource_score = _match_resource_advantage_score(match_score)
+    if win_score == 1.0:
         result = "Win"
-    elif match_score[0] == 0.0:
+    elif win_score == 0.0:
         result = "Loss"
     else:
         result = "Draw"
@@ -116,14 +118,32 @@ def build_result_record(
         "individual_id": individual.id,
         "opponent": opponent,
         "result": result,
-        "match_score": match_score,
-        "fitness": match_score,
-        "win_score": match_score[0] if len(match_score) > 0 else 0.0,
-        "resource_advantage_score": match_score[1] if len(match_score) > 1 else 0.0,
+        "match_score": dict(match_score),
+        "fitness": dict(match_score),
+        "win_score": win_score,
+        "resource_advantage_score": resource_score,
         "log_path": log_path,
         "trace_xml_path": trace_xml_path,
         "trace_json_path": trace_json_path,
     }
+
+
+def _match_win_score(match_score: dict | None) -> float:
+    if not isinstance(match_score, dict):
+        return 0.0
+    try:
+        return float(match_score.get("win_score", 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _match_resource_advantage_score(match_score: dict | None) -> float:
+    if not isinstance(match_score, dict):
+        return 0.0
+    try:
+        return float(match_score.get("raw_resource_advantage_score", 0.0))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _append_result(results: dict, individual_id: str, result_record: dict) -> None:
@@ -195,7 +215,7 @@ def run_generation_result_test(
     }
 
     for individual in selected_individuals:
-        prompt = evaluator.construct_prompt(individual)
+        prompt = evaluator._construct_prompt(individual)
 
         for interval_run in interval_runs:
             llm_interval = int(interval_run["llm_interval"])
@@ -205,12 +225,14 @@ def run_generation_result_test(
                     f"Testing generation {generation}, individual {individual.id} "
                     f"against opponent: {opponent} (llm_interval={llm_interval})"
                 )
-                match_score, metadata = evaluator.run_prompt_match(
-                    prompt,
-                    opponent,
+                result = evaluator.run_prompt_based_agent(
+                    prompt=prompt,
+                    opponent=opponent,
                     llm_interval=llm_interval,
                     test=True,
                 )
+                match_score = dict(result["match_score"])
+                metadata = dict(result.get("simulation_meta") or {})
                 result_record = build_result_record(
                     individual,
                     opponent,
@@ -236,15 +258,13 @@ def run_generation_result_test(
                 f"Testing generation {generation}, individual {individual.id} "
                 f"against opponent: {opponent} (java agent test)"
             )
-            stats: dict[str, float] = {}
-            java_fitness, metadata = evaluator.run_surrogate_match(
+            result = evaluator.run_java_based_agent(
                 prompt=prompt,
                 opponent=opponent,
-                stats=stats,
                 test=True,
             )
-
-            match_score = list(java_fitness)
+            match_score = dict(result["match_score"])
+            metadata = dict(result.get("simulation_meta") or {})
 
             result_record = build_result_record(
                 individual,

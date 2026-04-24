@@ -26,6 +26,22 @@ def safe_float(value: Any) -> float | None:
         return None
 
 
+def _match_win_score(match_score: Any) -> float | None:
+    if isinstance(match_score, dict):
+        return safe_float(match_score.get("win_score"))
+    if isinstance(match_score, list) and match_score:
+        return safe_float(match_score[0])
+    return None
+
+
+def _match_resource_score(match_score: Any) -> float | None:
+    if isinstance(match_score, dict):
+        return safe_float(match_score.get("raw_resource_advantage_score"))
+    if isinstance(match_score, list) and len(match_score) > 1:
+        return safe_float(match_score[1])
+    return None
+
+
 def build_mode_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregate one benchmark mode into compact summary statistics."""
     if not records:
@@ -193,15 +209,22 @@ def build_alignment_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
         for opponent in sorted(set(eagle_by_opponent) | set(surrogate_by_opponent)):
             eagle_record = eagle_by_opponent.get(opponent, {})
             surrogate_record = surrogate_by_opponent.get(opponent, {})
-            eagle_match_score = list(eagle_record.get("match_score") or eagle_record.get("fitness") or [])
-            surrogate_match_score = list(surrogate_record.get("match_score") or surrogate_record.get("fitness") or [])
-            win_gap = None
-            resource_gap = None
-            if eagle_match_score and surrogate_match_score:
-                if len(eagle_match_score) > 0 and len(surrogate_match_score) > 0:
-                    win_gap = abs(float(eagle_match_score[0]) - float(surrogate_match_score[0]))
-                if len(eagle_match_score) > 1 and len(surrogate_match_score) > 1:
-                    resource_gap = abs(float(eagle_match_score[1]) - float(surrogate_match_score[1]))
+            eagle_match_score = eagle_record.get("match_score") or eagle_record.get("fitness") or {}
+            surrogate_match_score = surrogate_record.get("match_score") or surrogate_record.get("fitness") or {}
+            eagle_win_score = _match_win_score(eagle_match_score)
+            surrogate_win_score = _match_win_score(surrogate_match_score)
+            eagle_resource_score = _match_resource_score(eagle_match_score)
+            surrogate_resource_score = _match_resource_score(surrogate_match_score)
+            win_gap = (
+                abs(float(eagle_win_score) - float(surrogate_win_score))
+                if eagle_win_score is not None and surrogate_win_score is not None
+                else None
+            )
+            resource_gap = (
+                abs(float(eagle_resource_score) - float(surrogate_resource_score))
+                if eagle_resource_score is not None and surrogate_resource_score is not None
+                else None
+            )
             gap_values = [value for value in [win_gap, resource_gap] if value is not None]
             rows.append(
                 {

@@ -37,7 +37,7 @@ class Reflection:
         cls,
         *,
         parsed_log: dict[str, Any] | None,
-        fitness: list[float] | None,
+        match_score: dict[str, Any] | None,
         timeout: bool,
         max_turn_hint: int | None,
     ) -> dict[str, Any]:
@@ -52,7 +52,7 @@ class Reflection:
         global_summary = cls._build_quality_summary(summary)
         phase_summaries = cls._build_phase_summaries(segments, final_turn)
         action_type_stats = cls._build_action_type_stats(move_results)
-        outcome = cls._derive_outcome(summary, fitness)
+        outcome = cls._derive_outcome(summary, match_score)
         diagnosis_notes = cls._build_diagnosis_notes(
             outcome=outcome,
             final_turn=final_turn,
@@ -65,7 +65,7 @@ class Reflection:
 
         return {
             "outcome": outcome,
-            "win_score": float(fitness[0]) if fitness else 0.0,
+            "win_score": cls._match_win_score(match_score),
             "final_turn": final_turn,
             "max_turn": max_turn,
             "ended_by_timeout": bool(timeout),
@@ -76,11 +76,11 @@ class Reflection:
         }
 
     @classmethod
-    def safe_fallback_context(cls, *, fitness: list[float] | None = None) -> dict[str, Any]:
+    def safe_fallback_context(cls, *, match_score: dict[str, Any] | None = None) -> dict[str, Any]:
         """Return a minimal context when no prior real-game data is available."""
         return {
             "outcome": "unknown",
-            "win_score": float(fitness[0]) if fitness else 0.0,
+            "win_score": cls._match_win_score(match_score),
             "final_turn": 0,
             "max_turn": 0,
             "ended_by_timeout": False,
@@ -272,13 +272,11 @@ class Reflection:
         }
 
     @classmethod
-    def _derive_outcome(cls, summary: dict[str, Any], fitness: list[float] | None) -> str:
+    def _derive_outcome(cls, summary: dict[str, Any], match_score: dict[str, Any] | None) -> str:
         """Map winner and fitness data onto a stable outcome label."""
-        win_score = float(fitness[0]) if fitness else None
+        win_score = cls._match_win_score(match_score)
         if win_score == 1.0:
             return "win"
-        if win_score == 0.5:
-            return "draw"
         if win_score == 0.0:
             return "loss"
 
@@ -287,6 +285,15 @@ class Reflection:
         if winner is None or target_side is None:
             return "unknown"
         return "win" if str(winner) == str(target_side) else "loss"
+
+    @staticmethod
+    def _match_win_score(match_score: dict[str, Any] | None) -> float:
+        if not isinstance(match_score, dict):
+            return 0.0
+        try:
+            return float(match_score.get("win_score", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
 
     @classmethod
     def _build_diagnosis_notes(
@@ -480,5 +487,4 @@ def read_max_turn_hint(repo_root: Path) -> int | None:
         except ValueError:
             return None
     return None
-
 
