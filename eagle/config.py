@@ -188,10 +188,10 @@ class EAConfig:
         self.strategy_mutation = strategy_mutation
 
         normalized_surrogate_mode = str(self.surrogate_mode).strip().lower()
-        if normalized_surrogate_mode not in {"random", "all_avg"}:
+        if normalized_surrogate_mode not in {"light_rush_and_heavy_rush"}:
             raise ValueError(
                 f"Unsupported surrogate_mode: {self.surrogate_mode!r}. "
-                "Use 'random' or 'all_avg'."
+                "Use 'light_rush_and_heavy_rush'."
             )
         self.surrogate_mode = normalized_surrogate_mode
         self.llm_interval = self._normalized_llm_interval_input(self.llm_interval)

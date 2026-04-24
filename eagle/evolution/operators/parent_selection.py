@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ...utils.fitness_utils import fitness_key
 
 class ParentSelection:
     """Parent-selection helpers shared by the legacy GA base class."""
@@ -12,7 +11,7 @@ class ParentSelection:
         """Return the index of the best candidate from a random tournament sample."""
         import random
         tournament_indices = random.sample(range(len(population)), tournament_size)
-        return max(tournament_indices, key=lambda idx: fitness_key(fitnesses[idx]))
+        return max(tournament_indices, key=lambda idx: fitnesses[idx])
     
     @staticmethod
     def random_selection(population: list) -> int:

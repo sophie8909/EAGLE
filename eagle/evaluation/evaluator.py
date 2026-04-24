@@ -12,11 +12,10 @@ from ..evolution.operators.reflection import Reflection, read_max_turn_hint
 from ..project import PROJECT_ROOT
 from ..utils.component_pool import ComponentPool
 from ..utils.fitness_calculator import (
-    combined_match_fitness_score,
+    combined_match_score,
     raw_resource_advantage_score,
 )
 from ..utils.fitness_recorder import FitnessRecorder
-from ..utils.fitness_utils import normalize_fitness
 from ..utils.individual import Individual
 from ..utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
 
@@ -93,7 +92,6 @@ class Evaluator:
             fitness, simulation_meta = self.run_prompt_match(prompt, opponent, stats=stats)
             evaluation_mode = "real"
 
-        fitness = normalize_fitness(fitness)
         self._record_match_score(
             individual=individual,
             prompt=prompt,
@@ -201,6 +199,7 @@ class Evaluator:
         timeout = bool(simulation_meta.get("timeout", False))
         summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else {}
         individual.last_real_evaluation = {
+            "fitness": list(fitness),
             "winner": simulation_meta.get("winner"),
             "timeout": timeout,
             "log_path": simulation_meta.get("log_path"),
@@ -286,13 +285,16 @@ class Evaluator:
         raw_resource_score: float | None = None,
     ) -> float:
         """Collapse one raw match score into one EA scalar slot."""
-        normalized = normalize_fitness(fitness)
-        if raw_resource_score is not None:
-            return float(raw_resource_score) + float(win_bonus) * float(normalized[0])
-        return combined_match_fitness_score(
-            normalized,
-            win_bonus=win_bonus,
-        )
+        if not fitness:
+            return raw_resource_score or 0.0
+
+        win_score = float(fitness[0])
+        if win_score == 1.0:
+            return win_bonus + (raw_resource_score or 0.0)
+        elif win_score == 0.0:
+            return -win_bonus + (raw_resource_score or 0.0)
+        else:
+            return raw_resource_score or 0.0
 
     @staticmethod
     def _build_opponent_score_vector(
@@ -343,7 +345,7 @@ class Evaluator:
                 generation=generation,
                 fitness_recorder=fitness_recorder,
             )
-            normalized_fitness = normalize_fitness(individual.fitness)
+            
             last_real_evaluation = getattr(individual, "last_real_evaluation", {}) or {}
             parsed_log = last_real_evaluation.get("parsed_log")
             raw_score = (
@@ -354,8 +356,10 @@ class Evaluator:
                 if isinstance(parsed_log, dict)
                 else 0.0
             )
+            print(f"Evaluated against opponent '{resolved_opponent}' with fitness {last_real_evaluation.get('fitness')} and raw resource advantage score {raw_score}")
+            print(f"Real evaluation against opponent '{resolved_opponent}' resource advantage score: {raw_score} win score: {last_real_evaluation.get('fitness', [0.0, 0.0])[0]}")
             combined_score = self._combined_match_score(
-                normalized_fitness,
+                fitness=last_real_evaluation.get("fitness"),
                 win_bonus=self.config.win_bonus,
                 raw_resource_score=raw_score,
             )
@@ -363,7 +367,7 @@ class Evaluator:
             per_opponent_results.append(
                 {
                     "opponent": resolved_opponent,
-                    "fitness": list(normalized_fitness),
+                    "fitness": last_real_evaluation.get("fitness"),
                     "combined_score": combined_score,
                     "raw_resource_advantage_score": raw_score,
                     "winner": last_real_evaluation.get("winner"),
@@ -398,50 +402,7 @@ class Evaluator:
         surrogate_mode = str(self.config.surrogate_mode).strip().lower()
         prompt = self.construct_prompt(individual)
 
-        if surrogate_mode == "random":
-            surrogate_opponent = random.choice(opponent_list) if opponent_list else None
-            match_score, metadata = self.run_surrogate_match(
-                prompt=prompt,
-                opponent=surrogate_opponent,
-            )
-            raw_fitness = normalize_fitness(match_score)
-            parsed_log = metadata.get("parsed_log") if isinstance(metadata, dict) else None
-            raw_score = (
-                raw_resource_advantage_score(
-                    parsed_log,
-                    self.config.resource_advantage_weights,
-                )
-                if isinstance(parsed_log, dict)
-                else None
-            )
-            configured_opponents = list(opponent_list) if opponent_list else [surrogate_opponent]
-            combined_score = self._combined_match_score(
-                raw_fitness,
-                win_bonus=self.config.win_bonus,
-                raw_resource_score=raw_score,
-            )
-            individual.fitness = self._build_opponent_score_vector(
-                [(surrogate_opponent, combined_score)],
-                configured_opponents,
-            )
-            individual.last_surrogate_evaluation = {
-                "mode": "random",
-                "opponents": [surrogate_opponent],
-                "llm_interval": active_llm_interval,
-                "scores": [
-                    {
-                        "opponent": surrogate_opponent,
-                        "fitness": raw_fitness,
-                        "combined_score": combined_score,
-                        "raw_resource_advantage_score": raw_score,
-                    }
-                ],
-                "aggregated_fitness": list(individual.fitness),
-            }
-            individual.evaluation_mode = "surrogate"
-            return list(individual.fitness)
-
-        if surrogate_mode == "all_avg":
+        if surrogate_mode == "light_rush_and_heavy_rush":
             opponents = list(opponent_list) if opponent_list else [None]
             opponent_scores: list[tuple[str | None, float]] = []
             per_opponent_scores: list[dict[str, object]] = []
@@ -451,7 +412,7 @@ class Evaluator:
                     prompt=prompt,
                     opponent=surrogate_opponent,
                 )
-                sampled_fitness = normalize_fitness(match_score)
+
                 parsed_log = metadata.get("parsed_log") if isinstance(metadata, dict) else None
                 raw_score = (
                     raw_resource_advantage_score(
@@ -462,7 +423,7 @@ class Evaluator:
                     else None
                 )
                 combined_score = self._combined_match_score(
-                    sampled_fitness,
+                    fitness=match_score,
                     win_bonus=self.config.win_bonus,
                     raw_resource_score=raw_score,
                 )
@@ -470,7 +431,7 @@ class Evaluator:
                 per_opponent_scores.append(
                     {
                         "opponent": surrogate_opponent,
-                        "fitness": sampled_fitness,
+                        "fitness": match_score,
                         "combined_score": combined_score,
                         "raw_resource_advantage_score": raw_score,
                     }
@@ -480,7 +441,7 @@ class Evaluator:
             individual.fitness = list(aggregated_fitness)
             individual.evaluation_mode = "surrogate"
             individual.last_surrogate_evaluation = {
-                "mode": "all_avg",
+                "mode": "light_rush_and_heavy_rush",
                 "opponents": opponents,
                 "llm_interval": active_llm_interval,
                 "scores": per_opponent_scores,

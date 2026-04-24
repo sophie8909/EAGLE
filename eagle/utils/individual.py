@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from .component_pool import ComponentPool
-from .fitness_utils import DEFAULT_FITNESS
 
+DEFAULT_FITNESS = [0.0, 0.0]
 
 @dataclass(frozen=True)
 class ComponentEntry:

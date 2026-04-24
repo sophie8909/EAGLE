@@ -1,7 +1,7 @@
 {
   "algorithm": "nsga2",
-  "population_size": 4,
-  "num_generations": 2,
+  "population_size": 10,
+  "num_generations": 50,
   "convergence_generations": 10,
   "reproduction_operator_probs": {
     "crossover": 0.7,
@@ -32,17 +32,17 @@
   ],
   "component_pool_path": "eagle/prompts/components.json",
   "initial_population_seeds": [],
-  "run_time_per_game_sec": 50,
+  "run_time_per_game_sec": 500,
   "real_eval_rate": 0.25,
   "real_eval_opponents": [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"
   ],
-  "llm_interval": [10],
+   "llm_interval": [10, 10, 5, 3, 1],
  
   "save_trace_on_test": false,
   "resource_advantage_alpha": 2.0,
-  "win_bonus": 2.0,
+  "win_bonus": 100.0,
   "resource_advantage_weights": {
     "base": 10.0,
     "worker": 1.0,
@@ -52,7 +52,7 @@
     "resource": 1.0
   },
   "surrogate_version": "policy",
-  "surrogate_mode": "all_avg", 
+  "surrogate_mode": "light_rush_and_heavy_rush", 
   "surrogate_recent_match_window": 10,
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts"

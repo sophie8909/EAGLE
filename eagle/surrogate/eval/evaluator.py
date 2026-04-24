@@ -7,7 +7,6 @@ from pathlib import Path
 
 from ...envs.microrts.runner import run_java_agent_game
 from ...project import PROJECT_ROOT
-from ...utils.fitness_utils import normalize_fitness
 from ..java.compiler import compile_java_agent
 from ..java.renderer import render_java_agent
 from ..strategy.extractor import extract_strategy
