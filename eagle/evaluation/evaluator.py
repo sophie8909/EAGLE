@@ -46,7 +46,7 @@ class Evaluator:
         generation: int | None = None,
         fitness_recorder: FitnessRecorder | None = None,
     ) -> None:
-        """Evaluate one individual and write the normalized two-objective result back."""
+        """Evaluate one individual and write the normalized raw match score back."""
         stats: dict[str, float] = {}
         parsed_log: dict[str, Any] | None = None
         winner: str | None = None
@@ -63,7 +63,8 @@ class Evaluator:
             if matches:
                 use_real_evaluation = False
                 history_reuse = True
-                fitness = matches[random.randint(0, len(matches) - 1)].get("fitness_score", [0.0, 0.0])
+                cached_match = matches[random.randint(0, len(matches) - 1)]
+                fitness = cached_match.get("match_score", cached_match.get("fitness_score", [0.0, 0.0]))
             else:
                 fitness = [0.0, 0.0]
         else:
@@ -90,6 +91,7 @@ class Evaluator:
                     "individual_id": getattr(individual, "id", None),
                     "generation": generation,
                     "prompt": prompt,
+                    "match_score": fitness,
                     "fitness": fitness,
                     "fitness_score": fitness,
                     "opponent": opponent,
@@ -153,6 +155,7 @@ class Evaluator:
                     "game_llm_call_time": None,
                     "ea_llm_call_time": stats.get("surrogate_time", 0.0)
                     + (operator_profile.get("ea_llm_call_time", 0.0) if isinstance(operator_profile, dict) else 0.0),
+                    "match_score": fitness,
                     "fitness": fitness,
                     "log_path": log_path,
                 }

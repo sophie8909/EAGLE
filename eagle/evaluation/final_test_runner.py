@@ -174,7 +174,7 @@ def run_final_test_suite(
                     f"{opponent} (mode={interval_run['label']}, llm_interval={llm_interval})",
                     flush=True,
                 )
-                fitness_score, metadata = evaluator.run_prompt_match(
+                match_score, metadata = evaluator.run_prompt_match(
                     prompt,
                     opponent,
                     llm_interval=llm_interval,
@@ -183,7 +183,7 @@ def run_final_test_suite(
                 result_record = build_result_record(
                     individual,
                     opponent,
-                    fitness_score,
+                    match_score,
                     str(metadata.get("log_path")),
                     trace_xml_path=str(metadata.get("trace_xml_path")) if metadata.get("trace_xml_path") else None,
                     trace_json_path=str(metadata.get("trace_json_path")) if metadata.get("trace_json_path") else None,

@@ -86,15 +86,15 @@ def load_generation_individuals(log_dir: str | Path, generation: int):
 def build_result_record(
     individual,
     opponent: str,
-    fitness_score: list[float],
+    match_score: list[float],
     log_path: str,
     trace_xml_path: str | None = None,
     trace_json_path: str | None = None,
 ) -> dict:
     """Convert one replay result into the JSON-friendly output schema."""
-    if fitness_score[0] == 1.0:
+    if match_score[0] == 1.0:
         result = "Win"
-    elif fitness_score[0] == 0.0:
+    elif match_score[0] == 0.0:
         result = "Loss"
     else:
         result = "Draw"
@@ -103,9 +103,10 @@ def build_result_record(
         "individual_id": individual.id,
         "opponent": opponent,
         "result": result,
-        "fitness": fitness_score,
-        "win_score": fitness_score[0] if len(fitness_score) > 0 else 0.0,
-        "resource_advantage_score": fitness_score[1] if len(fitness_score) > 1 else 0.0,
+        "match_score": match_score,
+        "fitness": match_score,
+        "win_score": match_score[0] if len(match_score) > 0 else 0.0,
+        "resource_advantage_score": match_score[1] if len(match_score) > 1 else 0.0,
         "log_path": log_path,
         "trace_xml_path": trace_xml_path,
         "trace_json_path": trace_json_path,
@@ -204,7 +205,7 @@ def run_generation_result_test(
                     f"Testing generation {generation}, individual {individual.id} "
                     f"against opponent: {opponent} (llm_interval={llm_interval})"
                 )
-                fitness_score, metadata = evaluator.run_prompt_match(
+                match_score, metadata = evaluator.run_prompt_match(
                     prompt,
                     opponent,
                     llm_interval=llm_interval,
@@ -213,7 +214,7 @@ def run_generation_result_test(
                 result_record = build_result_record(
                     individual,
                     opponent,
-                    fitness_score,
+                    match_score,
                     str(metadata.get("log_path")),
                     trace_xml_path=str(metadata.get("trace_xml_path")) if metadata.get("trace_xml_path") else None,
                     trace_json_path=str(metadata.get("trace_json_path")) if metadata.get("trace_json_path") else None,
@@ -243,12 +244,12 @@ def run_generation_result_test(
                 test=True,
             )
 
-            fitness_score = list(java_fitness)
+            match_score = list(java_fitness)
 
             result_record = build_result_record(
                 individual,
                 opponent,
-                fitness_score,
+                match_score,
                 str(metadata.get("log_path")),
                 trace_xml_path=str(metadata.get("trace_xml_path")) if metadata.get("trace_xml_path") else None,
                 trace_json_path=str(metadata.get("trace_json_path")) if metadata.get("trace_json_path") else None,

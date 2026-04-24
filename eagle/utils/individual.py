@@ -45,7 +45,8 @@ class Individual:
         self.stable_components = [self.game_rule]
         self.evolving_components: list[int] = []
 
-        # fitness = [opponent_1_score, opponent_2_score]
+        # EA-level fitness stores one scalar per configured opponent slot.
+        # With the default config this means [LightRush_score, HeavyRush_score].
         self.fitness = DEFAULT_FITNESS.copy()
         self.evaluation_mode: str | None = None
 

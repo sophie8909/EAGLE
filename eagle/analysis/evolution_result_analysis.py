@@ -17,8 +17,8 @@ GENERATION_LOG_PATTERN = re.compile(r"generation_(\d+)_mo\.txt$")
 FINAL_TEST_CANDIDATES = ("final_test_results.json", "final_test_result.json")
 FINAL_TEST_MODES = ("interval_1", "interval_10", "java_agent_test")
 EVOLUTION_OBJECTIVE_LABELS = (
-    "Resource Advantage vs LightRush",
-    "Resource Advantage vs HeavyRush",
+    "LightRush Combined Score",
+    "HeavyRush Combined Score",
 )
 
 

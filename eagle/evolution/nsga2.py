@@ -350,9 +350,10 @@ class NSGA2(EA):
     def _generate_offspring(self, generation: int, generation_stats: dict[str, float]) -> List[Individual]:
         """Create and surrogate-evaluate one full offspring population."""
         offspring: List[Individual] = []
+        target_count = self.config.population_size
 
         # Generational phase A: build the entire offspring population first.
-        while len(offspring) < self.config.population_size:
+        while len(offspring) < target_count:
             with timer("parent_selection_time", generation_stats):
                 parent1, parent2 = self.select_parents()
 
@@ -375,6 +376,11 @@ class NSGA2(EA):
             with timer("offspring_evaluation_time", generation_stats):
                 self.surrogate_evaluation(child, generation=generation)
             offspring.append(child)
+            print(
+                f"[Generation {generation + 1}] surrogate offspring "
+                f"{len(offspring)}/{target_count}",
+                flush=True,
+            )
 
             # Checkpoint meaning:
             # - phase="generation_surrogate" means this generation is still in
@@ -389,7 +395,7 @@ class NSGA2(EA):
                 )
             )
 
-        return offspring[: self.config.population_size]
+        return offspring[:target_count]
 
     def _resume_offspring_generation(
         self,
@@ -398,8 +404,9 @@ class NSGA2(EA):
         offspring: List[Individual],
     ) -> List[Individual]:
         """Continue offspring generation from a partially completed checkpoint."""
+        target_count = self.config.population_size
         # Resume point for phase="generation_surrogate".
-        while len(offspring) < self.config.population_size:
+        while len(offspring) < target_count:
             with timer("parent_selection_time", generation_stats):
                 parent1, parent2 = self.select_parents()
 
@@ -420,6 +427,11 @@ class NSGA2(EA):
             with timer("offspring_evaluation_time", generation_stats):
                 self.surrogate_evaluation(child, generation=generation)
             offspring.append(child)
+            print(
+                f"[Generation {generation + 1}] surrogate offspring "
+                f"{len(offspring)}/{target_count}",
+                flush=True,
+            )
 
             # Keep the same checkpoint contract as _generate_offspring().
             self.save_checkpoint(
@@ -430,7 +442,7 @@ class NSGA2(EA):
                     meta={"evaluated_offspring_count": len(offspring)},
                 )
             )
-        return offspring[: self.config.population_size]
+        return offspring[:target_count]
 
     def _rank_offspring_for_real_evaluation(self, offspring: List[Individual]) -> List[Individual]:
         """Rank offspring by surrogate fitness for the real-eval budget."""
@@ -446,6 +458,12 @@ class NSGA2(EA):
         """Spend the configured real-evaluation budget on the best-ranked offspring."""
         with timer("offspring_evaluation_time", generation_stats):
             real_eval_budget = self.config.real_eval_count(self.config.population_size)
+            if real_eval_budget > 0:
+                print(
+                    f"[Generation {generation + 1}] running real evaluation "
+                    f"for top {real_eval_budget} offspring",
+                    flush=True,
+                )
 
             # Generational phase B: after all offspring exist, real-evaluate only
             # the top-ranked children under the configured budget.
@@ -454,6 +472,11 @@ class NSGA2(EA):
                     continue
                 if index >= real_eval_budget:
                     break
+                print(
+                    f"[Generation {generation + 1}] real evaluation "
+                    f"{index + 1}/{real_eval_budget}",
+                    flush=True,
+                )
                 self.real_evaluation(child, random.choice(self.opponent_list), generation=generation)
 
                 # Checkpoint meaning:
@@ -581,6 +604,10 @@ class NSGA2(EA):
         start_generation = checkpoint.get("generation", 0) + (1 if checkpoint.get("phase") == "generation_complete" else 0)
 
         for generation in range(start_generation, self.config.num_generations):
+            print(
+                f"[Generation {generation + 1}/{self.config.num_generations}] start",
+                flush=True,
+            )
             # Phase 1: build or resume the full surrogate-evaluated offspring batch.
             generation_stats: dict[str, float] = {}
             if checkpoint.get("generation") == generation and checkpoint.get("phase") in {"generation_surrogate", "generation_real_eval"}:
@@ -588,6 +615,10 @@ class NSGA2(EA):
                 offspring = self._resume_offspring_generation(generation, generation_stats, offspring)
             else:
                 offspring = self._generate_offspring(generation, generation_stats)
+            print(
+                f"[Generation {generation + 1}] surrogate offspring ready: {len(offspring)}",
+                flush=True,
+            )
 
             # Phase 2: rank offspring for budgeted real evaluation.
             candidate_order = self._rank_offspring_for_real_evaluation(offspring)
@@ -609,9 +640,17 @@ class NSGA2(EA):
 
             # Phase 5: one environmental-selection step creates the next generation.
             with timer("survivor_selection_time", generation_stats):
+                print(
+                    f"[Generation {generation + 1}] selecting survivors",
+                    flush=True,
+                )
                 self.population = self.select_next_generation(self.population, offspring)
 
             self._log_generation(generation, generation_stats, offspring, pareto_fronts, log_dir)
+            print(
+                f"[Generation {generation + 1}] logged and checkpointed",
+                flush=True,
+            )
 
             # Phase 6: mark the full generation as completed.
             self.save_checkpoint(
@@ -624,6 +663,10 @@ class NSGA2(EA):
 
             # Phase 7: simple convergence check on the current first Pareto front.
             if self._has_converged(pareto_fronts, past_front_signatures):
+                print(
+                    f"[Generation {generation + 1}] convergence reached; stopping early",
+                    flush=True,
+                )
                 break
 
             checkpoint = self.build_checkpoint_state(

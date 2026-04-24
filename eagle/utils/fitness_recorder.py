@@ -135,6 +135,7 @@ class FitnessRecorder:
         history_key = self.build_history_key(record["prompt"], record.get("opponent"))
         history_record = {
             "history_key": history_key,
+            "match_score": record.get("match_score", record["fitness_score"]),
             "fitness_score": record["fitness_score"],
             "evaluation_mode": record.get("evaluation_mode"),
             "opponent": record.get("opponent"),

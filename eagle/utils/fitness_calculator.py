@@ -145,13 +145,43 @@ def resource_advantage_evaluation(
     return 0.0
 
 
+def combined_match_fitness_score(
+    fitness: list[float] | tuple[float, float] | None,
+    *,
+    resource_advantage_alpha: float,
+) -> float:
+    """
+    Collapse one raw match fitness into one scalar score for one opponent slot.
+
+    Raw match score stays `[win_score, resource_score]`, where:
+    - `win_score` is typically 1.0 / 0.5 / 0.0
+    - `resource_score` is the weighted resource/material advantage in [-1, 1]
+
+    EA-level fitness for NSGA-II/GA uses one scalar per configured opponent:
+    `resource_score + resource_advantage_alpha * win_score`
+    """
+    if not fitness:
+        return 0.0
+
+    try:
+        win_score = float(fitness[0]) if len(fitness) > 0 else 0.0
+    except (TypeError, ValueError):
+        win_score = 0.0
+    try:
+        resource_score = float(fitness[1]) if len(fitness) > 1 else 0.0
+    except (TypeError, ValueError):
+        resource_score = 0.0
+
+    return resource_score + float(resource_advantage_alpha) * win_score
+
+
 def calculate_fitness_score(
     log_content: str,
     resource_advantage_alpha: float,
     resource_advantage_weights: dict[str, float],
     parsed_log: dict[str, Any] | None = None,
 ) -> list[float]:
-    """Assemble the current two-objective fitness vector for a real game result."""
+    """Assemble the raw per-match score vector `[win_score, resource_score]`."""
     winner_info = parsed_log or parse_winner_info(log_content)["parsed_log"]
     winning_score = win_loss_evaluation(log_content, parsed_log=winner_info)
     resource_score = resource_advantage_evaluation(

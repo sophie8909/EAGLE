@@ -143,6 +143,17 @@ Outputs:
 - per-run logs under `logs/eagle/<timestamp>/`
 - generation summaries, profiles, checkpoints, and run state in the run directory
 
+Fitness conventions:
+
+- Raw single-match evaluation uses `match_score = [win_score, resource_score]`.
+- `win_score` is the game outcome signal from one match.
+- `resource_score` is the weighted final resource/material advantage from that same match.
+- Some result files still keep legacy `fitness` / `fitness_score` aliases for backward compatibility, but new code should treat these as `match_score`.
+- EA-level search fitness used by `ga`, `nsga2`, and `steady_state_nsga2` stores one scalar per configured opponent slot.
+- With the default config, EA-level fitness is `[LightRush_score, HeavyRush_score]`.
+- Each opponent score is computed as `resource_score + resource_advantage_alpha * win_score`.
+- `resource_advantage_alpha` therefore acts as the win bonus weight inside the EA search objective.
+
 ### 2. `scripts.run_surrogate_validation`
 
 Compare prompt-based EAGLE evaluation with surrogate-Java evaluation:

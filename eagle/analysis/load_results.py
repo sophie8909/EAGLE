@@ -16,6 +16,7 @@ KEY_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 SCORE_ALIASES: tuple[str, ...] = (
+    "match_score",
     "win_rate",
     "win_score",
     "fitness",

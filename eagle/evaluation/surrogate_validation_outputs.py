@@ -193,15 +193,15 @@ def build_alignment_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
         for opponent in sorted(set(eagle_by_opponent) | set(surrogate_by_opponent)):
             eagle_record = eagle_by_opponent.get(opponent, {})
             surrogate_record = surrogate_by_opponent.get(opponent, {})
-            eagle_fitness = list(eagle_record.get("fitness") or [])
-            surrogate_fitness = list(surrogate_record.get("fitness") or [])
+            eagle_match_score = list(eagle_record.get("match_score") or eagle_record.get("fitness") or [])
+            surrogate_match_score = list(surrogate_record.get("match_score") or surrogate_record.get("fitness") or [])
             win_gap = None
             resource_gap = None
-            if eagle_fitness and surrogate_fitness:
-                if len(eagle_fitness) > 0 and len(surrogate_fitness) > 0:
-                    win_gap = abs(float(eagle_fitness[0]) - float(surrogate_fitness[0]))
-                if len(eagle_fitness) > 1 and len(surrogate_fitness) > 1:
-                    resource_gap = abs(float(eagle_fitness[1]) - float(surrogate_fitness[1]))
+            if eagle_match_score and surrogate_match_score:
+                if len(eagle_match_score) > 0 and len(surrogate_match_score) > 0:
+                    win_gap = abs(float(eagle_match_score[0]) - float(surrogate_match_score[0]))
+                if len(eagle_match_score) > 1 and len(surrogate_match_score) > 1:
+                    resource_gap = abs(float(eagle_match_score[1]) - float(surrogate_match_score[1]))
             gap_values = [value for value in [win_gap, resource_gap] if value is not None]
             rows.append(
                 {

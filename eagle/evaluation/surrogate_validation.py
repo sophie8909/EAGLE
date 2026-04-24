@@ -80,11 +80,11 @@ def _infer_final_tick(parsed_log: dict[str, Any] | None) -> int | None:
             candidates.append(current_time)
     return max(candidates) if candidates else None
 
-def _result_label_from_fitness(fitness: list[float]) -> str:
+def _result_label_from_match_score(match_score: list[float]) -> str:
     """Map the first objective to the familiar Win/Draw/Loss labels."""
-    if fitness and fitness[0] == 1.0:
+    if match_score and match_score[0] == 1.0:
         return "Win"
-    if fitness and fitness[0] == 0.0:
+    if match_score and match_score[0] == 0.0:
         return "Loss"
     return "Draw"
 
@@ -171,14 +171,15 @@ def _history_record_to_result(
     history_record: dict[str, Any],
 ) -> dict[str, Any]:
     """Convert one cached history row into the experiment result schema."""
-    fitness = list(history_record.get("fitness_score") or [0.0, 0.0])
+    match_score = list(history_record.get("match_score") or history_record.get("fitness_score") or [0.0, 0.0])
     return {
         "opponent": opponent,
         "benchmark_mode": benchmark_mode,
-        "fitness": fitness,
-        "result": _result_label_from_fitness(fitness),
-        "win_score": fitness[0] if len(fitness) > 0 else 0.0,
-        "resource_advantage_score": fitness[1] if len(fitness) > 1 else 0.0,
+        "match_score": match_score,
+        "fitness": match_score,
+        "result": _result_label_from_match_score(match_score),
+        "win_score": match_score[0] if len(match_score) > 0 else 0.0,
+        "resource_advantage_score": match_score[1] if len(match_score) > 1 else 0.0,
         "game_time_sec": history_record.get("game_time_sec"),
         "log_path": history_record.get("log_path"),
         "winner": history_record.get("winner"),
@@ -224,7 +225,7 @@ def _record_match(
     prompt: str,
     opponent: str,
     benchmark_mode: str,
-    fitness: list[float],
+    match_score: list[float],
     game_time_sec: float,
     log_path: str | None,
     metadata: dict[str, Any] | None = None,
@@ -244,8 +245,9 @@ def _record_match(
         "individual_id": None,
         "generation": None,
         "prompt": prompt,
-        "fitness": list(fitness),
-        "fitness_score": list(fitness),
+        "match_score": list(match_score),
+        "fitness": list(match_score),
+        "fitness_score": list(match_score),
         "opponent": opponent,
         "evaluation_mode": "real",
         "benchmark_mode": benchmark_mode,
@@ -272,10 +274,11 @@ def _record_match(
     result = {
         "opponent": opponent,
         "benchmark_mode": benchmark_mode,
-        "fitness": list(fitness),
-        "result": _result_label_from_fitness(fitness),
-        "win_score": fitness[0] if len(fitness) > 0 else 0.0,
-        "resource_advantage_score": fitness[1] if len(fitness) > 1 else 0.0,
+        "match_score": list(match_score),
+        "fitness": list(match_score),
+        "result": _result_label_from_match_score(match_score),
+        "win_score": match_score[0] if len(match_score) > 0 else 0.0,
+        "resource_advantage_score": match_score[1] if len(match_score) > 1 else 0.0,
         "game_time_sec": float(game_time_sec),
         "final_tick": final_tick,
         "max_cycles": parsed_summary.get("max_cycles") if isinstance(parsed_summary, dict) else None,
@@ -321,7 +324,7 @@ def _run_eagle_match(
 
     stats: dict[str, float] = {}
     started = time.perf_counter()
-    fitness, metadata = evaluator.run_prompt_match(
+    match_score, metadata = evaluator.run_prompt_match(
         prompt=prompt,
         opponent=opponent,
         llm_interval=llm_interval,
@@ -336,7 +339,7 @@ def _run_eagle_match(
         prompt=prompt,
         opponent=opponent,
         benchmark_mode="eagle_final_test",
-        fitness=fitness,
+        match_score=match_score,
         game_time_sec=elapsed,
         log_path=log_path,
         metadata=metadata,
@@ -377,14 +380,14 @@ def _run_surrogate_java_match(
         test=True,
     )
     elapsed = time.perf_counter() - started
-    fitness = list(java_fitness)
+    match_score = list(java_fitness)
 
     return _record_match(
         recorder,
         prompt=prompt,
         opponent=opponent,
         benchmark_mode="surrogate_java_final_test",
-        fitness=fitness,
+        match_score=match_score,
         game_time_sec=elapsed,
         log_path=metadata.get("log_path"),
         metadata=metadata,

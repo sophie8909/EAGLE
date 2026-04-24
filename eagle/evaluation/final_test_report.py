@@ -15,10 +15,10 @@ def _normalize_result(record: dict[str, Any]) -> str:
     if result in {"win", "loss", "draw"}:
         return result.capitalize()
 
-    fitness = record.get("fitness")
-    if isinstance(fitness, list) and fitness:
+    match_score = record.get("match_score", record.get("fitness"))
+    if isinstance(match_score, list) and match_score:
         try:
-            win_score = float(fitness[0])
+            win_score = float(match_score[0])
         except (TypeError, ValueError):
             return "Unknown"
         if win_score == 1.0:

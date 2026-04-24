@@ -1,4 +1,4 @@
-"""Utilities for working with the project's two-objective fitness vectors."""
+"""Utilities for working with the project's fixed-width two-slot fitness vectors."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def normalize_fitness(fitness) -> list[float]:
 
 def fitness_key(fitness) -> tuple[float, float]:
     """
-    Comparable key for fixed-width two-objective ranking.
+    Comparable key for fixed-width two-slot ranking.
     """
     normalized = normalize_fitness(fitness)
     return tuple(normalized)

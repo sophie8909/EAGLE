@@ -14,7 +14,7 @@ from ..project import EAGLE_LOGS_DIR
 from ..utils.component_pool import ComponentPool
 from ..utils.individual import Individual
 from ..evaluation.evaluator import Evaluator
-from ..utils.fitness_calculator import raw_resource_advantage_score
+from ..utils.fitness_calculator import combined_match_fitness_score, raw_resource_advantage_score
 from ..evolution.operators.parent_selection import ParentSelection
 from ..evolution.operators.crossover import Crossover
 from ..evolution.operators.mutation import Mutation
@@ -377,10 +377,13 @@ class EA:
         return mutated_individual
 
     @staticmethod
-    def _combined_match_score(fitness: list[float] | None) -> float:
-        """Collapse one per-match fitness vector into one opponent-level scalar score."""
+    def _combined_match_score(fitness: list[float] | None, resource_advantage_alpha: float) -> float:
+        """Collapse raw match fitness into one scalar: resource score plus win bonus."""
         normalized = normalize_fitness(fitness)
-        return float(normalized[0]) + float(normalized[1])
+        return combined_match_fitness_score(
+            normalized,
+            resource_advantage_alpha=resource_advantage_alpha,
+        )
 
     def _build_opponent_score_vector(
         self,
@@ -422,7 +425,10 @@ class EA:
                 fitness_recorder=self.fitness_recorder,
             )
             normalized_fitness = normalize_fitness(individual.fitness)
-            combined_score = self._combined_match_score(normalized_fitness)
+            combined_score = self._combined_match_score(
+                normalized_fitness,
+                self.config.resource_advantage_alpha,
+            )
             opponent_scores.append((resolved_opponent, combined_score))
             last_real_evaluation = getattr(individual, "last_real_evaluation", {}) or {}
             parsed_log = last_real_evaluation.get("parsed_log")
@@ -479,7 +485,10 @@ class EA:
             )
             raw_fitness = normalize_fitness(individual.fitness)
             configured_opponents = list(self.opponent_list) if self.opponent_list else [surrogate_opponent]
-            combined_score = self._combined_match_score(raw_fitness)
+            combined_score = self._combined_match_score(
+                raw_fitness,
+                self.config.resource_advantage_alpha,
+            )
             individual.fitness = self._build_opponent_score_vector(
                 [(surrogate_opponent, combined_score)],
                 configured_opponents,
@@ -515,7 +524,10 @@ class EA:
                     fitness_recorder=None,
                 )
                 sampled_fitness = list(individual.fitness)
-                combined_score = self._combined_match_score(sampled_fitness)
+                combined_score = self._combined_match_score(
+                    sampled_fitness,
+                    self.config.resource_advantage_alpha,
+                )
                 opponent_scores.append((surrogate_opponent, combined_score))
                 per_opponent_scores.append(
                     {
