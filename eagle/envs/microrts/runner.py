@@ -243,7 +243,7 @@ def run_java_agent_game(
     log_prefix: str = "run",
     runtime_logs_dir: Path | None = None,
     record_trace: bool = False,
-) -> tuple[list[float], dict[str, Any]]:
+) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one MicroRTS game with explicit Java agent classes."""
     project_root = (project_root or PROJECT_ROOT).resolve()
     microrts_root = locate_microrts_root(project_root)
@@ -267,9 +267,8 @@ def run_java_agent_game(
         )
         log_content = Path(log_path_str).read_text(encoding="utf-8", errors="replace")
         parsed_log = parse_game_log(log_content, target_agent=_target_agent_name(ai1_class))
-        fitness = calculate_match_score(
+        match_score = calculate_match_score(
             log_content,
-            resource_advantage_alpha=config.resource_advantage_alpha,
             resource_advantage_weights=config.resource_advantage_weights,
             parsed_log=parsed_log,
         )
@@ -299,7 +298,7 @@ def run_java_agent_game(
             )
             if trace_info is not None:
                 metadata.update(trace_info)
-        return fitness, metadata
+        return match_score, metadata
     finally:
         _config_path(project_root).write_text(original_config, encoding="utf-8")
 
@@ -312,7 +311,7 @@ def run_prompt_based_game(
     opponent: str | None,
     test: bool = False,
     runtime_logs_dir: Path | None = None,
-) -> tuple[list[float], dict[str, Any]]:
+) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one real EAGLE-vs-opponent match driven by the prompt file."""
     return run_java_agent_game(
         project_root=project_root,

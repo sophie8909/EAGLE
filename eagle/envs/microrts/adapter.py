@@ -32,7 +32,7 @@ def run_surrogate_validation_case(
     surrogate_spec: dict[str, object] | None = None,
     test: bool = False,
     runtime_logs_dir: Path | None = None,
-) -> tuple[list[float], dict[str, Any]]:
+) -> tuple[dict[str, float], dict[str, Any]]:
     """Render one surrogate Java agent and run a validation match."""
     root = (project_root or PROJECT_ROOT).resolve()
     surrogate_spec = surrogate_spec or compile_prompt_to_surrogate_spec(prompt)[1]

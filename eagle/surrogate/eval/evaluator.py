@@ -14,9 +14,12 @@ from ..strategy.extractor import extract_strategy
 _COMPILED_AGENT_CACHE: dict[str, dict[str, str]] = {}
 
 
-def very_low_fitness() -> list[float]:
-    """Return the worst surrogate fitness used for fail-closed execution."""
-    return [0.0, 0.0]
+def very_low_fitness() -> dict[str, float]:
+    """Return the worst surrogate match score used for fail-closed execution."""
+    return {
+        "win_score": 0.0,
+        "raw_resource_advantage_score": 0.0,
+    }
 
 
 def generate_unique_class_name(prompt: str) -> str:
@@ -43,7 +46,7 @@ def evaluate_with_java_surrogate(
     repo_root: Path | None = None,
     config=None,
     opponent: str | None = None,
-) -> list[float]:
+) -> dict[str, float]:
     """
     Full pipeline:
     prompt -> strategy -> Java -> compile -> run -> fitness
@@ -69,7 +72,7 @@ def evaluate_with_java_surrogate(
                 "tmp_dir": str(tmp_dir),
             }
 
-        java_fitness, metadata = run_java_agent_game(
+        match_score, metadata = run_java_agent_game(
             project_root=resolved_repo_root,
             config=config,
             ai1_class=f"ai.abstraction.{class_name}",
@@ -82,6 +85,6 @@ def evaluate_with_java_surrogate(
         )
         if metadata.get("exit_code", 1) != 0:
             return very_low_fitness()
-        return normalize_fitness(java_fitness)
+        return match_score
     except Exception:
         return very_low_fitness()
