@@ -9,7 +9,7 @@ from ..config import EAConfig
 from ..main import OPPONENT_LIST
 from ..project import DEFAULT_FINAL_TEST_CONFIG_PATH
 from ..utils.component_pool import ComponentPool
-from ..utils.ea_log_parse import parse_individuals_from_ea_log
+from ..utils.ea_log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
 from .evaluator import Evaluator
 from .generation_replay import build_result_record, extract_individual_ids_up_to_front
 from .replay_common import apply_runtime_overrides, build_interval_runs, write_results_snapshot
@@ -102,25 +102,37 @@ def run_final_test_suite(
 
     generation_log_path = _resolve_final_generation_log_path(experiment_log_dir, last_gen)
     individuals_by_front = parse_individuals_from_ea_log(str(generation_log_path))
+    population_snapshot = parse_population_snapshot_from_ea_log(str(generation_log_path))
     selected_front_ids = set(
         extract_individual_ids_up_to_front(
             generation_log_path,
             final_test_max_front,
         )
     )
-    flattened_individuals = [
-        individual
-        for front in individuals_by_front
-        for individual in front
-    ]
+
+    # Final test should replay the survivor population saved in Population Snapshot,
+    # not the full parent+offspring union listed in Pareto Front sections.
+    if population_snapshot:
+        candidate_individuals = population_snapshot
+    else:
+        # Fallback for older logs that may not contain Population Snapshot.
+        seen_ids: set[str] = set()
+        candidate_individuals = []
+        for front in individuals_by_front:
+            for individual in front:
+                if individual.id in seen_ids:
+                    continue
+                seen_ids.add(individual.id)
+                candidate_individuals.append(individual)
+
     if selected_front_ids:
         selected_individuals = [
             individual
-            for individual in flattened_individuals
+            for individual in candidate_individuals
             if individual.id in selected_front_ids
         ]
     else:
-        selected_individuals = flattened_individuals
+        selected_individuals = candidate_individuals
 
     interval_runs = build_interval_runs(final_test_config_path, runtime_config.llm_interval)
     generation_number = _extract_generation_number(generation_log_path)

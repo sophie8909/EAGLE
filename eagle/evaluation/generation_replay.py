@@ -9,7 +9,7 @@ from typing import Iterable
 from ..main import OPPONENT_LIST
 from ..project import DEFAULT_FINAL_TEST_CONFIG_PATH
 from ..utils.component_pool import ComponentPool
-from ..utils.ea_log_parse import parse_individuals_from_ea_log
+from ..utils.ea_log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
 from .evaluator import Evaluator
 from .replay_common import build_interval_runs, load_runtime_config, write_results_snapshot
 
@@ -80,7 +80,20 @@ def load_generation_individuals(log_dir: str | Path, generation: int):
     generation_log_path = resolve_generation_log_path(log_dir, generation)
     if not generation_log_path.exists():
         raise FileNotFoundError(f"Generation log not found: {generation_log_path}")
-    return parse_individuals_from_ea_log(str(generation_log_path))
+    population_snapshot = parse_population_snapshot_from_ea_log(str(generation_log_path))
+    if population_snapshot:
+        return population_snapshot
+
+    individuals_by_front = parse_individuals_from_ea_log(str(generation_log_path))
+    seen_ids: set[str] = set()
+    deduplicated: list = []
+    for front in individuals_by_front:
+        for individual in front:
+            if individual.id in seen_ids:
+                continue
+            seen_ids.add(individual.id)
+            deduplicated.append(individual)
+    return deduplicated
 
 
 def build_result_record(
@@ -161,19 +174,6 @@ def run_generation_result_test(
     generation_log_path = resolve_generation_log_path(log_dir_path, generation)
     individuals = load_generation_individuals(log_dir_path, generation)
     allowed_individual = individuals
-    for i, front in enumerate(individuals):
-        print(f"Front {i} has {len(front)} individuals.")
-
-    if max_front is not None:
-        allowed_individual = individuals[:max_front] if max_front <= len(individuals) else individuals
-
-    # Flatten the list of fronts into a single list of individuals
-    flattened = []
-    for front in allowed_individual:
-        flattened.extend(front)
-    allowed_individual = flattened
-
-    print(allowed_individual)
     selected_individuals = filter_individuals(
         allowed_individual,
         individual_id=individual_id,
