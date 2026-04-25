@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from ctypes import alignment
 import json
 import re
 from pathlib import Path
@@ -21,6 +20,15 @@ from .state_generator import StateGenerator
 
 class Evaluator:
     """Evaluate prompts by asking an LLM for one generated game-state response."""
+
+    DEFAULT_ACTION_TYPE_SCORES = {
+        "idle": 0.0,
+        "move": 10.0,
+        "harvest": 2.0,
+        "build": 10.0,
+        "train": 3.0,
+        "attack": 3.0,
+    }
 
     def __init__(
         self,
@@ -195,6 +203,7 @@ class Evaluator:
                 "parseable": False,
                 "max_actions": self._extract_max_actions(dynamic_prompt),
                 "applicable_actions": 0,
+                "action_type_score_sum": 0.0,
                 "moves": [],
             }
 
@@ -207,6 +216,7 @@ class Evaluator:
         seen_positions: set[tuple[int, int]] = set()
         valid_actions = 0
         invalid_actions = 0
+        action_type_score_sum = 0.0
         move_results: list[dict[str, Any]] = []
 
         for move in moves:
@@ -223,14 +233,19 @@ class Evaluator:
 
             ok, reason = validate_llm_move_against_state(move, state)
             applied = bool(ok and not duplicate)
+            action_type = str(move.get("action_type", "")).strip().lower() if isinstance(move, dict) else ""
+            action_type_score = self._score_successful_action_type(action_type, move, state) if applied else 0.0
             if applied:
                 valid_actions += 1
+                action_type_score_sum += action_type_score
             else:
                 invalid_actions += 1
             move_results.append(
                 {
                     "move": move,
                     "applicable": applied,
+                    "action_type": action_type,
+                    "action_type_score": action_type_score,
                     "duplicate": duplicate,
                     "reason": "duplicate_unit" if duplicate else reason,
                 }
@@ -240,15 +255,94 @@ class Evaluator:
 
         idle_penalty = abs(len(moves) - max_actions)
         
-        score = (valid_actions * 10 - invalid_actions * 5 - idle_penalty * 2) / max_actions
+        # TODO: Tune the final formula after action-type scores are calibrated.
+        # Right now every successful non-idle action keeps the old 10-point
+        # contribution, so behavior remains close to the previous scoring.
+        score = (action_type_score_sum - invalid_actions * 5 - idle_penalty * 2) / max_actions
 
         return score, {
             "parseable": True,
             "max_actions": max_actions,
             "applicable_actions": valid_actions,
+            "action_type_score_sum": action_type_score_sum,
             "returned_actions": len(moves),
             "moves": move_results,
         }
+
+    def _score_successful_action_type(
+        self,
+        action_type: str,
+        move: dict[str, Any],
+        state: dict[str, Any],
+    ) -> float:
+        """Score one already-valid action by action type."""
+        if action_type == "harvest":
+            return 2.0
+        if action_type == "attack":
+            return 3.0
+        if action_type == "move":
+            return 1.0
+        if action_type == "idle":
+            return 0.0
+        if action_type == "build":
+            building_type = self._extract_building_type(move)
+            if not building_type:
+                return 10.0
+            same_building_count = self._count_ally_units_by_type(state, building_type)
+            return 10.0 - 2.0 * same_building_count
+        if action_type == "train":
+            unit_type = self._extract_train_unit_type(move)
+            if not unit_type:
+                return 3.0
+            same_unit_count = self._count_ally_units_by_type(state, unit_type)
+            if same_unit_count >= 20:
+                return -1.0
+            if same_unit_count >= 15:
+                return 0.0
+            if same_unit_count >= 10:
+                return 1.0
+            if same_unit_count >= 7:
+                return 2.0
+            return 3.0
+        return float(self.DEFAULT_ACTION_TYPE_SCORES.get(action_type, 0.0))
+
+    @staticmethod
+    def _extract_building_type(move: dict[str, Any]) -> str | None:
+        raw_move = str(move.get("raw_move", "")).lower()
+        match = re.search(r"\bbuild\s*\(.*,\s*([a-z_]+)\s*\)", raw_move)
+        if not match:
+            return None
+        return Evaluator._normalize_unit_type(match.group(1))
+
+    @staticmethod
+    def _extract_train_unit_type(move: dict[str, Any]) -> str | None:
+        raw_move = str(move.get("raw_move", "")).lower()
+        match = re.search(r"\btrain\s*\(\s*([a-z_]+)\s*\)", raw_move)
+        if not match:
+            return None
+        return Evaluator._normalize_unit_type(match.group(1))
+
+    @staticmethod
+    def _count_ally_units_by_type(state: dict[str, Any], unit_type: str) -> int:
+        normalized_type = Evaluator._normalize_unit_type(unit_type)
+        return sum(
+            1
+            for unit_info in dict(state.get("ally_units") or {}).values()
+            if Evaluator._normalize_unit_type(str(unit_info.get("type", ""))) == normalized_type
+        )
+
+    @staticmethod
+    def _normalize_unit_type(unit_type: str) -> str:
+        normalized = str(unit_type or "").strip().lower().replace("ally_", "").replace("ally ", "")
+        aliases = {
+            "worker unit": "worker",
+            "light unit": "light",
+            "heavy unit": "heavy",
+            "ranged unit": "ranged",
+            "base unit": "base",
+            "barracks unit": "barracks",
+        }
+        return aliases.get(normalized, normalized)
 
     @staticmethod
     def _extract_max_actions(dynamic_prompt: str) -> int:
