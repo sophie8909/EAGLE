@@ -52,7 +52,7 @@ public class EAGLE extends AbstractionLayerAI {
     static final String ENDPOINT_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     static final JsonObject MOVE_RESPONSE_SCHEMA;
     // How often the agent should refresh LLM actions. The value comes from config.properties.
-    static final int LLM_INTERVAL = loadLLMInterval();
+    static final int LLM_INTERVAL = 1;
     LocalDateTime now = LocalDateTime.now();
     String timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
 
