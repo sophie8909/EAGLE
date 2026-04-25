@@ -102,6 +102,8 @@ class EAConfig:
         default_factory=lambda: int(_default_config_value("surrogate_round_samples_per_match"))
     )
     surrogate_log_dir: str = field(default_factory=lambda: str(_default_config_value("surrogate_log_dir")))
+    one_eval_rounds: int = field(default_factory=lambda: int(_default_config_value("one_eval_rounds")))
+    prompt_history_path: str = field(default_factory=lambda: str(_default_config_value("prompt_history_path")))
 
 
     def __post_init__(self) -> None:

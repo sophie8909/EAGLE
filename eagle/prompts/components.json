@@ -72,20 +72,7 @@
       "      \"action_type\": \"harvest\"",
       "    }",
       "  ]",
-      "}"
-    ]
-  ],
-
-  "field_requirements": [
-    [
-      "Each move must include raw_move, unit_position, unit_type, and action_type.",
-      "The unit_position must exactly match the position of an Ally unit.",
-      "The unit_type must correctly describe the unit at that position.",
-      "The action_type must correspond to the action described in raw_move."
-    ]
-  ],
-  "examples": [
-    [
+      "}",
       "{\"raw_move\":\"(1, 1): worker harvest((0, 0), (2, 1))\",\"unit_position\":[1,1],\"unit_type\":\"worker\",\"action_type\":\"harvest\"}",
       "{\"raw_move\":\"(2, 1): base train(worker)\",\"unit_position\":[2,1],\"unit_type\":\"base\",\"action_type\":\"train\"}",
       "{\"raw_move\":\"(1, 1): worker move((3, 3))\",\"unit_position\":[1,1],\"unit_type\":\"worker\",\"action_type\":\"move\"}",
@@ -94,6 +81,14 @@
       "{\"raw_move\":\"(2, 1): barracks train(light)\",\"unit_position\":[2,1],\"unit_type\":\"barracks\",\"action_type\":\"train\"}",
       "{\"raw_move\":\"(2, 1): barracks train(heavy)\",\"unit_position\":[2,1],\"unit_type\":\"barracks\",\"action_type\":\"train\"}",
       "{\"raw_move\":\"(2, 1): barracks train(ranged)\",\"unit_position\":[2,1],\"unit_type\":\"barracks\",\"action_type\":\"train\"}"
+    ]
+  ],
+  "field_requirements": [
+    [
+      "Each move must include raw_move, unit_position, unit_type, and action_type.",
+      "The unit_position must exactly match the position of an Ally unit.",
+      "The unit_type must correctly describe the unit at that position.",
+      "The action_type must correspond to the action described in raw_move."
     ]
   ],
   "strategy_identity": [
@@ -205,9 +200,9 @@
       [
         "DECISION RULE:",
         "If combat_power > 0:",
-        "  → initiate attack on enemy units, workers, or base.",
+        " initiate attack on enemy units, workers, or base.",
         "Else:",
-        "  → continue harvesting, building, and unit production.",
+        " continue harvesting, building, and unit production.",
         "Do not engage in unfavorable fights."
       ]
     ]

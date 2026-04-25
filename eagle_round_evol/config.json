@@ -1,0 +1,52 @@
+{
+  "algorithm": "nsga2",
+  "population_size": 20,
+  "num_generations": 50,
+  "convergence_generations": 5,
+  "reproduction_operator_probs": {
+    "crossover": 0.5,
+    "mutation": 0.5,
+    "reflection": 0.0
+  },
+  "enable_reflection_operator": false,
+  "reflection_max_components_to_rewrite": 1,
+  "strategy_mutation": {
+    "pool_replacement": 0.4,
+    "identity_preserving_rewrite": 0.35,
+    "identity_shift_rewrite": 0.25
+  },
+  "selection_method": "random",
+  "tournament_size": 3,
+  "crossover": "uniform",
+  "crossover_repair_enabled": true,
+  "environment_selection_method": "elitism",
+  "steady_state_surrogate_offspring_count": 2,
+  "final_test_max_front": 0,
+  "include_strategy_identity_in_prompt": true,
+  "evolving_prompt_components": [],
+  "component_pool_path": "../eagle/prompts/components.json",
+  "initial_population_seeds": [],
+  "real_eval_rate": 1.0,
+  "real_eval_opponents": [],
+  "llm_interval": [1],
+  "save_trace_on_test": false,
+  "resource_advantage_alpha": 2.0,
+  "win_bonus": 100.0,
+  "resource_advantage_weights": {
+    "base": 10.0,
+    "worker": 1.0,
+    "light": 2.0,
+    "heavy": 2.0,
+    "ranged": 2.0,
+    "resource": 1.0
+  },
+  "prompt_history_path": "./eagle_round_evol/history.jsonl",
+  "one_eval_rounds": 5,
+  "surrogate_version": "policy",
+  "surrogate_mode": "light_rush_and_heavy_rush",
+  "surrogate_recent_match_window": 10,
+  "surrogate_round_samples_per_match": 1,
+  "surrogate_log_dir": "logs/microrts",
+  "round_eval_model": "llama3.1:8b",
+  "round_state_seed": 0
+}
