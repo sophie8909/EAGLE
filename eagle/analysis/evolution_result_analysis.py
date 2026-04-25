@@ -93,8 +93,11 @@ def _clean_axis_label(label: str) -> str:
     return label.split(".")[-1]
 
 
-def _evolution_objective_labels(run_dir: Path) -> tuple[str, str]:
+def _evolution_objective_labels(run_dir: Path, eval_mode: str = "match") -> tuple[str, str]:
     """Build axis labels from the run config's ordered real-eval opponents."""
+    if eval_mode == "round":
+        return ("Legal Action Ratio", "Strategy Alignment Score (0-100)")
+
     config = load_config_from_json(run_dir)
     opponents = list(getattr(config, "real_eval_opponents", []) or [])
     labels = [_clean_axis_label(opponent) for opponent in opponents[:2]]
@@ -221,11 +224,12 @@ def _plot_generation_scatter(
     output_dir: Path,
     custom_title: str | None = None,
     debug: bool = False,
+    eval_mode: str = "match",
 ) -> list[Path]:
     """Render one combined plot plus one per-generation plot."""
     plt = _require_matplotlib()
     generation_entries = _load_generation_entries(run_dir, debug=debug)
-    evolution_objective_labels = _evolution_objective_labels(run_dir)
+    evolution_objective_labels = _evolution_objective_labels(run_dir, eval_mode=eval_mode)
     if not generation_entries:
         return []
 
@@ -462,8 +466,12 @@ def analyze_evolution_run(
     latest: bool = False,
     title: str | None = None,
     debug: bool = False,
+    eval_mode: str = "match",
 ) -> dict[str, object]:
     """Generate evolution scatter plots and final-test resource heatmaps."""
+    if eval_mode not in {"match", "round"}:
+        raise ValueError(f"Unsupported eval_mode: {eval_mode!r}")
+
     resolved_run_dir = _resolve_run_dir(run_dir, latest)
     output_dir = ensure_directory(resolved_run_dir / "analysis" / "evolution")
 
@@ -472,6 +480,7 @@ def analyze_evolution_run(
         ensure_directory(output_dir / "generation_fitness"),
         custom_title=title,
         debug=debug,
+        eval_mode=eval_mode,
     )
     generation_gif_path = _build_generation_gif(
         generation_figures,
@@ -501,6 +510,7 @@ def analyze_evolution_run(
         "final_test_figures": final_test_figures,
         "title": title,
         "debug": debug,
+        "eval_mode": eval_mode,
     }
     summary_path = output_dir / "analysis_summary.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -515,6 +525,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--latest", action="store_true", help="Analyze the latest run with generation logs.")
     parser.add_argument("--title", default=None, help="Custom title for the generated plots.")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode and print debug output.")
+    parser.add_argument(
+        "--eval-mode",
+        choices=["match", "round"],
+        default="match",
+        help="Use 'round' for eagle_round_evol legality/alignment objectives.",
+    )
     return parser
 
 
@@ -522,7 +538,13 @@ def main() -> None:
     """CLI entry point for evolution-result analysis."""
     parser = build_argument_parser()
     args = parser.parse_args()
-    summary = analyze_evolution_run(run_dir=args.run_dir, latest=args.latest, title=args.title, debug=args.debug)
+    summary = analyze_evolution_run(
+        run_dir=args.run_dir,
+        latest=args.latest,
+        title=args.title,
+        debug=args.debug,
+        eval_mode=args.eval_mode,
+    )
     _debug_print(args.debug, json.dumps(summary, ensure_ascii=False, indent=2))
 
 

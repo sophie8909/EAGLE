@@ -7,6 +7,9 @@ import ast
 from .individual import Individual
 
 
+INDIVIDUAL_PREFIXES = ("Individual(", "RoundIndividual(")
+
+
 def _split_top_level_fields(individual_str: str) -> list[str]:
     """Split a serialized Individual(...) payload without breaking nested dicts."""
     fields = []
@@ -51,6 +54,19 @@ def _parse_literal(value: str):
         return value
 
 
+def _extract_individual_payload(line: str) -> str | None:
+    """Extract the constructor payload from Individual(...) log lines."""
+    for prefix in INDIVIDUAL_PREFIXES:
+        start_idx = line.find(prefix)
+        if start_idx == -1:
+            continue
+        end_idx = line.rfind(")")
+        if end_idx == -1 or end_idx <= start_idx:
+            return None
+        return line[start_idx + len(prefix):end_idx]
+    return None
+
+
 def parse_individuals_from_ea_log(log_file: str):
     """Parse serialized Individual records back into runtime Individual objects."""
     with open(log_file, "r", encoding="utf-8") as f:
@@ -65,15 +81,13 @@ def parse_individuals_from_ea_log(log_file: str):
                 individuals.append(front)
                 front = []
             continue
-        if not line.startswith("Individual"):
+        if not line.startswith(("Individual", "RoundIndividual")):
             continue
 
-        start_idx = line.find("Individual(") + len("Individual(")
-        end_idx = line.rfind(")")
-        if start_idx == -1 or end_idx == -1:
+        individual_str = _extract_individual_payload(line)
+        if individual_str is None:
             continue
 
-        individual_str = line[start_idx:end_idx]
         components = _split_top_level_fields(individual_str)
         individual_data = {}
         for component in components:
@@ -113,15 +127,13 @@ def parse_population_snapshot_from_ea_log(log_file: str) -> list[Individual]:
             continue
         if not in_population_snapshot:
             continue
-        if not line.startswith("Individual"):
+        if not line.startswith(("Individual", "RoundIndividual")):
             continue
 
-        start_idx = line.find("Individual(")
-        end_idx = line.rfind(")")
-        if start_idx == -1 or end_idx == -1:
+        individual_str = _extract_individual_payload(line)
+        if individual_str is None:
             continue
 
-        individual_str = line[start_idx + len("Individual("):end_idx]
         components = _split_top_level_fields(individual_str)
         individual_data = {}
         for component in components:
