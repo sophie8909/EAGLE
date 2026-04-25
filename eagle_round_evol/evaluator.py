@@ -56,7 +56,8 @@ class Evaluator:
         else:
             legality_score_sum = 0.0
             alignment_score_sum = 0.0
-            for i in range(self.config.one_eval_rounds):
+            n = self.config.one_eval_rounds
+            for i in range(n):
                 dynamic_prompt = self.state_generator.generate_text()
                 full_prompt = self._build_round_prompt(base_prompt, dynamic_prompt)
                 raw_response = self._ask_for_actions(full_prompt)
@@ -171,7 +172,7 @@ class Evaluator:
             {raw_response}
             """.strip()
         raw_score = self._ollama_generate(prompt=judge_prompt, temperature=0.1, json_format=True)
-        print(f"Raw score response:\n{raw_score}\n")
+        # print(f"Raw score response:\n{raw_score}\n")
         parsed = self._extract_first_json_object(raw_score)
         if isinstance(parsed, dict):
             try:
@@ -234,8 +235,8 @@ class Evaluator:
                     "reason": "duplicate_unit" if duplicate else reason,
                 }
             )
-        print(f"Dynamic prompt:\n{dynamic_prompt}\n")
-        print(f"Move results:\n{json.dumps(move_results, indent=2)}\n")
+        # print(f"Dynamic prompt:\n{dynamic_prompt}\n")
+        # print(f"Move results:\n{json.dumps(move_results, indent=2)}\n")
 
         idle_penalty = abs(len(moves) - max_actions)
         
