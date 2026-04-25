@@ -197,7 +197,7 @@ def _load_generation_entries_from_logs(run_dir: Path) -> list[tuple[int, list, s
         }
         population = parse_population_snapshot_from_ea_log(str(generation_log))
         if population:
-            loaded.append((generation_number, population, front_one_ids))
+            loaded.append((generation_number, population, _front_one_ids_from_population(population)))
             continue
         flattened = [individual for front in fronts for individual in front]
         loaded.append((generation_number, flattened, front_one_ids))
