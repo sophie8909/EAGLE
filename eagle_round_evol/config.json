@@ -2,7 +2,7 @@
   "algorithm": "nsga2",
   "population_size": 20,
   "num_generations": 50,
-  "convergence_generations": 5,
+  "convergence_generations": 10,
   "reproduction_operator_probs": {
     "crossover": 0.4,
     "mutation": 0.4,
@@ -11,9 +11,9 @@
   "enable_reflection_operator": true,
   "reflection_max_components_to_rewrite": 1,
   "strategy_mutation": {
-    "pool_replacement": 0.4,
-    "identity_preserving_rewrite": 0.35,
-    "identity_shift_rewrite": 0.25
+    "pool_replacement": 0.2,
+    "identity_preserving_rewrite": 0.45,
+    "identity_shift_rewrite": 0.35
   },
   "selection_method": "random",
   "tournament_size": 3,
@@ -41,7 +41,7 @@
     "resource": 1.0
   },
   "prompt_history_path": "./eagle_round_evol/history.jsonl",
-  "one_eval_rounds": 5,
+  "one_eval_rounds": 10,
   "surrogate_version": "policy",
   "surrogate_mode": "light_rush_and_heavy_rush",
   "surrogate_recent_match_window": 10,
