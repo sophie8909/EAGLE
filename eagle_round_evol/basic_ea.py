@@ -19,6 +19,7 @@ from eagle.utils.match_score_recorder import MatchScoreRecorder
 
 from .evaluator import Evaluator
 from .individual import Individual
+from .reflection import RoundReflection
 
 class EA:
     """Shared scaffolding for the single- and multi-objective EA variants.
@@ -301,6 +302,14 @@ class EA:
             )
         )
         return mutated_individual
+
+    def reflect(self, individual: Individual) -> Individual:
+        """Apply round-level reflection to one parent."""
+        return RoundReflection.reflect_individual(
+            individual,
+            self.component_pool,
+            self.config,
+        )
 
     def run_final_test(self):
         """Replay the last saved generation against the configured final-test opponents."""

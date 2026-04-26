@@ -355,20 +355,34 @@ class NSGA2(EA):
 
         # Generational phase A: build the entire offspring population first.
         while len(offspring) < target_count:
-            parent1, parent2 = self.select_parents()
-
-            # Step A1: create one child from the current parent population.
-            child = self.crossover(parent1, parent2)
-            child = self.mutate(child)
+            operator = self._sample_reproduction_operator()
+            if operator == "crossover":
+                parent1, parent2 = self.select_parents()
+                child = self.crossover(parent1, parent2)
+            elif operator == "mutation":
+                child = self.mutate(self.select_parent())
+            elif operator == "reflection":
+                child = self.reflect(self.select_parent())
+            else:
+                raise ValueError(f"Unsupported reproduction operator: {operator}")
 
             offspring.append(child)
             print(
                 f"[Generation {generation + 1}] generated offspring "
-                f"{len(offspring)}/{target_count}",
+                f"{len(offspring)}/{target_count} via {operator}",
                 flush=True,
             )
 
         return offspring[:target_count]
+
+    def _sample_reproduction_operator(self) -> str:
+        """Sample crossover, mutation, or round reflection from config weights."""
+        weights = self.config.reproduction_operator_weights()
+        if not weights:
+            return "mutation"
+        operators = list(weights.keys())
+        probabilities = [weights[operator] for operator in operators]
+        return random.choices(operators, weights=probabilities, k=1)[0]
 
     def _log_generation(
         self,

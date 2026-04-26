@@ -255,9 +255,7 @@ class Evaluator:
 
         idle_penalty = abs(len(moves) - max_actions)
         
-        # TODO: Tune the final formula after action-type scores are calibrated.
-        # Right now every successful non-idle action keeps the old 10-point
-        # contribution, so behavior remains close to the previous scoring.
+
         score = (action_type_score_sum - invalid_actions * 5 - idle_penalty * 2) / max_actions
 
         return score, {
@@ -281,7 +279,7 @@ class Evaluator:
         if action_type == "attack":
             return 3.0
         if action_type == "move":
-            return 1.0
+            return 0.5
         if action_type == "idle":
             return 0.0
         if action_type == "build":
@@ -295,13 +293,13 @@ class Evaluator:
             if not unit_type:
                 return 3.0
             same_unit_count = self._count_ally_units_by_type(state, unit_type)
-            if same_unit_count >= 20:
+            if same_unit_count >= 13:
                 return -1.0
-            if same_unit_count >= 15:
-                return 0.0
             if same_unit_count >= 10:
-                return 1.0
+                return 0.0
             if same_unit_count >= 7:
+                return 1.0
+            if same_unit_count >= 5:
                 return 2.0
             return 3.0
         return float(self.DEFAULT_ACTION_TYPE_SCORES.get(action_type, 0.0))
