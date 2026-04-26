@@ -34,6 +34,9 @@ class EA:
         """Initialize shared EA state and create the initial random population."""
         self.config = config
         self.component_pool = component_pool
+        self.component_pool.configure_non_evolving_keys(
+            getattr(self.config, "non_evolving_prompt_components", None)
+        )
         self.opponent_list = opponent_list
         self.population = self.initialize_population()
         self.current_log_dir: Path | None = None
@@ -60,8 +63,8 @@ class EA:
     def initialize_population(self) -> List[Individual]:
         """Create the starting population by sampling strategy indices at random."""
         individuals = []
-        evolving_static_keys = self.component_pool.resolve_evolving_static_keys(
-            self.config.evolving_prompt_components
+        evolving_component_keys = self.component_pool.resolve_evolving_component_keys(
+            self.config.non_evolving_prompt_components
         )
         initial_population_seeds = list(getattr(self.config, "initial_population_seeds", []) or [])
         if len(initial_population_seeds) > self.config.population_size:
@@ -77,12 +80,12 @@ class EA:
                 individual.initialize_from_seed(
                     self.component_pool,
                     seed,
-                    static_component_keys=evolving_static_keys,
+                    component_keys=evolving_component_keys,
                 )
             else:
                 individual.initialize_randomly(
                     self.component_pool,
-                    static_component_keys=evolving_static_keys,
+                    component_keys=evolving_component_keys,
                 )
             individuals.append(individual)
         return individuals

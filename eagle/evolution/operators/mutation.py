@@ -13,15 +13,15 @@ from ...utils.llm import LLM
 
 
 class Mutation:
-    """Mutation operators centered around strategy identity and phase coherence."""
+    """Mutation operators over flattened prompt components."""
 
     STATIC_POOL_MUTATION_MODE = "static_pool_replacement"
     STATIC_REWRITE_MUTATION_MODE = "static_rewrite"
 
     @classmethod
     def all_strategy_components(cls, component_pool: ComponentPool) -> list[str]:
-        """Return the active strategy component set from the loaded component JSON."""
-        return list(component_pool.strategy_keys)
+        """Compatibility wrapper returning the active evolving component set."""
+        return list(component_pool.evolving_component_keys)
 
     @classmethod
     def mutate_strategy(
@@ -31,34 +31,35 @@ class Mutation:
         config: EAConfig,
         mode: str | None = None,
     ) -> Individual:
-        """Dispatch one strategy mutation mode and attach mutation metadata."""
+        """Dispatch one component mutation mode and attach mutation metadata."""
         mutated_individual = individual.copy()
-        mutated_individual.strategy = cls._ensure_complete_strategy(
-            dict(mutated_individual.strategy or {}),
+        component_indices = cls._ensure_complete_strategy(
+            dict(getattr(mutated_individual, "component_indices", {}) or {}),
             component_pool,
         )
         mutated_individual.ea_llm_call_time = 0.0
 
         selected_mode = mode or cls._sample_mutation_mode(config)
         if selected_mode == "pool_replacement":
-            strategy, metadata, elapsed = cls.apply_pool_replacement(
-                mutated_individual.strategy,
+            component_indices, metadata, elapsed = cls.apply_pool_replacement(
+                component_indices,
                 component_pool,
             )
         elif selected_mode == "identity_preserving_rewrite":
-            strategy, metadata, elapsed = cls.apply_identity_preserving_rewrite(
-                mutated_individual.strategy,
+            component_indices, metadata, elapsed = cls.apply_identity_preserving_rewrite(
+                component_indices,
                 component_pool,
             )
         elif selected_mode == "identity_shift_rewrite":
-            strategy, metadata, elapsed = cls.apply_identity_shift_rewrite(
-                mutated_individual.strategy,
+            component_indices, metadata, elapsed = cls.apply_identity_shift_rewrite(
+                component_indices,
                 component_pool,
             )
         else:
             raise ValueError(f"Unsupported strategy mutation mode: {selected_mode}")
 
-        mutated_individual.strategy = cls._ensure_complete_strategy(strategy, component_pool)
+        for key, value in cls._ensure_complete_strategy(component_indices, component_pool).items():
+            mutated_individual.set_component_index(key, value)
         mutated_individual.ea_llm_call_time += elapsed
         mutated_individual.mutation_metadata = metadata
         return mutated_individual
@@ -70,20 +71,8 @@ class Mutation:
         component_pool: ComponentPool,
         config: EAConfig,
     ) -> Individual:
-        """Mutate either always-on strategy buckets or config-enabled static buckets."""
-        static_targets = component_pool.resolve_evolving_static_keys(config.evolving_prompt_components)
-        strategy_target_count = max(1, len(component_pool.strategy_keys))
-        static_target_count = len(static_targets)
-
-        if static_target_count > 0:
-            mutation_family = random.choices(
-                ["strategy", "static"],
-                weights=[strategy_target_count, static_target_count],
-                k=1,
-            )[0]
-            if mutation_family == "static":
-                return cls.mutate_static_component(individual, component_pool, static_targets)
-
+        """Mutate one flattened component from the config-enabled search space."""
+        component_pool.configure_non_evolving_keys(getattr(config, "non_evolving_prompt_components", None))
         return cls.mutate_strategy(individual, component_pool, config)
 
     @classmethod
@@ -96,26 +85,7 @@ class Mutation:
         """Mutate one config-enabled static component via pool replacement or LLM rewrite."""
         mutated_individual = individual.copy()
         target_component = random.choice(list(static_targets))
-        can_rewrite = component_pool.is_rewriteable_static_key(target_component)
-        if can_rewrite:
-            return cls.rewrite_static_component(mutated_individual, component_pool, target_component)
-
-        previous_index = mutated_individual.static_components.get(target_component)
-        replacement_index = component_pool.get_random_component_index(target_component)
-        if previous_index is not None:
-            for _ in range(8):
-                if replacement_index != previous_index:
-                    break
-                replacement_index = component_pool.get_random_component_index(target_component)
-        mutated_individual.set_component_index(target_component, replacement_index)
-        mutated_individual.ea_llm_call_time = getattr(mutated_individual, "ea_llm_call_time", 0.0) or 0.0
-        mutated_individual.mutation_metadata = {
-            "mutation_mode": cls.STATIC_POOL_MUTATION_MODE,
-            "changed_components": [target_component],
-            "old_index": previous_index,
-            "new_index": replacement_index,
-        }
-        return mutated_individual
+        return cls.rewrite_static_component(mutated_individual, component_pool, target_component)
 
     @classmethod
     def rewrite_static_component(
@@ -126,7 +96,7 @@ class Mutation:
     ) -> Individual:
         """Rewrite one non-strategy component while keeping the rest of the prompt stable."""
         mutated_individual = individual.copy()
-        previous_index = mutated_individual.static_components.get(target_component, 0)
+        previous_index = mutated_individual.component_indices.get(target_component, 0)
         current_text = component_pool.get_component_str(target_component, previous_index)
         instruction = cls._build_static_rewrite_instruction(
             individual=mutated_individual,
@@ -368,18 +338,19 @@ class Mutation:
         individual: Individual,
         component_pool: ComponentPool,
     ) -> Individual:
-        """Repair one crossover child so its dependent strategy parts become coherent."""
+        """Repair one crossover child so its dependent components become coherent."""
         repaired_individual = individual.copy()
-        repaired_individual.strategy = cls._ensure_complete_strategy(
-            dict(repaired_individual.strategy or {}),
+        component_indices = cls._ensure_complete_strategy(
+            dict(getattr(repaired_individual, "component_indices", {}) or {}),
             component_pool,
         )
         repaired_individual.ea_llm_call_time = getattr(repaired_individual, "ea_llm_call_time", 0.0) or 0.0
-        strategy, metadata, elapsed = cls.apply_crossover_repair_rewrite(
-            repaired_individual.strategy,
+        component_indices, metadata, elapsed = cls.apply_crossover_repair_rewrite(
+            component_indices,
             component_pool,
         )
-        repaired_individual.strategy = cls._ensure_complete_strategy(strategy, component_pool)
+        for key, value in cls._ensure_complete_strategy(component_indices, component_pool).items():
+            repaired_individual.set_component_index(key, value)
         repaired_individual.ea_llm_call_time += elapsed
         repaired_individual.mutation_metadata = metadata
         return repaired_individual
@@ -395,16 +366,13 @@ class Mutation:
     @classmethod
     def _allowed_pool_targets(cls, component_pool: ComponentPool) -> list[str]:
         """Return strategy buckets that are eligible for discrete pool replacement."""
-        return [
-            key for key in cls.all_strategy_components(component_pool)
-            if key in component_pool.strategy_keys
-        ]
+        return list(component_pool.evolving_component_keys)
 
     @staticmethod
     def _identity_key(component_pool: ComponentPool) -> str | None:
         """Return the active strategy identity key from the component pool metadata."""
-        identity_key = getattr(component_pool, "identity_strategy_key", None)
-        if identity_key in getattr(component_pool, "strategy_keys", []):
+        identity_key = getattr(component_pool, "identity_component_key", None)
+        if identity_key in getattr(component_pool, "evolving_component_keys", []):
             return identity_key
         return None
 
@@ -413,10 +381,10 @@ class Mutation:
         """Return strategy rewrite targets derived from the loaded component JSON."""
         configured = list(getattr(component_pool, "dependent_strategy_keys", []) or [])
         if configured:
-            return [target for target in configured if target in component_pool.strategy_keys]
+            return [target for target in configured if target in component_pool.evolving_component_keys]
         identity_key = cls._identity_key(component_pool)
         return [
-            target for target in component_pool.strategy_keys
+            target for target in component_pool.evolving_component_keys
             if target != identity_key
         ]
 
@@ -426,11 +394,11 @@ class Mutation:
         strategy: dict[str, int],
         component_pool: ComponentPool,
     ) -> dict[str, int]:
-        """Ensure every active strategy bucket has a valid selected candidate."""
+        """Ensure every active evolving component has a valid selected candidate."""
         completed = dict(strategy or {})
-        for strategy_key in component_pool.strategy_keys:
-            if strategy_key not in completed:
-                completed[strategy_key] = component_pool.get_random_strategy_component_index(strategy_key)
+        for component_key in component_pool.evolving_component_keys:
+            if component_key not in completed:
+                completed[component_key] = component_pool.get_random_component_index(component_key)
         return completed
 
     @classmethod
@@ -441,17 +409,17 @@ class Mutation:
         current_index: int | None,
     ) -> int:
         """Sample a replacement index, preferring a different candidate when possible."""
-        candidates = component_pool.components["strategy"][strategy_key]
+        candidates = component_pool.components[strategy_key]
         if len(candidates) <= 1:
             return 0 if current_index is None else current_index
 
-        replacement_index = component_pool.get_random_strategy_component_index(strategy_key)
+        replacement_index = component_pool.get_random_component_index(strategy_key)
         if current_index is None:
             return replacement_index
         for _ in range(8):
             if replacement_index != current_index:
                 return replacement_index
-            replacement_index = component_pool.get_random_strategy_component_index(strategy_key)
+            replacement_index = component_pool.get_random_component_index(strategy_key)
         return replacement_index
 
     @classmethod
@@ -486,7 +454,7 @@ class Mutation:
             )
             total_elapsed += elapsed
             rewritten_component = component_pool.parse_component_str(rewritten_text)
-            new_index = component_pool.add_strategy_component(target, rewritten_component)
+            new_index = component_pool.add_component(target, rewritten_component)
             updated_strategy[target] = new_index
             rewritten_targets.append(target)
 
@@ -509,7 +477,7 @@ class Mutation:
         identity_key = cls._identity_key(component_pool)
         identity_text = cls._component_text(component_pool, strategy, identity_key)
         unchanged_components = [
-            key for key in component_pool.strategy_keys
+            key for key in component_pool.component_keys
             if key != target_component
         ]
         unchanged_snapshot = "\n\n".join(
@@ -522,7 +490,7 @@ class Mutation:
             f"Rewrite target: {target_component}\n"
             f"Purpose: {purpose}\n\n"
             "Strategy component design:\n"
-            f"- Active strategy keys loaded from JSON: {', '.join(component_pool.strategy_keys)}.\n"
+            f"- Active component keys loaded from JSON: {', '.join(component_pool.component_keys)}.\n"
             f"- Identity key loaded from JSON: {identity_key or 'none'}.\n"
             "- Keep the rewritten component coherent with the active strategy keys and their current meanings.\n\n"
             "Global rewrite constraints:\n"
@@ -558,10 +526,10 @@ class Mutation:
     ) -> str:
         """Assemble the rewrite prompt for one non-strategy component."""
         static_snapshot = cls._format_static_snapshot(individual, component_pool, exclude={target_component})
-        strategy_snapshot = cls._format_strategy_snapshot(individual.strategy, component_pool)
+        strategy_snapshot = cls._format_strategy_snapshot(individual.component_indices, component_pool)
         current_text = component_pool.get_component_str(
             target_component,
-            int(individual.static_components.get(target_component, 0)),
+            int(individual.component_indices.get(target_component, 0)),
         )
         return (
             "Mutation mode: static_rewrite\n"
@@ -586,7 +554,7 @@ class Mutation:
     ) -> str:
         """Render the current strategy dictionary into a readable rewrite context."""
         blocks = []
-        for key in component_pool.strategy_keys:
+        for key in component_pool.component_keys:
             blocks.append(f"[{key}]\n{cls._component_text(component_pool, strategy, key)}")
         return "\n\n".join(blocks)
 
@@ -601,12 +569,12 @@ class Mutation:
         """Render selected non-strategy components into a readable rewrite context."""
         excluded = set(exclude or set())
         blocks: list[str] = []
-        for key in component_pool.static_component_keys:
+        for key in component_pool.component_keys:
             if key in excluded:
                 continue
-            if key not in individual.static_components:
+            if key not in individual.component_indices:
                 continue
-            component_index = int(individual.static_components[key])
+            component_index = int(individual.component_indices[key])
             blocks.append(f"[{key}]\n{component_pool.get_component_str(key, component_index)}")
         return "\n\n".join(blocks)
 
@@ -623,7 +591,7 @@ class Mutation:
         index = strategy.get(strategy_key)
         if index is None:
             return ""
-        return "\n".join(component_pool.get_strategy_component(strategy_key, index))
+        return "\n".join(component_pool.get_component(strategy_key, index))
 
     @staticmethod
     def _component_index(strategy: dict[str, int], strategy_key: str | None) -> int | None:

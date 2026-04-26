@@ -49,12 +49,8 @@ class RoundReflection:
             rewritten_text = current_text
 
         rewritten_component = component_pool.parse_component_str(rewritten_text)
-        if target in component_pool.strategy_keys:
-            new_index = component_pool.add_strategy_component(target, rewritten_component)
-            child.strategy[target] = new_index
-        else:
-            new_index = component_pool.add_component(target, rewritten_component)
-            child.set_component_index(target, new_index)
+        new_index = component_pool.add_component(target, rewritten_component)
+        child.set_component_index(target, new_index)
         if hasattr(child, "_sync_component_indices"):
             child._sync_component_indices()
 
@@ -79,11 +75,9 @@ class RoundReflection:
         format_targets = list(getattr(component_pool, "reflection_format_keys", []) or [])
         strategy_targets = list(getattr(component_pool, "reflection_strategy_keys", []) or [])
         if not format_targets:
-            format_targets = list(getattr(component_pool, "mutable_static_component_keys", []) or [])
+            format_targets = list(getattr(component_pool, "evolving_component_keys", []) or [])
         if not strategy_targets:
-            strategy_targets = list(
-                getattr(component_pool, "dependent_strategy_keys", []) or component_pool.strategy_keys
-            )
+            strategy_targets = list(getattr(component_pool, "evolving_component_keys", []) or [])
 
         if not parseable or action_ratio < 0.5:
             preferred_targets = format_targets
@@ -93,7 +87,7 @@ class RoundReflection:
             preferred_targets = strategy_targets + format_targets
 
         for target in preferred_targets:
-            if target in component_pool.fixed_component_keys:
+            if target in component_pool.non_evolving_component_keys:
                 continue
             if target in component_pool.component_keys:
                 return target
@@ -159,10 +153,7 @@ Rewrite rules:
 
     @staticmethod
     def _component_text(component_pool: ComponentPool, individual: Individual, target: str) -> str:
-        if target in component_pool.strategy_keys:
-            index = int(individual.strategy.get(target, 0))
-            return "\n".join(component_pool.get_strategy_component(target, index))
-        index = int(individual.static_components.get(target, 0))
+        index = int(individual.component_indices.get(target, 0))
         return component_pool.get_component_str(target, index)
 
     @staticmethod

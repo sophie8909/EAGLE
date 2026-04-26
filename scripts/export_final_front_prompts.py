@@ -72,56 +72,41 @@ def build_next_experiment_bundle(
     """Build one reduced component pool plus remapped seeds for the exported individuals."""
     reduced_components = deepcopy(component_pool.components)
     remapped_seeds: list[dict[str, object]] = []
-    static_index_maps: dict[str, dict[int, int]] = {}
-    strategy_index_maps: dict[str, dict[int, int]] = {}
+    index_maps: dict[str, dict[int, int]] = {}
 
-    for category in component_pool.static_component_keys:
+    for category in component_pool.component_keys:
         candidates = list(component_pool.components.get(category, []))
         if not candidates:
             continue
-        if category in component_pool.NON_EVOLVING_STATIC_KEYS:
+        if category in component_pool.non_evolving_component_keys:
             reduced_components[category] = deepcopy(candidates)
-            static_index_maps[category] = {index: index for index in range(len(candidates))}
+            index_maps[category] = {index: index for index in range(len(candidates))}
             continue
 
         used_indices = {
-            int(getattr(individual, "legacy_components", {}).get(category, 0))
+            int(
+                getattr(individual, "component_indices", {})
+                .get(category, getattr(individual, "legacy_components", {}).get(category, 0))
+            )
             for individual in individuals
         }
-        reduced_components[category], static_index_maps[category] = _copy_candidates_by_indices(candidates, used_indices)
-
-    reduced_strategy = deepcopy(component_pool.components.get("strategy", {}))
-    for strategy_key in component_pool.strategy_keys:
-        candidates = list(component_pool.components.get("strategy", {}).get(strategy_key, []))
-        if not candidates:
-            continue
-        used_indices = {
-            int(getattr(individual, "strategy", {}).get(strategy_key, 0))
-            for individual in individuals
-            if strategy_key in getattr(individual, "strategy", {})
-        }
-        reduced_strategy[strategy_key], strategy_index_maps[strategy_key] = _copy_candidates_by_indices(candidates, used_indices)
-    reduced_components["strategy"] = reduced_strategy
+        reduced_components[category], index_maps[category] = _copy_candidates_by_indices(candidates, used_indices)
 
     for individual in individuals:
-        remapped_static_components = {}
-        for category, old_index in dict(getattr(individual, "legacy_components", {}) or {}).items():
-            if category not in static_index_maps:
+        remapped_components = {}
+        component_indices = dict(getattr(individual, "component_indices", {}) or {})
+        component_indices.update(dict(getattr(individual, "legacy_components", {}) or {}))
+        component_indices.update(dict(getattr(individual, "strategy", {}) or {}))
+        for category, old_index in component_indices.items():
+            if category not in index_maps:
                 continue
-            remapped_static_components[category] = static_index_maps[category].get(int(old_index), 0)
-
-        remapped_strategy = {}
-        for strategy_key, old_index in dict(getattr(individual, "strategy", {}) or {}).items():
-            if strategy_key not in strategy_index_maps:
-                continue
-            remapped_strategy[strategy_key] = strategy_index_maps[strategy_key].get(int(old_index), 0)
+            remapped_components[category] = index_maps[category].get(int(old_index), 0)
 
         remapped_seeds.append(
             {
                 "id": getattr(individual, "id", None),
                 "game_rule": 0,
-                "static_components": remapped_static_components,
-                "strategy": remapped_strategy,
+                "component_indices": remapped_components,
             }
         )
 

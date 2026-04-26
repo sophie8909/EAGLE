@@ -83,29 +83,33 @@ class Individual:
         component_indices = getattr(individual, "component_indices", None)
         if isinstance(component_indices, dict):
             clone.component_indices = {str(key): int(value) for key, value in component_indices.items()}
+            clone.static_components = dict(clone.component_indices)
+            clone.strategy = {}
         clone.fitness = list(getattr(individual, "fitness", DEFAULT_FITNESS) or DEFAULT_FITNESS)
         clone.evaluation_mode = getattr(individual, "evaluation_mode", None)
         last_round_evaluation = getattr(individual, "last_round_evaluation", None)
         if isinstance(last_round_evaluation, dict):
             clone.last_round_evaluation = dict(last_round_evaluation)
+        for attr in ("mutation_metadata", "reflection_metadata", "ea_llm_call_time"):
+            if hasattr(individual, attr):
+                value = getattr(individual, attr)
+                setattr(clone, attr, dict(value) if isinstance(value, dict) else value)
         return clone
 
     def initialize_randomly(
         self,
         component_pool: ComponentPool,
-        static_component_keys: list[str] | None = None,
+        component_keys: list[str] | None = None,
     ) -> None:
         self.game_rule = 0
+        self.component_indices = {}
         self.static_components = {}
-        for category in component_pool.static_component_keys:
-            if category in component_pool.FIXED_COMPONENT_KEYS:
+        self.strategy = {}
+        for category in component_pool.component_keys:
+            if category in component_pool.non_evolving_component_keys:
                 self.set_component_index(category, 0)
-        for category in list(static_component_keys or []):
+        for category in list(component_keys or component_pool.evolving_component_keys):
             self.set_component_index(category, component_pool.get_random_component_index(category))
-        self.strategy = {
-            strategy_key: component_pool.get_random_strategy_component_index(strategy_key)
-            for strategy_key in component_pool.strategy_keys
-        }
         self._sync_component_indices()
 
     def initialize_from_seed(
@@ -113,61 +117,34 @@ class Individual:
         component_pool: ComponentPool,
         seed: dict[str, Any],
         *,
-        static_component_keys: list[str] | None = None,
+        component_keys: list[str] | None = None,
         fill_missing_random: bool = True,
     ) -> None:
         seed_payload = dict(seed or {})
         flat_seed_indices = dict(seed_payload.get("components") or seed_payload.get("component_indices") or {})
-        if "game_rule" in component_pool.component_keys:
-            self.game_rule = int(flat_seed_indices.get("game_rule", seed_payload.get("game_rule", 0)))
-            component_pool.get_component("game_rule", self.game_rule)
-        else:
-            self.game_rule = 0
+        flat_seed_indices.update(dict(seed_payload.get("static_components") or {}))
+        flat_seed_indices.update(dict(seed_payload.get("strategy") or {}))
 
-        static_indices = dict(seed_payload.get("static_components") or {})
-        static_indices.update(
-            {
-                key: value
-                for key, value in flat_seed_indices.items()
-                if key in component_pool.static_component_keys
-            }
-        )
+        self.game_rule = int(flat_seed_indices.get("game_rule", seed_payload.get("game_rule", 0)))
+        self.component_indices = {}
         self.static_components = {}
-        for category in sorted(set(component_pool.static_component_keys) | set(static_component_keys or [])):
-            if category not in component_pool.static_component_keys:
+        self.strategy = {}
+        selected_keys = set(component_pool.component_keys)
+        selected_keys.update(str(key) for key in (component_keys or []))
+
+        for category in sorted(selected_keys):
+            if category not in component_pool.component_keys:
                 continue
-            if category in component_pool.FIXED_COMPONENT_KEYS:
+            if category in component_pool.non_evolving_component_keys:
                 component_index = 0
-                component_pool.get_component(category, component_index)
-                self.set_component_index(category, component_index)
-                continue
-            if category in static_indices:
-                component_index = int(static_indices[category])
+            elif category in flat_seed_indices:
+                component_index = int(flat_seed_indices[category])
             elif fill_missing_random:
                 component_index = component_pool.get_random_component_index(category)
             else:
                 continue
             component_pool.get_component(category, component_index)
             self.set_component_index(category, component_index)
-
-        strategy_indices = dict(seed_payload.get("strategy") or {})
-        strategy_indices.update(
-            {
-                key: value
-                for key, value in flat_seed_indices.items()
-                if key in component_pool.strategy_keys
-            }
-        )
-        self.strategy = {}
-        for strategy_key in component_pool.strategy_keys:
-            if strategy_key in strategy_indices:
-                component_index = int(strategy_indices[strategy_key])
-            elif fill_missing_random:
-                component_index = component_pool.get_random_strategy_component_index(strategy_key)
-            else:
-                continue
-            component_pool.get_strategy_component(strategy_key, component_index)
-            self.strategy[strategy_key] = component_index
         self._sync_component_indices()
 
     def get_component_index(self, category: str) -> int:
@@ -175,8 +152,6 @@ class Individual:
             return self.game_rule
         if category in self.component_indices:
             return self.component_indices[category]
-        if category in self.static_components:
-            return self.static_components[category]
         return getattr(self, category)
 
     def set_component_index(self, category: str, value: int) -> None:
@@ -185,25 +160,31 @@ class Individual:
             self.component_indices[category] = int(value)
             return
         self.component_indices[category] = int(value)
-        self.static_components[category] = int(value)
         setattr(self, category, int(value))
 
     def copy(self) -> "Individual":
         clone = Individual(
             game_rule=self.game_rule,
-            strategy=dict(self.strategy or {}),
-            static_components=dict(self.static_components or {}),
+            strategy={},
+            static_components=dict(self.component_indices or {}),
         )
         clone.component_indices = dict(self.component_indices or {})
         clone.fitness = list(self.fitness or DEFAULT_FITNESS)
         clone.evaluation_mode = self.evaluation_mode
         if isinstance(self.last_round_evaluation, dict):
             clone.last_round_evaluation = dict(self.last_round_evaluation)
+        for attr in ("mutation_metadata", "reflection_metadata", "ea_llm_call_time"):
+            if hasattr(self, attr):
+                value = getattr(self, attr)
+                setattr(clone, attr, dict(value) if isinstance(value, dict) else value)
         return clone
 
     def _sync_component_indices(self) -> None:
-        self.component_indices = {}
+        existing_indices = dict(getattr(self, "component_indices", {}) or {})
         if self.game_rule:
-            self.component_indices["game_rule"] = int(self.game_rule)
-        self.component_indices.update({str(key): int(value) for key, value in self.static_components.items()})
-        self.component_indices.update({str(key): int(value) for key, value in self.strategy.items()})
+            existing_indices["game_rule"] = int(self.game_rule)
+        existing_indices.update({str(key): int(value) for key, value in self.static_components.items()})
+        existing_indices.update({str(key): int(value) for key, value in self.strategy.items()})
+        self.component_indices = existing_indices
+        self.static_components = dict(existing_indices)
+        self.strategy = {}

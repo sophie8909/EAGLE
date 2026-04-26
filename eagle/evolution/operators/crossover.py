@@ -7,47 +7,31 @@ from ...utils.individual import Individual
 
 
 class Crossover:
-    """Crossover operators that recombine parent strategy indices into children."""
+    """Crossover operators that recombine flattened component indices."""
 
     @staticmethod
     def uniform_crossover(component_pool: ComponentPool, parent1: Individual, parent2: Individual) -> Individual:
-        """Pick each strategy slot independently from either parent."""
+        """Pick each evolving component slot independently from either parent."""
         import random
         child = Individual()
-        p1_strategy = parent1.strategy or {}
-        p2_strategy = parent2.strategy or {}
         child.game_rule = parent1.game_rule
+        child.component_indices = {}
         child.static_components = {}
+        child.strategy = {}
 
-        static_keys = sorted(
-            set((parent1.static_components or {}).keys()) | set((parent2.static_components or {}).keys())
-        )
-        for category in static_keys:
-            p1_has = category in (parent1.static_components or {})
-            p2_has = category in (parent2.static_components or {})
-            if p1_has and p2_has:
-                selected_value = random.choice(
-                    [parent1.static_components[category], parent2.static_components[category]]
-                )
-            elif p1_has:
-                selected_value = parent1.static_components[category]
-            elif p2_has:
-                selected_value = parent2.static_components[category]
+        p1_indices = dict(getattr(parent1, "component_indices", {}) or getattr(parent1, "static_components", {}) or {})
+        p2_indices = dict(getattr(parent2, "component_indices", {}) or getattr(parent2, "static_components", {}) or {})
+        for category in component_pool.component_keys:
+            if category in component_pool.non_evolving_component_keys:
+                selected_value = 0
+            elif category in p1_indices and category in p2_indices:
+                selected_value = random.choice([p1_indices[category], p2_indices[category]])
+            elif category in p1_indices:
+                selected_value = p1_indices[category]
+            elif category in p2_indices:
+                selected_value = p2_indices[category]
             else:
                 selected_value = component_pool.get_random_component_index(category)
             child.set_component_index(category, selected_value)
-
-        child.strategy = {}
-        for strategy_key in component_pool.strategy_keys:
-            if strategy_key in p1_strategy and strategy_key in p2_strategy:
-                child.strategy[strategy_key] = random.choice(
-                    [p1_strategy[strategy_key], p2_strategy[strategy_key]]
-                )
-            elif strategy_key in p1_strategy:
-                child.strategy[strategy_key] = p1_strategy[strategy_key]
-            elif strategy_key in p2_strategy:
-                child.strategy[strategy_key] = p2_strategy[strategy_key]
-            else:
-                child.strategy[strategy_key] = component_pool.get_random_strategy_component_index(strategy_key)
         return child
     

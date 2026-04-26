@@ -272,20 +272,10 @@ class Evaluator:
         }
 
     def _construct_prompt(self, individual: Individual) -> str:
-        static_prompt_lines = []
-        if self.component_pool.has_category("game_rule"):
-            static_prompt_lines = self.component_pool.render_selected_static_prompt_lines(
-                individual.static_components,
-                game_rule_index=individual.game_rule,
-            )
-        strategy_prompt_lines = self.component_pool.render_strategy_prompt_lines(
-            individual.strategy,
-            include_strategy_identity=self.config.include_strategy_identity_in_prompt,
+        prompt_lines = self.component_pool.render_prompt_lines(
+            individual.component_indices,
+            include_identity_component=self.config.include_strategy_identity_in_prompt,
         )
-        prompt_lines = static_prompt_lines.copy()
-        if prompt_lines and strategy_prompt_lines:
-            prompt_lines.append("")
-        prompt_lines.extend(strategy_prompt_lines)
         return "\n".join(prompt_lines)
 
     def _run_prompt_match(

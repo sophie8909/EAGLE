@@ -15,6 +15,7 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "id": getattr(individual, "id", None),
         "game_rule": individual.game_rule,
+        "component_indices": dict(getattr(individual, "component_indices", {}) or {}),
         "strategy": dict(individual.strategy or {}),
         "fitness": list(individual.fitness) if isinstance(individual.fitness, (list, tuple)) else individual.fitness,
         "static_components": dict(getattr(individual, "static_components", {}) or {}),
@@ -48,8 +49,13 @@ def deserialize_individual(payload: dict[str, Any]) -> Individual:
     individual = Individual(
         id=payload.get("id"),
         game_rule=payload.get("game_rule", 0),
-        strategy=payload.get("strategy"),
-        static_components=dict(payload.get("static_components") or {}),
+        strategy={},
+        static_components=dict(
+            payload.get("component_indices")
+            or payload.get("static_components")
+            or payload.get("strategy")
+            or {}
+        ),
     )
 
     fitness = payload.get("fitness")

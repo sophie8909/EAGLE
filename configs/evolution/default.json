@@ -30,6 +30,9 @@
     "building_types",
     "game_state_format"
   ],
+  "non_evolving_prompt_components": [
+    "json_schema"
+  ],
   "component_pool_path": "eagle/prompts/components.json",
   "initial_population_seeds": [],
   "run_time_per_game_sec": 500,

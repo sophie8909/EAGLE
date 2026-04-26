@@ -106,10 +106,10 @@ class Reflection:
         config: EAConfig,
         reflection_context: dict[str, Any],
     ) -> tuple[Individual, dict[str, Any]]:
-        """Rewrite a small set of strategy components using compact feedback."""
+        """Rewrite a small set of flattened components using compact feedback."""
         child = parent.copy()
-        child.strategy = Mutation._ensure_complete_strategy(
-            dict(child.strategy or {}),
+        component_indices = Mutation._ensure_complete_strategy(
+            dict(getattr(child, "component_indices", {}) or {}),
             component_pool,
         )
         child.ea_llm_call_time = 0.0
@@ -126,13 +126,14 @@ class Reflection:
                 "reflection_context_used_fallback": True,
             }
 
-        strategy, rewrite_summary, elapsed = cls._rewrite_targets_with_reflection(
-            strategy=child.strategy,
+        component_indices, rewrite_summary, elapsed = cls._rewrite_targets_with_reflection(
+            strategy=component_indices,
             component_pool=component_pool,
             reflection_context=reflection_context,
             targets=target_components,
         )
-        child.strategy = Mutation._ensure_complete_strategy(strategy, component_pool)
+        for key, value in Mutation._ensure_complete_strategy(component_indices, component_pool).items():
+            child.set_component_index(key, value)
         child.ea_llm_call_time += elapsed
         return child, {
             "rewritten_components": target_components,
@@ -347,18 +348,7 @@ class Reflection:
             2,
         )
 
-        available_targets = [
-            target
-            for target in (
-                "decision_priority",
-                "early_game_plan",
-                "mid_game_plan",
-                "late_game_plan",
-                "tactical_heuristics",
-                "anti_stall_rules",
-            )
-            if target in component_pool.strategy_keys
-        ]
+        available_targets = list(component_pool.evolving_component_keys)
         if not available_targets:
             return []
 
@@ -425,7 +415,7 @@ class Reflection:
             )
             total_elapsed += elapsed
             rewritten_component = component_pool.parse_component_str(rewritten_text)
-            new_index = component_pool.add_strategy_component(target, rewritten_component)
+            new_index = component_pool.add_component(target, rewritten_component)
             updated_strategy[target] = new_index
             rewritten_targets.append(target)
 
@@ -443,7 +433,11 @@ class Reflection:
     ) -> str:
         """Assemble the rewrite instruction used by the reflection operator."""
         strategy_snapshot = Mutation._format_strategy_snapshot(strategy, component_pool)
-        identity_text = Mutation._component_text(component_pool, strategy, Mutation.IDENTITY_KEY)
+        identity_text = Mutation._component_text(
+            component_pool,
+            strategy,
+            getattr(component_pool, "identity_component_key", None),
+        )
         context_lines = json_dumps_compact(reflection_context)
         return (
             "Reflection operator\n"
@@ -487,4 +481,3 @@ def read_max_turn_hint(repo_root: Path) -> int | None:
         except ValueError:
             return None
     return None
-

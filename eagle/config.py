@@ -72,6 +72,9 @@ class EAConfig:
     evolving_prompt_components: list[str] = field(
         default_factory=lambda: list(_default_config_value("evolving_prompt_components"))
     )
+    non_evolving_prompt_components: list[str] = field(
+        default_factory=lambda: list(_default_config_value("non_evolving_prompt_components"))
+    )
     component_pool_path: str = field(default_factory=lambda: str(_default_config_value("component_pool_path")))
     initial_population_seeds: list[dict[str, Any]] = field(
         default_factory=lambda: list(_default_config_value("initial_population_seeds"))
@@ -125,6 +128,9 @@ class EAConfig:
         if not isinstance(self.evolving_prompt_components, list):
             raise ValueError("evolving_prompt_components must be a list of component keys.")
         self.evolving_prompt_components = [str(key) for key in self.evolving_prompt_components]
+        if not isinstance(self.non_evolving_prompt_components, list):
+            raise ValueError("non_evolving_prompt_components must be a list of component keys.")
+        self.non_evolving_prompt_components = [str(key) for key in self.non_evolving_prompt_components]
         self.component_pool_path = str(self.component_pool_path or "").strip()
         if not self.component_pool_path:
             raise ValueError("component_pool_path must be a non-empty path.")
@@ -217,6 +223,7 @@ class EAConfig:
             "final_test_max_front": self.final_test_max_front,
             "include_strategy_identity_in_prompt": self.include_strategy_identity_in_prompt,
             "evolving_prompt_components": list(self.evolving_prompt_components),
+            "non_evolving_prompt_components": list(self.non_evolving_prompt_components),
             "component_pool_path": self.component_pool_path,
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
             "real_eval_opponents": list(self.real_eval_opponents),
