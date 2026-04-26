@@ -333,8 +333,13 @@ class EA:
         """Store the evolving component pool so later analysis can reproduce runs."""
         import json
         components_file = f"{log_dir}/component_pool.json"
+        payload = (
+            self.component_pool.to_compatible_dict()
+            if hasattr(self.component_pool, "to_compatible_dict")
+            else self.component_pool.components
+        )
         with open(components_file, "w") as f:
-            json.dump(self.component_pool.components, f, indent=4)
+            json.dump(payload, f, indent=4)
 
 
     def select_parents(self) -> List[Individual]:

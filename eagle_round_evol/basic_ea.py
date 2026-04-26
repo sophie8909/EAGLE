@@ -223,8 +223,8 @@ class EA:
         import json
         components_file = f"{log_dir}/component_pool.json"
         payload = (
-            self.component_pool.to_flat_dict()
-            if hasattr(self.component_pool, "to_flat_dict")
+            self.component_pool.to_compatible_dict()
+            if hasattr(self.component_pool, "to_compatible_dict")
             else self.component_pool.components
         )
         with open(components_file, "w") as f:

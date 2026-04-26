@@ -35,11 +35,13 @@ class ComponentPool:
     def __init__(self, components: Dict[str, Any]):
         self.flat_components: OrderedDict[str, list[list[str]]] = OrderedDict()
         self.strategy_keys: list[str] = []
+        self._source_strategy_keys: set[str] = set()
 
         for key, value in dict(components or {}).items():
             if key == "strategy" and isinstance(value, dict):
                 for strategy_key, candidates in value.items():
                     strategy_key = str(strategy_key)
+                    self._source_strategy_keys.add(strategy_key)
                     self.strategy_keys.append(strategy_key)
                     self.flat_components[strategy_key] = self._normalize_candidates(candidates)
                 continue
@@ -110,6 +112,24 @@ class ComponentPool:
     def to_flat_dict(self) -> dict[str, list[list[str]]]:
         """Return the canonical flattened component payload."""
         return {key: value for key, value in self.flat_components.items()}
+
+    def to_compatible_dict(self) -> dict[str, Any]:
+        """Return a JSON payload that preserves the nested strategy view.
+
+        The runtime representation is flat, but saving the strategy buckets
+        under ``strategy`` keeps reloads and older tools from losing which keys
+        participate in strategy mutation/crossover.
+        """
+        payload: OrderedDict[str, Any] = OrderedDict()
+        strategy_payload: OrderedDict[str, list[list[str]]] = OrderedDict()
+        for key, candidates in self.flat_components.items():
+            if key in self.strategy_keys:
+                strategy_payload[key] = candidates
+            else:
+                payload[key] = candidates
+        if strategy_payload:
+            payload["strategy"] = strategy_payload
+        return payload
 
     def has_category(self, category: str) -> bool:
         """Return whether a component category exists and contains candidates."""
