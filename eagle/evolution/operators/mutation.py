@@ -15,29 +15,13 @@ from ...utils.llm import LLM
 class Mutation:
     """Mutation operators centered around strategy identity and phase coherence."""
 
-    IDENTITY_KEY = "strategy_identity"
-    DEPENDENT_COMPONENTS = [
-        "phase_transition_rule",
-        "early_game_plan",
-        "mid_game_plan",
-        "late_game_plan",
-        "decision_priority",
-    ]
-    WEAKLY_DEPENDENT_COMPONENTS = [
-        "tactical_heuristics",
-        "anti_stall_rules",
-    ]
     STATIC_POOL_MUTATION_MODE = "static_pool_replacement"
     STATIC_REWRITE_MUTATION_MODE = "static_rewrite"
 
     @classmethod
-    def all_strategy_components(cls) -> list[str]:
-        """Return the full ordered strategy component set."""
-        return [
-            cls.IDENTITY_KEY,
-            *cls.DEPENDENT_COMPONENTS,
-            *cls.WEAKLY_DEPENDENT_COMPONENTS,
-        ]
+    def all_strategy_components(cls, component_pool: ComponentPool) -> list[str]:
+        """Return the active strategy component set from the loaded component JSON."""
+        return list(component_pool.strategy_keys)
 
     @classmethod
     def mutate_strategy(
@@ -170,8 +154,19 @@ class Mutation:
     ) -> tuple[dict[str, int], dict[str, Any], float]:
         """Replace one strategy component with another pool candidate."""
         updated_strategy = dict(strategy or {})
-        target_component = random.choice(cls._allowed_pool_targets(component_pool))
-        old_identity = cls._component_index(updated_strategy, cls.IDENTITY_KEY)
+        allowed_targets = cls._allowed_pool_targets(component_pool)
+        if not allowed_targets:
+            return updated_strategy, cls._build_metadata(
+                mutation_mode="pool_replacement",
+                changed_components=[],
+                old_identity=None,
+                new_identity=None,
+                repair_triggered=False,
+                rewrite_prompt_summary="pool_replacement: no active strategy targets",
+            ), 0.0
+        target_component = random.choice(allowed_targets)
+        identity_key = cls._identity_key(component_pool)
+        old_identity = cls._component_index(updated_strategy, identity_key)
         replacement_index = cls._sample_replacement_index(
             component_pool,
             target_component,
@@ -184,9 +179,9 @@ class Mutation:
         rewrite_prompt_summary = ""
         elapsed = 0.0
 
-        if target_component == cls.IDENTITY_KEY:
+        if identity_key is not None and target_component == identity_key:
             repair_triggered = True
-            dependent_targets = list(cls.DEPENDENT_COMPONENTS)
+            dependent_targets = cls._dependent_targets(component_pool)
             updated_strategy, rewrite_summary, repair_elapsed = cls._rewrite_targets(
                 updated_strategy,
                 component_pool,
@@ -208,7 +203,7 @@ class Mutation:
             mutation_mode="pool_replacement",
             changed_components=changed_components,
             old_identity=old_identity,
-            new_identity=cls._component_index(updated_strategy, cls.IDENTITY_KEY),
+            new_identity=cls._component_index(updated_strategy, identity_key),
             repair_triggered=repair_triggered,
             rewrite_prompt_summary=rewrite_prompt_summary,
         )
@@ -222,16 +217,27 @@ class Mutation:
     ) -> tuple[dict[str, int], dict[str, Any], float]:
         """Rewrite dependent components while keeping the current identity fixed."""
         updated_strategy = dict(strategy or {})
-        old_identity = cls._component_index(updated_strategy, cls.IDENTITY_KEY)
-        target_count = 1 if random.random() < 0.7 else 2
-        selected_targets = random.sample(cls.DEPENDENT_COMPONENTS, k=target_count)
+        identity_key = cls._identity_key(component_pool)
+        old_identity = cls._component_index(updated_strategy, identity_key)
+        available_targets = cls._dependent_targets(component_pool)
+        if not available_targets:
+            return updated_strategy, cls._build_metadata(
+                mutation_mode="identity_preserving_rewrite",
+                changed_components=[],
+                old_identity=old_identity,
+                new_identity=cls._component_index(updated_strategy, identity_key),
+                repair_triggered=False,
+                rewrite_prompt_summary="identity_preserving_rewrite: no available dependent targets",
+            ), 0.0
+        target_count = min(len(available_targets), 1 if random.random() < 0.7 else 2)
+        selected_targets = random.sample(available_targets, k=target_count)
         updated_strategy, rewrite_summary, elapsed = cls._rewrite_targets(
             updated_strategy,
             component_pool,
             selected_targets,
             mode_name="identity_preserving_rewrite",
             purpose=(
-                "Keep strategy_identity unchanged and rewrite only the selected dependent strategy components "
+                "Keep the configured identity component unchanged and rewrite only the selected dependent strategy components "
                 "so they better fit the current identity and remain consistent with the other existing strategy components."
             ),
             preserve_identity=True,
@@ -240,7 +246,7 @@ class Mutation:
             mutation_mode="identity_preserving_rewrite",
             changed_components=selected_targets,
             old_identity=old_identity,
-            new_identity=cls._component_index(updated_strategy, cls.IDENTITY_KEY),
+            new_identity=cls._component_index(updated_strategy, identity_key),
             repair_triggered=False,
             rewrite_prompt_summary=rewrite_summary,
         )
@@ -270,33 +276,35 @@ class Mutation:
     ) -> tuple[dict[str, int], dict[str, Any], float]:
         """Rewrite strategy identity first, then rewrite dependent components to match it."""
         updated_strategy = dict(strategy or {})
-        old_identity = cls._component_index(updated_strategy, cls.IDENTITY_KEY)
+        identity_key = cls._identity_key(component_pool)
+        old_identity = cls._component_index(updated_strategy, identity_key)
         elapsed = 0.0
 
-        updated_strategy, identity_summary, identity_elapsed = cls._rewrite_targets(
-            updated_strategy,
-            component_pool,
-            [cls.IDENTITY_KEY],
-            mode_name="identity_shift_rewrite",
-            purpose=(
-                "Create a new strategy_identity with a clearly different overall strategic style. "
-                "The new identity should define aggression level, economy commitment, pressure timing, defense bias, "
-                "risk tolerance, and preferred win path."
-            ),
-            preserve_identity=False,
-        )
-        elapsed += identity_elapsed
+        identity_summary = "identity_shift_rewrite: no identity target configured"
+        if identity_key is not None:
+            updated_strategy, identity_summary, identity_elapsed = cls._rewrite_targets(
+                updated_strategy,
+                component_pool,
+                [identity_key],
+                mode_name="identity_shift_rewrite",
+                purpose=(
+                    f"Create a new {identity_key} with a clearly different overall strategic style. "
+                    "Define aggression level, economy commitment, pressure timing, defense bias, "
+                    "risk tolerance, and preferred win path."
+                ),
+                preserve_identity=False,
+            )
+            elapsed += identity_elapsed
 
-        dependent_targets = list(cls.DEPENDENT_COMPONENTS)
+        dependent_targets = cls._dependent_targets(component_pool)
         updated_strategy, dependent_summary, dependent_elapsed = cls._rewrite_targets(
             updated_strategy,
             component_pool,
             dependent_targets,
             mode_name="identity_shift_rewrite",
             purpose=(
-                "The strategy_identity has changed. Rewrite the dependent strategy components so the whole strategy "
-                "becomes coherent with the new identity across phase transition, early game, mid game, late game, "
-                "and decision priority."
+                "The configured identity component has changed. Rewrite the dependent strategy components so the whole strategy "
+                "becomes coherent with the new identity across the active strategy component set."
             ),
             preserve_identity=True,
         )
@@ -304,9 +312,9 @@ class Mutation:
 
         metadata = cls._build_metadata(
             mutation_mode="identity_shift_rewrite",
-            changed_components=[cls.IDENTITY_KEY, *dependent_targets],
+            changed_components=([identity_key] if identity_key is not None else []) + dependent_targets,
             old_identity=old_identity,
-            new_identity=cls._component_index(updated_strategy, cls.IDENTITY_KEY),
+            new_identity=cls._component_index(updated_strategy, identity_key),
             repair_triggered=True,
             rewrite_prompt_summary=f"{identity_summary} | {dependent_summary}",
         )
@@ -320,8 +328,18 @@ class Mutation:
     ) -> tuple[dict[str, int], dict[str, Any], float]:
         """Repair a mixed strategy so it becomes coherent with its chosen identity."""
         updated_strategy = dict(strategy or {})
-        old_identity = cls._component_index(updated_strategy, cls.IDENTITY_KEY)
-        repair_targets = list(cls.DEPENDENT_COMPONENTS)
+        identity_key = cls._identity_key(component_pool)
+        old_identity = cls._component_index(updated_strategy, identity_key)
+        repair_targets = cls._dependent_targets(component_pool)
+        if not repair_targets:
+            return updated_strategy, cls._build_metadata(
+                mutation_mode="crossover_repair_rewrite",
+                changed_components=[],
+                old_identity=old_identity,
+                new_identity=cls._component_index(updated_strategy, identity_key),
+                repair_triggered=False,
+                rewrite_prompt_summary="crossover_repair_rewrite: no available repair targets",
+            ), 0.0
         updated_strategy, rewrite_summary, elapsed = cls._rewrite_targets(
             updated_strategy,
             component_pool,
@@ -329,7 +347,7 @@ class Mutation:
             mode_name="crossover_repair_rewrite",
             purpose=(
                 "This strategy may have been assembled from mixed parents or mixed pool components. "
-                "Repair contradictions across phase plans and decision priority so the result becomes coherent with the chosen strategy_identity. "
+                "Repair contradictions across the active strategy components so the result becomes coherent with the chosen identity component. "
                 "Preserve useful inherited content where possible, but rewrite whatever is necessary for internal consistency."
             ),
             preserve_identity=True,
@@ -338,7 +356,7 @@ class Mutation:
             mutation_mode="crossover_repair_rewrite",
             changed_components=repair_targets,
             old_identity=old_identity,
-            new_identity=cls._component_index(updated_strategy, cls.IDENTITY_KEY),
+            new_identity=cls._component_index(updated_strategy, identity_key),
             repair_triggered=True,
             rewrite_prompt_summary=rewrite_summary,
         )
@@ -378,8 +396,28 @@ class Mutation:
     def _allowed_pool_targets(cls, component_pool: ComponentPool) -> list[str]:
         """Return strategy buckets that are eligible for discrete pool replacement."""
         return [
-            key for key in cls.all_strategy_components()
+            key for key in cls.all_strategy_components(component_pool)
             if key in component_pool.strategy_keys
+        ]
+
+    @staticmethod
+    def _identity_key(component_pool: ComponentPool) -> str | None:
+        """Return the active strategy identity key from the component pool metadata."""
+        identity_key = getattr(component_pool, "identity_strategy_key", None)
+        if identity_key in getattr(component_pool, "strategy_keys", []):
+            return identity_key
+        return None
+
+    @classmethod
+    def _dependent_targets(cls, component_pool: ComponentPool) -> list[str]:
+        """Return strategy rewrite targets derived from the loaded component JSON."""
+        configured = list(getattr(component_pool, "dependent_strategy_keys", []) or [])
+        if configured:
+            return [target for target in configured if target in component_pool.strategy_keys]
+        identity_key = cls._identity_key(component_pool)
+        return [
+            target for target in component_pool.strategy_keys
+            if target != identity_key
         ]
 
     @classmethod
@@ -468,7 +506,8 @@ class Mutation:
     ) -> str:
         """Assemble the rewrite constraints used by all rewrite-based mutations."""
         strategy_snapshot = cls._format_strategy_snapshot(strategy, component_pool)
-        identity_text = cls._component_text(component_pool, strategy, cls.IDENTITY_KEY)
+        identity_key = cls._identity_key(component_pool)
+        identity_text = cls._component_text(component_pool, strategy, identity_key)
         unchanged_components = [
             key for key in component_pool.strategy_keys
             if key != target_component
@@ -483,11 +522,9 @@ class Mutation:
             f"Rewrite target: {target_component}\n"
             f"Purpose: {purpose}\n\n"
             "Strategy component design:\n"
-            "- strategy_identity is the top-level style controller.\n"
-            "- phase_transition_rule decides early/mid/late using state-based conditions over rigid turn thresholds.\n"
-            "- early_game_plan, mid_game_plan, and late_game_plan should each integrate economy, production, combat, and pressure naturally.\n"
-            "- decision_priority defines real-time priority when goals conflict.\n"
-            "- tactical_heuristics and anti_stall_rules are stabilizers, not primary style drivers.\n\n"
+            f"- Active strategy keys loaded from JSON: {', '.join(component_pool.strategy_keys)}.\n"
+            f"- Identity key loaded from JSON: {identity_key or 'none'}.\n"
+            "- Keep the rewritten component coherent with the active strategy keys and their current meanings.\n\n"
             "Global rewrite constraints:\n"
             "1. Modify only the allowed strategy component named above.\n"
             "2. Preserve all non-strategy sections completely.\n"
@@ -499,8 +536,8 @@ class Mutation:
             "8. Avoid vague phrases such as 'play carefully', 'balance economy and army', 'adapt to the situation', 'make good decisions', or 'attack when ready' unless they are followed by concrete conditions.\n"
             "9. Prefer explicit if-then rules, ordered priorities, and phase-specific actions.\n"
             "10. Keep the rewritten text compatible with the unchanged components.\n"
-            "11. Keep tactical_heuristics and anti_stall_rules as stabilizers, not style drivers.\n"
-            f"12. {'Preserve strategy_identity exactly as written.' if preserve_identity else 'You may change strategy_identity because this is an identity shift.'}\n\n"f"Current strategy_identity:\n{identity_text}\n\n"
+            f"11. {'Preserve the identity component exactly as written.' if preserve_identity else 'You may change the identity component because this is an identity shift.'}\n\n"
+            f"Current identity component ({identity_key or 'none'}):\n{identity_text}\n\n"
             f"Current strategy snapshot:\n{strategy_snapshot}\n\n"
             f"Unchanged strategy components to stay consistent with:\n{unchanged_snapshot}\n\n"
             "Output requirements:\n"
@@ -578,17 +615,21 @@ class Mutation:
         cls,
         component_pool: ComponentPool,
         strategy: dict[str, int],
-        strategy_key: str,
+        strategy_key: str | None,
     ) -> str:
         """Read one strategy component as a newline-joined text block."""
+        if strategy_key is None:
+            return ""
         index = strategy.get(strategy_key)
         if index is None:
             return ""
         return "\n".join(component_pool.get_strategy_component(strategy_key, index))
 
     @staticmethod
-    def _component_index(strategy: dict[str, int], strategy_key: str) -> int | None:
+    def _component_index(strategy: dict[str, int], strategy_key: str | None) -> int | None:
         """Return one selected component index from the strategy dict."""
+        if strategy_key is None:
+            return None
         return dict(strategy or {}).get(strategy_key)
 
     @staticmethod

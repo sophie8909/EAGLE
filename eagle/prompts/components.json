@@ -1,4 +1,35 @@
 {
+  "metadata": {
+    "strategy_keys": [
+      "strategy_identity",
+      "phase_transition_rule",
+      "early_game_plan",
+      "mid_game_plan",
+      "late_game_plan",
+      "combat_evaluation",
+      "decision_rule"
+    ],
+    "identity_strategy_key": "strategy_identity",
+    "fixed_component_keys": [
+      "json_schema"
+    ],
+    "reflection_format_keys": [
+      "actions",
+      "raw_move_format",
+      "field_requirements",
+      "valid_move_examples"
+    ],
+    "reflection_strategy_keys": [
+      "strategy_identity",
+      "phase_transition_rule",
+      "early_game_plan",
+      "mid_game_plan",
+      "late_game_plan",
+      "combat_evaluation",
+      "decision_rule"
+    ]
+  },
+
   "role": [
     [
       "You are an AI agent playing a real-time strategy game.",

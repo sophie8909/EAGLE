@@ -16,24 +16,6 @@ from .individual import Individual
 class RoundReflection:
     """Rewrite one prompt component using feedback from round-level evaluation."""
 
-    FORMAT_TARGETS = [
-        "actions",
-        "raw_move_format",
-        "game_state_format",
-        "field_requirements",
-    ]
-    STRATEGY_TARGETS = [
-        "decision_priority",
-        "early_game_plan",
-        "mid_game_plan",
-        "late_game_plan",
-        "tactical_heuristics",
-        "anti_stall_rules",
-        "combat_evaluation",
-        "decision_rule",
-        "strategy_identity",
-    ]
-
     @classmethod
     def reflect_individual(
         cls,
@@ -94,15 +76,24 @@ class RoundReflection:
         max_actions = max(1.0, float(legality.get("max_actions", 1) or 1.0))
         action_ratio = applicable / max_actions
 
+        format_targets = list(getattr(component_pool, "reflection_format_keys", []) or [])
+        strategy_targets = list(getattr(component_pool, "reflection_strategy_keys", []) or [])
+        if not format_targets:
+            format_targets = list(getattr(component_pool, "mutable_static_component_keys", []) or [])
+        if not strategy_targets:
+            strategy_targets = list(
+                getattr(component_pool, "dependent_strategy_keys", []) or component_pool.strategy_keys
+            )
+
         if not parseable or action_ratio < 0.5:
-            preferred_targets = cls.FORMAT_TARGETS
+            preferred_targets = format_targets
         elif alignment < 7.0:
-            preferred_targets = cls.STRATEGY_TARGETS
+            preferred_targets = strategy_targets
         else:
-            preferred_targets = cls.STRATEGY_TARGETS + cls.FORMAT_TARGETS
+            preferred_targets = strategy_targets + format_targets
 
         for target in preferred_targets:
-            if target in component_pool.FIXED_COMPONENT_KEYS:
+            if target in component_pool.fixed_component_keys:
                 continue
             if target in component_pool.component_keys:
                 return target

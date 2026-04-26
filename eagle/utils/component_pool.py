@@ -19,36 +19,52 @@ class ComponentPool:
 
     FIXED_COMPONENT_KEYS = {"json_schema"}
     NON_EVOLVING_STATIC_KEYS = FIXED_COMPONENT_KEYS
-    PREFERRED_STRATEGY_KEYS = {
-        "strategy_identity",
-        "phase_transition_rule",
-        "early_game_plan",
-        "mid_game_plan",
-        "late_game_plan",
-        "decision_priority",
-        "tactical_heuristics",
-        "anti_stall_rules",
-        "combat_evaluation",
-        "decision_rule",
-    }
 
     def __init__(self, components: Dict[str, Any]):
+        raw_components = dict(components or {})
+        metadata = dict(raw_components.pop("metadata", {}) or {})
+        self.metadata = metadata
+        explicit_strategy_keys = [str(key) for key in metadata.get("strategy_keys", []) or []]
+        explicit_fixed_keys = [str(key) for key in metadata.get("fixed_component_keys", []) or []]
+
+        self.fixed_component_keys = set(explicit_fixed_keys or self.FIXED_COMPONENT_KEYS)
+        self.FIXED_COMPONENT_KEYS = self.fixed_component_keys
+        self.NON_EVOLVING_STATIC_KEYS = self.fixed_component_keys
         self.flat_components: OrderedDict[str, list[list[str]]] = OrderedDict()
         self.strategy_keys: list[str] = []
         self._source_strategy_keys: set[str] = set()
 
-        for key, value in dict(components or {}).items():
+        for key, value in raw_components.items():
             if key == "strategy" and isinstance(value, dict):
                 for strategy_key, candidates in value.items():
                     strategy_key = str(strategy_key)
                     self._source_strategy_keys.add(strategy_key)
-                    self.strategy_keys.append(strategy_key)
+                    if strategy_key not in self.strategy_keys:
+                        self.strategy_keys.append(strategy_key)
                     self.flat_components[strategy_key] = self._normalize_candidates(candidates)
                 continue
             key = str(key)
-            if key in self.PREFERRED_STRATEGY_KEYS and key not in self.strategy_keys:
-                self.strategy_keys.append(key)
             self.flat_components[key] = self._normalize_candidates(value)
+
+        for strategy_key in explicit_strategy_keys:
+            if strategy_key in self.flat_components and strategy_key not in self.strategy_keys:
+                self.strategy_keys.append(strategy_key)
+        if explicit_strategy_keys:
+            ordered_strategy_keys = [
+                key for key in explicit_strategy_keys
+                if key in self.flat_components
+            ]
+            ordered_strategy_keys.extend(
+                key for key in self.strategy_keys
+                if key not in ordered_strategy_keys
+            )
+            self.strategy_keys = ordered_strategy_keys
+
+        self.identity_strategy_key = self._resolve_identity_strategy_key(metadata)
+        self.dependent_strategy_keys = [
+            key for key in self.strategy_keys
+            if key != self.identity_strategy_key
+        ]
 
         strategy_view = OrderedDict(
             (key, self.flat_components[key])
@@ -65,10 +81,22 @@ class ComponentPool:
             key for key in self.component_keys
             if key not in self.strategy_keys
         ]
+        self.mutable_static_component_keys = [
+            key for key in self.static_component_keys
+            if key not in self.fixed_component_keys
+        ]
         self.evolving_component_keys = [
             key for key in self.component_keys
-            if key not in self.FIXED_COMPONENT_KEYS
+            if key not in self.fixed_component_keys
         ]
+        self.reflection_format_keys = self._filter_component_keys(
+            metadata.get("reflection_format_keys"),
+            fallback=self.mutable_static_component_keys,
+        )
+        self.reflection_strategy_keys = self._filter_component_keys(
+            metadata.get("reflection_strategy_keys"),
+            fallback=self.dependent_strategy_keys or self.strategy_keys,
+        )
 
     @classmethod
     def from_json(cls, filepath: str) -> "ComponentPool":
@@ -98,6 +126,20 @@ class ComponentPool:
         """Drop empty placeholder lines while preserving original text order."""
         return [str(line) for line in component_lines if str(line).strip()]
 
+    def _resolve_identity_strategy_key(self, metadata: dict[str, Any]) -> str | None:
+        explicit_identity = metadata.get("identity_strategy_key")
+        if explicit_identity is not None and str(explicit_identity) in self.strategy_keys:
+            return str(explicit_identity)
+        return self.strategy_keys[0] if self.strategy_keys else None
+
+    def _filter_component_keys(self, keys: Any, *, fallback: list[str]) -> list[str]:
+        if not keys:
+            return list(fallback)
+        return [
+            str(key) for key in keys
+            if str(key) in self.component_keys and str(key) not in self.fixed_component_keys
+        ] or list(fallback)
+
     def _flatten_all_prompt_lines(self) -> list[str]:
         lines: list[str] = []
         for key in self.component_keys:
@@ -121,6 +163,15 @@ class ComponentPool:
         participate in strategy mutation/crossover.
         """
         payload: OrderedDict[str, Any] = OrderedDict()
+        payload["metadata"] = OrderedDict(
+            [
+                ("strategy_keys", list(self.strategy_keys)),
+                ("identity_strategy_key", self.identity_strategy_key),
+                ("fixed_component_keys", sorted(self.fixed_component_keys)),
+                ("reflection_format_keys", list(self.reflection_format_keys)),
+                ("reflection_strategy_keys", list(self.reflection_strategy_keys)),
+            ]
+        )
         strategy_payload: OrderedDict[str, list[list[str]]] = OrderedDict()
         for key, candidates in self.flat_components.items():
             if key in self.strategy_keys:
@@ -203,7 +254,7 @@ class ComponentPool:
             candidates = self.flat_components.get(key, [])
             if not candidates:
                 continue
-            selected_index = 0 if key in self.FIXED_COMPONENT_KEYS else int(selected_indices.get(key, 0))
+            selected_index = 0 if key in self.fixed_component_keys else int(selected_indices.get(key, 0))
             if selected_index < 0 or selected_index >= len(candidates):
                 selected_index = 0
             lines = self._normalize_component_lines(candidates[selected_index])
@@ -217,13 +268,12 @@ class ComponentPool:
     def resolve_evolving_static_keys(self, configured_keys: List[str] | None) -> List[str]:
         """Return all mutable non-strategy categories; config no longer narrows them."""
         return [
-            key for key in self.static_component_keys
-            if key not in self.FIXED_COMPONENT_KEYS
+            key for key in self.mutable_static_component_keys
         ]
 
     def is_rewriteable_static_key(self, category: str) -> bool:
         """Return whether one static category may be rewritten by LLM operators."""
-        return category in self.static_component_keys and category not in self.FIXED_COMPONENT_KEYS
+        return category in self.static_component_keys and category not in self.fixed_component_keys
 
     def render_strategy_prompt_lines(
         self,
@@ -236,7 +286,7 @@ class ComponentPool:
         rendered_lines: List[str] = []
 
         for strategy_key in self.strategy_keys:
-            if strategy_key == "strategy_identity" and not include_strategy_identity:
+            if strategy_key == self.identity_strategy_key and not include_strategy_identity:
                 continue
             if strategy_key not in strategy_indices:
                 continue
@@ -263,7 +313,7 @@ class ComponentPool:
         component_indices = dict(getattr(individual, "component_indices", {}) or {})
         payload: Dict[str, Any] = {}
         for key in self.component_keys:
-            if key == "strategy_identity" and not include_strategy_identity:
+            if key == self.identity_strategy_key and not include_strategy_identity:
                 continue
             selected_index = int(component_indices.get(key, 0))
             lines = list(self.get_component(key, selected_index))
@@ -271,7 +321,7 @@ class ComponentPool:
                 "index": selected_index,
                 "lines": lines,
                 "text": "\n".join(lines),
-                "mutable": key not in self.FIXED_COMPONENT_KEYS,
+                "mutable": key not in self.fixed_component_keys,
             }
 
         return {
