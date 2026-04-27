@@ -4,9 +4,9 @@
   "num_generations": 50,
   "convergence_generations": 10,
   "reproduction_operator_probs": {
-    "crossover": 0.4,
-    "mutation": 0.4,
-    "reflection": 0.2
+    "crossover": 0.35,
+    "mutation": 0.35,
+    "reflection": 0.3
   },
   "enable_reflection_operator": true,
   "reflection_max_components_to_rewrite": 1,
@@ -24,9 +24,6 @@
   "final_test_max_front": 0,
   "include_strategy_identity_in_prompt": true,
   "evolving_prompt_components": [],
-  "non_evolving_prompt_components": [
-    "json_schema"
-  ],
   "component_pool_path": "../eagle/prompts/components.json",
   "initial_population_seeds": [],
   "real_eval_rate": 1.0,
