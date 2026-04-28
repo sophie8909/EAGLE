@@ -177,8 +177,7 @@ Rewrite rules:
         target: str,
     ) -> str:
         """Read the selected text for one component."""
-        index = int(individual.component_indices.get(target, 0))
-        return component_pool.get_component_str(target, index)
+        return component_pool.get_component_str(target, individual.get_component_index(target))
 
     @staticmethod
     def _feedback_summary(individual: Individual) -> dict[str, Any]:

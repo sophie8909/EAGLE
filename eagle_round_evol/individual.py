@@ -34,6 +34,7 @@ class Individual:
         strategy: dict[str, int] | str | None = None,
         static_components: dict[str, int] | None = None,
         component_indices: dict[str, int] | None = None,
+        component_bitmask: list[int] | None = None,
     ):
         self.id = id or f"ind-{next(self._id_counter)}"
         if id is not None:
@@ -41,22 +42,18 @@ class Individual:
 
         self.game_rule = int(game_rule)
 
-        self.component_indices: dict[str, int] = {}
+        self.component_indices: dict[str, dict[str, int]] = {}
         self.static_components: dict[str, int] = {}
         self.strategy: dict[str, int] = {}
 
         if isinstance(component_indices, dict):
-            self.component_indices.update(
-                {str(key): int(value) for key, value in component_indices.items()}
-            )
+            self.component_indices.update(self._normalize_component_indices(component_indices))
 
         if isinstance(static_components, dict):
-            self.component_indices.update(
-                {str(key): int(value) for key, value in static_components.items()}
-            )
+            self.component_indices.update(self._normalize_component_indices(static_components))
 
         normalized_strategy = self._normalize_strategy(strategy)
-        self.component_indices.update(normalized_strategy)
+        self.component_indices.update(self._normalize_component_indices(normalized_strategy))
 
         self._sync_component_indices()
 
@@ -83,7 +80,9 @@ class Individual:
 
     def __repr__(self) -> str:
         """Return a compact representation suitable for logs."""
-        return f"Individual(id={self.id}, component_indices={self.component_indices})"
+        return (
+            f"Individual(id={self.id}, component_indices={self.component_indices})"
+        )
 
     @staticmethod
     def _normalize_strategy(strategy: dict[str, int] | str | None) -> dict[str, int]:
@@ -115,6 +114,33 @@ class Individual:
                 return normalized
 
         return {}
+
+    @classmethod
+    def _normalize_component_indices(cls, payload: dict[str, Any] | None) -> dict[str, dict[str, int]]:
+        normalized: dict[str, dict[str, int]] = {}
+        if not isinstance(payload, dict):
+            return normalized
+        for key, value in payload.items():
+            normalized[str(key)] = cls._normalize_component_entry(value)
+        return normalized
+
+    @staticmethod
+    def _normalize_component_entry(value: Any, *, default_enabled: int = 1) -> dict[str, int]:
+        if isinstance(value, dict):
+            raw_index = value.get("index", 0)
+            raw_enabled = value.get("enabled", value.get("bit", default_enabled))
+        else:
+            raw_index = value
+            raw_enabled = default_enabled
+        try:
+            index = int(raw_index)
+        except (TypeError, ValueError):
+            index = 0
+        try:
+            enabled = 1 if int(raw_enabled) else 0
+        except (TypeError, ValueError):
+            enabled = 1
+        return {"index": index, "enabled": enabled}
 
     @classmethod
     def _sync_id_counter(cls, individual_id: str) -> None:
@@ -180,6 +206,7 @@ class Individual:
             "strategy",
             "components",
             "component_indices",
+            "bitmask",
         }
 
         direct_indices = {
@@ -213,7 +240,7 @@ class Individual:
             if category in component_pool.non_evolving_component_keys:
                 component_index = 0
             elif category in component_indices:
-                component_index = int(component_indices[category])
+                component_index = self._normalize_component_entry(component_indices[category])["index"]
             elif fill_missing_random:
                 component_index = component_pool.get_random_component_index(category)
             else:
@@ -222,13 +249,22 @@ class Individual:
             component_pool.get_component(category, component_index)
             self.set_component_index(category, component_index)
 
+        self._apply_legacy_bitmask(
+            seed_payload.get("component_bitmask") or seed_payload.get("bitmask"),
+            component_pool,
+        )
+
         self._sync_component_indices()
 
     def get_component_index(self, category: str) -> int:
         """Read one component index."""
         if category == "game_rule":
             return int(self.game_rule)
-        return int(self.component_indices.get(category, 0))
+        return int(self._normalize_component_entry(self.component_indices.get(category, 0))["index"])
+
+    def is_component_enabled(self, category: str) -> int:
+        """Return whether one component is included in the rendered prompt."""
+        return int(self._normalize_component_entry(self.component_indices.get(category, 0))["enabled"])
 
     def set_component_index(self, category: str, value: int) -> None:
         """Write one selected component index."""
@@ -238,23 +274,38 @@ class Individual:
         if category == "game_rule":
             self.game_rule = value
 
-        self.component_indices[category] = value
+        enabled = self.is_component_enabled(category) if category in self.component_indices else 1
+        self.component_indices[category] = {"index": value, "enabled": enabled}
         self.static_components[category] = value
         setattr(self, category, value)
+
+    def set_component_enabled(self, category: str, enabled: int) -> None:
+        """Set the prompt-inclusion bit for one component."""
+        category = str(category)
+        entry = self._normalize_component_entry(self.component_indices.get(category, 0))
+        entry["enabled"] = 1 if int(enabled) else 0
+        self.component_indices[category] = entry
+
+    def flip_component_enabled(self, category: str) -> tuple[int, int]:
+        """Flip one component inclusion bit and return old/new bits."""
+        old_bit = self.is_component_enabled(category)
+        new_bit = 0 if old_bit else 1
+        self.set_component_enabled(category, new_bit)
+        return old_bit, new_bit
 
     def copy(self) -> "Individual":
         """Create a mutable clone suitable for crossover, mutation, or reflection."""
         clone = Individual(
             id=None,
             game_rule=self.game_rule,
-            component_indices=dict(self.component_indices),
+            component_indices={key: dict(value) for key, value in self.component_indices.items()},
         )
 
         clone.static_components = dict(self.static_components)
         clone.strategy = {}
 
         for key, value in clone.component_indices.items():
-            setattr(clone, key, int(value))
+            setattr(clone, key, int(clone.get_component_index(key)))
 
         clone.fitness = self.fitness.copy() if hasattr(self.fitness, "copy") else self.fitness
         clone.evaluation_mode = self.evaluation_mode
@@ -285,26 +336,39 @@ class Individual:
         """Create a copy from an existing individual for legacy EA code."""
         return individual.copy()
 
+    def _apply_legacy_bitmask(self, raw_bitmask: Any, component_pool: ComponentPool) -> None:
+        """Fold legacy standalone bitmask data into component_indices entries."""
+        if isinstance(raw_bitmask, dict):
+            for key in component_pool.component_keys:
+                if key in raw_bitmask:
+                    self.set_component_enabled(key, int(raw_bitmask[key]))
+            return
+        if isinstance(raw_bitmask, (list, tuple)):
+            for index, key in enumerate(component_pool.component_keys):
+                if index >= len(raw_bitmask):
+                    break
+                self.set_component_enabled(key, int(raw_bitmask[index]))
+
     def _sync_component_indices(self) -> None:
         """Synchronize compatibility fields without overwriting the genotype."""
-        merged: dict[str, int] = {}
+        merged: dict[str, dict[str, int]] = {}
 
         existing = getattr(self, "component_indices", {}) or {}
         if isinstance(existing, dict):
             for key, value in existing.items():
                 try:
-                    merged[str(key)] = int(value)
+                    merged[str(key)] = self._normalize_component_entry(value)
                 except (TypeError, ValueError):
                     continue
 
         if getattr(self, "game_rule", 0):
-            merged.setdefault("game_rule", int(self.game_rule))
+            merged.setdefault("game_rule", {"index": int(self.game_rule), "enabled": 1})
 
         static_components = getattr(self, "static_components", {}) or {}
         if isinstance(static_components, dict):
             for key, value in static_components.items():
                 try:
-                    merged.setdefault(str(key), int(value))
+                    merged.setdefault(str(key), self._normalize_component_entry(value))
                 except (TypeError, ValueError):
                     continue
 
@@ -312,13 +376,16 @@ class Individual:
         if isinstance(strategy, dict):
             for key, value in strategy.items():
                 try:
-                    merged.setdefault(str(key), int(value))
+                    merged.setdefault(str(key), self._normalize_component_entry(value))
                 except (TypeError, ValueError):
                     continue
 
         self.component_indices = dict(merged)
-        self.static_components = dict(self.component_indices)
+        self.static_components = {
+            key: int(value["index"])
+            for key, value in self.component_indices.items()
+        }
         self.strategy = {}
 
         for key, value in self.component_indices.items():
-            setattr(self, key, int(value))
+            setattr(self, key, int(value["index"]))

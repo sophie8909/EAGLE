@@ -13,7 +13,8 @@
   "strategy_mutation": {
     "pool_replacement": 0.4,
     "identity_preserving_rewrite": 0.35,
-    "identity_shift_rewrite": 0.25
+    "identity_shift_rewrite": 0.25,
+    "bitmask_flip": 0.0
   },
   "selection_method": "random",
   "tournament_size": 3,

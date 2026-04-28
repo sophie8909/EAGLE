@@ -12,8 +12,9 @@
   "reflection_max_components_to_rewrite": 1,
   "strategy_mutation": {
     "pool_replacement": 0.2,
-    "identity_preserving_rewrite": 0.7,
-    "identity_shift_rewrite": 0.1
+    "identity_preserving_rewrite": 0.6,
+    "identity_shift_rewrite": 0.1,
+    "bitmask_flip": 0.1
   },
   "selection_method": "random",
   "tournament_size": 3,

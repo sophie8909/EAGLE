@@ -303,12 +303,14 @@ class ComponentPool:
         selected_indices = dict(selected_indices or {})
         rendered_lines: list[str] = []
         for key in self.component_keys:
+            if not self._selected_enabled(selected_indices.get(key, 0)):
+                continue
             if key == self.identity_component_key and not include_identity_component:
                 continue
             candidates = self.flat_components.get(key, [])
             if not candidates:
                 continue
-            selected_index = 0 if key in self.non_evolving_component_keys else int(selected_indices.get(key, 0))
+            selected_index = 0 if key in self.non_evolving_component_keys else self._selected_index(selected_indices.get(key, 0))
             if selected_index < 0 or selected_index >= len(candidates):
                 selected_index = 0
             lines = self._normalize_component_lines(candidates[selected_index])
@@ -318,6 +320,26 @@ class ComponentPool:
                 rendered_lines.append("")
             rendered_lines.extend(lines)
         return rendered_lines
+
+    @staticmethod
+    def _selected_index(value: Any) -> int:
+        if isinstance(value, dict):
+            value = value.get("index", 0)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _selected_enabled(value: Any) -> bool:
+        if isinstance(value, dict):
+            value = value.get("enabled", 1)
+        else:
+            value = 1
+        try:
+            return bool(int(value))
+        except (TypeError, ValueError):
+            return True
 
     def describe_individual_components(
         self,
@@ -331,13 +353,15 @@ class ComponentPool:
         for key in self.component_keys:
             if key == self.identity_component_key and not include_strategy_identity:
                 continue
-            selected_index = int(component_indices.get(key, 0))
+            selected_value = component_indices.get(key, 0)
+            selected_index = self._selected_index(selected_value)
             lines = list(self.get_component(key, selected_index))
             payload[key] = {
                 "index": selected_index,
                 "lines": lines,
                 "text": "\n".join(lines),
                 "evolving": key not in self.non_evolving_component_keys,
+                "included": self._selected_enabled(selected_value),
             }
         return {
             "individual_id": getattr(individual, "id", None),

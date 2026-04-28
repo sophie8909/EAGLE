@@ -334,7 +334,19 @@ class NSGA2(EA):
         """
         signature = []
         for ind in front:
-            sig = tuple(sorted(ind.component_indices.items()))
+            component_signature = tuple(
+                sorted(
+                    (
+                        key,
+                        ind.get_component_index(key),
+                        ind.is_component_enabled(key),
+                    )
+                    for key in ind.component_indices
+                )
+            )
+            sig = (
+                component_signature,
+            )
             signature.append(sig)
 
         signature.sort()

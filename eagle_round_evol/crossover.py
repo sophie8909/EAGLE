@@ -37,16 +37,19 @@ class Crossover:
                 selected_value = 0
             elif category in p1_indices and category in p2_indices:
                 selected_value = random.choice(
-                    [int(p1_indices[category]), int(p2_indices[category])]
+                    [parent1.get_component_index(category), parent2.get_component_index(category)]
                 )
             elif category in p1_indices:
-                selected_value = int(p1_indices[category])
+                selected_value = parent1.get_component_index(category)
             elif category in p2_indices:
-                selected_value = int(p2_indices[category])
+                selected_value = parent2.get_component_index(category)
             else:
                 selected_value = component_pool.get_random_component_index(category)
 
             child.set_component_index(category, selected_value)
+            p1_enabled = parent1.is_component_enabled(category) if category in p1_indices else 1
+            p2_enabled = parent2.is_component_enabled(category) if category in p2_indices else 1
+            child.set_component_enabled(category, random.choice([p1_enabled, p2_enabled]))
 
         child._sync_component_indices()
         return child

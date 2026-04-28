@@ -183,7 +183,10 @@ class EAConfig:
             "pool_replacement",
             "identity_preserving_rewrite",
             "identity_shift_rewrite",
+            "bitmask_flip",
         }
+        for mutation_key in expected_mutation_keys:
+            strategy_mutation.setdefault(mutation_key, 0.0)
         actual_mutation_keys = set(strategy_mutation.keys())
         if actual_mutation_keys != expected_mutation_keys:
             raise ValueError(
@@ -293,6 +296,7 @@ class EAConfig:
                 "pool_replacement": 1.0,
                 "identity_preserving_rewrite": 0.0,
                 "identity_shift_rewrite": 0.0,
+                "bitmask_flip": 0.0,
             }
         return {
             key: max(0.0, value) / total

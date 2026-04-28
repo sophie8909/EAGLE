@@ -35,13 +35,15 @@ class Mutation:
         mutated_individual = individual.copy()
 
         component_indices = cls._ensure_complete_strategy(
-            dict(getattr(mutated_individual, "component_indices", {}) or {}),
+            cls._index_map(mutated_individual),
             component_pool,
         )
 
         mutated_individual.ea_llm_call_time = 0.0
 
         selected_mode = mode or cls._sample_mutation_mode(config)
+        if selected_mode == "bitmask_flip":
+            return cls.apply_enabled_bit_flip(mutated_individual, component_pool)
 
         if selected_mode == "pool_replacement":
             component_indices, metadata, elapsed = cls.apply_pool_replacement(
@@ -70,6 +72,43 @@ class Mutation:
         mutated_individual.ea_llm_call_time += elapsed
         mutated_individual.mutation_metadata = metadata
 
+        return mutated_individual
+
+    @classmethod
+    def apply_enabled_bit_flip(
+        cls,
+        individual: Individual,
+        component_pool: ComponentPool,
+    ) -> Individual:
+        """Flip 1 to 4 component-inclusion bits."""
+        mutated_individual = individual.copy()
+
+        if not component_pool.component_keys:
+            mutated_individual.mutation_metadata = {
+                "mutation_mode": "bitmask_flip",
+                "changed_components": [],
+                "flipped_indices": [],
+            }
+            return mutated_individual
+
+        flip_count = random.randint(1, min(4, len(component_pool.component_keys)))
+        flipped_indices = sorted(random.sample(range(len(component_pool.component_keys)), k=flip_count))
+        flipped_components = [component_pool.component_keys[index] for index in flipped_indices]
+        old_bits: list[int] = []
+        new_bits: list[int] = []
+        for component_key in flipped_components:
+            old_bit, new_bit = mutated_individual.flip_component_enabled(component_key)
+            old_bits.append(old_bit)
+            new_bits.append(new_bit)
+
+        mutated_individual.ea_llm_call_time = getattr(mutated_individual, "ea_llm_call_time", 0.0) or 0.0
+        mutated_individual.mutation_metadata = {
+            "mutation_mode": "bitmask_flip",
+            "changed_components": flipped_components,
+            "flipped_indices": flipped_indices,
+            "old_bits": old_bits,
+            "new_bits": new_bits,
+        }
         return mutated_individual
 
     @classmethod
@@ -110,7 +149,7 @@ class Mutation:
     ) -> Individual:
         """Rewrite one component while keeping the rest of the prompt stable."""
         mutated_individual = individual.copy()
-        previous_index = int(mutated_individual.component_indices.get(target_component, 0))
+        previous_index = mutated_individual.get_component_index(target_component)
         current_text = component_pool.get_component_str(target_component, previous_index)
 
         instruction = cls._build_static_rewrite_instruction(
@@ -380,7 +419,7 @@ class Mutation:
         """Repair one crossover child so its dependent components become coherent."""
         repaired_individual = individual.copy()
         component_indices = cls._ensure_complete_strategy(
-            dict(getattr(repaired_individual, "component_indices", {}) or {}),
+            cls._index_map(repaired_individual),
             component_pool,
         )
 
@@ -471,7 +510,10 @@ class Mutation:
         component_pool: ComponentPool,
     ) -> dict[str, int]:
         """Ensure every active evolving component has a valid selected candidate."""
-        completed = dict(strategy or {})
+        completed = {
+            str(key): cls._coerce_index(value)
+            for key, value in dict(strategy or {}).items()
+        }
 
         for component_key in component_pool.evolving_component_keys:
             if component_key not in completed:
@@ -480,6 +522,22 @@ class Mutation:
                 )
 
         return completed
+
+    @staticmethod
+    def _coerce_index(value: Any) -> int:
+        if isinstance(value, dict):
+            value = value.get("index", 0)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    @classmethod
+    def _index_map(cls, individual: Individual) -> dict[str, int]:
+        return {
+            key: cls._coerce_index(value)
+            for key, value in dict(getattr(individual, "component_indices", {}) or {}).items()
+        }
 
     @classmethod
     def _sample_replacement_index(
@@ -626,7 +684,7 @@ class Mutation:
         )
         current_text = component_pool.get_component_str(
             target_component,
-            int(individual.component_indices.get(target_component, 0)),
+            individual.get_component_index(target_component),
         )
 
         return (
@@ -674,7 +732,7 @@ class Mutation:
             if key not in individual.component_indices:
                 continue
 
-            component_index = int(individual.component_indices[key])
+            component_index = individual.get_component_index(key)
             blocks.append(
                 f"[{key}]\n{component_pool.get_component_str(key, component_index)}"
             )
@@ -692,9 +750,9 @@ class Mutation:
         if strategy_key is None:
             return ""
 
-        index = strategy.get(strategy_key)
+        index = cls._coerce_index(strategy.get(strategy_key))
 
-        if index is None:
+        if strategy_key not in strategy:
             return ""
 
         try:
@@ -710,7 +768,9 @@ class Mutation:
         """Return one selected component index from the strategy dict."""
         if strategy_key is None:
             return None
-        return dict(strategy or {}).get(strategy_key)
+        if strategy_key not in dict(strategy or {}):
+            return None
+        return Mutation._coerce_index(dict(strategy or {}).get(strategy_key))
 
     @staticmethod
     def _build_metadata(
