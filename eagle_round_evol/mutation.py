@@ -84,8 +84,9 @@ class Mutation:
     ) -> Individual:
         """Flip 1 to 4 component-inclusion bits."""
         mutated_individual = individual.copy()
+        mutable_components = list(getattr(component_pool, "component_keys", []) or [])
 
-        if not component_pool.component_keys:
+        if not mutable_components:
             mutated_individual.mutation_metadata = {
                 "mutation_mode": "bitmask_flip",
                 "changed_components": [],
@@ -93,9 +94,9 @@ class Mutation:
             }
             return mutated_individual
 
-        flip_count = random.randint(1, min(4, len(component_pool.component_keys)))
-        flipped_indices = sorted(random.sample(range(len(component_pool.component_keys)), k=flip_count))
-        flipped_components = [component_pool.component_keys[index] for index in flipped_indices]
+        flip_count = random.randint(1, min(4, len(mutable_components)))
+        flipped_components = random.sample(mutable_components, k=flip_count)
+        flipped_indices = sorted(component_pool.component_keys.index(key) for key in flipped_components)
         old_bits: list[int] = []
         new_bits: list[int] = []
         for component_key in flipped_components:

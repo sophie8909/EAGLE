@@ -13,13 +13,14 @@ if __package__ is None or __package__ == "":
 from eagle.config import EAConfig, load_config_from_json, resolve_component_pool_path
 from eagle.utils.component_pool import ComponentPool
 
+from eagle_round_evol.ga import GA
 from eagle_round_evol.nsga2 import NSGA2
 
 DEFAULT_ROUND_CONFIG_PATH = Path(__file__).resolve().with_name("config.json")
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run the round-level EAGLE NSGA-II search.")
+    parser = argparse.ArgumentParser(description="Run the round-level EAGLE evolutionary search.")
     parser.add_argument(
         "--config",
         type=str,
@@ -61,6 +62,13 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run a tiny smoke test: population_size=2 and num_generations=1.",
     )
+    parser.add_argument(
+        "--algorithm",
+        type=str,
+        choices=["nsga2", "ga"],
+        default=None,
+        help="Evolution algorithm. Defaults to config value; fallback is nsga2.",
+    )
     return parser
 
 
@@ -74,7 +82,7 @@ def _load_config(args: argparse.Namespace) -> EAConfig:
     else:
         config = EAConfig()
 
-    config.algorithm = "nsga2"
+    config.algorithm = str(args.algorithm or getattr(config, "algorithm", "nsga2")).lower()
     config.real_eval_rate = 1.0
     config.final_test_max_front = 0
 
@@ -131,11 +139,18 @@ def main() -> None:
     config = _load_config(args)
     component_pool = _resolve_component_pool(config, args)
 
-    nsga2 = NSGA2(config, component_pool, opponent_list=[])
-    log_dir = nsga2.create_log_folder()
-    nsga2.save_config(log_dir)
+    algorithm = str(getattr(config, "algorithm", "nsga2")).lower()
+    if algorithm == "ga":
+        evolver = GA(config, component_pool, opponent_list=[])
+    elif algorithm == "nsga2":
+        evolver = NSGA2(config, component_pool, opponent_list=[])
+    else:
+        raise ValueError(f"Unsupported algorithm: {algorithm}")
+
+    log_dir = evolver.create_log_folder()
+    evolver.save_config(log_dir)
     print(f"[Round Evol] log_dir={log_dir}", flush=True)
-    nsga2.run()
+    evolver.run()
     print("[Round Evol] complete", flush=True)
 
 
