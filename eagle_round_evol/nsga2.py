@@ -15,6 +15,7 @@ from eagle.utils.component_pool import ComponentPool
 from .basic_ea import EA
 from .evaluator import Evaluator
 from .individual import Individual
+from .mutation import Mutation
 
 
 def _normalize_two_objective_fitness(fitness) -> list[float]:
@@ -368,12 +369,14 @@ class NSGA2(EA):
                 parent = self.select_parent()
                 print(f"[Generation {generation + 1}] selected parent for mutation: id={parent.id} {parent}", flush=True)
                 child = self.mutate(parent)
+                setattr(child, "_mutation_parent_fitness", _normalize_two_objective_fitness(parent.fitness))
                 print(f"[Generation {generation + 1}] created child from mutation: id={child.id} {child}", flush=True)
             elif operator == "reflection":
                 child = self.reflect(self.select_parent())
             else:
                 raise ValueError(f"Unsupported reproduction operator: {operator}")
 
+            setattr(child, "_reproduction_operator", operator)
             offspring.append(child)
             print(
                 f"[Generation {generation + 1}] generated offspring "
@@ -470,6 +473,7 @@ class NSGA2(EA):
                     f"id={child.id} fitness={child.fitness}",
                     flush=True,
                 )
+                self._update_mutation_component_feedback(child)
 
             # Phase 2: combine parent population and completed offspring batch.
             # Pareto fronts here are computed on the union, before survivor truncation.
@@ -499,3 +503,22 @@ class NSGA2(EA):
                 break
 
         return self.population
+
+    def _update_mutation_component_feedback(self, child: Individual) -> None:
+        """Feed mutation-mode success/failure back to adaptive roulette."""
+        if getattr(child, "_reproduction_operator", None) != "mutation":
+            return
+
+        metadata = dict(getattr(child, "mutation_metadata", {}) or {})
+        mutation_mode = metadata.get("mutation_mode")
+        parent_fitness = getattr(child, "_mutation_parent_fitness", None)
+        if parent_fitness is None:
+            return
+
+        child_fitness = _normalize_two_objective_fitness(child.fitness)
+        improved = (
+            child_fitness[0] >= parent_fitness[0]
+            and child_fitness[1] >= parent_fitness[1]
+            and (child_fitness[0] > parent_fitness[0] or child_fitness[1] > parent_fitness[1])
+        )
+        Mutation.update_mutation_component_feedback(mutation_mode, improved)

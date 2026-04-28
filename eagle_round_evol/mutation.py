@@ -17,6 +17,8 @@ class Mutation:
 
     STATIC_POOL_MUTATION_MODE = "static_pool_replacement"
     STATIC_REWRITE_MUTATION_MODE = "static_rewrite"
+    _mutation_component_weights: dict[str, float] = {}
+    _mutation_component_fail_counts: dict[str, int] = {}
 
     @classmethod
     def all_strategy_components(cls, component_pool: ComponentPool) -> list[str]:
@@ -465,11 +467,46 @@ class Mutation:
 
     @classmethod
     def _sample_mutation_mode(cls, config: EAConfig) -> str:
-        """Sample one mutation mode from the configured strategy-mutation weights."""
-        weights = config.strategy_mutation_mode_weights()
-        modes = list(weights.keys())
-        probabilities = [weights[mode] for mode in modes]
-        return random.choices(modes, weights=probabilities, k=1)[0]
+        """Sample one mutation mode from adaptive roulette weights."""
+        configured_weights = config.strategy_mutation_mode_weights()
+        modes = list(configured_weights.keys())
+        if not modes:
+            raise ValueError("No configured strategy mutation modes available.")
+
+        for mode in modes:
+            cls._mutation_component_weights.setdefault(mode, 1.0)
+            cls._mutation_component_fail_counts.setdefault(mode, 0)
+
+        mode_weights = [cls._mutation_component_weights[mode] for mode in modes]
+        return random.choices(modes, weights=mode_weights, k=1)[0]
+
+    @classmethod
+    def update_mutation_component_feedback(
+        cls,
+        mutation_mode: str | None,
+        improved: bool,
+    ) -> None:
+        """Update roulette statistics for one mutation component based on outcome."""
+        if not mutation_mode:
+            return
+
+        weight = float(cls._mutation_component_weights.get(mutation_mode, 1.0))
+        fail_count = int(cls._mutation_component_fail_counts.get(mutation_mode, 0))
+
+        if improved:
+            weight *= 1.25
+            fail_count = 0
+        else:
+            weight *= 0.85
+            fail_count += 1
+
+        if fail_count >= 3:
+            weight = 1.0
+            fail_count = 0
+
+        weight = min(10.0, max(1.0, weight))
+        cls._mutation_component_weights[mutation_mode] = weight
+        cls._mutation_component_fail_counts[mutation_mode] = fail_count
 
     @classmethod
     def _allowed_pool_targets(cls, component_pool: ComponentPool) -> list[str]:
