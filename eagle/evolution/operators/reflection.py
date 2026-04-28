@@ -414,7 +414,10 @@ class Reflection:
                 instruction,
             )
             total_elapsed += elapsed
-            rewritten_component = component_pool.parse_component_str(rewritten_text)
+            rewritten_component = component_pool.parse_rewritten_component(
+                target,
+                rewritten_text,
+            )
             new_index = component_pool.add_component(target, rewritten_component)
             updated_strategy[target] = new_index
             rewritten_targets.append(target)

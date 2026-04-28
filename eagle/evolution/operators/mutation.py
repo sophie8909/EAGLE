@@ -120,7 +120,10 @@ class Mutation:
         )
 
         rewritten_text, elapsed = cls.rewrite_component_with_llm(current_text, instruction)
-        rewritten_component = component_pool.parse_component_str(rewritten_text)
+        rewritten_component = component_pool.parse_rewritten_component(
+            target_component,
+            rewritten_text,
+        )
         new_index = component_pool.add_component(target_component, rewritten_component)
 
         mutated_individual.set_component_index(target_component, new_index)
@@ -536,7 +539,10 @@ class Mutation:
             )
             total_elapsed += elapsed
 
-            rewritten_component = component_pool.parse_component_str(rewritten_text)
+            rewritten_component = component_pool.parse_rewritten_component(
+                target,
+                rewritten_text,
+            )
             new_index = component_pool.add_component(target, rewritten_component)
 
             updated_strategy[target] = new_index

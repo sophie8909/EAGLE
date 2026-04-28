@@ -51,7 +51,10 @@ class RoundReflection:
         if not rewritten_text.strip():
             rewritten_text = current_text
 
-        rewritten_component = component_pool.parse_component_str(rewritten_text)
+        rewritten_component = component_pool.parse_rewritten_component(
+            target,
+            rewritten_text,
+        )
         new_index = component_pool.add_component(target, rewritten_component)
 
         child.set_component_index(target, new_index)
@@ -83,19 +86,19 @@ class RoundReflection:
         action_ratio = applicable / max_actions
 
         format_targets = list(getattr(component_pool, "reflection_format_keys", []) or [])
-        strategy_targets = list(getattr(component_pool, "reflection_strategy_keys", []) or [])
+        alignment_targets = list(getattr(component_pool, "reflection_alignment_keys", []) or [])
 
         if not format_targets:
             format_targets = list(getattr(component_pool, "evolving_component_keys", []) or [])
-        if not strategy_targets:
-            strategy_targets = list(getattr(component_pool, "evolving_component_keys", []) or [])
+        if not alignment_targets:
+            alignment_targets = list(getattr(component_pool, "evolving_component_keys", []) or [])
 
         if not parseable or action_ratio < 0.5:
             preferred_targets = format_targets
         elif alignment < 7.0:
-            preferred_targets = strategy_targets
+            preferred_targets = alignment_targets
         else:
-            preferred_targets = strategy_targets + format_targets
+            preferred_targets = alignment_targets + format_targets
 
         for target in preferred_targets:
             if target in component_pool.non_evolving_component_keys:

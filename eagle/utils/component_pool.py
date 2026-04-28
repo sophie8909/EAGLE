@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from collections import OrderedDict
+from copy import deepcopy
 from typing import Any, Dict, List
 
 
@@ -44,8 +46,8 @@ class ComponentPool:
             metadata.get("reflection_format_keys"),
             fallback=self.evolving_component_keys,
         )
-        self.reflection_strategy_keys = self._filter_component_keys(
-            metadata.get("reflection_strategy_keys"),
+        self.reflection_alignment_keys = self._filter_component_keys(
+            metadata.get("reflection_alignment_keys") or metadata.get("reflection_strategy_keys"),
             fallback=self.evolving_component_keys,
         )
 
@@ -59,6 +61,7 @@ class ComponentPool:
         self.FIXED_COMPONENT_KEYS = self.fixed_component_keys
         self.NON_EVOLVING_STATIC_KEYS = self.fixed_component_keys
         self.identity_strategy_key = self.identity_component_key
+        self.reflection_strategy_keys = list(self.reflection_alignment_keys)
         self.dependent_strategy_keys = [
             key for key in self.evolving_component_keys
             if key != self.identity_component_key
@@ -159,10 +162,11 @@ class ComponentPool:
                 ("identity_component_key", self.identity_component_key),
                 ("non_evolving_component_keys", sorted(self.non_evolving_component_keys)),
                 ("reflection_format_keys", list(self.reflection_format_keys)),
-                ("reflection_strategy_keys", list(self.reflection_strategy_keys)),
+                ("reflection_alignment_keys", list(self.reflection_alignment_keys)),
             ]
         )
-        payload.update(self.flat_components)
+        for key, candidates in self.flat_components.items():
+            payload[key] = deepcopy(candidates)
         return payload
 
     def has_category(self, category: str) -> bool:
@@ -191,6 +195,7 @@ class ComponentPool:
 
     def add_component(self, category: str, component: List[str]) -> int:
         """Append a newly generated component and return its stored index."""
+        component = self._normalize_component_lines(component)
         if category == "game_rule":
             self.game_rule_components.append(component)
             return len(self.game_rule_components) - 1
@@ -204,7 +209,89 @@ class ComponentPool:
 
     def parse_component_str(self, component_str: str) -> List[str]:
         """Convert a text block back into the line-based storage format."""
-        return component_str.splitlines()
+        return self._normalize_component_lines(str(component_str).splitlines())
+
+    def parse_rewritten_component(self, category: str, component_str: str) -> List[str]:
+        """Parse LLM rewrite output while keeping only the requested component."""
+        if category not in self.component_keys:
+            raise KeyError(f"Component category not found: {category}")
+        return self.parse_component_str(
+            self._extract_target_component_text(category, str(component_str))
+        )
+
+    def _extract_target_component_text(self, category: str, text: str) -> str:
+        text = self._strip_code_fences(text.strip())
+        if not text:
+            return ""
+
+        lines = text.splitlines()
+        known_keys = set(self.component_keys)
+        collected: list[str] = []
+        collecting = False
+        found_target_header = False
+        found_any_component_header = False
+
+        for line in lines:
+            header_key = self._component_header_key(line, known_keys)
+            if header_key is None:
+                if collecting:
+                    collected.append(line)
+                continue
+
+            found_any_component_header = True
+            if header_key == category:
+                found_target_header = True
+                collecting = True
+                continue
+            if found_target_header and collecting:
+                break
+            collecting = False
+
+        if found_target_header:
+            return "\n".join(collected).strip()
+
+        if found_any_component_header:
+            prefix_lines: list[str] = []
+            for line in lines:
+                if self._component_header_key(line, known_keys) is not None:
+                    break
+                prefix_lines.append(line)
+            if any(line.strip() for line in prefix_lines):
+                return "\n".join(prefix_lines).strip()
+
+        return text
+
+    @staticmethod
+    def _strip_code_fences(text: str) -> str:
+        stripped = text.strip()
+        if not stripped.startswith("```"):
+            return stripped
+        lines = stripped.splitlines()
+        if lines and lines[0].strip().startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        return "\n".join(lines).strip()
+
+    @staticmethod
+    def _component_header_key(line: str, known_keys: set[str]) -> str | None:
+        stripped = line.strip()
+        if not stripped:
+            return None
+
+        bracket_match = re.fullmatch(r"\[([A-Za-z0-9_\-]+)\]", stripped)
+        if bracket_match and bracket_match.group(1) in known_keys:
+            return bracket_match.group(1)
+
+        heading_match = re.fullmatch(r"#{1,6}\s*([A-Za-z0-9_\-]+)\s*:?", stripped)
+        if heading_match and heading_match.group(1) in known_keys:
+            return heading_match.group(1)
+
+        label_match = re.fullmatch(r"([A-Za-z0-9_\-]+)\s*:", stripped)
+        if label_match and label_match.group(1) in known_keys:
+            return label_match.group(1)
+
+        return None
 
     def render_prompt_lines(
         self,

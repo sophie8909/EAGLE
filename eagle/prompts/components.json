@@ -14,6 +14,20 @@
       "json_schema",
       "training_examples",
       "current_game_state_marker"
+    ],
+    "reflection_format_keys": [
+      "actions",
+      "raw_move_format",
+      "field_requirements"
+    ],
+    "reflection_alignment_keys": [
+      "strategy_identity",
+      "early_game_plan",
+      "mid_game_plan",
+      "late_game_plan",
+      "strategy",
+      "strategy_action_mapping",
+      "decision_process"
     ]
   },
   "strategy_identity": [
