@@ -4,6 +4,7 @@ NSGA-II implementation for multi-objective optimization of prompt components.
 
 from __future__ import annotations
 
+from inspect import signature
 import math
 import random
 from typing import List, Tuple
@@ -331,17 +332,9 @@ class NSGA2(EA):
         This is used for a simple convergence check across generations.
         We sort the components tuples so the order inside the front does not matter.
         """
-        signature: List[Tuple] = []
+        signature = []
         for ind in front:
-            # Backward compatibility: older code may have `components`
-            if hasattr(ind, "components"):
-                sig = tuple((comp.name, comp.value) for comp in ind.components)
-            else:
-                strategy_items = tuple(sorted((ind.strategy or {}).items()))
-                sig = (
-                    ("game_rule", getattr(ind, "game_rule", 0)),
-                    ("strategy", strategy_items),
-                )
+            sig = tuple(sorted(ind.component_indices.items()))
             signature.append(sig)
 
         signature.sort()
@@ -360,7 +353,10 @@ class NSGA2(EA):
                 parent1, parent2 = self.select_parents()
                 child = self.crossover(parent1, parent2)
             elif operator == "mutation":
-                child = self.mutate(self.select_parent())
+                parent = self.select_parent()
+                print(f"[Generation {generation + 1}] selected parent for mutation: id={parent.id} {parent}", flush=True)
+                child = self.mutate(parent)
+                print(f"[Generation {generation + 1}] created child from mutation: id={child.id} {child}", flush=True)
             elif operator == "reflection":
                 child = self.reflect(self.select_parent())
             else:

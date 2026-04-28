@@ -4,16 +4,16 @@
   "num_generations": 50,
   "convergence_generations": 10,
   "reproduction_operator_probs": {
-    "crossover": 0.35,
-    "mutation": 0.35,
+    "crossover": 0.2,
+    "mutation": 0.5,
     "reflection": 0.3
   },
   "enable_reflection_operator": true,
   "reflection_max_components_to_rewrite": 1,
   "strategy_mutation": {
     "pool_replacement": 0.2,
-    "identity_preserving_rewrite": 0.45,
-    "identity_shift_rewrite": 0.35
+    "identity_preserving_rewrite": 0.7,
+    "identity_shift_rewrite": 0.1
   },
   "selection_method": "random",
   "tournament_size": 3,
@@ -22,7 +22,7 @@
   "environment_selection_method": "elitism",
   "steady_state_surrogate_offspring_count": 2,
   "final_test_max_front": 0,
-  "include_strategy_identity_in_prompt": true,
+  "include_strategy_identity_in_prompt": false,
   "evolving_prompt_components": [],
   "component_pool_path": "../eagle/prompts/components.json",
   "initial_population_seeds": [],

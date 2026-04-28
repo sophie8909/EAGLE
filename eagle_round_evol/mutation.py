@@ -6,10 +6,10 @@ import random
 import time
 from typing import Any
 
-from ...config import EAConfig
-from ...utils.component_pool import ComponentPool
-from ...utils.individual import Individual
-from ...utils.llm import LLM
+from eagle.config import EAConfig
+from eagle.utils.component_pool import ComponentPool
+from .individual import Individual
+from eagle.utils.llm import LLM
 
 
 class Mutation:

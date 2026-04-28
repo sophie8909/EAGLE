@@ -26,6 +26,7 @@ class RoundReflection:
         """Create one reflected child by rewriting a single component."""
         child = individual.copy()
         target = cls._select_target(child, component_pool)
+
         if target is None:
             child.reflection_metadata = {
                 "reflection_applied": False,
@@ -40,19 +41,21 @@ class RoundReflection:
             target=target,
             current_text=current_text,
         )
+
         rewritten_text = cls._rewrite_component(
             current_text=current_text,
             instruction=instruction,
             model=str(getattr(config, "round_eval_model", "llama3.1:8b")),
         )
+
         if not rewritten_text.strip():
             rewritten_text = current_text
 
         rewritten_component = component_pool.parse_component_str(rewritten_text)
         new_index = component_pool.add_component(target, rewritten_component)
+
         child.set_component_index(target, new_index)
-        if hasattr(child, "_sync_component_indices"):
-            child._sync_component_indices()
+        child._sync_component_indices()
 
         child.reflection_metadata = {
             "reflection_applied": True,
@@ -60,12 +63,19 @@ class RoundReflection:
             "new_index": new_index,
             "round_feedback_summary": cls._feedback_summary(child),
         }
+
         return child
 
     @classmethod
-    def _select_target(cls, individual: Individual, component_pool: ComponentPool) -> str | None:
+    def _select_target(
+        cls,
+        individual: Individual,
+        component_pool: ComponentPool,
+    ) -> str | None:
+        """Select which component should be rewritten from round feedback."""
         feedback = dict(getattr(individual, "last_round_evaluation", {}) or {})
         legality = dict(feedback.get("legality") or {})
+
         alignment = float(feedback.get("strategy_alignment_score", 0.0) or 0.0)
         parseable = bool(legality.get("parseable", False))
         applicable = float(legality.get("applicable_actions", 0) or 0.0)
@@ -74,6 +84,7 @@ class RoundReflection:
 
         format_targets = list(getattr(component_pool, "reflection_format_keys", []) or [])
         strategy_targets = list(getattr(component_pool, "reflection_strategy_keys", []) or [])
+
         if not format_targets:
             format_targets = list(getattr(component_pool, "evolving_component_keys", []) or [])
         if not strategy_targets:
@@ -91,6 +102,7 @@ class RoundReflection:
                 continue
             if target in component_pool.component_keys:
                 return target
+
         return None
 
     @classmethod
@@ -102,8 +114,10 @@ class RoundReflection:
         target: str,
         current_text: str,
     ) -> str:
+        """Build the LLM rewrite instruction for reflection."""
         feedback = dict(getattr(individual, "last_round_evaluation", {}) or {})
         component_summary = component_pool.describe_individual_components(individual)
+
         return f"""
 You are improving one component of a MicroRTS prompt for round-level LLM action generation.
 
@@ -134,6 +148,7 @@ Rewrite rules:
         instruction: str,
         model: str,
     ) -> str:
+        """Rewrite a component through the local Ollama endpoint."""
         try:
             response = requests.post(
                 "http://localhost:11434/api/generate",
@@ -147,19 +162,27 @@ Rewrite rules:
             )
             response.raise_for_status()
             data = response.json()
-            return str(data.get("response", "")).strip()
+            rewritten_text = str(data.get("response", "")).strip()
+            return rewritten_text or current_text
         except Exception:
             return current_text
 
     @staticmethod
-    def _component_text(component_pool: ComponentPool, individual: Individual, target: str) -> str:
+    def _component_text(
+        component_pool: ComponentPool,
+        individual: Individual,
+        target: str,
+    ) -> str:
+        """Read the selected text for one component."""
         index = int(individual.component_indices.get(target, 0))
         return component_pool.get_component_str(target, index)
 
     @staticmethod
     def _feedback_summary(individual: Individual) -> dict[str, Any]:
+        """Summarize round feedback for reflection metadata."""
         feedback = dict(getattr(individual, "last_round_evaluation", {}) or {})
         legality = dict(feedback.get("legality") or {})
+
         return {
             "fitness": list(getattr(individual, "fitness", []) or []),
             "parseable": legality.get("parseable"),

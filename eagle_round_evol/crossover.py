@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import random
 
-from ...utils.component_pool import ComponentPool
-from ...utils.individual import Individual
+from eagle.utils.component_pool import ComponentPool
+from .individual import Individual
 
 
 class Crossover:

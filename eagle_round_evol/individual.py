@@ -1,4 +1,6 @@
-"""Round-evaluation individual model."""
+"""
+Individual class for representing a candidate solution in the genetic algorithm.
+"""
 
 from __future__ import annotations
 
@@ -16,19 +18,12 @@ DEFAULT_FITNESS = [0.0, 0.0]
 @dataclass(frozen=True)
 class ComponentEntry:
     """Stable name/value pair used when serializing an individual's components."""
-
     name: str
     value: Any
 
 
 class Individual:
-    """One candidate prompt configuration evaluated on generated game states.
-
-    Current design:
-    - All selectable prompt components are stored in component_indices.
-    - non-evolving components are fixed to index 0.
-    - strategy/static_components are kept only for backward compatibility.
-    """
+    """One candidate prompt configuration in the evolutionary search space."""
 
     _id_counter = itertools.count()
 
@@ -36,135 +31,135 @@ class Individual:
         self,
         id: str | None = None,
         game_rule: int = 0,
-        strategy: dict[str, int] | str | int | None = None,
+        strategy: dict[str, int] | str | None = None,
         static_components: dict[str, int] | None = None,
         component_indices: dict[str, int] | None = None,
     ):
-        self.id = id or f"round-ind-{next(self._id_counter)}"
+        self.id = id or f"ind-{next(self._id_counter)}"
+        if id is not None:
+            self._sync_id_counter(id)
+
         self.game_rule = int(game_rule)
 
         self.component_indices: dict[str, int] = {}
         self.static_components: dict[str, int] = {}
         self.strategy: dict[str, int] = {}
 
-        if component_indices:
-            self.component_indices.update(self._normalize_index_dict(component_indices))
+        if isinstance(component_indices, dict):
+            self.component_indices.update(
+                {str(key): int(value) for key, value in component_indices.items()}
+            )
 
-        if static_components:
-            self.component_indices.update(self._normalize_index_dict(static_components))
+        if isinstance(static_components, dict):
+            self.component_indices.update(
+                {str(key): int(value) for key, value in static_components.items()}
+            )
 
         normalized_strategy = self._normalize_strategy(strategy)
-        if normalized_strategy:
-            self.component_indices.update(normalized_strategy)
-
-        if self.game_rule:
-            self.component_indices["game_rule"] = self.game_rule
+        self.component_indices.update(normalized_strategy)
 
         self._sync_component_indices()
 
+        self.stable_components = [self.game_rule]
+        self.evolving_components: list[int] = []
+
         self.fitness = DEFAULT_FITNESS.copy()
         self.evaluation_mode: str | None = None
-        self.last_round_evaluation: dict[str, Any] | None = None
+
+        self.last_round_evaluation: dict[str, Any] = {}
+        self.last_surrogate_evaluation: dict[str, Any] = {}
+        self.last_real_evaluation: dict[str, Any] = {}
+        self.mutation_metadata: dict[str, Any] = {}
+        self.reflection_metadata: dict[str, Any] = {}
+        self.ea_llm_call_time = 0.0
 
     @property
     def components(self) -> list[ComponentEntry]:
-        return [
-            ComponentEntry(name, value)
-            for name, value in sorted((self.component_indices or {}).items())
-        ]
+        """Return a deterministic representation used by legacy code paths."""
+        entries = [ComponentEntry("game_rule", self.game_rule)]
+        for name, value in sorted((self.component_indices or {}).items()):
+            entries.append(ComponentEntry(name, value))
+        return entries
 
     def __repr__(self) -> str:
-        return (
-            f"Individual(game_rule={self.game_rule}, "
-            f"component_indices={self.component_indices})"
-        )
+        """Return a compact representation suitable for logs."""
+        return f"Individual(id={self.id}, component_indices={self.component_indices})"
 
     @staticmethod
-    def _normalize_index_dict(value: Any) -> dict[str, int]:
-        if value is None:
-            return {}
-        if not isinstance(value, dict):
-            return {}
-        normalized: dict[str, int] = {}
-        for key, item in value.items():
-            try:
-                normalized[str(key)] = int(item)
-            except (TypeError, ValueError):
-                continue
-        return normalized
-
-    @classmethod
-    def _normalize_strategy(cls, strategy: dict[str, int] | str | int | None) -> dict[str, int]:
+    def _normalize_strategy(strategy: dict[str, int] | str | None) -> dict[str, int]:
+        """Normalize legacy strategy payloads into component-index dictionaries."""
         if strategy is None:
             return {}
 
         if isinstance(strategy, dict):
-            return cls._normalize_index_dict(strategy)
-
-        if isinstance(strategy, int):
-            # Backward compatibility: old code may accidentally pass strategy as an index.
-            # It cannot be mapped safely to a key here, so ignore it.
-            return {}
+            normalized: dict[str, int] = {}
+            for key, value in strategy.items():
+                try:
+                    normalized[str(key)] = int(value)
+                except (TypeError, ValueError):
+                    continue
+            return normalized
 
         if isinstance(strategy, str):
             try:
                 parsed = ast.literal_eval(strategy)
-            except (SyntaxError, ValueError):
+            except (ValueError, SyntaxError):
                 return {}
-
             if isinstance(parsed, dict):
-                return cls._normalize_index_dict(parsed)
-
-            return {}
+                normalized = {}
+                for key, value in parsed.items():
+                    try:
+                        normalized[str(key)] = int(value)
+                    except (TypeError, ValueError):
+                        continue
+                return normalized
 
         return {}
 
     @classmethod
-    def from_existing(cls, individual: Any) -> "Individual":
-        clone = cls(
-            id=getattr(individual, "id", None),
-            game_rule=getattr(individual, "game_rule", 0),
-            component_indices=dict(getattr(individual, "component_indices", {}) or {}),
-            static_components=dict(getattr(individual, "static_components", {}) or {}),
-            strategy=getattr(individual, "strategy", None),
-        )
+    def _sync_id_counter(cls, individual_id: str) -> None:
+        """Keep generated IDs ahead of checkpoint-restored explicit IDs."""
+        if not isinstance(individual_id, str) or not individual_id.startswith("ind-"):
+            return
 
-        clone.fitness = list(getattr(individual, "fitness", DEFAULT_FITNESS) or DEFAULT_FITNESS)
-        clone.evaluation_mode = getattr(individual, "evaluation_mode", None)
+        suffix = individual_id.removeprefix("ind-")
+        if not suffix.isdigit():
+            return
 
-        last_round_evaluation = getattr(individual, "last_round_evaluation", None)
-        if isinstance(last_round_evaluation, dict):
-            clone.last_round_evaluation = dict(last_round_evaluation)
-
-        for attr in ("mutation_metadata", "reflection_metadata", "ea_llm_call_time"):
-            if hasattr(individual, attr):
-                value = getattr(individual, attr)
-                setattr(clone, attr, dict(value) if isinstance(value, dict) else value)
-
-        return clone
+        target = int(suffix) + 1
+        while True:
+            current = next(cls._id_counter)
+            if current >= target:
+                cls._id_counter = itertools.count(current + 1)
+                return
 
     def initialize_randomly(
         self,
         component_pool: ComponentPool,
         component_keys: list[str] | None = None,
     ) -> None:
+        """Fill selected flattened component categories with random valid indices."""
         self.game_rule = 0
         self.component_indices = {}
+        self.static_components = {}
+        self.strategy = {}
 
-        selected_keys = list(component_keys or component_pool.evolving_component_keys)
+        keys = list(component_keys or component_pool.evolving_component_keys)
 
         for category in component_pool.component_keys:
             if category in component_pool.non_evolving_component_keys:
                 self.set_component_index(category, 0)
 
-        for category in selected_keys:
+        for category in keys:
+            if category not in component_pool.component_keys:
+                continue
             if category in component_pool.non_evolving_component_keys:
                 self.set_component_index(category, 0)
-                continue
-            self.set_component_index(
-                category,
-                component_pool.get_random_component_index(category),
-            )
+            else:
+                self.set_component_index(
+                    category,
+                    component_pool.get_random_component_index(category),
+                )
 
         self._sync_component_indices()
 
@@ -176,29 +171,40 @@ class Individual:
         component_keys: list[str] | None = None,
         fill_missing_random: bool = True,
     ) -> None:
+        """Initialize one individual from a partial seed."""
         seed_payload = dict(seed or {})
+        reserved_keys = {
+            "id",
+            "game_rule",
+            "static_components",
+            "strategy",
+            "components",
+            "component_indices",
+        }
 
-        flat_seed_indices: dict[str, int] = {}
-        flat_seed_indices.update(
-            self._normalize_index_dict(seed_payload.get("components"))
-        )
-        flat_seed_indices.update(
-            self._normalize_index_dict(seed_payload.get("component_indices"))
-        )
-        flat_seed_indices.update(
-            self._normalize_index_dict(seed_payload.get("static_components"))
-        )
-        flat_seed_indices.update(
-            self._normalize_strategy(seed_payload.get("strategy"))
-        )
+        direct_indices = {
+            key: value
+            for key, value in seed_payload.items()
+            if key not in reserved_keys and key in component_pool.component_keys
+        }
 
-        self.game_rule = int(
-            flat_seed_indices.get("game_rule", seed_payload.get("game_rule", 0))
+        component_indices = dict(
+            seed_payload.get("components")
+            or seed_payload.get("component_indices")
+            or {}
         )
+        component_indices.update(dict(seed_payload.get("static_components") or {}))
+        component_indices.update(self._normalize_strategy(seed_payload.get("strategy")))
+        component_indices.update(direct_indices)
+
+        self.game_rule = int(seed_payload.get("game_rule", 0))
         self.component_indices = {}
+        self.static_components = {}
+        self.strategy = {}
 
         selected_keys = set(component_pool.component_keys)
         selected_keys.update(str(key) for key in (component_keys or []))
+        selected_keys.update(str(key) for key in component_indices.keys())
 
         for category in sorted(selected_keys):
             if category not in component_pool.component_keys:
@@ -206,8 +212,8 @@ class Individual:
 
             if category in component_pool.non_evolving_component_keys:
                 component_index = 0
-            elif category in flat_seed_indices:
-                component_index = int(flat_seed_indices[category])
+            elif category in component_indices:
+                component_index = int(component_indices[category])
             elif fill_missing_random:
                 component_index = component_pool.get_random_component_index(category)
             else:
@@ -219,65 +225,99 @@ class Individual:
         self._sync_component_indices()
 
     def get_component_index(self, category: str) -> int:
+        """Read one component index."""
         if category == "game_rule":
-            return self.game_rule
-
-        if category in self.component_indices:
-            return int(self.component_indices[category])
-
-        attr_value = getattr(self, category, None)
-        if attr_value is None:
-            raise KeyError(f"Component index not found for category: {category}")
-
-        return int(attr_value)
+            return int(self.game_rule)
+        return int(self.component_indices.get(category, 0))
 
     def set_component_index(self, category: str, value: int) -> None:
-        index = int(value)
+        """Write one selected component index."""
+        category = str(category)
+        value = int(value)
 
         if category == "game_rule":
-            self.game_rule = index
+            self.game_rule = value
 
-        self.component_indices[str(category)] = index
-        setattr(self, str(category), index)
+        self.component_indices[category] = value
+        self.static_components[category] = value
+        setattr(self, category, value)
 
     def copy(self) -> "Individual":
+        """Create a mutable clone suitable for crossover, mutation, or reflection."""
         clone = Individual(
+            id=None,
             game_rule=self.game_rule,
-            component_indices=dict(self.component_indices or {}),
+            component_indices=dict(self.component_indices),
         )
 
-        clone.fitness = list(self.fitness or DEFAULT_FITNESS)
+        clone.static_components = dict(self.static_components)
+        clone.strategy = {}
+
+        for key, value in clone.component_indices.items():
+            setattr(clone, key, int(value))
+
+        clone.fitness = self.fitness.copy() if hasattr(self.fitness, "copy") else self.fitness
         clone.evaluation_mode = self.evaluation_mode
 
-        if isinstance(self.last_round_evaluation, dict):
-            clone.last_round_evaluation = dict(self.last_round_evaluation)
+        for attr in (
+            "last_round_evaluation",
+            "last_surrogate_evaluation",
+            "last_real_evaluation",
+            "mutation_metadata",
+            "reflection_metadata",
+        ):
+            value = getattr(self, attr, None)
+            if isinstance(value, dict):
+                setattr(clone, attr, dict(value))
+            elif value is not None:
+                setattr(clone, attr, value)
 
-        for attr in ("mutation_metadata", "reflection_metadata", "ea_llm_call_time"):
+        clone.ea_llm_call_time = getattr(self, "ea_llm_call_time", 0.0)
+
+        for attr in ("pareto_rank", "crowding_distance"):
             if hasattr(self, attr):
-                value = getattr(self, attr)
-                setattr(clone, attr, dict(value) if isinstance(value, dict) else value)
+                setattr(clone, attr, getattr(self, attr))
 
         return clone
 
+    @classmethod
+    def from_existing(cls, individual: "Individual") -> "Individual":
+        """Create a copy from an existing individual for legacy EA code."""
+        return individual.copy()
+
     def _sync_component_indices(self) -> None:
-        existing_indices: dict[str, int] = {}
+        """Synchronize compatibility fields without overwriting the genotype."""
+        merged: dict[str, int] = {}
 
-        existing_indices.update(
-            self._normalize_index_dict(getattr(self, "component_indices", {}) or {})
-        )
-        existing_indices.update(
-            self._normalize_index_dict(getattr(self, "static_components", {}) or {})
-        )
+        existing = getattr(self, "component_indices", {}) or {}
+        if isinstance(existing, dict):
+            for key, value in existing.items():
+                try:
+                    merged[str(key)] = int(value)
+                except (TypeError, ValueError):
+                    continue
 
-        strategy = getattr(self, "strategy", None)
+        if getattr(self, "game_rule", 0):
+            merged.setdefault("game_rule", int(self.game_rule))
+
+        static_components = getattr(self, "static_components", {}) or {}
+        if isinstance(static_components, dict):
+            for key, value in static_components.items():
+                try:
+                    merged.setdefault(str(key), int(value))
+                except (TypeError, ValueError):
+                    continue
+
+        strategy = getattr(self, "strategy", {}) or {}
         if isinstance(strategy, dict):
-            existing_indices.update(self._normalize_index_dict(strategy))
+            for key, value in strategy.items():
+                try:
+                    merged.setdefault(str(key), int(value))
+                except (TypeError, ValueError):
+                    continue
 
-        if self.game_rule:
-            existing_indices["game_rule"] = int(self.game_rule)
-
-        self.component_indices = existing_indices
-        self.static_components = dict(existing_indices)
+        self.component_indices = dict(merged)
+        self.static_components = dict(self.component_indices)
         self.strategy = {}
 
         for key, value in self.component_indices.items():

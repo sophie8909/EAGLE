@@ -10,9 +10,9 @@ from typing import Any, List
 
 from eagle.config import EAConfig
 from eagle.evaluation.final_test_runner import run_final_test_suite
-from eagle.evolution.operators.crossover import Crossover
-from eagle.evolution.operators.mutation import Mutation
-from eagle.evolution.operators.parent_selection import ParentSelection
+from .crossover import Crossover
+from .mutation import Mutation
+from .parent_selection import ParentSelection
 from eagle.project import EAGLE_LOGS_DIR
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.match_score_recorder import MatchScoreRecorder

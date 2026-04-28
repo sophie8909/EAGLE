@@ -111,6 +111,7 @@ class Evaluator:
         }
 
     def _construct_prompt(self, individual: Individual) -> str:
+        print(f"Constructing prompt for individual with component indices: {individual.component_indices}")
         prompt_lines = self.component_pool.render_prompt_lines(
             individual.component_indices,
             include_identity_component=getattr(self.config, "include_strategy_identity_in_prompt", True),
