@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import json
+import math
+import re
 import sys
+from pathlib import Path
+from statistics import median
 
 
 def _extract_eval_mode(argv: list[str]) -> tuple[str, list[str]]:
@@ -16,6 +21,17 @@ def _extract_eval_mode(argv: list[str]) -> tuple[str, list[str]]:
 
     known_args, remaining_argv = parser.parse_known_args(argv)
     return known_args.eval_mode, remaining_argv
+
+
+def _extract_ea_mode(argv: list[str]) -> tuple[str, list[str]]:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--ea-mode",
+        choices=["auto", "mo", "ga"],
+        default="auto",
+    )
+    known_args, remaining_argv = parser.parse_known_args(argv)
+    return known_args.ea_mode, remaining_argv
 
 
 def _patch_ea_log_parser(eval_mode: str) -> None:
@@ -36,14 +52,204 @@ def _patch_ea_log_parser(eval_mode: str) -> None:
     analysis.parse_population_snapshot_from_ea_log = parse_population_snapshot_from_ea_log
 
 
+def _patch_analysis_ea_mode() -> None:
+    import eagle.analysis.evolution_result_analysis as analysis
+
+    if getattr(analysis, "_ea_mode_patched", False):
+        return
+
+    ga_generation_pattern = re.compile(r"generation_(\d+)\.txt$")
+    original_build_argument_parser = analysis.build_argument_parser
+    original_analyze_evolution_run = analysis.analyze_evolution_run
+
+    def _extract_ga_generation_number(path: Path) -> int:
+        match = ga_generation_pattern.match(path.name)
+        if not match:
+            return -1
+        return int(match.group(1))
+
+    def _detect_ea_mode(run_dir: Path, requested_mode: str) -> str:
+        mode = (requested_mode or "auto").lower()
+        if mode in {"mo", "ga"}:
+            return mode
+        if any(run_dir.glob("generation_*_mo.txt")):
+            return "mo"
+        if any(_extract_ga_generation_number(path) > 0 for path in run_dir.glob("generation_*.txt")):
+            return "ga"
+        return "mo"
+
+    def _load_ga_generation_scores(run_dir: Path) -> list[tuple[int, list[float]]]:
+        generations: list[tuple[int, list[float]]] = []
+        for generation_log in sorted(run_dir.glob("generation_*.txt"), key=_extract_ga_generation_number):
+            generation_number = _extract_ga_generation_number(generation_log)
+            if generation_number < 1:
+                continue
+            scores: list[float] = []
+            for raw_line in generation_log.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line.startswith(("Individual", "RoundIndividual")):
+                    continue
+                fitness_start = line.find("Fitness:")
+                if fitness_start == -1:
+                    continue
+                fitness_segment = line[fitness_start + len("Fitness:"):].strip()
+                try:
+                    parsed = json.loads(fitness_segment.replace("'", '"'))
+                except Exception:
+                    continue
+                if isinstance(parsed, list) and parsed:
+                    value = analysis._safe_float(parsed[0])
+                    if not math.isnan(value):
+                        scores.append(value)
+            if scores:
+                generations.append((generation_number, scores))
+        return generations
+
+    def _plot_generation_ga_curve(
+        run_dir: Path,
+        output_dir: Path,
+        custom_title: str | None = None,
+        debug: bool = False,
+    ) -> Path | None:
+        plt = analysis._require_matplotlib()
+        generations: list[int] = []
+        best_scores: list[float] = []
+        mean_scores: list[float] = []
+        median_scores: list[float] = []
+        worst_scores: list[float] = []
+
+        for generation_number, scores in _load_ga_generation_scores(run_dir):
+            generations.append(generation_number)
+            best_scores.append(max(scores))
+            mean_scores.append(sum(scores) / len(scores))
+            median_scores.append(float(median(scores)))
+            worst_scores.append(min(scores))
+
+        if not generations:
+            generation_entries = analysis._load_generation_entries(run_dir, debug=debug)
+            for generation_number, individuals, _ in generation_entries:
+                scores = []
+                for individual in individuals:
+                    fitness = list(getattr(individual, "fitness", []) or [])
+                    score = analysis._safe_float(fitness[0]) if fitness else float("nan")
+                    if not math.isnan(score):
+                        scores.append(score)
+                if scores:
+                    generations.append(int(generation_number))
+                    best_scores.append(max(scores))
+                    mean_scores.append(sum(scores) / len(scores))
+                    median_scores.append(float(median(scores)))
+                    worst_scores.append(min(scores))
+
+        if not generations:
+            return None
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(generations, best_scores, label="Best", linewidth=2.0)
+        plt.plot(generations, mean_scores, label="Mean", linewidth=2.0)
+        plt.plot(generations, median_scores, label="Median", linewidth=2.0)
+        plt.plot(generations, worst_scores, label="Worst", linewidth=2.0)
+        plt.xlabel("Generation")
+        plt.ylabel("Fitness Score")
+        plt.title(analysis._compose_plot_title("GA Generation Fitness Curve", custom_title))
+        plt.grid(alpha=0.25)
+        plt.legend(loc="best")
+
+        figure_path = output_dir / "ga_fitness_curve.png"
+        plt.tight_layout()
+        plt.savefig(figure_path, dpi=200)
+        plt.close()
+        return figure_path
+
+    def _analyze_evolution_run_with_ea_mode(
+        run_dir: str | Path | None = None,
+        *,
+        latest: bool = False,
+        title: str | None = None,
+        debug: bool = False,
+        eval_mode: str = "match",
+        ea_mode: str = "auto",
+    ) -> dict[str, object]:
+        resolved_run_dir = analysis._resolve_run_dir(run_dir, latest)
+        resolved_ea_mode = _detect_ea_mode(resolved_run_dir, ea_mode)
+
+        if resolved_ea_mode == "mo":
+            summary = original_analyze_evolution_run(
+                run_dir=resolved_run_dir,
+                latest=False,
+                title=title,
+                debug=debug,
+                eval_mode=eval_mode,
+            )
+            summary["ea_mode"] = resolved_ea_mode
+            summary_path = Path(summary["summary_path"])
+            summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+            return summary
+
+        output_dir = analysis.ensure_directory(resolved_run_dir / "analysis" / "evolution")
+        generation_output_dir = analysis.ensure_directory(output_dir / "generation_fitness")
+        ga_curve_path = _plot_generation_ga_curve(
+            resolved_run_dir,
+            generation_output_dir,
+            custom_title=title,
+            debug=debug,
+        )
+        summary = {
+            "run_dir": str(resolved_run_dir),
+            "generation_scatter_figures": [],
+            "generation_animation_gif": None,
+            "ga_fitness_curve": str(ga_curve_path) if ga_curve_path is not None else None,
+            "final_test_result_path": None,
+            "final_test_figures": {},
+            "title": title,
+            "debug": debug,
+            "eval_mode": eval_mode,
+            "ea_mode": resolved_ea_mode,
+        }
+        summary_path = output_dir / "analysis_summary.json"
+        summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        summary["summary_path"] = str(summary_path)
+        return summary
+
+    def _build_argument_parser_with_ea_mode():
+        parser = original_build_argument_parser()
+        parser.add_argument(
+            "--ea-mode",
+            choices=["auto", "mo", "ga"],
+            default="auto",
+            help="Evolution analysis mode: auto-detect from logs, or force 'mo'/'ga'.",
+        )
+        return parser
+
+    def _main_with_ea_mode() -> None:
+        parser = analysis.build_argument_parser()
+        args = parser.parse_args()
+        summary = analysis.analyze_evolution_run(
+            run_dir=args.run_dir,
+            latest=args.latest,
+            title=args.title,
+            debug=args.debug,
+            eval_mode=args.eval_mode,
+            ea_mode=args.ea_mode,
+        )
+        analysis._debug_print(args.debug, json.dumps(summary, ensure_ascii=False, indent=2))
+
+    analysis.build_argument_parser = _build_argument_parser_with_ea_mode
+    analysis.analyze_evolution_run = _analyze_evolution_run_with_ea_mode
+    analysis.main = _main_with_ea_mode
+    analysis._ea_mode_patched = True
+
+
 def main() -> None:
-    eval_mode, original_argv = _extract_eval_mode(sys.argv[1:])
+    eval_mode, argv_after_eval = _extract_eval_mode(sys.argv[1:])
+    ea_mode, original_argv = _extract_ea_mode(argv_after_eval)
     _patch_ea_log_parser(eval_mode)
 
     import eagle.analysis.evolution_result_analysis as analysis
+    _patch_analysis_ea_mode()
 
-    # Keep --eval-mode for the downstream analysis parser.
-    sys.argv = [sys.argv[0], "--eval-mode", eval_mode, *original_argv]
+    # Keep wrapper-only options for the downstream flow.
+    sys.argv = [sys.argv[0], "--eval-mode", eval_mode, "--ea-mode", ea_mode, *original_argv]
     analysis.main()
 
 
