@@ -313,15 +313,16 @@ class Evaluator:
         if action_type == "harvest":
             return 2.0
         if action_type == "attack":
-            return 3.0
+            return self._score_attack(move, state)
         if action_type == "move":
             return 0.5
         if action_type == "idle":
             return 0.0
         if action_type == "build":
             building_type = self._extract_building_type(move)
-            if not building_type:
-                return 10.0
+            if building_type == "barracks":
+                ally_barracks_count = self._count_ally_units_by_type(state, "barracks")
+                return max(0.0, 50.0 - 10.0 * ally_barracks_count)
             same_building_count = self._count_ally_units_by_type(state, building_type)
             return 10.0 - 2.0 * same_building_count
         if action_type == "train":
@@ -340,6 +341,36 @@ class Evaluator:
             return 3.0
         return float(self.DEFAULT_ACTION_TYPE_SCORES.get(action_type, 0.0))
 
+    def _score_attack(self, move: dict[str, Any], state: dict[str, Any]) -> float:
+        """Score one valid attack by range pressure and target priority."""
+        attacker_position = self._move_unit_position_tuple(move)
+        attack_target = self._extract_attack_target(move)
+        if attacker_position is None or attack_target is None:
+            return float(self.DEFAULT_ACTION_TYPE_SCORES.get("attack", 0.0))
+
+        target_info = self._enemy_info_at_position(state, attack_target)
+        if not target_info:
+            return float(self.DEFAULT_ACTION_TYPE_SCORES.get("attack", 0.0))
+
+        distance = abs(attacker_position[0] - attack_target[0]) + abs(attacker_position[1] - attack_target[1])
+        base_score = max(0.5, 20.0 / (distance + 1))
+
+        target_type = self._normalize_unit_type(str(target_info.get("type", "")))
+        attacker_type = self._normalize_unit_type(str(move.get("unit_type", "")))
+        attacker_damage = self._unit_type_damage(attacker_type)
+        target_hp = self._unit_hp(target_info)
+        can_kill = attacker_damage >= target_hp
+
+        multiplier = 1.0
+        if target_type in {"base", "barracks"}:
+            multiplier = 1.5
+        elif target_type in {"light", "heavy", "ranged"} and can_kill:
+            multiplier = 2.0
+        elif target_type == "worker" and can_kill:
+            multiplier = 1.0
+
+        return base_score * multiplier
+
     @staticmethod
     def _extract_building_type(move: dict[str, Any]) -> str | None:
         raw_move = str(move.get("raw_move", "")).lower()
@@ -347,6 +378,67 @@ class Evaluator:
         if not match:
             return None
         return Evaluator._normalize_unit_type(match.group(1))
+
+    @staticmethod
+    def _extract_attack_target(move: dict[str, Any]) -> tuple[int, int] | None:
+        """Parse the target coordinate from attack((x, y)) in raw_move."""
+        raw_move = str(move.get("raw_move", ""))
+        match = re.search(r"\battack\s*\(\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)\s*\)", raw_move)
+        if not match:
+            return None
+        return int(match.group(1)), int(match.group(2))
+
+    @staticmethod
+    def _move_unit_position_tuple(move: dict[str, Any]) -> tuple[int, int] | None:
+        """Return unit_position as a coordinate tuple when it is well formed."""
+        unit_position = move.get("unit_position")
+        if (
+            isinstance(unit_position, list)
+            and len(unit_position) == 2
+            and all(isinstance(value, int) for value in unit_position)
+        ):
+            return unit_position[0], unit_position[1]
+        return None
+
+    @staticmethod
+    def _enemy_info_at_position(state: dict[str, Any], position: tuple[int, int]) -> dict[str, Any] | None:
+        """Find enemy unit or building info at the target coordinate."""
+        enemy_units = state.get("enemy_units", {})
+        if not isinstance(enemy_units, dict):
+            return None
+        target_info = enemy_units.get(position)
+        return target_info if isinstance(target_info, dict) else None
+
+    @staticmethod
+    def _unit_type_damage(unit_type: str) -> float:
+        """Return the single-hit damage for one MicroRTS unit type."""
+        damage_by_type = {
+            "worker": 1.0,
+            "light": 2.0,
+            "heavy": 4.0,
+            "ranged": 1.0,
+        }
+        return damage_by_type.get(Evaluator._normalize_unit_type(unit_type), 0.0)
+
+    @staticmethod
+    def _unit_hp(unit_info: dict[str, Any]) -> float:
+        """Read HP from parsed unit info, falling back to known MicroRTS defaults."""
+        raw_hp = unit_info.get("hp", unit_info.get("HP"))
+        if raw_hp is None:
+            hp_match = re.search(r"\bHP\s*=\s*(-?\d+(?:\.\d+)?)", str(unit_info.get("stats", "")))
+            raw_hp = hp_match.group(1) if hp_match else None
+        try:
+            return float(raw_hp)
+        except (TypeError, ValueError):
+            unit_type = Evaluator._normalize_unit_type(str(unit_info.get("type", "")))
+            return {
+                "worker": 1.0,
+                "light": 4.0,
+                "heavy": 8.0,
+                "ranged": 3.0,
+                "base": 10.0,
+                "barracks": 5.0,
+            }.get(unit_type, 1.0)
 
     @staticmethod
     def _extract_train_unit_type(move: dict[str, Any]) -> str | None:
