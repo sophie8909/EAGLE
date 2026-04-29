@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import ast
+import json
+import math
+from pathlib import Path
+from statistics import median
 
 from .individual import Individual
 
@@ -154,3 +158,156 @@ def parse_population_snapshot_from_ea_log(log_file: str) -> list[Individual]:
         population.append(individual)
 
     return population
+
+
+def _patch_round_analysis_ga_mode() -> None:
+    try:
+        import eagle.analysis.evolution_result_analysis as analysis
+    except Exception:
+        return
+
+    if getattr(analysis, "_round_ga_mode_patched", False):
+        return
+
+    def _plot_generation_ga_curve(
+        run_dir: Path,
+        output_dir: Path,
+        custom_title: str | None = None,
+        debug: bool = False,
+    ) -> Path | None:
+        plt = analysis._require_matplotlib()
+        generation_entries = analysis._load_generation_entries(run_dir, debug=debug)
+        if not generation_entries:
+            return None
+
+        generations: list[int] = []
+        best_scores: list[float] = []
+        mean_scores: list[float] = []
+        median_scores: list[float] = []
+        worst_scores: list[float] = []
+
+        for generation_number, individuals, _ in generation_entries:
+            scores: list[float] = []
+            for individual in individuals:
+                fitness = list(getattr(individual, "fitness", []) or [])
+                score = analysis._safe_float(fitness[0]) if len(fitness) > 0 else float("nan")
+                if math.isnan(score):
+                    continue
+                scores.append(score)
+
+            if not scores:
+                continue
+
+            generations.append(int(generation_number))
+            best_scores.append(max(scores))
+            mean_scores.append(sum(scores) / len(scores))
+            median_scores.append(float(median(scores)))
+            worst_scores.append(min(scores))
+
+        if not generations:
+            return None
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(generations, best_scores, label="Best", linewidth=2.0, color="#2ca02c")
+        plt.plot(generations, mean_scores, label="Mean", linewidth=2.0, color="#1f77b4")
+        plt.plot(generations, median_scores, label="Median", linewidth=2.0, color="#ff7f0e")
+        plt.plot(generations, worst_scores, label="Worst", linewidth=2.0, color="#d62728")
+
+        plt.xlabel("Generation")
+        plt.ylabel("Fitness Score")
+        plt.title(analysis._compose_plot_title("GA Generation Fitness Curve", custom_title))
+        plt.grid(alpha=0.25)
+        plt.legend(loc="best")
+
+        figure_path = output_dir / "ga_fitness_curve.png"
+        plt.tight_layout()
+        plt.savefig(figure_path, dpi=200)
+        plt.close()
+        return figure_path
+
+    original_build_argument_parser = analysis.build_argument_parser
+    original_analyze_evolution_run = analysis.analyze_evolution_run
+
+    def _build_argument_parser_with_ea_mode():
+        parser = original_build_argument_parser()
+        parser.add_argument(
+            "--ea-mode",
+            choices=["mo", "ga"],
+            default="mo",
+            help="Evolution analysis mode: multi-objective scatter ('mo') or GA scalar curve ('ga').",
+        )
+        return parser
+
+    def _analyze_evolution_run_with_ea_mode(
+        run_dir: str | Path | None = None,
+        *,
+        latest: bool = False,
+        title: str | None = None,
+        debug: bool = False,
+        eval_mode: str = "match",
+        ea_mode: str = "mo",
+    ) -> dict[str, object]:
+        if ea_mode != "ga":
+            summary = original_analyze_evolution_run(
+                run_dir=run_dir,
+                latest=latest,
+                title=title,
+                debug=debug,
+                eval_mode=eval_mode,
+            )
+            summary["ea_mode"] = ea_mode
+            summary_path = Path(summary["summary_path"])
+            summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+            return summary
+
+        if eval_mode not in {"match", "round"}:
+            raise ValueError(f"Unsupported eval_mode: {eval_mode!r}")
+
+        resolved_run_dir = analysis._resolve_run_dir(run_dir, latest)
+        output_dir = analysis.ensure_directory(resolved_run_dir / "analysis" / "evolution")
+        generation_output_dir = analysis.ensure_directory(output_dir / "generation_fitness")
+
+        ga_curve_path = _plot_generation_ga_curve(
+            resolved_run_dir,
+            generation_output_dir,
+            custom_title=title,
+            debug=debug,
+        )
+
+        summary = {
+            "run_dir": str(resolved_run_dir),
+            "generation_scatter_figures": [],
+            "generation_animation_gif": None,
+            "ga_fitness_curve": str(ga_curve_path) if ga_curve_path is not None else None,
+            "final_test_result_path": None,
+            "final_test_figures": {},
+            "title": title,
+            "debug": debug,
+            "eval_mode": eval_mode,
+            "ea_mode": ea_mode,
+        }
+        summary_path = output_dir / "analysis_summary.json"
+        summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        summary["summary_path"] = str(summary_path)
+        return summary
+
+    def _main_with_ea_mode() -> None:
+        parser = analysis.build_argument_parser()
+        args = parser.parse_args()
+        summary = analysis.analyze_evolution_run(
+            run_dir=args.run_dir,
+            latest=args.latest,
+            title=args.title,
+            debug=args.debug,
+            eval_mode=args.eval_mode,
+            ea_mode=args.ea_mode,
+        )
+        analysis._debug_print(args.debug, json.dumps(summary, ensure_ascii=False, indent=2))
+
+    analysis.build_argument_parser = _build_argument_parser_with_ea_mode
+    analysis.analyze_evolution_run = _analyze_evolution_run_with_ea_mode
+    analysis.main = _main_with_ea_mode
+    analysis._round_ga_mode_patched = True
+
+
+_patch_round_analysis_ga_mode()
