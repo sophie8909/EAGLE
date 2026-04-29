@@ -68,19 +68,20 @@ def _patch_analysis_ea_mode() -> None:
             return -1
         return int(match.group(1))
 
-    def _detect_ea_mode(run_dir: Path, requested_mode: str) -> str:
-        mode = (requested_mode or "auto").lower()
-        if mode in {"mo", "ga"}:
-            return mode
+    def _detect_ea_mode(run_dir: Path):
         if any(run_dir.glob("generation_*_mo.txt")):
             return "mo"
-        if any(_extract_ga_generation_number(path) > 0 for path in run_dir.glob("generation_*.txt")):
+        if any(path for path in run_dir.glob("generation_*.txt") if "_mo" not in path.name):
             return "ga"
-        return "mo"
+        return None
 
     def _load_ga_generation_scores(run_dir: Path) -> list[tuple[int, list[float]]]:
         generations: list[tuple[int, list[float]]] = []
-        for generation_log in sorted(run_dir.glob("generation_*.txt"), key=_extract_ga_generation_number):
+        generation_logs = (
+            path for path in run_dir.glob("generation_*.txt")
+            if "_mo" not in path.name
+        )
+        for generation_log in sorted(generation_logs, key=_extract_ga_generation_number):
             generation_number = _extract_ga_generation_number(generation_log)
             if generation_number < 1:
                 continue
@@ -105,7 +106,7 @@ def _patch_analysis_ea_mode() -> None:
                 generations.append((generation_number, scores))
         return generations
 
-    def _plot_generation_ga_curve(
+    def _plot_ga_curve(
         run_dir: Path,
         output_dir: Path,
         custom_title: str | None = None,
@@ -171,7 +172,8 @@ def _patch_analysis_ea_mode() -> None:
         ea_mode: str = "auto",
     ) -> dict[str, object]:
         resolved_run_dir = analysis._resolve_run_dir(run_dir, latest)
-        resolved_ea_mode = _detect_ea_mode(resolved_run_dir, ea_mode)
+        detected = _detect_ea_mode(resolved_run_dir)
+        resolved_ea_mode = detected if ea_mode == "auto" else ea_mode
 
         if resolved_ea_mode == "mo":
             summary = original_analyze_evolution_run(
@@ -188,19 +190,35 @@ def _patch_analysis_ea_mode() -> None:
 
         output_dir = analysis.ensure_directory(resolved_run_dir / "analysis" / "evolution")
         generation_output_dir = analysis.ensure_directory(output_dir / "generation_fitness")
-        ga_curve_path = _plot_generation_ga_curve(
+        ga_curve_path = _plot_ga_curve(
             resolved_run_dir,
             generation_output_dir,
             custom_title=title,
             debug=debug,
         )
+
+        final_test_path = analysis._resolve_final_test_path(resolved_run_dir)
+        final_test_figures: dict[str, str] = {}
+        if final_test_path is not None:
+            final_test_output_dir = analysis.ensure_directory(output_dir / "final_test")
+            for interval_mode in analysis.FINAL_TEST_MODES:
+                figure_path = analysis._plot_final_test_mode(
+                    resolved_run_dir,
+                    final_test_output_dir,
+                    final_test_path,
+                    interval_mode,
+                    custom_title=title,
+                )
+                if figure_path is not None:
+                    final_test_figures[interval_mode] = str(figure_path)
+
         summary = {
             "run_dir": str(resolved_run_dir),
             "generation_scatter_figures": [],
             "generation_animation_gif": None,
             "ga_fitness_curve": str(ga_curve_path) if ga_curve_path is not None else None,
-            "final_test_result_path": None,
-            "final_test_figures": {},
+            "final_test_result_path": str(final_test_path) if final_test_path is not None else None,
+            "final_test_figures": final_test_figures,
             "title": title,
             "debug": debug,
             "eval_mode": eval_mode,
