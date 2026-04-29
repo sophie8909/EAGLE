@@ -6,6 +6,7 @@ import ast
 import json
 import math
 from pathlib import Path
+import re
 from statistics import median
 
 from .individual import Individual
@@ -169,6 +170,53 @@ def _patch_round_analysis_ga_mode() -> None:
     if getattr(analysis, "_round_ga_mode_patched", False):
         return
 
+    ga_generation_pattern = re.compile(r"generation_(\d+)\.txt$")
+
+    def _extract_ga_generation_number(path: Path) -> int:
+        match = ga_generation_pattern.match(path.name)
+        if not match:
+            return -1
+        return int(match.group(1))
+
+    def _detect_ea_mode(run_dir: Path, requested_mode: str) -> str:
+        mode = (requested_mode or "auto").lower()
+        if mode in {"mo", "ga"}:
+            return mode
+        if any(run_dir.glob("generation_*_mo.txt")):
+            return "mo"
+        if any(
+            _extract_ga_generation_number(path) > 0
+            for path in run_dir.glob("generation_*.txt")
+        ):
+            return "ga"
+        return "mo"
+
+    def _load_ga_generation_scores(run_dir: Path) -> list[tuple[int, list[float]]]:
+        generations: list[tuple[int, list[float]]] = []
+        for generation_log in sorted(run_dir.glob("generation_*.txt"), key=_extract_ga_generation_number):
+            generation_number = _extract_ga_generation_number(generation_log)
+            if generation_number < 1:
+                continue
+            scores: list[float] = []
+            with generation_log.open("r", encoding="utf-8") as handle:
+                for raw_line in handle:
+                    line = raw_line.strip()
+                    if not line.startswith(("Individual", "RoundIndividual")):
+                        continue
+                    fitness_start = line.find("Fitness:")
+                    if fitness_start == -1:
+                        continue
+                    fitness_segment = line[fitness_start + len("Fitness:"):].strip()
+                    if fitness_segment.startswith("[") and fitness_segment.endswith("]"):
+                        parsed = _parse_literal(fitness_segment)
+                        if isinstance(parsed, list) and parsed:
+                            value = analysis._safe_float(parsed[0])
+                            if not math.isnan(value):
+                                scores.append(value)
+            if scores:
+                generations.append((generation_number, scores))
+        return generations
+
     def _plot_generation_ga_curve(
         run_dir: Path,
         output_dir: Path,
@@ -176,33 +224,34 @@ def _patch_round_analysis_ga_mode() -> None:
         debug: bool = False,
     ) -> Path | None:
         plt = analysis._require_matplotlib()
-        generation_entries = analysis._load_generation_entries(run_dir, debug=debug)
-        if not generation_entries:
-            return None
-
         generations: list[int] = []
         best_scores: list[float] = []
         mean_scores: list[float] = []
         median_scores: list[float] = []
         worst_scores: list[float] = []
 
-        for generation_number, individuals, _ in generation_entries:
-            scores: list[float] = []
-            for individual in individuals:
-                fitness = list(getattr(individual, "fitness", []) or [])
-                score = analysis._safe_float(fitness[0]) if len(fitness) > 0 else float("nan")
-                if math.isnan(score):
-                    continue
-                scores.append(score)
-
-            if not scores:
-                continue
-
-            generations.append(int(generation_number))
-            best_scores.append(max(scores))
-            mean_scores.append(sum(scores) / len(scores))
-            median_scores.append(float(median(scores)))
-            worst_scores.append(min(scores))
+        generation_entries = analysis._load_generation_entries(run_dir, debug=debug)
+        if generation_entries:
+            for generation_number, individuals, _ in generation_entries:
+                scores: list[float] = []
+                for individual in individuals:
+                    fitness = list(getattr(individual, "fitness", []) or [])
+                    score = analysis._safe_float(fitness[0]) if len(fitness) > 0 else float("nan")
+                    if not math.isnan(score):
+                        scores.append(score)
+                if scores:
+                    generations.append(int(generation_number))
+                    best_scores.append(max(scores))
+                    mean_scores.append(sum(scores) / len(scores))
+                    median_scores.append(float(median(scores)))
+                    worst_scores.append(min(scores))
+        else:
+            for generation_number, scores in _load_ga_generation_scores(run_dir):
+                generations.append(int(generation_number))
+                best_scores.append(max(scores))
+                mean_scores.append(sum(scores) / len(scores))
+                median_scores.append(float(median(scores)))
+                worst_scores.append(min(scores))
 
         if not generations:
             return None
@@ -232,9 +281,9 @@ def _patch_round_analysis_ga_mode() -> None:
         parser = original_build_argument_parser()
         parser.add_argument(
             "--ea-mode",
-            choices=["mo", "ga"],
-            default="mo",
-            help="Evolution analysis mode: multi-objective scatter ('mo') or GA scalar curve ('ga').",
+            choices=["auto", "mo", "ga"],
+            default="auto",
+            help="Evolution analysis mode: auto-detect from logs, or force 'mo'/'ga'.",
         )
         return parser
 
@@ -245,17 +294,20 @@ def _patch_round_analysis_ga_mode() -> None:
         title: str | None = None,
         debug: bool = False,
         eval_mode: str = "match",
-        ea_mode: str = "mo",
+        ea_mode: str = "auto",
     ) -> dict[str, object]:
-        if ea_mode != "ga":
+        resolved_run_dir = analysis._resolve_run_dir(run_dir, latest)
+        resolved_ea_mode = _detect_ea_mode(resolved_run_dir, ea_mode)
+
+        if resolved_ea_mode != "ga":
             summary = original_analyze_evolution_run(
-                run_dir=run_dir,
+                run_dir=resolved_run_dir,
                 latest=latest,
                 title=title,
                 debug=debug,
                 eval_mode=eval_mode,
             )
-            summary["ea_mode"] = ea_mode
+            summary["ea_mode"] = resolved_ea_mode
             summary_path = Path(summary["summary_path"])
             summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
             return summary
@@ -263,7 +315,6 @@ def _patch_round_analysis_ga_mode() -> None:
         if eval_mode not in {"match", "round"}:
             raise ValueError(f"Unsupported eval_mode: {eval_mode!r}")
 
-        resolved_run_dir = analysis._resolve_run_dir(run_dir, latest)
         output_dir = analysis.ensure_directory(resolved_run_dir / "analysis" / "evolution")
         generation_output_dir = analysis.ensure_directory(output_dir / "generation_fitness")
 
@@ -284,7 +335,7 @@ def _patch_round_analysis_ga_mode() -> None:
             "title": title,
             "debug": debug,
             "eval_mode": eval_mode,
-            "ea_mode": ea_mode,
+            "ea_mode": resolved_ea_mode,
         }
         summary_path = output_dir / "analysis_summary.json"
         summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
