@@ -70,13 +70,29 @@ class Evaluator:
                 full_prompt = self._build_round_prompt(base_prompt, dynamic_prompt)
                 raw_response = self._ask_for_actions(full_prompt)
                 parsed_response = self._extract_first_json_object(raw_response)
+                format_valid, format_reason = self._validate_action_response_format(parsed_response)
 
-                legality_score, legality_details = self._score_legality(parsed_response, dynamic_prompt)
-                alignment_score = self._score_strategy_alignment(
-                    base_prompt=base_prompt,
-                    dynamic_prompt=dynamic_prompt,
-                    raw_response=raw_response,
-                )
+                if format_valid:
+                    legality_score, legality_details = self._score_legality(parsed_response, dynamic_prompt)
+                    alignment_score = self._score_strategy_alignment(
+                        base_prompt=base_prompt,
+                        dynamic_prompt=dynamic_prompt,
+                        raw_response=raw_response,
+                    )
+                else:
+                    legality_score = -100.0
+                    alignment_score = -100.0
+                    legality_details = {
+                        "parseable": isinstance(parsed_response, dict),
+                        "format_valid": False,
+                        "format_error": format_reason,
+                        "max_actions": self._extract_max_actions(dynamic_prompt),
+                        "applicable_actions": 0,
+                        "action_type_score_sum": 0.0,
+                        "returned_actions": 0,
+                        "moves": [],
+                    }
+
                 legality_score_sum += legality_score
                 alignment_score_sum += alignment_score
 
@@ -250,12 +266,42 @@ class Evaluator:
 
         return score, {
             "parseable": True,
+            "format_valid": True,
             "max_actions": max_actions,
             "applicable_actions": valid_actions,
             "action_type_score_sum": action_type_score_sum,
             "returned_actions": len(moves),
             "moves": move_results,
         }
+
+    @staticmethod
+    def _validate_action_response_format(parsed_response: dict[str, Any] | None) -> tuple[bool, str | None]:
+        """Validate the required action-response JSON schema before scoring fitness."""
+        if not isinstance(parsed_response, dict):
+            return False, "response is not a JSON object"
+        if not isinstance(parsed_response.get("thinking"), str):
+            return False, "missing string field: thinking"
+
+        moves = parsed_response.get("moves")
+        if not isinstance(moves, list):
+            return False, "missing list field: moves"
+
+        required_string_fields = ("raw_move", "unit_type", "action_type")
+        for index, move in enumerate(moves):
+            if not isinstance(move, dict):
+                return False, f"moves[{index}] is not an object"
+            for field in required_string_fields:
+                if not isinstance(move.get(field), str):
+                    return False, f"moves[{index}] missing string field: {field}"
+            unit_position = move.get("unit_position")
+            if (
+                not isinstance(unit_position, list)
+                or len(unit_position) != 2
+                or not all(isinstance(value, int) for value in unit_position)
+            ):
+                return False, f"moves[{index}] missing [int, int] field: unit_position"
+
+        return True, None
 
     def _score_successful_action_type(
         self,
