@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from copy import deepcopy
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -13,11 +14,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from eagle.config import load_config_from_json
 from eagle.evaluation.evaluator import Evaluator
-from eagle.evaluation.final_test_runner import _resolve_latest_generation_log_path
 from eagle.main import _resolve_component_pool_path
 from eagle.utils.checkpoint import CheckpointManager, deserialize_individual
 from eagle.utils.component_pool import ComponentPool
-from eagle.utils.ea_log_parse import parse_individuals_from_ea_log
+from eagle_round_evol.ea_log_parse import parse_individuals_from_ea_log
 
 
 def _sorted_fronts_from_checkpoint_population(individuals: list) -> list[list]:
@@ -29,12 +29,61 @@ def _sorted_fronts_from_checkpoint_population(individuals: list) -> list[list]:
     return [grouped[key] for key in sorted(grouped)]
 
 
-def load_final_fronts(log_dir: Path) -> tuple[list[list], str]:
-    """Load the latest available fronts from generation logs or checkpoints."""
-    generation_logs = sorted(log_dir.glob("generation_*_mo.txt"))
-    if generation_logs:
-        latest_generation_log = _resolve_latest_generation_log_path(log_dir)
-        return parse_individuals_from_ea_log(str(latest_generation_log)), latest_generation_log.name
+def _extract_generation_number(path: Path) -> int:
+    """Extract the one-based generation number from GA or MO generation logs."""
+    match = re.fullmatch(r"generation_(\d+)(?:_mo)?\.txt", path.name)
+    if not match:
+        return -1
+    return int(match.group(1))
+
+
+def _ga_generation_logs(log_dir: Path) -> list[Path]:
+    """Return GA generation logs, excluding multi-objective logs."""
+    return [
+        path for path in log_dir.glob("generation_*.txt")
+        if "_mo" not in path.name and _extract_generation_number(path) >= 0
+    ]
+
+
+def _mo_generation_logs(log_dir: Path) -> list[Path]:
+    """Return multi-objective generation logs."""
+    return [
+        path for path in log_dir.glob("generation_*_mo.txt")
+        if _extract_generation_number(path) >= 0
+    ]
+
+
+def _detect_ea_mode(log_dir: Path) -> str | None:
+    """Detect whether one log directory contains GA or multi-objective logs."""
+    if _mo_generation_logs(log_dir):
+        return "mo"
+    if _ga_generation_logs(log_dir):
+        return "ga"
+    return None
+
+
+def _latest_generation_log(log_dir: Path, ea_mode: str) -> Path:
+    """Resolve the latest generation log for one EA mode."""
+    if ea_mode == "mo":
+        candidates = _mo_generation_logs(log_dir)
+    elif ea_mode == "ga":
+        candidates = _ga_generation_logs(log_dir)
+    else:
+        candidates = _mo_generation_logs(log_dir) + _ga_generation_logs(log_dir)
+    if not candidates:
+        raise FileNotFoundError(f"No {ea_mode} generation logs found under {log_dir}")
+    return max(candidates, key=lambda path: (_extract_generation_number(path), path.stat().st_mtime))
+
+
+def load_final_groups(log_dir: Path, ea_mode: str) -> tuple[list[list], str, str]:
+    """Load final MO fronts or the final GA population from logs/checkpoints."""
+    resolved_mode = _detect_ea_mode(log_dir) if ea_mode == "auto" else ea_mode
+    if resolved_mode in {"mo", "ga"}:
+        latest_generation_log = _latest_generation_log(log_dir, resolved_mode)
+        groups = parse_individuals_from_ea_log(str(latest_generation_log))
+        if resolved_mode == "ga":
+            groups = [[individual for group in groups for individual in group]]
+        return groups, latest_generation_log.name, resolved_mode
 
     checkpoint_state = CheckpointManager(log_dir).load_state()
     if checkpoint_state and checkpoint_state.get("population"):
@@ -42,11 +91,40 @@ def load_final_fronts(log_dir: Path) -> tuple[list[list], str]:
             deserialize_individual(payload)
             for payload in list(checkpoint_state.get("population") or [])
         ]
-        return _sorted_fronts_from_checkpoint_population(individuals), "checkpoint_population"
+        return _sorted_fronts_from_checkpoint_population(individuals), "checkpoint_population", "mo"
 
     raise FileNotFoundError(
         f"No generation log or checkpoint population found under {log_dir}"
     )
+
+
+def _component_entry_index(value: object) -> int:
+    """Read a component candidate index from legacy int or {'index', 'enabled'} entries."""
+    if isinstance(value, dict):
+        value = value.get("index", 0)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _component_entry_enabled(value: object) -> int:
+    """Read a component inclusion bit from legacy int or {'index', 'enabled'} entries."""
+    if isinstance(value, dict):
+        value = value.get("enabled", 1)
+    else:
+        value = 1
+    try:
+        return 1 if int(value) else 0
+    except (TypeError, ValueError):
+        return 1
+
+
+def _render_prompt(evaluator: Evaluator, individual) -> str:
+    """Render one prompt through the current evaluator API."""
+    if hasattr(evaluator, "construct_prompt"):
+        return evaluator.construct_prompt(individual)
+    return evaluator._construct_prompt(individual)
 
 
 def _copy_candidates_by_indices(candidates: list[list[str]], indices: set[int]) -> tuple[list[list[str]], dict[int, int]]:
@@ -84,7 +162,7 @@ def build_next_experiment_bundle(
             continue
 
         used_indices = {
-            int(
+            _component_entry_index(
                 getattr(individual, "component_indices", {})
                 .get(category, getattr(individual, "legacy_components", {}).get(category, 0))
             )
@@ -100,7 +178,10 @@ def build_next_experiment_bundle(
         for category, old_index in component_indices.items():
             if category not in index_maps:
                 continue
-            remapped_components[category] = index_maps[category].get(int(old_index), 0)
+            remapped_components[category] = {
+                "index": index_maps[category].get(_component_entry_index(old_index), 0),
+                "enabled": _component_entry_enabled(old_index),
+            }
 
         remapped_seeds.append(
             {
@@ -124,13 +205,14 @@ def build_next_experiment_bundle(
     }
 
 
-def export_front(
+def export_final_prompt(
     *,
     log_dir: Path,
     output_root: Path,
+    ea_mode: str,
     max_front: int,
 ) -> Path:
-    """Export the latest fronts into prompt/<run>/front_<N>/."""
+    """Export the final MO fronts or GA population into prompt/<run>/final_prompt/."""
     component_pool_path = log_dir / "component_pool.json"
     if not component_pool_path.exists():
         component_pool_path = Path(_resolve_component_pool_path())
@@ -138,38 +220,46 @@ def export_front(
         raise FileNotFoundError(f"Component pool not found: {component_pool_path}")
 
     component_pool = ComponentPool.from_json(str(component_pool_path))
-    evaluator = Evaluator(component_pool, config=load_config_from_json(log_dir))
+    config = load_config_from_json(log_dir)
+    component_pool.configure_non_evolving_keys(getattr(config, "non_evolving_prompt_components", None))
+    evaluator = Evaluator(component_pool, config=config)
     source_config_payload = json.loads((log_dir / "config.json").read_text(encoding="utf-8")) if (log_dir / "config.json").exists() else {}
-    fronts, source_name = load_final_fronts(log_dir)
-    selected_fronts = fronts[:max_front]
+    groups, source_name, resolved_ea_mode = load_final_groups(log_dir, ea_mode)
+    selected_fronts = groups if resolved_ea_mode == "ga" else groups[:max_front]
     selected_individuals = [
         individual
         for front in selected_fronts
         for individual in front
     ]
-    export_dir = output_root / log_dir.name / f"front_1_to_{max_front}"
+    export_dir = output_root / log_dir.name / "final_prompt"
     export_dir.mkdir(parents=True, exist_ok=True)
 
     manifest = {
         "log_dir": str(log_dir),
         "source": source_name,
-        "front_count": len(selected_fronts),
+        "ea_mode": resolved_ea_mode,
+        "group_count": len(selected_fronts),
+        "front_count": len(selected_fronts) if resolved_ea_mode == "mo" else 0,
         "individual_count": len(selected_individuals),
-        "fronts": [],
+        "groups": [],
     }
 
-    for front_index, front in enumerate(selected_fronts, start=1):
-        front_manifest = {
-            "front_index": front_index,
+    for group_index, group in enumerate(selected_fronts, start=1):
+        group_manifest = {
+            "group_index": group_index,
+            "front_index": group_index if resolved_ea_mode == "mo" else None,
+            "label": f"front_{group_index}" if resolved_ea_mode == "mo" else "ga_population",
             "individuals": [],
         }
-        for individual_index, individual in enumerate(front, start=1):
-            individual_dir = export_dir / f"front_{front_index:02d}_{individual_index:02d}_{individual.id}"
+        for individual_index, individual in enumerate(group, start=1):
+            prefix = f"front_{group_index:02d}" if resolved_ea_mode == "mo" else "ga"
+            individual_dir = export_dir / f"{prefix}_{individual_index:02d}_{individual.id}"
             individual_dir.mkdir(parents=True, exist_ok=True)
 
             individual_payload = {
                 "id": individual.id,
                 "game_rule": individual.game_rule,
+                "component_indices": dict(getattr(individual, "component_indices", {}) or {}),
                 "static_components": dict(getattr(individual, "legacy_components", {}) or {}),
                 "strategy": dict(getattr(individual, "strategy", {}) or {}),
                 "fitness": list(getattr(individual, "fitness", []) or []),
@@ -181,7 +271,7 @@ def export_front(
                 individual,
                 include_strategy_identity=evaluator.config.include_strategy_identity_in_prompt,
             )
-            prompt_text = evaluator.construct_prompt(individual)
+            prompt_text = _render_prompt(evaluator, individual)
 
             (individual_dir / "individual.json").write_text(
                 json.dumps(individual_payload, indent=2, ensure_ascii=False) + "\n",
@@ -193,14 +283,14 @@ def export_front(
             )
             (individual_dir / "prompt.txt").write_text(prompt_text + "\n", encoding="utf-8")
 
-            front_manifest["individuals"].append(
+            group_manifest["individuals"].append(
                 {
                     "id": individual.id,
                     "fitness": list(getattr(individual, "fitness", []) or []),
                     "directory": str(individual_dir.relative_to(PROJECT_ROOT)).replace("\\", "/"),
                 }
             )
-        manifest["fronts"].append(front_manifest)
+        manifest["groups"].append(group_manifest)
 
     (export_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
@@ -229,19 +319,25 @@ def export_front(
 
 
 def main() -> None:
-    """Export the final front prompts and component selections for one experiment."""
+    """Export final prompts and component selections for one experiment."""
     parser = argparse.ArgumentParser(
         description=(
-            "Export the latest final front from one experiment into prompt/<run>/ with "
+            "Export final prompts from one experiment into prompt/<run>/final_prompt with "
             "prompt text, individual indices, and concrete component content."
         )
     )
     parser.add_argument("--log-dir", required=True, help="Experiment directory under logs/eagle/.")
     parser.add_argument(
+        "--ea-mode",
+        choices=["auto", "mo", "ga"],
+        default="auto",
+        help="Export mode. auto detects generation_*_mo.txt vs generation_*.txt.",
+    )
+    parser.add_argument(
         "--max-front",
         type=int,
         default=1,
-        help="How many leading fronts to export. Defaults to 1.",
+        help="How many leading MO fronts to export. Ignored for GA. Defaults to 1.",
     )
     parser.add_argument(
         "--output-root",
@@ -257,12 +353,13 @@ def main() -> None:
     if not output_root.is_absolute():
         output_root = (PROJECT_ROOT / output_root).resolve()
 
-    export_dir = export_front(
+    export_dir = export_final_prompt(
         log_dir=log_dir,
         output_root=output_root,
+        ea_mode=args.ea_mode,
         max_front=max(1, int(args.max_front)),
     )
-    print(f"[DONE] Exported front prompts to {export_dir}")
+    print(f"[DONE] Exported final prompts to {export_dir}")
 
 
 if __name__ == "__main__":
