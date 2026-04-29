@@ -75,6 +75,34 @@ def _patch_analysis_ea_mode() -> None:
             return "ga"
         return None
 
+    def _has_ga_generation_logs(run_dir: Path) -> bool:
+        return any(path for path in run_dir.glob("generation_*.txt") if "_mo" not in path.name)
+
+    def _has_matching_generation_logs(run_dir: Path, ea_mode: str) -> bool:
+        if ea_mode == "mo":
+            return any(run_dir.glob("generation_*_mo.txt"))
+        if ea_mode == "ga":
+            return _has_ga_generation_logs(run_dir)
+        return any(run_dir.glob("generation_*_mo.txt")) or _has_ga_generation_logs(run_dir)
+
+    def _find_latest_ea_run_dir(ea_mode: str) -> Path:
+        candidates = []
+        for path in analysis.EAGLE_LOGS_DIR.iterdir():
+            if path.is_dir() and _has_matching_generation_logs(path, ea_mode):
+                candidates.append(path)
+        if not candidates:
+            raise FileNotFoundError(
+                f"No {ea_mode} EA run directories with generation logs found under {analysis.EAGLE_LOGS_DIR}"
+            )
+        return max(candidates, key=lambda path: path.stat().st_mtime)
+
+    def _resolve_run_dir_with_ea_mode(run_dir: str | Path | None, latest: bool, ea_mode: str) -> Path:
+        if run_dir is not None:
+            return Path(run_dir).resolve()
+        if latest:
+            return _find_latest_ea_run_dir(ea_mode)
+        raise ValueError("Provide --run-dir or use --latest.")
+
     def _load_ga_generation_scores(run_dir: Path) -> list[tuple[int, list[float]]]:
         generations: list[tuple[int, list[float]]] = []
         generation_logs = (
@@ -171,7 +199,7 @@ def _patch_analysis_ea_mode() -> None:
         eval_mode: str = "match",
         ea_mode: str = "auto",
     ) -> dict[str, object]:
-        resolved_run_dir = analysis._resolve_run_dir(run_dir, latest)
+        resolved_run_dir = _resolve_run_dir_with_ea_mode(run_dir, latest, ea_mode)
         detected = _detect_ea_mode(resolved_run_dir)
         resolved_ea_mode = detected if ea_mode == "auto" else ea_mode
 
