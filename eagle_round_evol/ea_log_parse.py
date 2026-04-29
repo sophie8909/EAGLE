@@ -154,7 +154,3 @@ def parse_population_snapshot_from_ea_log(log_file: str) -> list[Individual]:
         population.append(individual)
 
     return population
-    analysis._round_ga_mode_patched = True
-
-
-_patch_round_analysis_ga_mode()
