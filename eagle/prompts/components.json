@@ -13,7 +13,6 @@
       "memoryless_barracks_rule",
       "json_schema",
       "field_requirements",
-      "training_examples",
       "current_game_state_marker",
       "actions",
       "raw_move_format"
@@ -58,7 +57,6 @@
       "Use only the current game state. Do not rely on memory from previous turns."
     ]
   ],
-
   "critical_rules": [
     [
       "CRITICAL RULES:",
@@ -81,7 +79,6 @@
       "17. Never train from Enemy Barracks."
     ]
   ],
-
   "game_objects": [
     [
       "BUILDINGS:",
@@ -120,7 +117,6 @@
       "- Long-range attacker"
     ]
   ],
-
   "actions": [
     [
       "ACTIONS:",
@@ -132,7 +128,6 @@
       "idle()"
     ]
   ],
-
   "raw_move_format": [
     [
       "RAW MOVE FORMAT:",
@@ -146,7 +141,6 @@
       "(4,4): light attack((5,6))"
     ]
   ],
-
   "example_safety_rule": [
     [
       "EXAMPLE SAFETY RULE:",
@@ -156,7 +150,6 @@
       "When checking worker_count or Ally Barracks Unit, check ONLY the current game state, never examples."
     ]
   ],
-
   "state_interpretation_step": [
     [
       "STATE INTERPRETATION STEP:",
@@ -184,7 +177,6 @@
       "If worker_2 exists and has_ally_barracks == False, worker_2 is always the barracks builder."
     ]
   ],
-
   "decision_logic": [
     [
       "DECISION LOGIC:",
@@ -199,7 +191,6 @@
       "   - If has_ally_barracks=True, decision=train_army_or_attack"
     ]
   ],
-
   "consistency_rule": [
     [
       "CONSISTENCY RULE:",
@@ -213,7 +204,6 @@
       "worker_count=<number>; worker_status=<less_than_2/enough_workers>; has_ally_barracks=<True/False>; builder=<worker_2_position or none>; decision=<train_worker/build_barracks_with_worker_2/train_army_or_attack>; reason=..."
     ]
   ],
-
   "barracks_ownership_rule": [
     [
       "BARRACKS OWNERSHIP RULE:",
@@ -232,7 +222,6 @@
       "Only train combat units from a position listed as Ally Barracks Unit."
     ]
   ],
-
   "start_game_rule": [
     [
       "START GAME RULE:",
@@ -259,7 +248,6 @@
       "3. Else -> normal strategy"
     ]
   ],
-
   "stable_worker_role_rule": [
     [
       "STABLE WORKER ROLE RULE:",
@@ -276,7 +264,6 @@
       "Even if the game says another worker is idling, worker_2 remains the barracks builder."
     ]
   ],
-
   "memoryless_barracks_rule": [
     [
       "MEMORYLESS BARRACKS RULE FOR ANY MAP:",
@@ -324,7 +311,6 @@
       "- Do not send worker_2 to harvest, move, or attack while no Ally Barracks Unit exists."
     ]
   ],
-
   "early_game_plan": [
     [
       "EARLY GAME:",
@@ -336,7 +322,6 @@
       "- Enemy Barracks Unit does not change this rule."
     ]
   ],
-
   "mid_game_plan": [
     [
       "MID GAME:",
@@ -346,7 +331,6 @@
       "- Move army toward Enemy Base."
     ]
   ],
-
   "late_game_plan": [
     [
       "LATE GAME:",
@@ -354,7 +338,6 @@
       "- Continue producing army."
     ]
   ],
-
   "strategy": [
     [
       "STRATEGY:",
@@ -365,7 +348,6 @@
       "5. Attack enemy base."
     ]
   ],
-
   "strategy_action_mapping": [
     [
       "STRATEGY TO ACTION:",
@@ -376,7 +358,6 @@
       "attack -> attack((enemy_x,enemy_y))"
     ]
   ],
-
   "decision_process": [
     [
       "DECISION PROCESS:",
@@ -403,7 +384,6 @@
       "11. Output valid JSON only."
     ]
   ],
-
   "field_requirements": [
     [
       "Each move must include:",
@@ -413,7 +393,6 @@
       "- action_type"
     ]
   ],
-
   "json_schema": [
     [
       "Output format:",
@@ -430,8 +409,7 @@
       "}"
     ]
   ],
-
-  "training_examples": [
+  "training_example_worker_bootstrap": [
     [
       "INPUT:",
       "Map size: 8x8",
@@ -461,8 +439,11 @@
       "      \"action_type\": \"harvest\"",
       "    }",
       "  ]",
-      "}",
-      "",
+      "}"
+    ]
+  ],
+  "training_example_build_barracks": [
+    [
       "INPUT:",
       "Map size: 8x8",
       "Turn: 70/5000",
@@ -500,8 +481,11 @@
       "      \"action_type\": \"harvest\"",
       "    }",
       "  ]",
-      "}",
-      "",
+      "}"
+    ]
+  ],
+  "training_example_repeat_barracks_low_resources": [
+    [
       "INPUT:",
       "Map size: 8x8",
       "Turn: 90/5000",
@@ -532,8 +516,11 @@
       "      \"action_type\": \"harvest\"",
       "    }",
       "  ]",
-      "}",
-      "",
+      "}"
+    ]
+  ],
+  "training_example_enemy_barracks_not_ally": [
+    [
       "INPUT:",
       "Map size: 8x8",
       "Turn: 120/5000",
@@ -565,8 +552,11 @@
       "      \"action_type\": \"harvest\"",
       "    }",
       "  ]",
-      "}",
-      "",
+      "}"
+    ]
+  ],
+  "training_example_many_workers_no_train_worker": [
+    [
       "INPUT:",
       "Map size: 8x8",
       "Turn: 150/5000",
@@ -612,8 +602,11 @@
       "      \"action_type\": \"harvest\"",
       "    }",
       "  ]",
-      "}",
-      "",
+      "}"
+    ]
+  ],
+  "training_example_ally_barracks_train_army": [
+    [
       "INPUT:",
       "Map size: 8x8",
       "Turn: 180/5000",
@@ -660,7 +653,6 @@
       "}"
     ]
   ],
-
   "current_game_state_marker": [
     [
       "Ignore all training examples above.",
