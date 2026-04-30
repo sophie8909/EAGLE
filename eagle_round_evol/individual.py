@@ -175,17 +175,14 @@ class Individual:
         for category in component_pool.component_keys:
             if category in component_pool.non_evolving_component_keys:
                 self.set_component_index(category, 0)
-
-        for category in keys:
-            if category not in component_pool.component_keys:
-                continue
-            if category in component_pool.non_evolving_component_keys:
-                self.set_component_index(category, 0)
-            else:
+            elif category in keys:
                 self.set_component_index(
                     category,
                     component_pool.get_random_component_index(category),
                 )
+            else:
+                # Even non-evolving search targets still carry an enabled bit.
+                self.set_component_index(category, 0)
 
         self._sync_component_indices()
 
