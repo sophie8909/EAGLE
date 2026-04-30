@@ -118,50 +118,14 @@ public class FEStatePane extends JPanel {
                                 new EvaluationFunctionForwarding(new SimpleEvaluationFunction()),
                                 new SimpleOptEvaluationFunction()};
 
-    public static Class AIs[] = {PassiveAI.class,
-                   MouseController.class,
-                   RandomAI.class,
+    public static Class AIs[] = {ai.eagle.EAGLE.class,
+                   ai.abstraction.eagle_ea.class,
+                   EAGLESurrogate.class,
                    RandomBiasedAI.class,
-                   WorkerRush.class,
-                   LightRush.class,
+                   RandomAI.class,
+                   PassiveAI.class,
                    HeavyRush.class,
-                   RangedRush.class,
-                   WorkerDefense.class,
-                   LightDefense.class,
-                   HeavyDefense.class,
-                   RangedDefense.class,
-                   POWorkerRush.class,
-                   POLightRush.class,
-                   POHeavyRush.class,
-                   PORangedRush.class,
-                   WorkerRushPlusPlus.class,
-                   CRush_V1.class,
-                   CRush_V2.class,
-                   PortfolioAI.class,
-                   PGSAI.class,
-                   IDRTMinimax.class,
-                   IDRTMinimaxRandomized.class,
-                   IDABCD.class,
-                   MonteCarlo.class,
-                   LSI.class,
-                   UCT.class,
-                   UCTUnitActions.class,
-                   UCTFirstPlayUrgency.class,
-                   DownsamplingUCT.class, 
-                   NaiveMCTS.class,
-                   BS3_NaiveMCTS.class,
-                   MLPSMCTS.class,
-                   AHTNAI.class,
-                   InformedNaiveMCTS.class,
-                   PuppetSearchMCTS.class,
-                   SCV.class,
-                   LLM_DeepseekR1.class, // LLM_DeepseekR1 for response
-                   LLM_Gemini.class, // LLM_Gemini for response
-                   ollama.class, // for ollama one
-                   mistral.class, //for Mistral
-                   ai.eagle.EAGLE.class, // standalone EAGLE with bundled prompt.txt
-                   ai.abstraction.eagle_ea.class, // archived EAGLE EA version
-                   EAGLESurrogate.class, // for EAGLE surrogate
+                   LightRush.class,
                   };
 
     
@@ -761,6 +725,7 @@ public class FEStatePane extends JPanel {
                 aiComboBox[player].setAlignmentX(Component.CENTER_ALIGNMENT);
                 aiComboBox[player].setAlignmentY(Component.TOP_ALIGNMENT);
                 aiComboBox[player].setMaximumSize(new Dimension(300,24));
+                aiComboBox[player].setSelectedIndex(player == 0 ? 0 : 3);
                 ptmp.add(aiComboBox[player]);
                 p1.add(ptmp);
             }
