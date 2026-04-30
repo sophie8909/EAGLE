@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 import re
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,28 @@ class Evaluator:
         cached_sample_count = self._history_sample_count(cached_record)
 
         if cached_fitness is not None:
+            if random.random() < 0.5:
+                print(
+                    f"Found cached fitness for prompt (hash={self.history._hash_prompt(base_prompt)}), "
+                    "using existing averaged fitness.",
+                    flush=True,
+                )
+                individual.fitness = list(cached_fitness)
+                individual.evaluation_mode = "history_avg"
+                individual.last_round_evaluation = {
+                    "generation": generation,
+                    "base_prompt": base_prompt,
+                    "cached_fitness": cached_fitness,
+                    "cached_sample_count": cached_sample_count,
+                    "fitness": individual.fitness,
+                    "history_decision": "use_existing_average",
+                }
+                return {
+                    "prompt": base_prompt,
+                    "fitness": individual.fitness,
+                    "evaluation_mode": individual.evaluation_mode,
+                    "round": individual.last_round_evaluation,
+                }
             print(
                 f"Found cached fitness for prompt (hash={self.history._hash_prompt(base_prompt)}), "
                 "running a fresh LLM evaluation and averaging.",
