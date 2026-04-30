@@ -21,6 +21,7 @@ from .state_generator import StateGenerator
 class Evaluator:
     """Evaluate prompts by asking an LLM for one generated game-state response."""
 
+    MISSING_MOVES_FITNESS_SCORE = -2.0
     DEFAULT_ACTION_TYPE_SCORES = {
         "idle": 0.0,
         "move": 10.0,
@@ -98,8 +99,13 @@ class Evaluator:
 
                 legality_max = self._theoretical_legality_max(dynamic_prompt, legality_details)
                 alignment_max = self._theoretical_alignment_max()
-                legality_score = self._normalize_to_signed_unit_interval(legality_raw, legality_max)
-                alignment_score = self._normalize_to_signed_unit_interval(alignment_raw, alignment_max)
+                missing_moves = self._has_missing_or_empty_moves(parsed_response)
+                if missing_moves:
+                    legality_score = self.MISSING_MOVES_FITNESS_SCORE
+                    alignment_score = self.MISSING_MOVES_FITNESS_SCORE
+                else:
+                    legality_score = self._normalize_to_signed_unit_interval(legality_raw, legality_max)
+                    alignment_score = self._normalize_to_signed_unit_interval(alignment_raw, alignment_max)
 
                 legality_raw_sum += legality_raw
                 alignment_raw_sum += alignment_raw
@@ -316,6 +322,14 @@ class Evaluator:
         safe_max = max(1e-9, float(theoretical_max))
         normalized = float(raw_score) / safe_max
         return max(-1.0, min(1.0, normalized))
+
+    @staticmethod
+    def _has_missing_or_empty_moves(parsed_response: dict[str, Any] | None) -> bool:
+        """Return whether the response omitted actions entirely."""
+        if not isinstance(parsed_response, dict):
+            return True
+        moves = parsed_response.get("moves")
+        return not isinstance(moves, list) or len(moves) == 0
 
     def _best_theoretical_action_score_for_unit(
         self,
