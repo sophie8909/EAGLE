@@ -669,7 +669,8 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
                 mapPrompt + "\n" +
                 turnPrompt + "\n" +
                 maxActionsPrompt + "\n\n" +
-                featuresPrompt + "\n";
+                featuresPrompt + "\n" +
+                "OUTPUT:\n";
 
        // System.out.println("=== Prompt to LLM ===");
        // System.out.println(finalPrompt);
