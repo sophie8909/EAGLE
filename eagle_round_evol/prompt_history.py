@@ -37,6 +37,13 @@ class PromptHistory:
             return None
         return entry["fitness"]
 
+    def get_record(self, prompt: str) -> dict[str, Any] | None:
+        key = self._hash_prompt(prompt)
+        entry = self.history.get(key)
+        if entry is None:
+            return None
+        return dict(entry)
+
     # ---------- save ----------
     def save(
         self,
@@ -45,9 +52,6 @@ class PromptHistory:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         key = self._hash_prompt(prompt)
-
-        if key in self.history:
-            return
 
         record = {
             "prompt_hash": key,

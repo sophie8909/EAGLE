@@ -57,92 +57,139 @@ class Evaluator:
         base_prompt = self._construct_prompt(individual)
         
 
-        cached = self.history.get(base_prompt)
+        cached_record = self.history.get_record(base_prompt)
+        cached_fitness = cached_record.get("fitness") if cached_record is not None else None
+        cached_sample_count = self._history_sample_count(cached_record)
 
-        if cached is not None:
-            print(f"Found cached fitness for prompt (hash={self.history._hash_prompt(base_prompt)}), skipping LLM evaluation.")
-            individual.fitness = cached
-            individual.evaluation_mode = "cached"
-        else:
-            legality_score_sum = 0.0
-            alignment_score_sum = 0.0
-            legality_raw_sum = 0.0
-            alignment_raw_sum = 0.0
-            n = self.config.one_eval_rounds
-            for i in range(n):
-                dynamic_prompt = self.state_generator.generate_text()
-                full_prompt = self._build_round_prompt(base_prompt, dynamic_prompt)
-                raw_response = self._ask_for_actions(full_prompt)
-                parsed_response = self._extract_first_json_object(raw_response)
-                format_valid, format_reason = self._validate_action_response_format(parsed_response)
-
-                if format_valid:
-                    legality_raw, legality_details = self._score_legality(parsed_response, dynamic_prompt)
-                    alignment_raw = self._score_strategy_alignment(
-                        base_prompt=base_prompt,
-                        dynamic_prompt=dynamic_prompt,
-                        raw_response=raw_response,
-                    )
-                else:
-                    legality_raw = -100.0
-                    alignment_raw = -100.0
-                    legality_details = {
-                        "parseable": isinstance(parsed_response, dict),
-                        "format_valid": False,
-                        "format_error": format_reason,
-                        "max_actions": self._extract_max_actions(dynamic_prompt),
-                        "applicable_actions": 0,
-                        "action_type_score_sum": 0.0,
-                        "returned_actions": 0,
-                        "moves": [],
-                    }
-
-                legality_max = self._theoretical_legality_max(dynamic_prompt, legality_details)
-                alignment_max = self._theoretical_alignment_max()
-                missing_moves = self._has_missing_or_empty_moves(parsed_response)
-                if missing_moves:
-                    legality_score = self.MISSING_MOVES_FITNESS_SCORE
-                    alignment_score = self.MISSING_MOVES_FITNESS_SCORE
-                else:
-                    legality_score = self._normalize_to_signed_unit_interval(legality_raw, legality_max)
-                    alignment_score = self._normalize_to_signed_unit_interval(alignment_raw, alignment_max)
-
-                legality_raw_sum += legality_raw
-                alignment_raw_sum += alignment_raw
-                legality_score_sum += legality_score
-                alignment_score_sum += alignment_score
-
-            fitness = [ legality_score_sum / n, alignment_score_sum / n ]
-            individual.fitness = fitness
-            individual.evaluation_mode = "round_llm"
-            individual.last_round_evaluation = {
-                "generation": generation,
-                "base_prompt": base_prompt,
-                "dynamic_prompt": dynamic_prompt,
-                "full_prompt": full_prompt,
-                "raw_response": raw_response,
-                "parsed_response": parsed_response,
-                "legality": legality_details,
-                "strategy_alignment_score": alignment_score_sum / n,
-                "raw_legality_score": legality_raw_sum / n,
-                "raw_strategy_alignment_score": alignment_raw_sum / n,
-                "fitness": fitness,
-            }
-
-            self.history.save(
-                prompt=base_prompt,
-                fitness=fitness,
-                metadata={
-                    "evaluation_mode": individual.evaluation_mode,
-                    "round": individual.last_round_evaluation,
-                }
+        if cached_fitness is not None:
+            print(
+                f"Found cached fitness for prompt (hash={self.history._hash_prompt(base_prompt)}), "
+                "running a fresh LLM evaluation and averaging.",
+                flush=True,
             )
+
+        legality_score_sum = 0.0
+        alignment_score_sum = 0.0
+        legality_raw_sum = 0.0
+        alignment_raw_sum = 0.0
+        n = self.config.one_eval_rounds
+        for i in range(n):
+            dynamic_prompt = self.state_generator.generate_text()
+            full_prompt = self._build_round_prompt(base_prompt, dynamic_prompt)
+            raw_response = self._ask_for_actions(full_prompt)
+            parsed_response = self._extract_first_json_object(raw_response)
+            format_valid, format_reason = self._validate_action_response_format(parsed_response)
+
+            if format_valid:
+                legality_raw, legality_details = self._score_legality(parsed_response, dynamic_prompt)
+                alignment_raw = self._score_strategy_alignment(
+                    base_prompt=base_prompt,
+                    dynamic_prompt=dynamic_prompt,
+                    raw_response=raw_response,
+                )
+            else:
+                legality_raw = -100.0
+                alignment_raw = -100.0
+                legality_details = {
+                    "parseable": isinstance(parsed_response, dict),
+                    "format_valid": False,
+                    "format_error": format_reason,
+                    "max_actions": self._extract_max_actions(dynamic_prompt),
+                    "applicable_actions": 0,
+                    "action_type_score_sum": 0.0,
+                    "returned_actions": 0,
+                    "moves": [],
+                }
+
+            legality_max = self._theoretical_legality_max(dynamic_prompt, legality_details)
+            alignment_max = self._theoretical_alignment_max()
+            missing_moves = self._has_missing_or_empty_moves(parsed_response)
+            if missing_moves:
+                legality_score = self.MISSING_MOVES_FITNESS_SCORE
+                alignment_score = self.MISSING_MOVES_FITNESS_SCORE
+            else:
+                legality_score = self._normalize_to_signed_unit_interval(legality_raw, legality_max)
+                alignment_score = self._normalize_to_signed_unit_interval(alignment_raw, alignment_max)
+
+            legality_raw_sum += legality_raw
+            alignment_raw_sum += alignment_raw
+            legality_score_sum += legality_score
+            alignment_score_sum += alignment_score
+
+        latest_fitness = [ legality_score_sum / n, alignment_score_sum / n ]
+        fitness = self._average_history_fitness(
+            cached_fitness,
+            latest_fitness,
+            cached_sample_count,
+        )
+        fitness_sample_count = cached_sample_count + 1 if cached_fitness is not None else 1
+        individual.fitness = fitness
+        individual.evaluation_mode = "round_llm_history_avg" if cached_fitness is not None else "round_llm"
+        individual.last_round_evaluation = {
+            "generation": generation,
+            "base_prompt": base_prompt,
+            "dynamic_prompt": dynamic_prompt,
+            "full_prompt": full_prompt,
+            "raw_response": raw_response,
+            "parsed_response": parsed_response,
+            "legality": legality_details,
+            "strategy_alignment_score": alignment_score_sum / n,
+            "raw_legality_score": legality_raw_sum / n,
+            "raw_strategy_alignment_score": alignment_raw_sum / n,
+            "latest_fitness": latest_fitness,
+            "cached_fitness": cached_fitness,
+            "cached_sample_count": cached_sample_count,
+            "fitness_sample_count": fitness_sample_count,
+            "fitness": fitness,
+        }
+
+        self.history.save(
+            prompt=base_prompt,
+            fitness=fitness,
+            metadata={
+                "evaluation_mode": individual.evaluation_mode,
+                "fitness_sample_count": fitness_sample_count,
+                "latest_fitness": latest_fitness,
+                "cached_fitness": cached_fitness,
+                "round": individual.last_round_evaluation,
+            }
+        )
         return {
             "prompt": base_prompt,
             "fitness": individual.fitness,
             "evaluation_mode": individual.evaluation_mode,
             "round": individual.last_round_evaluation,
         }
+
+    @staticmethod
+    def _history_sample_count(cached_record: dict[str, Any] | None) -> int:
+        if cached_record is None:
+            return 0
+        metadata = dict(cached_record.get("metadata") or {})
+        try:
+            return max(1, int(metadata.get("fitness_sample_count", 1)))
+        except (TypeError, ValueError):
+            return 1
+
+    @staticmethod
+    def _average_history_fitness(
+        cached_fitness: Any,
+        latest_fitness: list[float],
+        cached_sample_count: int,
+    ) -> list[float]:
+        if cached_fitness is None:
+            return list(latest_fitness)
+        cached_values = list(cached_fitness)
+        width = max(len(cached_values), len(latest_fitness))
+        averaged: list[float] = []
+        for index in range(width):
+            cached_value = float(cached_values[index]) if index < len(cached_values) else 0.0
+            latest_value = float(latest_fitness[index]) if index < len(latest_fitness) else 0.0
+            averaged.append(
+                ((cached_value * cached_sample_count) + latest_value)
+                / (cached_sample_count + 1)
+            )
+        return averaged
 
     def _construct_prompt(self, individual: Individual) -> str:
         prompt_lines = self.component_pool.render_prompt_lines(

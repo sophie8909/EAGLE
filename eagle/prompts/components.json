@@ -2,11 +2,15 @@
   "metadata": {
     "identity_component_key": "strategy_identity",
     "non_evolving_component_keys": [
+      "role",
       "critical_rules",
+      "game_objects",
       "example_safety_rule",
       "state_interpretation_step",
       "decision_logic",
+      "decision_process",
       "consistency_rule",
+      "attack_style",
       "barracks_ownership_rule",
       "start_game_rule",
       "stable_worker_role_rule",
@@ -15,7 +19,14 @@
       "field_requirements",
       "current_game_state_marker",
       "actions",
-      "raw_move_format"
+      "raw_move_format",
+      "training_example_no_workers",
+      "training_example_worker_bootstrap",
+      "training_example_build_barracks",
+      "training_example_repeat_barracks_low_resources",
+      "training_example_enemy_barracks_not_ally",
+      "training_example_many_workers_no_train_worker",
+      "training_example_ally_barracks_train_army"
     ],
     "reflection_format_keys": [
       "actions",
@@ -204,6 +215,14 @@
       "worker_count=<number>; worker_status=<less_than_2/enough_workers>; has_ally_barracks=<True/False>; builder=<worker_2_position or none>; decision=<train_worker/build_barracks_with_worker_2/train_army_or_attack>; reason=..."
     ]
   ],
+  "attack_style": [
+    [
+      "ATTACK STYLE:",
+      "When combat units exist, attack or move toward Enemy Base.",
+      "Do not wait to accumulate a large army before attacking.",
+      "Always attack immediately when enemy units are in range."
+    ]
+  ],
   "barracks_ownership_rule": [
     [
       "BARRACKS OWNERSHIP RULE:",
@@ -273,12 +292,10 @@
       "",
       "When no Ally Barracks Unit exists and worker_status=enough_workers:",
       "1. Always assign worker_2 to attempt barracks construction this turn.",
-      "2. Do this even if Ally Base resources are currently below 5.",
-      "3. Do not require resources >= 5 for repeated build attempts.",
-      "4. Absence of Ally Barracks Unit means the barracks task is not complete.",
-      "5. Repeated build commands are correct.",
-      "6. Continue issuing a barracks build command from worker_2 every turn until a current-state line exactly contains \"Ally Barracks Unit\".",
-      "7. Never replace worker_2 with worker_1, worker_3, or another worker.",
+      "2. Absence of Ally Barracks Unit means the barracks task is not complete.",
+      "3. Repeated build commands are correct.",
+      "4. Continue issuing a barracks build command from worker_2 every turn until a current-state line exactly contains \"Ally Barracks Unit\".",
+      "5. Never replace worker_2 with worker_1, worker_3, or another worker.",
       "",
       "Build target selection:",
       "Choose the first valid target near the Ally Base using this priority order:",
@@ -404,6 +421,33 @@
       "      \"unit_position\": [x,y],",
       "      \"unit_type\": \"worker\",",
       "      \"action_type\": \"harvest\"",
+      "    }",
+      "  ]",
+      "}"
+    ]
+  ],
+  "training_example_no_workers": [
+    [
+      "INPUT:",
+      "Map size: 8x8",
+      "Turn: 10/5000",
+      "Max actions: 4",
+      "",
+      "Feature locations:",
+      "(0, 0) Neutral Resource Node {resources=20}",
+      "(7, 7) Neutral Resource Node {resources=20}",
+      "(2, 1) Ally Base Unit {resources=5, current_action=\"idling\", HP=10}",
+      "(5, 6) Enemy Base Unit {resources=5, current_action=\"idling\", HP=10}",
+      "",
+      "OUPUT:",
+      "{",
+      "  \"thinking\": \"worker_count=0; worker_status=less_than_2; has_ally_barracks=False; builder=none; decision=train_worker; reason=Base must train one worker to start the game\",",
+      "  \"moves\": [",
+      "    {",
+      "      \"raw_move\": \"(2,1): base train(worker)\",",
+      "      \"unit_position\": [2,1],",
+      "      \"unit_type\": \"base\",",
+      "      \"action_type\": \"train\"",
       "    }",
       "  ]",
       "}"
