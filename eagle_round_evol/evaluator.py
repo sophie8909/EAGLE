@@ -29,6 +29,7 @@ class Evaluator:
         "train": 3.0,
         "attack": 3.0,
     }
+    THEORETICAL_ALIGNMENT_MAX = 100.0
 
     def __init__(
         self,
@@ -51,7 +52,7 @@ class Evaluator:
         generation: int | None = None,
         **_: Any,
     ) -> dict[str, Any]:
-        """Generate one state, ask for actions, and assign two-objective fitness."""
+        """Generate one state, ask for actions, and assign normalized two-objective fitness."""
         base_prompt = self._construct_prompt(individual)
         
 
@@ -64,6 +65,8 @@ class Evaluator:
         else:
             legality_score_sum = 0.0
             alignment_score_sum = 0.0
+            legality_raw_sum = 0.0
+            alignment_raw_sum = 0.0
             n = self.config.one_eval_rounds
             for i in range(n):
                 dynamic_prompt = self.state_generator.generate_text()
@@ -73,15 +76,15 @@ class Evaluator:
                 format_valid, format_reason = self._validate_action_response_format(parsed_response)
 
                 if format_valid:
-                    legality_score, legality_details = self._score_legality(parsed_response, dynamic_prompt)
-                    alignment_score = self._score_strategy_alignment(
+                    legality_raw, legality_details = self._score_legality(parsed_response, dynamic_prompt)
+                    alignment_raw = self._score_strategy_alignment(
                         base_prompt=base_prompt,
                         dynamic_prompt=dynamic_prompt,
                         raw_response=raw_response,
                     )
                 else:
-                    legality_score = -100.0
-                    alignment_score = -100.0
+                    legality_raw = -100.0
+                    alignment_raw = -100.0
                     legality_details = {
                         "parseable": isinstance(parsed_response, dict),
                         "format_valid": False,
@@ -93,6 +96,13 @@ class Evaluator:
                         "moves": [],
                     }
 
+                legality_max = self._theoretical_legality_max(dynamic_prompt, legality_details)
+                alignment_max = self._theoretical_alignment_max()
+                legality_score = self._normalize_to_signed_unit_interval(legality_raw, legality_max)
+                alignment_score = self._normalize_to_signed_unit_interval(alignment_raw, alignment_max)
+
+                legality_raw_sum += legality_raw
+                alignment_raw_sum += alignment_raw
                 legality_score_sum += legality_score
                 alignment_score_sum += alignment_score
 
@@ -108,6 +118,8 @@ class Evaluator:
                 "parsed_response": parsed_response,
                 "legality": legality_details,
                 "strategy_alignment_score": alignment_score_sum / n,
+                "raw_legality_score": legality_raw_sum / n,
+                "raw_strategy_alignment_score": alignment_raw_sum / n,
                 "fitness": fitness,
             }
 
@@ -274,6 +286,106 @@ class Evaluator:
             "moves": move_results,
         }
 
+    def _theoretical_legality_max(
+        self,
+        dynamic_prompt: str,
+        legality_details: dict[str, Any] | None = None,
+    ) -> float:
+        state = parse_dynamic_prompt_state(dynamic_prompt)
+        max_actions = max(1, self._extract_max_actions(dynamic_prompt))
+        ally_units = list(dict(state.get("ally_units") or {}).values())
+        if not ally_units:
+            return 1.0
+
+        # Use the best achievable score per controllable unit under current state context,
+        # then select top-K units when max_actions is smaller than the ally unit count.
+        per_unit_caps = [
+            self._best_theoretical_action_score_for_unit(state, unit_info)
+            for unit_info in ally_units
+        ]
+        per_unit_caps.sort(reverse=True)
+        top_k = per_unit_caps[:max_actions]
+        total = sum(top_k)
+        return max(1.0, float(total))
+
+    def _theoretical_alignment_max(self) -> float:
+        return float(self.THEORETICAL_ALIGNMENT_MAX)
+
+    @staticmethod
+    def _normalize_to_signed_unit_interval(raw_score: float, theoretical_max: float) -> float:
+        safe_max = max(1e-9, float(theoretical_max))
+        normalized = float(raw_score) / safe_max
+        return max(-1.0, min(1.0, normalized))
+
+    def _best_theoretical_action_score_for_unit(
+        self,
+        state: dict[str, Any],
+        unit_info: dict[str, Any],
+    ) -> float:
+        """Estimate one unit's best possible immediate action score for this state."""
+        unit_type = self._normalize_unit_type(str(unit_info.get("type", "")))
+
+        candidates = [0.0, 0.5]  # idle, move
+
+        if unit_type == "worker":
+            candidates.append(2.0)  # harvest
+            ally_barracks_count = self._count_ally_units_by_type(state, "barracks")
+            candidates.append(max(0.0, 50.0 - 10.0 * ally_barracks_count))  # build barracks
+            candidates.append(max(0.0, 10.0 - 2.0 * self._count_ally_units_by_type(state, "base")))  # build base
+
+        if unit_type in {"base", "barracks"}:
+            # Best-case train score in current shaping function.
+            candidates.append(3.0)
+
+        if unit_type in {"worker", "light", "heavy", "ranged"}:
+            candidates.append(self._best_theoretical_attack_score(state, unit_info))
+
+        return max(candidates) if candidates else 0.0
+
+    def _best_theoretical_attack_score(
+        self,
+        state: dict[str, Any],
+        attacker_info: dict[str, Any],
+    ) -> float:
+        """Estimate the best attack score available to a unit in this state."""
+        attacker_position = self._unit_info_position_tuple(attacker_info)
+        if attacker_position is None:
+            return float(self.DEFAULT_ACTION_TYPE_SCORES.get("attack", 0.0))
+
+        enemy_units = dict(state.get("enemy_units") or {})
+        if not enemy_units:
+            return float(self.DEFAULT_ACTION_TYPE_SCORES.get("attack", 0.0))
+
+        attacker_type = self._normalize_unit_type(str(attacker_info.get("type", "")))
+        attacker_damage = self._unit_type_damage(attacker_type)
+        best_score = float(self.DEFAULT_ACTION_TYPE_SCORES.get("attack", 0.0))
+
+        for position, enemy_info in enemy_units.items():
+            if not isinstance(position, tuple) or len(position) != 2:
+                continue
+            if not isinstance(enemy_info, dict):
+                continue
+
+            target_x, target_y = position
+            distance = abs(attacker_position[0] - int(target_x)) + abs(attacker_position[1] - int(target_y))
+            base_score = max(0.5, 20.0 / (distance + 1))
+
+            target_type = self._normalize_unit_type(str(enemy_info.get("type", "")))
+            target_hp = self._unit_hp(enemy_info)
+            can_kill = attacker_damage >= target_hp
+
+            multiplier = 1.0
+            if target_type in {"base", "barracks"}:
+                multiplier = 1.5
+            elif target_type in {"light", "heavy", "ranged"} and can_kill:
+                multiplier = 2.0
+            elif target_type == "worker" and can_kill:
+                multiplier = 1.0
+
+            best_score = max(best_score, base_score * multiplier)
+
+        return best_score
+
     @staticmethod
     def _validate_action_response_format(parsed_response: dict[str, Any] | None) -> tuple[bool, str | None]:
         """Validate the required action-response JSON schema before scoring fitness."""
@@ -408,6 +520,23 @@ class Evaluator:
             return None
         target_info = enemy_units.get(position)
         return target_info if isinstance(target_info, dict) else None
+
+    @staticmethod
+    def _unit_info_position_tuple(unit_info: dict[str, Any]) -> tuple[int, int] | None:
+        """Extract (x, y) from parsed unit info."""
+        for key in ("position", "pos", "unit_position"):
+            value = unit_info.get(key)
+            if (
+                isinstance(value, (list, tuple))
+                and len(value) == 2
+                and all(isinstance(v, int) for v in value)
+            ):
+                return int(value[0]), int(value[1])
+        x = unit_info.get("x")
+        y = unit_info.get("y")
+        if isinstance(x, int) and isinstance(y, int):
+            return int(x), int(y)
+        return None
 
     @staticmethod
     def _unit_type_damage(unit_type: str) -> float:
