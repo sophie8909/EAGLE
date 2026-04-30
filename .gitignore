@@ -31,7 +31,6 @@ __pycache__/
 tournament/traces/*.xml
 tournament/traces/*.json
 tournament/traces/*.xml
-prompt.txt
 resources/config.properties
 resources/config.properties
 /.venv
@@ -43,3 +42,4 @@ third_party/microrts/resources/config.properties
 /prompt
 /prompt
 *.xml
+third_party/microrts/prompt.txt
