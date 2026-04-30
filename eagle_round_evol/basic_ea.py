@@ -109,19 +109,28 @@ class EA:
         self._log_initial_population_snapshot()
        
     def _log_initial_population_snapshot(self) -> None:
-        """Persist one `generation_0_mo.txt` snapshot after initial real evaluation."""
+        """Persist one generation-0 snapshot after initial real evaluation."""
         if self.current_log_dir is None:
             return
-        if not hasattr(self, "_assign_rank_and_crowding"):
+
+        if hasattr(self, "_assign_rank_and_crowding"):
+            snapshot_path = self.current_log_dir / "generation_0_mo.txt"
+            if snapshot_path.exists():
+                return
+
+            pareto_fronts = self._assign_rank_and_crowding(self.population)
+            self.log_multi_objective_generation(str(self.current_log_dir), -1, pareto_fronts)
+            self.save_component_pool(str(self.current_log_dir))
             return
 
-        snapshot_path = self.current_log_dir / "generation_0_mo.txt"
-        if snapshot_path.exists():
-            return
+        if hasattr(self, "_fitness0"):
+            snapshot_path = self.current_log_dir / "generation_0.txt"
+            if snapshot_path.exists():
+                return
 
-        pareto_fronts = self._assign_rank_and_crowding(self.population)
-        self.log_multi_objective_generation(str(self.current_log_dir), -1, pareto_fronts)
-        self.save_component_pool(str(self.current_log_dir))
+            best_individual = max(self.population, key=self._fitness0)
+            self.log_single_objective_generation(str(self.current_log_dir), -1, best_individual)
+            self.save_component_pool(str(self.current_log_dir))
 
 
     
