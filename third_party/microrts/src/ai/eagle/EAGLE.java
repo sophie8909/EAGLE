@@ -1,4 +1,6 @@
-package ai.abstraction;
+package ai.eagle;
+
+import ai.abstraction.*;
 
 import ai.abstraction.pathfinding.AStarPathFinding;
 import ai.core.AI;
@@ -189,7 +191,7 @@ public class EAGLE extends AbstractionLayerAI {
     // Override with -Dmicrorts.prompt=path or MICRORTS_PROMPT=path.
     static final String PROMPT_PATH =
             System.getProperty("microrts.prompt",
-                    System.getenv().getOrDefault("MICRORTS_PROMPT", "prompt.txt"));
+                    System.getenv().getOrDefault("MICRORTS_PROMPT", "src/ai/eagle/prompt.txt"));
 
     protected static final String DEFAULT_PROMPT = """
 You are an AI playing a real-time strategy game. You control ALLY units only.

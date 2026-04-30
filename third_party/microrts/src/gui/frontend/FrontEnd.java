@@ -35,6 +35,13 @@ public class FrontEnd extends JPanel {
         FEStatePane panel1 = new FEStatePane(); // game panel
         tabbedPane.addTab("States", null, panel1, "Load/save states and play games.");
 
+        JComponent eaglePanel = makeTextPanel("<html><body style='text-align:center'>"
+                + "EAGLE Java: ai.eagle.EAGLE<br>"
+                + "Prompt: src/ai/eagle/prompt.txt<br>"
+                + "EA archive: ai.abstraction.eagle_ea"
+                + "</body></html>");
+        tabbedPane.addTab("EAGLE", null, eaglePanel, "EAGLE Java agent and prompt bundle.");
+
         JComponent panel2 = new FETracePane(panel1);
         tabbedPane.addTab("Traces", null, panel2, "Load/save and view replays.");
 

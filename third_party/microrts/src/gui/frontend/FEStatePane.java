@@ -159,7 +159,8 @@ public class FEStatePane extends JPanel {
                    LLM_Gemini.class, // LLM_Gemini for response
                    ollama.class, // for ollama one
                    mistral.class, //for Mistral
-                   EAGLE.class, // for EAGLE
+                   ai.eagle.EAGLE.class, // standalone EAGLE with bundled prompt.txt
+                   ai.abstraction.eagle_ea.class, // archived EAGLE EA version
                    EAGLESurrogate.class, // for EAGLE surrogate
                   };
 
@@ -580,7 +581,7 @@ public class FEStatePane extends JPanel {
                                     // ollama
                                     ollama ollama = new ollama(currentUtt, aiName1, aiName2);
                                     
-                                    EAGLE eagle = new EAGLE(currentUtt, aiName1, aiName2);
+                                    ai.eagle.EAGLE eagle = new ai.eagle.EAGLE(currentUtt, aiName1, aiName2);
                                     
 
                                     //mistral

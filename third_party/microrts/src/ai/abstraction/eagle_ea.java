@@ -21,18 +21,19 @@ import rts.units.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.text.SimpleDateFormat;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.stream.Collectors;
 import gui.frontend.FEStatePane;
 import rts.Game;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 
 /**
  *
  * @author Mukesh
  */
-public class EAGLE extends AbstractionLayerAI {
+public class eagle_ea extends AbstractionLayerAI {
 
     /**
      * Static & non-static variables
@@ -50,10 +51,8 @@ public class EAGLE extends AbstractionLayerAI {
     String fileName = "Response_format.csv";
     static final String ENDPOINT_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     static final JsonObject MOVE_RESPONSE_SCHEMA;
-    // How often the LLM should act on the game state
-    // NOTE: Fairness is now handled at the game level via ai_decision_interval in config.properties
-    // This should be set to 1 so the LLM responds whenever the game asks
-    static final Integer LLM_INTERVAL = 1;
+    // How often the agent should refresh LLM actions. The value comes from config.properties.
+    static final int LLM_INTERVAL = 1;
     LocalDateTime now = LocalDateTime.now();
     String timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
 
@@ -186,74 +185,82 @@ public class EAGLE extends AbstractionLayerAI {
      */
     // Improved prompt with clear JSON format to reduce parsing errors
     // ===== PROMPT LOADING =====
-    // Override with -Dmicrorts.prompt=path or MICRORTS_PROMPT=path.
+    // 你可以用：
+    //   export MICRORTS_PROMPT=prompts/my_prompt.txt
+    // 或 java 啟動參數： -Dmicrorts.prompt=prompts/my_prompt.txt
+    // 若都沒設，預設讀 prompts/prompt.txt
     static final String PROMPT_PATH =
             System.getProperty("microrts.prompt",
                     System.getenv().getOrDefault("MICRORTS_PROMPT", "prompt.txt"));
 
+    // fallback：避免檔案不存在時直接炸掉
     protected static final String DEFAULT_PROMPT = """
-You are an AI playing a real-time strategy game. You control ALLY units only.
+    You are an AI playing a real-time strategy game. You control ALLY units only.
 
-CRITICAL RULES:
-1. You can ONLY command units marked as "Ally" - NEVER command "Enemy" or "Neutral" units
-2. Each move MUST be a JSON object with ALL four required fields
-3. The unit_position MUST match an Ally unit's position exactly from the game state
+    CRITICAL RULES:
+    1. You can ONLY command units marked as "Ally" - NEVER command "Enemy" or "Neutral" units
+    2. Each move MUST be a JSON object with ALL four required fields
+    3. The unit_position MUST match an Ally unit's position exactly from the game state
 
-ACTIONS (use exact format):
-- move((x, y)) - Move to position
-- harvest((resource_x, resource_y), (base_x, base_y)) - Worker gathers resources
-- train(unit_type) - Base trains: worker | Barracks trains: light, heavy, ranged
-- build((x, y), building_type) - Worker builds: base, barracks
-- attack((enemy_x, enemy_y)) - Attack enemy at position
+    ACTIONS (use exact format):
+    - move((x, y))
+    - harvest((resource_x, resource_y), (base_x, base_y))
+    - train(unit_type)
+    - build((x, y), building_type)
+    - attack((enemy_x, enemy_y))
 
-REQUIRED JSON FORMAT:
-{
-  "thinking": "Brief strategy",
-  "moves": [
+    REQUIRED JSON FORMAT:
     {
-      "raw_move": "(x, y): unit_type action((args))",
-      "unit_position": [x, y],
-      "unit_type": "worker",
-      "action_type": "harvest"
+    "thinking": "Brief strategy",
+    "moves": [
+        {
+        "raw_move": "(x, y): unit_type action((args))",
+        "unit_position": [x, y],
+        "unit_type": "worker",
+        "action_type": "harvest"
+        }
+    ]
     }
-  ]
-}
 
-EVERY MOVE OBJECT MUST HAVE ALL 4 FIELDS:
-- raw_move: string like "(2, 0): worker harvest((0, 0), (2, 1))"
-- unit_position: [x, y] array matching YOUR Ally unit position
-- unit_type: "worker", "base", "barracks", "light", "heavy", or "ranged"
-- action_type: "move", "harvest", "train", "build", or "attack"
-
-VALID MOVE EXAMPLES:
-{"raw_move": "(1, 1): worker harvest((0, 0), (2, 1))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "harvest"}
-{"raw_move": "(2, 1): base train(worker)", "unit_position": [2, 1], "unit_type": "base", "action_type": "train"}
-{"raw_move": "(1, 1): worker attack((5, 6))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "attack"}
-{"raw_move": "(1, 1): worker move((3, 3))", "unit_position": [1, 1], "unit_type": "worker", "action_type": "move"}
-{"raw_move": "(1, 1): worker build((3, 3), barracks)", "unit_position": [1, 1], "unit_type": "worker", "action_type": "build"}
-
-STRATEGY: Harvest resources, train workers, build barracks, train army, attack enemy base.
-""";
+    STRATEGY: Harvest resources, train workers, build barracks, train army, attack enemy base.
+    """;
 
     private static String PROMPT = null;
+
+    private static int loadLLMInterval() {
+        Properties properties = new Properties();
+        File configFile = new File("resources/config.properties");
+
+        try (FileInputStream input = new FileInputStream(configFile)) {
+            properties.load(input);
+            String rawValue = properties.getProperty("llm_interval", "1").trim();
+            return Math.max(1, Integer.parseInt(rawValue));
+        } catch (Exception e) {
+            System.err.println("Failed to read llm_interval from " + configFile.getPath() + ": " + e.getMessage());
+            return 1;
+        }
+    }
 
     protected static String loadPromptOnce() {
         if (PROMPT != null) return PROMPT;
 
-        java.nio.file.Path path = java.nio.file.Paths.get(PROMPT_PATH);
+        // 允許用相對路徑（相對於你執行 MicroRTS 的工作目錄）
+        java.nio.file.Path p = java.nio.file.Paths.get(PROMPT_PATH);
+
         try {
-            String loadedPrompt = java.nio.file.Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
-            if (loadedPrompt == null || loadedPrompt.trim().isEmpty()) {
-                System.err.println("Prompt file is empty: " + path.toAbsolutePath() + " -> fallback DEFAULT_PROMPT");
+            PROMPT = java.nio.file.Files.readString(p, java.nio.charset.StandardCharsets.UTF_8);
+            System.out.println(PROMPT);
+            // 防呆：空檔案也當作失敗
+            if (PROMPT == null || PROMPT.trim().isEmpty()) {
+                System.err.println("⚠️ Prompt file is empty: " + p.toAbsolutePath() + " -> fallback DEFAULT_PROMPT");
                 PROMPT = DEFAULT_PROMPT;
             } else {
-                PROMPT = loadedPrompt;
-                System.out.println("Loaded prompt from: " + path.toAbsolutePath());
+                System.out.println("✅ Loaded prompt from: " + p.toAbsolutePath());
             }
         } catch (Exception e) {
-            System.err.println("Failed to read prompt file: " + path.toAbsolutePath());
-            System.err.println("Reason: " + e.getMessage());
-            System.err.println("-> fallback DEFAULT_PROMPT");
+            System.err.println("⚠️ Failed to read prompt file: " + p.toAbsolutePath());
+            System.err.println("   Reason: " + e.getMessage());
+            System.err.println("   -> fallback DEFAULT_PROMPT");
             PROMPT = DEFAULT_PROMPT;
         }
         return PROMPT;
@@ -377,7 +384,7 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
      * @param a_utt
      *
      */
-    public EAGLE(UnitTypeTable a_utt) {
+    public eagle_ea(UnitTypeTable a_utt) {
         this(a_utt, new AStarPathFinding());
 
         //
@@ -410,7 +417,7 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
          */
     }
 
-    public EAGLE(UnitTypeTable a_utt,String aiName1, String aiName2){
+    public eagle_ea(UnitTypeTable a_utt,String aiName1, String aiName2){
         this(a_utt, new AStarPathFinding());
         if((aiName1 != null && aiName2 != null) && (!(aiName1.isEmpty())  || !(aiName2.isEmpty())) && logsInitializedone != true) {
             this.aiName1 = aiName1;
@@ -426,7 +433,7 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
      * @param a_utt = ?
      * @param a_pf = ?
      */
-    public EAGLE(UnitTypeTable a_utt, PathFinding a_pf) {
+    public eagle_ea(UnitTypeTable a_utt, PathFinding a_pf) {
         super(a_pf); //
         System.out.println(" in this 2 nd mg546924 180 "+ a_utt);
         reset(a_utt); // method call
@@ -438,7 +445,46 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
      */
     public String createFileName() throws Exception {
         System.out.println("aiName1 "+this.aiName1+" "+this.aiName2+" "+aiName2+" "+aiName1);
-        return "Response"+timestamp+"_"+this.aiName1+"_"+num_shot+"_"+this.aiName2+"_"+MODEL+".csv";
+        return resolveResponseFilePath(
+                "Response"+timestamp+"_"+this.aiName1+"_"+num_shot+"_"+this.aiName2+"_"+MODEL+".csv"
+        ).toString();
+    }
+
+    private static Path resolveProjectRoot() {
+        Path current = Paths.get("").toAbsolutePath().normalize();
+        while (current != null) {
+            if (Files.exists(current.resolve("third_party").resolve("microrts"))) {
+                return current;
+            }
+            Path fileName = current.getFileName();
+            Path parent = current.getParent();
+            Path grandParent = parent != null ? parent.getParent() : null;
+            if (fileName != null
+                    && "microrts".equals(fileName.toString())
+                    && parent != null
+                    && parent.getFileName() != null
+                    && "third_party".equals(parent.getFileName().toString())
+                    && grandParent != null) {
+                return grandParent;
+            }
+            current = current.getParent();
+        }
+        return Paths.get("").toAbsolutePath().normalize();
+    }
+
+    private static Path resolveResponseLogsDirectory() throws IOException {
+        Path projectRoot = resolveProjectRoot();
+        Path responsesDir = projectRoot.resolve("logs").resolve("responses");
+        Files.createDirectories(responsesDir);
+        return responsesDir;
+    }
+
+    private static Path resolveResponseFilePath(String filename) throws IOException {
+        return resolveResponseLogsDirectory().resolve(filename);
+    }
+
+    private static Path resolveResponseArtifactPath(String filename) throws IOException {
+        return resolveResponseLogsDirectory().resolve(filename);
     }
 
     /**
@@ -474,7 +520,7 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"));
         wrapper.addProperty("end_time", timestamp);
 
-        try (FileWriter writer = new FileWriter("game_summary.json", true)) {
+        try (FileWriter writer = new FileWriter(resolveResponseArtifactPath("game_summary.json").toString(), true)) {
             System.out.println(" am i in : 245 LLM _gemini ");
             writer.write(new GsonBuilder().setPrettyPrinting().create().toJson(wrapper));
             writer.write(System.lineSeparator());
@@ -498,7 +544,13 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
 
         // Build names once
         String ts = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
-        fileName01 = "Response" + ts + "_" + a + "_" + num_shot + "_" + b + "_" + MODEL + ".csv";
+        try {
+            fileName01 = resolveResponseFilePath(
+                    "Response" + ts + "_" + a + "_" + num_shot + "_" + b + "_" + MODEL + ".csv"
+            ).toString();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to initialize EAGLE response log path.", e);
+        }
        // FilenameXXXten = "LLM_Gemini_" + ts + ".json";
 
         try (FileWriter writer = new FileWriter(fileName01)) {
@@ -556,7 +608,7 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
 
     @Override
     public AI clone() {
-        return new ollama(utt, pf);
+        return new EAGLE(utt, pf);
     }
 
 
@@ -665,18 +717,26 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
                 .collect(Collectors.joining(", ", "[", "]"));
 
         // Final LLM prompt
-        finalPrompt = getBasePrompt() + "\n\n" +
+        String basePrompt = getBasePrompt();
+
+        finalPrompt = basePrompt + "\n\n" +
                 mapPrompt + "\n" +
                 turnPrompt + "\n" +
                 maxActionsPrompt + "\n\n" +
                 featuresPrompt + "\n";
-
+        String dynamicPrompt = mapPrompt + "\n" +
+                turnPrompt + "\n" +
+                maxActionsPrompt + "\n\n" +
+                featuresPrompt + "\n";
        // System.out.println("=== Prompt to LLM ===");
        // System.out.println(finalPrompt);
        // System.out.println("=====================");LLM returned String as expected
 
         // ===== Call the model (Ollama in your current version) =====
         String response = prompt(finalPrompt);
+        System.out.println("=== Dynamic Prompt ===");
+        System.out.println(dynamicPrompt);
+        System.out.println("========================");
         System.out.println("=== Raw LLM Response ===");
         System.out.println(response);
         System.out.println("========================");
@@ -1150,7 +1210,7 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
         // need to do in other way as off now llm
         // prompt will be passed only once so that we can save tokens
         if(promptstart == 0) {
-            finalPrompt = getBasePrompt() + "\n\n" + mapPrompt + "\n" + turnPrompt + "\n" + maxActionsPrompt + "\n\n" + featuresPrompt + "\n";
+            finalPrompt = PROMPT + "\n\n" + mapPrompt + "\n" + turnPrompt + "\n" + maxActionsPrompt + "\n\n" + featuresPrompt + "\n";
             promptstart = promptstart+1;
         }
         else{
@@ -1160,7 +1220,7 @@ STRATEGY: Harvest resources, train workers, build barracks, train army, attack e
         //  need to implement they  Context caching process
 
 
-        finalPrompt = getBasePrompt() + "\n\n" + mapPrompt + "\n" + turnPrompt + "\n" + maxActionsPrompt + "\n\n" + featuresPrompt + "\n";
+        finalPrompt = PROMPT + "\n\n" + mapPrompt + "\n" + turnPrompt + "\n" + maxActionsPrompt + "\n\n" + featuresPrompt + "\n";
 
         System.out.println(" gmu3r2g 344 3  -----------------------------------  \n ");
         System.out.println(finalPrompt);
