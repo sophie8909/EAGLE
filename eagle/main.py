@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from .config import EAConfig, load_config_from_json, resolve_component_pool_path
+from .experiment.config import load_experiment_config
+from .experiment.runner import build_algorithm
 from .project import DEFAULT_EVOLUTION_CONFIG_PATH, EAGLE_LOGS_DIR, PROMPTS_DIR
 from .utils.component_pool import ComponentPool
 
@@ -51,6 +53,8 @@ def _resolve_base_config(args, resume_log_dir: str | None) -> EAConfig:
     if resume_log_dir:
         return load_config_from_json(resume_log_dir)
     if args.config:
+        if str(args.config).lower().endswith((".yaml", ".yml")):
+            return load_experiment_config(args.config).ea
         return load_config_from_json(args.config)
     if DEFAULT_EVOLUTION_CONFIG_PATH.exists():
         return load_config_from_json(DEFAULT_EVOLUTION_CONFIG_PATH)
@@ -71,7 +75,6 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
         config.population_size = max(2, min(config.population_size, 2))
         config.num_generations = 2
         config.real_eval_rate = 0.0
-        config.steady_state_surrogate_offspring_count = 2
         config.run_time_per_game_sec = 30
         config.final_test_max_front = 0
 
@@ -108,13 +111,19 @@ def main() -> None:
         "--config",
         type=str,
         default=None,
-        help=f"Load one base config JSON file. Defaults to {DEFAULT_EVOLUTION_CONFIG_PATH.as_posix()} when present.",
+        help=f"Load one base config JSON/YAML file. Defaults to {DEFAULT_EVOLUTION_CONFIG_PATH.as_posix()} when present.",
     )
     parser.add_argument(
         "--algorithm",
-        choices=["ga", "nsga2", "steady_state_nsga2"],
+        choices=["round_ga", "round_nsga2"],
         default=None,
         help="Override the algorithm for this run.",
+    )
+    parser.add_argument(
+        "--evaluator",
+        choices=["round"],
+        default=None,
+        help="Override the evaluator selected by YAML experiment configs.",
     )
     parser.add_argument(
         "--timeout-sec",
@@ -150,42 +159,37 @@ def main() -> None:
     component_pool = ComponentPool.from_json(
         _resolve_component_pool_path_from_config(config, args, resume_log_dir)
     )
-    if config.algorithm == "ga":
-        from .evolution.ga import GA
+    experiment_config = load_experiment_config(args.config) if args.config and str(args.config).lower().endswith((".yaml", ".yml")) else None
+    if experiment_config is None:
+        from .experiment.config import ExperimentConfig
 
-        ga = GA(config, component_pool, opponent_list=opponent_list)
-        if resume_log_dir:
-            ga.attach_log_dir(resume_log_dir)
-        ga.save_config(ga.create_log_folder())
-        ga.run()
-    elif config.algorithm == "nsga2":
-        from .evolution.nsga2 import NSGA2
-
-        nsga2 = NSGA2(config, component_pool, opponent_list=opponent_list)
-        if resume_log_dir:
-            nsga2.attach_log_dir(resume_log_dir)
-        nsga2.save_config(nsga2.create_log_folder())
-        nsga2.run()
-        if should_run_final_test:
-            print("Running final test for NSGA2...")
-            nsga2.run_final_test()
-        else:
-            print("Skipping final test.")
-    elif config.algorithm == "steady_state_nsga2":
-        from .evolution.steady_state_nsga2 import SteadyStateNSGA2
-
-        steady_state_nsga2 = SteadyStateNSGA2(config, component_pool, opponent_list=opponent_list)
-        if resume_log_dir:
-            steady_state_nsga2.attach_log_dir(resume_log_dir)
-        steady_state_nsga2.save_config(steady_state_nsga2.create_log_folder())
-        steady_state_nsga2.run()
-        if should_run_final_test:
-            print("Running final test for Steady-State NSGA2...")
-            steady_state_nsga2.run_final_test()
-        else:
-            print("Skipping final test.")
+        experiment_config = ExperimentConfig(
+            algorithm=config.algorithm,
+            evaluator="round",
+            ea=config,
+            opponents=opponent_list,
+        )
     else:
-        raise ValueError(f"Unsupported algorithm: {config.algorithm}")
+        experiment_config.ea = config
+        experiment_config.opponents = opponent_list
+    if args.evaluator:
+        experiment_config.evaluator = args.evaluator
+
+    algorithm = build_algorithm(
+        experiment_config,
+        component_pool=component_pool,
+        opponent_list=opponent_list,
+    )
+    if resume_log_dir:
+        algorithm.attach_log_dir(resume_log_dir)
+    algorithm.save_config(algorithm.create_log_folder())
+    algorithm.run()
+    if hasattr(algorithm, "run_final_test"):
+        if should_run_final_test:
+            print(f"Running final test for {experiment_config.algorithm}...")
+            algorithm.run_final_test()
+        else:
+            print("Skipping final test.")
 
 
 if __name__ == "__main__":

@@ -13,11 +13,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from eagle.config import load_config_from_json
-from eagle.evaluation.evaluator import Evaluator
+from eagle.eval.microrts.full_game_evaluator import FullGameEvaluator
 from eagle.main import _resolve_component_pool_path
 from eagle.utils.checkpoint import CheckpointManager, deserialize_individual
 from eagle.utils.component_pool import ComponentPool
-from eagle_round_evol.ea_log_parse import parse_individuals_from_ea_log
+from eagle.evolution.component.log_parse import parse_individuals_from_ea_log
 
 
 def _sorted_fronts_from_checkpoint_population(individuals: list) -> list[list]:
@@ -99,7 +99,7 @@ def load_final_groups(log_dir: Path, ea_mode: str) -> tuple[list[list], str, str
 
 
 def _component_entry_index(value: object) -> int:
-    """Read a component candidate index from legacy int or {'index', 'enabled'} entries."""
+    """Read a component candidate index from a component entry."""
     if isinstance(value, dict):
         value = value.get("index", 0)
     try:
@@ -109,7 +109,7 @@ def _component_entry_index(value: object) -> int:
 
 
 def _component_entry_enabled(value: object) -> int:
-    """Read a component inclusion bit from legacy int or {'index', 'enabled'} entries."""
+    """Read a component inclusion bit from a component entry."""
     if isinstance(value, dict):
         value = value.get("enabled", 1)
     else:
@@ -120,10 +120,8 @@ def _component_entry_enabled(value: object) -> int:
         return 1
 
 
-def _render_prompt(evaluator: Evaluator, individual) -> str:
+def _render_prompt(evaluator: FullGameEvaluator, individual) -> str:
     """Render one prompt through the current evaluator API."""
-    if hasattr(evaluator, "construct_prompt"):
-        return evaluator.construct_prompt(individual)
     return evaluator._construct_prompt(individual)
 
 
@@ -148,12 +146,12 @@ def build_next_experiment_bundle(
     source_config_payload: dict,
 ) -> dict[str, object]:
     """Build one reduced component pool plus remapped seeds for the exported individuals."""
-    reduced_components = deepcopy(component_pool.components)
+    reduced_components = deepcopy(component_pool.to_flat_dict())
     remapped_seeds: list[dict[str, object]] = []
     index_maps: dict[str, dict[int, int]] = {}
 
     for category in component_pool.component_keys:
-        candidates = list(component_pool.components.get(category, []))
+        candidates = list(component_pool.flat_components.get(category, []))
         if not candidates:
             continue
         if category in component_pool.non_evolving_component_keys:
@@ -163,8 +161,7 @@ def build_next_experiment_bundle(
 
         used_indices = {
             _component_entry_index(
-                getattr(individual, "component_indices", {})
-                .get(category, getattr(individual, "legacy_components", {}).get(category, 0))
+                getattr(individual, "component_indices", {}).get(category, 0)
             )
             for individual in individuals
         }
@@ -173,8 +170,6 @@ def build_next_experiment_bundle(
     for individual in individuals:
         remapped_components = {}
         component_indices = dict(getattr(individual, "component_indices", {}) or {})
-        component_indices.update(dict(getattr(individual, "legacy_components", {}) or {}))
-        component_indices.update(dict(getattr(individual, "strategy", {}) or {}))
         for category, old_index in component_indices.items():
             if category not in index_maps:
                 continue
@@ -222,7 +217,7 @@ def export_final_prompt(
     component_pool = ComponentPool.from_json(str(component_pool_path))
     config = load_config_from_json(log_dir)
     component_pool.configure_non_evolving_keys(getattr(config, "non_evolving_prompt_components", None))
-    evaluator = Evaluator(component_pool, config=config)
+    evaluator = FullGameEvaluator(component_pool, config=config)
     source_config_payload = json.loads((log_dir / "config.json").read_text(encoding="utf-8")) if (log_dir / "config.json").exists() else {}
     groups, source_name, resolved_ea_mode = load_final_groups(log_dir, ea_mode)
     selected_fronts = groups if resolved_ea_mode == "ga" else groups[:max_front]
@@ -260,8 +255,6 @@ def export_final_prompt(
                 "id": individual.id,
                 "game_rule": individual.game_rule,
                 "component_indices": dict(getattr(individual, "component_indices", {}) or {}),
-                "static_components": dict(getattr(individual, "legacy_components", {}) or {}),
-                "strategy": dict(getattr(individual, "strategy", {}) or {}),
                 "fitness": list(getattr(individual, "fitness", []) or []),
                 "evaluation_mode": getattr(individual, "evaluation_mode", None),
                 "pareto_rank": getattr(individual, "pareto_rank", None),

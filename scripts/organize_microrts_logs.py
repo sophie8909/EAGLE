@@ -16,13 +16,13 @@ TEXT_FILE_SUFFIXES = {".csv", ".json", ".jsonl", ".md", ".txt"}
 MICRORTS_LOG_NAME_PATTERN = re.compile(
     r"^(?:SurrogateLog_|run_)?"
     r"(?P<date>\d{4}-\d{2}-\d{2})_(?P<time>\d{2}-\d{2}-\d{2})"
-    r"(?:_(?P<kind>test_surrogate|test|surrogate))?"
+    r"(?:_(?P<kind>test_eaglePolicy|eaglePolicy|test_eagleJava|eagleJava|test_surrogate|test|surrogate))?"
     r"\.(?:log|txt)$"
 )
 MICRORTS_LOG_REFERENCE_PATTERN = re.compile(
     r"((?:SurrogateLog_|run_)?"
     r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}"
-    r"(?:_(?:test_surrogate|test|surrogate))?"
+    r"(?:_(?:test_eaglePolicy|eaglePolicy|test_eagleJava|eagleJava|test_surrogate|test|surrogate))?"
     r"\.(?:log|txt))"
 )
 

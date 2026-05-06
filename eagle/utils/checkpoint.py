@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .individual import Individual
+from eagle.evolution.component.individual import Individual
 from .profiler import write_jsonl
 
 
@@ -16,9 +16,9 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
         "id": getattr(individual, "id", None),
         "game_rule": individual.game_rule,
         "component_indices": dict(getattr(individual, "component_indices", {}) or {}),
-        "strategy": dict(individual.strategy or {}),
         "fitness": list(individual.fitness) if isinstance(individual.fitness, (list, tuple)) else individual.fitness,
-        "static_components": dict(getattr(individual, "static_components", {}) or {}),
+        "rendered_prompt": getattr(individual, "rendered_prompt", ""),
+        "metadata": dict(getattr(individual, "metadata", {}) or {}),
     }
 
     operator_profile = getattr(individual, "operator_profile", None)
@@ -49,18 +49,16 @@ def deserialize_individual(payload: dict[str, Any]) -> Individual:
     individual = Individual(
         id=payload.get("id"),
         game_rule=payload.get("game_rule", 0),
-        strategy={},
-        static_components=dict(
-            payload.get("component_indices")
-            or payload.get("static_components")
-            or payload.get("strategy")
-            or {}
-        ),
+        component_indices=dict(payload.get("component_indices") or {}),
     )
 
     fitness = payload.get("fitness")
     if fitness is not None:
         individual.fitness = fitness
+    individual.rendered_prompt = str(payload.get("rendered_prompt") or "")
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        individual.metadata = dict(metadata)
 
     operator_profile = payload.get("operator_profile")
     if isinstance(operator_profile, dict):

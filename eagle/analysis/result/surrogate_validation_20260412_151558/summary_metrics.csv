@@ -1,9 +1,0 @@
-group_type,group_value,pair_count,unique_prompt_count,pearson,spearman,kendall_tau,mae,rmse,mean_bias,topk_overlap_5,topk_overlap_10,topk_overlap_20
-overall,overall,60,10,,,,0.48333333333333334,0.4915960401250875,0.016666666666666666,0.6,1.0,1.0
-map,__unknown_map__,60,10,,,,0.48333333333333334,0.4915960401250875,0.016666666666666666,0.6,1.0,1.0
-opponent,ai.PassiveAI,10,10,,,,0.4,0.4472135954999579,0.4,1.0,1.0,1.0
-opponent,ai.RandomAI,10,10,,,,0.5,0.5,0.1,0.8,1.0,1.0
-opponent,ai.RandomBiasedAI,10,10,,,,0.5,0.5,-0.2,0.8,1.0,1.0
-opponent,ai.abstraction.HeavyRush,10,10,,,,0.5,0.5,0.2,0.8,1.0,1.0
-opponent,ai.abstraction.LightRush,10,10,,,,0.5,0.5,0.1,0.6,1.0,1.0
-opponent,ai.abstraction.WorkerRush,10,10,,,,0.5,0.5,-0.5,1.0,1.0,1.0

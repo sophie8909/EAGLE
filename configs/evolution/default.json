@@ -1,5 +1,5 @@
 {
-  "algorithm": "nsga2",
+  "algorithm": "round_nsga2",
   "population_size": 10,
   "num_generations": 50,
   "convergence_generations": 10,
@@ -21,7 +21,6 @@
   "crossover": "uniform",
   "crossover_repair_enabled": true,
   "environment_selection_method": "elitism",
-  "steady_state_surrogate_offspring_count": 4,
   "final_test_max_front": 1,
   "include_strategy_identity_in_prompt": false,
   "evolving_prompt_components": [
@@ -79,11 +78,11 @@
     "ranged": 2.0,
     "resource": 1.0
   },
-  "surrogate_version": "policy",
+  "surrogate_version": "eaglePolicy",
   "surrogate_mode": "light_rush_and_heavy_rush", 
   "surrogate_recent_match_window": 10,
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts",
-  "prompt_history_path": "./eagle_round_evol/history.jsonl",
+  "prompt_history_path": "logs/microrts/round_evol/history.jsonl",
   "one_eval_rounds": 5
 }

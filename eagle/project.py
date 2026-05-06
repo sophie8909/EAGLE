@@ -24,7 +24,7 @@ DEFAULT_FINAL_TEST_CONFIG_PATH = EVALUATION_CONFIGS_DIR / "final_test.json"
 
 
 def ensure_directory(path: Path, *, tolerate_file: bool = False) -> Path:
-    """Create one directory unless a legacy file already occupies the path."""
+    """Create one directory unless a file already occupies the path."""
     if path.exists():
         if path.is_dir():
             return path

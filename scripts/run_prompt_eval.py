@@ -1,6 +1,6 @@
-"""Replay saved generations for prompt-based evaluation."""
+"""Replay saved MicroRTS generations for prompt-based evaluation."""
 
-from eagle.evaluation.generation_replay import main
+from eagle.eval.microrts.generation_replay import main
 
 
 if __name__ == "__main__":

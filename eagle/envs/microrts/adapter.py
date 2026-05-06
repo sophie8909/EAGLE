@@ -1,4 +1,4 @@
-"""Thin compatibility layer between EAGLE modules and vendored MicroRTS."""
+"""MicroRTS runtime adapter used by evaluation and surrogate validation."""
 
 from __future__ import annotations
 
@@ -6,8 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ...project import PROJECT_ROOT
-from ...surrogate.compiler import compile_prompt_to_surrogate_spec
-from ...surrogate.eval.agent_generator import render_surrogate_agent
+from ...surrogate.compiler.eagle_policy_spec import compile_prompt_to_eagle_policy_spec
 from .compiler import compile_microrts, locate_microrts_root
 from .runner import (
     detect_timeout,
@@ -28,15 +27,17 @@ def run_surrogate_validation_case(
     config,
     prompt: str,
     opponent: str | None,
-    ai1_class: str = "ai.abstraction.EAGLESurrogate",
-    surrogate_spec: dict[str, object] | None = None,
+    ai1_class: str = "ai.abstraction.eaglePolicy",
+    eagle_policy_spec: dict[str, object] | None = None,
     test: bool = False,
     runtime_logs_dir: Path | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
-    """Render one surrogate Java agent and run a validation match."""
+    """Render one eaglePolicy Java agent and run a validation match."""
+    from ...surrogate.eval.eagle_policy_renderer import render_eagle_policy_agent
+
     root = (project_root or PROJECT_ROOT).resolve()
-    surrogate_spec = surrogate_spec or compile_prompt_to_surrogate_spec(prompt)[1]
-    render_surrogate_agent(root, prompt, surrogate_spec)
+    eagle_policy_spec = eagle_policy_spec or compile_prompt_to_eagle_policy_spec(prompt)[1]
+    render_eagle_policy_agent(root, prompt, eagle_policy_spec)
     return run_java_agent_game(
         project_root=root,
         config=config,
@@ -44,7 +45,7 @@ def run_surrogate_validation_case(
         opponent=opponent,
         prompt=prompt,
         compile_first=True,
-        log_prefix="run_surrogate" if not test else "run_test_surrogate",
+        log_prefix="run_eagle_policy" if not test else "run_test_eagle_policy",
         runtime_logs_dir=runtime_logs_dir,
         record_trace=bool(test and getattr(config, "save_trace_on_test", False)),
     )

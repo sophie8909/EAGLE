@@ -37,16 +37,10 @@ def _extract_ea_mode(argv: list[str]) -> tuple[str, list[str]]:
 def _patch_ea_log_parser(eval_mode: str) -> None:
     import eagle.analysis.evolution_result_analysis as analysis
 
-    if eval_mode == "round":
-        from eagle_round_evol.ea_log_parse import (
-            parse_individuals_from_ea_log,
-            parse_population_snapshot_from_ea_log,
-        )
-    else:
-        from eagle.utils.ea_log_parse import (
-            parse_individuals_from_ea_log,
-            parse_population_snapshot_from_ea_log,
-        )
+    from eagle.evolution.component.log_parse import (
+        parse_individuals_from_ea_log,
+        parse_population_snapshot_from_ea_log,
+    )
 
     analysis.parse_individuals_from_ea_log = parse_individuals_from_ea_log
     analysis.parse_population_snapshot_from_ea_log = parse_population_snapshot_from_ea_log

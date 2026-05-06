@@ -120,7 +120,7 @@ def normalize_result_rows(rows: list[dict[str, str]], source_name: str) -> list[
         map_name = _first_present_value(row, KEY_ALIASES["map_name"])
         opponent = _first_present_value(row, KEY_ALIASES["opponent"])
         if prompt_id is None:
-            raise ValueError(f"{source_name} row {index} is missing prompt_id-compatible columns")
+            raise ValueError(f"{source_name} row {index} is missing an accepted prompt_id column")
         if map_name is None:
             map_name = "__unknown_map__"
         if opponent is None:
@@ -128,7 +128,7 @@ def normalize_result_rows(rows: list[dict[str, str]], source_name: str) -> list[
         seed = _first_present_value(row, KEY_ALIASES["seed"]) or "__aggregate__"
         score = _parse_outcome_score(row)
         if score is None:
-            raise ValueError(f"{source_name} row {index} is missing a score/outcome-compatible column")
+            raise ValueError(f"{source_name} row {index} is missing an accepted score/outcome column")
         component_values = {
             "win": _parse_float(_first_present_value(row, RESULT_COMPONENT_ALIASES["win"])),
             "resource": _parse_float(_first_present_value(row, RESULT_COMPONENT_ALIASES["resource"])),
@@ -234,7 +234,7 @@ def normalize_behavior_rows(rows: list[dict[str, str]], source_name: str) -> tup
     for index, row in enumerate(rows):
         prompt_id = _first_present_value(row, KEY_ALIASES["prompt_id"])
         if prompt_id is None:
-            raise ValueError(f"{source_name} behavior row {index} is missing prompt_id-compatible columns")
+            raise ValueError(f"{source_name} behavior row {index} is missing an accepted prompt_id column")
         map_name = _first_present_value(row, KEY_ALIASES["map_name"]) or "__unknown_map__"
         opponent = _first_present_value(row, KEY_ALIASES["opponent"]) or "__unknown_opponent__"
         seed = _first_present_value(row, KEY_ALIASES["seed"]) or "__aggregate__"
@@ -337,7 +337,7 @@ def split_surrogate_validation_matches(
     rows: list[dict[str, str]],
     *,
     prompt_mode: str = "eagle_final_test",
-    java_mode: str = "surrogate_java_final_test",
+    java_mode: str = "eagle_policy_final_test",
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     """Split one surrogate_validation_matches.csv into prompt and Java result rows."""
     prompt_rows: list[dict[str, str]] = []

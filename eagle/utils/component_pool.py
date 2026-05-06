@@ -14,6 +14,9 @@ class ComponentPool:
     """Prompt component pool with one flattened component namespace."""
 
     DEFAULT_NON_EVOLVING_COMPONENT_KEYS = {"json_schema"}
+    TRAINING_EXAMPLES_KEY = "training_examples"
+    TRAINING_EXAMPLE_PREFIX = "training_example_"
+    MAX_TRAINING_EXAMPLES_PER_RENDER = 4
 
     def __init__(self, components: Dict[str, Any]):
         raw_components = dict(components or {})
@@ -21,20 +24,27 @@ class ComponentPool:
         self.metadata = metadata
 
         self.flat_components: OrderedDict[str, list[list[str]]] = OrderedDict()
+        self.prompt_component_keys: list[str] = []
+        self.training_examples: list[dict[str, Any]] = []
         for key, value in raw_components.items():
-            if key == "strategy" and isinstance(value, dict):
-                for nested_key, candidates in value.items():
-                    self.flat_components[str(nested_key)] = self._normalize_candidates(candidates)
+            key = str(key)
+            if key == self.TRAINING_EXAMPLES_KEY:
+                self.training_examples = self._normalize_training_examples(value)
+                self.prompt_component_keys.append(key)
                 continue
-            self.flat_components[str(key)] = self._normalize_candidates(value)
+            if key.startswith(self.TRAINING_EXAMPLE_PREFIX):
+                self.training_examples.extend(self._legacy_training_examples(key, value))
+                if self.TRAINING_EXAMPLES_KEY not in self.prompt_component_keys:
+                    self.prompt_component_keys.append(self.TRAINING_EXAMPLES_KEY)
+                continue
+            self.flat_components[key] = self._normalize_candidates(value)
+            self.prompt_component_keys.append(key)
 
         self.component_keys = list(self.flat_components.keys())
         self.game_rule_source_keys = list(self.component_keys)
         self.game_rule_components = [self._flatten_all_prompt_lines()]
 
         metadata_non_evolving = metadata.get("non_evolving_component_keys")
-        if metadata_non_evolving is None:
-            metadata_non_evolving = metadata.get("fixed_component_keys")
         self.non_evolving_component_keys = self._valid_key_set(
             metadata_non_evolving,
             fallback=self.DEFAULT_NON_EVOLVING_COMPONENT_KEYS,
@@ -47,21 +57,10 @@ class ComponentPool:
             fallback=self.evolving_component_keys,
         )
         self.reflection_alignment_keys = self._filter_component_keys(
-            metadata.get("reflection_alignment_keys") or metadata.get("reflection_strategy_keys"),
+            metadata.get("reflection_alignment_keys"),
             fallback=self.evolving_component_keys,
         )
 
-        # Compatibility aliases for older analysis/export code. Runtime logic no
-        # longer treats these as separate namespaces.
-        self.components = self.flat_components
-        self.strategy_keys = list(self.component_keys)
-        self.static_component_keys = list(self.component_keys)
-        self.mutable_static_component_keys = list(self.evolving_component_keys)
-        self.fixed_component_keys = set(self.non_evolving_component_keys)
-        self.FIXED_COMPONENT_KEYS = self.fixed_component_keys
-        self.NON_EVOLVING_STATIC_KEYS = self.fixed_component_keys
-        self.identity_strategy_key = self.identity_component_key
-        self.reflection_strategy_keys = list(self.reflection_alignment_keys)
         self.dependent_strategy_keys = [
             key for key in self.evolving_component_keys
             if key != self.identity_component_key
@@ -101,8 +100,6 @@ class ComponentPool:
 
     def _resolve_identity_component_key(self, metadata: dict[str, Any]) -> str | None:
         explicit_identity = metadata.get("identity_component_key")
-        if explicit_identity is None:
-            explicit_identity = metadata.get("identity_strategy_key")
         if explicit_identity is not None and str(explicit_identity) in self.component_keys:
             return str(explicit_identity)
         return None
@@ -133,10 +130,6 @@ class ComponentPool:
             fallback=self.DEFAULT_NON_EVOLVING_COMPONENT_KEYS,
         )
         self.evolving_component_keys = self.resolve_evolving_component_keys(None)
-        self.mutable_static_component_keys = list(self.evolving_component_keys)
-        self.fixed_component_keys = set(self.non_evolving_component_keys)
-        self.FIXED_COMPONENT_KEYS = self.fixed_component_keys
-        self.NON_EVOLVING_STATIC_KEYS = self.fixed_component_keys
         self.dependent_strategy_keys = [
             key for key in self.evolving_component_keys
             if key != self.identity_component_key
@@ -150,11 +143,17 @@ class ComponentPool:
         )
         return [key for key in self.component_keys if key not in excluded]
 
-    def to_flat_dict(self) -> dict[str, list[list[str]]]:
+    def to_flat_dict(self) -> dict[str, Any]:
         """Return the canonical flattened component payload."""
-        return {key: value for key, value in self.flat_components.items()}
+        payload: dict[str, Any] = {}
+        for key in self.prompt_component_keys:
+            if key == self.TRAINING_EXAMPLES_KEY:
+                payload[key] = deepcopy(self.training_examples)
+            else:
+                payload[key] = self.flat_components[key]
+        return payload
 
-    def to_compatible_dict(self) -> dict[str, Any]:
+    def to_component_dict(self) -> dict[str, Any]:
         """Return a JSON payload using the flattened component schema."""
         payload: OrderedDict[str, Any] = OrderedDict()
         payload["metadata"] = OrderedDict(
@@ -165,8 +164,11 @@ class ComponentPool:
                 ("reflection_alignment_keys", list(self.reflection_alignment_keys)),
             ]
         )
-        for key, candidates in self.flat_components.items():
-            payload[key] = deepcopy(candidates)
+        for key in self.prompt_component_keys:
+            if key == self.TRAINING_EXAMPLES_KEY:
+                payload[key] = deepcopy(self.training_examples)
+            else:
+                payload[key] = deepcopy(self.flat_components[key])
         return payload
 
     def has_category(self, category: str) -> bool:
@@ -302,7 +304,14 @@ class ComponentPool:
         """Render the full prompt from flattened component indices."""
         selected_indices = dict(selected_indices or {})
         rendered_lines: list[str] = []
-        for key in self.component_keys:
+        for key in self.prompt_component_keys:
+            if key == self.TRAINING_EXAMPLES_KEY:
+                lines = self._render_training_examples(selected_indices.get(key))
+                if lines:
+                    if rendered_lines:
+                        rendered_lines.append("")
+                    rendered_lines.extend(lines)
+                continue
             if not self._selected_enabled(selected_indices.get(key, 0)):
                 continue
             if key == self.identity_component_key and not include_identity_component:
@@ -340,6 +349,70 @@ class ComponentPool:
             return bool(int(value))
         except (TypeError, ValueError):
             return True
+
+    @classmethod
+    def _legacy_training_examples(cls, key: str, value: Any) -> list[dict[str, Any]]:
+        """Convert one old training_example_* component into the merged schema."""
+        name = key.removeprefix(cls.TRAINING_EXAMPLE_PREFIX)
+        return [
+            {
+                "name": name,
+                "content": candidate,
+            }
+            for candidate in cls._normalize_candidates(value)
+        ]
+
+    @staticmethod
+    def _normalize_training_examples(value: Any) -> list[dict[str, Any]]:
+        """Normalize merged training examples while preserving example text."""
+        if not isinstance(value, list):
+            return []
+        examples: list[dict[str, Any]] = []
+        for index, item in enumerate(value):
+            if isinstance(item, dict):
+                name = str(item.get("name", f"example_{index}"))
+                content = item.get("content", [])
+            else:
+                name = f"example_{index}"
+                content = item
+            if isinstance(content, list):
+                lines = [str(line) for line in content]
+            else:
+                lines = [str(content)]
+            examples.append({"name": name, "content": lines})
+        return examples
+
+    def _render_training_examples(self, selection: Any = None) -> list[str]:
+        """Sample and concatenate training examples for one prompt render."""
+        if not self.training_examples:
+            return []
+        max_count = min(self.MAX_TRAINING_EXAMPLES_PER_RENDER, len(self.training_examples))
+        sample_count = self._training_example_sample_count(selection, max_count)
+        if sample_count <= 0:
+            return []
+        selected_examples = random.sample(self.training_examples, sample_count)
+        rendered_lines: list[str] = []
+        for example in selected_examples:
+            lines = self._normalize_component_lines(example.get("content", []))
+            if not lines:
+                continue
+            if rendered_lines:
+                rendered_lines.append("")
+            rendered_lines.extend(lines)
+        return rendered_lines
+
+    @staticmethod
+    def _training_example_sample_count(selection: Any, max_count: int) -> int:
+        """Resolve random or fixed training-example sample count."""
+        if isinstance(selection, dict):
+            selection = selection.get("sample_count", selection.get("count"))
+        if selection is None or str(selection).strip().lower() in {"", "random", "random_0_4"}:
+            return random.randint(0, max_count)
+        try:
+            fixed_count = int(selection)
+        except (TypeError, ValueError):
+            return random.randint(0, max_count)
+        return max(0, min(max_count, fixed_count))
 
     def describe_individual_components(
         self,

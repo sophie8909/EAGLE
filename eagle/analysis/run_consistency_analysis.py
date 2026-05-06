@@ -140,7 +140,7 @@ def run_consistency_analysis(
         prompt_raw_rows, java_raw_rows = split_surrogate_validation_matches(run_rows)
         if not prompt_raw_rows or not java_raw_rows:
             raise ValueError(
-                "surrogate_validation_matches.csv did not contain both eagle_final_test and surrogate_java_final_test rows."
+                "surrogate_validation_matches.csv did not contain both eagle_final_test and eagle_policy_final_test rows."
             )
     else:
         prompt_raw_rows = read_csv_rows(prompt_results_path)

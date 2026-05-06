@@ -1,9 +1,0 @@
-{
-  "team_name": "your-team-name",
-  "display_name": "Your Team Display Name",
-  "agent_class": "Agent",
-  "agent_file": "Agent.java",
-  "model_provider": "ollama",
-  "model_name": "llama3.1:8b",
-  "description": "Brief description of your agent's strategy"
-}

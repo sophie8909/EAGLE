@@ -1,9 +1,0 @@
-{
-  "team_name": "example-team",
-  "display_name": "Example Team",
-  "agent_class": "WorkerRushLLMAgent",
-  "agent_file": "WorkerRushLLMAgent.java",
-  "model_provider": "none",
-  "model_name": "none",
-  "description": "Simple WorkerRush wrapper demonstrating the submission format. No LLM required."
-}

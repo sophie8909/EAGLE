@@ -118,6 +118,14 @@ def _make_log_path(
         filename = f"run_{timestamp}_surrogate.log"
     elif normalized_prefix == "run_test_surrogate":
         filename = f"run_{timestamp}_test_surrogate.log"
+    elif normalized_prefix == "run_eagle_policy":
+        filename = f"run_{timestamp}_eaglePolicy.log"
+    elif normalized_prefix == "run_test_eagle_policy":
+        filename = f"run_{timestamp}_test_eaglePolicy.log"
+    elif normalized_prefix == "run_eagle_java":
+        filename = f"run_{timestamp}_eagleJava.log"
+    elif normalized_prefix == "run_test_eagle_java":
+        filename = f"run_{timestamp}_test_eagleJava.log"
     else:
         filename = f"{normalized_prefix}_{timestamp}.log"
     return logs_dir / filename

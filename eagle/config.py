@@ -62,9 +62,6 @@ class EAConfig:
     environment_selection_method: str = field(
         default_factory=lambda: str(_default_config_value("environment_selection_method"))
     )
-    steady_state_surrogate_offspring_count: int = field(
-        default_factory=lambda: int(_default_config_value("steady_state_surrogate_offspring_count"))
-    )
     final_test_max_front: int | None = field(default_factory=lambda: _default_config_value("final_test_max_front"))
     include_strategy_identity_in_prompt: bool = field(
         default_factory=lambda: bool(_default_config_value("include_strategy_identity_in_prompt"))
@@ -222,7 +219,6 @@ class EAConfig:
             "crossover": self.crossover,
             "crossover_repair_enabled": self.crossover_repair_enabled,
             "environment_selection_method": self.environment_selection_method,
-            "steady_state_surrogate_offspring_count": self.steady_state_surrogate_offspring_count,
             "final_test_max_front": self.final_test_max_front,
             "include_strategy_identity_in_prompt": self.include_strategy_identity_in_prompt,
             "evolving_prompt_components": list(self.evolving_prompt_components),

@@ -11,7 +11,8 @@ from pathlib import Path
 from ..config import load_config_from_json
 from ..project import EAGLE_LOGS_DIR, ensure_directory
 from ..utils.checkpoint import deserialize_individual
-from ..utils.ea_log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
+from ..evolution.component.log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
+from ..representation.fitness import fitness_values, normalize_fitness_dict
 
 
 GENERATION_LOG_PATTERN = re.compile(r"generation_(\d+)_mo\.txt$")
@@ -130,16 +131,35 @@ def _dominates(left_fitness: list[float], right_fitness: list[float]) -> bool:
     return better_in_any
 
 
+def _objective_names(individuals: list) -> list[str]:
+    """Return objective names present in a population without assuming count."""
+    names: list[str] = []
+    for individual in individuals:
+        for name in normalize_fitness_dict(getattr(individual, "fitness", {})).keys():
+            if name not in names:
+                names.append(name)
+    return names or ["objective_0", "objective_1"]
+
+
+def _xy_fitness(individual, objective_names: list[str]) -> tuple[float, float]:
+    """Return the first two objective values for scatter plotting."""
+    values = fitness_values(getattr(individual, "fitness", {}), objective_names)
+    x_value = _safe_float(values[0]) if len(values) > 0 else float("nan")
+    y_value = _safe_float(values[1]) if len(values) > 1 else float("nan")
+    return x_value, y_value
+
+
 def _front_one_ids_from_population(individuals: list) -> set[str]:
     """Compute Front-1 ids directly from one population snapshot."""
     front_one: list = []
+    objective_names = _objective_names(individuals)
     for candidate in individuals:
-        candidate_fitness = list(getattr(candidate, "fitness", []) or [])
+        candidate_fitness = fitness_values(getattr(candidate, "fitness", {}), objective_names)
         dominated = False
         for other in individuals:
             if other is candidate:
                 continue
-            other_fitness = list(getattr(other, "fitness", []) or [])
+            other_fitness = fitness_values(getattr(other, "fitness", {}), objective_names)
             if _dominates(other_fitness, candidate_fitness):
                 dominated = True
                 break
@@ -235,10 +255,10 @@ def _plot_generation_scatter(
 
     all_x_values: list[float] = []
     all_y_values: list[float] = []
+    objective_names = _objective_names([individual for _, individuals, _ in generation_entries for individual in individuals])
     for _, individuals, _ in generation_entries:
         for individual in individuals:
-            x_value = _safe_float(individual.fitness[0]) if len(individual.fitness) > 0 else float("nan")
-            y_value = _safe_float(individual.fitness[1]) if len(individual.fitness) > 1 else float("nan")
+            x_value, y_value = _xy_fitness(individual, objective_names)
             if math.isnan(x_value) or math.isnan(y_value):
                 continue
             all_x_values.append(x_value)
@@ -272,8 +292,7 @@ def _plot_generation_scatter(
         front_one_pairs = []
 
         for individual in individuals:
-            x_value = _safe_float(individual.fitness[0]) if len(individual.fitness) > 0 else float("nan")
-            y_value = _safe_float(individual.fitness[1]) if len(individual.fitness) > 1 else float("nan")
+            x_value, y_value = _xy_fitness(individual, objective_names)
             print(f"Gen {generation_number} - Individual {getattr(individual, 'id', '')}: Fitness = ({x_value}, {y_value}), Front 1 = {getattr(individual, 'id', '') in front_one_ids}")
             if math.isnan(x_value) or math.isnan(y_value):
                 continue
@@ -529,7 +548,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "--eval-mode",
         choices=["match", "round"],
         default="match",
-        help="Use 'round' for eagle_round_evol legality/alignment objectives.",
+        help="Use 'round' for MicroRTS round legality/alignment objectives.",
     )
     return parser
 

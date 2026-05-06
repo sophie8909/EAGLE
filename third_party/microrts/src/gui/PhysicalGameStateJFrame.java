@@ -6,7 +6,6 @@ package gui;
 
 import javax.swing.*;
 
-import gui.frontend.GameController;
 import rts.GameState;
 
 import java.awt.*;

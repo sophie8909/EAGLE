@@ -397,7 +397,7 @@ def collect_recent_dynamic_prompts(
         # Only reuse real EAGLE runtime logs for surrogate round sampling.
         # Surrogate-agent logs can contain different action traces and would
         # leak the surrogate policy back into the history window.
-        if "[EAGLE.getAction]" not in log_text or "[EAGLESurrogate.getAction]" in log_text:
+        if "[EAGLE.getAction]" not in log_text or "[eaglePolicy.getAction]" in log_text:
             continue
         for block in extract_dynamic_prompt_blocks(log_text):
             item = dict(block)
