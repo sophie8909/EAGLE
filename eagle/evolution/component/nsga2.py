@@ -4,7 +4,6 @@ NSGA-II implementation for multi-objective optimization of prompt components.
 
 from __future__ import annotations
 
-from inspect import signature
 import math
 import random
 from typing import List, Tuple
@@ -14,7 +13,6 @@ from eagle.utils.component_pool import ComponentPool
 
 from .base import EA
 from .individual import Individual
-from eagle.operators.component.mutation import Mutation
 
 
 def _normalize_two_objective_fitness(fitness) -> list[float]:
@@ -49,6 +47,9 @@ class NSGA2(EA):
        you should convert them before storing them in `individual.fitness`,
        or modify `dominates()` accordingly.
     """
+
+    default_parent_selection_operator_name = "nsga2_tournament"
+    default_replacement_operator_name = "nsga2_environmental"
 
     def __init__(
         self,
@@ -96,29 +97,6 @@ class NSGA2(EA):
         if self.dominates(ind2, ind1):
             return ind2
         return random.choice([ind1, ind2])
-
-    def select_parents(self) -> List[Individual]:
-        """Sample two parents with NSGA-II's tournament selection policy."""
-        if len(self.population) < 2:
-            raise ValueError("NSGA-II requires at least two individuals for parent selection.")
-
-        self._assign_rank_and_crowding(self.population)
-
-        def _pick_one() -> Individual:
-            """Run one binary tournament under the current NSGA-II ranking state."""
-            a, b = random.sample(self.population, 2)
-            return self._better_parent(a, b)
-
-        return _pick_one(), _pick_one()
-
-    def select_parent(self) -> Individual:
-        """Sample one parent with NSGA-II's tournament selection policy."""
-        if len(self.population) < 2:
-            raise ValueError("NSGA-II requires at least two individuals for parent selection.")
-
-        self._assign_rank_and_crowding(self.population)
-        a, b = random.sample(self.population, 2)
-        return self._better_parent(a, b)
 
     def dominates(self, ind1: Individual, ind2: Individual) -> bool:
         """
@@ -278,8 +256,7 @@ class NSGA2(EA):
         Returns:
             The next generation with size `self.config.population_size`.
         """
-        next_generation, _ = self._select_next_generation_with_fronts(population, offspring)
-        return next_generation
+        return super().select_next_generation(population, offspring)
 
     def _select_next_generation_with_fronts(
         self,
@@ -520,4 +497,6 @@ class NSGA2(EA):
             and child_fitness[1] >= parent_fitness[1]
             and (child_fitness[0] > parent_fitness[0] or child_fitness[1] > parent_fitness[1])
         )
-        Mutation.update_mutation_component_feedback(mutation_mode, improved)
+        update_feedback = getattr(self.mutation_operator, "update_feedback", None)
+        if update_feedback is not None:
+            update_feedback(mutation_mode, improved)

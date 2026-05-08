@@ -4,15 +4,11 @@ Base class for evolutionary algorithms.
 
 from __future__ import annotations
 
-import random
 from pathlib import Path
 from typing import Any, ClassVar, List
 
 from eagle.config import EAConfig
-from eagle.eval.microrts.final_test_runner import run_final_test_suite
-from .parent_selection import ParentSelection
-from eagle.operators.component.crossover import Crossover
-from eagle.operators.component.mutation import Mutation
+from eagle.operators.registry import get_operator
 from eagle.project import EAGLE_LOGS_DIR
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.match_score_recorder import MatchScoreRecorder
@@ -30,6 +26,10 @@ class EA:
 
     evaluator_factory: ClassVar[Any | None] = None
     reflection_operator: ClassVar[Any | None] = None
+    default_mutation_operator_name: ClassVar[str] = "component_strategy_mutation"
+    default_crossover_operator_name: ClassVar[str] = "uniform"
+    default_parent_selection_operator_name: ClassVar[str | None] = None
+    default_replacement_operator_name: ClassVar[str] = "pool_replacement"
 
     def __init__(self, config: EAConfig, component_pool: ComponentPool, opponent_list: List[str]):
         """Initialize shared EA state and create the initial random population."""
@@ -43,6 +43,34 @@ class EA:
         self.current_log_dir: Path | None = None
         self.match_score_recorder: MatchScoreRecorder | None = None
         self.current_generation = 0
+        self.mutation_operator = get_operator(
+            "mutation",
+            self._operator_name("mutation", self.default_mutation_operator_name),
+        )
+        self.crossover_operator = get_operator(
+            "crossover",
+            self._operator_name("crossover", self.default_crossover_operator_name),
+        )
+        self.parent_selection_operator = get_operator(
+            "parent_selection",
+            self._operator_name(
+                "parent_selection",
+                self.default_parent_selection_operator_name or self.config.selection_method,
+            ),
+        )
+        self.replacement_operator = get_operator(
+            "replacement",
+            self._operator_name("replacement", self.default_replacement_operator_name),
+        )
+
+    def _operator_name(self, operator_type: str, default_name: str) -> str:
+        """Return a configured operator name or the algorithm default."""
+        explicit_name = getattr(self.config, f"{operator_type}_operator", None)
+        if explicit_name:
+            return str(explicit_name)
+        if operator_type == "crossover":
+            return str(getattr(self.config, "crossover", default_name) or default_name)
+        return default_name
 
 
     def save_config(self, log_dir: str):
@@ -242,75 +270,36 @@ class EA:
 
     def select_parents(self) -> List[Individual]:
         """Choose two parents according to the configured parent-selection rule."""
-        if self.config.selection_method == "random":
-            idx1 = ParentSelection.random_selection(self.population)
-            idx2 = ParentSelection.random_selection(self.population)
-            return self.population[idx1], self.population[idx2]
-
-        if self.config.selection_method == "tournament":
-            fitnesses = [list(ind.fitness) if ind.fitness is not None else [0.0, 0.0] for ind in self.population]
-            idx1 = ParentSelection.tournament_selection(
-                self.population,
-                fitnesses,
-                min(self.config.tournament_size, len(self.population)),
-            )
-            idx2 = ParentSelection.tournament_selection(
-                self.population,
-                fitnesses,
-                min(self.config.tournament_size, len(self.population)),
-            )
-            return self.population[idx1], self.population[idx2]
-
-        raise ValueError(f"Unsupported selection_method: {self.config.selection_method}")
+        return self.parent_selection_operator(self, count=2)
 
     def select_parent(self) -> Individual:
         """Choose exactly one parent according to the configured selection rule."""
-        if self.config.selection_method == "random":
-            return self.population[ParentSelection.random_selection(self.population)]
-
-        if self.config.selection_method == "tournament":
-            fitnesses = [list(ind.fitness) if ind.fitness is not None else [0.0, 0.0] for ind in self.population]
-            idx = ParentSelection.tournament_selection(
-                self.population,
-                fitnesses,
-                min(self.config.tournament_size, len(self.population)),
-            )
-            return self.population[idx]
-
-        raise ValueError(f"Unsupported selection_method: {self.config.selection_method}")
+        return self.parent_selection_operator(self, count=1)
 
     def crossover(self, parent1: Individual, parent2: Individual) -> Individual:
         """Create one child and seed its fitness with the parents' average values."""
-        if self.config.crossover == "uniform":
-            offspring = Individual.from_existing(
-                Crossover.uniform_crossover(self.component_pool, parent1, parent2)
-            )
-            if self.config.crossover_repair_enabled:
-                offspring = Individual.from_existing(
-                    Mutation.repair_strategy_after_crossover(
-                        offspring,
-                        self.component_pool,
-                    )
-                )
-            # Seed the child with a cheap inherited estimate; round evaluation
-            # overwrites this before survivor selection.
-            offspring.fitness = [
-                (left + right) / 2
-                for left, right in zip(parent1.fitness, parent2.fitness)
-            ]
-            return offspring
-        raise ValueError(f"Unsupported crossover: {self.config.crossover}")
+        return self.crossover_operator(
+            self.component_pool,
+            parent1,
+            parent2,
+            self.config,
+        )
     
     def mutate(self, individual: Individual) -> Individual:
         """Apply one of the configured mutation strategies to a copied child."""
-        mutated_individual = Individual.from_existing(
-            Mutation.mutate_individual(
-                individual,
-                self.component_pool,
-                self.config,
-            )
+        return self.mutation_operator(
+            individual,
+            self.component_pool,
+            self.config,
         )
-        return mutated_individual
+
+    def select_next_generation(
+        self,
+        population: List[Individual],
+        offspring: List[Individual],
+    ) -> List[Individual]:
+        """Create the next population through the configured replacement operator."""
+        return self.replacement_operator(self, population, offspring)
 
     def reflect(self, individual: Individual) -> Individual:
         """Apply the configured reflection operator to one parent."""
@@ -337,4 +326,6 @@ class EA:
         if self.config.final_test_max_front is not None and int(self.config.final_test_max_front) < 1:
             print("[Final Test] skipped because final_test_max_front=0", flush=True)
             return
+        from eagle.eval.microrts.final_test_runner import run_final_test_suite
+
         run_final_test_suite(self.current_log_dir, self.current_generation, self.config)

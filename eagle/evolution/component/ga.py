@@ -10,7 +10,6 @@ from eagle.utils.component_pool import ComponentPool
 
 from .base import EA
 from .individual import Individual
-from eagle.operators.component.mutation import Mutation
 
 
 def _normalize_single_objective_fitness(fitness) -> list[float]:
@@ -34,6 +33,9 @@ def _normalize_single_objective_fitness(fitness) -> list[float]:
 class GA(EA):
     """Single-objective GA using score-only selection and survival."""
 
+    default_parent_selection_operator_name = "ga_fitness_tournament"
+    default_replacement_operator_name = "ga_fitness_elitism"
+
     def __init__(
         self,
         config: EAConfig,
@@ -54,29 +56,6 @@ class GA(EA):
         if f2 > f1:
             return ind2
         return random.choice([ind1, ind2])
-
-    def select_parent(self) -> Individual:
-        """Select one parent by binary tournament on fitness[0]."""
-        if len(self.population) < 2:
-            raise ValueError("GA requires at least two individuals for parent selection.")
-        a, b = random.sample(self.population, 2)
-        return self._better_parent(a, b)
-
-    def select_parents(self) -> List[Individual]:
-        """Select two parents by independent binary tournaments on fitness[0]."""
-        if len(self.population) < 2:
-            raise ValueError("GA requires at least two individuals for parent selection.")
-        return self.select_parent(), self.select_parent()
-
-    def select_next_generation(
-        self,
-        population: List[Individual],
-        offspring: List[Individual],
-    ) -> List[Individual]:
-        """Select survivors by fitness[0] descending from parents+offspring."""
-        combined_population = population + offspring
-        ranked = sorted(combined_population, key=self._fitness0, reverse=True)
-        return ranked[: self.config.population_size]
 
     def _sample_reproduction_operator(self) -> str:
         """Sample crossover, mutation, or reflection from config weights."""
@@ -130,7 +109,9 @@ class GA(EA):
             return
 
         improved = self._fitness0(child) > float(parent_fitness0)
-        Mutation.update_mutation_component_feedback(mutation_mode, improved)
+        update_feedback = getattr(self.mutation_operator, "update_feedback", None)
+        if update_feedback is not None:
+            update_feedback(mutation_mode, improved)
 
     def run(self) -> list:
         """Main single-objective GA loop."""
