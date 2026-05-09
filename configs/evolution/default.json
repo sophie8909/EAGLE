@@ -1,5 +1,6 @@
 {
   "algorithm": "round_nsga2",
+  "evaluator": "round",
   "population_size": 10,
   "num_generations": 50,
   "convergence_generations": 10,
@@ -16,9 +17,11 @@
     "identity_shift_rewrite": 0.25,
     "bitmask_flip": 0.0
   },
+  "mutation_operator": "mix",
   "selection_method": "random",
   "tournament_size": 3,
   "crossover": "uniform",
+  "crossover_operator": "uniform",
   "crossover_repair_enabled": true,
   "environment_selection_method": "elitism",
   "final_test_max_front": 1,
@@ -61,6 +64,9 @@
   "initial_population_seeds": [],
   "run_time_per_game_sec": 500,
   "real_eval_rate": 0.25,
+  "objective_operator": "round_legality_alignment",
+  "training_example_sample_count": "random_0_4",
+  "training_example_fixed_count": false,
   "real_eval_opponents": [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"

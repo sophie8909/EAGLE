@@ -9,7 +9,7 @@ from ...envs.microrts.compiler import locate_microrts_root
 from ...utils.component_pool import ComponentPool
 from ...config import EAConfig
 from ...evolution.component.individual import Individual
-from ...operators.component.mutation import Mutation
+from ...operators.mutation import support as mutation_support
 
 
 _ACTION_TYPES = ("move", "harvest", "build", "train", "attack")
@@ -108,7 +108,7 @@ class Reflection:
     ) -> tuple[Individual, dict[str, Any]]:
         """Rewrite a small set of flattened components using compact feedback."""
         child = parent.copy()
-        component_indices = Mutation._ensure_complete_strategy(
+        component_indices = mutation_support.ensure_complete_strategy(
             dict(getattr(child, "component_indices", {}) or {}),
             component_pool,
         )
@@ -132,7 +132,7 @@ class Reflection:
             reflection_context=reflection_context,
             targets=target_components,
         )
-        for key, value in Mutation._ensure_complete_strategy(component_indices, component_pool).items():
+        for key, value in mutation_support.ensure_complete_strategy(component_indices, component_pool).items():
             child.set_component_index(key, value)
         child.ea_llm_call_time += elapsed
         return child, {
@@ -402,14 +402,14 @@ class Reflection:
         rewritten_targets: list[str] = []
 
         for target in targets:
-            current_text = Mutation._component_text(component_pool, updated_strategy, target)
+            current_text = mutation_support.component_text(component_pool, updated_strategy, target)
             instruction = cls._build_reflection_instruction(
                 strategy=updated_strategy,
                 component_pool=component_pool,
                 target_component=target,
                 reflection_context=reflection_context,
             )
-            rewritten_text, elapsed = Mutation.rewrite_component_with_llm(
+            rewritten_text, elapsed = mutation_support.rewrite_component_with_llm(
                 current_text,
                 instruction,
             )
@@ -435,8 +435,8 @@ class Reflection:
         reflection_context: dict[str, Any],
     ) -> str:
         """Assemble the rewrite instruction used by the reflection operator."""
-        strategy_snapshot = Mutation._format_strategy_snapshot(strategy, component_pool)
-        identity_text = Mutation._component_text(
+        strategy_snapshot = mutation_support.format_strategy_snapshot(strategy, component_pool)
+        identity_text = mutation_support.component_text(
             component_pool,
             strategy,
             getattr(component_pool, "identity_component_key", None),

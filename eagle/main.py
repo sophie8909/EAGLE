@@ -68,6 +68,9 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     if args.algorithm:
         config.algorithm = args.algorithm
 
+    if args.evaluator:
+        config.evaluator = args.evaluator
+
     if args.timeout_sec is not None:
         config.run_time_per_game_sec = max(1, int(args.timeout_sec))
 
@@ -121,7 +124,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--evaluator",
-        choices=["round"],
+        choices=["round", "gameplay"],
         default=None,
         help="Override the evaluator selected by YAML experiment configs.",
     )
@@ -165,7 +168,7 @@ def main() -> None:
 
         experiment_config = ExperimentConfig(
             algorithm=config.algorithm,
-            evaluator="round",
+            evaluator=config.evaluator,
             ea=config,
             opponents=opponent_list,
         )
@@ -174,6 +177,7 @@ def main() -> None:
         experiment_config.opponents = opponent_list
     if args.evaluator:
         experiment_config.evaluator = args.evaluator
+        config.evaluator = args.evaluator
 
     algorithm = build_algorithm(
         experiment_config,

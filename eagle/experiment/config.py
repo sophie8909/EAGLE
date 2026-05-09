@@ -38,14 +38,26 @@ def experiment_config_from_payload(payload: dict[str, Any] | None) -> Experiment
     ea_payload = dict(data.get("ea") or {})
     if "algorithm" in data and "algorithm" not in ea_payload:
         ea_payload["algorithm"] = str(data["algorithm"]).strip().lower().replace("-", "_")
-    ea_config = load_config_payload(ea_payload)
-    algorithm = str(data.get("algorithm") or ea_config.algorithm)
     evaluator_value = data.get("evaluator")
     evaluator = str(
         (evaluator_value.get("name") if isinstance(evaluator_value, dict) else evaluator_value)
         or data.get("evaluator_name")
+        or ea_payload.get("evaluator")
         or "round"
-    )
+    ).strip().lower()
+    if "evaluator" not in ea_payload:
+        ea_payload["evaluator"] = evaluator
+    if "objective_operator" not in ea_payload:
+        default_objectives = {
+            "round": "round_legality_alignment",
+            "gameplay": "microrts_opponent",
+        }
+        ea_payload["objective_operator"] = default_objectives.get(
+            evaluator,
+            "round_legality_alignment",
+        )
+    ea_config = load_config_payload(ea_payload)
+    algorithm = str(data.get("algorithm") or ea_config.algorithm)
     opponents = list(data.get("opponents") or ea_config.real_eval_opponents or [])
     evaluator_params = dict(data.get("evaluator_params") or {})
     if isinstance(evaluator_value, dict):

@@ -49,7 +49,7 @@ class NSGA2(EA):
     """
 
     default_parent_selection_operator_name = "nsga2_tournament"
-    default_replacement_operator_name = "nsga2_environmental"
+    default_env_selection_operator_name = "nsga2_environmental"
 
     def __init__(
         self,
@@ -329,57 +329,42 @@ class NSGA2(EA):
         signature.sort()
         return signature
 
-    
-    def _generate_offspring(self, generation: int) -> List[Individual]:
-        """Create one full offspring population without evaluating it yet."""
-        offspring: List[Individual] = []
-        target_count = self.config.population_size
+    def _mutation_parent_snapshot(self, parent: Individual) -> list[float]:
+        """Capture the parent vector used by NSGA-II mutation feedback."""
+        return _normalize_two_objective_fitness(parent.fitness)
 
-        # Generational phase A: build the entire offspring population first.
-        while len(offspring) < target_count:
-            operator = self._sample_reproduction_operator()
-            if operator == "crossover":
-                parent1, parent2 = self.select_parents()
-                child = self.crossover(parent1, parent2)
-            elif operator == "mutation":
-                parent = self.select_parent()
-                print(f"[Generation {generation + 1}] selected parent for mutation: id={parent.id} {parent}", flush=True)
-                child = self.mutate(parent)
-                setattr(child, "_mutation_parent_fitness", _normalize_two_objective_fitness(parent.fitness))
-                print(f"[Generation {generation + 1}] created child from mutation: id={child.id} {child}", flush=True)
-            elif operator == "reflection":
-                child = self.reflect(self.select_parent())
-            else:
-                raise ValueError(f"Unsupported reproduction operator: {operator}")
+    def _mutation_improved(self, child: Individual, parent_snapshot) -> bool:
+        """Return whether a mutation child Pareto-improved over its parent."""
+        parent_fitness = list(parent_snapshot)
+        child_fitness = _normalize_two_objective_fitness(child.fitness)
+        return (
+            child_fitness[0] >= parent_fitness[0]
+            and child_fitness[1] >= parent_fitness[1]
+            and (child_fitness[0] > parent_fitness[0] or child_fitness[1] > parent_fitness[1])
+        )
 
-            setattr(child, "_reproduction_operator", operator)
-            offspring.append(child)
-            print(
-                f"[Generation {generation + 1}] generated offspring "
-                f"{len(offspring)}/{target_count} via {operator}",
-                flush=True,
-            )
+    def _new_run_state(self) -> List[List[Tuple]]:
+        """Keep first-front signatures for convergence detection."""
+        return []
 
-        return offspring[:target_count]
-
-    def _sample_reproduction_operator(self) -> str:
-        """Sample crossover, mutation, or reflection from config weights."""
-        weights = self.config.reproduction_operator_weights()
-        if not weights:
-            return "mutation"
-        operators = list(weights.keys())
-        probabilities = [weights[operator] for operator in operators]
-        return random.choices(operators, weights=probabilities, k=1)[0]
+    def _before_survivor_selection(
+        self,
+        generation: int,
+        offspring: List[Individual],
+    ) -> List[List[Individual]]:
+        """Compute parent-plus-offspring Pareto fronts before replacement."""
+        combined_population = self.population + offspring
+        return self._assign_rank_and_crowding(combined_population)
 
     def _log_generation(
         self,
         generation: int,
         offspring: List[Individual],
-        pareto_fronts: List[List[Individual]],
+        generation_context: List[List[Individual]],
         log_dir: str,
     ) -> None:
         """Write Pareto-front snapshots and the component pool."""
-        self.log_multi_objective_generation(log_dir, generation, pareto_fronts)
+        self.log_multi_objective_generation(log_dir, generation, generation_context)
         self.save_component_pool(log_dir)
         self.current_generation = generation
 
@@ -403,100 +388,12 @@ class NSGA2(EA):
             and all(sig == past_front_signatures[0] for sig in past_front_signatures)
         )
 
-    def run(self) -> list:
-        """
-        Main NSGA-II optimization loop.
-
-        Workflow:
-        1. Evaluate the initial population.
-        2. Repeatedly generate offspring through selection, crossover, and mutation.
-        3. Evaluate offspring.
-        4. Perform environmental selection with non-dominated sorting and crowding distance.
-        5. Log the Pareto fronts for each generation.
-        6. Stop early if the best front remains unchanged for several generations.
-
-        Returns:
-            The final population.
-        """
-        log_dir = self.create_log_folder()
-        evaluator = self.build_evaluator()
-
-        self._evaluate_initial_population(evaluator)
-
-        past_front_signatures: List[List[Tuple]] = []
-
-        for generation in range(self.config.num_generations):
-            print(
-                f"[Generation {generation + 1}/{self.config.num_generations}] start",
-                flush=True,
-            )
-            # Phase 1: build the full offspring batch.
-            offspring = self._generate_offspring(generation)
-            print(
-                f"[Generation {generation + 1}] generated offspring ready: {len(offspring)}",
-                flush=True,
-            )
-
-            for index, child in enumerate(offspring):
-                print(
-                    f"[Generation {generation + 1}] round evaluation "
-                    f"{index + 1}/{len(offspring)} id={child.id}",
-                    flush=True,
-                )
-                evaluator.evaluate(child, generation=generation)
-                print(
-                    f"[Generation {generation + 1}] round result "
-                    f"id={child.id} fitness={child.fitness}",
-                    flush=True,
-                )
-                self._update_mutation_component_feedback(child)
-
-            # Phase 2: combine parent population and completed offspring batch.
-            # Pareto fronts here are computed on the union, before survivor truncation.
-            combined_population = self.population + offspring
-            pareto_fronts = self._assign_rank_and_crowding(combined_population)
-
-            # Phase 3: one environmental-selection step creates the next generation.
-            print(
-                f"[Generation {generation + 1}] selecting survivors",
-                flush=True,
-            )
-            self.population = self.select_next_generation(self.population, offspring)
-
-            self._log_generation(generation, offspring, pareto_fronts, log_dir)
-            self.print_population_snapshot(f"generation {generation + 1} survivors")
-            print(
-                f"[Generation {generation + 1}] logged",
-                flush=True,
-            )
-
-            # Phase 4: simple convergence check on the current first Pareto front.
-            if self._has_converged(pareto_fronts, past_front_signatures):
-                print(
-                    f"[Generation {generation + 1}] convergence reached; stopping early",
-                    flush=True,
-                )
-                break
-
-        return self.population
-
-    def _update_mutation_component_feedback(self, child: Individual) -> None:
-        """Feed mutation-mode success/failure back to adaptive roulette."""
-        if getattr(child, "_reproduction_operator", None) != "mutation":
-            return
-
-        metadata = dict(getattr(child, "mutation_metadata", {}) or {})
-        mutation_mode = metadata.get("mutation_mode")
-        parent_fitness = getattr(child, "_mutation_parent_fitness", None)
-        if parent_fitness is None:
-            return
-
-        child_fitness = _normalize_two_objective_fitness(child.fitness)
-        improved = (
-            child_fitness[0] >= parent_fitness[0]
-            and child_fitness[1] >= parent_fitness[1]
-            and (child_fitness[0] > parent_fitness[0] or child_fitness[1] > parent_fitness[1])
-        )
-        update_feedback = getattr(self.mutation_operator, "update_feedback", None)
-        if update_feedback is not None:
-            update_feedback(mutation_mode, improved)
+    def _after_generation(
+        self,
+        generation: int,
+        offspring: List[Individual],
+        generation_context: List[List[Individual]],
+        run_state: List[List[Tuple]],
+    ) -> bool:
+        """Stop when the first Pareto front has stabilized."""
+        return self._has_converged(generation_context, run_state)

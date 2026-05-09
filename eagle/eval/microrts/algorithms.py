@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from eagle.core.registry import ALGORITHMS
+from eagle.core.registry import ALGORITHMS, EVALUATORS
 from eagle.evolution.component.ga import GA
 from eagle.evolution.component.nsga2 import NSGA2
 from eagle.reflection.microrts.round_reflection import RoundReflection
 
+from .full_game_evaluator import FullGameEvaluator
 from .round_evaluator import Evaluator as RoundEvaluator
+
+
+EVALUATORS.register("round", RoundEvaluator)
+EVALUATORS.register("gameplay", FullGameEvaluator)
 
 
 @ALGORITHMS.register("round_ga")

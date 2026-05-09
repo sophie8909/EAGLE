@@ -8,10 +8,10 @@ from typing import Any
 
 from ...config import EAConfig
 from ...envs.microrts.runner import run_java_agent_game, run_prompt_based_game
+from ...objectives.registry import get_objective
 from ...reflection.microrts.game_log_reflection_context import Reflection, read_max_turn_hint
 from ...project import PROJECT_ROOT
 from ...utils.component_pool import ComponentPool
-from ...utils.fitness_calculator import combined_match_score
 from ...utils.match_score_recorder import MatchScoreRecorder
 from ...evolution.component.individual import Individual
 from ...utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
@@ -36,6 +36,9 @@ class FullGameEvaluator:
         self.repo_root = PROJECT_ROOT
         self.runtime_logs_dir = Path(runtime_logs_dir) if runtime_logs_dir is not None else None
         setattr(self.config, "runtime_logs_dir", self.runtime_logs_dir)
+        self.objective = get_objective(
+            getattr(self.config, "objective_operator", "microrts_opponent")
+        )
 
     def evaluate(
         self,
@@ -91,7 +94,12 @@ class FullGameEvaluator:
 
             parsed_log = simulation_meta.get("parsed_log")
             raw_score = self._raw_resource_advantage_score(match_score)
-            combined_score = self._combined_match_score(match_score, win_bonus=self.config.win_bonus)
+            combined_score = self.objective(
+                match_score,
+                config=self.config,
+                target=opponent,
+                index=len(opponent_scores),
+            )
             opponent_scores.append((opponent, combined_score))
             per_opponent_results.append(
                 {
@@ -107,7 +115,11 @@ class FullGameEvaluator:
                 }
             )
 
-        aggregated_fitness = self._build_opponent_score_vector(opponent_scores, resolved_opponents)
+        aggregated_fitness = self._build_opponent_score_vector(
+            opponent_scores,
+            resolved_opponents,
+            self.objective,
+        )
         individual.fitness = dict(aggregated_fitness)
         individual.rendered_prompt = prompt
         individual.evaluation_mode = (
@@ -153,7 +165,12 @@ class FullGameEvaluator:
             )
             match_score = dict(result["match_score"])
             raw_score = self._raw_resource_advantage_score(match_score)
-            combined_score = self._combined_match_score(match_score, win_bonus=self.config.win_bonus)
+            combined_score = self.objective(
+                match_score,
+                config=self.config,
+                target=opponent,
+                index=len(opponent_scores),
+            )
             opponent_scores.append((opponent, combined_score))
             per_opponent_scores.append(
                 {
@@ -164,7 +181,11 @@ class FullGameEvaluator:
                 }
             )
 
-        aggregated_fitness = self._build_opponent_score_vector(opponent_scores, resolved_opponents)
+        aggregated_fitness = self._build_opponent_score_vector(
+            opponent_scores,
+            resolved_opponents,
+            self.objective,
+        )
         individual.fitness = dict(aggregated_fitness)
         individual.rendered_prompt = prompt
         individual.evaluation_mode = "surrogate"
@@ -462,14 +483,6 @@ class FullGameEvaluator:
         write_jsonl(record, profile_output_path)
 
     @staticmethod
-    def _combined_match_score(
-        match_score: dict[str, Any] | None,
-        *,
-        win_bonus: float,
-    ) -> float:
-        return combined_match_score(match_score, win_bonus=win_bonus)
-
-    @staticmethod
     def _normalize_match_score(match_score: Any) -> dict[str, float]:
         if isinstance(match_score, dict):
             return {
@@ -501,19 +514,13 @@ class FullGameEvaluator:
     def _build_opponent_score_vector(
         opponent_scores: list[tuple[str | None, float]],
         configured_opponents: list[str | None],
+        objective=None,
     ) -> dict[str, float]:
         if not configured_opponents:
             configured_opponents = [None]
         score_by_opponent = {opponent: score for opponent, score in opponent_scores}
+        objective = objective or get_objective("microrts_opponent")
         return {
-            FullGameEvaluator._objective_name_for_opponent(opponent, index): float(score_by_opponent.get(opponent, 0.0))
+            objective.objective_key(opponent, index): float(score_by_opponent.get(opponent, 0.0))
             for index, opponent in enumerate(configured_opponents)
         }
-
-    @staticmethod
-    def _objective_name_for_opponent(opponent: str | None, index: int) -> str:
-        """Create a stable objective key for one configured opponent."""
-        if opponent is None:
-            return f"objective_{index}"
-        short_name = str(opponent).split(".")[-1]
-        return short_name or f"objective_{index}"

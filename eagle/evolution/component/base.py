@@ -4,6 +4,7 @@ Base class for evolutionary algorithms.
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
 from typing import Any, ClassVar, List
 
@@ -26,10 +27,10 @@ class EA:
 
     evaluator_factory: ClassVar[Any | None] = None
     reflection_operator: ClassVar[Any | None] = None
-    default_mutation_operator_name: ClassVar[str] = "component_strategy_mutation"
+    default_mutation_operator_name: ClassVar[str] = "mix"
     default_crossover_operator_name: ClassVar[str] = "uniform"
     default_parent_selection_operator_name: ClassVar[str | None] = None
-    default_replacement_operator_name: ClassVar[str] = "pool_replacement"
+    default_env_selection_operator_name: ClassVar[str] = "pool_replacement"
 
     def __init__(self, config: EAConfig, component_pool: ComponentPool, opponent_list: List[str]):
         """Initialize shared EA state and create the initial random population."""
@@ -58,9 +59,9 @@ class EA:
                 self.default_parent_selection_operator_name or self.config.selection_method,
             ),
         )
-        self.replacement_operator = get_operator(
-            "replacement",
-            self._operator_name("replacement", self.default_replacement_operator_name),
+        self.env_selection_operator = get_operator(
+            "env_selection",
+            self._operator_name("env_selection", self.default_env_selection_operator_name),
         )
 
     def _operator_name(self, operator_type: str, default_name: str) -> str:
@@ -69,7 +70,7 @@ class EA:
         if explicit_name:
             return str(explicit_name)
         if operator_type == "crossover":
-            return str(getattr(self.config, "crossover", default_name) or default_name)
+            return str(getattr(self.config, "crossover_operator", None) or getattr(self.config, "crossover", default_name) or default_name)
         return default_name
 
 
@@ -123,6 +124,7 @@ class EA:
         self,
         evaluator: Any,
     ):
+        """Evaluate the starting population before the generational loop begins."""
         for index, individual in enumerate(self.population):
             print(
                 f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
@@ -136,6 +138,170 @@ class EA:
         print("[Initial Population] complete", flush=True)
         self.print_population_snapshot("initial population")
         self._log_initial_population_snapshot()
+
+    def _sample_reproduction_operator(self) -> str:
+        """Sample crossover, mutation, or reflection from configured weights."""
+        weights = self.config.reproduction_operator_weights()
+        if not weights:
+            return "mutation"
+        operators = list(weights.keys())
+        probabilities = [weights[operator] for operator in operators]
+        return random.choices(operators, weights=probabilities, k=1)[0]
+
+    def _mutation_parent_snapshot(self, parent: Individual) -> Any:
+        """Return algorithm-specific parent fitness data used for feedback."""
+        return None
+
+    def _mutation_improved(self, child: Individual, parent_snapshot: Any) -> bool:
+        """Return whether a mutation child improved over its parent."""
+        return False
+
+    def _update_mutation_component_feedback(self, child: Individual) -> None:
+        """Feed mutation-mode success/failure back to adaptive mutation operators."""
+        if getattr(child, "_reproduction_operator", None) != "mutation":
+            return
+
+        metadata = dict(getattr(child, "mutation_metadata", {}) or {})
+        mutation_mode = metadata.get("mutation_mode")
+        parent_snapshot = getattr(child, "_mutation_parent_snapshot", None)
+        if parent_snapshot is None:
+            return
+
+        update_feedback = getattr(self.mutation_operator, "update_feedback", None)
+        if update_feedback is not None:
+            update_feedback(mutation_mode, self._mutation_improved(child, parent_snapshot))
+
+    def _generate_offspring(self, generation: int) -> List[Individual]:
+        """Create one full offspring population without evaluating it yet."""
+        offspring: List[Individual] = []
+        target_count = self.config.population_size
+
+        while len(offspring) < target_count:
+            operator = self._sample_reproduction_operator()
+            if operator == "crossover":
+                parent1, parent2 = self.select_parents()
+                child = self.crossover(parent1, parent2)
+            elif operator == "mutation":
+                parent = self.select_parent()
+                print(
+                    f"[Generation {generation + 1}] selected parent for mutation: "
+                    f"id={parent.id} {parent}",
+                    flush=True,
+                )
+                child = self.mutate(parent)
+                setattr(child, "_mutation_parent_snapshot", self._mutation_parent_snapshot(parent))
+                print(
+                    f"[Generation {generation + 1}] created child from mutation: "
+                    f"id={child.id} {child}",
+                    flush=True,
+                )
+            elif operator == "reflection":
+                child = self.reflect(self.select_parent())
+            else:
+                raise ValueError(f"Unsupported reproduction operator: {operator}")
+
+            setattr(child, "_reproduction_operator", operator)
+            offspring.append(child)
+            print(
+                f"[Generation {generation + 1}] generated offspring "
+                f"{len(offspring)}/{target_count} via {operator}",
+                flush=True,
+            )
+
+        return offspring[:target_count]
+
+    def _evaluate_offspring(self, evaluator: Any, offspring: List[Individual], generation: int) -> None:
+        """Evaluate every generated child and update operator feedback."""
+        evaluator_label = getattr(self, "evaluator_name", None) or getattr(self.config, "evaluator", "evaluation")
+        for index, child in enumerate(offspring):
+            print(
+                f"[Generation {generation + 1}] {evaluator_label} evaluation "
+                f"{index + 1}/{len(offspring)} id={child.id}",
+                flush=True,
+            )
+            evaluator.evaluate(child, generation=generation)
+            print(
+                f"[Generation {generation + 1}] {evaluator_label} result "
+                f"id={child.id} fitness={child.fitness}",
+                flush=True,
+            )
+            self._update_mutation_component_feedback(child)
+
+    def _new_run_state(self) -> Any:
+        """Return algorithm-specific state carried across generations."""
+        return None
+
+    def _before_survivor_selection(self, generation: int, offspring: List[Individual]) -> Any:
+        """Return algorithm-specific context computed before replacement."""
+        return None
+
+    def _log_generation(
+        self,
+        generation: int,
+        offspring: List[Individual],
+        generation_context: Any,
+        log_dir: str,
+    ) -> None:
+        """Persist one generation snapshot."""
+        best_individual = max(self.population, key=lambda ind: ind.fitness or [])
+        self.log_single_objective_generation(log_dir, generation, best_individual)
+        self.save_component_pool(log_dir)
+        self.current_generation = generation
+
+    def _after_generation(
+        self,
+        generation: int,
+        offspring: List[Individual],
+        generation_context: Any,
+        run_state: Any,
+    ) -> bool:
+        """Return True when the shared loop should stop early."""
+        return False
+
+    def run(self) -> list:
+        """Run the shared generational EA flow."""
+        log_dir = self.create_log_folder()
+        evaluator = self.build_evaluator()
+
+        self._evaluate_initial_population(evaluator)
+        run_state = self._new_run_state()
+
+        for generation in range(self.config.num_generations):
+            print(
+                f"[Generation {generation + 1}/{self.config.num_generations}] start",
+                flush=True,
+            )
+
+            offspring = self._generate_offspring(generation)
+            print(
+                f"[Generation {generation + 1}] generated offspring ready: {len(offspring)}",
+                flush=True,
+            )
+
+            self._evaluate_offspring(evaluator, offspring, generation)
+            generation_context = self._before_survivor_selection(generation, offspring)
+
+            print(
+                f"[Generation {generation + 1}] selecting survivors",
+                flush=True,
+            )
+            self.population = self.select_next_generation(self.population, offspring)
+
+            self._log_generation(generation, offspring, generation_context, log_dir)
+            self.print_population_snapshot(f"generation {generation + 1} survivors")
+            print(
+                f"[Generation {generation + 1}] logged",
+                flush=True,
+            )
+
+            if self._after_generation(generation, offspring, generation_context, run_state):
+                print(
+                    f"[Generation {generation + 1}] convergence reached; stopping early",
+                    flush=True,
+                )
+                break
+
+        return self.population
        
     def _log_initial_population_snapshot(self) -> None:
         """Persist one generation-0 snapshot after initial real evaluation."""
@@ -299,7 +465,7 @@ class EA:
         offspring: List[Individual],
     ) -> List[Individual]:
         """Create the next population through the configured replacement operator."""
-        return self.replacement_operator(self, population, offspring)
+        return self.env_selection_operator(self, population, offspring)
 
     def reflect(self, individual: Individual) -> Individual:
         """Apply the configured reflection operator to one parent."""
@@ -315,6 +481,14 @@ class EA:
 
     def build_evaluator(self) -> Any:
         """Create the evaluator supplied by the application layer."""
+        evaluator_name = str(
+            getattr(self, "evaluator_name", None) or getattr(self.config, "evaluator", "")
+        ).strip()
+        if evaluator_name:
+            from eagle.core.registry import EVALUATORS
+
+            evaluator_cls = EVALUATORS.get(evaluator_name)
+            return evaluator_cls(self.component_pool, self.config)
         if self.evaluator_factory is None:
             raise ValueError(
                 "No evaluator_factory configured for this component evolution algorithm."

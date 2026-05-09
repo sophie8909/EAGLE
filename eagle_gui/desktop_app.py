@@ -16,6 +16,8 @@ from tkinter.scrolledtext import ScrolledText
 from typing import Any
 
 from eagle.eval.microrts.state_generator import StateGenerator
+from eagle.objectives.registry import get_objective, list_objective_names
+from eagle.operators.registry import list_operator_names
 from eagle.utils.component_pool import ComponentPool
 
 
@@ -26,9 +28,13 @@ LOG_DIR = ROOT / "logs" / "eagle"
 DEFAULT_CONFIG = CONFIG_DIR / "default.json"
 APPLICATION_CHOICES = ("microrts",)
 ALGORITHM_CHOICES = ("round_ga", "round_nsga2")
-EVALUATOR_CHOICES = ("round",)
+EVALUATOR_CHOICES = ("round", "gameplay")
 ROUND_ALGORITHMS = {"round_ga", "round_nsga2"}
 GA_ALGORITHMS = {"round_ga"}
+DEFAULT_OBJECTIVE_BY_EVALUATOR = {
+    "round": "round_legality_alignment",
+    "gameplay": "microrts_opponent",
+}
 SURROGATE_PATH_LINES = (
     "eaglePolicy.java: reusable fixed policy template -> ai.abstraction.eaglePolicy",
     "eagleJava.java: generated Java with the same policy behavior -> ai.abstraction.eagleJava",
@@ -42,8 +48,8 @@ class EagleDesktopApp:
         """Create the desktop window and bind periodic refreshes."""
         self.root = root
         self.root.title("EAGLE Desktop")
-        self.root.geometry("1220x820")
         self.root.minsize(1020, 680)
+        self.maximize_window()
 
         self.process: subprocess.Popen | None = None
         self.process_log_path: Path | None = None
@@ -64,6 +70,10 @@ class EagleDesktopApp:
         self.training_example_command = StringVar(value="harvest")
         self.training_example_current_move = StringVar(value="Select a coordinate and command to assemble one move.")
         self.training_example_sample_count = StringVar(value="random 0-4")
+        self.training_example_sample_min = StringVar(value="0")
+        self.training_example_sample_max = StringVar(value="4")
+        self.training_example_fixed_sample_count = StringVar(value="4")
+        self.training_example_fixed_count = BooleanVar(value=False)
         self.training_example_units: list[dict[str, Any]] = []
         self.selected_run = StringVar(value="")
         self.status = StringVar(value="Ready")
@@ -77,13 +87,18 @@ class EagleDesktopApp:
         self.real_eval_rate = StringVar(value="0.25")
         self.final_test_max_front = StringVar(value="1")
         self.selection_method = StringVar(value="random")
+        self.parent_selection_operator = StringVar(value="nsga2_tournament")
         self.tournament_size = StringVar(value="3")
         self.crossover = StringVar(value="uniform")
+        self.crossover_operator = StringVar(value="uniform")
+        self.mutation_operator = StringVar(value="mix")
+        self.env_selection_operator = StringVar(value="nsga2_environmental")
         self.crossover_repair_enabled = BooleanVar(value=True)
         self.enable_reflection_operator = BooleanVar(value=True)
         self.skip_final_test = BooleanVar(value=False)
         self.quick_run = BooleanVar(value=False)
         self.opponents_text = StringVar(value="ai.abstraction.LightRush, ai.abstraction.HeavyRush")
+        self.objective_operator = StringVar(value="round_legality_alignment")
         self.objective_targets: list[str] = ["ai.abstraction.LightRush", "ai.abstraction.HeavyRush"]
         self.single_objective_target = StringVar(value="ai.abstraction.LightRush")
         self.objective_detail = StringVar(value="Select an objective target to inspect its calculation.")
@@ -100,11 +115,21 @@ class EagleDesktopApp:
             "bitmask_flip": StringVar(value="0.0"),
         }
 
-        self.notebook = ttk.Notebook(root)
-        self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
+        self.main_layout = ttk.Frame(root)
+        self.main_layout.pack(fill="both", expand=True, padx=10, pady=10)
+        self.main_layout.columnconfigure(0, weight=2, uniform="main")
+        self.main_layout.columnconfigure(1, weight=1, uniform="main")
+        self.main_layout.rowconfigure(0, weight=1)
+
+        self.notebook = ttk.Notebook(self.main_layout)
+        self.notebook.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        self.algorithm_panel = ttk.LabelFrame(self.main_layout, text="Algorithm", padding=10)
+        self.algorithm_panel.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
 
         self._build_component_tab()
         self._build_flow_tab()
+        self._build_objectives_tab()
+        self._build_operators_tab()
         self._build_run_tab()
         self._build_analysis_tab()
         self._build_prompt_tab()
@@ -112,6 +137,24 @@ class EagleDesktopApp:
         self.load_base_config_into_form()
         self.refresh_runs()
         self._schedule_refresh()
+
+    def maximize_window(self) -> None:
+        """Open the GUI maximized, with a portable geometry fallback."""
+        try:
+            self.root.state("zoomed")
+            return
+        except Exception:
+            pass
+
+        try:
+            self.root.attributes("-zoomed", True)
+            return
+        except Exception:
+            pass
+
+        width = self.root.winfo_screenwidth()
+        height = self.root.winfo_screenheight()
+        self.root.geometry(f"{width}x{height}+0+0")
 
     def _build_component_tab(self) -> None:
         """Build controls for selecting, editing, and rendering component JSON files."""
@@ -140,7 +183,7 @@ class EagleDesktopApp:
 
         editor = ttk.LabelFrame(workspace, text="Component Editor", padding=8)
         editor.columnconfigure(1, weight=1)
-        editor.rowconfigure(4, weight=1)
+        editor.rowconfigure(5, weight=1)
         workspace.add(editor, weight=1)
 
         ttk.Label(editor, text="Component").grid(row=0, column=0, sticky="w", pady=4)
@@ -168,59 +211,95 @@ class EagleDesktopApp:
         actions.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 8))
         ttk.Button(actions, text="Use in prompt", command=self.use_component_in_prompt).pack(side="left")
         ttk.Button(actions, text="Apply edit", command=self.apply_component_edit).pack(side="left", padx=(8, 0))
-        ttk.Button(actions, text="Add component", command=self.add_component_category).pack(side="left", padx=(8, 0))
-        ttk.Button(actions, text="Delete component", command=self.delete_component_category).pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="Add candidate", command=self.add_component_candidate).pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="Delete candidate", command=self.delete_component_candidate).pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="Save JSON", command=self.save_component_json).pack(side="left", padx=(8, 0))
-        ttk.Button(actions, text="Save as experiment", command=self.save_component_json_as).pack(side="left", padx=(8, 0))
+        ttk.Button(actions, text="Save as config file", command=self.save_component_json_as).pack(side="left", padx=(8, 0))
 
-        move_builder = ttk.LabelFrame(editor, text="Move Builder", padding=8)
-        move_builder.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 8))
-        move_builder.columnconfigure(1, weight=0)
-        move_builder.columnconfigure(3, weight=0)
-        move_builder.columnconfigure(4, weight=1)
+        self.move_builder = ttk.LabelFrame(editor, text="Move Builder", padding=8)
+        self.move_builder.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        self.move_builder.columnconfigure(1, weight=0)
+        self.move_builder.columnconfigure(3, weight=0)
+        self.move_builder.columnconfigure(4, weight=1)
 
-        ttk.Button(move_builder, text="Random state", command=self.generate_training_example_state).grid(
-            row=0, column=0, sticky="w"
+        sample_controls = ttk.Frame(self.move_builder)
+        sample_controls.grid(row=0, column=0, columnspan=5, sticky="ew")
+        sample_controls.columnconfigure(3, weight=1)
+        ttk.Checkbutton(
+            sample_controls,
+            text="Fixed example count",
+            variable=self.training_example_fixed_count,
+            command=self.refresh_training_example_sampling_controls,
+        ).grid(row=0, column=0, sticky="w")
+        self.training_example_range_frame = ttk.Frame(sample_controls)
+        self.training_example_range_frame.grid(row=0, column=1, sticky="w", padx=(16, 0))
+        ttk.Label(self.training_example_range_frame, text="Sample range").pack(side="left")
+        ttk.Label(self.training_example_range_frame, text="A").pack(side="left", padx=(8, 0))
+        ttk.Entry(
+            self.training_example_range_frame,
+            textvariable=self.training_example_sample_min,
+            width=4,
+        ).pack(side="left", padx=(4, 0))
+        ttk.Label(self.training_example_range_frame, text="B").pack(side="left", padx=(8, 0))
+        ttk.Entry(
+            self.training_example_range_frame,
+            textvariable=self.training_example_sample_max,
+            width=4,
+        ).pack(side="left", padx=(4, 0))
+        self.training_example_fixed_frame = ttk.Frame(sample_controls)
+        self.training_example_fixed_frame.grid(row=0, column=1, sticky="w", padx=(16, 0))
+        ttk.Label(self.training_example_fixed_frame, text="Sample count").pack(side="left")
+        ttk.Entry(
+            self.training_example_fixed_frame,
+            textvariable=self.training_example_fixed_sample_count,
+            width=8,
+        ).pack(side="left", padx=(8, 0))
+        self.training_example_sample_min.trace_add("write", self.on_training_example_sampling_changed)
+        self.training_example_sample_max.trace_add("write", self.on_training_example_sampling_changed)
+        self.training_example_fixed_sample_count.trace_add("write", self.on_training_example_sampling_changed)
+        self.refresh_training_example_sampling_controls()
+
+        ttk.Button(self.move_builder, text="Random state", command=self.generate_training_example_state).grid(
+            row=1, column=0, sticky="w", pady=(8, 0)
         )
-        ttk.Button(move_builder, text="Refresh units", command=self.refresh_training_example_units).grid(
-            row=0, column=1, sticky="w", padx=(8, 0)
+        ttk.Button(self.move_builder, text="Refresh units", command=self.refresh_training_example_units).grid(
+            row=1, column=1, sticky="w", padx=(8, 0), pady=(8, 0)
         )
-        ttk.Label(move_builder, text="Unit").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(self.move_builder, text="Unit").grid(row=2, column=0, sticky="w", pady=(8, 0))
         self.training_example_unit_combo = ttk.Combobox(
-            move_builder,
+            self.move_builder,
             textvariable=self.training_example_unit,
             state="readonly",
             values=(),
             width=10,
         )
-        self.training_example_unit_combo.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        self.training_example_unit_combo.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
         self.training_example_unit_combo.bind("<<ComboboxSelected>>", self.update_training_example_move_preview)
 
-        ttk.Label(move_builder, text="Command").grid(row=1, column=2, sticky="w", padx=(16, 0), pady=(8, 0))
+        ttk.Label(self.move_builder, text="Command").grid(row=2, column=2, sticky="w", padx=(16, 0), pady=(8, 0))
         self.training_example_command_combo = ttk.Combobox(
-            move_builder,
+            self.move_builder,
             textvariable=self.training_example_command,
             state="readonly",
             values=(),
             width=18,
         )
-        self.training_example_command_combo.grid(row=1, column=3, sticky="w", padx=(8, 0), pady=(8, 0))
+        self.training_example_command_combo.grid(row=2, column=3, sticky="w", padx=(8, 0), pady=(8, 0))
         self.training_example_command_combo.bind("<<ComboboxSelected>>", self.update_training_example_move_preview)
 
-        ttk.Button(move_builder, text="Append move", command=self.append_training_example_move).grid(
-            row=1, column=4, sticky="w", padx=(12, 0), pady=(8, 0)
+        ttk.Button(self.move_builder, text="Append move", command=self.append_training_example_move).grid(
+            row=2, column=4, sticky="w", padx=(12, 0), pady=(8, 0)
         )
         ttk.Label(
-            move_builder,
+            self.move_builder,
             textvariable=self.training_example_current_move,
             wraplength=640,
             justify="left",
-        ).grid(row=2, column=0, columnspan=5, sticky="ew", pady=(8, 0))
+        ).grid(row=3, column=0, columnspan=5, sticky="ew", pady=(8, 0))
+        self.refresh_move_builder_visibility()
 
         self.component_editor = ScrolledText(editor, wrap="word", height=18)
-        self.component_editor.grid(row=4, column=0, columnspan=2, sticky="nsew")
+        self.component_editor.grid(row=5, column=0, columnspan=2, sticky="nsew")
 
         preview = ttk.LabelFrame(workspace, text="Prompt Builder", padding=8)
         preview.columnconfigure(0, weight=1)
@@ -230,7 +309,7 @@ class EagleDesktopApp:
 
         self.component_selection_table = ttk.Treeview(
             preview,
-            columns=("component", "static", "candidate", "lines"),
+            columns=("component", "static", "candidate", "candidate_count", "lines"),
             show="headings",
             selectmode="browse",
             height=9,
@@ -238,10 +317,12 @@ class EagleDesktopApp:
         self.component_selection_table.heading("component", text="Component")
         self.component_selection_table.heading("static", text="Static")
         self.component_selection_table.heading("candidate", text="Candidate")
+        self.component_selection_table.heading("candidate_count", text="Count")
         self.component_selection_table.heading("lines", text="Lines")
         self.component_selection_table.column("component", width=190, anchor="w")
         self.component_selection_table.column("static", width=70, anchor="center")
         self.component_selection_table.column("candidate", width=90, anchor="center")
+        self.component_selection_table.column("candidate_count", width=70, anchor="center")
         self.component_selection_table.column("lines", width=70, anchor="center")
         self.component_selection_table.grid(row=0, column=0, sticky="nsew")
         self.component_selection_table.bind("<<TreeviewSelect>>", self.on_component_prompt_row_selected)
@@ -257,30 +338,32 @@ class EagleDesktopApp:
         ttk.Button(builder_actions, text="Toggle static", command=self.toggle_selected_static_component).pack(
             side="left", padx=(8, 0)
         )
-        ttk.Label(builder_actions, text="Examples").pack(side="left", padx=(16, 4))
-        self.training_example_sample_count_combo = ttk.Combobox(
-            builder_actions,
-            textvariable=self.training_example_sample_count,
-            state="readonly",
-            values=("random 0-4", "0", "1", "2", "3", "4"),
-            width=12,
+        ttk.Button(builder_actions, text="Add component", command=self.add_component_category).pack(
+            side="left", padx=(8, 0)
         )
-        self.training_example_sample_count_combo.pack(side="left")
-        self.training_example_sample_count_combo.bind("<<ComboboxSelected>>", self.on_training_example_sample_count_selected)
-
-        ttk.Label(preview, text="Rendered prompt").grid(row=2, column=0, sticky="w")
+        ttk.Button(builder_actions, text="Delete component", command=self.delete_component_category).pack(
+            side="left", padx=(8, 0)
+        )
+        rendered_prompt_header = ttk.Frame(preview)
+        rendered_prompt_header.grid(row=2, column=0, sticky="ew")
+        ttk.Label(rendered_prompt_header, text="Rendered prompt").pack(side="left")
+        ttk.Button(
+            rendered_prompt_header,
+            text="Copy current prompt",
+            command=self.copy_current_prompt,
+        ).pack(side="right")
         self.component_prompt_output = ScrolledText(preview, wrap="word", height=14)
         self.component_prompt_output.grid(row=3, column=0, sticky="nsew", pady=(4, 0))
 
     def _build_flow_tab(self) -> None:
-        """Build algorithm, operator, and flow controls."""
-        tab = ttk.Frame(self.notebook, padding=10)
-        self.notebook.add(tab, text="Algorithm")
+        """Build the fixed right-side algorithm and flow controls."""
+        tab = self.algorithm_panel
         for column in (1, 3):
             tab.columnconfigure(column, weight=1)
 
         self._labeled_combo(tab, "Application", self.application, APPLICATION_CHOICES, 0, 0)
-        self._labeled_combo(tab, "Evaluator", self.evaluator, EVALUATOR_CHOICES, 0, 2)
+        evaluator_combo = self._labeled_combo(tab, "Evaluator", self.evaluator, EVALUATOR_CHOICES, 0, 2)
+        evaluator_combo.bind("<<ComboboxSelected>>", self.on_evaluator_selected)
         algorithm_combo = self._labeled_combo(tab, "Algorithm", self.algorithm, ALGORITHM_CHOICES, 1, 0)
         algorithm_combo.bind("<<ComboboxSelected>>", self.on_algorithm_selected)
         self._labeled_entry(tab, "Config name", self.config_name, 1, 2)
@@ -289,57 +372,90 @@ class EagleDesktopApp:
         self._labeled_entry(tab, "Game seconds", self.run_time_per_game_sec, 3, 0)
         self._labeled_entry(tab, "Real eval rate", self.real_eval_rate, 3, 2)
         self._labeled_entry(tab, "Final-test max front", self.final_test_max_front, 4, 0)
-        self._labeled_combo(tab, "Parent selection", self.selection_method, ("random", "tournament"), 5, 0)
-        self._labeled_entry(tab, "Tournament size", self.tournament_size, 5, 2)
-        self._labeled_combo(tab, "Crossover", self.crossover, ("uniform",), 6, 0)
-        ttk.Checkbutton(tab, text="Crossover repair", variable=self.crossover_repair_enabled).grid(
-            row=6, column=2, sticky="w", pady=4
-        )
         ttk.Checkbutton(tab, text="Enable reflection operator", variable=self.enable_reflection_operator).grid(
-            row=7, column=0, columnspan=2, sticky="w", pady=4
+            row=5, column=0, columnspan=2, sticky="w", pady=4
         )
         ttk.Checkbutton(tab, text="Quick run override", variable=self.quick_run).grid(
-            row=7, column=2, sticky="w", pady=4
+            row=5, column=2, sticky="w", pady=4
         )
         ttk.Checkbutton(tab, text="Skip final test", variable=self.skip_final_test).grid(
-            row=7, column=3, sticky="w", pady=4
+            row=5, column=3, sticky="w", pady=4
         )
 
-        ttk.Label(tab, text="Operator probabilities").grid(row=8, column=0, sticky="w", pady=(14, 4))
-        self._labeled_entry(tab, "crossover", self.operator_weights["crossover"], 9, 0)
-        self._labeled_entry(tab, "mutation", self.operator_weights["mutation"], 9, 2)
-        self._labeled_entry(tab, "reflection", self.operator_weights["reflection"], 10, 0)
+        selection_frame = ttk.LabelFrame(tab, text="Selection", padding=8)
+        selection_frame.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(14, 0))
+        selection_frame.columnconfigure(1, weight=1)
+        ttk.Label(selection_frame, text="Mutation").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Label(selection_frame, textvariable=self.mutation_operator).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0), pady=4
+        )
+        ttk.Label(selection_frame, text="Crossover").grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Label(selection_frame, textvariable=self.crossover_operator).grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=4
+        )
+        self._labeled_combo(
+            selection_frame,
+            "Parent",
+            self.parent_selection_operator,
+            self.operator_choices("parent_selection"),
+            2,
+            0,
+        )
+        self._labeled_entry(selection_frame, "Tournament size", self.tournament_size, 3, 0)
+        self._labeled_combo(
+            selection_frame,
+            "Env",
+            self.env_selection_operator,
+            self.operator_choices("env_selection"),
+            4,
+            0,
+        )
 
-        ttk.Label(tab, text="Mutation mode weights").grid(row=11, column=0, sticky="w", pady=(14, 4))
-        self._labeled_entry(tab, "pool replacement", self.mutation_weights["pool_replacement"], 12, 0)
-        self._labeled_entry(tab, "identity preserving", self.mutation_weights["identity_preserving_rewrite"], 12, 2)
-        self._labeled_entry(tab, "identity shift", self.mutation_weights["identity_shift_rewrite"], 13, 0)
-        self._labeled_entry(tab, "bitmask flip", self.mutation_weights["bitmask_flip"], 13, 2)
+        surrogate_frame = ttk.LabelFrame(tab, text="Surrogate Paths", padding=8)
+        surrogate_frame.grid(row=7, column=0, columnspan=4, sticky="ew", pady=(14, 0))
+        for index, line in enumerate(SURROGATE_PATH_LINES):
+            ttk.Label(surrogate_frame, text=line).grid(row=index, column=0, sticky="w")
 
-        objective_frame = ttk.LabelFrame(tab, text="Objectives", padding=8)
-        objective_frame.grid(row=14, column=0, columnspan=4, sticky="nsew", pady=(14, 4))
-        objective_frame.columnconfigure(0, weight=1)
-        objective_frame.columnconfigure(1, weight=1)
-        objective_frame.rowconfigure(0, weight=1)
+        actions = ttk.Frame(tab)
+        actions.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(16, 0))
+        ttk.Button(actions, text="Validate settings", command=self.validate_settings).pack(side="left")
+        ttk.Button(actions, text="Save generated config", command=self.save_generated_config).pack(side="left", padx=(8, 0))
+
+    def _build_objectives_tab(self) -> None:
+        """Build objective plugin and target controls."""
+        tab = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(tab, text="Objectives")
+        tab.columnconfigure(1, weight=1)
+        tab.rowconfigure(1, weight=1)
+
+        self.objective_operator_combo = self._labeled_combo(
+            tab,
+            "Objective",
+            self.objective_operator,
+            self.objective_choices(),
+            0,
+            0,
+        )
+        self.objective_operator_combo.bind("<<ComboboxSelected>>", self.on_objective_operator_selected)
 
         self.objective_table = ttk.Treeview(
-            objective_frame,
+            tab,
             columns=("target", "objective", "calculation"),
             show="headings",
             selectmode="browse",
-            height=5,
+            height=9,
         )
         self.objective_table.heading("target", text="Target opponent")
         self.objective_table.heading("objective", text="Objective key")
         self.objective_table.heading("calculation", text="Calculation")
-        self.objective_table.column("target", width=240, anchor="w")
-        self.objective_table.column("objective", width=130, anchor="w")
-        self.objective_table.column("calculation", width=420, anchor="w")
-        self.objective_table.grid(row=0, column=0, columnspan=2, sticky="nsew")
+        self.objective_table.column("target", width=260, anchor="w")
+        self.objective_table.column("objective", width=150, anchor="w")
+        self.objective_table.column("calculation", width=430, anchor="w")
+        self.objective_table.grid(row=1, column=0, columnspan=4, sticky="nsew", pady=(12, 0))
         self.objective_table.bind("<<TreeviewSelect>>", self.on_objective_selected)
 
-        objective_actions = ttk.Frame(objective_frame)
-        objective_actions.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        objective_actions = ttk.Frame(tab)
+        objective_actions.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(8, 0))
         ttk.Button(objective_actions, text="Add target", command=self.add_objective_target).pack(side="left")
         ttk.Button(objective_actions, text="Delete target", command=self.delete_objective_target).pack(
             side="left", padx=(8, 0)
@@ -348,19 +464,121 @@ class EagleDesktopApp:
             side="left", padx=(8, 0)
         )
 
-        ttk.Label(objective_frame, textvariable=self.objective_detail, wraplength=760, justify="left").grid(
-            row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0)
+        ttk.Label(tab, textvariable=self.objective_detail, wraplength=820, justify="left").grid(
+            row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0)
         )
 
-        surrogate_frame = ttk.LabelFrame(tab, text="Surrogate Paths", padding=8)
-        surrogate_frame.grid(row=15, column=0, columnspan=4, sticky="ew", pady=(14, 0))
-        for index, line in enumerate(SURROGATE_PATH_LINES):
-            ttk.Label(surrogate_frame, text=line).grid(row=index, column=0, sticky="w")
+    def _build_operators_tab(self) -> None:
+        """Build mutation and crossover operator controls."""
+        tab = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(tab, text="Operators")
+        for column in (1, 3):
+            tab.columnconfigure(column, weight=1)
 
-        actions = ttk.Frame(tab)
-        actions.grid(row=16, column=0, columnspan=4, sticky="ew", pady=(16, 0))
-        ttk.Button(actions, text="Validate settings", command=self.validate_settings).pack(side="left")
-        ttk.Button(actions, text="Save generated config", command=self.save_generated_config).pack(side="left", padx=(8, 0))
+        crossover_frame = ttk.LabelFrame(tab, text="Crossover", padding=8)
+        crossover_frame.grid(row=0, column=0, columnspan=4, sticky="ew")
+        crossover_frame.columnconfigure(1, weight=1)
+        crossover_combo = self._labeled_combo(
+            crossover_frame,
+            "Operator",
+            self.crossover_operator,
+            self.operator_choices("crossover"),
+            0,
+            0,
+        )
+        crossover_combo.bind("<<ComboboxSelected>>", self.refresh_crossover_repair_visibility)
+        self.crossover_repair_checkbutton = ttk.Checkbutton(
+            crossover_frame,
+            text="LLM repair",
+            variable=self.crossover_repair_enabled,
+        )
+        self.crossover_repair_checkbutton.grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=4
+        )
+
+        mutation_frame = ttk.LabelFrame(tab, text="Mutation", padding=8)
+        mutation_frame.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(14, 0))
+        for column in (1, 3):
+            mutation_frame.columnconfigure(column, weight=1)
+        mutation_combo = self._labeled_combo(
+            mutation_frame,
+            "Operator",
+            self.mutation_operator,
+            self.operator_choices("mutation"),
+            0,
+            0,
+        )
+        mutation_combo.bind("<<ComboboxSelected>>", self.refresh_mutation_weight_visibility)
+        self.mutation_weights_frame = ttk.Frame(mutation_frame)
+        self.mutation_weights_frame.grid(row=1, column=0, columnspan=4, sticky="ew")
+        for column_index in (1, 3):
+            self.mutation_weights_frame.columnconfigure(column_index, weight=1)
+        ttk.Label(self.mutation_weights_frame, text="Mode weights").grid(
+            row=0, column=0, sticky="w", pady=(14, 4)
+        )
+        row = 2
+        column = 0
+        for name in self.mutation_weight_names():
+            variable = self.mutation_weights.setdefault(name, StringVar(value="0.0"))
+            self._labeled_entry(
+                self.mutation_weights_frame,
+                name.replace("_", " "),
+                variable,
+                row,
+                column,
+            )
+            column += 2
+            if column > 2:
+                column = 0
+                row += 1
+        self.refresh_crossover_repair_visibility()
+        self.refresh_mutation_weight_visibility()
+
+    def operator_choices(self, operator_type: str) -> tuple[str, ...]:
+        """Return registered operator names discovered from plugin folders."""
+        return list_operator_names(operator_type)
+
+    def mutation_weight_names(self) -> tuple[str, ...]:
+        """Return mutation plugins that can participate in roulette weighting."""
+        excluded = {"mix"}
+        return tuple(name for name in self.operator_choices("mutation") if name not in excluded)
+
+    def refresh_mutation_weight_visibility(self, _event: object | None = None) -> None:
+        """Show mutation weights only for the weighted mix operator."""
+        if not hasattr(self, "mutation_weights_frame"):
+            return
+        if self.mutation_operator.get() == "mix":
+            self.mutation_weights_frame.grid()
+        else:
+            self.mutation_weights_frame.grid_remove()
+
+    def refresh_crossover_repair_visibility(self, _event: object | None = None) -> None:
+        """Show LLM repair only for uniform crossover."""
+        if not hasattr(self, "crossover_repair_checkbutton"):
+            return
+        if self.crossover_operator.get() == "uniform":
+            self.crossover_repair_checkbutton.grid()
+        else:
+            self.crossover_repair_checkbutton.grid_remove()
+
+    def ensure_operator_choice(self, variable: StringVar, operator_type: str, default_name: str) -> None:
+        """Reset a stale operator selection to a discovered default."""
+        choices = self.operator_choices(operator_type)
+        if variable.get() not in choices:
+            variable.set(default_name if default_name in choices else (choices[0] if choices else ""))
+
+    def ensure_objective_choice(self) -> None:
+        """Reset a stale objective selection to a discovered default."""
+        choices = self.objective_choices()
+        if hasattr(self, "objective_operator_combo"):
+            self.objective_operator_combo.configure(values=choices)
+        if self.objective_operator.get() not in choices:
+            default_name = DEFAULT_OBJECTIVE_BY_EVALUATOR.get(self.evaluator.get(), "")
+            self.objective_operator.set(
+                default_name
+                if default_name in choices
+                else (choices[0] if choices else "")
+            )
 
     def _build_run_tab(self) -> None:
         """Build process launch and log controls."""
@@ -440,14 +658,34 @@ class EagleDesktopApp:
         return combo
 
     def on_algorithm_selected(self, _event: object | None = None) -> None:
-        """Keep evaluator defaults consistent with the selected algorithm family."""
+        """Keep algorithm-derived defaults in sync with the current flow."""
         if self.algorithm.get() in ROUND_ALGORITHMS:
-            self.evaluator.set("round")
             self.final_test_max_front.set("0")
+        self.ensure_objective_choice()
+        self.refresh_objective_table()
+
+    def on_evaluator_selected(self, _event: object | None = None) -> None:
+        """Refresh evaluator-specific objective choices."""
+        self.ensure_objective_choice()
+        self.refresh_objective_table()
+
+    def objective_choices(self) -> tuple[str, ...]:
+        """Return registered objective names discovered from objective plugins."""
+        return list_objective_names(self.evaluator.get())
+
+    def current_objective(self):
+        """Return the currently selected objective plugin."""
+        return get_objective(self.objective_operator.get())
+
+    def on_objective_operator_selected(self, _event: object | None = None) -> None:
+        """Refresh objective rows after selecting another objective plugin."""
         self.refresh_objective_table()
 
     def add_objective_target(self) -> None:
         """Add a target opponent objective to the GUI list."""
+        if not getattr(self.current_objective(), "target_based", True):
+            messagebox.showerror("No target list", "The selected objective does not use opponent targets.")
+            return
         target = simpledialog.askstring("Add objective target", "Target opponent class:", parent=self.root)
         if target is None:
             return
@@ -465,6 +703,9 @@ class EagleDesktopApp:
 
     def delete_objective_target(self) -> None:
         """Delete the selected target opponent objective."""
+        if not getattr(self.current_objective(), "target_based", True):
+            messagebox.showerror("No target list", "The selected objective does not use opponent targets.")
+            return
         target = self.selected_objective_target()
         if target is None:
             messagebox.showerror("No objective selected", "Select an objective target first.")
@@ -481,6 +722,9 @@ class EagleDesktopApp:
 
     def use_selected_single_objective(self) -> None:
         """Use the selected objective as the single-objective GA target."""
+        if not getattr(self.current_objective(), "target_based", True):
+            messagebox.showerror("No target list", "The selected objective does not use opponent targets.")
+            return
         target = self.selected_objective_target()
         if target is None:
             messagebox.showerror("No objective selected", "Select an objective target first.")
@@ -490,6 +734,8 @@ class EagleDesktopApp:
 
     def selected_objective_target(self) -> str | None:
         """Return the target selected in the objective table."""
+        if not getattr(self.current_objective(), "target_based", True):
+            return None
         selection = self.objective_table.selection()
         if not selection:
             return None
@@ -499,10 +745,31 @@ class EagleDesktopApp:
         """Refresh objective rows and show their calculation details."""
         if not hasattr(self, "objective_table"):
             return
+        objective = self.current_objective()
         previous = select_target or self.selected_objective_target() or self.single_objective_target.get()
         self.objective_table.delete(*self.objective_table.get_children())
+        if not getattr(objective, "target_based", True):
+            for index in range(max(1, int(getattr(objective, "objective_count", 1)))):
+                objective_key = objective.objective_key(None, index)
+                prefix = "[single] " if self.algorithm.get() in GA_ALGORITHMS and index == 0 else ""
+                iid = f"objective:{index}"
+                self.objective_table.insert(
+                    "",
+                    "end",
+                    iid=iid,
+                    values=(
+                        f"{prefix}state generator",
+                        objective_key,
+                        objective.calculation_label,
+                    ),
+                )
+            children = self.objective_table.get_children()
+            if children:
+                self.objective_table.selection_set(children[0])
+            self.update_objective_detail()
+            return
         for index, target in enumerate(self.objective_targets):
-            objective_key = objective_key_for_target(target, index)
+            objective_key = objective.objective_key(target, index)
             prefix = "[single] " if self.algorithm.get() in GA_ALGORITHMS and target == self.single_objective_target.get() else ""
             self.objective_table.insert(
                 "",
@@ -511,7 +778,7 @@ class EagleDesktopApp:
                 values=(
                     f"{prefix}{target}",
                     objective_key,
-                    "raw_resource_advantage_score + win_bonus * win_score",
+                    objective.calculation_label,
                 ),
             )
         if previous in self.objective_targets:
@@ -526,6 +793,23 @@ class EagleDesktopApp:
 
     def update_objective_detail(self) -> None:
         """Show how the selected objective is calculated."""
+        objective = self.current_objective()
+        if not getattr(objective, "target_based", True):
+            selection = self.objective_table.selection()
+            index = 0
+            if selection and str(selection[0]).startswith("objective:"):
+                try:
+                    index = int(str(selection[0]).split(":", 1)[1])
+                except ValueError:
+                    index = 0
+            self.objective_detail.set(
+                objective.describe(
+                    None,
+                    index,
+                    single_objective=self.algorithm.get() in GA_ALGORITHMS,
+                )
+            )
+            return
         target = self.selected_objective_target()
         if target is None:
             self.objective_detail.set("Select an objective target to inspect its calculation.")
@@ -534,15 +818,12 @@ class EagleDesktopApp:
             index = self.objective_targets.index(target)
         except ValueError:
             index = 0
-        objective_key = objective_key_for_target(target, index)
-        mode = "single-objective GA uses only this selected target" if self.algorithm.get() in GA_ALGORITHMS else "multi-objective NSGA-II uses every listed target as one objective"
         self.objective_detail.set(
-            f"{objective_key} against {target}: "
-            "match_score = calculate_match_score(log, resource_advantage_weights); "
-            "raw_resource_advantage_score = weighted ally material/resources - weighted enemy material/resources; "
-            "win_score = 1 for win, -1 for loss, 0 for draw/unknown; "
-            "objective = raw_resource_advantage_score + win_bonus * win_score. "
-            f"Current mode: {mode}."
+            self.current_objective().describe(
+                target,
+                index,
+                single_objective=self.algorithm.get() in GA_ALGORITHMS,
+            )
         )
 
     def browse_base_config(self) -> None:
@@ -669,6 +950,16 @@ class EagleDesktopApp:
             self.component_candidate.set(values[0])
         elif not values:
             self.component_candidate.set("0")
+        self.refresh_move_builder_visibility()
+
+    def refresh_move_builder_visibility(self) -> None:
+        """Show the move builder only while editing training examples."""
+        if not hasattr(self, "move_builder"):
+            return
+        if self.is_training_examples_category(self.component_category.get()):
+            self.move_builder.grid()
+        else:
+            self.move_builder.grid_remove()
 
     def is_training_examples_category(self, category: str) -> bool:
         """Return whether a component category is the merged training examples bucket."""
@@ -754,6 +1045,7 @@ class EagleDesktopApp:
         category = self.component_category.get()
         index = self.selected_component_candidate_index()
         self._set_text(self.component_editor, "\n".join(self.component_candidate_lines(category, index)))
+        self.refresh_move_builder_visibility()
         if self.is_training_examples_category(category):
             self.refresh_training_example_units()
 
@@ -1108,20 +1400,98 @@ class EagleDesktopApp:
         self.refresh_component_selection_table()
         self.render_selected_component_prompt()
 
-    def on_training_example_sample_count_selected(self, _event: object | None = None) -> None:
-        """Refresh prompt preview after changing training-example sample count."""
+    def refresh_training_example_sampling_controls(self) -> None:
+        """Toggle range or fixed-count sampling inputs."""
+        if not hasattr(self, "training_example_range_frame"):
+            return
+        if self.training_example_fixed_count.get():
+            self.training_example_range_frame.grid_remove()
+            self.training_example_fixed_frame.grid()
+        else:
+            self.training_example_fixed_frame.grid_remove()
+            self.training_example_range_frame.grid()
+        self.on_training_example_sampling_changed()
+
+    def on_training_example_sampling_changed(self, *_: object) -> None:
+        """Refresh prompt preview after changing training-example sampling."""
+        self.training_example_sample_count.set(self.training_example_sample_label())
+        if not hasattr(self, "component_selection_table"):
+            return
         self.refresh_component_selection_table()
-        self.render_selected_component_prompt()
+        if hasattr(self, "component_prompt_output"):
+            self.render_selected_component_prompt()
 
     def training_example_selection_value(self) -> str | int:
         """Return random or fixed training-example sample-count selection."""
-        raw_value = self.training_example_sample_count.get().strip()
-        if raw_value == "random 0-4":
-            return "random_0_4"
+        if self.training_example_fixed_count.get():
+            return self._parse_nonnegative_int(
+                self.training_example_fixed_sample_count.get(),
+                default=4,
+            )
+        lower, upper = self.training_example_sample_bounds()
+        return f"random_{lower}_{upper}"
+
+    def training_example_sample_label(self) -> str:
+        """Return the table display text for training-example sampling."""
+        if self.training_example_fixed_count.get():
+            return str(
+                self._parse_nonnegative_int(
+                    self.training_example_fixed_sample_count.get(),
+                    default=4,
+                )
+            )
+        lower, upper = self.training_example_sample_bounds()
+        return f"random {lower}-{upper}"
+
+    def training_example_sample_bounds(self) -> tuple[int, int]:
+        """Return normalized training-example sample range bounds."""
+        lower = self._parse_nonnegative_int(self.training_example_sample_min.get(), default=0)
+        upper = self._parse_nonnegative_int(self.training_example_sample_max.get(), default=4)
+        if lower > upper:
+            lower, upper = upper, lower
+        return lower, upper
+
+    def apply_training_example_sample_config(self, value: object, fixed: object | None = None) -> None:
+        """Load training-example sampling from config or legacy GUI values."""
+        if fixed is not None:
+            self.training_example_fixed_count.set(bool(fixed))
+        text = str(value if value is not None else "").strip()
+        if isinstance(value, int) or text.isdigit():
+            self.training_example_fixed_count.set(True if fixed is None else bool(fixed))
+            self.training_example_fixed_sample_count.set(str(self._parse_nonnegative_int(text, default=4)))
+        else:
+            lower, upper = self._parse_training_example_range(text)
+            if fixed is None:
+                self.training_example_fixed_count.set(False)
+            self.training_example_sample_min.set(str(lower))
+            self.training_example_sample_max.set(str(upper))
+        self.refresh_training_example_sampling_controls()
+
+    @staticmethod
+    def _parse_nonnegative_int(value: object, *, default: int) -> int:
+        """Parse a non-negative integer with a stable fallback."""
         try:
-            return int(raw_value)
-        except ValueError:
-            return "random_0_4"
+            return max(0, int(str(value).strip()))
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _parse_training_example_range(cls, value: object) -> tuple[int, int]:
+        """Parse A-B, random A-B, or random_A_B training-example ranges."""
+        text = str(value or "").strip().lower().replace("_", " ")
+        match = re.search(r"(\d+)\s*-\s*(\d+)", text)
+        if not match:
+            match = re.search(r"random\s+(\d+)\s+(\d+)", text)
+        if not match and text.isdigit():
+            count = cls._parse_nonnegative_int(text, default=4)
+            return count, count
+        if not match:
+            return 0, 4
+        lower = cls._parse_nonnegative_int(match.group(1), default=0)
+        upper = cls._parse_nonnegative_int(match.group(2), default=4)
+        if lower > upper:
+            lower, upper = upper, lower
+        return lower, upper
 
     def reset_component_prompt_selection(self) -> None:
         """Select candidate zero for every loaded component."""
@@ -1143,7 +1513,13 @@ class EagleDesktopApp:
                     "",
                     "end",
                     iid=key,
-                    values=(key, "-", self.training_example_sample_count.get(), line_count),
+                    values=(
+                        key,
+                        "-",
+                        self.training_example_sample_label(),
+                        len(examples),
+                        line_count,
+                    ),
                 )
                 continue
             selected_index = self.component_prompt_selection.get(key, 0)
@@ -1162,7 +1538,7 @@ class EagleDesktopApp:
                 "",
                 "end",
                 iid=key,
-                values=(key, static_label, selected_index, line_count),
+                values=(key, static_label, selected_index, candidate_count, line_count),
             )
 
     def render_selected_component_prompt(self) -> None:
@@ -1188,6 +1564,14 @@ class EagleDesktopApp:
             self._set_text(self.component_prompt_output, f"Could not render prompt:\n{exc}")
             return
         self._set_text(self.component_prompt_output, "\n".join(rendered_lines))
+
+    def copy_current_prompt(self) -> None:
+        """Copy the currently rendered prompt to the clipboard."""
+        prompt = self.component_prompt_output.get("1.0", "end").rstrip("\n")
+        self.root.clipboard_clear()
+        self.root.clipboard_append(prompt)
+        self.root.update_idletasks()
+        self.component_status.set("Copied current prompt to clipboard")
 
     def include_identity_component_in_preview(self) -> bool:
         """Return whether preview rendering should include the identity component."""
@@ -1221,10 +1605,31 @@ class EagleDesktopApp:
         self.num_generations.set(str(payload.get("num_generations", self.num_generations.get())))
         self.run_time_per_game_sec.set(str(payload.get("run_time_per_game_sec", self.run_time_per_game_sec.get())))
         self.real_eval_rate.set(str(payload.get("real_eval_rate", self.real_eval_rate.get())))
+        self.objective_operator.set(str(payload.get("objective_operator", self.objective_operator.get())))
+        self.apply_training_example_sample_config(
+            payload.get(
+                "training_example_sample_count",
+                self.training_example_selection_value(),
+            ),
+            payload.get("training_example_fixed_count"),
+        )
         self.final_test_max_front.set(str(payload.get("final_test_max_front", self.final_test_max_front.get())))
         self.selection_method.set(str(payload.get("selection_method", self.selection_method.get())))
+        self.parent_selection_operator.set(
+            str(payload.get("parent_selection_operator", self.parent_selection_operator.get()))
+        )
         self.tournament_size.set(str(payload.get("tournament_size", self.tournament_size.get())))
         self.crossover.set(str(payload.get("crossover", self.crossover.get())))
+        self.crossover_operator.set(str(payload.get("crossover_operator", self.crossover.get())))
+        self.mutation_operator.set(str(payload.get("mutation_operator", self.mutation_operator.get())))
+        self.env_selection_operator.set(
+            str(
+                payload.get(
+                    "env_selection_operator",
+                    payload.get("environment_selection_method", self.env_selection_operator.get()),
+                )
+            )
+        )
         self.crossover_repair_enabled.set(bool(payload.get("crossover_repair_enabled", True)))
         self.enable_reflection_operator.set(bool(payload.get("enable_reflection_operator", True)))
         self.component_runtime_path.set(str(payload.get("component_pool_path", self.component_runtime_path.get())))
@@ -1245,6 +1650,13 @@ class EagleDesktopApp:
             variable.set(str((payload.get("reproduction_operator_probs") or {}).get(key, variable.get())))
         for key, variable in self.mutation_weights.items():
             variable.set(str((payload.get("strategy_mutation") or {}).get(key, variable.get())))
+        self.ensure_operator_choice(self.parent_selection_operator, "parent_selection", "nsga2_tournament")
+        self.ensure_operator_choice(self.crossover_operator, "crossover", "uniform")
+        self.ensure_operator_choice(self.mutation_operator, "mutation", "mix")
+        self.ensure_operator_choice(self.env_selection_operator, "env_selection", "nsga2_environmental")
+        self.ensure_objective_choice()
+        self.refresh_mutation_weight_visibility()
+        self.refresh_crossover_repair_visibility()
         component_path = resolve_repo_path(self.component_runtime_path.get())
         if component_path.exists():
             self.preview_component(component_path)
@@ -1288,8 +1700,9 @@ class EagleDesktopApp:
             raise ValueError(f"Runtime component path does not exist: {component_path}")
         if self.application.get() != "microrts":
             raise ValueError(f"Unsupported application: {self.application.get()}.")
-        if self.algorithm.get() in ROUND_ALGORITHMS and self.evaluator.get() != "round":
-            raise ValueError("round_ga and round_nsga2 must use the round evaluator.")
+        if self.evaluator.get() not in EVALUATOR_CHOICES:
+            raise ValueError(f"Unsupported evaluator: {self.evaluator.get()}.")
+        self.ensure_objective_choice()
         objective_targets = self.config_objective_targets()
 
         payload.update(
@@ -1301,14 +1714,26 @@ class EagleDesktopApp:
                 "num_generations": parse_int(self.num_generations.get(), "num_generations"),
                 "run_time_per_game_sec": parse_int(self.run_time_per_game_sec.get(), "run_time_per_game_sec"),
                 "real_eval_rate": parse_float(self.real_eval_rate.get(), "real_eval_rate"),
+                "objective_operator": self.objective_operator.get(),
+                "training_example_sample_count": self.training_example_selection_value(),
+                "training_example_fixed_count": bool(self.training_example_fixed_count.get()),
                 "final_test_max_front": parse_optional_nonnegative_int(
                     self.final_test_max_front.get(),
                     "final_test_max_front",
                 ),
                 "selection_method": self.selection_method.get(),
+                "parent_selection_operator": self.parent_selection_operator.get(),
                 "tournament_size": parse_int(self.tournament_size.get(), "tournament_size"),
                 "crossover": self.crossover.get(),
-                "crossover_repair_enabled": bool(self.crossover_repair_enabled.get()),
+                "crossover_operator": self.crossover_operator.get(),
+                "mutation_operator": self.mutation_operator.get(),
+                "environment_selection_method": self.env_selection_operator.get(),
+                "env_selection_operator": self.env_selection_operator.get(),
+                "crossover_repair_enabled": (
+                    bool(self.crossover_repair_enabled.get())
+                    if self.crossover_operator.get() == "uniform"
+                    else False
+                ),
                 "enable_reflection_operator": bool(self.enable_reflection_operator.get()),
                 "component_pool_path": component_path,
                 "non_evolving_prompt_components": self.config_static_component_keys(),
@@ -1317,18 +1742,28 @@ class EagleDesktopApp:
                     key: parse_float(variable.get(), key)
                     for key, variable in self.operator_weights.items()
                 },
-                "strategy_mutation": {
-                    key: parse_float(variable.get(), key)
-                    for key, variable in self.mutation_weights.items()
-                },
+                "strategy_mutation": self.build_strategy_mutation_weights(),
             }
         )
         normalize_probability_map(payload["reproduction_operator_probs"], "reproduction_operator_probs")
         normalize_probability_map(payload["strategy_mutation"], "strategy_mutation")
         return payload
 
+    def build_strategy_mutation_weights(self) -> dict[str, float]:
+        """Return mutation weights according to the selected mutation operator."""
+        selected_operator = self.mutation_operator.get()
+        if selected_operator != "mix":
+            return {selected_operator: 1.0}
+        return {
+            key: parse_float(variable.get(), key)
+            for key, variable in self.mutation_weights.items()
+            if key in self.mutation_weight_names()
+        }
+
     def config_objective_targets(self) -> list[str]:
         """Return objective targets according to the selected algorithm mode."""
+        if not getattr(self.current_objective(), "target_based", True):
+            return [target.strip() for target in self.objective_targets if target.strip()]
         targets = [target.strip() for target in self.objective_targets if target.strip()]
         if not targets:
             raise ValueError("At least one objective target is required.")
@@ -1538,14 +1973,6 @@ def parse_target_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     return []
-
-
-def objective_key_for_target(target: str | None, index: int) -> str:
-    """Return the stable objective key used by the MicroRTS evaluator."""
-    if target is None:
-        return f"objective_{index}"
-    short_name = str(target).split(".")[-1]
-    return short_name or f"objective_{index}"
 
 
 def first_output_line_index(lines: list[str]) -> int | None:

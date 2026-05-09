@@ -38,6 +38,7 @@ def _default_config_value(key: str) -> Any:
 class EAConfig:
     """Flat configuration surface for all EA, evaluation, and surrogate settings."""
     algorithm: str = field(default_factory=lambda: str(_default_config_value("algorithm")))
+    evaluator: str = field(default_factory=lambda: str(_default_config_value("evaluator")))
     population_size: int = field(default_factory=lambda: int(_default_config_value("population_size")))
     num_generations: int = field(default_factory=lambda: int(_default_config_value("num_generations")))
     convergence_generations: int = field(default_factory=lambda: int(_default_config_value("convergence_generations")))
@@ -53,15 +54,19 @@ class EAConfig:
     strategy_mutation: dict[str, float] = field(
         default_factory=lambda: dict(_default_config_value("strategy_mutation"))
     )
+    mutation_operator: str = "mix"
     selection_method: str = field(default_factory=lambda: str(_default_config_value("selection_method")))
+    parent_selection_operator: str = ""
     tournament_size: int = field(default_factory=lambda: int(_default_config_value("tournament_size")))
     crossover: str = field(default_factory=lambda: str(_default_config_value("crossover")))
+    crossover_operator: str = field(default_factory=lambda: str(_default_config_value("crossover_operator")))
     crossover_repair_enabled: bool = field(
         default_factory=lambda: bool(_default_config_value("crossover_repair_enabled"))
     )
     environment_selection_method: str = field(
         default_factory=lambda: str(_default_config_value("environment_selection_method"))
     )
+    env_selection_operator: str = ""
     final_test_max_front: int | None = field(default_factory=lambda: _default_config_value("final_test_max_front"))
     include_strategy_identity_in_prompt: bool = field(
         default_factory=lambda: bool(_default_config_value("include_strategy_identity_in_prompt"))
@@ -79,6 +84,7 @@ class EAConfig:
 
     run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
     real_eval_rate: float = field(default_factory=lambda: float(_default_config_value("real_eval_rate")))
+    objective_operator: str = field(default_factory=lambda: str(_default_config_value("objective_operator")))
     real_eval_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("real_eval_opponents")))
     llm_interval: list[int] = field(default_factory=lambda: list(_default_config_value("llm_interval")))
     save_trace_on_test: bool = field(default_factory=lambda: bool(_default_config_value("save_trace_on_test")))
@@ -118,6 +124,19 @@ class EAConfig:
     def validate(self) -> None:
         """Validate config values that affect offspring generation behavior."""
         self._normalize_crossover()
+        self.evaluator = str(self.evaluator or "round").strip().lower()
+        if self.evaluator not in {"round", "gameplay"}:
+            raise ValueError("evaluator must be either 'round' or 'gameplay'.")
+        self.objective_operator = str(self.objective_operator or "").strip()
+        from eagle.objectives.registry import list_objective_names
+
+        objective_names = list_objective_names(self.evaluator)
+        if self.objective_operator not in objective_names:
+            raise ValueError(
+                f"objective_operator {self.objective_operator!r} is not valid for "
+                f"evaluator {self.evaluator!r}. Available objectives: "
+                f"{', '.join(objective_names) or '(none)'}."
+            )
 
         if self.reflection_max_components_to_rewrite < 1:
             raise ValueError("reflection_max_components_to_rewrite must be >= 1.")
@@ -139,11 +158,6 @@ class EAConfig:
                 raise ValueError("Each initial_population_seeds entry must be a dict.")
             normalized_seeds.append(dict(seed))
         self.initial_population_seeds = normalized_seeds
-
-        if self.crossover != "uniform":
-            raise ValueError(
-                f"Unsupported crossover: {self.crossover!r}. Only 'uniform' is supported."
-            )
 
         probabilities = self._normalized_probability_input(self.reproduction_operator_probs)
         expected_keys = {"crossover", "mutation", "reflection"}
@@ -176,20 +190,6 @@ class EAConfig:
             )
 
         strategy_mutation = self._normalized_strategy_mutation_input(self.strategy_mutation)
-        expected_mutation_keys = {
-            "pool_replacement",
-            "identity_preserving_rewrite",
-            "identity_shift_rewrite",
-            "bitmask_flip",
-        }
-        for mutation_key in expected_mutation_keys:
-            strategy_mutation.setdefault(mutation_key, 0.0)
-        actual_mutation_keys = set(strategy_mutation.keys())
-        if actual_mutation_keys != expected_mutation_keys:
-            raise ValueError(
-                "strategy_mutation must define exactly "
-                f"{sorted(expected_mutation_keys)}, got {sorted(actual_mutation_keys)}."
-            )
         if all(value <= 0.0 for value in strategy_mutation.values()):
             raise ValueError("strategy_mutation must leave at least one mode enabled.")
 
@@ -208,23 +208,29 @@ class EAConfig:
         """Return the subset of fields that control population search behavior."""
         return {
             "algorithm": self.algorithm,
+            "evaluator": self.evaluator,
             "population_size": self.population_size,
             "num_generations": self.num_generations,
             "reproduction_operator_probs": dict(self.reproduction_operator_probs),
             "enable_reflection_operator": self.enable_reflection_operator,
             "reflection_max_components_to_rewrite": self.reflection_max_components_to_rewrite,
             "strategy_mutation": dict(self.strategy_mutation),
+            "mutation_operator": self.mutation_operator,
             "selection_method": self.selection_method,
+            "parent_selection_operator": self.parent_selection_operator,
             "tournament_size": self.tournament_size,
             "crossover": self.crossover,
+            "crossover_operator": self.crossover_operator,
             "crossover_repair_enabled": self.crossover_repair_enabled,
             "environment_selection_method": self.environment_selection_method,
+            "env_selection_operator": self.env_selection_operator,
             "final_test_max_front": self.final_test_max_front,
             "include_strategy_identity_in_prompt": self.include_strategy_identity_in_prompt,
             "evolving_prompt_components": list(self.evolving_prompt_components),
             "non_evolving_prompt_components": list(self.non_evolving_prompt_components),
             "component_pool_path": self.component_pool_path,
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
+            "objective_operator": self.objective_operator,
             "real_eval_opponents": list(self.real_eval_opponents),
         }
 

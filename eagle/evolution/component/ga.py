@@ -34,7 +34,7 @@ class GA(EA):
     """Single-objective GA using score-only selection and survival."""
 
     default_parent_selection_operator_name = "ga_fitness_tournament"
-    default_replacement_operator_name = "ga_fitness_elitism"
+    default_env_selection_operator_name = "ga_fitness_elitism"
 
     def __init__(
         self,
@@ -57,109 +57,23 @@ class GA(EA):
             return ind2
         return random.choice([ind1, ind2])
 
-    def _sample_reproduction_operator(self) -> str:
-        """Sample crossover, mutation, or reflection from config weights."""
-        weights = self.config.reproduction_operator_weights()
-        if not weights:
-            return "mutation"
-        operators = list(weights.keys())
-        probabilities = [weights[operator] for operator in operators]
-        return random.choices(operators, weights=probabilities, k=1)[0]
+    def _mutation_parent_snapshot(self, parent: Individual) -> float:
+        """Capture the parent score used by GA mutation feedback."""
+        return self._fitness0(parent)
 
-    def _generate_offspring(self, generation: int) -> List[Individual]:
-        """Create one full offspring population without evaluating it yet."""
-        offspring: List[Individual] = []
-        target_count = self.config.population_size
+    def _mutation_improved(self, child: Individual, parent_snapshot) -> bool:
+        """Return whether a mutation child improved on fitness[0]."""
+        return self._fitness0(child) > float(parent_snapshot)
 
-        while len(offspring) < target_count:
-            operator = self._sample_reproduction_operator()
-            if operator == "crossover":
-                parent1, parent2 = self.select_parents()
-                child = self.crossover(parent1, parent2)
-            elif operator == "mutation":
-                parent = self.select_parent()
-                print(f"[Generation {generation + 1}] selected parent for mutation: id={parent.id} {parent}", flush=True)
-                child = self.mutate(parent)
-                setattr(child, "_mutation_parent_fitness0", self._fitness0(parent))
-                print(f"[Generation {generation + 1}] created child from mutation: id={child.id} {child}", flush=True)
-            elif operator == "reflection":
-                child = self.reflect(self.select_parent())
-            else:
-                raise ValueError(f"Unsupported reproduction operator: {operator}")
-
-            setattr(child, "_reproduction_operator", operator)
-            offspring.append(child)
-            print(
-                f"[Generation {generation + 1}] generated offspring "
-                f"{len(offspring)}/{target_count} via {operator}",
-                flush=True,
-            )
-
-        return offspring[:target_count]
-
-    def _update_mutation_component_feedback(self, child: Individual) -> None:
-        """Feed mutation-mode success/failure back to adaptive roulette."""
-        if getattr(child, "_reproduction_operator", None) != "mutation":
-            return
-
-        metadata = dict(getattr(child, "mutation_metadata", {}) or {})
-        mutation_mode = metadata.get("mutation_mode")
-        parent_fitness0 = getattr(child, "_mutation_parent_fitness0", None)
-        if parent_fitness0 is None:
-            return
-
-        improved = self._fitness0(child) > float(parent_fitness0)
-        update_feedback = getattr(self.mutation_operator, "update_feedback", None)
-        if update_feedback is not None:
-            update_feedback(mutation_mode, improved)
-
-    def run(self) -> list:
-        """Main single-objective GA loop."""
-        log_dir = self.create_log_folder()
-        evaluator = self.build_evaluator()
-
-        self._evaluate_initial_population(evaluator)
-
-        for generation in range(self.config.num_generations):
-            print(
-                f"[Generation {generation + 1}/{self.config.num_generations}] start",
-                flush=True,
-            )
-
-            offspring = self._generate_offspring(generation)
-            print(
-                f"[Generation {generation + 1}] generated offspring ready: {len(offspring)}",
-                flush=True,
-            )
-
-            for index, child in enumerate(offspring):
-                print(
-                    f"[Generation {generation + 1}] round evaluation "
-                    f"{index + 1}/{len(offspring)} id={child.id}",
-                    flush=True,
-                )
-                evaluator.evaluate(child, generation=generation)
-                print(
-                    f"[Generation {generation + 1}] round result "
-                    f"id={child.id} fitness={child.fitness}",
-                    flush=True,
-                )
-                self._update_mutation_component_feedback(child)
-
-            print(
-                f"[Generation {generation + 1}] selecting survivors",
-                flush=True,
-            )
-            self.population = self.select_next_generation(self.population, offspring)
-
-            best_individual = max(self.population, key=self._fitness0)
-            self.log_single_objective_generation(log_dir, generation, best_individual)
-            self.save_component_pool(log_dir)
-            self.current_generation = generation
-            self.print_population_snapshot(f"generation {generation + 1} survivors")
-            print(
-                f"[Generation {generation + 1}] logged",
-                flush=True,
-            )
-
-        return self.population
+    def _log_generation(
+        self,
+        generation: int,
+        offspring: List[Individual],
+        generation_context,
+        log_dir: str,
+    ) -> None:
+        """Write the GA generation snapshot."""
+        best_individual = max(self.population, key=self._fitness0)
+        self.log_single_objective_generation(log_dir, generation, best_individual)
+        self.save_component_pool(log_dir)
+        self.current_generation = generation

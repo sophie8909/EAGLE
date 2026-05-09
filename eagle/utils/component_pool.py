@@ -406,8 +406,19 @@ class ComponentPool:
         """Resolve random or fixed training-example sample count."""
         if isinstance(selection, dict):
             selection = selection.get("sample_count", selection.get("count"))
-        if selection is None or str(selection).strip().lower() in {"", "random", "random_0_4"}:
+        raw_selection = str(selection).strip().lower() if selection is not None else ""
+        if selection is None or raw_selection in {"", "random"}:
             return random.randint(0, max_count)
+        normalized_selection = raw_selection.replace("_", " ")
+        range_match = re.search(r"(\d+)\s*-\s*(\d+)", normalized_selection)
+        if not range_match:
+            range_match = re.search(r"random\s+(\d+)\s+(\d+)", normalized_selection)
+        if range_match:
+            lower = max(0, min(max_count, int(range_match.group(1))))
+            upper = max(0, min(max_count, int(range_match.group(2))))
+            if lower > upper:
+                lower, upper = upper, lower
+            return random.randint(lower, upper)
         try:
             fixed_count = int(selection)
         except (TypeError, ValueError):
