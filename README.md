@@ -2,6 +2,59 @@
 
 EAGLE is the main project in this repository. MicroRTS is treated as a vendored third-party environment under `third_party/microrts`, while the Python-side research workflow lives under `eagle/`.
 
+
+## GUI Usage
+
+The GUI is a native local desktop window implemented with Python `tkinter`. It does not run through a browser or a web server.
+
+Start it from the repository root with either command:
+
+```bash
+./run.sh
+```
+
+```bash
+python -m eagle_gui.app
+```
+
+On Windows, this also works after activating the environment:
+
+```powershell
+py -3 -m eagle_gui.app
+```
+
+Main GUI functions:
+
+- `Components`: edit prompt components, choose candidates, preview the rendered prompt, and mark components as static.
+- `Algorithm`: choose algorithm settings such as GA/NSGA-II, population size, generations, surrogate mode, timeout, and quick-run options.
+- `Objectives`: choose objective scoring and target opponents.
+- `Operators`: choose crossover and mutation operators, including weighted mutation modes.
+- `Run`: save the generated config, start or stop an experiment, and view process output.
+- `Live Analysis`: watch run progress from `logs/eagle/`.
+- `Prompts`: inspect prompts saved in generation logs and checkpoints.
+
+Pressing `Save generated config` writes the current settings to:
+
+```text
+configs/experiments/<config_name>.json
+```
+
+Pressing `Start experiment` saves that config and launches EAGLE with the selected algorithm, evaluator, and surrogate settings.
+
+```bash
+python -m eagle.main --config configs/experiments/<config_name>.json --algorithm <algorithm> --evaluator <evaluator>
+```
+
+The run writes normal EAGLE artifacts under `logs/eagle/<timestamp>/`.
+
+Notes:
+
+- Run the GUI from the repository root so relative config, log, component, and MicroRTS paths resolve correctly.
+- The desktop GUI uses `tkinter`, which is bundled with normal Python installations. If your Python distribution omits Tk support, install the Tk package for that distribution.
+- Java-backed MicroRTS validation still requires `java` and `javac` on `PATH`.
+- LLM-backed mutation, reflection, and evaluation paths still require Ollama to be reachable from the environment that starts the desktop GUI.
+
+
 ## Repository Structure
 
 ```text
@@ -141,6 +194,35 @@ pip install -r requirements.txt
 Then make sure `java` and `javac` are available on `PATH`.
 
 If you use LLM-backed mutation, reflection, or evaluation paths, make sure Ollama is reachable from the environment where you run EAGLE. Run all commands from the repository root.
+
+## Quick Start with `run.sh`
+
+`run.sh` opens the native EAGLE desktop GUI from the repository root.
+
+If your environment is already ready:
+
+```bash
+./run.sh
+```
+
+If you want the script to check or create the Conda environment first:
+
+```bash
+./run.sh --setup
+```
+
+If you also want to reinstall Python packages:
+
+```bash
+./run.sh --setup --install
+```
+
+Notes:
+
+- Run the script from the repository root.
+- The script expects a Bash-compatible shell such as Git Bash, WSL, or a Unix shell.
+- `./run.sh` uses the current active `python`.
+- Java-backed MicroRTS runs still need `java` and `javac` on `PATH`.
 
 ## Compile MicroRTS
 
@@ -296,53 +378,6 @@ Outputs:
 
 - a JSON result file in the run directory unless `--output` is provided
 
-## GUI Usage
-
-The GUI is a native local desktop window implemented with Python `tkinter`; it does not run through a browser or a web server.
-
-Start it from the repository root after activating the EAGLE environment:
-
-```bash
-python -m eagle_gui.app
-```
-
-On Windows, the Python launcher is also fine:
-
-```powershell
-py -3 -m eagle_gui.app
-```
-
-The desktop window has these main tabs:
-
-- `Components`: choose an initial `component.json`, import or save it into `configs/experiments/`, add/delete component keys and candidates, mark normal components as static, select concrete candidates to render a prompt preview, and edit candidate text directly before saving the updated component JSON. Static components are shown in the prompt-builder table and are saved as `non_evolving_prompt_components` in generated configs. The merged `training_examples` component uses a specialized editor: it can generate a random MicroRTS static state block, parse state units, and append legal-format example moves from action buttons such as train, build, harvest, and attack.
-- `Algorithm`: choose the application, surrogate, and generated config name, then control the current algorithm flow: `round_ga`, `round_nsga2`, population size, generations, game timeout, gameplay rate, final-test front count, parent selection, tournament size, crossover repair, quick-run, and final-test skipping. The objectives panel lets you add/delete target opponents, inspect the exact objective calculation, and choose the active target for single-objective GA. Multi-objective NSGA-II uses every listed target as one objective. The current application choice is `microrts`; future applications should add their own `third_party/<app>`, `eagle/domains/<app>`, `eagle/eval/<app>`, and `eagle/reflection/<app>` modules.
-- `Algorithm`: also controls operator weights through `reproduction_operator_probs` (`crossover`, `mutation`, `reflection`) and mutation-mode weights through `strategy_mutation` (`pool_replacement`, `identity_preserving_rewrite`, `identity_shift_rewrite`, `bitmask_flip`).
-- `Run`: save the current GUI settings into `configs/experiments/<config_name>.json`, launch EAGLE in a background process, stop the process launched by the GUI, and inspect the process output log.
-- `Surrogate Paths`: shows the two Java-backed surrogate paths: `eaglePolicy.java` for fixed policy injection and `eagleJava.java` for direct Java generation.
-- `Live Analysis`: select a run under `logs/eagle/` and refresh live GA/MO analysis from existing `run_state.json` and `checkpoints.jsonl` artifacts. GA mode reports first-objective best fitness by generation; MO mode reports objective count and the current non-dominated front sample. Both modes summarize operator and mutation metadata when present.
-- `Prompts`: inspect prompt text recovered from generation logs and checkpointed `rendered_prompt` fields.
-
-Pressing `Save generated config` writes the current settings to:
-
-```text
-configs/experiments/<config_name>.json
-```
-
-Pressing `Start experiment` saves that config and launches:
-
-```bash
-python -m eagle.main --config configs/experiments/<config_name>.json --algorithm <algorithm> --evaluator <evaluator>
-```
-
-The run writes normal EAGLE artifacts under `logs/eagle/<timestamp>/`. Keep `Live Analysis` open to watch the selected run update while it is running.
-
-Notes:
-
-- Run the GUI from the repository root so relative config, log, component, and MicroRTS paths resolve correctly.
-- The desktop GUI uses `tkinter`, which is bundled with normal Python installations. If your Python distribution omits Tk support, install the Tk package for that distribution.
-- Java-backed MicroRTS validation still requires `java` and `javac` on `PATH`.
-- LLM-backed mutation, reflection, and evaluation paths still require Ollama to be reachable from the environment that starts the desktop GUI.
-
 ## Output Locations
 
 - EAGLE run logs: `logs/eagle/<timestamp>/`
@@ -351,7 +386,3 @@ Notes:
 - Response CSV files: `responses/`
 - Analysis outputs: `results/analysis/`
 - Cross-run fitness history: `history/fitness_history.jsonl`
-
-## Notes
-
-- The active MicroRTS location is `third_party/microrts`. The old root-level MicroRTS copy has been removed.
