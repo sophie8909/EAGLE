@@ -15,7 +15,7 @@ class ExperimentConfig:
     """Config envelope for selecting framework components by name."""
 
     algorithm: str = "round_nsga2"
-    evaluator: str = "round"
+    evaluator: str = "gameplay"
     ea: EAConfig = field(default_factory=EAConfig)
     evaluator_params: dict[str, Any] = field(default_factory=dict)
     opponents: list[str] = field(default_factory=list)
@@ -43,14 +43,14 @@ def experiment_config_from_payload(payload: dict[str, Any] | None) -> Experiment
         (evaluator_value.get("name") if isinstance(evaluator_value, dict) else evaluator_value)
         or data.get("evaluator_name")
         or ea_payload.get("evaluator")
-        or "round"
+        or "gameplay"
     ).strip().lower()
     if "evaluator" not in ea_payload:
         ea_payload["evaluator"] = evaluator
     if "objective_operator" not in ea_payload:
         default_objectives = {
             "round": "round_legality_alignment",
-            "gameplay": "microrts_opponent",
+            "gameplay": "microrts_resource_weighted",
         }
         ea_payload["objective_operator"] = default_objectives.get(
             evaluator,
@@ -58,7 +58,7 @@ def experiment_config_from_payload(payload: dict[str, Any] | None) -> Experiment
         )
     ea_config = load_config_payload(ea_payload)
     algorithm = str(data.get("algorithm") or ea_config.algorithm)
-    opponents = list(data.get("opponents") or ea_config.real_eval_opponents or [])
+    opponents = list(data.get("opponents") or ea_config.gameplay_opponents or [])
     evaluator_params = dict(data.get("evaluator_params") or {})
     if isinstance(evaluator_value, dict):
         evaluator_params.update(dict(evaluator_value.get("params") or {}))

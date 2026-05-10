@@ -12,7 +12,7 @@
     "resource": 1.0
   },
   "surrogate_version": "eaglePolicy",
-  "surrogate_mode": "light_rush_and_heavy_rush",
+  "surrogate": "round",
   "surrogate_recent_match_window": 10,
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts"

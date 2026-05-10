@@ -60,6 +60,11 @@ class Evaluator:
     ) -> dict[str, Any]:
         """Generate one state, ask for actions, and assign normalized two-objective fitness."""
         base_prompt = self._construct_prompt(individual)
+        print(
+            "[DEBUG] round evaluate start "
+            f"individual={individual.id} generation={generation} rounds={self.config.one_eval_rounds}",
+            flush=True,
+        )
         
 
         cached_record = self.history.get_record(base_prompt)
@@ -83,6 +88,11 @@ class Evaluator:
                     "fitness": individual.fitness,
                     "history_decision": "use_existing_average",
                 }
+                print(
+                    "[DEBUG] round evaluate complete "
+                    f"individual={individual.id} fitness={individual.fitness} mode={individual.evaluation_mode}",
+                    flush=True,
+                )
                 return {
                     "prompt": base_prompt,
                     "fitness": individual.fitness,
@@ -101,6 +111,11 @@ class Evaluator:
         alignment_raw_sum = 0.0
         n = self.config.one_eval_rounds
         for i in range(n):
+            print(
+                "[DEBUG] round sample start "
+                f"individual={individual.id} generation={generation} sample={i + 1}/{n}",
+                flush=True,
+            )
             dynamic_prompt = self.state_generator.generate_text()
             full_prompt = self._build_round_prompt(base_prompt, dynamic_prompt)
             raw_response = self._ask_for_actions(full_prompt)
@@ -142,6 +157,13 @@ class Evaluator:
             alignment_raw_sum += alignment_raw
             legality_score_sum += legality_score
             alignment_score_sum += alignment_score
+            print(
+                "[DEBUG] round sample result "
+                f"individual={individual.id} sample={i + 1}/{n} "
+                f"format_valid={format_valid} legality={legality_score:.4f} "
+                f"alignment={alignment_score:.4f}",
+                flush=True,
+            )
 
         latest_fitness = [ legality_score_sum / n, alignment_score_sum / n ]
         fitness = self._average_history_fitness(
@@ -180,6 +202,11 @@ class Evaluator:
                 "cached_fitness": cached_fitness,
                 "round": individual.last_round_evaluation,
             }
+        )
+        print(
+            "[DEBUG] round evaluate complete "
+            f"individual={individual.id} fitness={individual.fitness} mode={individual.evaluation_mode}",
+            flush=True,
         )
         return {
             "prompt": base_prompt,

@@ -22,10 +22,13 @@ def _normalize_two_objective_fitness(fitness) -> list[float]:
     if isinstance(fitness, (int, float)):
         return [float(fitness), 0.0]
     values: list[float] = []
-    try:
-        iterable = list(fitness)
-    except TypeError:
-        return [0.0, 0.0]
+    if isinstance(fitness, dict):
+        iterable = list(fitness.values())
+    else:
+        try:
+            iterable = list(fitness)
+        except TypeError:
+            return [0.0, 0.0]
     for value in iterable[:2]:
         try:
             values.append(float(value))

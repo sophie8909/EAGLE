@@ -82,7 +82,9 @@ def _load_config(args: argparse.Namespace) -> EAConfig:
         config = EAConfig()
 
     config.algorithm = str(args.algorithm or getattr(config, "algorithm", "round_nsga2")).lower()
-    config.real_eval_rate = 1.0
+    config.evaluator = "round"
+    config.objective_operator = "round_legality_alignment"
+    config.gameplay_rate = 1.0
     config.final_test_max_front = 0
 
     if args.component_pool:

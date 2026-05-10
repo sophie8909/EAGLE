@@ -29,9 +29,9 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
     if isinstance(mutation_metadata, dict):
         payload["mutation_metadata"] = dict(mutation_metadata)
 
-    last_real_evaluation = getattr(individual, "last_real_evaluation", None)
-    if isinstance(last_real_evaluation, dict):
-        payload["last_real_evaluation"] = dict(last_real_evaluation)
+    last_gameplay_evaluation = getattr(individual, "last_gameplay_evaluation", None)
+    if isinstance(last_gameplay_evaluation, dict):
+        payload["last_gameplay_evaluation"] = dict(last_gameplay_evaluation)
 
     last_surrogate_evaluation = getattr(individual, "last_surrogate_evaluation", None)
     if isinstance(last_surrogate_evaluation, dict):
@@ -68,9 +68,9 @@ def deserialize_individual(payload: dict[str, Any]) -> Individual:
     if isinstance(mutation_metadata, dict):
         individual.mutation_metadata = dict(mutation_metadata)
 
-    last_real_evaluation = payload.get("last_real_evaluation")
-    if isinstance(last_real_evaluation, dict):
-        individual.last_real_evaluation = dict(last_real_evaluation)
+    last_gameplay_evaluation = payload.get("last_gameplay_evaluation")
+    if isinstance(last_gameplay_evaluation, dict):
+        individual.last_gameplay_evaluation = dict(last_gameplay_evaluation)
 
     last_surrogate_evaluation = payload.get("last_surrogate_evaluation")
     if isinstance(last_surrogate_evaluation, dict):

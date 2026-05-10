@@ -348,7 +348,7 @@ def extract_dynamic_prompt_blocks(log_text: str) -> list[dict[str, Any]]:
     Extract full Dynamic Prompt blocks from a log.
 
     Each returned item preserves the original prompt text and, when available,
-    the parsed turn number so downstream surrogate evaluators can reuse a real
+    the parsed turn number so downstream surrogate evaluators can reuse a gameplay
     game snapshot without replaying the game.
     """
     blocks: list[dict[str, Any]] = []
@@ -394,7 +394,7 @@ def collect_recent_dynamic_prompts(
     collected: list[dict[str, Any]] = []
     for log_path in candidate_logs:
         log_text = log_path.read_text(encoding="utf-8", errors="replace")
-        # Only reuse real EAGLE runtime logs for surrogate round sampling.
+        # Only reuse gameplay EAGLE runtime logs for surrogate round sampling.
         # Surrogate-agent logs can contain different action traces and would
         # leak the surrogate policy back into the history window.
         if "[EAGLE.getAction]" not in log_text or "[eaglePolicy.getAction]" in log_text:

@@ -71,17 +71,34 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     if args.evaluator:
         config.evaluator = args.evaluator
 
+    if args.surrogate:
+        config.surrogate = args.surrogate
+        config.evaluator = "gameplay"
+        config.objective_operator = (
+            "microrts_resource_weighted"
+            if args.surrogate == "round"
+            else "microrts_win_loss"
+        )
+
     if args.timeout_sec is not None:
         config.run_time_per_game_sec = max(1, int(args.timeout_sec))
 
     if args.quick_run:
         config.population_size = max(2, min(config.population_size, 2))
         config.num_generations = 2
-        config.real_eval_rate = 0.0
+        config.gameplay_rate = 0.0
         config.run_time_per_game_sec = 30
         config.final_test_max_front = 0
 
     config.validate()
+    print(
+        "[DEBUG] runtime_config "
+        f"algorithm={config.algorithm} evaluator={config.evaluator} "
+        f"surrogate={config.surrogate} objective={config.objective_operator} "
+        f"population={config.population_size} generations={config.num_generations} "
+        f"gameplay_rate={config.gameplay_rate}",
+        flush=True,
+    )
     return config
 
 
@@ -127,6 +144,12 @@ def main() -> None:
         choices=["round", "gameplay"],
         default=None,
         help="Override the evaluator selected by YAML experiment configs.",
+    )
+    parser.add_argument(
+        "--surrogate",
+        choices=["round", "policy_agent", "java_agent"],
+        default=None,
+        help="Select the MicroRTS surrogate mode and derived gameplay objective.",
     )
     parser.add_argument(
         "--timeout-sec",
@@ -178,7 +201,15 @@ def main() -> None:
     if args.evaluator:
         experiment_config.evaluator = args.evaluator
         config.evaluator = args.evaluator
+    if args.surrogate:
+        experiment_config.evaluator = config.evaluator
 
+    print(
+        "[DEBUG] launch "
+        f"component_pool={_resolve_component_pool_path_from_config(config, args, resume_log_dir)} "
+        f"opponents={opponent_list} final_test={should_run_final_test}",
+        flush=True,
+    )
     algorithm = build_algorithm(
         experiment_config,
         component_pool=component_pool,

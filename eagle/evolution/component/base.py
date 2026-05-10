@@ -304,7 +304,7 @@ class EA:
         return self.population
        
     def _log_initial_population_snapshot(self) -> None:
-        """Persist one generation-0 snapshot after initial real evaluation."""
+        """Persist one generation-0 snapshot after initial gameplay evaluation."""
         if self.current_log_dir is None:
             return
 

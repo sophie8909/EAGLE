@@ -83,9 +83,9 @@ class EAConfig:
     )
 
     run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
-    real_eval_rate: float = field(default_factory=lambda: float(_default_config_value("real_eval_rate")))
+    gameplay_rate: float = field(default_factory=lambda: float(_default_config_value("gameplay_rate")))
     objective_operator: str = field(default_factory=lambda: str(_default_config_value("objective_operator")))
-    real_eval_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("real_eval_opponents")))
+    gameplay_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("gameplay_opponents")))
     llm_interval: list[int] = field(default_factory=lambda: list(_default_config_value("llm_interval")))
     save_trace_on_test: bool = field(default_factory=lambda: bool(_default_config_value("save_trace_on_test")))
 
@@ -100,7 +100,7 @@ class EAConfig:
     )
 
     surrogate_version: str = field(default_factory=lambda: str(_default_config_value("surrogate_version")))
-    surrogate_mode: str = field(default_factory=lambda: str(_default_config_value("surrogate_mode")))
+    surrogate: str = field(default_factory=lambda: str(_default_config_value("surrogate")))
     surrogate_recent_match_window: int = field(
         default_factory=lambda: int(_default_config_value("surrogate_recent_match_window"))
     )
@@ -127,6 +127,19 @@ class EAConfig:
         self.evaluator = str(self.evaluator or "round").strip().lower()
         if self.evaluator not in {"round", "gameplay"}:
             raise ValueError("evaluator must be either 'round' or 'gameplay'.")
+        normalized_surrogate = str(self.surrogate).strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized_surrogate not in {"round", "policy_agent", "java_agent"}:
+            raise ValueError(
+                f"Unsupported surrogate: {self.surrogate!r}. "
+                "Use 'round', 'policy_agent', or 'java_agent'."
+            )
+        self.surrogate = normalized_surrogate
+        if self.evaluator == "gameplay":
+            self.objective_operator = (
+                "microrts_resource_weighted"
+                if self.surrogate == "round"
+                else "microrts_win_loss"
+            )
         self.objective_operator = str(self.objective_operator or "").strip()
         from eagle.objectives.registry import list_objective_names
 
@@ -195,13 +208,6 @@ class EAConfig:
 
         self.strategy_mutation = strategy_mutation
 
-        normalized_surrogate_mode = str(self.surrogate_mode).strip().lower()
-        if normalized_surrogate_mode not in {"light_rush_and_heavy_rush"}:
-            raise ValueError(
-                f"Unsupported surrogate_mode: {self.surrogate_mode!r}. "
-                "Use 'light_rush_and_heavy_rush'."
-            )
-        self.surrogate_mode = normalized_surrogate_mode
         self.llm_interval = self._normalized_llm_interval_input(self.llm_interval)
 
     def evolution_settings(self) -> dict[str, object]:
@@ -231,7 +237,7 @@ class EAConfig:
             "component_pool_path": self.component_pool_path,
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
             "objective_operator": self.objective_operator,
-            "real_eval_opponents": list(self.real_eval_opponents),
+            "gameplay_opponents": list(self.gameplay_opponents),
         }
 
     def fitness_settings(self) -> dict[str, object]:
@@ -245,17 +251,17 @@ class EAConfig:
     def surrogate_settings(self) -> dict[str, object]:
         """Return the subset of fields used by surrogate evaluators."""
         return {
-            "surrogate_mode": self.surrogate_mode,
+            "surrogate": self.surrogate,
             "surrogate_recent_match_window": self.surrogate_recent_match_window,
             "surrogate_round_samples_per_match": self.surrogate_round_samples_per_match,
             "surrogate_log_dir": self.surrogate_log_dir,
         }
 
-    def real_eval_count(self, candidate_count: int | None = None) -> int:
-        """Convert `real_eval_rate` into an integer evaluation budget."""
+    def gameplay_count(self, candidate_count: int | None = None) -> int:
+        """Convert `gameplay_rate` into an integer evaluation budget."""
         total = candidate_count if candidate_count is not None else self.population_size
-        budget = int(total * self.real_eval_rate)
-        if self.real_eval_rate > 0 and budget == 0:
+        budget = int(total * self.gameplay_rate)
+        if self.gameplay_rate > 0 and budget == 0:
             return 1
         return max(0, budget)
 

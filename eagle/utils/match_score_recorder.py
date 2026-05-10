@@ -152,5 +152,5 @@ class MatchScoreRecorder:
         with self.log_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(normalized_record, ensure_ascii=False) + "\n")
 
-        if normalized_record.get("evaluation_mode") == "real":
+        if normalized_record.get("evaluation_mode") == "gameplay":
             self.add_history_record(self.record_to_history_entry(normalized_record))

@@ -18,6 +18,14 @@ def _normalize_single_objective_fitness(fitness) -> list[float]:
         return [0.0]
     if isinstance(fitness, (int, float)):
         return [float(fitness)]
+    if isinstance(fitness, dict):
+        iterable = list(fitness.values())
+        if not iterable:
+            return [0.0]
+        try:
+            return [float(iterable[0])]
+        except (TypeError, ValueError):
+            return [0.0]
     try:
         iterable = list(fitness)
     except TypeError:

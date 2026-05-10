@@ -156,6 +156,11 @@ def launch_java_match(
     classpath = f"{lib_dir / '*'}{os.pathsep}{bin_dir}"
     command = ["java", "-cp", classpath, "rts.MicroRTS"]
 
+    print(
+        "[DEBUG] microrts launch "
+        f"cwd={microrts_root} timeout={run_time_per_game_sec} log={log_path}",
+        flush=True,
+    )
     started = time.perf_counter()
     with log_path.open("w", encoding="utf-8") as stream:
         process = subprocess.Popen(
@@ -178,6 +183,11 @@ def launch_java_match(
                     f"\n[python-runner] timed out after {run_time_per_game_sec} seconds.\n"
                 )
     elapsed = time.perf_counter() - started
+    print(
+        "[DEBUG] microrts complete "
+        f"exit_code={exit_code} timed_out={timed_out} elapsed={elapsed:.2f}s log={log_path}",
+        flush=True,
+    )
     return exit_code, timed_out, str(log_path), elapsed
 
 
@@ -255,6 +265,11 @@ def run_java_agent_game(
     """Run one MicroRTS game with explicit Java agent classes."""
     project_root = (project_root or PROJECT_ROOT).resolve()
     microrts_root = locate_microrts_root(project_root)
+    print(
+        "[DEBUG] gameplay setup "
+        f"ai1={ai1_class} opponent={opponent} compile_first={compile_first} prefix={log_prefix}",
+        flush=True,
+    )
     if compile_first:
         compile_microrts(project_root)
 
@@ -290,6 +305,12 @@ def run_java_agent_game(
             "game_time_sec": game_time_sec,
             "microrts_root": str(microrts_root),
         }
+        print(
+            "[DEBUG] gameplay parsed "
+            f"ai1={ai1_class} opponent={opponent} winner={metadata['winner']} "
+            f"timeout={metadata['timeout']} score={match_score}",
+            flush=True,
+        )
         if record_trace:
             config_properties = read_config_properties(project_root)
             trace_info = record_java_match_trace(
@@ -320,7 +341,7 @@ def run_prompt_based_game(
     test: bool = False,
     runtime_logs_dir: Path | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
-    """Run one real EAGLE-vs-opponent match driven by the prompt file."""
+    """Run one gameplay EAGLE-vs-opponent match driven by the prompt file."""
     return run_java_agent_game(
         project_root=project_root,
         config=config,

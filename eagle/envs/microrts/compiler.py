@@ -67,7 +67,7 @@ def compile_microrts(project_root: Path | None = None) -> Path:
         except FileNotFoundError as exc:
             raise RuntimeError(
                 "Failed to compile MicroRTS because `javac` was not found on PATH. "
-                "Install a JDK or add `javac` to PATH before running real matches."
+                "Install a JDK or add `javac` to PATH before running gameplay matches."
             ) from exc
         except subprocess.CalledProcessError as exc:
             stderr = (exc.stderr or "").strip()

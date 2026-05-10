@@ -199,12 +199,13 @@ Fitness conventions:
 - `resource_score` is the weighted final resource/material advantage from that same match.
 - New result readers should treat `match_score` as the canonical raw single-match score field.
 - EA-level search fitness used by `round_ga` and `round_nsga2` stores one scalar per configured objective slot.
-- The slot order is read from `real_eval_opponents` in the run config.
+- The slot order is read from `gameplay_opponents` in the run config.
 - With the default config, EA-level fitness is `[LightRush_score, HeavyRush_score]`.
-- Each opponent score is computed as `raw_resource_advantage_score + win_bonus * win_score`.
+- With `surrogate=round`, each opponent score is `raw_resource_advantage_score`.
+- With `surrogate=policy_agent` or `surrogate=java_agent`, each opponent score is `win_score`.
 - `resource_advantage_alpha` remains the separate parameter used inside resource-advantage scoring.
 - `win_bonus` is the win bonus weight inside the EA search objective.
-- Real evaluation always uses the full ordered `real_eval_opponents` list from config; it does not sample a random opponent.
+- Gameplay evaluation always uses the full ordered `gameplay_opponents` list from config; it does not sample a random opponent.
 
 ### 2. `scripts.run_surrogate_validation`
 
@@ -314,7 +315,7 @@ py -3 -m eagle_gui.app
 The desktop window has these main tabs:
 
 - `Components`: choose an initial `component.json`, import or save it into `configs/experiments/`, add/delete component keys and candidates, mark normal components as static, select concrete candidates to render a prompt preview, and edit candidate text directly before saving the updated component JSON. Static components are shown in the prompt-builder table and are saved as `non_evolving_prompt_components` in generated configs. The merged `training_examples` component uses a specialized editor: it can generate a random MicroRTS static state block, parse state units, and append legal-format example moves from action buttons such as train, build, harvest, and attack.
-- `Algorithm`: choose the application, evaluator, and generated config name, then control the current algorithm flow: `round_ga`, `round_nsga2`, population size, generations, game timeout, real-evaluation rate, final-test front count, parent selection, tournament size, crossover repair, quick-run, and final-test skipping. The objectives panel lets you add/delete target opponents, inspect the exact objective calculation, and choose the active target for single-objective GA. Multi-objective NSGA-II uses every listed target as one objective. The current application choice is `microrts`; future applications should add their own `third_party/<app>`, `eagle/domains/<app>`, `eagle/eval/<app>`, and `eagle/reflection/<app>` modules.
+- `Algorithm`: choose the application, surrogate, and generated config name, then control the current algorithm flow: `round_ga`, `round_nsga2`, population size, generations, game timeout, gameplay rate, final-test front count, parent selection, tournament size, crossover repair, quick-run, and final-test skipping. The objectives panel lets you add/delete target opponents, inspect the exact objective calculation, and choose the active target for single-objective GA. Multi-objective NSGA-II uses every listed target as one objective. The current application choice is `microrts`; future applications should add their own `third_party/<app>`, `eagle/domains/<app>`, `eagle/eval/<app>`, and `eagle/reflection/<app>` modules.
 - `Algorithm`: also controls operator weights through `reproduction_operator_probs` (`crossover`, `mutation`, `reflection`) and mutation-mode weights through `strategy_mutation` (`pool_replacement`, `identity_preserving_rewrite`, `identity_shift_rewrite`, `bitmask_flip`).
 - `Run`: save the current GUI settings into `configs/experiments/<config_name>.json`, launch EAGLE in a background process, stop the process launched by the GUI, and inspect the process output log.
 - `Surrogate Paths`: shows the two Java-backed surrogate paths: `eaglePolicy.java` for fixed policy injection and `eagleJava.java` for direct Java generation.

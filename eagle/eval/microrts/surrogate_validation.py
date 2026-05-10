@@ -283,7 +283,7 @@ def _record_match(
         "prompt": prompt,
         "match_score": dict(match_score),
         "opponent": opponent,
-        "evaluation_mode": "real",
+        "evaluation_mode": "gameplay",
         "benchmark_mode": benchmark_mode,
         "evaluation_time": float(game_time_sec),
         "game_time_sec": float(game_time_sec),
@@ -344,7 +344,7 @@ def _run_eagle_match(
     opponent: str,
     llm_interval: int,
 ) -> dict[str, Any]:
-    """Run one 5000-cycle benchmark match with the real EAGLE Java agent."""
+    """Run one 5000-cycle benchmark match with the gameplay EAGLE Java agent."""
     ai1 = "ai.abstraction.EAGLE"
 
     cached = _maybe_reuse_cached_match(
@@ -526,7 +526,7 @@ def run_surrogate_validation_quick_run(
     config: EAConfig | None = None,
     opponents: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Run the smallest real surrogate-validation benchmark that still launches games."""
+    """Run the smallest gameplay surrogate-validation benchmark that still launches games."""
     selected_opponents = list(opponents or [DEFAULT_QUICK_RUN_OPPONENT])
     if not selected_opponents:
         selected_opponents = [DEFAULT_QUICK_RUN_OPPONENT]
@@ -577,7 +577,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--quick-run",
         action="store_true",
-        help="Run one individual against one opponent using real matches for a minimal end-to-end benchmark.",
+        help="Run one individual against one opponent using gameplay matches for a minimal end-to-end benchmark.",
     )
     return parser
 

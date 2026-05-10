@@ -41,7 +41,7 @@ class Reflection:
         timeout: bool,
         max_turn_hint: int | None,
     ) -> dict[str, Any]:
-        """Convert one parsed real-game log into a compact reflection context."""
+        """Convert one parsed gameplay log into a compact reflection context."""
         parsed_log = parsed_log or {}
         summary = dict(parsed_log.get("summary") or {})
         segments = list(parsed_log.get("segments") or [])
@@ -77,7 +77,7 @@ class Reflection:
 
     @classmethod
     def safe_fallback_context(cls, *, match_score: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Return a minimal context when no prior real-game data is available."""
+        """Return a minimal context when no prior gameplay data is available."""
         return {
             "outcome": "unknown",
             "win_score": cls._match_win_score(match_score),
@@ -94,7 +94,7 @@ class Reflection:
                 "intent_counts": {action_type: 0 for action_type in _ACTION_TYPES},
                 "executed_counts": {action_type: 0 for action_type in _ACTION_TYPES},
             },
-            "diagnosis_notes": ["No prior real-evaluation summary was available."],
+            "diagnosis_notes": ["No prior gameplay summary was available."],
             "missing_data": True,
         }
 
@@ -446,7 +446,7 @@ class Reflection:
             "Reflection operator\n"
             f"Rewrite target: {target_component}\n\n"
             "Goal:\n"
-            "- Make one conservative improvement using compact feedback from the parent's last real game.\n"
+            "- Make one conservative improvement using compact feedback from the parent's last gameplay match.\n"
             "- Keep strategy_identity unchanged.\n"
             "- Rewrite only the named target component.\n"
             "- Preserve the existing strategic style unless the feedback strongly suggests a local adjustment.\n"

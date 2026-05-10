@@ -1,20 +1,19 @@
-"""MicroRTS opponent-score objective plugin."""
+"""MicroRTS win/loss gameplay objective plugin."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from eagle.objectives.base import BaseObjective
-from eagle.utils.fitness_calculator import combined_match_score
 
 
-class MicroRTSOpponentObjective(BaseObjective):
-    """Score one configured MicroRTS opponent slot."""
+class MicroRTSWinLossObjective(BaseObjective):
+    """Score one configured MicroRTS opponent by match outcome only."""
 
-    name = "microrts_opponent"
+    name = "microrts_win_loss"
     evaluator = "gameplay"
     target_based = True
-    calculation_label = "raw_resource_advantage_score + win_bonus * win_score"
+    calculation_label = "win_score"
 
     def __call__(
         self,
@@ -24,15 +23,20 @@ class MicroRTSOpponentObjective(BaseObjective):
         target: str | None = None,
         index: int = 0,
     ) -> float:
-        """Calculate the scalar objective for one opponent result."""
-        return combined_match_score(match_score, win_bonus=config.win_bonus)
+        """Return the win/loss score for one opponent result."""
+        if not match_score:
+            return 0.0
+        try:
+            return float(match_score.get("win_score", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
 
     def objective_key(self, target: str | None, index: int) -> str:
         """Create a stable objective key for one configured opponent."""
         if target is None:
-            return f"objective_{index}"
+            return f"win_loss_{index}"
         short_name = str(target).split(".")[-1]
-        return short_name or f"objective_{index}"
+        return f"{short_name}_win_loss" if short_name else f"win_loss_{index}"
 
     def describe(self, target: str | None, index: int, *, single_objective: bool) -> str:
         """Return the calculation details shown in the GUI."""
@@ -44,9 +48,7 @@ class MicroRTSOpponentObjective(BaseObjective):
         )
         return (
             f"{objective_key} against {target}: "
-            "match_score = calculate_match_score(log, resource_advantage_weights); "
-            "raw_resource_advantage_score = weighted ally material/resources - weighted enemy material/resources; "
-            "win_score = 1 for win, -1 for loss, 0 for draw/unknown; "
-            f"objective = {self.calculation_label}. "
+            "objective = win_score; "
+            "win_score = 1 for win, -1 for loss, 0 for draw/unknown. "
             f"Current mode: {mode}."
         )

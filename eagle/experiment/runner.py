@@ -25,10 +25,18 @@ def build_algorithm(
     pool = component_pool or ComponentPool.from_json(resolve_component_pool_path(experiment.ea))
     opponents = list(opponent_list if opponent_list is not None else experiment.opponents)
     if not opponents:
-        opponents = list(experiment.ea.real_eval_opponents)
+        opponents = list(experiment.ea.gameplay_opponents)
     algorithm = algorithm_cls(experiment.ea, pool, opponent_list=opponents)
     algorithm.evaluator_name = experiment.evaluator
     algorithm.evaluator_params = dict(experiment.evaluator_params)
+    print(
+        "[DEBUG] build_algorithm "
+        f"algorithm={experiment.algorithm} evaluator={experiment.evaluator} "
+        f"surrogate={getattr(experiment.ea, 'surrogate', 'unknown')} "
+        f"objective={getattr(experiment.ea, 'objective_operator', 'unknown')} "
+        f"opponents={opponents}",
+        flush=True,
+    )
     return algorithm
 
 

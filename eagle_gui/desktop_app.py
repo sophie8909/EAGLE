@@ -29,11 +29,13 @@ DEFAULT_CONFIG = CONFIG_DIR / "default.json"
 APPLICATION_CHOICES = ("microrts",)
 ALGORITHM_CHOICES = ("round_ga", "round_nsga2")
 EVALUATOR_CHOICES = ("round", "gameplay")
+SURROGATE_CHOICES = ("round", "policy_agent", "java_agent")
 ROUND_ALGORITHMS = {"round_ga", "round_nsga2"}
 GA_ALGORITHMS = {"round_ga"}
-DEFAULT_OBJECTIVE_BY_EVALUATOR = {
-    "round": "round_legality_alignment",
-    "gameplay": "microrts_opponent",
+DEFAULT_OBJECTIVE_BY_SURROGATE = {
+    "round": "microrts_resource_weighted",
+    "policy_agent": "microrts_win_loss",
+    "java_agent": "microrts_win_loss",
 }
 SURROGATE_PATH_LINES = (
     "eaglePolicy.java: reusable fixed policy template -> ai.abstraction.eaglePolicy",
@@ -80,11 +82,12 @@ class EagleDesktopApp:
 
         self.application = StringVar(value="microrts")
         self.algorithm = StringVar(value="round_nsga2")
-        self.evaluator = StringVar(value="round")
+        self.evaluator = StringVar(value="gameplay")
+        self.surrogate = StringVar(value="round")
         self.population_size = StringVar(value="10")
         self.num_generations = StringVar(value="50")
         self.run_time_per_game_sec = StringVar(value="500")
-        self.real_eval_rate = StringVar(value="0.25")
+        self.gameplay_rate = StringVar(value="0.25")
         self.final_test_max_front = StringVar(value="1")
         self.selection_method = StringVar(value="random")
         self.parent_selection_operator = StringVar(value="nsga2_tournament")
@@ -98,7 +101,7 @@ class EagleDesktopApp:
         self.skip_final_test = BooleanVar(value=False)
         self.quick_run = BooleanVar(value=False)
         self.opponents_text = StringVar(value="ai.abstraction.LightRush, ai.abstraction.HeavyRush")
-        self.objective_operator = StringVar(value="round_legality_alignment")
+        self.objective_operator = StringVar(value="microrts_resource_weighted")
         self.objective_targets: list[str] = ["ai.abstraction.LightRush", "ai.abstraction.HeavyRush"]
         self.single_objective_target = StringVar(value="ai.abstraction.LightRush")
         self.objective_detail = StringVar(value="Select an objective target to inspect its calculation.")
@@ -362,15 +365,15 @@ class EagleDesktopApp:
             tab.columnconfigure(column, weight=1)
 
         self._labeled_combo(tab, "Application", self.application, APPLICATION_CHOICES, 0, 0)
-        evaluator_combo = self._labeled_combo(tab, "Evaluator", self.evaluator, EVALUATOR_CHOICES, 0, 2)
-        evaluator_combo.bind("<<ComboboxSelected>>", self.on_evaluator_selected)
+        surrogate_combo = self._labeled_combo(tab, "Surrogate", self.surrogate, SURROGATE_CHOICES, 0, 2)
+        surrogate_combo.bind("<<ComboboxSelected>>", self.on_surrogate_selected)
         algorithm_combo = self._labeled_combo(tab, "Algorithm", self.algorithm, ALGORITHM_CHOICES, 1, 0)
         algorithm_combo.bind("<<ComboboxSelected>>", self.on_algorithm_selected)
         self._labeled_entry(tab, "Config name", self.config_name, 1, 2)
         self._labeled_entry(tab, "Population size", self.population_size, 2, 0)
         self._labeled_entry(tab, "Generations", self.num_generations, 2, 2)
         self._labeled_entry(tab, "Game seconds", self.run_time_per_game_sec, 3, 0)
-        self._labeled_entry(tab, "Real eval rate", self.real_eval_rate, 3, 2)
+        self._labeled_entry(tab, "Gameplay rate", self.gameplay_rate, 3, 2)
         self._labeled_entry(tab, "Final-test max front", self.final_test_max_front, 4, 0)
         ttk.Checkbutton(tab, text="Enable reflection operator", variable=self.enable_reflection_operator).grid(
             row=5, column=0, columnspan=2, sticky="w", pady=4
@@ -573,7 +576,7 @@ class EagleDesktopApp:
         if hasattr(self, "objective_operator_combo"):
             self.objective_operator_combo.configure(values=choices)
         if self.objective_operator.get() not in choices:
-            default_name = DEFAULT_OBJECTIVE_BY_EVALUATOR.get(self.evaluator.get(), "")
+            default_name = DEFAULT_OBJECTIVE_BY_SURROGATE.get(self.surrogate.get(), "")
             self.objective_operator.set(
                 default_name
                 if default_name in choices
@@ -664,14 +667,18 @@ class EagleDesktopApp:
         self.ensure_objective_choice()
         self.refresh_objective_table()
 
-    def on_evaluator_selected(self, _event: object | None = None) -> None:
-        """Refresh evaluator-specific objective choices."""
+    def on_surrogate_selected(self, _event: object | None = None) -> None:
+        """Refresh surrogate-specific evaluator and objective choices."""
+        self.evaluator.set("gameplay")
+        default_objective = DEFAULT_OBJECTIVE_BY_SURROGATE.get(self.surrogate.get(), "")
+        if default_objective:
+            self.objective_operator.set(default_objective)
         self.ensure_objective_choice()
         self.refresh_objective_table()
 
     def objective_choices(self) -> tuple[str, ...]:
         """Return registered objective names discovered from objective plugins."""
-        return list_objective_names(self.evaluator.get())
+        return list_objective_names("gameplay")
 
     def current_objective(self):
         """Return the currently selected objective plugin."""
@@ -1600,11 +1607,14 @@ class EagleDesktopApp:
             self.application.set("microrts")
         self.evaluator.set(str(payload.get("evaluator", self.evaluator.get())))
         if self.evaluator.get() not in EVALUATOR_CHOICES:
-            self.evaluator.set("round")
+            self.evaluator.set("gameplay")
+        self.surrogate.set(str(payload.get("surrogate", self.surrogate.get())).strip().lower().replace("-", "_").replace(" ", "_"))
+        if self.surrogate.get() not in SURROGATE_CHOICES:
+            self.surrogate.set("round")
         self.population_size.set(str(payload.get("population_size", self.population_size.get())))
         self.num_generations.set(str(payload.get("num_generations", self.num_generations.get())))
         self.run_time_per_game_sec.set(str(payload.get("run_time_per_game_sec", self.run_time_per_game_sec.get())))
-        self.real_eval_rate.set(str(payload.get("real_eval_rate", self.real_eval_rate.get())))
+        self.gameplay_rate.set(str(payload.get("gameplay_rate", self.gameplay_rate.get())))
         self.objective_operator.set(str(payload.get("objective_operator", self.objective_operator.get())))
         self.apply_training_example_sample_config(
             payload.get(
@@ -1640,7 +1650,7 @@ class EagleDesktopApp:
                 payload.get("non_evolving_component_keys", list(ComponentPool.DEFAULT_NON_EVOLVING_COMPONENT_KEYS)),
             )
         )
-        loaded_opponents = parse_target_list(payload.get("real_eval_opponents", []))
+        loaded_opponents = parse_target_list(payload.get("gameplay_opponents", []))
         if loaded_opponents:
             self.objective_targets = loaded_opponents
             if self.single_objective_target.get() not in self.objective_targets:
@@ -1660,6 +1670,7 @@ class EagleDesktopApp:
         component_path = resolve_repo_path(self.component_runtime_path.get())
         if component_path.exists():
             self.preview_component(component_path)
+        self.on_surrogate_selected()
         self.on_algorithm_selected()
         self.status.set(f"Loaded {path}")
 
@@ -1702,6 +1713,9 @@ class EagleDesktopApp:
             raise ValueError(f"Unsupported application: {self.application.get()}.")
         if self.evaluator.get() not in EVALUATOR_CHOICES:
             raise ValueError(f"Unsupported evaluator: {self.evaluator.get()}.")
+        if self.surrogate.get() not in SURROGATE_CHOICES:
+            raise ValueError(f"Unsupported surrogate: {self.surrogate.get()}.")
+        self.evaluator.set("gameplay")
         self.ensure_objective_choice()
         objective_targets = self.config_objective_targets()
 
@@ -1709,11 +1723,12 @@ class EagleDesktopApp:
             {
                 "application": self.application.get(),
                 "evaluator": self.evaluator.get(),
+                "surrogate": self.surrogate.get(),
                 "algorithm": self.algorithm.get(),
                 "population_size": parse_int(self.population_size.get(), "population_size"),
                 "num_generations": parse_int(self.num_generations.get(), "num_generations"),
                 "run_time_per_game_sec": parse_int(self.run_time_per_game_sec.get(), "run_time_per_game_sec"),
-                "real_eval_rate": parse_float(self.real_eval_rate.get(), "real_eval_rate"),
+                "gameplay_rate": parse_float(self.gameplay_rate.get(), "gameplay_rate"),
                 "objective_operator": self.objective_operator.get(),
                 "training_example_sample_count": self.training_example_selection_value(),
                 "training_example_fixed_count": bool(self.training_example_fixed_count.get()),
@@ -1737,7 +1752,7 @@ class EagleDesktopApp:
                 "enable_reflection_operator": bool(self.enable_reflection_operator.get()),
                 "component_pool_path": component_path,
                 "non_evolving_prompt_components": self.config_static_component_keys(),
-                "real_eval_opponents": objective_targets,
+                "gameplay_opponents": objective_targets,
                 "reproduction_operator_probs": {
                     key: parse_float(variable.get(), key)
                     for key, variable in self.operator_weights.items()
@@ -1805,6 +1820,8 @@ class EagleDesktopApp:
             self.algorithm.get(),
             "--evaluator",
             self.evaluator.get(),
+            "--surrogate",
+            self.surrogate.get(),
         ]
         if self.quick_run.get():
             command.append("--quick-run")
@@ -1815,6 +1832,11 @@ class EagleDesktopApp:
         self.process_log_path = LOG_DIR / f"gui_process_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         log_handle = self.process_log_path.open("w", encoding="utf-8", errors="replace")
         log_handle.write("Command: " + " ".join(command) + "\n\n")
+        log_handle.write(
+            "[DEBUG] gui start "
+            f"surrogate={self.surrogate.get()} evaluator={self.evaluator.get()} "
+            f"objective={self.objective_operator.get()} gameplay_rate={self.gameplay_rate.get()}\n\n"
+        )
         log_handle.flush()
         self.process = subprocess.Popen(
             command,

@@ -29,8 +29,8 @@
     "game_state_format"
   ],
   "run_time_per_game_sec": 30,
-  "real_eval_rate": 0.25,
-  "real_eval_opponents": [
+  "gameplay_rate": 0.25,
+  "gameplay_opponents": [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"
   ],
@@ -46,7 +46,7 @@
     "resource": 1.0
   },
   "surrogate_version": "eaglePolicy",
-  "surrogate_mode": "light_rush_and_heavy_rush",
+  "surrogate": "round",
   "surrogate_recent_match_window": 10,
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts"

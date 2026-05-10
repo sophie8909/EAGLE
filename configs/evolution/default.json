@@ -1,6 +1,6 @@
 {
   "algorithm": "round_nsga2",
-  "evaluator": "round",
+  "evaluator": "gameplay",
   "population_size": 10,
   "num_generations": 50,
   "convergence_generations": 10,
@@ -63,11 +63,11 @@
   "component_pool_path": "eagle/prompts/components.json",
   "initial_population_seeds": [],
   "run_time_per_game_sec": 500,
-  "real_eval_rate": 0.25,
-  "objective_operator": "round_legality_alignment",
+  "gameplay_rate": 0.25,
+  "objective_operator": "microrts_resource_weighted",
   "training_example_sample_count": "random_0_4",
   "training_example_fixed_count": false,
-  "real_eval_opponents": [
+  "gameplay_opponents": [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"
   ],
@@ -85,7 +85,7 @@
     "resource": 1.0
   },
   "surrogate_version": "eaglePolicy",
-  "surrogate_mode": "light_rush_and_heavy_rush", 
+  "surrogate": "round", 
   "surrogate_recent_match_window": 10,
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts",

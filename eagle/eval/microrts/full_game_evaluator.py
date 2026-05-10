@@ -16,14 +16,14 @@ from ...utils.match_score_recorder import MatchScoreRecorder
 from ...evolution.component.individual import Individual
 from ...utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
 
-DEFAULT_REAL_EVAL_OPPONENTS = [
+DEFAULT_GAMEPLAY_OPPONENTS = [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush",
 ]
 
 
 class FullGameEvaluator:
-    """Evaluate one MicroRTS individual through real or policy-backed matches."""
+    """Evaluate one MicroRTS individual through gameplay or policy-backed matches."""
 
     def __init__(
         self,
@@ -37,7 +37,7 @@ class FullGameEvaluator:
         self.runtime_logs_dir = Path(runtime_logs_dir) if runtime_logs_dir is not None else None
         setattr(self.config, "runtime_logs_dir", self.runtime_logs_dir)
         self.objective = get_objective(
-            getattr(self.config, "objective_operator", "microrts_opponent")
+            getattr(self.config, "objective_operator", "microrts_resource_weighted")
         )
 
     def evaluate(
@@ -50,17 +50,30 @@ class FullGameEvaluator:
         opponents: list[str] | None = None,
         allow_history_reuse: bool = False,
     ) -> dict[str, Any]:
-        """Run real evaluation across opponents and aggregate EA fitness."""
+        """Run gameplay evaluation across opponents and aggregate EA fitness."""
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         prompt = self._construct_prompt(individual)
-        resolved_opponents = list(opponents) if opponents is not None else self._configured_real_eval_opponents()
+        resolved_opponents = list(opponents) if opponents is not None else self._configured_gameplay_opponents()
+        surrogate = str(getattr(self.config, "surrogate", "round"))
+        print(
+            "[DEBUG] gameplay evaluate start "
+            f"individual={individual.id} generation={generation} surrogate={surrogate} "
+            f"objective={getattr(self.config, 'objective_operator', 'unknown')} "
+            f"opponents={resolved_opponents}",
+            flush=True,
+        )
 
         opponent_scores: list[tuple[str | None, float]] = []
         per_opponent_results: list[dict[str, Any]] = []
         evaluation_modes: list[str] = []
 
         for opponent in resolved_opponents:
-            result = self.run_prompt_based_agent(
+            print(
+                "[DEBUG] gameplay opponent start "
+                f"individual={individual.id} opponent={opponent} surrogate={surrogate}",
+                flush=True,
+            )
+            result = self._run_gameplay_mode(
                 individual=individual,
                 prompt=prompt,
                 opponent=opponent,
@@ -71,7 +84,7 @@ class FullGameEvaluator:
             )
             match_score = dict(result["match_score"])
             simulation_meta = dict(result.get("simulation_meta") or {})
-            evaluation_mode = str(result.get("evaluation_mode") or "real")
+            evaluation_mode = str(result.get("evaluation_mode") or "gameplay")
             evaluation_modes.append(evaluation_mode)
 
             self._record_match_score(
@@ -85,8 +98,8 @@ class FullGameEvaluator:
                 match_score_recorder=match_score_recorder,
             )
 
-            if evaluation_mode == "real":
-                self._store_real_match_metadata(
+            if evaluation_mode == "gameplay":
+                self._store_gameplay_match_metadata(
                     individual=individual,
                     match_score=match_score,
                     simulation_meta=simulation_meta,
@@ -114,6 +127,12 @@ class FullGameEvaluator:
                     "evaluation_mode": evaluation_mode,
                 }
             )
+            print(
+                "[DEBUG] gameplay opponent result "
+                f"individual={individual.id} opponent={opponent} mode={evaluation_mode} "
+                f"match_score={match_score} combined={combined_score}",
+                flush=True,
+            )
 
         aggregated_fitness = self._build_opponent_score_vector(
             opponent_scores,
@@ -125,17 +144,23 @@ class FullGameEvaluator:
         individual.evaluation_mode = (
             "history_reuse"
             if evaluation_modes and all(mode == "history_reuse" for mode in evaluation_modes)
-            else "real"
+            else "gameplay"
         )
         if hasattr(individual, "last_surrogate_evaluation"):
             delattr(individual, "last_surrogate_evaluation")
-        individual.last_real_evaluation = {
+        individual.last_gameplay_evaluation = {
             "mode": "multi_opponent_opponent_vector",
+            "surrogate": surrogate,
             "opponents": resolved_opponents,
             "llm_interval": active_llm_interval,
             "per_opponent": per_opponent_results,
             "aggregated_fitness": dict(aggregated_fitness),
         }
+        print(
+            "[DEBUG] gameplay evaluate complete "
+            f"individual={individual.id} fitness={dict(aggregated_fitness)}",
+            flush=True,
+        )
         return {
             "prompt": prompt,
             "fitness": dict(aggregated_fitness),
@@ -153,7 +178,7 @@ class FullGameEvaluator:
         """Run surrogate evaluation across opponents and aggregate EA fitness."""
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         prompt = self._construct_prompt(individual)
-        resolved_opponents = list(opponents) if opponents is not None else self._configured_real_eval_opponents()
+        resolved_opponents = list(opponents) if opponents is not None else self._configured_gameplay_opponents()
 
         opponent_scores: list[tuple[str | None, float]] = []
         per_opponent_scores: list[dict[str, object]] = []
@@ -203,6 +228,44 @@ class FullGameEvaluator:
             "scores": per_opponent_scores,
         }
 
+    def _run_gameplay_mode(
+        self,
+        *,
+        individual: Individual,
+        prompt: str,
+        opponent: str | None,
+        generation: int | None,
+        profile_output_path: str | Path | None,
+        match_score_recorder: MatchScoreRecorder | None,
+        allow_history_reuse: bool,
+    ) -> dict[str, Any]:
+        """Dispatch one gameplay match according to the configured surrogate."""
+        surrogate = str(getattr(self.config, "surrogate", "round")).strip().lower()
+        if surrogate == "policy_agent":
+            return self.run_java_based_agent(
+                individual=individual,
+                prompt=prompt,
+                opponent=opponent,
+                ai1_class="ai.abstraction.eaglePolicy",
+                log_prefix="run_eagle_policy",
+                evaluation_mode="policy_agent",
+            )
+        if surrogate == "java_agent":
+            return self.run_generated_java_agent(
+                individual=individual,
+                prompt=prompt,
+                opponent=opponent,
+            )
+        return self.run_prompt_based_agent(
+            individual=individual,
+            prompt=prompt,
+            opponent=opponent,
+            generation=generation,
+            profile_output_path=profile_output_path,
+            match_score_recorder=match_score_recorder,
+            allow_history_reuse=allow_history_reuse,
+        )
+
     def run_prompt_based_agent(
         self,
         *,
@@ -216,7 +279,7 @@ class FullGameEvaluator:
         llm_interval: int | None = None,
         test: bool = False,
     ) -> dict[str, Any]:
-        """Run one real EAGLE match and return the raw single-match payload."""
+        """Run one gameplay EAGLE match and return the raw single-match payload."""
         rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
         stats: dict[str, float] = {}
 
@@ -245,7 +308,7 @@ class FullGameEvaluator:
         summarize_total_eval_time(stats)
 
         if profile_output_path is not None:
-            self._write_real_match_profile(
+            self._write_gameplay_match_profile(
                 individual=individual,
                 generation=generation,
                 prompt=rendered_prompt,
@@ -261,7 +324,7 @@ class FullGameEvaluator:
             "match_score": dict(match_score),
             "simulation_meta": simulation_meta,
             "stats": stats,
-            "evaluation_mode": "real",
+            "evaluation_mode": "gameplay",
         }
 
     def run_java_based_agent(
@@ -273,25 +336,73 @@ class FullGameEvaluator:
         ai1_class: str = "ai.abstraction.eaglePolicy",
         llm_interval: int | None = None,
         test: bool = False,
+        log_prefix: str = "run_eagle_policy",
+        evaluation_mode: str = "policy_agent",
     ) -> dict[str, Any]:
         """Run one policy-backed Java-agent match and return the raw single-match payload."""
         rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
         stats: dict[str, float] = {}
         with timer("game_play_time", stats):
-            match_score, simulation_meta = self._run_java_match(
-                rendered_prompt,
-                opponent,
-                ai1_class=ai1_class,
-                llm_interval=llm_interval,
-                test=test,
-            )
+            if ai1_class == "ai.abstraction.eaglePolicy":
+                from eagle.envs.microrts.adapter import run_surrogate_validation_case
+
+                original_interval = getattr(self.config, "_active_llm_interval", None)
+                if llm_interval is not None:
+                    self.config.set_active_llm_interval(int(llm_interval))
+                try:
+                    match_score, simulation_meta = run_surrogate_validation_case(
+                        project_root=self.repo_root,
+                        config=self.config,
+                        prompt=rendered_prompt,
+                        opponent=opponent,
+                        ai1_class=ai1_class,
+                        test=test,
+                        runtime_logs_dir=self.runtime_logs_dir,
+                    )
+                    match_score = self._normalize_match_score(match_score)
+                finally:
+                    self.config.set_active_llm_interval(original_interval)
+            else:
+                match_score, simulation_meta = self._run_java_match(
+                    rendered_prompt,
+                    opponent,
+                    ai1_class=ai1_class,
+                    llm_interval=llm_interval,
+                    test=test,
+                    log_prefix=log_prefix,
+                )
         summarize_total_eval_time(stats)
         return {
             "prompt": rendered_prompt,
             "match_score": dict(match_score),
             "simulation_meta": simulation_meta,
             "stats": stats,
-            "evaluation_mode": "surrogate",
+            "evaluation_mode": evaluation_mode,
+        }
+
+    def run_generated_java_agent(
+        self,
+        *,
+        individual: Individual | None = None,
+        prompt: str | None = None,
+        opponent: str | None = None,
+    ) -> dict[str, Any]:
+        """Compile and run the generated eagleJava agent for one match."""
+        from eagle.surrogate.eval.eagle_java_match_evaluator import evaluate_with_eagle_java
+
+        rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
+        match_score = evaluate_with_eagle_java(
+            rendered_prompt,
+            repo_root=self.repo_root,
+            config=self.config,
+            opponent=opponent,
+        )
+        return {
+            "prompt": rendered_prompt,
+            "match_score": dict(match_score),
+            "simulation_meta": {},
+            "stats": {},
+            "evaluation_mode": "java_agent",
         }
 
     def _construct_prompt(self, individual: Individual) -> str:
@@ -333,6 +444,7 @@ class FullGameEvaluator:
         ai1_class: str,
         llm_interval: int | None = None,
         test: bool = False,
+        log_prefix: str = "run_eagle_policy",
     ) -> tuple[dict[str, float], dict[str, Any]]:
         original_interval = getattr(self.config, "_active_llm_interval", None)
         if llm_interval is not None:
@@ -345,7 +457,7 @@ class FullGameEvaluator:
                 opponent=opponent,
                 prompt=prompt,
                 compile_first=True,
-                log_prefix="run_eagle_policy" if not test else "run_test_eagle_policy",
+                log_prefix=log_prefix if not test else f"{log_prefix.replace('run_', 'run_test_', 1)}",
                 runtime_logs_dir=self.runtime_logs_dir,
                 record_trace=bool(test and getattr(self.config, "save_trace_on_test", False)),
             )
@@ -353,9 +465,9 @@ class FullGameEvaluator:
         finally:
             self.config.set_active_llm_interval(original_interval)
 
-    def _configured_real_eval_opponents(self) -> list[str]:
-        configured_opponents = list(getattr(self.config, "real_eval_opponents", []) or [])
-        return configured_opponents or list(DEFAULT_REAL_EVAL_OPPONENTS)
+    def _configured_gameplay_opponents(self) -> list[str]:
+        configured_opponents = list(getattr(self.config, "gameplay_opponents", []) or [])
+        return configured_opponents or list(DEFAULT_GAMEPLAY_OPPONENTS)
 
     def _lookup_history_match_score(
         self,
@@ -403,7 +515,7 @@ class FullGameEvaluator:
             }
         )
 
-    def _store_real_match_metadata(
+    def _store_gameplay_match_metadata(
         self,
         *,
         individual: Individual,
@@ -413,7 +525,7 @@ class FullGameEvaluator:
         parsed_log = simulation_meta.get("parsed_log")
         timeout = bool(simulation_meta.get("timeout", False))
         summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else {}
-        individual.last_real_evaluation = {
+        individual.last_gameplay_evaluation = {
             "winner": simulation_meta.get("winner"),
             "timeout": timeout,
             "log_path": simulation_meta.get("log_path"),
@@ -428,7 +540,7 @@ class FullGameEvaluator:
             "raw_resource_advantage_score": self._raw_resource_advantage_score(match_score),
         }
 
-    def _write_real_match_profile(
+    def _write_gameplay_match_profile(
         self,
         *,
         individual: Individual | None,
@@ -449,7 +561,7 @@ class FullGameEvaluator:
         )
         record.update(
             {
-                "evaluation_mode": "real",
+                "evaluation_mode": "gameplay",
                 "opponent": opponent,
                 "prompt_length": len(prompt),
                 "winner": simulation_meta.get("winner"),
@@ -519,7 +631,7 @@ class FullGameEvaluator:
         if not configured_opponents:
             configured_opponents = [None]
         score_by_opponent = {opponent: score for opponent, score in opponent_scores}
-        objective = objective or get_objective("microrts_opponent")
+        objective = objective or get_objective("microrts_resource_weighted")
         return {
             objective.objective_key(opponent, index): float(score_by_opponent.get(opponent, 0.0))
             for index, opponent in enumerate(configured_opponents)

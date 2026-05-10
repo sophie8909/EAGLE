@@ -95,12 +95,12 @@ def _clean_axis_label(label: str) -> str:
 
 
 def _evolution_objective_labels(run_dir: Path, eval_mode: str = "match") -> tuple[str, str]:
-    """Build axis labels from the run config's ordered real-eval opponents."""
+    """Build axis labels from the run config's ordered gameplay opponents."""
     if eval_mode == "round":
         return ("Legal Action Ratio", "Strategy Alignment Score (0-100)")
 
     config = load_config_from_json(run_dir)
-    opponents = list(getattr(config, "real_eval_opponents", []) or [])
+    opponents = list(getattr(config, "gameplay_opponents", []) or [])
     labels = [_clean_axis_label(opponent) for opponent in opponents[:2]]
     while len(labels) < 2:
         labels.append(f"Objective {len(labels) + 1}")

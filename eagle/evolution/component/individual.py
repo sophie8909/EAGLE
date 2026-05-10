@@ -53,7 +53,7 @@ class Individual:
 
         self.last_round_evaluation: dict[str, Any] = {}
         self.last_surrogate_evaluation: dict[str, Any] = {}
-        self.last_real_evaluation: dict[str, Any] = {}
+        self.last_gameplay_evaluation: dict[str, Any] = {}
         self.mutation_metadata: dict[str, Any] = {}
         self.reflection_metadata: dict[str, Any] = {}
         self.ea_llm_call_time = 0.0
@@ -231,7 +231,7 @@ class Individual:
         for attr in (
             "last_round_evaluation",
             "last_surrogate_evaluation",
-            "last_real_evaluation",
+            "last_gameplay_evaluation",
             "mutation_metadata",
             "reflection_metadata",
         ):

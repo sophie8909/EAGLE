@@ -449,7 +449,7 @@ class LLM:
 
         You are given:
         1. a strategy prompt
-        2. one real Dynamic Prompt captured from a previous MicroRTS log
+        2. one gameplay Dynamic Prompt captured from a previous MicroRTS log
 
         Be conservative. Judge whether the strategy prompt is likely to help the agent produce legal, relevant, and useful actions for THIS game state.
 
