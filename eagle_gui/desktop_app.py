@@ -33,6 +33,14 @@ EVALUATOR_CHOICES = ("round", "gameplay")
 SURROGATE_CHOICES = ("policy_agent", "java_agent")
 ROUND_ALGORITHMS = {"round_ga", "round_nsga2"}
 GA_ALGORITHMS = {"round_ga"}
+PARENT_SELECTION_BY_ALGORITHM = {
+    "round_ga": "ga_fitness_tournament",
+    "round_nsga2": "nsga2_tournament",
+}
+ENV_SELECTION_BY_ALGORITHM = {
+    "round_ga": "ga_fitness_elitism",
+    "round_nsga2": "nsga2_environmental",
+}
 SURROGATE_PATH_LINES = (
     "eaglePolicy.java: reusable fixed policy template -> ai.abstraction.eaglePolicy",
     "eagleJava.java: generated Java with the same policy behavior -> ai.abstraction.eagleJava",
@@ -86,12 +94,12 @@ class EagleDesktopApp:
         self.gameplay_rate = StringVar(value="0.25")
         self.final_test_max_front = StringVar(value="1")
         self.selection_method = StringVar(value="random")
-        self.parent_selection_operator = StringVar(value="nsga2_tournament")
+        self.parent_selection_operator = StringVar(value=PARENT_SELECTION_BY_ALGORITHM["round_nsga2"])
         self.tournament_size = StringVar(value="3")
         self.crossover = StringVar(value="uniform")
         self.crossover_operator = StringVar(value="uniform")
         self.mutation_operator = StringVar(value="mix")
-        self.env_selection_operator = StringVar(value="nsga2_environmental")
+        self.env_selection_operator = StringVar(value=ENV_SELECTION_BY_ALGORITHM["round_nsga2"])
         self.crossover_repair_enabled = BooleanVar(value=True)
         self.enable_reflection_operator = BooleanVar(value=True)
         self.skip_final_test = BooleanVar(value=False)
@@ -701,6 +709,7 @@ class EagleDesktopApp:
 
     def on_algorithm_selected(self, _event: object | None = None) -> None:
         """Keep algorithm-derived defaults in sync with the current flow."""
+        self.sync_algorithm_operator_defaults()
         if self.algorithm.get() in ROUND_ALGORITHMS:
             self.final_test_max_front.set("0")
         if self.algorithm.get() in GA_ALGORITHMS and self.objective_mode.get() not in {"single", "weighted_mix"}:
@@ -709,6 +718,16 @@ class EagleDesktopApp:
             self.objective_mode.set("multi")
         self.ensure_objective_choice()
         self.refresh_objective_table()
+
+    def sync_algorithm_operator_defaults(self) -> None:
+        """Keep algorithm-specific parent and environment operators compatible."""
+        algorithm = self.algorithm.get()
+        parent_default = PARENT_SELECTION_BY_ALGORITHM.get(algorithm)
+        env_default = ENV_SELECTION_BY_ALGORITHM.get(algorithm)
+        if parent_default and self.parent_selection_operator.get() != parent_default:
+            self.parent_selection_operator.set(parent_default)
+        if env_default and self.env_selection_operator.get() != env_default:
+            self.env_selection_operator.set(env_default)
 
     def on_surrogate_selected(self, _event: object | None = None) -> None:
         """Refresh surrogate-specific evaluator and objective choices."""
@@ -1749,6 +1768,7 @@ class EagleDesktopApp:
         self.ensure_operator_choice(self.crossover_operator, "crossover", "uniform")
         self.ensure_operator_choice(self.mutation_operator, "mutation", "mix")
         self.ensure_operator_choice(self.env_selection_operator, "env_selection", "nsga2_environmental")
+        self.sync_algorithm_operator_defaults()
         self.ensure_objective_choice()
         self.refresh_objective_table()
         self.refresh_mutation_weight_visibility()
@@ -1803,6 +1823,7 @@ class EagleDesktopApp:
                 raise ValueError(f"Unsupported surrogate: {self.surrogate.get()}.")
             self.surrogate.set(SURROGATE_CHOICES[0])
         self.ensure_objective_choice()
+        self.sync_algorithm_operator_defaults()
         objective_targets = self.config_objective_targets()
         objective_config = self.build_objective_config()
 

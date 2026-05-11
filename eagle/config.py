@@ -141,6 +141,14 @@ class EAConfig:
             self.surrogate = normalized_surrogate
         algorithm_name = str(self.algorithm or "").strip().lower()
         single_objective_algorithm = algorithm_name.endswith("_ga") or algorithm_name == "ga"
+        self.parent_selection_operator = self._normalized_parent_selection_operator(
+            self.parent_selection_operator,
+            single_objective_algorithm,
+        )
+        self.env_selection_operator = self._normalized_env_selection_operator(
+            self.env_selection_operator,
+            single_objective_algorithm,
+        )
         if self.objective_config == _default_config_value("objective_config"):
             from eagle.objectives.registry import default_objective_config
 
@@ -350,6 +358,26 @@ class EAConfig:
         if any(value < 1 for value in values):
             raise ValueError("All llm_interval values must be >= 1.")
         return values
+
+    @staticmethod
+    def _normalized_parent_selection_operator(raw_operator: str | None, single_objective: bool) -> str:
+        """Return a parent-selection operator compatible with the algorithm family."""
+        operator = str(raw_operator or "").strip()
+        if single_objective and operator in {"", "nsga2_tournament"}:
+            return "ga_fitness_tournament"
+        if not single_objective and operator in {"", "ga_fitness_tournament", "tournament"}:
+            return "nsga2_tournament"
+        return operator
+
+    @staticmethod
+    def _normalized_env_selection_operator(raw_operator: str | None, single_objective: bool) -> str:
+        """Return an environment-selection operator compatible with the algorithm family."""
+        operator = str(raw_operator or "").strip()
+        if single_objective and operator in {"", "nsga2_environmental"}:
+            return "ga_fitness_elitism"
+        if not single_objective and operator in {"", "ga_fitness_elitism", "elitism"}:
+            return "nsga2_environmental"
+        return operator
 
 
 def _config_with_defaults_unvalidated() -> EAConfig:
