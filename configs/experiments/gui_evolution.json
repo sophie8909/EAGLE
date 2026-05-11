@@ -1,5 +1,6 @@
 {
   "algorithm": "round_ga",
+  "evaluator": "round",
   "population_size": 10,
   "num_generations": 50,
   "convergence_generations": 10,
@@ -59,7 +60,6 @@
   ],
   "component_pool_path": "eagle/prompts/components.json",
   "initial_population_seeds": [],
-  "run_time_per_game_sec": 500,
   "gameplay_rate": 0.25,
   "objective_config": {
     "mode": "single",
@@ -88,7 +88,6 @@
     "resource": 1.0
   },
   "surrogate_version": "eaglePolicy",
-  "surrogate": "round",
   "surrogate_recent_match_window": 10,
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts",

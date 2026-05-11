@@ -55,9 +55,9 @@ def _resolve_base_config(args, resume_log_dir: str | None) -> EAConfig:
     if args.config:
         if str(args.config).lower().endswith((".yaml", ".yml")):
             return load_experiment_config(args.config).ea
-        return load_config_from_json(args.config)
+        return load_config_from_json(args.config, validate=False)
     if DEFAULT_EVOLUTION_CONFIG_PATH.exists():
-        return load_config_from_json(DEFAULT_EVOLUTION_CONFIG_PATH)
+        return load_config_from_json(DEFAULT_EVOLUTION_CONFIG_PATH, validate=False)
     return EAConfig()
 
 

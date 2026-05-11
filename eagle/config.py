@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import MISSING, dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -352,7 +352,21 @@ class EAConfig:
         return values
 
 
-def load_config_payload(payload: dict[str, Any] | None) -> EAConfig:
+def _config_with_defaults_unvalidated() -> EAConfig:
+    """Build an `EAConfig` with default field values without eager validation."""
+    config = object.__new__(EAConfig)
+    for field_name, field_info in EAConfig.__dataclass_fields__.items():
+        if field_info.default is not MISSING:
+            value = deepcopy(field_info.default)
+        elif field_info.default_factory is not MISSING:
+            value = field_info.default_factory()
+        else:
+            value = None
+        setattr(config, field_name, value)
+    return config
+
+
+def load_config_payload(payload: dict[str, Any] | None, *, validate: bool = True) -> EAConfig:
     """Build one validated config from a JSON-like payload."""
     payload = dict(payload or {})
     if "objective_config" not in payload and "objective_operator" in payload:
@@ -365,7 +379,7 @@ def load_config_payload(payload: dict[str, Any] | None) -> EAConfig:
             "mode": "single",
             "objective": str(payload["objective"]),
         }
-    config = EAConfig()
+    config = _config_with_defaults_unvalidated()
     valid_fields = set(config.__dataclass_fields__.keys())
 
     for key, value in payload.items():
@@ -373,18 +387,19 @@ def load_config_payload(payload: dict[str, Any] | None) -> EAConfig:
             continue
         setattr(config, key, value)
 
-    config.validate()
+    if validate:
+        config.validate()
     return config
 
 
-def load_config_from_json(path_or_dir: str | Path) -> EAConfig:
+def load_config_from_json(path_or_dir: str | Path, *, validate: bool = True) -> EAConfig:
     """Load a saved config file or run directory into a validated `EAConfig`."""
     candidate_path = Path(path_or_dir)
     config_path = candidate_path / "config.json" if candidate_path.is_dir() else candidate_path
     if not config_path.exists():
         return EAConfig()
     payload = json.loads(config_path.read_text(encoding="utf-8"))
-    return load_config_payload(payload)
+    return load_config_payload(payload, validate=validate)
 
 
 def clone_config(config: EAConfig) -> EAConfig:

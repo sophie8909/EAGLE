@@ -214,7 +214,7 @@ class EagleDesktopApp:
         ttk.Button(actions, text="Add candidate", command=self.add_component_candidate).pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="Delete candidate", command=self.delete_component_candidate).pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="Save JSON", command=self.save_component_json).pack(side="left", padx=(8, 0))
-        ttk.Button(actions, text="Save as config file", command=self.save_component_json_as).pack(side="left", padx=(8, 0))
+        ttk.Button(actions, text="Save as components file", command=self.save_component_json_as).pack(side="left", padx=(8, 0))
 
         self.move_builder = ttk.LabelFrame(editor, text="Move Builder", padding=8)
         self.move_builder.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 8))
