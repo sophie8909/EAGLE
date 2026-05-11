@@ -33,7 +33,7 @@ def build_algorithm(
         "[DEBUG] build_algorithm "
         f"algorithm={experiment.algorithm} evaluator={experiment.evaluator} "
         f"surrogate={getattr(experiment.ea, 'surrogate', 'unknown')} "
-        f"objective={getattr(experiment.ea, 'objective_operator', 'unknown')} "
+        f"objective_config={getattr(experiment.ea, 'objective_config', {})} "
         f"opponents={opponents}",
         flush=True,
     )

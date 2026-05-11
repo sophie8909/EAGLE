@@ -16,7 +16,7 @@ from tkinter.scrolledtext import ScrolledText
 from typing import Any
 
 from eagle.eval.microrts.state_generator import StateGenerator
-from eagle.objectives.registry import get_objective, list_objective_names
+from eagle.objectives.registry import get_objectives, list_objective_names, normalize_objective_key
 from eagle.operators.registry import list_operator_names
 from eagle.utils.component_pool import ComponentPool
 
@@ -29,14 +29,9 @@ DEFAULT_CONFIG = CONFIG_DIR / "default.json"
 APPLICATION_CHOICES = ("microrts",)
 ALGORITHM_CHOICES = ("round_ga", "round_nsga2")
 EVALUATOR_CHOICES = ("round", "gameplay")
-SURROGATE_CHOICES = ("round", "policy_agent", "java_agent")
+SURROGATE_CHOICES = ("policy_agent", "java_agent")
 ROUND_ALGORITHMS = {"round_ga", "round_nsga2"}
 GA_ALGORITHMS = {"round_ga"}
-DEFAULT_OBJECTIVE_BY_SURROGATE = {
-    "round": "microrts_resource_weighted",
-    "policy_agent": "microrts_win_loss",
-    "java_agent": "microrts_win_loss",
-}
 SURROGATE_PATH_LINES = (
     "eaglePolicy.java: reusable fixed policy template -> ai.abstraction.eaglePolicy",
     "eagleJava.java: generated Java with the same policy behavior -> ai.abstraction.eagleJava",
@@ -83,7 +78,7 @@ class EagleDesktopApp:
         self.application = StringVar(value="microrts")
         self.algorithm = StringVar(value="round_nsga2")
         self.evaluator = StringVar(value="gameplay")
-        self.surrogate = StringVar(value="round")
+        self.surrogate = StringVar(value="policy_agent")
         self.population_size = StringVar(value="10")
         self.num_generations = StringVar(value="50")
         self.run_time_per_game_sec = StringVar(value="500")
@@ -101,10 +96,12 @@ class EagleDesktopApp:
         self.skip_final_test = BooleanVar(value=False)
         self.quick_run = BooleanVar(value=False)
         self.opponents_text = StringVar(value="ai.abstraction.LightRush, ai.abstraction.HeavyRush")
-        self.objective_operator = StringVar(value="microrts_resource_weighted")
+        self.objective_mode = StringVar(value="multi")
+        self.single_objective = StringVar(value="resource_advantage")
+        self.objective_weights: dict[str, StringVar] = {}
+        self.multi_objectives: dict[str, BooleanVar] = {}
         self.objective_targets: list[str] = ["ai.abstraction.LightRush", "ai.abstraction.HeavyRush"]
-        self.single_objective_target = StringVar(value="ai.abstraction.LightRush")
-        self.objective_detail = StringVar(value="Select an objective target to inspect its calculation.")
+        self.objective_detail = StringVar(value="Select an objective to inspect its calculation.")
 
         self.operator_weights = {
             "crossover": StringVar(value="0.7"),
@@ -364,29 +361,39 @@ class EagleDesktopApp:
         for column in (1, 3):
             tab.columnconfigure(column, weight=1)
 
-        self._labeled_combo(tab, "Application", self.application, APPLICATION_CHOICES, 0, 0)
-        surrogate_combo = self._labeled_combo(tab, "Surrogate", self.surrogate, SURROGATE_CHOICES, 0, 2)
+        application_combo = self._labeled_combo(tab, "Application", self.application, APPLICATION_CHOICES, 0, 0)
+        application_combo.bind("<<ComboboxSelected>>", self.on_objective_mode_selected)
+        evaluator_combo = self._labeled_combo(tab, "Eval mode", self.evaluator, EVALUATOR_CHOICES, 0, 2)
+        evaluator_combo.bind("<<ComboboxSelected>>", self.on_evaluator_selected)
+        self.surrogate_controls_frame = ttk.Frame(tab)
+        self.surrogate_controls_frame.grid(row=1, column=0, columnspan=2, sticky="ew")
+        self.surrogate_controls_frame.columnconfigure(1, weight=1)
+        surrogate_combo = self._labeled_combo(self.surrogate_controls_frame, "Surrogate", self.surrogate, SURROGATE_CHOICES, 0, 0)
         surrogate_combo.bind("<<ComboboxSelected>>", self.on_surrogate_selected)
-        algorithm_combo = self._labeled_combo(tab, "Algorithm", self.algorithm, ALGORITHM_CHOICES, 1, 0)
+        algorithm_combo = self._labeled_combo(tab, "Algorithm", self.algorithm, ALGORITHM_CHOICES, 1, 2)
         algorithm_combo.bind("<<ComboboxSelected>>", self.on_algorithm_selected)
-        self._labeled_entry(tab, "Config name", self.config_name, 1, 2)
-        self._labeled_entry(tab, "Population size", self.population_size, 2, 0)
-        self._labeled_entry(tab, "Generations", self.num_generations, 2, 2)
-        self._labeled_entry(tab, "Game seconds", self.run_time_per_game_sec, 3, 0)
-        self._labeled_entry(tab, "Gameplay rate", self.gameplay_rate, 3, 2)
-        self._labeled_entry(tab, "Final-test max front", self.final_test_max_front, 4, 0)
+        self._labeled_entry(tab, "Config name", self.config_name, 2, 0)
+        self._labeled_entry(tab, "Population size", self.population_size, 2, 2)
+        self._labeled_entry(tab, "Generations", self.num_generations, 3, 0)
+        self.game_seconds_frame = ttk.Frame(tab)
+        self.game_seconds_frame.grid(row=3, column=2, columnspan=2, sticky="ew")
+        self.game_seconds_frame.columnconfigure(1, weight=1)
+        self._labeled_entry(self.game_seconds_frame, "Game seconds", self.run_time_per_game_sec, 0, 0)
+        self._labeled_entry(tab, "Gameplay rate", self.gameplay_rate, 4, 0)
+        self._labeled_entry(tab, "Final-test max front", self.final_test_max_front, 4, 2)
+        self._labeled_entry(tab, "Gameplay opponents", self.opponents_text, 5, 0)
         ttk.Checkbutton(tab, text="Enable reflection operator", variable=self.enable_reflection_operator).grid(
-            row=5, column=0, columnspan=2, sticky="w", pady=4
+            row=6, column=0, columnspan=2, sticky="w", pady=4
         )
         ttk.Checkbutton(tab, text="Quick run override", variable=self.quick_run).grid(
-            row=5, column=2, sticky="w", pady=4
+            row=6, column=2, sticky="w", pady=4
         )
         ttk.Checkbutton(tab, text="Skip final test", variable=self.skip_final_test).grid(
-            row=5, column=3, sticky="w", pady=4
+            row=6, column=3, sticky="w", pady=4
         )
 
         selection_frame = ttk.LabelFrame(tab, text="Selection", padding=8)
-        selection_frame.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(14, 0))
+        selection_frame.grid(row=7, column=0, columnspan=4, sticky="ew", pady=(14, 0))
         selection_frame.columnconfigure(1, weight=1)
         ttk.Label(selection_frame, text="Mutation").grid(row=0, column=0, sticky="w", pady=4)
         ttk.Label(selection_frame, textvariable=self.mutation_operator).grid(
@@ -414,61 +421,78 @@ class EagleDesktopApp:
             0,
         )
 
-        surrogate_frame = ttk.LabelFrame(tab, text="Surrogate Paths", padding=8)
-        surrogate_frame.grid(row=7, column=0, columnspan=4, sticky="ew", pady=(14, 0))
+        self.surrogate_paths_frame = ttk.LabelFrame(tab, text="Surrogate Paths", padding=8)
+        self.surrogate_paths_frame.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(14, 0))
         for index, line in enumerate(SURROGATE_PATH_LINES):
-            ttk.Label(surrogate_frame, text=line).grid(row=index, column=0, sticky="w")
+            ttk.Label(self.surrogate_paths_frame, text=line).grid(row=index, column=0, sticky="w")
 
         actions = ttk.Frame(tab)
-        actions.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(16, 0))
+        actions.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(16, 0))
         ttk.Button(actions, text="Validate settings", command=self.validate_settings).pack(side="left")
         ttk.Button(actions, text="Save generated config", command=self.save_generated_config).pack(side="left", padx=(8, 0))
+        self.refresh_surrogate_visibility()
 
     def _build_objectives_tab(self) -> None:
-        """Build objective plugin and target controls."""
+        """Build objective selection controls."""
         tab = ttk.Frame(self.notebook, padding=10)
         self.notebook.add(tab, text="Objectives")
         tab.columnconfigure(1, weight=1)
-        tab.rowconfigure(1, weight=1)
+        tab.rowconfigure(2, weight=1)
 
-        self.objective_operator_combo = self._labeled_combo(
-            tab,
+        self.objective_mode_frame = ttk.Frame(tab)
+        self.objective_mode_frame.grid(row=0, column=0, columnspan=4, sticky="ew")
+        self.objective_mode_combo = self._labeled_combo(
+            self.objective_mode_frame,
+            "Mode",
+            self.objective_mode,
+            ("single", "weighted_mix"),
+            0,
+            0,
+        )
+        self.objective_mode_combo.bind("<<ComboboxSelected>>", self.on_objective_mode_selected)
+
+        self.single_objective_frame = ttk.Frame(tab)
+        self.single_objective_frame.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+        self.single_objective_combo = self._labeled_combo(
+            self.single_objective_frame,
             "Objective",
-            self.objective_operator,
+            self.single_objective,
             self.objective_choices(),
             0,
             0,
         )
-        self.objective_operator_combo.bind("<<ComboboxSelected>>", self.on_objective_operator_selected)
+        self.single_objective_combo.bind("<<ComboboxSelected>>", self.on_objective_selected)
 
         self.objective_table = ttk.Treeview(
             tab,
-            columns=("target", "objective", "calculation"),
+            columns=("selected", "objective", "label", "direction", "weight"),
             show="headings",
             selectmode="browse",
             height=9,
         )
-        self.objective_table.heading("target", text="Target opponent")
+        self.objective_table.heading("selected", text="Use")
         self.objective_table.heading("objective", text="Objective key")
-        self.objective_table.heading("calculation", text="Calculation")
-        self.objective_table.column("target", width=260, anchor="w")
-        self.objective_table.column("objective", width=150, anchor="w")
-        self.objective_table.column("calculation", width=430, anchor="w")
-        self.objective_table.grid(row=1, column=0, columnspan=4, sticky="nsew", pady=(12, 0))
+        self.objective_table.heading("label", text="Label")
+        self.objective_table.heading("direction", text="Direction")
+        self.objective_table.heading("weight", text="Weight")
+        self.objective_table.column("selected", width=70, anchor="center")
+        self.objective_table.column("objective", width=230, anchor="w")
+        self.objective_table.column("label", width=260, anchor="w")
+        self.objective_table.column("direction", width=90, anchor="center")
+        self.objective_table.column("weight", width=110, anchor="e")
+        self.objective_table.grid(row=2, column=0, columnspan=4, sticky="nsew", pady=(12, 0))
         self.objective_table.bind("<<TreeviewSelect>>", self.on_objective_selected)
+        self.objective_table.bind("<Double-1>", self.on_objective_table_double_click)
 
         objective_actions = ttk.Frame(tab)
-        objective_actions.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(8, 0))
-        ttk.Button(objective_actions, text="Add target", command=self.add_objective_target).pack(side="left")
-        ttk.Button(objective_actions, text="Delete target", command=self.delete_objective_target).pack(
-            side="left", padx=(8, 0)
-        )
-        ttk.Button(objective_actions, text="Use selected for single objective", command=self.use_selected_single_objective).pack(
+        objective_actions.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+        ttk.Button(objective_actions, text="Toggle selected", command=self.toggle_selected_objective).pack(side="left")
+        ttk.Button(objective_actions, text="Set weight", command=self.set_selected_objective_weight).pack(
             side="left", padx=(8, 0)
         )
 
         ttk.Label(tab, textvariable=self.objective_detail, wraplength=820, justify="left").grid(
-            row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0)
+            row=4, column=0, columnspan=4, sticky="ew", pady=(8, 0)
         )
 
     def _build_operators_tab(self) -> None:
@@ -571,17 +595,21 @@ class EagleDesktopApp:
             variable.set(default_name if default_name in choices else (choices[0] if choices else ""))
 
     def ensure_objective_choice(self) -> None:
-        """Reset a stale objective selection to a discovered default."""
+        """Reset stale objective selections to available objectives."""
         choices = self.objective_choices()
-        if hasattr(self, "objective_operator_combo"):
-            self.objective_operator_combo.configure(values=choices)
-        if self.objective_operator.get() not in choices:
-            default_name = DEFAULT_OBJECTIVE_BY_SURROGATE.get(self.surrogate.get(), "")
-            self.objective_operator.set(
-                default_name
-                if default_name in choices
-                else (choices[0] if choices else "")
-            )
+        if hasattr(self, "single_objective_combo"):
+            self.single_objective_combo.configure(values=choices)
+        if self.single_objective.get() not in choices:
+            self.single_objective.set(choices[0] if choices else "")
+        for key in choices:
+            self.objective_weights.setdefault(key, StringVar(value="1.0"))
+            self.multi_objectives.setdefault(key, BooleanVar(value=True))
+        for key in list(self.objective_weights):
+            if key not in choices:
+                del self.objective_weights[key]
+        for key in list(self.multi_objectives):
+            if key not in choices:
+                del self.multi_objectives[key]
 
     def _build_run_tab(self) -> None:
         """Build process launch and log controls."""
@@ -664,173 +692,158 @@ class EagleDesktopApp:
         """Keep algorithm-derived defaults in sync with the current flow."""
         if self.algorithm.get() in ROUND_ALGORITHMS:
             self.final_test_max_front.set("0")
+        if self.algorithm.get() in GA_ALGORITHMS and self.objective_mode.get() not in {"single", "weighted_mix"}:
+            self.objective_mode.set("single")
+        if self.algorithm.get() not in GA_ALGORITHMS:
+            self.objective_mode.set("multi")
         self.ensure_objective_choice()
         self.refresh_objective_table()
 
     def on_surrogate_selected(self, _event: object | None = None) -> None:
         """Refresh surrogate-specific evaluator and objective choices."""
-        self.evaluator.set("gameplay")
-        default_objective = DEFAULT_OBJECTIVE_BY_SURROGATE.get(self.surrogate.get(), "")
-        if default_objective:
-            self.objective_operator.set(default_objective)
         self.ensure_objective_choice()
         self.refresh_objective_table()
 
-    def objective_choices(self) -> tuple[str, ...]:
-        """Return registered objective names discovered from objective plugins."""
-        return list_objective_names("gameplay")
-
-    def current_objective(self):
-        """Return the currently selected objective plugin."""
-        return get_objective(self.objective_operator.get())
-
-    def on_objective_operator_selected(self, _event: object | None = None) -> None:
-        """Refresh objective rows after selecting another objective plugin."""
+    def on_evaluator_selected(self, _event: object | None = None) -> None:
+        """Refresh objective controls after changing eval mode."""
+        self.refresh_surrogate_visibility()
+        self.ensure_objective_choice()
         self.refresh_objective_table()
 
-    def add_objective_target(self) -> None:
-        """Add a target opponent objective to the GUI list."""
-        if not getattr(self.current_objective(), "target_based", True):
-            messagebox.showerror("No target list", "The selected objective does not use opponent targets.")
-            return
-        target = simpledialog.askstring("Add objective target", "Target opponent class:", parent=self.root)
-        if target is None:
-            return
-        target = target.strip()
-        if not target:
-            messagebox.showerror("Invalid objective target", "Target opponent class cannot be empty.")
-            return
-        if target in self.objective_targets:
-            messagebox.showerror("Duplicate objective target", f"{target} already exists.")
-            return
-        self.objective_targets.append(target)
-        if not self.single_objective_target.get():
-            self.single_objective_target.set(target)
-        self.refresh_objective_table(select_target=target)
+    def refresh_surrogate_visibility(self) -> None:
+        """Show gameplay-only controls only when gameplay evaluation is active."""
+        gameplay_active = self.evaluator.get() == "gameplay"
+        if hasattr(self, "surrogate_controls_frame"):
+            if gameplay_active:
+                self.surrogate_controls_frame.grid()
+                if self.surrogate.get() not in SURROGATE_CHOICES:
+                    self.surrogate.set(SURROGATE_CHOICES[0])
+            else:
+                self.surrogate_controls_frame.grid_remove()
+        if hasattr(self, "game_seconds_frame"):
+            if gameplay_active:
+                self.game_seconds_frame.grid()
+            else:
+                self.game_seconds_frame.grid_remove()
+        if hasattr(self, "surrogate_paths_frame"):
+            if gameplay_active:
+                self.surrogate_paths_frame.grid()
+            else:
+                self.surrogate_paths_frame.grid_remove()
 
-    def delete_objective_target(self) -> None:
-        """Delete the selected target opponent objective."""
-        if not getattr(self.current_objective(), "target_based", True):
-            messagebox.showerror("No target list", "The selected objective does not use opponent targets.")
-            return
-        target = self.selected_objective_target()
-        if target is None:
-            messagebox.showerror("No objective selected", "Select an objective target first.")
-            return
-        if len(self.objective_targets) == 1:
-            messagebox.showerror("Cannot delete objective", "Keep at least one objective target.")
-            return
-        if not messagebox.askyesno("Delete objective", f"Delete objective target?\n{target}"):
-            return
-        self.objective_targets = [item for item in self.objective_targets if item != target]
-        if self.single_objective_target.get() == target:
-            self.single_objective_target.set(self.objective_targets[0])
-        self.refresh_objective_table(select_target=self.single_objective_target.get())
+    def current_eval_mode(self) -> str:
+        """Return the objective-facing eval mode implied by GUI settings."""
+        if self.evaluator.get() == "round":
+            return "round"
+        return "java_surrogate"
 
-    def use_selected_single_objective(self) -> None:
-        """Use the selected objective as the single-objective GA target."""
-        if not getattr(self.current_objective(), "target_based", True):
-            messagebox.showerror("No target list", "The selected objective does not use opponent targets.")
-            return
-        target = self.selected_objective_target()
-        if target is None:
-            messagebox.showerror("No objective selected", "Select an objective target first.")
-            return
-        self.single_objective_target.set(target)
-        self.refresh_objective_table(select_target=target)
+    def objective_choices(self) -> tuple[str, ...]:
+        """Return registered objective names discovered from objective plugins."""
+        return list_objective_names(self.application.get(), self.current_eval_mode())
 
-    def selected_objective_target(self) -> str | None:
-        """Return the target selected in the objective table."""
-        if not getattr(self.current_objective(), "target_based", True):
-            return None
+    def on_objective_mode_selected(self, _event: object | None = None) -> None:
+        """Refresh objective rows after changing objective mode."""
+        self.refresh_objective_table()
+
+    def selected_objective_key(self) -> str | None:
+        """Return the selected objective key."""
         selection = self.objective_table.selection()
         if not selection:
             return None
-        return selection[0]
+        return str(selection[0])
 
     def refresh_objective_table(self, *, select_target: str | None = None) -> None:
         """Refresh objective rows and show their calculation details."""
         if not hasattr(self, "objective_table"):
             return
-        objective = self.current_objective()
-        previous = select_target or self.selected_objective_target() or self.single_objective_target.get()
+        self.ensure_objective_choice()
+        single_algorithm = self.algorithm.get() in GA_ALGORITHMS
+        if single_algorithm:
+            self.objective_mode_frame.grid()
+        else:
+            self.objective_mode.set("multi")
+            self.objective_mode_frame.grid_remove()
+
+        if single_algorithm and self.objective_mode.get() == "single":
+            self.single_objective_frame.grid()
+            self.objective_table.grid_remove()
+        else:
+            self.single_objective_frame.grid_remove()
+            self.objective_table.grid()
+
         self.objective_table.delete(*self.objective_table.get_children())
-        if not getattr(objective, "target_based", True):
-            for index in range(max(1, int(getattr(objective, "objective_count", 1)))):
-                objective_key = objective.objective_key(None, index)
-                prefix = "[single] " if self.algorithm.get() in GA_ALGORITHMS and index == 0 else ""
-                iid = f"objective:{index}"
-                self.objective_table.insert(
-                    "",
-                    "end",
-                    iid=iid,
-                    values=(
-                        f"{prefix}state generator",
-                        objective_key,
-                        objective.calculation_label,
-                    ),
-                )
-            children = self.objective_table.get_children()
-            if children:
-                self.objective_table.selection_set(children[0])
-            self.update_objective_detail()
-            return
-        for index, target in enumerate(self.objective_targets):
-            objective_key = objective.objective_key(target, index)
-            prefix = "[single] " if self.algorithm.get() in GA_ALGORITHMS and target == self.single_objective_target.get() else ""
+        for objective in get_objectives(self.application.get(), self.current_eval_mode()):
+            selected = self.multi_objectives.setdefault(objective.key, BooleanVar(value=True)).get()
+            weight = self.objective_weights.setdefault(objective.key, StringVar(value="1.0")).get()
             self.objective_table.insert(
                 "",
                 "end",
-                iid=target,
+                iid=objective.key,
                 values=(
-                    f"{prefix}{target}",
-                    objective_key,
-                    objective.calculation_label,
+                    "yes" if selected else "no",
+                    objective.key,
+                    objective.label,
+                    objective.direction,
+                    weight,
                 ),
             )
-        if previous in self.objective_targets:
-            self.objective_table.selection_set(previous)
-        elif self.objective_targets:
-            self.objective_table.selection_set(self.objective_targets[0])
+        key_to_select = select_target or self.selected_objective_key() or self.single_objective.get()
+        if key_to_select in self.objective_table.get_children():
+            self.objective_table.selection_set(key_to_select)
+        elif self.objective_table.get_children():
+            self.objective_table.selection_set(self.objective_table.get_children()[0])
         self.update_objective_detail()
 
     def on_objective_selected(self, _event: object | None = None) -> None:
         """Show the calculation details for the selected objective."""
         self.update_objective_detail()
 
+    def on_objective_table_double_click(self, _event: object | None = None) -> None:
+        """Toggle or edit the selected objective according to current mode."""
+        if self.objective_mode.get() == "weighted_mix":
+            self.set_selected_objective_weight()
+        else:
+            self.toggle_selected_objective()
+
+    def toggle_selected_objective(self) -> None:
+        """Toggle the selected multi-objective row."""
+        key = self.selected_objective_key()
+        if not key:
+            return
+        variable = self.multi_objectives.setdefault(key, BooleanVar(value=True))
+        variable.set(not bool(variable.get()))
+        self.refresh_objective_table(select_target=key)
+
+    def set_selected_objective_weight(self) -> None:
+        """Edit the selected weighted-mix objective weight."""
+        key = self.selected_objective_key()
+        if not key:
+            return
+        current = self.objective_weights.setdefault(key, StringVar(value="1.0")).get()
+        value = simpledialog.askstring("Set objective weight", f"Weight for {key}:", initialvalue=current, parent=self.root)
+        if value is None:
+            return
+        parse_float(value, f"weight for {key}")
+        self.objective_weights[key].set(value.strip())
+        self.multi_objectives.setdefault(key, BooleanVar(value=True)).set(True)
+        self.refresh_objective_table(select_target=key)
+
     def update_objective_detail(self) -> None:
         """Show how the selected objective is calculated."""
-        objective = self.current_objective()
-        if not getattr(objective, "target_based", True):
-            selection = self.objective_table.selection()
-            index = 0
-            if selection and str(selection[0]).startswith("objective:"):
-                try:
-                    index = int(str(selection[0]).split(":", 1)[1])
-                except ValueError:
-                    index = 0
-            self.objective_detail.set(
-                objective.describe(
-                    None,
-                    index,
-                    single_objective=self.algorithm.get() in GA_ALGORITHMS,
-                )
-            )
+        if self.algorithm.get() in GA_ALGORITHMS and self.objective_mode.get() == "single":
+            key = self.single_objective.get()
+        else:
+            key = self.selected_objective_key()
+        if not key:
+            self.objective_detail.set("No objective selected.")
             return
-        target = self.selected_objective_target()
-        if target is None:
-            self.objective_detail.set("Select an objective target to inspect its calculation.")
+        objective_by_key = {objective.key: objective for objective in get_objectives(self.application.get(), self.current_eval_mode())}
+        objective = objective_by_key.get(key)
+        if objective is None:
+            self.objective_detail.set(f"{key} is not available for {self.current_eval_mode()}.")
             return
-        try:
-            index = self.objective_targets.index(target)
-        except ValueError:
-            index = 0
         self.objective_detail.set(
-            self.current_objective().describe(
-                target,
-                index,
-                single_objective=self.algorithm.get() in GA_ALGORITHMS,
-            )
+            f"{objective.key}: {objective.label}; direction={objective.direction}; eval_mode={self.current_eval_mode()}."
         )
 
     def browse_base_config(self) -> None:
@@ -1610,12 +1623,13 @@ class EagleDesktopApp:
             self.evaluator.set("gameplay")
         self.surrogate.set(str(payload.get("surrogate", self.surrogate.get())).strip().lower().replace("-", "_").replace(" ", "_"))
         if self.surrogate.get() not in SURROGATE_CHOICES:
-            self.surrogate.set("round")
+            self.surrogate.set(SURROGATE_CHOICES[0])
+        self.refresh_surrogate_visibility()
         self.population_size.set(str(payload.get("population_size", self.population_size.get())))
         self.num_generations.set(str(payload.get("num_generations", self.num_generations.get())))
         self.run_time_per_game_sec.set(str(payload.get("run_time_per_game_sec", self.run_time_per_game_sec.get())))
         self.gameplay_rate.set(str(payload.get("gameplay_rate", self.gameplay_rate.get())))
-        self.objective_operator.set(str(payload.get("objective_operator", self.objective_operator.get())))
+        self.load_objective_config(payload.get("objective_config", {}))
         self.apply_training_example_sample_config(
             payload.get(
                 "training_example_sample_count",
@@ -1653,8 +1667,6 @@ class EagleDesktopApp:
         loaded_opponents = parse_target_list(payload.get("gameplay_opponents", []))
         if loaded_opponents:
             self.objective_targets = loaded_opponents
-            if self.single_objective_target.get() not in self.objective_targets:
-                self.single_objective_target.set(self.objective_targets[0])
         self.opponents_text.set(", ".join(self.objective_targets))
         for key, variable in self.operator_weights.items():
             variable.set(str((payload.get("reproduction_operator_probs") or {}).get(key, variable.get())))
@@ -1665,12 +1677,12 @@ class EagleDesktopApp:
         self.ensure_operator_choice(self.mutation_operator, "mutation", "mix")
         self.ensure_operator_choice(self.env_selection_operator, "env_selection", "nsga2_environmental")
         self.ensure_objective_choice()
+        self.refresh_objective_table()
         self.refresh_mutation_weight_visibility()
         self.refresh_crossover_repair_visibility()
         component_path = resolve_repo_path(self.component_runtime_path.get())
         if component_path.exists():
             self.preview_component(component_path)
-        self.on_surrogate_selected()
         self.on_algorithm_selected()
         self.status.set(f"Loaded {path}")
 
@@ -1714,22 +1726,22 @@ class EagleDesktopApp:
         if self.evaluator.get() not in EVALUATOR_CHOICES:
             raise ValueError(f"Unsupported evaluator: {self.evaluator.get()}.")
         if self.surrogate.get() not in SURROGATE_CHOICES:
-            raise ValueError(f"Unsupported surrogate: {self.surrogate.get()}.")
-        self.evaluator.set("gameplay")
+            if self.evaluator.get() == "gameplay":
+                raise ValueError(f"Unsupported surrogate: {self.surrogate.get()}.")
+            self.surrogate.set(SURROGATE_CHOICES[0])
         self.ensure_objective_choice()
         objective_targets = self.config_objective_targets()
+        objective_config = self.build_objective_config()
 
         payload.update(
             {
                 "application": self.application.get(),
                 "evaluator": self.evaluator.get(),
-                "surrogate": self.surrogate.get(),
                 "algorithm": self.algorithm.get(),
                 "population_size": parse_int(self.population_size.get(), "population_size"),
                 "num_generations": parse_int(self.num_generations.get(), "num_generations"),
-                "run_time_per_game_sec": parse_int(self.run_time_per_game_sec.get(), "run_time_per_game_sec"),
                 "gameplay_rate": parse_float(self.gameplay_rate.get(), "gameplay_rate"),
-                "objective_operator": self.objective_operator.get(),
+                "objective_config": objective_config,
                 "training_example_sample_count": self.training_example_selection_value(),
                 "training_example_fixed_count": bool(self.training_example_fixed_count.get()),
                 "final_test_max_front": parse_optional_nonnegative_int(
@@ -1760,6 +1772,12 @@ class EagleDesktopApp:
                 "strategy_mutation": self.build_strategy_mutation_weights(),
             }
         )
+        if self.evaluator.get() == "gameplay":
+            payload["surrogate"] = self.surrogate.get()
+            payload["run_time_per_game_sec"] = parse_int(self.run_time_per_game_sec.get(), "run_time_per_game_sec")
+        else:
+            payload.pop("surrogate", None)
+            payload.pop("run_time_per_game_sec", None)
         normalize_probability_map(payload["reproduction_operator_probs"], "reproduction_operator_probs")
         normalize_probability_map(payload["strategy_mutation"], "strategy_mutation")
         return payload
@@ -1776,21 +1794,65 @@ class EagleDesktopApp:
         }
 
     def config_objective_targets(self) -> list[str]:
-        """Return objective targets according to the selected algorithm mode."""
-        if not getattr(self.current_objective(), "target_based", True):
-            return [target.strip() for target in self.objective_targets if target.strip()]
-        targets = [target.strip() for target in self.objective_targets if target.strip()]
+        """Return configured gameplay opponents."""
+        if self.evaluator.get() == "round":
+            self.objective_targets = []
+            return []
+        targets = parse_target_list(self.opponents_text.get())
         if not targets:
-            raise ValueError("At least one objective target is required.")
-        if self.algorithm.get() in GA_ALGORITHMS:
-            target = self.single_objective_target.get().strip()
-            if not target:
-                target = targets[0]
-                self.single_objective_target.set(target)
-            if target not in targets:
-                targets.insert(0, target)
-            return [target]
+            raise ValueError("At least one gameplay opponent is required.")
+        self.objective_targets = targets
         return targets
+
+    def load_objective_config(self, objective_config: Any) -> None:
+        """Load objective_config into GUI objective controls."""
+        config = dict(objective_config or {})
+        mode = str(config.get("mode", self.objective_mode.get())).strip().lower()
+        if mode in {"single", "weighted_mix", "multi"}:
+            self.objective_mode.set(mode)
+        objective = normalize_objective_key(str(config.get("objective", self.single_objective.get())))
+        if objective:
+            self.single_objective.set(objective)
+        for key, value in dict(config.get("weights") or {}).items():
+            normalized_key = normalize_objective_key(str(key).strip())
+            self.objective_weights[normalized_key] = StringVar(value=str(value))
+            self.multi_objectives[normalized_key] = BooleanVar(value=True)
+        configured_objectives = [normalize_objective_key(str(key).strip()) for key in config.get("objectives", [])]
+        if configured_objectives:
+            for key in self.objective_choices():
+                self.multi_objectives.setdefault(key, BooleanVar(value=False)).set(key in configured_objectives)
+
+    def build_objective_config(self) -> dict[str, Any]:
+        """Build and validate objective_config from GUI objective controls."""
+        choices = set(self.objective_choices())
+        if self.algorithm.get() in GA_ALGORITHMS:
+            mode = self.objective_mode.get()
+            if mode == "single":
+                objective = self.single_objective.get().strip()
+                if objective not in choices:
+                    raise ValueError(f"Objective {objective!r} is not available for {self.current_eval_mode()}.")
+                return {"mode": "single", "objective": objective}
+            weights = {
+                key: parse_float(variable.get(), f"weight for {key}")
+                for key, variable in self.objective_weights.items()
+                if key in choices and self.multi_objectives.setdefault(key, BooleanVar(value=True)).get()
+            }
+            if not weights:
+                raise ValueError("weighted_mix requires at least one objective.")
+            weights = {key: value for key, value in weights.items() if value > 0}
+            if not weights:
+                raise ValueError("weighted_mix requires at least one positive weight.")
+            total = sum(weights.values())
+            return {"mode": "weighted_mix", "weights": {key: value / total for key, value in weights.items()}}
+
+        objectives = [
+            key
+            for key in self.objective_choices()
+            if self.multi_objectives.setdefault(key, BooleanVar(value=True)).get()
+        ]
+        if len(objectives) < 2:
+            raise ValueError("multi mode requires at least two objectives.")
+        return {"mode": "multi", "objectives": objectives}
 
     def config_filename(self) -> str:
         """Return a safe config filename from the user-provided config name."""
@@ -1820,9 +1882,9 @@ class EagleDesktopApp:
             self.algorithm.get(),
             "--evaluator",
             self.evaluator.get(),
-            "--surrogate",
-            self.surrogate.get(),
         ]
+        if self.evaluator.get() == "gameplay":
+            command.extend(["--surrogate", self.surrogate.get()])
         if self.quick_run.get():
             command.append("--quick-run")
         if self.skip_final_test.get():
@@ -1834,8 +1896,9 @@ class EagleDesktopApp:
         log_handle.write("Command: " + " ".join(command) + "\n\n")
         log_handle.write(
             "[DEBUG] gui start "
-            f"surrogate={self.surrogate.get()} evaluator={self.evaluator.get()} "
-            f"objective={self.objective_operator.get()} gameplay_rate={self.gameplay_rate.get()}\n\n"
+            f"surrogate={self.surrogate.get() if self.evaluator.get() == 'gameplay' else '(none)'} "
+            f"evaluator={self.evaluator.get()} "
+            f"objective_config={self.build_objective_config()} gameplay_rate={self.gameplay_rate.get()}\n\n"
         )
         log_handle.flush()
         self.process = subprocess.Popen(

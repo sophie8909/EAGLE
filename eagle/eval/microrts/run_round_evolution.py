@@ -83,8 +83,15 @@ def _load_config(args: argparse.Namespace) -> EAConfig:
 
     config.algorithm = str(args.algorithm or getattr(config, "algorithm", "round_nsga2")).lower()
     config.evaluator = "round"
-    config.objective_operator = "round_legality_alignment"
+    config.objective_config = {
+        "mode": "single",
+        "objective": "resource_advantage",
+    } if config.algorithm == "round_ga" else {
+        "mode": "multi",
+        "objectives": ["resource_advantage", "strategy_alignment"],
+    }
     config.gameplay_rate = 1.0
+    config.validate()
     config.final_test_max_front = 0
 
     if args.component_pool:

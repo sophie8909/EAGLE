@@ -64,7 +64,13 @@
   "initial_population_seeds": [],
   "run_time_per_game_sec": 500,
   "gameplay_rate": 0.25,
-  "objective_operator": "microrts_resource_weighted",
+  "objective_config": {
+    "mode": "multi",
+    "objectives": [
+      "resource_advantage",
+      "win_score"
+    ]
+  },
   "training_example_sample_count": "random_0_4",
   "training_example_fixed_count": false,
   "gameplay_opponents": [

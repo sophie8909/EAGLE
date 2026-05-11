@@ -10,12 +10,36 @@ from eagle.llm import LLM
 from eagle.operators.mutation import support as mutation_support
 
 
+def _average_objective_fitness(left_fitness: dict, right_fitness: dict) -> dict[str, float]:
+    """Average two objective-name keyed fitness dictionaries."""
+    averaged: dict[str, float] = {}
+    objective_names = list(left_fitness.keys())
+    objective_names.extend(key for key in right_fitness.keys() if key not in left_fitness)
+
+    for objective_name in objective_names:
+        left_value = left_fitness.get(objective_name)
+        right_value = right_fitness.get(objective_name)
+        if left_value is None:
+            averaged[str(objective_name)] = float(right_value)
+        elif right_value is None:
+            averaged[str(objective_name)] = float(left_value)
+        else:
+            averaged[str(objective_name)] = (float(left_value) + float(right_value)) / 2
+    return averaged
+
+
 def average_parent_fitness(child: Individual, parent1: Individual, parent2: Individual) -> Individual:
     """Attach the mean parent fitness to one crossover child."""
-    child.fitness = [
-        (left + right) / 2
-        for left, right in zip(parent1.fitness, parent2.fitness)
-    ]
+    parent1_fitness = parent1.fitness
+    parent2_fitness = parent2.fitness
+
+    if isinstance(parent1_fitness, dict) and isinstance(parent2_fitness, dict):
+        child.fitness = _average_objective_fitness(parent1_fitness, parent2_fitness)
+    else:
+        child.fitness = [
+            (left + right) / 2
+            for left, right in zip(parent1_fitness, parent2_fitness)
+        ]
     return child
 
 

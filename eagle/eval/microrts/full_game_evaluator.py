@@ -8,7 +8,7 @@ from typing import Any
 
 from ...config import EAConfig
 from ...envs.microrts.runner import run_java_agent_game, run_prompt_based_game
-from ...objectives.registry import get_objective
+from ...objectives.registry import objective_eval_mode
 from ...reflection.microrts.game_log_reflection_context import Reflection, read_max_turn_hint
 from ...project import PROJECT_ROOT
 from ...utils.component_pool import ComponentPool
@@ -36,9 +36,6 @@ class FullGameEvaluator:
         self.repo_root = PROJECT_ROOT
         self.runtime_logs_dir = Path(runtime_logs_dir) if runtime_logs_dir is not None else None
         setattr(self.config, "runtime_logs_dir", self.runtime_logs_dir)
-        self.objective = get_objective(
-            getattr(self.config, "objective_operator", "microrts_resource_weighted")
-        )
 
     def evaluate(
         self,
@@ -58,12 +55,11 @@ class FullGameEvaluator:
         print(
             "[DEBUG] gameplay evaluate start "
             f"individual={individual.id} generation={generation} surrogate={surrogate} "
-            f"objective={getattr(self.config, 'objective_operator', 'unknown')} "
+            f"objective_config={getattr(self.config, 'objective_config', {})} "
             f"opponents={resolved_opponents}",
             flush=True,
         )
 
-        opponent_scores: list[tuple[str | None, float]] = []
         per_opponent_results: list[dict[str, Any]] = []
         evaluation_modes: list[str] = []
 
@@ -107,18 +103,10 @@ class FullGameEvaluator:
 
             parsed_log = simulation_meta.get("parsed_log")
             raw_score = self._raw_resource_advantage_score(match_score)
-            combined_score = self.objective(
-                match_score,
-                config=self.config,
-                target=opponent,
-                index=len(opponent_scores),
-            )
-            opponent_scores.append((opponent, combined_score))
             per_opponent_results.append(
                 {
                     "opponent": opponent,
                     "match_score": match_score,
-                    "combined_score": combined_score,
                     "raw_resource_advantage_score": raw_score,
                     "winner": simulation_meta.get("winner"),
                     "timeout": simulation_meta.get("timeout"),
@@ -130,16 +118,17 @@ class FullGameEvaluator:
             print(
                 "[DEBUG] gameplay opponent result "
                 f"individual={individual.id} opponent={opponent} mode={evaluation_mode} "
-                f"match_score={match_score} combined={combined_score}",
+                f"match_score={match_score}",
                 flush=True,
             )
 
-        aggregated_fitness = self._build_opponent_score_vector(
-            opponent_scores,
-            resolved_opponents,
-            self.objective,
-        )
-        individual.fitness = dict(aggregated_fitness)
+        eval_result = self._aggregate_raw_eval_result({
+            "eval_mode": objective_eval_mode(self.config, {"scores": per_opponent_results}),
+            "evaluation_mode": "gameplay",
+            "surrogate": surrogate,
+            "opponents": resolved_opponents,
+            "scores": per_opponent_results,
+        })
         individual.rendered_prompt = prompt
         individual.evaluation_mode = (
             "history_reuse"
@@ -154,19 +143,15 @@ class FullGameEvaluator:
             "opponents": resolved_opponents,
             "llm_interval": active_llm_interval,
             "per_opponent": per_opponent_results,
-            "aggregated_fitness": dict(aggregated_fitness),
+            "eval_result": eval_result,
         }
         print(
             "[DEBUG] gameplay evaluate complete "
-            f"individual={individual.id} fitness={dict(aggregated_fitness)}",
+            f"individual={individual.id} eval_mode={eval_result['eval_mode']}",
             flush=True,
         )
-        return {
-            "prompt": prompt,
-            "fitness": dict(aggregated_fitness),
-            "evaluation_mode": individual.evaluation_mode,
-            "scores": per_opponent_results,
-        }
+        eval_result["prompt"] = prompt
+        return eval_result
 
     def surrogate(
         self,
@@ -180,7 +165,6 @@ class FullGameEvaluator:
         prompt = self._construct_prompt(individual)
         resolved_opponents = list(opponents) if opponents is not None else self._configured_gameplay_opponents()
 
-        opponent_scores: list[tuple[str | None, float]] = []
         per_opponent_scores: list[dict[str, object]] = []
         for opponent in resolved_opponents:
             result = self.run_java_based_agent(
@@ -190,28 +174,21 @@ class FullGameEvaluator:
             )
             match_score = dict(result["match_score"])
             raw_score = self._raw_resource_advantage_score(match_score)
-            combined_score = self.objective(
-                match_score,
-                config=self.config,
-                target=opponent,
-                index=len(opponent_scores),
-            )
-            opponent_scores.append((opponent, combined_score))
             per_opponent_scores.append(
                 {
                     "opponent": opponent,
                     "match_score": match_score,
-                    "combined_score": combined_score,
                     "raw_resource_advantage_score": raw_score,
                 }
             )
 
-        aggregated_fitness = self._build_opponent_score_vector(
-            opponent_scores,
-            resolved_opponents,
-            self.objective,
-        )
-        individual.fitness = dict(aggregated_fitness)
+        eval_result = self._aggregate_raw_eval_result({
+            "eval_mode": "java_surrogate",
+            "evaluation_mode": "surrogate",
+            "surrogate": "java_surrogate",
+            "opponents": resolved_opponents,
+            "scores": per_opponent_scores,
+        })
         individual.rendered_prompt = prompt
         individual.evaluation_mode = "surrogate"
         individual.last_surrogate_evaluation = {
@@ -219,14 +196,10 @@ class FullGameEvaluator:
             "opponents": resolved_opponents,
             "llm_interval": active_llm_interval,
             "scores": per_opponent_scores,
-            "aggregated_fitness": dict(aggregated_fitness),
+            "eval_result": eval_result,
         }
-        return {
-            "prompt": prompt,
-            "fitness": dict(aggregated_fitness),
-            "evaluation_mode": "surrogate",
-            "scores": per_opponent_scores,
-        }
+        eval_result["prompt"] = prompt
+        return eval_result
 
     def _run_gameplay_mode(
         self,
@@ -595,6 +568,57 @@ class FullGameEvaluator:
         write_jsonl(record, profile_output_path)
 
     @staticmethod
+    def _aggregate_raw_eval_result(eval_result: dict[str, Any]) -> dict[str, Any]:
+        """Add top-level raw metrics averaged across opponent match results."""
+        scores = list(eval_result.get("scores") or [])
+        if not scores:
+            eval_result.update(
+                {
+                    "resource_diff": 0.0,
+                    "ally_units": 0.0,
+                    "enemy_units": 0.0,
+                    "winner": 0.0,
+                    "game_ticks": 0.0,
+                    "timeout": False,
+                }
+            )
+            return eval_result
+
+        resource_total = 0.0
+        win_total = 0.0
+        tick_total = 0.0
+        ally_total = 0.0
+        enemy_total = 0.0
+        timeout = False
+        for score in scores:
+            match_score = dict(score.get("match_score") or {})
+            resource_total += float(match_score.get("raw_resource_advantage_score", 0.0))
+            win_total += float(match_score.get("win_score", 0.0))
+            timeout = timeout or bool(score.get("timeout", False))
+            summary = dict(score.get("parsed_summary") or {})
+            resource_history = list(summary.get("resource_history") or [])
+            if resource_history:
+                tick_total += float(resource_history[-1].get("time", 0.0))
+            feature_history = list(summary.get("feature_history") or [])
+            if feature_history:
+                final_features = dict(feature_history[-1])
+                ally_total += sum(float(value) for value in dict(final_features.get("ally") or {}).values())
+                enemy_total += sum(float(value) for value in dict(final_features.get("enemy") or {}).values())
+
+        count = float(len(scores))
+        eval_result.update(
+            {
+                "resource_diff": resource_total / count,
+                "ally_units": ally_total / count,
+                "enemy_units": enemy_total / count,
+                "winner": win_total / count,
+                "game_ticks": tick_total / count,
+                "timeout": timeout,
+            }
+        )
+        return eval_result
+
+    @staticmethod
     def _normalize_match_score(match_score: Any) -> dict[str, float]:
         if isinstance(match_score, dict):
             return {
@@ -621,18 +645,3 @@ class FullGameEvaluator:
             return float(match_score.get("raw_resource_advantage_score", 0.0))
         except (TypeError, ValueError):
             return 0.0
-
-    @staticmethod
-    def _build_opponent_score_vector(
-        opponent_scores: list[tuple[str | None, float]],
-        configured_opponents: list[str | None],
-        objective=None,
-    ) -> dict[str, float]:
-        if not configured_opponents:
-            configured_opponents = [None]
-        score_by_opponent = {opponent: score for opponent, score in opponent_scores}
-        objective = objective or get_objective("microrts_resource_weighted")
-        return {
-            objective.objective_key(opponent, index): float(score_by_opponent.get(opponent, 0.0))
-            for index, opponent in enumerate(configured_opponents)
-        }

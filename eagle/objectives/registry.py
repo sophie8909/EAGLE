@@ -1,72 +1,229 @@
-"""Plugin-style registry for objective implementations."""
+"""Registry and fitness construction helpers for objective plugins."""
 
 from __future__ import annotations
 
 from importlib import import_module
 from pathlib import Path
+from typing import Any
 
-from eagle.objectives.base import BaseObjective
+from eagle.objectives.base import Objective
 
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
 def _normalize_name(name: str) -> str:
-    """Normalize objective names without changing their public spelling rules."""
-    return str(name).strip().lower().replace("-", "_")
+    """Normalize public objective, application, and eval-mode names."""
+    return str(name).strip().lower().replace("-", "_").replace(" ", "_")
 
 
-def _iter_plugin_modules():
-    """Yield importable objective plugin modules."""
-    for path in sorted(_PACKAGE_ROOT.glob("*.py")):
+_LEGACY_OBJECTIVE_KEYS = {
+    "round_legality_alignment": "resource_advantage",
+    "microrts_resource_weighted": "resource_advantage",
+    "microrts_win_loss": "win_score",
+    "full_game_resource_advantage": "resource_advantage",
+    "full_game_win_loss": "win_score",
+    "java_surrogate_resource_advantage": "resource_advantage",
+    "java_surrogate_win_loss": "win_score",
+    "round_legality": "resource_advantage",
+    "round_strategy_alignment": "strategy_alignment",
+    "action_type_score_ratio": "resource_advantage",
+    "action_legality_ratio": "resource_advantage",
+    "format_validity": "strategy_alignment",
+}
+
+
+def normalize_objective_key(key: str) -> str:
+    """Normalize current and legacy objective keys to the active key."""
+    normalized_key = _normalize_name(key)
+    return _LEGACY_OBJECTIVE_KEYS.get(normalized_key, normalized_key)
+
+
+def _iter_plugin_modules() -> tuple[str, ...]:
+    """Return importable objective plugin module names."""
+    modules: list[str] = []
+    for path in sorted(_PACKAGE_ROOT.rglob("*.py")):
         if path.name in {"__init__.py", "base.py", "registry.py"}:
             continue
-        yield f"eagle.objectives.{path.stem}"
+        relative = path.relative_to(_PACKAGE_ROOT).with_suffix("")
+        module_suffix = ".".join(relative.parts)
+        modules.append(f"eagle.objectives.{module_suffix}")
+    return tuple(modules)
 
 
-def _discover_objectives() -> dict[str, type[BaseObjective]]:
+def _discover_objectives() -> dict[str, type[Objective]]:
     """Import objective modules and collect concrete objective classes."""
-    discovered: dict[str, type[BaseObjective]] = {}
+    discovered: dict[str, type[Objective]] = {}
     for module_name in _iter_plugin_modules():
         module = import_module(module_name)
         for value in vars(module).values():
             if not isinstance(value, type):
                 continue
-            if value is BaseObjective:
+            if value is Objective:
                 continue
             if value.__module__ != module.__name__:
                 continue
-            if not issubclass(value, BaseObjective):
+            if not issubclass(value, Objective):
                 continue
-            if not getattr(value, "name", ""):
+            key = _normalize_name(getattr(value, "key", ""))
+            if not key:
                 continue
-            discovered[_normalize_name(value.name)] = value
+            discovered[key] = value
     return discovered
 
 
-OBJECTIVE_REGISTRY: dict[str, type[BaseObjective]] = _discover_objectives()
+OBJECTIVE_REGISTRY: dict[str, dict[str, type[Objective]]] = {}
 
 
-def list_objective_names(evaluator: str | None = None) -> tuple[str, ...]:
-    """Return sorted objective plugin names."""
-    if evaluator is None:
-        return tuple(sorted(OBJECTIVE_REGISTRY))
-    normalized_evaluator = _normalize_name(evaluator)
-    return tuple(
-        sorted(
-            name
-            for name, objective_cls in OBJECTIVE_REGISTRY.items()
-            if _normalize_name(getattr(objective_cls, "evaluator", "")) == normalized_evaluator
-        )
-    )
+def register_objective(application: str, objective: Objective | type[Objective]) -> None:
+    """Register one objective instance or class for an application."""
+    normalized_application = _normalize_name(application)
+    objective_cls = objective if isinstance(objective, type) else objective.__class__
+    key = _normalize_name(getattr(objective_cls, "key", ""))
+    if not key:
+        raise ValueError("Objective key must be non-empty.")
+    OBJECTIVE_REGISTRY.setdefault(normalized_application, {})[key] = objective_cls
 
 
-def get_objective(objective_name: str, config: dict | None = None) -> BaseObjective:
-    """Instantiate one registered objective by name."""
-    normalized_name = _normalize_name(objective_name)
-    if normalized_name not in OBJECTIVE_REGISTRY:
-        known_names = ", ".join(sorted(OBJECTIVE_REGISTRY))
+def _ensure_discovered() -> None:
+    """Populate the registry from plugin modules once."""
+    if OBJECTIVE_REGISTRY:
+        return
+    for objective_cls in _discover_objectives().values():
+        application = getattr(objective_cls, "application", "")
+        register_objective(application, objective_cls)
+
+
+def get_objective(application: str, key: str) -> Objective:
+    """Instantiate one registered objective by application and key."""
+    _ensure_discovered()
+    normalized_application = _normalize_name(application)
+    normalized_key = normalize_objective_key(key)
+    application_registry = OBJECTIVE_REGISTRY.get(normalized_application, {})
+    if normalized_key not in application_registry:
+        known_keys = ", ".join(sorted(application_registry))
+        raise ValueError(f"Unknown {application} objective {key!r}. Known objectives: {known_keys}.")
+    return application_registry[normalized_key]()
+
+
+def get_objectives(application: str, eval_mode: str) -> tuple[Objective, ...]:
+    """Return objectives available for one application/eval-mode pair."""
+    _ensure_discovered()
+    normalized_application = _normalize_name(application)
+    normalized_eval_mode = _normalize_name(eval_mode)
+    objectives: list[Objective] = []
+    for objective_cls in OBJECTIVE_REGISTRY.get(normalized_application, {}).values():
+        eval_modes = {_normalize_name(mode) for mode in getattr(objective_cls, "eval_modes", set())}
+        if normalized_eval_mode in eval_modes:
+            objectives.append(objective_cls())
+    return tuple(sorted(objectives, key=lambda objective: objective.key))
+
+
+def list_objective_names(application: str | None = None, eval_mode: str | None = None) -> tuple[str, ...]:
+    """Return objective keys, optionally filtered by application and eval mode."""
+    _ensure_discovered()
+    if application is None and eval_mode is None:
+        names: list[str] = []
+        for application_registry in OBJECTIVE_REGISTRY.values():
+            names.extend(application_registry)
+        return tuple(sorted(names))
+    if application is None or eval_mode is None:
+        raise ValueError("application and eval_mode must be provided together.")
+    return tuple(objective.key for objective in get_objectives(application, eval_mode))
+
+
+def objective_eval_mode(config: Any, eval_result: dict | None = None) -> str:
+    """Resolve the objective-facing eval mode from config and evaluator output."""
+    if eval_result and eval_result.get("eval_mode"):
+        return _normalize_name(eval_result.get("eval_mode"))
+
+    explicit_eval_mode = getattr(config, "eval_mode", None)
+    if explicit_eval_mode:
+        return _normalize_name(explicit_eval_mode)
+
+    evaluator = _normalize_name(getattr(config, "evaluator", "round"))
+    if evaluator == "round":
+        return "round"
+
+    if eval_result:
+        result_eval_mode = _normalize_name(eval_result.get("evaluation_mode", ""))
+        if result_eval_mode in {"policy_agent", "java_agent", "java_surrogate"}:
+            return "java_surrogate"
+
+    surrogate = _normalize_name(getattr(config, "surrogate", "round"))
+    if surrogate in {"policy_agent", "java_agent", "java_surrogate"}:
+        return "java_surrogate"
+    return "full_game"
+
+
+def default_objective_config(config: Any) -> dict[str, Any]:
+    """Create a conservative objective config for the current algorithm/eval mode."""
+    eval_mode = objective_eval_mode(config)
+    objectives = list_objective_names("microrts", eval_mode)
+    if not objectives:
+        return {"mode": "multi", "objectives": []}
+    algorithm = _normalize_name(getattr(config, "algorithm", "round_nsga2"))
+    single_objective = algorithm.endswith("_ga") or algorithm == "ga"
+    if single_objective:
+        return {"mode": "single", "objective": objectives[0]}
+    return {"mode": "multi", "objectives": objectives[:2] if len(objectives) > 1 else objectives}
+
+
+def validate_required_metrics(objective: Objective, eval_result: dict) -> None:
+    """Raise when an objective's required raw metrics are missing."""
+    missing = sorted(metric for metric in objective.required_metrics if metric not in eval_result)
+    if missing:
         raise ValueError(
-            f"Unknown objective {objective_name!r}. Known objectives: {known_names}."
+            f"Objective {objective.key!r} requires missing eval_result metrics: {', '.join(missing)}."
         )
-    return OBJECTIVE_REGISTRY[normalized_name](config)
+
+
+def validate_objective_config(config: Any, eval_result: dict | None = None) -> dict[str, Any]:
+    """Validate and normalize objective_config for the active eval mode."""
+    application = _normalize_name(getattr(config, "application", "microrts") or "microrts")
+    eval_mode = objective_eval_mode(config, eval_result)
+    available = {objective.key for objective in get_objectives(application, eval_mode)}
+    objective_config = dict(getattr(config, "objective_config", None) or default_objective_config(config))
+    mode = _normalize_name(objective_config.get("mode", ""))
+    if mode not in {"single", "weighted_mix", "multi"}:
+        raise ValueError("objective_config.mode must be 'single', 'weighted_mix', or 'multi'.")
+
+    if mode == "single":
+        objective = normalize_objective_key(objective_config.get("objective", ""))
+        if not objective:
+            raise ValueError("single objective_config requires exactly one objective.")
+        _validate_supported_objectives([objective], available, eval_mode)
+        return {"mode": "single", "objective": objective}
+
+    if mode == "weighted_mix":
+        raw_weights = dict(objective_config.get("weights") or {})
+        if not raw_weights:
+            raise ValueError("weighted_mix objective_config requires at least one weighted objective.")
+        weights = {
+            normalize_objective_key(key): float(value)
+            for key, value in raw_weights.items()
+            if float(value) > 0
+        }
+        if not weights:
+            raise ValueError("weighted_mix objective_config requires at least one positive weight.")
+        _validate_supported_objectives(weights.keys(), available, eval_mode)
+        total = sum(weights.values())
+        normalized_weights = {key: value / total for key, value in weights.items()}
+        return {"mode": "weighted_mix", "weights": normalized_weights}
+
+    objectives = [normalize_objective_key(key) for key in objective_config.get("objectives", [])]
+    if len(objectives) < 2:
+        raise ValueError("multi objective_config requires at least two objectives.")
+    _validate_supported_objectives(objectives, available, eval_mode)
+    return {"mode": "multi", "objectives": objectives}
+
+
+def _validate_supported_objectives(objectives: Any, available: set[str], eval_mode: str) -> None:
+    """Raise if any selected objective is unavailable for the active eval mode."""
+    selected = list(objectives)
+    unsupported = [key for key in selected if key not in available]
+    if unsupported:
+        raise ValueError(
+            "Selected objectives do not support current eval_mode "
+            f"{eval_mode!r}: {', '.join(unsupported)}."
+        )

@@ -55,7 +55,13 @@
   "component_pool_path": "eagle/prompts/components.json",
   "initial_population_seeds": [],
   "gameplay_rate": 1.0,
-  "objective_operator": "round_legality_alignment",
+  "objective_config": {
+    "mode": "multi",
+    "objectives": [
+      "resource_advantage",
+      "strategy_alignment"
+    ]
+  },
   "gameplay_opponents": [],
   "llm_interval": [1],
   "save_trace_on_test": false,

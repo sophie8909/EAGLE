@@ -5,13 +5,13 @@ set -e
 ENV_NAME="eagle"
 PYTHON_VERSION="3.11"
 
-SETUP_MODE=false
+GUI_MODE=false
 INSTALL_MODE=false
 
 for arg in "$@"; do
   case $arg in
-    --setup)
-      SETUP_MODE=true
+    --gui)
+      GUI_MODE=true
       shift
       ;;
     --install)
@@ -24,7 +24,7 @@ done
 # -----------------------------
 # Fast path: no setup
 # -----------------------------
-if [ "$SETUP_MODE" = false ]; then
+if [ "$GUI_MODE" = true ]; then
   python -m eagle_gui.app
   exit 0
 fi

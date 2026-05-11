@@ -47,15 +47,6 @@ def experiment_config_from_payload(payload: dict[str, Any] | None) -> Experiment
     ).strip().lower()
     if "evaluator" not in ea_payload:
         ea_payload["evaluator"] = evaluator
-    if "objective_operator" not in ea_payload:
-        default_objectives = {
-            "round": "round_legality_alignment",
-            "gameplay": "microrts_resource_weighted",
-        }
-        ea_payload["objective_operator"] = default_objectives.get(
-            evaluator,
-            "round_legality_alignment",
-        )
     ea_config = load_config_payload(ea_payload)
     algorithm = str(data.get("algorithm") or ea_config.algorithm)
     opponents = list(data.get("opponents") or ea_config.gameplay_opponents or [])

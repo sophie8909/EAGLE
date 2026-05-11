@@ -73,12 +73,6 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
 
     if args.surrogate:
         config.surrogate = args.surrogate
-        config.evaluator = "gameplay"
-        config.objective_operator = (
-            "microrts_resource_weighted"
-            if args.surrogate == "round"
-            else "microrts_win_loss"
-        )
 
     if args.timeout_sec is not None:
         config.run_time_per_game_sec = max(1, int(args.timeout_sec))
@@ -94,7 +88,7 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     print(
         "[DEBUG] runtime_config "
         f"algorithm={config.algorithm} evaluator={config.evaluator} "
-        f"surrogate={config.surrogate} objective={config.objective_operator} "
+        f"surrogate={config.surrogate} objective_config={config.objective_config} "
         f"population={config.population_size} generations={config.num_generations} "
         f"gameplay_rate={config.gameplay_rate}",
         flush=True,
@@ -147,9 +141,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--surrogate",
-        choices=["round", "policy_agent", "java_agent"],
+        choices=["policy_agent", "java_agent"],
         default=None,
-        help="Select the MicroRTS surrogate mode and derived gameplay objective.",
+        help="Select the gameplay agent surrogate mode.",
     )
     parser.add_argument(
         "--timeout-sec",

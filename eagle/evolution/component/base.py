@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, ClassVar, List
 
 from eagle.config import EAConfig
+from eagle.objectives.aggregation import aggregate_fitness
 from eagle.operators.registry import get_operator
 from eagle.project import EAGLE_LOGS_DIR
 from eagle.utils.component_pool import ComponentPool
@@ -130,10 +131,7 @@ class EA:
                 f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
                 flush=True,
             )
-            evaluator.evaluate(
-                individual,
-                generation=-1,
-            )
+            self._evaluate_individual(evaluator, individual, generation=-1)
 
         print("[Initial Population] complete", flush=True)
         self.print_population_snapshot("initial population")
@@ -219,13 +217,26 @@ class EA:
                 f"{index + 1}/{len(offspring)} id={child.id}",
                 flush=True,
             )
-            evaluator.evaluate(child, generation=generation)
+            self._evaluate_individual(evaluator, child, generation=generation)
             print(
                 f"[Generation {generation + 1}] {evaluator_label} result "
                 f"id={child.id} fitness={child.fitness}",
                 flush=True,
             )
             self._update_mutation_component_feedback(child)
+
+    def _evaluate_individual(self, evaluator: Any, individual: Individual, *, generation: int | None) -> dict[str, Any]:
+        """Run the evaluator and aggregate raw metrics into individual fitness."""
+        eval_result = evaluator.evaluate(individual, generation=generation)
+        fitness = aggregate_fitness(eval_result, self.config)
+        individual.fitness = fitness
+        individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
+        individual.evaluation_mode = str(eval_result.get("evaluation_mode") or eval_result.get("eval_mode") or "")
+        if eval_result.get("eval_mode") == "round":
+            individual.last_round_evaluation = dict(eval_result)
+        elif eval_result.get("eval_mode") in {"full_game", "java_surrogate"}:
+            individual.last_gameplay_evaluation = dict(eval_result)
+        return eval_result
 
     def _new_run_state(self) -> Any:
         """Return algorithm-specific state carried across generations."""
@@ -444,12 +455,24 @@ class EA:
 
     def crossover(self, parent1: Individual, parent2: Individual) -> Individual:
         """Create one child and seed its fitness with the parents' average values."""
+        parent1, parent2 = self._crossover_seed_parents(parent1, parent2)
         return self.crossover_operator(
             self.component_pool,
             parent1,
             parent2,
             self.config,
         )
+
+    @staticmethod
+    def _crossover_seed_parents(parent1: Individual, parent2: Individual) -> tuple[Individual, Individual]:
+        """Adapt scalar GA fitness to the existing crossover seeding contract."""
+        if not isinstance(parent1.fitness, (int, float)) and not isinstance(parent2.fitness, (int, float)):
+            return parent1, parent2
+        left = parent1.copy()
+        right = parent2.copy()
+        left.fitness = [float(parent1.fitness)] if isinstance(parent1.fitness, (int, float)) else parent1.fitness
+        right.fitness = [float(parent2.fitness)] if isinstance(parent2.fitness, (int, float)) else parent2.fitness
+        return left, right
     
     def mutate(self, individual: Individual) -> Individual:
         """Apply one of the configured mutation strategies to a copied child."""

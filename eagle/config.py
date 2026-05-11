@@ -37,6 +37,7 @@ def _default_config_value(key: str) -> Any:
 @dataclass
 class EAConfig:
     """Flat configuration surface for all EA, evaluation, and surrogate settings."""
+    application: str = "microrts"
     algorithm: str = field(default_factory=lambda: str(_default_config_value("algorithm")))
     evaluator: str = field(default_factory=lambda: str(_default_config_value("evaluator")))
     population_size: int = field(default_factory=lambda: int(_default_config_value("population_size")))
@@ -84,7 +85,7 @@ class EAConfig:
 
     run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
     gameplay_rate: float = field(default_factory=lambda: float(_default_config_value("gameplay_rate")))
-    objective_operator: str = field(default_factory=lambda: str(_default_config_value("objective_operator")))
+    objective_config: dict[str, Any] = field(default_factory=lambda: dict(_default_config_value("objective_config")))
     gameplay_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("gameplay_opponents")))
     llm_interval: list[int] = field(default_factory=lambda: list(_default_config_value("llm_interval")))
     save_trace_on_test: bool = field(default_factory=lambda: bool(_default_config_value("save_trace_on_test")))
@@ -124,32 +125,34 @@ class EAConfig:
     def validate(self) -> None:
         """Validate config values that affect offspring generation behavior."""
         self._normalize_crossover()
+        self.application = str(self.application or "microrts").strip().lower()
         self.evaluator = str(self.evaluator or "round").strip().lower()
         if self.evaluator not in {"round", "gameplay"}:
             raise ValueError("evaluator must be either 'round' or 'gameplay'.")
         normalized_surrogate = str(self.surrogate).strip().lower().replace("-", "_").replace(" ", "_")
-        if normalized_surrogate not in {"round", "policy_agent", "java_agent"}:
-            raise ValueError(
-                f"Unsupported surrogate: {self.surrogate!r}. "
-                "Use 'round', 'policy_agent', or 'java_agent'."
-            )
-        self.surrogate = normalized_surrogate
-        if self.evaluator == "gameplay":
-            self.objective_operator = (
-                "microrts_resource_weighted"
-                if self.surrogate == "round"
-                else "microrts_win_loss"
-            )
-        self.objective_operator = str(self.objective_operator or "").strip()
-        from eagle.objectives.registry import list_objective_names
+        if self.evaluator == "round":
+            self.surrogate = ""
+        else:
+            if normalized_surrogate not in {"policy_agent", "java_agent"}:
+                raise ValueError(
+                    f"Unsupported gameplay surrogate: {self.surrogate!r}. "
+                    "Use 'policy_agent' or 'java_agent'."
+                )
+            self.surrogate = normalized_surrogate
+        algorithm_name = str(self.algorithm or "").strip().lower()
+        single_objective_algorithm = algorithm_name.endswith("_ga") or algorithm_name == "ga"
+        if self.objective_config == _default_config_value("objective_config"):
+            from eagle.objectives.registry import default_objective_config
 
-        objective_names = list_objective_names(self.evaluator)
-        if self.objective_operator not in objective_names:
-            raise ValueError(
-                f"objective_operator {self.objective_operator!r} is not valid for "
-                f"evaluator {self.evaluator!r}. Available objectives: "
-                f"{', '.join(objective_names) or '(none)'}."
-            )
+            self.objective_config = default_objective_config(self)
+        from eagle.objectives.registry import validate_objective_config
+
+        self.objective_config = validate_objective_config(self)
+        objective_mode = str(self.objective_config.get("mode", "")).strip().lower()
+        if single_objective_algorithm and objective_mode not in {"single", "weighted_mix"}:
+            raise ValueError("Single-objective algorithms require objective_config.mode single or weighted_mix.")
+        if not single_objective_algorithm and objective_mode != "multi":
+            raise ValueError("Multi-objective algorithms require objective_config.mode multi.")
 
         if self.reflection_max_components_to_rewrite < 1:
             raise ValueError("reflection_max_components_to_rewrite must be >= 1.")
@@ -236,7 +239,7 @@ class EAConfig:
             "non_evolving_prompt_components": list(self.non_evolving_prompt_components),
             "component_pool_path": self.component_pool_path,
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
-            "objective_operator": self.objective_operator,
+            "objective_config": deepcopy(self.objective_config),
             "gameplay_opponents": list(self.gameplay_opponents),
         }
 
@@ -352,6 +355,16 @@ class EAConfig:
 def load_config_payload(payload: dict[str, Any] | None) -> EAConfig:
     """Build one validated config from a JSON-like payload."""
     payload = dict(payload or {})
+    if "objective_config" not in payload and "objective_operator" in payload:
+        payload["objective_config"] = {
+            "mode": "single",
+            "objective": str(payload["objective_operator"]),
+        }
+    if "objective_config" not in payload and "objective" in payload:
+        payload["objective_config"] = {
+            "mode": "single",
+            "objective": str(payload["objective"]),
+        }
     config = EAConfig()
     valid_fields = set(config.__dataclass_fields__.keys())
 

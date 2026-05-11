@@ -1,31 +1,33 @@
-"""Common interfaces for replaceable fitness objectives."""
+"""Base interfaces and helpers for modular objectives."""
 
 from __future__ import annotations
 
-from typing import Any
+from abc import ABC, abstractmethod
 
 
-class BaseObjective:
-    """Base class for objective plugins."""
+class Objective(ABC):
+    """Base class for one named optimization objective."""
 
-    name: str = ""
-    calculation_label: str = ""
-    evaluator: str = ""
-    target_based: bool = True
-    objective_count: int = 1
+    key: str = ""
+    label: str = ""
+    direction: str = "max"
+    application: str = ""
+    eval_modes: set[str] = set()
+    required_metrics: set[str] = set()
 
-    def __init__(self, config: dict | None = None):
-        """Store optional objective-local configuration."""
-        self.config = dict(config or {})
+    def __init__(self) -> None:
+        """Validate static objective metadata when instantiated."""
+        if self.direction not in {"max", "min"}:
+            raise ValueError(f"Unsupported objective direction: {self.direction!r}.")
 
-    def __call__(self, *args: Any, **kwargs: Any) -> float:
-        """Calculate one objective value."""
-        raise NotImplementedError
+    @abstractmethod
+    def compute(self, eval_result: dict) -> float:
+        """Compute the raw objective value from one evaluator result."""
 
-    def objective_key(self, target: str | None, index: int) -> str:
-        """Return the stable objective key for one configured target."""
-        raise NotImplementedError
+    def optimization_value(self, eval_result: dict) -> float:
+        """Return the value stored in fitness for maximization algorithms."""
+        value = float(self.compute(eval_result))
+        return value if self.direction == "max" else -value
 
-    def describe(self, target: str | None, index: int, *, single_objective: bool) -> str:
-        """Return a human-readable calculation summary for the GUI."""
-        raise NotImplementedError
+
+BaseObjective = Objective

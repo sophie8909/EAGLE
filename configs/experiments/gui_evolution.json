@@ -61,6 +61,10 @@
   "initial_population_seeds": [],
   "run_time_per_game_sec": 500,
   "gameplay_rate": 0.25,
+  "objective_config": {
+    "mode": "single",
+    "objective": "resource_advantage"
+  },
   "gameplay_opponents": [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"
