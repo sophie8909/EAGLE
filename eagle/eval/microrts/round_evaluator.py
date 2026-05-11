@@ -16,6 +16,7 @@ from eagle.evolution.component.individual import Individual
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.log_parse import parse_dynamic_prompt_state
 from eagle.utils.move_validator import validate_llm_move_against_state
+from eagle.utils.profiler import build_base_record, write_jsonl
 
 from .prompt_history import PromptHistory
 from .state_generator import StateGenerator
@@ -56,6 +57,7 @@ class Evaluator:
         individual: Individual,
         *,
         generation: int | None = None,
+        profile_output_path: str | Path | None = None,
         **_: Any,
     ) -> dict[str, Any]:
         """Generate states, ask for actions, and return raw objective metrics."""
@@ -97,6 +99,15 @@ class Evaluator:
                     "eval_result": eval_result,
                     "history_decision": "use_existing_average",
                 }
+                self._write_round_profile(
+                    individual=individual,
+                    generation=generation,
+                    profile_output_path=profile_output_path,
+                    base_prompt=base_prompt,
+                    eval_result=eval_result,
+                    samples=[],
+                    history_decision="use_existing_average",
+                )
                 print(
                     "[DEBUG] round evaluate complete "
                     f"individual={individual.id} mode=history_avg",
@@ -119,6 +130,7 @@ class Evaluator:
         action_type_score_sum_total = 0.0
         theoretical_legality_max_total = 0.0
         resource_diff_sum = 0.0
+        round_samples: list[dict[str, Any]] = []
         n = self.config.one_eval_rounds
         for i in range(n):
             print(
@@ -176,6 +188,22 @@ class Evaluator:
             action_type_score_sum_total += float(legality_details.get("action_type_score_sum", 0.0))
             theoretical_legality_max_total += legality_max
             resource_diff_sum += self._round_resource_diff(state)
+            round_samples.append(
+                {
+                    "sample": i + 1,
+                    "dynamic_prompt": dynamic_prompt,
+                    "full_prompt": full_prompt,
+                    "raw_response": raw_response,
+                    "parsed_response": parsed_response,
+                    "format_valid": format_valid,
+                    "format_reason": format_reason,
+                    "legality": legality_details,
+                    "legality_score": legality_score,
+                    "strategy_alignment_score": alignment_score,
+                    "raw_legality_score": legality_raw,
+                    "raw_strategy_alignment_score": alignment_raw,
+                }
+            )
             print(
                 "[DEBUG] round sample result "
                 f"individual={individual.id} sample={i + 1}/{n} "
@@ -209,11 +237,12 @@ class Evaluator:
         individual.last_round_evaluation = {
             "generation": generation,
             "base_prompt": base_prompt,
-            "dynamic_prompt": dynamic_prompt,
-            "full_prompt": full_prompt,
-            "raw_response": raw_response,
-            "parsed_response": parsed_response,
-            "legality": legality_details,
+            "samples": round_samples,
+            "dynamic_prompt": round_samples[-1]["dynamic_prompt"] if round_samples else "",
+            "full_prompt": round_samples[-1]["full_prompt"] if round_samples else base_prompt,
+            "raw_response": round_samples[-1]["raw_response"] if round_samples else "",
+            "parsed_response": round_samples[-1]["parsed_response"] if round_samples else None,
+            "legality": round_samples[-1]["legality"] if round_samples else {},
             "raw_legality_score": legality_raw_sum / n,
             "raw_strategy_alignment_score": alignment_raw_sum / n,
             "latest_eval_result": latest_eval_result,
@@ -222,6 +251,16 @@ class Evaluator:
             "cached_sample_count": cached_sample_count,
             "fitness_sample_count": fitness_sample_count,
         }
+
+        self._write_round_profile(
+            individual=individual,
+            generation=generation,
+            profile_output_path=profile_output_path,
+            base_prompt=base_prompt,
+            eval_result=eval_result,
+            samples=round_samples,
+            history_decision="fresh_average" if cached_fitness is not None else "fresh",
+        )
 
         self.history.save(
             prompt=base_prompt,
@@ -241,6 +280,39 @@ class Evaluator:
             flush=True,
         )
         return eval_result
+
+    def _write_round_profile(
+        self,
+        *,
+        individual: Individual,
+        generation: int | None,
+        profile_output_path: str | Path | None,
+        base_prompt: str,
+        eval_result: dict[str, Any],
+        samples: list[dict[str, Any]],
+        history_decision: str,
+    ) -> None:
+        """Append one prompt/output profile row for the GUI prompt inspector."""
+        if profile_output_path is None:
+            return
+        record = build_base_record(
+            generation=generation,
+            individual_id=getattr(individual, "id", None),
+            record_type="evaluation",
+        )
+        record.update(
+            {
+                "evaluation_mode": eval_result.get("evaluation_mode", "round_llm"),
+                "eval_mode": "round",
+                "history_decision": history_decision,
+                "prompt": base_prompt,
+                "prompt_length": len(base_prompt),
+                "fitness": getattr(individual, "fitness", None),
+                "eval_result": dict(eval_result),
+                "round_samples": samples,
+            }
+        )
+        write_jsonl(record, profile_output_path)
 
     @staticmethod
     def _history_sample_count(cached_record: dict[str, Any] | None) -> int:

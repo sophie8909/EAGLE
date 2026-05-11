@@ -227,7 +227,12 @@ class EA:
 
     def _evaluate_individual(self, evaluator: Any, individual: Individual, *, generation: int | None) -> dict[str, Any]:
         """Run the evaluator and aggregate raw metrics into individual fitness."""
-        eval_result = evaluator.evaluate(individual, generation=generation)
+        eval_result = evaluator.evaluate(
+            individual,
+            generation=generation,
+            profile_output_path=self.get_profile_log_path(),
+            match_score_recorder=self.match_score_recorder,
+        )
         fitness = aggregate_fitness(eval_result, self.config)
         individual.fitness = fitness
         individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))

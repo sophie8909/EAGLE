@@ -536,6 +536,7 @@ class FullGameEvaluator:
             {
                 "evaluation_mode": "gameplay",
                 "opponent": opponent,
+                "prompt": prompt,
                 "prompt_length": len(prompt),
                 "winner": simulation_meta.get("winner"),
                 "timeout": simulation_meta.get("timeout", False),

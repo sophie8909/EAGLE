@@ -18,6 +18,7 @@ from typing import Any
 from eagle.eval.microrts.state_generator import StateGenerator
 from eagle.objectives.registry import get_objectives, list_objective_names, normalize_objective_key
 from eagle.operators.registry import list_operator_names
+from eagle.utils.log_parse import parse_log_file
 from eagle.utils.component_pool import ComponentPool
 
 
@@ -656,15 +657,25 @@ class EagleDesktopApp:
         tab.columnconfigure(1, weight=1)
         tab.rowconfigure(0, weight=1)
 
-        self.prompt_table = ttk.Treeview(tab, columns=("prompt_id",), show="headings")
-        self.prompt_table.heading("prompt_id", text="Prompt")
-        self.prompt_table.column("prompt_id", width=280, anchor="w")
+        self.prompt_table = ttk.Treeview(
+            tab,
+            columns=("generation", "individual", "mode", "opponent"),
+            show="headings",
+        )
+        self.prompt_table.heading("generation", text="Gen")
+        self.prompt_table.heading("individual", text="Individual")
+        self.prompt_table.heading("mode", text="Mode")
+        self.prompt_table.heading("opponent", text="Opponent")
+        self.prompt_table.column("generation", width=70, anchor="center")
+        self.prompt_table.column("individual", width=140, anchor="w")
+        self.prompt_table.column("mode", width=130, anchor="w")
+        self.prompt_table.column("opponent", width=220, anchor="w")
         self.prompt_table.grid(row=0, column=0, sticky="nsw", padx=(0, 8))
         self.prompt_table.bind("<<TreeviewSelect>>", self.show_selected_prompt)
 
         self.prompt_output = ScrolledText(tab, wrap="word")
         self.prompt_output.grid(row=0, column=1, sticky="nsew")
-        self.loaded_prompts: dict[str, str] = {}
+        self.loaded_prompts: dict[str, dict[str, Any]] = {}
 
     def _labeled_entry(self, parent: ttk.Frame, label: str, variable: StringVar, row: int, column: int) -> None:
         """Create a label and entry pair."""
@@ -2011,12 +2022,22 @@ class EagleDesktopApp:
         self._set_text(self.analysis_output, report.body)
 
     def refresh_prompts(self, run_dir: Path | None) -> None:
-        """Refresh prompt list from generation logs and run_state."""
+        """Refresh prompt list from the latest generation evaluation profiles."""
         previous = self.selected_prompt_id()
         self.prompt_table.delete(*self.prompt_table.get_children())
         self.loaded_prompts = load_prompts(run_dir) if run_dir else {}
-        for prompt_id in self.loaded_prompts:
-            self.prompt_table.insert("", "end", iid=prompt_id, values=(prompt_id,))
+        for prompt_id, record in self.loaded_prompts.items():
+            self.prompt_table.insert(
+                "",
+                "end",
+                iid=prompt_id,
+                values=(
+                    record.get("generation", ""),
+                    record.get("individual_id", ""),
+                    record.get("evaluation_mode", ""),
+                    record.get("opponent", ""),
+                ),
+            )
         if previous in self.loaded_prompts:
             self.prompt_table.selection_set(previous)
         elif self.loaded_prompts:
@@ -2024,9 +2045,13 @@ class EagleDesktopApp:
         self.show_selected_prompt()
 
     def show_selected_prompt(self, _event: object | None = None) -> None:
-        """Show the currently selected prompt text."""
+        """Show the selected evaluated individual's prompt and LLM outputs."""
         prompt_id = self.selected_prompt_id()
-        self._set_text(self.prompt_output, self.loaded_prompts.get(prompt_id or "", "No prompt text found."))
+        record = self.loaded_prompts.get(prompt_id or "")
+        if not record:
+            self._set_text(self.prompt_output, "No prompt text found.")
+            return
+        self._set_text(self.prompt_output, format_prompt_record(record))
 
     def selected_prompt_id(self) -> str | None:
         """Return the selected prompt ID."""
@@ -2047,7 +2072,9 @@ class EagleDesktopApp:
     def _schedule_refresh(self) -> None:
         """Periodically refresh process output and selected-run analysis."""
         self.refresh_process_log()
-        self.refresh_analysis(self.current_run_dir())
+        run_dir = self.current_run_dir()
+        self.refresh_analysis(run_dir)
+        self.refresh_prompts(run_dir)
         self.root.after(3000, self._schedule_refresh)
 
 
@@ -2512,22 +2539,230 @@ def load_checkpoint_rows(run_dir: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def load_prompts(run_dir: Path | None) -> dict[str, str]:
-    """Extract prompt text from generation logs and run state."""
+def load_prompts(run_dir: Path | None) -> dict[str, dict[str, Any]]:
+    """Extract latest-generation evaluated prompt records for the prompt inspector."""
     if run_dir is None:
         return {}
-    prompts: dict[str, str] = {}
-    for path in sorted(run_dir.glob("generation*.txt")):
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for index, block in enumerate(text.split("Prompt:\n")[1:], start=1):
-            prompt = block.split("\nIndividual(", 1)[0].split("\nPopulation", 1)[0].strip()
-            if prompt:
-                prompts[f"{path.stem}_{index}"] = prompt
-    for item in load_population(run_dir):
-        prompt = item.get("rendered_prompt")
-        if prompt:
-            prompts[str(item.get("id") or len(prompts))] = str(prompt)
-    return prompts
+    profile_records = latest_generation_profile_records(run_dir)
+    if profile_records:
+        return profile_records
+    checkpoint_records = latest_generation_checkpoint_prompt_records(run_dir)
+    if checkpoint_records:
+        return checkpoint_records
+    return generation_log_prompt_records(run_dir)
+
+
+def latest_generation_profile_records(run_dir: Path) -> dict[str, dict[str, Any]]:
+    """Return profile rows for the latest generation present in profiles.jsonl."""
+    rows = load_jsonl_rows(run_dir / "profiles.jsonl")
+    rows = [row for row in rows if row.get("record_type") == "evaluation"]
+    if not rows:
+        return {}
+    latest_generation = latest_value([row.get("generation") for row in rows])
+    latest_rows = [row for row in rows if row.get("generation") == latest_generation]
+    records: dict[str, dict[str, Any]] = {}
+    for index, row in enumerate(latest_rows, start=1):
+        prompt = str(row.get("prompt") or "")
+        if not prompt:
+            continue
+        record = dict(row)
+        record["prompt"] = prompt
+        record["llm_output"] = llm_output_from_profile_record(record)
+        record_id = prompt_record_id(record, index)
+        records[record_id] = record
+    return records
+
+
+def latest_generation_checkpoint_prompt_records(run_dir: Path) -> dict[str, dict[str, Any]]:
+    """Return prompt rows from the latest checkpoint generation when profiles are absent."""
+    rows = load_checkpoint_rows(run_dir)
+    if not rows:
+        population = load_population(run_dir)
+        rows = [{"generation": "state", "phase": "run_state", "individual": item} for item in population]
+    if not rows:
+        return {}
+    latest_generation = latest_value([row.get("generation") for row in rows])
+    latest_rows = [row for row in rows if row.get("generation") == latest_generation]
+    records: dict[str, dict[str, Any]] = {}
+    for index, row in enumerate(latest_rows, start=1):
+        item = dict(row.get("individual") or {})
+        prompt = str(item.get("rendered_prompt") or "")
+        if not prompt:
+            continue
+        evaluation = prompt_evaluation_from_individual(item)
+        record = {
+            "generation": row.get("generation"),
+            "phase": row.get("phase", ""),
+            "individual_id": item.get("id"),
+            "evaluation_mode": item.get("evaluation_mode") or evaluation.get("evaluation_mode", ""),
+            "opponent": "",
+            "prompt": prompt,
+            "llm_output": llm_output_from_evaluation(evaluation),
+            "fitness": item.get("fitness"),
+        }
+        records[prompt_record_id(record, index)] = record
+    return records
+
+
+def generation_log_prompt_records(run_dir: Path) -> dict[str, dict[str, Any]]:
+    """Fallback prompt extraction from human-readable generation logs."""
+    records: dict[str, dict[str, Any]] = {}
+    paths = sorted(run_dir.glob("generation*.txt"))
+    if not paths:
+        return records
+    latest_path = paths[-1]
+    text = latest_path.read_text(encoding="utf-8", errors="replace")
+    for index, block in enumerate(text.split("Prompt:\n")[1:], start=1):
+        prompt = block.split("\nIndividual(", 1)[0].split("\nPopulation", 1)[0].strip()
+        if not prompt:
+            continue
+        record = {
+            "generation": latest_path.stem,
+            "individual_id": f"prompt-{index}",
+            "evaluation_mode": "generation_log",
+            "opponent": "",
+            "prompt": prompt,
+            "llm_output": "No LLM output recorded in generation log.",
+        }
+        records[prompt_record_id(record, index)] = record
+    return records
+
+
+def load_jsonl_rows(path: Path) -> list[dict[str, Any]]:
+    """Load JSONL rows, skipping malformed lines."""
+    rows: list[dict[str, Any]] = []
+    if not path.exists():
+        return rows
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line.lstrip("\ufeff"))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
+
+
+def prompt_record_id(record: dict[str, Any], index: int) -> str:
+    """Build a stable prompt-table row id."""
+    parts = [
+        str(record.get("generation", "")),
+        str(record.get("individual_id", "")),
+        str(record.get("opponent", "")),
+        str(index),
+    ]
+    return "|".join(part.replace("|", "/") for part in parts)
+
+
+def prompt_evaluation_from_individual(item: dict[str, Any]) -> dict[str, Any]:
+    """Return the most detailed evaluation object stored on one checkpointed individual."""
+    for key in ("last_round_evaluation", "last_gameplay_evaluation", "last_surrogate_evaluation"):
+        value = item.get(key)
+        if isinstance(value, dict) and value:
+            return dict(value)
+    return {}
+
+
+def llm_output_from_profile_record(record: dict[str, Any]) -> str:
+    """Return all LLM outputs attached to one profile row."""
+    if isinstance(record.get("round_samples"), list):
+        return format_round_samples(record["round_samples"])
+    output = llm_output_from_log_path(record.get("log_path"))
+    if output:
+        return output
+    return "No LLM output recorded for this evaluation."
+
+
+def llm_output_from_evaluation(evaluation: dict[str, Any]) -> str:
+    """Return all LLM outputs attached to one checkpoint evaluation object."""
+    samples = evaluation.get("samples")
+    if isinstance(samples, list):
+        return format_round_samples(samples)
+    if evaluation.get("raw_response"):
+        return str(evaluation["raw_response"])
+    per_opponent = evaluation.get("per_opponent")
+    if isinstance(per_opponent, list):
+        sections = []
+        for item in per_opponent:
+            if not isinstance(item, dict):
+                continue
+            output = llm_output_from_log_path(item.get("log_path"))
+            if output:
+                sections.append(f"Opponent: {item.get('opponent', '')}\n{output}")
+        if sections:
+            return "\n\n".join(sections)
+    return "No LLM output recorded for this evaluation."
+
+
+def format_round_samples(samples: list[Any]) -> str:
+    """Format every round-sample LLM response."""
+    sections: list[str] = []
+    for index, sample in enumerate(samples, start=1):
+        if not isinstance(sample, dict):
+            continue
+        response = str(sample.get("raw_response") or "")
+        dynamic_prompt = str(sample.get("dynamic_prompt") or "")
+        sections.append(
+            f"Sample {sample.get('sample', index)}\n"
+            f"Dynamic prompt:\n{dynamic_prompt}\n\n"
+            f"LLM output:\n{response}"
+        )
+    return "\n\n".join(sections) if sections else "No fresh LLM samples; this evaluation reused history."
+
+
+def llm_output_from_log_path(path_value: Any) -> str:
+    """Parse every raw LLM response from one MicroRTS gameplay log."""
+    if not path_value:
+        return ""
+    path = resolve_runtime_log_path(str(path_value))
+    if not path.exists():
+        return f"Log file not found: {path_value}"
+    try:
+        parsed = parse_log_file(path)
+    except (OSError, ValueError) as exc:
+        return f"Could not parse log file {path}:\n{exc}"
+    sections: list[str] = []
+    for segment in parsed.get("segments", []):
+        if not isinstance(segment, dict):
+            continue
+        response = segment.get("raw_llm_response_text")
+        if not response:
+            continue
+        sections.append(
+            f"Turn {segment.get('current_time', segment.get('segment_index', ''))}\n{response}"
+        )
+    return "\n\n".join(sections)
+
+
+def resolve_runtime_log_path(path_text: str) -> Path:
+    """Resolve Windows, repo-relative, or WSL-mounted runtime log paths."""
+    normalized = path_text.replace("\\", "/")
+    drive_match = re.fullmatch(r"/mnt/([a-zA-Z])/(.*)", normalized)
+    if drive_match:
+        drive = drive_match.group(1).upper()
+        rest = drive_match.group(2).replace("/", "\\")
+        return Path(f"{drive}:\\{rest}")
+    return resolve_repo_path(path_text)
+
+
+def format_prompt_record(record: dict[str, Any]) -> str:
+    """Format one prompt record for the right-side inspector."""
+    header = [
+        f"Generation: {record.get('generation', '')}",
+        f"Individual: {record.get('individual_id', '')}",
+        f"Mode: {record.get('evaluation_mode', '')}",
+    ]
+    opponent = record.get("opponent")
+    if opponent:
+        header.append(f"Opponent: {opponent}")
+    fitness = record.get("fitness")
+    if fitness not in (None, ""):
+        header.append(f"Fitness: {fitness}")
+    prompt = str(record.get("prompt") or "No prompt text recorded.")
+    output = str(record.get("llm_output") or "No LLM output recorded for this evaluation.")
+    return "\n".join(header) + f"\n\nPrompt:\n{prompt}\n\nLLM output:\n{output}"
 
 
 def build_live_analysis_report(run_dir: Path) -> AnalysisReport:
