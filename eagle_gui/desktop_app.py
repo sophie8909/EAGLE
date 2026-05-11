@@ -858,14 +858,56 @@ class EagleDesktopApp:
 
     def browse_component(self) -> None:
         """Choose an initial component pool JSON file."""
+        initial_dir = self.component_file_dialog_dir()
         path = filedialog.askopenfilename(
-            initialdir=str(ROOT),
+            initialdir=str(initial_dir),
+            initialfile=self.default_component_filename(),
             title="Select component.json",
             filetypes=(("JSON files", "*.json"), ("All files", "*.*")),
         )
         if path:
             self.component_source_path.set(path)
             self.preview_component(Path(path))
+
+    def component_file_dialog_dir(self) -> Path:
+        """Return the directory that should open for component file dialogs."""
+        candidates: list[Path] = []
+        if self.loaded_component_path is not None:
+            candidates.append(self.loaded_component_path)
+        for value in (
+            self.component_source_path.get(),
+            self.component_runtime_path.get(),
+        ):
+            if value:
+                candidates.append(resolve_repo_path(value))
+        try:
+            payload = load_json_file(resolve_repo_path(self.base_config_path.get()))
+        except (OSError, ValueError):
+            payload = {}
+        configured = str(payload.get("component_pool_path", "")).strip()
+        if configured:
+            candidates.append(resolve_repo_path(configured))
+        candidates.append(ROOT / "eagle" / "prompts" / "components.json")
+
+        for candidate in candidates:
+            directory = candidate if candidate.is_dir() else candidate.parent
+            if directory.exists():
+                return directory
+        return ROOT
+
+    def default_component_filename(self) -> str:
+        """Return the filename shown by default in component save dialogs."""
+        if self.loaded_component_path is not None:
+            return self.loaded_component_path.name
+        for value in (
+            self.component_source_path.get(),
+            self.component_runtime_path.get(),
+        ):
+            if value:
+                name = Path(value).name
+                if name:
+                    return name
+        return "components.json"
 
     def import_component(self) -> None:
         """Copy the selected component JSON into configs/experiments and use it for the next run."""
@@ -1354,8 +1396,24 @@ class EagleDesktopApp:
         if not self.component_payload:
             messagebox.showerror("No component loaded", "Load a component JSON before saving.")
             return None
-        EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
-        destination = EXPERIMENT_DIR / f"components_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        directory = self.component_file_dialog_dir()
+        filename = simpledialog.askstring(
+            "Save components JSON",
+            "File name:",
+            initialvalue=self.default_component_filename(),
+            parent=self.root,
+        )
+        if filename is None:
+            return None
+        filename = filename.strip()
+        if not filename:
+            messagebox.showerror("Missing file name", "Enter a component JSON file name.")
+            return None
+        destination = directory / Path(filename).name
+        if destination.suffix.lower() != ".json":
+            destination = destination.with_suffix(".json")
+        if destination.exists() and not messagebox.askyesno("Overwrite component JSON", f"Overwrite existing file?\n{destination}"):
+            return None
         saved = self.write_component_payload(destination)
         if saved:
             self.loaded_component_path = saved
