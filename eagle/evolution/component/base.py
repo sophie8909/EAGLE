@@ -238,9 +238,17 @@ class EA:
         individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
         individual.evaluation_mode = str(eval_result.get("evaluation_mode") or eval_result.get("eval_mode") or "")
         if eval_result.get("eval_mode") == "round":
-            individual.last_round_evaluation = dict(eval_result)
+            existing = getattr(individual, "last_round_evaluation", None)
+            if isinstance(existing, dict) and existing:
+                existing.setdefault("eval_result", dict(eval_result))
+            else:
+                individual.last_round_evaluation = {"eval_result": dict(eval_result)}
         elif eval_result.get("eval_mode") in {"full_game", "java_surrogate"}:
-            individual.last_gameplay_evaluation = dict(eval_result)
+            existing = getattr(individual, "last_gameplay_evaluation", None)
+            if isinstance(existing, dict) and existing:
+                existing.setdefault("eval_result", dict(eval_result))
+            else:
+                individual.last_gameplay_evaluation = {"eval_result": dict(eval_result)}
         return eval_result
 
     def _new_run_state(self) -> Any:

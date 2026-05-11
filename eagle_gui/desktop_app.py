@@ -878,7 +878,9 @@ class EagleDesktopApp:
         )
         if path:
             self.component_source_path.set(path)
-            self.preview_component(Path(path))
+            selected_path = Path(path)
+            self.component_runtime_path.set(relative_or_absolute(selected_path))
+            self.preview_component(selected_path)
 
     def component_file_dialog_dir(self) -> Path:
         """Return the directory that should open for component file dialogs."""
@@ -960,6 +962,8 @@ class EagleDesktopApp:
             return
 
         self.loaded_component_path = path
+        self.component_source_path.set(str(path))
+        self.component_runtime_path.set(relative_or_absolute(path))
         self.component_payload = pool.to_component_dict()
         self.component_prompt_selection = {key: 0 for key in pool.component_keys}
         if not self.static_component_keys:
@@ -2009,7 +2013,7 @@ class EagleDesktopApp:
         if self.process and self.process.poll() is not None:
             self.status.set(f"Process exited with code {self.process.returncode}")
         if self.process_log_path:
-            self._set_text(self.process_output, read_tail(self.process_log_path, 18000))
+            self._set_text_preserve_scroll(self.process_output, read_tail(self.process_log_path, 18000))
 
     def refresh_analysis(self, run_dir: Path | None) -> None:
         """Refresh GA/MO analysis for one run."""
@@ -2068,6 +2072,20 @@ class EagleDesktopApp:
         """Replace a text widget's content."""
         widget.delete("1.0", "end")
         widget.insert("1.0", text)
+
+    def _set_text_preserve_scroll(self, widget: ScrolledText, text: str) -> None:
+        """Replace text without forcing an unrelated scroll jump."""
+        current = widget.get("1.0", "end-1c")
+        if current == text:
+            return
+        first, last = widget.yview()
+        was_at_bottom = last >= 0.995
+        widget.delete("1.0", "end")
+        widget.insert("1.0", text)
+        if was_at_bottom:
+            widget.see("end")
+        else:
+            widget.yview_moveto(first)
 
     def _schedule_refresh(self) -> None:
         """Periodically refresh process output and selected-run analysis."""
