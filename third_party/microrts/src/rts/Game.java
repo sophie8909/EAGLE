@@ -215,5 +215,18 @@ public class Game {
             trace.toxml(tracePath);
             System.out.println("[MicroRTS] saved trace: " + tracePath);
         }
+
+        System.out.flush();
+        System.err.flush();
+
+        if (w != null) {
+            w.setVisible(false);
+            w.dispose();
+        }
+
+        String forceExit = System.getenv("EAGLE_FORCE_EXIT_ON_GAME_OVER");
+        if ("1".equals(forceExit)) {
+            System.exit(0);
+        }
     }
 }
