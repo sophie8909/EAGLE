@@ -71,7 +71,7 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     if args.evaluator:
         config.evaluator = args.evaluator
 
-    if args.surrogate:
+    if args.surrogate and str(config.algorithm).strip().lower() == "ga_surrogate":
         config.surrogate = args.surrogate
 
     if args.timeout_sec is not None:
@@ -88,9 +88,12 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     print(
         "[DEBUG] runtime_config "
         f"algorithm={config.algorithm} evaluator={config.evaluator} "
-        f"surrogate={config.surrogate} objective_config={config.objective_config} "
+        f"surrogate={config.surrogate if config.algorithm == 'ga_surrogate' else '(ignored)'} "
+        f"objective_config={config.objective_config} "
         f"population={config.population_size} generations={config.num_generations} "
-        f"gameplay_rate={config.gameplay_rate}",
+        f"gameplay_refresh_interval={config.gameplay_refresh_interval} "
+        f"surrogate_top_ratio={config.surrogate_top_ratio} "
+        f"archive_parent_ratio={config.archive_parent_ratio}",
         flush=True,
     )
     return config
@@ -129,13 +132,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--algorithm",
-        choices=["round_ga", "round_nsga2"],
+        choices=["ga", "nsga2", "ga_surrogate"],
         default=None,
         help="Override the algorithm for this run.",
     )
     parser.add_argument(
         "--evaluator",
-        choices=["round", "gameplay"],
+        choices=["gameplay"],
         default=None,
         help="Override the evaluator selected by YAML experiment configs.",
     )
@@ -192,10 +195,12 @@ def main() -> None:
     else:
         experiment_config.ea = config
         experiment_config.opponents = opponent_list
+        experiment_config.algorithm = config.algorithm
+        experiment_config.evaluator = config.evaluator
     if args.evaluator:
         experiment_config.evaluator = args.evaluator
         config.evaluator = args.evaluator
-    if args.surrogate:
+    if args.surrogate and config.algorithm == "ga_surrogate":
         experiment_config.evaluator = config.evaluator
 
     print(

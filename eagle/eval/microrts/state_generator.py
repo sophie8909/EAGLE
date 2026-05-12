@@ -199,7 +199,7 @@ class StateGenerator:
             "kind": "Base Unit",
             "attrs": {
                 "resources": resources,
-                "current_action": self.rng.choice(["idling", "producing unit at (0,0)"]),
+                "current_action": self._maybe_train_or_produce(pos),
                 "HP": HP["Base Unit"],
             },
         }
@@ -210,7 +210,7 @@ class StateGenerator:
             "owner": owner,
             "kind": "Barracks Unit",
             "attrs": {
-                "current_action": self.rng.choice(["idling", "producing unit at (0,0)"]),
+                "current_action": self._maybe_train_or_produce(pos),
                 "HP": HP["Barracks Unit"],
             },
         }
@@ -230,10 +230,31 @@ class StateGenerator:
         }
 
     def _maybe_harvest(self) -> str:
-        return self.rng.choice(["idling", "harvesting from (0,0)", "moving to (0,0)"])
+        return self.rng.choice(
+            [
+                "idling",
+                "harvesting right from adjacent_cell=(0,0)",
+                "moving right toward next_cell=(0,0)",
+                "building Barracks at (0,0)",
+            ]
+        )
 
     def _maybe_move(self) -> str:
-        return self.rng.choice(["idling", "moving to (0,0)"])
+        return self.rng.choice(["idling", "moving right toward next_cell=(0,0)"])
+
+    def _maybe_train_or_produce(self, pos: tuple[int, int]) -> str:
+        x, y = pos
+        adjacent = (min(self.map_size - 1, x + 1), y)
+        return self.rng.choice(
+            [
+                "idling",
+                "training Worker",
+                f"producing Worker right at adjacent_cell={self._fmt_pos(adjacent)}",
+            ]
+        )
+
+    def _fmt_pos(self, pos: tuple[int, int]) -> str:
+        return f"({pos[0]},{pos[1]})"
 
     def _fmt_attrs(self, attrs: dict[str, Any]) -> str:
         out = []

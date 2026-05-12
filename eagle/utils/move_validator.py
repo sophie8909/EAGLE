@@ -49,6 +49,9 @@ def validate_llm_move_against_state(
     if action_type == "idle":
         return True, "idle"
 
+    if not unit_info.get("available_for_new_command", True):
+        return False, "unit_busy"
+
     if action_type == "train":
         if actual_type not in {"base", "barracks"}:
             return False, "train_on_non_structure"

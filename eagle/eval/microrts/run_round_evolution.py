@@ -10,8 +10,8 @@ from pathlib import Path
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from eagle.config import EAConfig, load_config_from_json, resolve_component_pool_path
-from eagle.eval.microrts.algorithms import MicroRTSRoundGA, MicroRTSRoundNSGA2
+from eagle.config import EAConfig, load_config_from_json, normalize_algorithm_name, resolve_component_pool_path
+from eagle.eval.microrts.algorithms import MicroRTSGA, MicroRTSNSGA2
 from eagle.project import EVOLUTION_CONFIGS_DIR
 from eagle.utils.component_pool import ComponentPool
 
@@ -64,9 +64,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--algorithm",
         type=str,
-        choices=["round_nsga2", "round_ga"],
+        choices=["ga", "nsga2"],
         default=None,
-        help="Evolution algorithm. Defaults to config value; fallback is round_nsga2.",
+        help="Evolution algorithm. Defaults to config value; fallback is nsga2.",
     )
     return parser
 
@@ -81,12 +81,12 @@ def _load_config(args: argparse.Namespace) -> EAConfig:
     else:
         config = EAConfig()
 
-    config.algorithm = str(args.algorithm or getattr(config, "algorithm", "round_nsga2")).lower()
-    config.evaluator = "round"
+    config.algorithm = normalize_algorithm_name(args.algorithm or getattr(config, "algorithm", "nsga2"), warn=True)
+    config.evaluator = "gameplay"
     config.objective_config = {
         "mode": "single",
         "objective": "resource_advantage",
-    } if config.algorithm == "round_ga" else {
+    } if config.algorithm == "ga" else {
         "mode": "multi",
         "objectives": ["resource_advantage", "strategy_alignment"],
     }
@@ -147,11 +147,11 @@ def main() -> None:
     config = _load_config(args)
     component_pool = _resolve_component_pool(config, args)
 
-    algorithm = str(getattr(config, "algorithm", "round_nsga2")).lower()
-    if algorithm == "round_ga":
-        evolver = MicroRTSRoundGA(config, component_pool, opponent_list=[])
-    elif algorithm == "round_nsga2":
-        evolver = MicroRTSRoundNSGA2(config, component_pool, opponent_list=[])
+    algorithm = normalize_algorithm_name(getattr(config, "algorithm", "nsga2"), warn=True)
+    if algorithm == "ga":
+        evolver = MicroRTSGA(config, component_pool, opponent_list=[])
+    elif algorithm == "nsga2":
+        evolver = MicroRTSNSGA2(config, component_pool, opponent_list=[])
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 

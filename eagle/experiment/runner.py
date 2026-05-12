@@ -71,7 +71,7 @@ def _ensure_default_registrations() -> None:
     """Import default component modules so decorators populate registries."""
     from .. import operators  # noqa: F401
     from ..evolution.component import algorithms as component_algorithms  # noqa: F401
-    from ..eval.microrts import algorithms as microrts_round_algorithms  # noqa: F401
+    from ..eval.microrts import algorithms as microrts_algorithms  # noqa: F401
 
 
 def default_component_pool() -> ComponentPool:

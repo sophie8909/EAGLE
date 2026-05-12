@@ -1,6 +1,6 @@
 {
-  "algorithm": "round_nsga2",
-  "evaluator": "round",
+  "algorithm": "nsga2",
+  "evaluator": "gameplay",
   "population_size": 20,
   "num_generations": 50,
   "convergence_generations": 10,

@@ -1,5 +1,5 @@
 {
-  "algorithm": "round_nsga2",
+  "algorithm": "nsga2",
   "population_size": 3,
   "num_generations": 50,
   "convergence_generations": 10,

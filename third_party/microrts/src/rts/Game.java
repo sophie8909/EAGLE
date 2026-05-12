@@ -147,6 +147,8 @@ public class Game {
         ai2.preGameAnalysis(gs, 0);
 
         boolean gameover = false;
+        String tracePath = System.getProperty("microrts.trace.path", "").trim();
+        Trace trace = tracePath.isEmpty() ? null : new Trace(utt);
 
         while (!gameover && gs.getTime() < maxCycles) {
             long timeToNextUpdate = System.currentTimeMillis() + updateInterval;
@@ -160,6 +162,12 @@ public class Game {
             // If an AI takes 5 seconds, the game just runs slower, not unfairly
             rts.PlayerAction pa1 = ai1.getAction(0, playerOneGameState);
             rts.PlayerAction pa2 = ai2.getAction(1, playerTwoGameState);
+            if (trace != null) {
+                TraceEntry entry = new TraceEntry(gs.getPhysicalGameState().cloneIncludingTerrain(), gs.getTime());
+                entry.addPlayerAction(pa1);
+                entry.addPlayerAction(pa2);
+                trace.addEntry(entry);
+            }
             gs.issueSafe(pa1);
             gs.issueSafe(pa2);
 
@@ -203,5 +211,9 @@ public class Game {
             System.out.println("Draw (no winner)");
         }
         System.out.println("===================");
+        if (trace != null) {
+            trace.toxml(tracePath);
+            System.out.println("[MicroRTS] saved trace: " + tracePath);
+        }
     }
 }

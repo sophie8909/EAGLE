@@ -1,6 +1,6 @@
 {
-  "algorithm": "round_ga",
-  "evaluator": "round",
+  "algorithm": "ga_surrogate",
+  "evaluator": "gameplay",
   "population_size": 10,
   "num_generations": 50,
   "convergence_generations": 10,
@@ -61,6 +61,9 @@
   "component_pool_path": "eagle/prompts/components.json",
   "initial_population_seeds": [],
   "gameplay_rate": 0.25,
+  "gameplay_refresh_interval": 5,
+  "surrogate_top_ratio": 0.3,
+  "archive_parent_ratio": 0.25,
   "objective_config": {
     "mode": "single",
     "objective": "resource_advantage"
@@ -88,6 +91,7 @@
     "resource": 1.0
   },
   "surrogate_version": "eaglePolicy",
+  "surrogate": "policy_agent",
   "surrogate_recent_match_window": 10,
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts",

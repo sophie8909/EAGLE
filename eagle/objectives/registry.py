@@ -141,14 +141,20 @@ def objective_eval_mode(config: Any, eval_result: dict | None = None) -> str:
     if explicit_eval_mode:
         return _normalize_name(explicit_eval_mode)
 
-    evaluator = _normalize_name(getattr(config, "evaluator", "round"))
-    if evaluator == "round":
-        return "round"
+    evaluator = _normalize_name(getattr(config, "evaluator", "gameplay"))
+    if evaluator != "gameplay":
+        return evaluator
 
     if eval_result:
         result_eval_mode = _normalize_name(eval_result.get("evaluation_mode", ""))
+        if result_eval_mode == "gameplay":
+            return "full_game"
         if result_eval_mode in {"policy_agent", "java_agent", "java_surrogate"}:
             return "java_surrogate"
+
+    algorithm = _normalize_name(getattr(config, "algorithm", "nsga2"))
+    if algorithm != "ga_surrogate":
+        return "full_game"
 
     surrogate = _normalize_name(getattr(config, "surrogate", "round"))
     if surrogate in {"policy_agent", "java_agent", "java_surrogate"}:
@@ -162,8 +168,8 @@ def default_objective_config(config: Any) -> dict[str, Any]:
     objectives = list_objective_names("microrts", eval_mode)
     if not objectives:
         return {"mode": "multi", "objectives": []}
-    algorithm = _normalize_name(getattr(config, "algorithm", "round_nsga2"))
-    single_objective = algorithm.endswith("_ga") or algorithm == "ga"
+    algorithm = _normalize_name(getattr(config, "algorithm", "nsga2"))
+    single_objective = algorithm in {"ga", "ga_surrogate"}
     if single_objective:
         return {"mode": "single", "objective": objectives[0]}
     return {"mode": "multi", "objectives": objectives[:2] if len(objectives) > 1 else objectives}

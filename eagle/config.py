@@ -13,6 +13,32 @@ from typing import Any
 from .project import DEFAULT_EVOLUTION_CONFIG_PATH, PROJECT_ROOT
 
 
+def normalize_algorithm_name(
+    algorithm: Any,
+    *,
+    evaluator: Any = None,
+    surrogate: Any = None,
+    warn: bool = False,
+) -> str:
+    """Normalize current algorithm names and explicitly handled legacy aliases."""
+    normalized = str(algorithm or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized == "round_nsga2":
+        if warn:
+            print("WARNING: round_nsga2 is deprecated; use nsga2. NSGA-II surrogate is removed.", flush=True)
+        return "nsga2"
+    if normalized == "round_ga":
+        evaluator_name = str(evaluator or "").strip().lower().replace("-", "_").replace(" ", "_")
+        surrogate_name = str(surrogate or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if evaluator_name == "round" or surrogate_name in {"policy_agent", "java_agent"}:
+            if warn:
+                print("WARNING: round_ga is deprecated; mapped to ga_surrogate.", flush=True)
+            return "ga_surrogate"
+        if warn:
+            print("WARNING: round_ga is deprecated; mapped to ga.", flush=True)
+        return "ga"
+    return normalized or "nsga2"
+
+
 @lru_cache(maxsize=1)
 def _default_evolution_payload() -> dict[str, Any]:
     """Load the canonical default EA settings from configs/evolution/default.json."""
@@ -85,6 +111,9 @@ class EAConfig:
 
     run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
     gameplay_rate: float = field(default_factory=lambda: float(_default_config_value("gameplay_rate")))
+    gameplay_refresh_interval: int = field(default_factory=lambda: int(_default_config_value("gameplay_refresh_interval")))
+    surrogate_top_ratio: float = field(default_factory=lambda: float(_default_config_value("surrogate_top_ratio")))
+    archive_parent_ratio: float = field(default_factory=lambda: float(_default_config_value("archive_parent_ratio")))
     objective_config: dict[str, Any] = field(default_factory=lambda: dict(_default_config_value("objective_config")))
     gameplay_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("gameplay_opponents")))
     llm_interval: list[int] = field(default_factory=lambda: list(_default_config_value("llm_interval")))
@@ -126,21 +155,26 @@ class EAConfig:
         """Validate config values that affect offspring generation behavior."""
         self._normalize_crossover()
         self.application = str(self.application or "microrts").strip().lower()
-        self.evaluator = str(self.evaluator or "round").strip().lower()
-        if self.evaluator not in {"round", "gameplay"}:
-            raise ValueError("evaluator must be either 'round' or 'gameplay'.")
+        self.algorithm = normalize_algorithm_name(
+            self.algorithm,
+            evaluator=getattr(self, "evaluator", None),
+            surrogate=getattr(self, "surrogate", None),
+            warn=True,
+        )
+        self.evaluator = str(self.evaluator or "gameplay").strip().lower()
+        if self.evaluator != "gameplay":
+            raise ValueError("evaluator must be 'gameplay'.")
         normalized_surrogate = str(self.surrogate).strip().lower().replace("-", "_").replace(" ", "_")
-        if self.evaluator == "round":
-            self.surrogate = ""
-        else:
-            if normalized_surrogate not in {"policy_agent", "java_agent"}:
-                raise ValueError(
-                    f"Unsupported gameplay surrogate: {self.surrogate!r}. "
-                    "Use 'policy_agent' or 'java_agent'."
-                )
-            self.surrogate = normalized_surrogate
+        if normalized_surrogate not in {"policy_agent", "java_agent"}:
+            raise ValueError(
+                f"Unsupported surrogate backend: {self.surrogate!r}. "
+                "Use 'policy_agent' or 'java_agent'."
+            )
+        self.surrogate = normalized_surrogate
         algorithm_name = str(self.algorithm or "").strip().lower()
-        single_objective_algorithm = algorithm_name.endswith("_ga") or algorithm_name == "ga"
+        if algorithm_name not in {"ga", "nsga2", "ga_surrogate"}:
+            raise ValueError("algorithm must be one of: ga, nsga2, ga_surrogate.")
+        single_objective_algorithm = algorithm_name in {"ga", "ga_surrogate"}
         self.parent_selection_operator = self._normalized_parent_selection_operator(
             self.parent_selection_operator,
             single_objective_algorithm,
@@ -158,12 +192,20 @@ class EAConfig:
         self.objective_config = validate_objective_config(self)
         objective_mode = str(self.objective_config.get("mode", "")).strip().lower()
         if single_objective_algorithm and objective_mode not in {"single", "weighted_mix"}:
+            from eagle.objectives.registry import default_objective_config
+
+            self.objective_config = default_objective_config(self)
+            objective_mode = str(self.objective_config.get("mode", "")).strip().lower()
+        if single_objective_algorithm and objective_mode not in {"single", "weighted_mix"}:
             raise ValueError("Single-objective algorithms require objective_config.mode single or weighted_mix.")
         if not single_objective_algorithm and objective_mode != "multi":
             raise ValueError("Multi-objective algorithms require objective_config.mode multi.")
 
         if self.reflection_max_components_to_rewrite < 1:
             raise ValueError("reflection_max_components_to_rewrite must be >= 1.")
+        self.gameplay_refresh_interval = max(1, int(self.gameplay_refresh_interval))
+        self.surrogate_top_ratio = min(1.0, max(0.0, float(self.surrogate_top_ratio)))
+        self.archive_parent_ratio = min(1.0, max(0.0, float(self.archive_parent_ratio)))
 
         if not isinstance(self.evolving_prompt_components, list):
             raise ValueError("evolving_prompt_components must be a list of component keys.")
@@ -249,6 +291,9 @@ class EAConfig:
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
             "objective_config": deepcopy(self.objective_config),
             "gameplay_opponents": list(self.gameplay_opponents),
+            "gameplay_refresh_interval": self.gameplay_refresh_interval,
+            "surrogate_top_ratio": self.surrogate_top_ratio,
+            "archive_parent_ratio": self.archive_parent_ratio,
         }
 
     def fitness_settings(self) -> dict[str, object]:
@@ -263,6 +308,9 @@ class EAConfig:
         """Return the subset of fields used by surrogate evaluators."""
         return {
             "surrogate": self.surrogate,
+            "gameplay_refresh_interval": self.gameplay_refresh_interval,
+            "surrogate_top_ratio": self.surrogate_top_ratio,
+            "archive_parent_ratio": self.archive_parent_ratio,
             "surrogate_recent_match_window": self.surrogate_recent_match_window,
             "surrogate_round_samples_per_match": self.surrogate_round_samples_per_match,
             "surrogate_log_dir": self.surrogate_log_dir,

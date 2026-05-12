@@ -69,6 +69,7 @@ FEATURE_LINE_RE = re.compile(
     r"(?:\s+(?P<stats>\{.*\}))?\s*$"
 )
 RESOURCE_VALUE_RE = re.compile(r"resources\s*=\s*(?P<value>\d+)", re.IGNORECASE)
+CURRENT_ACTION_RE = re.compile(r'current_action\s*=\s*"(?P<value>[^"]*)"', re.IGNORECASE)
 
 
 # =========================================================
@@ -503,6 +504,10 @@ def parse_dynamic_prompt_state(dynamic_prompt_text: str) -> dict[str, Any]:
             "team": team.lower(),
             "stats": stats,
         }
+        current_action_match = CURRENT_ACTION_RE.search(stats)
+        current_action = current_action_match.group("value") if current_action_match else "idling"
+        unit_info["current_action"] = current_action
+        unit_info["available_for_new_command"] = current_action.strip().lower() == "idling"
         if normalized_unit == "base":
             resource_match = RESOURCE_VALUE_RE.search(stats)
             unit_info["resources"] = int(resource_match.group("value")) if resource_match else 0

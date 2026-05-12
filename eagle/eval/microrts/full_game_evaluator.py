@@ -51,7 +51,11 @@ class FullGameEvaluator:
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         prompt = self._construct_prompt(individual)
         resolved_opponents = list(opponents) if opponents is not None else self._configured_gameplay_opponents()
-        surrogate = str(getattr(self.config, "surrogate", "round"))
+        surrogate = (
+            str(getattr(self.config, "surrogate", ""))
+            if str(getattr(self.config, "algorithm", "")).strip().lower() == "ga_surrogate"
+            else ""
+        )
         print(
             "[DEBUG] gameplay evaluate start "
             f"individual={individual.id} generation={generation} surrogate={surrogate} "
@@ -166,12 +170,23 @@ class FullGameEvaluator:
         resolved_opponents = list(opponents) if opponents is not None else self._configured_gameplay_opponents()
 
         per_opponent_scores: list[dict[str, object]] = []
+        surrogate = str(getattr(self.config, "surrogate", "policy_agent")).strip().lower()
         for opponent in resolved_opponents:
-            result = self.run_java_based_agent(
-                individual=individual,
-                prompt=prompt,
-                opponent=opponent,
-            )
+            if surrogate == "java_agent":
+                result = self.run_generated_java_agent(
+                    individual=individual,
+                    prompt=prompt,
+                    opponent=opponent,
+                )
+            else:
+                result = self.run_java_based_agent(
+                    individual=individual,
+                    prompt=prompt,
+                    opponent=opponent,
+                    ai1_class="ai.abstraction.eaglePolicy",
+                    log_prefix="run_eagle_policy",
+                    evaluation_mode="policy_agent",
+                )
             match_score = dict(result["match_score"])
             raw_score = self._raw_resource_advantage_score(match_score)
             per_opponent_scores.append(
@@ -185,7 +200,7 @@ class FullGameEvaluator:
         eval_result = self._aggregate_raw_eval_result({
             "eval_mode": "java_surrogate",
             "evaluation_mode": "surrogate",
-            "surrogate": "java_surrogate",
+            "surrogate": surrogate,
             "opponents": resolved_opponents,
             "scores": per_opponent_scores,
         })
@@ -213,22 +228,6 @@ class FullGameEvaluator:
         allow_history_reuse: bool,
     ) -> dict[str, Any]:
         """Dispatch one gameplay match according to the configured surrogate."""
-        surrogate = str(getattr(self.config, "surrogate", "round")).strip().lower()
-        if surrogate == "policy_agent":
-            return self.run_java_based_agent(
-                individual=individual,
-                prompt=prompt,
-                opponent=opponent,
-                ai1_class="ai.abstraction.eaglePolicy",
-                log_prefix="run_eagle_policy",
-                evaluation_mode="policy_agent",
-            )
-        if surrogate == "java_agent":
-            return self.run_generated_java_agent(
-                individual=individual,
-                prompt=prompt,
-                opponent=opponent,
-            )
         return self.run_prompt_based_agent(
             individual=individual,
             prompt=prompt,

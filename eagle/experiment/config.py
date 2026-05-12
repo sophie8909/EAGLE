@@ -7,14 +7,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..config import EAConfig, load_config_payload
+from ..config import EAConfig, load_config_payload, normalize_algorithm_name
 
 
 @dataclass
 class ExperimentConfig:
     """Config envelope for selecting framework components by name."""
 
-    algorithm: str = "round_nsga2"
+    algorithm: str = "nsga2"
     evaluator: str = "gameplay"
     ea: EAConfig = field(default_factory=EAConfig)
     evaluator_params: dict[str, Any] = field(default_factory=dict)
@@ -37,7 +37,12 @@ def experiment_config_from_payload(payload: dict[str, Any] | None) -> Experiment
     data = dict(payload or {})
     ea_payload = dict(data.get("ea") or {})
     if "algorithm" in data and "algorithm" not in ea_payload:
-        ea_payload["algorithm"] = str(data["algorithm"]).strip().lower().replace("-", "_")
+        ea_payload["algorithm"] = normalize_algorithm_name(
+            data["algorithm"],
+            evaluator=data.get("evaluator"),
+            surrogate=data.get("surrogate") or ea_payload.get("surrogate"),
+            warn=True,
+        )
     evaluator_value = data.get("evaluator")
     evaluator = str(
         (evaluator_value.get("name") if isinstance(evaluator_value, dict) else evaluator_value)
@@ -48,7 +53,12 @@ def experiment_config_from_payload(payload: dict[str, Any] | None) -> Experiment
     if "evaluator" not in ea_payload:
         ea_payload["evaluator"] = evaluator
     ea_config = load_config_payload(ea_payload)
-    algorithm = str(data.get("algorithm") or ea_config.algorithm)
+    algorithm = normalize_algorithm_name(
+        data.get("algorithm") or ea_config.algorithm,
+        evaluator=evaluator,
+        surrogate=getattr(ea_config, "surrogate", None),
+        warn=True,
+    )
     opponents = list(data.get("opponents") or ea_config.gameplay_opponents or [])
     evaluator_params = dict(data.get("evaluator_params") or {})
     if isinstance(evaluator_value, dict):

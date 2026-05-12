@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -10,12 +11,14 @@ import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from tkinter import BooleanVar, StringVar, Tk, filedialog, messagebox, simpledialog
+from tkinter import BooleanVar, PhotoImage, StringVar, Tk, filedialog, messagebox, simpledialog
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 from typing import Any
 
+from eagle.config import normalize_algorithm_name
 from eagle.eval.microrts.state_generator import StateGenerator
+from eagle.envs.microrts.runner import save_prompt, set_config_property
 from eagle.objectives.registry import get_objectives, list_objective_names, normalize_objective_key
 from eagle.operators.registry import list_operator_names
 from eagle.utils.log_parse import parse_log_file
@@ -26,25 +29,44 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = ROOT / "configs" / "evolution"
 EXPERIMENT_DIR = ROOT / "configs" / "experiments"
 LOG_DIR = ROOT / "logs" / "eagle"
+APP_ICON = ROOT / "assets" / "eagle.png"
 DEFAULT_CONFIG = CONFIG_DIR / "default.json"
 APPLICATION_CHOICES = ("microrts",)
-ALGORITHM_CHOICES = ("round_ga", "round_nsga2")
-EVALUATOR_CHOICES = ("round", "gameplay")
+ALGORITHM_CHOICES = ("ga", "nsga2", "ga_surrogate")
+EVALUATOR_CHOICES = ("gameplay",)
 SURROGATE_CHOICES = ("policy_agent", "java_agent")
-ROUND_ALGORITHMS = {"round_ga", "round_nsga2"}
-GA_ALGORITHMS = {"round_ga"}
+MICRORTS_OPPONENT_CHOICES = (
+    "ai.abstraction.HeavyRush",
+    "ai.abstraction.LightRush",
+    "ai.RandomBiasedAI",
+    "ai.RandomAI",
+    "ai.PassiveAI",
+)
+GA_ALGORITHMS = {"ga", "ga_surrogate"}
+SURROGATE_ALGORITHMS = {"ga_surrogate"}
 PARENT_SELECTION_BY_ALGORITHM = {
-    "round_ga": "ga_fitness_tournament",
-    "round_nsga2": "nsga2_tournament",
+    "ga": "ga_fitness_tournament",
+    "ga_surrogate": "ga_fitness_tournament",
+    "nsga2": "nsga2_tournament",
 }
 ENV_SELECTION_BY_ALGORITHM = {
-    "round_ga": "ga_fitness_elitism",
-    "round_nsga2": "nsga2_environmental",
+    "ga": "ga_fitness_elitism",
+    "ga_surrogate": "ga_fitness_elitism",
+    "nsga2": "nsga2_environmental",
 }
 SURROGATE_PATH_LINES = (
     "eaglePolicy.java: reusable fixed policy template -> ai.abstraction.eaglePolicy",
     "eagleJava.java: generated Java with the same policy behavior -> ai.abstraction.eagleJava",
 )
+
+# File layout guide:
+# - EagleDesktopApp.__init__ stores Tk variables and process handles.
+# - _build_* methods create visible tabs and side-panel controls.
+# - sync/refresh methods keep GUI selections consistent with available algorithm modes.
+# - component_* and training_example_* methods own component JSON editing.
+# - render/save prompt methods bridge component JSON, prompt preview, and Java prompt.txt.
+# - start/launch/refresh methods run Python EAGLE or visible Java MicroRTS processes.
+# - module-level helpers parse prompt text, load run artifacts, and format live analysis.
 
 
 class EagleDesktopApp:
@@ -56,11 +78,20 @@ class EagleDesktopApp:
         self.root.title("EAGLE Desktop")
         self.root.minsize(1020, 680)
         self.maximize_window()
+        self.window_icon = None
+        if APP_ICON.exists():
+            self.window_icon = PhotoImage(file=str(APP_ICON))
+            root.iconphoto(True, self.window_icon)
 
+        # Long-running child processes are tracked separately so experiment runs and
+        # visible Java MicroRTS runs can be started/stopped independently.
         self.process: subprocess.Popen | None = None
         self.process_log_path: Path | None = None
+        self.microrts_gui_process: subprocess.Popen | None = None
+        self.microrts_gui_log_path: Path | None = None
         self.generated_config_path: Path | None = None
 
+        # Component editor state owns the JSON payload and prompt-builder candidate selection.
         self.base_config_path = StringVar(value=str(DEFAULT_CONFIG))
         self.config_name = StringVar(value="gui_evolution")
         self.component_source_path = StringVar(value="")
@@ -84,22 +115,26 @@ class EagleDesktopApp:
         self.selected_run = StringVar(value="")
         self.status = StringVar(value="Ready")
 
+        # Algorithm settings mirror the JSON config schema produced by build_config_payload().
         self.application = StringVar(value="microrts")
-        self.algorithm = StringVar(value="round_nsga2")
+        self.algorithm = StringVar(value="nsga2")
         self.evaluator = StringVar(value="gameplay")
         self.surrogate = StringVar(value="policy_agent")
         self.population_size = StringVar(value="10")
         self.num_generations = StringVar(value="50")
         self.run_time_per_game_sec = StringVar(value="500")
         self.gameplay_rate = StringVar(value="0.25")
+        self.gameplay_refresh_interval = StringVar(value="5")
+        self.surrogate_top_ratio = StringVar(value="0.3")
+        self.archive_parent_ratio = StringVar(value="0.25")
         self.final_test_max_front = StringVar(value="1")
         self.selection_method = StringVar(value="random")
-        self.parent_selection_operator = StringVar(value=PARENT_SELECTION_BY_ALGORITHM["round_nsga2"])
+        self.parent_selection_operator = StringVar(value=PARENT_SELECTION_BY_ALGORITHM["nsga2"])
         self.tournament_size = StringVar(value="3")
         self.crossover = StringVar(value="uniform")
         self.crossover_operator = StringVar(value="uniform")
         self.mutation_operator = StringVar(value="mix")
-        self.env_selection_operator = StringVar(value=ENV_SELECTION_BY_ALGORITHM["round_nsga2"])
+        self.env_selection_operator = StringVar(value=ENV_SELECTION_BY_ALGORITHM["nsga2"])
         self.crossover_repair_enabled = BooleanVar(value=True)
         self.enable_reflection_operator = BooleanVar(value=True)
         self.skip_final_test = BooleanVar(value=False)
@@ -111,6 +146,17 @@ class EagleDesktopApp:
         self.multi_objectives: dict[str, BooleanVar] = {}
         self.objective_targets: list[str] = ["ai.abstraction.LightRush", "ai.abstraction.HeavyRush"]
         self.objective_detail = StringVar(value="Select an objective to inspect its calculation.")
+
+        # Java GUI settings are separate from experiment settings; they patch the vendored
+        # MicroRTS config only when launching a visible Java game.
+        self.microrts_gui_status = StringVar(value="Java GUI not running")
+        self.microrts_gui_opponent = StringVar(value="ai.abstraction.HeavyRush")
+        self.microrts_gui_map_dir = StringVar(value="8x8")
+        self.microrts_gui_map_file = StringVar(value="basesWorkers8x8.xml")
+        self.microrts_gui_update_interval = StringVar(value="50")
+        self.microrts_gui_llm_interval = StringVar(value="1")
+        self.microrts_gui_save_trace = BooleanVar(value=False)
+        self.selected_trace = StringVar(value="")
 
         self.operator_weights = {
             "crossover": StringVar(value="0.7"),
@@ -142,10 +188,15 @@ class EagleDesktopApp:
         self._build_run_tab()
         self._build_analysis_tab()
         self._build_prompt_tab()
+        self._build_java_gui_tab()
 
         self.load_base_config_into_form()
         self.refresh_runs()
         self._schedule_refresh()
+
+    # ------------------------------------------------------------------
+    # Window and tab construction
+    # ------------------------------------------------------------------
 
     def maximize_window(self) -> None:
         """Open the GUI maximized, with a portable geometry fallback."""
@@ -388,9 +439,33 @@ class EagleDesktopApp:
         self.game_seconds_frame.grid(row=3, column=2, columnspan=2, sticky="ew")
         self.game_seconds_frame.columnconfigure(1, weight=1)
         self._labeled_entry(self.game_seconds_frame, "Game seconds", self.run_time_per_game_sec, 0, 0)
-        self._labeled_entry(tab, "Gameplay rate", self.gameplay_rate, 4, 0)
-        self._labeled_entry(tab, "Final-test max front", self.final_test_max_front, 4, 2)
-        self._labeled_entry(tab, "Gameplay opponents", self.opponents_text, 5, 0)
+        self.surrogate_algorithm_frame = ttk.Frame(tab)
+        self.surrogate_algorithm_frame.grid(row=4, column=0, columnspan=4, sticky="ew")
+        self.surrogate_algorithm_frame.columnconfigure(1, weight=1)
+        self.surrogate_algorithm_frame.columnconfigure(3, weight=1)
+        self._labeled_entry(
+            self.surrogate_algorithm_frame,
+            "gameplay_refresh_interval",
+            self.gameplay_refresh_interval,
+            0,
+            0,
+        )
+        self._labeled_entry(
+            self.surrogate_algorithm_frame,
+            "surrogate_top_ratio",
+            self.surrogate_top_ratio,
+            0,
+            2,
+        )
+        self._labeled_entry(
+            self.surrogate_algorithm_frame,
+            "archive_parent_ratio",
+            self.archive_parent_ratio,
+            1,
+            0,
+        )
+        self._labeled_entry(tab, "Final-test max front", self.final_test_max_front, 5, 0)
+        self._labeled_entry(tab, "Gameplay opponents", self.opponents_text, 5, 2)
         ttk.Checkbutton(tab, text="Enable reflection operator", variable=self.enable_reflection_operator).grid(
             row=6, column=0, columnspan=2, sticky="w", pady=4
         )
@@ -685,6 +760,85 @@ class EagleDesktopApp:
         self.prompt_output.grid(row=0, column=1, sticky="nsew")
         self.loaded_prompts: dict[str, dict[str, Any]] = {}
 
+    def _build_java_gui_tab(self) -> None:
+        """Build controls for saving a prompt and launching the Java MicroRTS GUI."""
+        tab = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(tab, text="Java GUI")
+        tab.columnconfigure(0, weight=1)
+
+        settings = ttk.Frame(tab)
+        settings.grid(row=0, column=0, sticky="ew")
+        settings.columnconfigure(1, weight=1)
+        settings.columnconfigure(3, weight=1)
+        ttk.Label(settings, text="Opponent").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Combobox(
+            settings,
+            textvariable=self.microrts_gui_opponent,
+            values=MICRORTS_OPPONENT_CHOICES,
+            state="readonly",
+        ).grid(
+            row=0, column=1, sticky="ew", padx=(8, 16), pady=4
+        )
+        ttk.Label(settings, text="Map folder").grid(row=0, column=2, sticky="w", pady=4)
+        self.microrts_gui_map_dir_combo = ttk.Combobox(
+            settings,
+            textvariable=self.microrts_gui_map_dir,
+            values=microrts_map_dir_choices(),
+            state="readonly",
+        )
+        self.microrts_gui_map_dir_combo.grid(row=0, column=3, sticky="ew", padx=(8, 16), pady=4)
+        self.microrts_gui_map_dir_combo.bind("<<ComboboxSelected>>", self.on_microrts_map_dir_selected)
+        ttk.Label(settings, text="Map file").grid(row=1, column=0, sticky="w", pady=4)
+        self.microrts_gui_map_file_combo = ttk.Combobox(
+            settings,
+            textvariable=self.microrts_gui_map_file,
+            values=microrts_map_file_choices(self.microrts_gui_map_dir.get()),
+            state="readonly",
+        )
+        self.microrts_gui_map_file_combo.grid(row=1, column=1, sticky="ew", padx=(8, 16), pady=4)
+        ttk.Label(settings, text="Update interval").grid(row=1, column=2, sticky="w", pady=4)
+        ttk.Entry(settings, textvariable=self.microrts_gui_update_interval, width=8).grid(
+            row=1, column=3, sticky="w", padx=(8, 16), pady=4
+        )
+        ttk.Label(settings, text="LLM interval").grid(row=1, column=4, sticky="w", pady=4)
+        ttk.Entry(settings, textvariable=self.microrts_gui_llm_interval, width=8).grid(
+            row=1, column=5, sticky="w", padx=(8, 0), pady=4
+        )
+        ttk.Checkbutton(settings, text="Save trace", variable=self.microrts_gui_save_trace).grid(
+            row=1, column=6, sticky="w", padx=(8, 0), pady=4
+        )
+
+        actions = ttk.Frame(tab)
+        actions.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        ttk.Button(actions, text="Load current prompt", command=self.load_current_prompt_for_java_gui).pack(side="left")
+        ttk.Button(actions, text="Save prompt.txt", command=self.save_java_gui_prompt).pack(side="left", padx=(8, 0))
+        ttk.Button(actions, text="Save and launch MicroRTS", command=self.launch_microrts_java_gui).pack(
+            side="left", padx=(8, 0)
+        )
+        ttk.Button(actions, text="Stop MicroRTS", command=self.stop_microrts_java_gui).pack(side="left", padx=(8, 0))
+        ttk.Label(actions, textvariable=self.microrts_gui_status).pack(side="left", padx=(16, 0))
+
+        trace_actions = ttk.Frame(tab)
+        trace_actions.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        self.trace_selector = ttk.Combobox(trace_actions, textvariable=self.selected_trace, state="readonly", width=100)
+        self.trace_selector.pack(side="left", fill="x", expand=True)
+        ttk.Button(trace_actions, text="Refresh traces", command=self.refresh_trace_choices).pack(side="left", padx=(8, 0))
+        ttk.Button(trace_actions, text="Open trace", command=self.open_selected_trace).pack(side="left", padx=(8, 0))
+
+        self.java_gui_prompt_output = ScrolledText(tab, wrap="word", height=14)
+        self.java_gui_prompt_output.grid(row=3, column=0, sticky="nsew", pady=(8, 0))
+
+        ttk.Label(tab, text="Java MicroRTS log").grid(row=4, column=0, sticky="w", pady=(12, 0))
+        self.microrts_gui_output = ScrolledText(tab, wrap="word", height=10)
+        self.microrts_gui_output.grid(row=5, column=0, sticky="nsew", pady=(4, 0))
+        tab.rowconfigure(3, weight=1)
+        tab.rowconfigure(5, weight=1)
+        self.refresh_trace_choices()
+
+    # ------------------------------------------------------------------
+    # Small widget factories
+    # ------------------------------------------------------------------
+
     def _labeled_entry(self, parent: ttk.Frame, label: str, variable: StringVar, row: int, column: int) -> None:
         """Create a label and entry pair."""
         ttk.Label(parent, text=label).grid(row=row, column=column, sticky="w", pady=4)
@@ -707,15 +861,18 @@ class EagleDesktopApp:
         )
         return combo
 
+    # ------------------------------------------------------------------
+    # Algorithm, evaluator, surrogate, and objective synchronization
+    # ------------------------------------------------------------------
+
     def on_algorithm_selected(self, _event: object | None = None) -> None:
         """Keep algorithm-derived defaults in sync with the current flow."""
         self.sync_algorithm_operator_defaults()
-        if self.algorithm.get() in ROUND_ALGORITHMS:
-            self.final_test_max_front.set("0")
         if self.algorithm.get() in GA_ALGORITHMS and self.objective_mode.get() not in {"single", "weighted_mix"}:
             self.objective_mode.set("single")
         if self.algorithm.get() not in GA_ALGORITHMS:
             self.objective_mode.set("multi")
+        self.refresh_surrogate_visibility()
         self.ensure_objective_choice()
         self.refresh_objective_table()
 
@@ -731,6 +888,8 @@ class EagleDesktopApp:
 
     def on_surrogate_selected(self, _event: object | None = None) -> None:
         """Refresh surrogate-specific evaluator and objective choices."""
+        if self.algorithm.get() not in SURROGATE_ALGORITHMS:
+            return
         self.ensure_objective_choice()
         self.refresh_objective_table()
 
@@ -741,15 +900,21 @@ class EagleDesktopApp:
         self.refresh_objective_table()
 
     def refresh_surrogate_visibility(self) -> None:
-        """Show gameplay-only controls only when gameplay evaluation is active."""
+        """Show surrogate-only controls only for the ga_surrogate algorithm."""
         gameplay_active = self.evaluator.get() == "gameplay"
+        surrogate_active = self.algorithm.get() in SURROGATE_ALGORITHMS
         if hasattr(self, "surrogate_controls_frame"):
-            if gameplay_active:
+            if surrogate_active:
                 self.surrogate_controls_frame.grid()
                 if self.surrogate.get() not in SURROGATE_CHOICES:
                     self.surrogate.set(SURROGATE_CHOICES[0])
             else:
                 self.surrogate_controls_frame.grid_remove()
+        if hasattr(self, "surrogate_algorithm_frame"):
+            if surrogate_active:
+                self.surrogate_algorithm_frame.grid()
+            else:
+                self.surrogate_algorithm_frame.grid_remove()
         if hasattr(self, "game_seconds_frame"):
             if gameplay_active:
                 self.game_seconds_frame.grid()
@@ -763,9 +928,7 @@ class EagleDesktopApp:
 
     def current_eval_mode(self) -> str:
         """Return the objective-facing eval mode implied by GUI settings."""
-        if self.evaluator.get() == "round":
-            return "round"
-        return "java_surrogate"
+        return "full_game"
 
     def objective_choices(self) -> tuple[str, ...]:
         """Return registered objective names discovered from objective plugins."""
@@ -875,6 +1038,10 @@ class EagleDesktopApp:
         self.objective_detail.set(
             f"{objective.key}: {objective.label}; direction={objective.direction}; eval_mode={self.current_eval_mode()}."
         )
+
+    # ------------------------------------------------------------------
+    # Component JSON loading, editing, and candidate management
+    # ------------------------------------------------------------------
 
     def browse_base_config(self) -> None:
         """Choose a base evolution JSON config."""
@@ -1306,6 +1473,10 @@ class EagleDesktopApp:
         if metadata.get("identity_component_key") == key:
             metadata["identity_component_key"] = None
 
+    # ------------------------------------------------------------------
+    # Training-example move builder embedded in the component editor
+    # ------------------------------------------------------------------
+
     def generate_training_example_state(self) -> None:
         """Replace the selected training example INPUT block with a random state."""
         if not self.is_training_examples_category(self.component_category.get()):
@@ -1469,6 +1640,10 @@ class EagleDesktopApp:
         self.loaded_component_path = path
         self.component_status.set(f"Saved component JSON to {path}")
         return path
+
+    # ------------------------------------------------------------------
+    # Prompt rendering and Java GUI prompt export
+    # ------------------------------------------------------------------
 
     def use_component_in_prompt(self) -> None:
         """Use the selected candidate for the selected component in prompt rendering."""
@@ -1685,6 +1860,98 @@ class EagleDesktopApp:
         self.root.update_idletasks()
         self.component_status.set("Copied current prompt to clipboard")
 
+    def current_prompt_text(self) -> str:
+        """Return the prompt currently visible in the GUI."""
+        if hasattr(self, "component_prompt_output"):
+            prompt = self.component_prompt_output.get("1.0", "end").rstrip("\n")
+            if prompt.strip():
+                return prompt
+        prompt_id = self.selected_prompt_id() if hasattr(self, "prompt_table") else None
+        record = self.loaded_prompts.get(prompt_id or "") if hasattr(self, "loaded_prompts") else None
+        if record:
+            prompt = str(record.get("prompt") or "").rstrip("\n")
+            if prompt.strip():
+                return prompt
+        return ""
+
+    def load_current_prompt_for_java_gui(self) -> None:
+        """Copy the active rendered/evaluated prompt into the Java GUI prompt editor."""
+        prompt = self.current_prompt_text()
+        if not prompt.strip():
+            messagebox.showwarning("No prompt", "Render or select a prompt first.")
+            return
+        self._set_text(self.java_gui_prompt_output, prompt)
+        self.microrts_gui_status.set("Loaded current prompt")
+
+    def save_java_gui_prompt(self) -> Path | None:
+        """Save the Java GUI prompt to the MicroRTS runtime prompt file."""
+        prompt = self.java_gui_prompt_output.get("1.0", "end").rstrip("\n")
+        if not prompt.strip():
+            prompt = self.current_prompt_text()
+            if prompt.strip():
+                self._set_text(self.java_gui_prompt_output, prompt)
+        if not prompt.strip():
+            messagebox.showwarning("No prompt", "Render or select a prompt first.")
+            return None
+        try:
+            prompt_path = save_prompt(ROOT, prompt)
+        except OSError as exc:
+            messagebox.showerror("Could not save prompt", str(exc))
+            return None
+        self.microrts_gui_status.set(f"Saved {prompt_path}")
+        return prompt_path
+
+    def on_microrts_map_dir_selected(self, _event: object | None = None) -> None:
+        """Refresh the map-file dropdown after changing the map folder."""
+        files = microrts_map_file_choices(self.microrts_gui_map_dir.get())
+        if hasattr(self, "microrts_gui_map_file_combo"):
+            self.microrts_gui_map_file_combo.configure(values=files)
+        if files and self.microrts_gui_map_file.get() not in files:
+            self.microrts_gui_map_file.set(files[0])
+
+    def selected_microrts_map(self) -> str:
+        """Return the selected MicroRTS map path as `maps/AA/BB.xml`."""
+        map_dir = self.microrts_gui_map_dir.get().strip()
+        map_file = self.microrts_gui_map_file.get().strip()
+        if not map_dir or not map_file:
+            return ""
+        return f"maps/{map_dir}/{map_file}"
+
+    def refresh_trace_choices(self) -> None:
+        """Refresh saved MicroRTS trace choices."""
+        traces = [str(path) for path in microrts_trace_choices()]
+        if hasattr(self, "trace_selector"):
+            self.trace_selector.configure(values=traces)
+        if traces and self.selected_trace.get() not in traces:
+            self.selected_trace.set(traces[0])
+        elif not traces:
+            self.selected_trace.set("")
+
+    def open_selected_trace(self) -> None:
+        """Open a saved MicroRTS trace in the Java trace viewer."""
+        trace_text = self.selected_trace.get().strip()
+        if not trace_text:
+            messagebox.showwarning("No trace selected", "Select a saved trace first.")
+            return
+        trace_path = Path(trace_text)
+        if not trace_path.exists():
+            messagebox.showerror("Missing trace", f"Trace file does not exist:\n{trace_path}")
+            self.refresh_trace_choices()
+            return
+        try:
+            microrts_root = require_microrts_class("gui/TraceViewerMain.class")
+        except (OSError, RuntimeError, FileNotFoundError) as exc:
+            messagebox.showerror("Could not open trace", str(exc))
+            return
+        classpath = f"{microrts_root / 'lib' / '*'}{os.pathsep}{microrts_root / 'bin'}"
+        command = ["java", "-cp", classpath, "gui.TraceViewerMain", str(trace_path)]
+        try:
+            subprocess.Popen(command, cwd=microrts_root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
+        except OSError as exc:
+            messagebox.showerror("Could not open trace", str(exc))
+            return
+        self.microrts_gui_status.set(f"Opened trace {trace_path.name}")
+
     def include_identity_component_in_preview(self) -> bool:
         """Return whether preview rendering should include the identity component."""
         try:
@@ -1692,6 +1959,10 @@ class EagleDesktopApp:
         except (OSError, json.JSONDecodeError):
             return True
         return bool(payload.get("include_strategy_identity_in_prompt", True))
+
+    # ------------------------------------------------------------------
+    # Config load/save and experiment payload assembly
+    # ------------------------------------------------------------------
 
     def load_base_config_into_form(self) -> None:
         """Load config fields into the GUI form."""
@@ -1704,13 +1975,20 @@ class EagleDesktopApp:
         except json.JSONDecodeError as exc:
             messagebox.showerror("Invalid config JSON", str(exc))
             return
-        self.algorithm.set(str(payload.get("algorithm", self.algorithm.get())))
+        self.algorithm.set(
+            normalize_algorithm_name(
+                payload.get("algorithm", self.algorithm.get()),
+                evaluator=payload.get("evaluator"),
+                surrogate=payload.get("surrogate"),
+                warn=True,
+            )
+        )
         if self.algorithm.get() not in ALGORITHM_CHOICES:
-            self.algorithm.set("round_nsga2")
+            self.algorithm.set("nsga2")
         self.application.set(str(payload.get("application", self.application.get())))
         if self.application.get() not in APPLICATION_CHOICES:
             self.application.set("microrts")
-        self.evaluator.set(str(payload.get("evaluator", self.evaluator.get())))
+        self.evaluator.set("gameplay")
         if self.evaluator.get() not in EVALUATOR_CHOICES:
             self.evaluator.set("gameplay")
         self.surrogate.set(str(payload.get("surrogate", self.surrogate.get())).strip().lower().replace("-", "_").replace(" ", "_"))
@@ -1721,6 +1999,11 @@ class EagleDesktopApp:
         self.num_generations.set(str(payload.get("num_generations", self.num_generations.get())))
         self.run_time_per_game_sec.set(str(payload.get("run_time_per_game_sec", self.run_time_per_game_sec.get())))
         self.gameplay_rate.set(str(payload.get("gameplay_rate", self.gameplay_rate.get())))
+        self.gameplay_refresh_interval.set(
+            str(payload.get("gameplay_refresh_interval", self.gameplay_refresh_interval.get()))
+        )
+        self.surrogate_top_ratio.set(str(payload.get("surrogate_top_ratio", self.surrogate_top_ratio.get())))
+        self.archive_parent_ratio.set(str(payload.get("archive_parent_ratio", self.archive_parent_ratio.get())))
         self.load_objective_config(payload.get("objective_config", {}))
         self.apply_training_example_sample_config(
             payload.get(
@@ -1816,6 +2099,9 @@ class EagleDesktopApp:
             raise ValueError(f"Runtime component path does not exist: {component_path}")
         if self.application.get() != "microrts":
             raise ValueError(f"Unsupported application: {self.application.get()}.")
+        if self.algorithm.get() not in ALGORITHM_CHOICES:
+            raise ValueError(f"Unsupported algorithm: {self.algorithm.get()}.")
+        self.evaluator.set("gameplay")
         if self.evaluator.get() not in EVALUATOR_CHOICES:
             raise ValueError(f"Unsupported evaluator: {self.evaluator.get()}.")
         if self.surrogate.get() not in SURROGATE_CHOICES:
@@ -1834,7 +2120,6 @@ class EagleDesktopApp:
                 "algorithm": self.algorithm.get(),
                 "population_size": parse_int(self.population_size.get(), "population_size"),
                 "num_generations": parse_int(self.num_generations.get(), "num_generations"),
-                "gameplay_rate": parse_float(self.gameplay_rate.get(), "gameplay_rate"),
                 "objective_config": objective_config,
                 "training_example_sample_count": self.training_example_selection_value(),
                 "training_example_fixed_count": bool(self.training_example_fixed_count.get()),
@@ -1866,12 +2151,21 @@ class EagleDesktopApp:
                 "strategy_mutation": self.build_strategy_mutation_weights(),
             }
         )
-        if self.evaluator.get() == "gameplay":
+        if self.algorithm.get() == "ga_surrogate":
             payload["surrogate"] = self.surrogate.get()
+            payload["gameplay_refresh_interval"] = parse_int(
+                self.gameplay_refresh_interval.get(),
+                "gameplay_refresh_interval",
+            )
+            payload["surrogate_top_ratio"] = parse_float(self.surrogate_top_ratio.get(), "surrogate_top_ratio")
+            payload["archive_parent_ratio"] = parse_float(self.archive_parent_ratio.get(), "archive_parent_ratio")
             payload["run_time_per_game_sec"] = parse_int(self.run_time_per_game_sec.get(), "run_time_per_game_sec")
         else:
             payload.pop("surrogate", None)
-            payload.pop("run_time_per_game_sec", None)
+            payload.pop("gameplay_refresh_interval", None)
+            payload.pop("surrogate_top_ratio", None)
+            payload.pop("archive_parent_ratio", None)
+            payload["run_time_per_game_sec"] = parse_int(self.run_time_per_game_sec.get(), "run_time_per_game_sec")
         normalize_probability_map(payload["reproduction_operator_probs"], "reproduction_operator_probs")
         normalize_probability_map(payload["strategy_mutation"], "strategy_mutation")
         return payload
@@ -1958,6 +2252,10 @@ class EagleDesktopApp:
             safe = f"{safe}.json"
         return safe
 
+    # ------------------------------------------------------------------
+    # Process launch, stop, and live refresh
+    # ------------------------------------------------------------------
+
     def start_experiment(self) -> None:
         """Save current settings and start EAGLE in a background process."""
         if self.process and self.process.poll() is None:
@@ -1977,7 +2275,7 @@ class EagleDesktopApp:
             "--evaluator",
             self.evaluator.get(),
         ]
-        if self.evaluator.get() == "gameplay":
+        if self.algorithm.get() == "ga_surrogate":
             command.extend(["--surrogate", self.surrogate.get()])
         if self.quick_run.get():
             command.append("--quick-run")
@@ -1990,9 +2288,12 @@ class EagleDesktopApp:
         log_handle.write("Command: " + " ".join(command) + "\n\n")
         log_handle.write(
             "[DEBUG] gui start "
-            f"surrogate={self.surrogate.get() if self.evaluator.get() == 'gameplay' else '(none)'} "
+            f"surrogate={self.surrogate.get() if self.algorithm.get() == 'ga_surrogate' else '(ignored)'} "
             f"evaluator={self.evaluator.get()} "
-            f"objective_config={self.build_objective_config()} gameplay_rate={self.gameplay_rate.get()}\n\n"
+            f"objective_config={self.build_objective_config()} "
+            f"gameplay_refresh_interval={self.gameplay_refresh_interval.get()} "
+            f"surrogate_top_ratio={self.surrogate_top_ratio.get()} "
+            f"archive_parent_ratio={self.archive_parent_ratio.get()}\n\n"
         )
         log_handle.flush()
         self.process = subprocess.Popen(
@@ -2004,6 +2305,77 @@ class EagleDesktopApp:
         )
         self.status.set(f"Started PID {self.process.pid}")
         self.refresh_all_views()
+
+    def launch_microrts_java_gui(self) -> None:
+        """Save the current prompt and open a visible Java MicroRTS match."""
+        if self.microrts_gui_process and self.microrts_gui_process.poll() is None:
+            messagebox.showwarning("MicroRTS already running", "Stop the current Java GUI before starting another one.")
+            return
+        prompt_path = self.save_java_gui_prompt()
+        if prompt_path is None:
+            return
+        try:
+            update_interval = parse_int(self.microrts_gui_update_interval.get(), "update_interval")
+            llm_interval = parse_int(self.microrts_gui_llm_interval.get(), "llm_interval")
+            opponent = self.microrts_gui_opponent.get().strip()
+            map_location = self.selected_microrts_map()
+            if not opponent:
+                raise ValueError("Opponent is required.")
+            if not map_location:
+                raise ValueError("Map is required.")
+            microrts_root = require_microrts_class("rts/MicroRTS.class")
+            set_config_property(ROOT, "launch_mode", "STANDALONE")
+            set_config_property(ROOT, "headless", "false")
+            set_config_property(ROOT, "map_location", map_location)
+            set_config_property(ROOT, "AI1", "ai.eagle.EAGLE")
+            set_config_property(ROOT, "AI2", opponent)
+            set_config_property(ROOT, "update_interval", str(update_interval))
+            set_config_property(ROOT, "llm_interval", str(llm_interval))
+        except (OSError, RuntimeError, ValueError, FileNotFoundError) as exc:
+            messagebox.showerror("Could not launch MicroRTS", str(exc))
+            return
+
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        self.microrts_gui_log_path = LOG_DIR / f"microrts_gui_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        classpath = f"{microrts_root / 'lib' / '*'}{os.pathsep}{microrts_root / 'bin'}"
+        command = ["java", "-Deagle.debug=true", "-cp", classpath, "rts.MicroRTS"]
+        trace_path: Path | None = None
+        if self.microrts_gui_save_trace.get():
+            trace_dir = microrts_trace_dir()
+            trace_dir.mkdir(parents=True, exist_ok=True)
+            trace_path = trace_dir / f"gui_trace_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
+            command.insert(2, f"-Dmicrorts.trace.path={trace_path}")
+        log_handle = self.microrts_gui_log_path.open("w", encoding="utf-8", errors="replace")
+        log_handle.write("Command: " + " ".join(command) + "\n")
+        log_handle.write(f"Prompt: {prompt_path}\nOpponent: {opponent}\nMap: {map_location}\n")
+        if trace_path is not None:
+            log_handle.write(f"Trace: {trace_path}\n")
+            self.selected_trace.set(str(trace_path))
+            self.refresh_trace_choices()
+        log_handle.write("EAGLE debug: enabled\n\n")
+        log_handle.flush()
+        try:
+            self.microrts_gui_process = subprocess.Popen(
+                command,
+                cwd=microrts_root,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+        except OSError as exc:
+            log_handle.close()
+            messagebox.showerror("Could not launch MicroRTS", str(exc))
+            return
+        self.microrts_gui_status.set(f"MicroRTS PID {self.microrts_gui_process.pid}")
+        self.refresh_microrts_gui_log()
+
+    def stop_microrts_java_gui(self) -> None:
+        """Terminate the Java MicroRTS process launched from the GUI tab."""
+        if not self.microrts_gui_process or self.microrts_gui_process.poll() is not None:
+            self.microrts_gui_status.set("Java GUI not running")
+            return
+        self.microrts_gui_process.terminate()
+        self.microrts_gui_status.set(f"Stopping MicroRTS PID {self.microrts_gui_process.pid}")
 
     def stop_process(self) -> None:
         """Terminate the process launched from this GUI."""
@@ -2035,6 +2407,14 @@ class EagleDesktopApp:
             self.status.set(f"Process exited with code {self.process.returncode}")
         if self.process_log_path:
             self._set_text_preserve_scroll(self.process_output, read_tail(self.process_log_path, 18000))
+
+    def refresh_microrts_gui_log(self) -> None:
+        """Refresh the Java MicroRTS GUI log panel."""
+        if self.microrts_gui_process and self.microrts_gui_process.poll() is not None:
+            self.microrts_gui_status.set(f"MicroRTS exited with code {self.microrts_gui_process.returncode}")
+            self.refresh_trace_choices()
+        if self.microrts_gui_log_path and hasattr(self, "microrts_gui_output"):
+            self._set_text_preserve_scroll(self.microrts_gui_output, read_text_file(self.microrts_gui_log_path))
 
     def refresh_analysis(self, run_dir: Path | None) -> None:
         """Refresh GA/MO analysis for one run."""
@@ -2069,6 +2449,10 @@ class EagleDesktopApp:
             self.prompt_table.selection_set(next(iter(self.loaded_prompts)))
         self.show_selected_prompt()
 
+    # ------------------------------------------------------------------
+    # Current selection helpers and text widget helpers
+    # ------------------------------------------------------------------
+
     def show_selected_prompt(self, _event: object | None = None) -> None:
         """Show the selected evaluated individual's prompt and LLM outputs."""
         prompt_id = self.selected_prompt_id()
@@ -2099,23 +2483,32 @@ class EagleDesktopApp:
         current = widget.get("1.0", "end-1c")
         if current == text:
             return
-        first, last = widget.yview()
+        top_index = widget.index("@0,0")
+        _first, last = widget.yview()
         was_at_bottom = last >= 0.995
         widget.delete("1.0", "end")
         widget.insert("1.0", text)
         if was_at_bottom:
             widget.see("end")
         else:
-            widget.yview_moveto(first)
+            try:
+                widget.yview(top_index)
+            except Exception:
+                pass
 
     def _schedule_refresh(self) -> None:
         """Periodically refresh process output and selected-run analysis."""
         self.refresh_process_log()
+        self.refresh_microrts_gui_log()
         run_dir = self.current_run_dir()
         self.refresh_analysis(run_dir)
         self.refresh_prompts(run_dir)
         self.root.after(3000, self._schedule_refresh)
 
+
+# ----------------------------------------------------------------------
+# Live-analysis payload and primitive form parsers
+# ----------------------------------------------------------------------
 
 class AnalysisReport:
     """Live-analysis display payload."""
@@ -2183,6 +2576,10 @@ def parse_target_list(value: Any) -> list[str]:
         return [str(item).strip() for item in value if str(item).strip()]
     return []
 
+
+# ----------------------------------------------------------------------
+# Prompt feature parsing and training-example synthesis helpers
+# ----------------------------------------------------------------------
 
 def first_output_line_index(lines: list[str]) -> int | None:
     """Return the first OUTPUT/OUPUT marker line index."""
@@ -2510,6 +2907,10 @@ def move_json_lines(move: dict[str, Any]) -> list[str]:
     ]
 
 
+# ----------------------------------------------------------------------
+# Validation, path, and file helpers
+# ----------------------------------------------------------------------
+
 def normalize_probability_map(weights: dict[str, float], field_name: str) -> None:
     """Normalize one non-empty probability map in-place."""
     total = sum(weights.values())
@@ -2533,11 +2934,77 @@ def relative_or_absolute(path: Path) -> str:
         return str(path.resolve())
 
 
+def microrts_root_path() -> Path:
+    """Return the vendored MicroRTS root path for GUI file discovery."""
+    return ROOT / "third_party" / "microrts"
+
+
+def require_microrts_class(class_file: str) -> Path:
+    """Return MicroRTS root if a required WSL-built class is available."""
+    microrts_root = microrts_root_path()
+    required = microrts_root / "bin" / class_file
+    if not required.exists():
+        raise FileNotFoundError(
+            "Missing MicroRTS class file. Compile from WSL first:\n"
+            "cd /mnt/d/Project/EAGLE/third_party/microrts && "
+            "find src -name '*.java' | sort > /tmp/eagle_microrts_sources.txt && "
+            "javac -encoding UTF-8 -cp 'lib/gson-2.10.1.jar:lib/minimal-json-0.9.4.jar:lib/jdom.jar:"
+            "lib/junit-4.12.jar:lib/hamcrest-all-1.3.jar:lib/weka.jar' "
+            "-sourcepath src -d bin @/tmp/eagle_microrts_sources.txt"
+        )
+    return microrts_root
+
+
+def microrts_map_dir_choices() -> tuple[str, ...]:
+    """Return first-level MicroRTS map folders under `maps/`."""
+    maps_dir = microrts_root_path() / "maps"
+    if not maps_dir.exists():
+        return ("8x8",)
+    choices = sorted(path.name for path in maps_dir.iterdir() if path.is_dir())
+    return tuple(choices) if choices else ("8x8",)
+
+
+def microrts_map_file_choices(map_dir: str) -> tuple[str, ...]:
+    """Return XML map filenames inside one first-level map folder."""
+    normalized_dir = str(map_dir or "").strip()
+    maps_dir = microrts_root_path() / "maps" / normalized_dir
+    if not maps_dir.exists():
+        return ("basesWorkers8x8.xml",)
+    choices = sorted(path.name for path in maps_dir.glob("*.xml") if path.is_file())
+    return tuple(choices) if choices else ("basesWorkers8x8.xml",)
+
+
+def microrts_trace_dir() -> Path:
+    """Return the GUI-visible MicroRTS trace directory."""
+    return ROOT / "logs" / "microrts" / "traces"
+
+
+def microrts_trace_choices() -> list[Path]:
+    """Return saved trace files newest first."""
+    trace_dir = microrts_trace_dir()
+    if not trace_dir.exists():
+        return []
+    paths = [
+        path
+        for pattern in ("*.xml", "*.zip")
+        for path in trace_dir.glob(pattern)
+        if path.is_file()
+    ]
+    return sorted(paths, key=lambda path: path.stat().st_mtime, reverse=True)
+
+
 def read_tail(path: Path, limit: int) -> str:
     """Read a text file tail."""
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8", errors="replace")[-limit:]
+
+
+def read_text_file(path: Path) -> str:
+    """Read a whole text file for log panels that must stay browseable from the start."""
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
 
 
 def load_json_file(path: Path) -> dict[str, Any]:
@@ -2550,6 +3017,10 @@ def load_json_file(path: Path) -> dict[str, Any]:
         return {}
     return payload if isinstance(payload, dict) else {}
 
+
+# ----------------------------------------------------------------------
+# Run artifact and prompt-record loading
+# ----------------------------------------------------------------------
 
 def load_population(run_dir: Path) -> list[dict[str, Any]]:
     """Load the latest checkpointed population."""
@@ -2803,6 +3274,10 @@ def format_prompt_record(record: dict[str, Any]) -> str:
     output = str(record.get("llm_output") or "No LLM output recorded for this evaluation.")
     return "\n".join(header) + f"\n\nPrompt:\n{prompt}\n\nLLM output:\n{output}"
 
+
+# ----------------------------------------------------------------------
+# Live GA/MO analysis formatting
+# ----------------------------------------------------------------------
 
 def build_live_analysis_report(run_dir: Path) -> AnalysisReport:
     """Build a live GA/MO analysis report from existing run artifacts."""
