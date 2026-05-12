@@ -29,7 +29,7 @@ def normalize_algorithm_name(
     if normalized == "round_ga":
         evaluator_name = str(evaluator or "").strip().lower().replace("-", "_").replace(" ", "_")
         surrogate_name = str(surrogate or "").strip().lower().replace("-", "_").replace(" ", "_")
-        if evaluator_name == "round" or surrogate_name in {"policy_agent", "java_agent"}:
+        if evaluator_name == "round" or surrogate_name in {"round", "policy_agent", "java_agent"}:
             if warn:
                 print("WARNING: round_ga is deprecated; mapped to ga_surrogate.", flush=True)
             return "ga_surrogate"
@@ -165,10 +165,10 @@ class EAConfig:
         if self.evaluator != "gameplay":
             raise ValueError("evaluator must be 'gameplay'.")
         normalized_surrogate = str(self.surrogate).strip().lower().replace("-", "_").replace(" ", "_")
-        if normalized_surrogate not in {"policy_agent", "java_agent"}:
+        if normalized_surrogate not in {"round", "policy_agent", "java_agent"}:
             raise ValueError(
                 f"Unsupported surrogate backend: {self.surrogate!r}. "
-                "Use 'policy_agent' or 'java_agent'."
+                "Use 'round', 'policy_agent', or 'java_agent'."
             )
         self.surrogate = normalized_surrogate
         algorithm_name = str(self.algorithm or "").strip().lower()

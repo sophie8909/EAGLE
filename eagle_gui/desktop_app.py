@@ -34,7 +34,7 @@ DEFAULT_CONFIG = CONFIG_DIR / "default.json"
 APPLICATION_CHOICES = ("microrts",)
 ALGORITHM_CHOICES = ("ga", "nsga2", "ga_surrogate")
 EVALUATOR_CHOICES = ("gameplay",)
-SURROGATE_CHOICES = ("policy_agent", "java_agent")
+SURROGATE_CHOICES = ("round", "policy_agent", "java_agent")
 MICRORTS_OPPONENT_CHOICES = (
     "ai.abstraction.HeavyRush",
     "ai.abstraction.LightRush",
@@ -55,6 +55,7 @@ ENV_SELECTION_BY_ALGORITHM = {
     "nsga2": "nsga2_environmental",
 }
 SURROGATE_PATH_LINES = (
+    "round: fast local MicroRTS round evaluator used inside GA Surrogate",
     "eaglePolicy.java: reusable fixed policy template -> ai.abstraction.eaglePolicy",
     "eagleJava.java: generated Java with the same policy behavior -> ai.abstraction.eagleJava",
 )
@@ -119,7 +120,7 @@ class EagleDesktopApp:
         self.application = StringVar(value="microrts")
         self.algorithm = StringVar(value="nsga2")
         self.evaluator = StringVar(value="gameplay")
-        self.surrogate = StringVar(value="policy_agent")
+        self.surrogate = StringVar(value="round")
         self.population_size = StringVar(value="10")
         self.num_generations = StringVar(value="50")
         self.run_time_per_game_sec = StringVar(value="500")

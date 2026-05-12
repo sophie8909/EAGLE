@@ -144,7 +144,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--surrogate",
-        choices=["policy_agent", "java_agent"],
+        choices=["round", "policy_agent", "java_agent"],
         default=None,
         help="Select the gameplay agent surrogate mode.",
     )
@@ -163,6 +163,11 @@ def main() -> None:
         "--skip-final-test",
         action="store_true",
         help="Skip the final evaluation stage for NSGA-II variants.",
+    )
+    parser.add_argument(
+        "--final-test",
+        action="store_true",
+        help="Run the final evaluation stage when final_test_max_front allows it.",
     )
     parser.add_argument(
         "--opponent",

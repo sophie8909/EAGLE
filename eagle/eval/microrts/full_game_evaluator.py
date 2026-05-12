@@ -170,15 +170,27 @@ class FullGameEvaluator:
         resolved_opponents = list(opponents) if opponents is not None else self._configured_gameplay_opponents()
 
         per_opponent_scores: list[dict[str, object]] = []
-        surrogate = str(getattr(self.config, "surrogate", "policy_agent")).strip().lower()
+        surrogate = str(getattr(self.config, "surrogate", "round")).strip().lower()
         for opponent in resolved_opponents:
-            if surrogate == "java_agent":
+            if surrogate == "round":
+                print(
+                    "[GA Surrogate] using round surrogate "
+                    f"individual={getattr(individual, 'id', None)} generation={generation}",
+                    flush=True,
+                )
+                result = self.run_round_surrogate(
+                    individual=individual,
+                    prompt=prompt,
+                    opponent=opponent,
+                    generation=generation,
+                )
+            elif surrogate == "java_agent":
                 result = self.run_generated_java_agent(
                     individual=individual,
                     prompt=prompt,
                     opponent=opponent,
                 )
-            else:
+            elif surrogate == "policy_agent":
                 result = self.run_java_based_agent(
                     individual=individual,
                     prompt=prompt,
@@ -186,6 +198,11 @@ class FullGameEvaluator:
                     ai1_class="ai.abstraction.eaglePolicy",
                     log_prefix="run_eagle_policy",
                     evaluation_mode="policy_agent",
+                )
+            else:
+                raise ValueError(
+                    f"Unsupported surrogate={surrogate!r}. "
+                    "Expected one of: round, policy_agent, java_agent."
                 )
             match_score = dict(result["match_score"])
             raw_score = self._raw_resource_advantage_score(match_score)
@@ -215,6 +232,41 @@ class FullGameEvaluator:
         }
         eval_result["prompt"] = prompt
         return eval_result
+
+    def run_round_surrogate(
+        self,
+        *,
+        individual: Individual,
+        prompt: str | None = None,
+        opponent: str | None = None,
+        generation: int | None = None,
+    ) -> dict[str, Any]:
+        """Evaluate one candidate with the local round evaluator without launching Java."""
+        from .round_evaluator import Evaluator as RoundEvaluator
+
+        rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
+        round_evaluator = RoundEvaluator(
+            self.component_pool,
+            self.config,
+            runtime_logs_dir=self.runtime_logs_dir,
+        )
+        round_eval_result = round_evaluator.evaluate(individual, generation=generation)
+        round_score = self._round_surrogate_score(round_eval_result)
+        return {
+            "prompt": rendered_prompt,
+            "match_score": {
+                "win_score": 0.0,
+                "raw_resource_advantage_score": round_score,
+            },
+            "simulation_meta": {
+                "winner": None,
+                "timeout": False,
+                "round_eval_result": round_eval_result,
+                "opponent": opponent,
+            },
+            "stats": {},
+            "evaluation_mode": "round",
+        }
 
     def _run_gameplay_mode(
         self,
@@ -645,3 +697,20 @@ class FullGameEvaluator:
             return float(match_score.get("raw_resource_advantage_score", 0.0))
         except (TypeError, ValueError):
             return 0.0
+
+    @staticmethod
+    def _round_surrogate_score(round_eval_result: dict[str, Any] | None) -> float:
+        """Extract a scalar score from the round evaluator result."""
+        if not isinstance(round_eval_result, dict):
+            return 0.0
+        for key in ("fitness", "round_score", "raw_resource_advantage_score", "score"):
+            value = round_eval_result.get(key)
+            if isinstance(value, dict):
+                value = next(iter(value.values()), 0.0)
+            elif isinstance(value, (list, tuple)):
+                value = value[0] if value else 0.0
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+        return 0.0

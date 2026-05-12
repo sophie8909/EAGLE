@@ -233,6 +233,8 @@ class Evaluator:
             latest_eval_result,
             cached_sample_count,
         )
+        eval_result.setdefault("round_score", float(eval_result.get("resource_diff", 0.0)))
+        eval_result.setdefault("raw_resource_advantage_score", float(eval_result.get("resource_diff", 0.0)))
         fitness_sample_count = cached_sample_count + 1 if cached_fitness is not None else 1
         individual.last_round_evaluation = {
             "generation": generation,
