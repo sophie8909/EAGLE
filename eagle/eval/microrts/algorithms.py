@@ -141,6 +141,35 @@ class MicroRTSGASurrogate(GA):
         )
         self.gameplay_elite_archive = archive[: max(1, self.config.population_size)]
 
+    def _checkpoint_extra_state(self) -> dict:
+        """Persist gameplay archive membership for interrupted ga_surrogate runs."""
+        return {
+            "gameplay_elite_archive_ids": [
+                getattr(individual, "id", None)
+                for individual in self.gameplay_elite_archive
+                if getattr(individual, "id", None) is not None
+            ]
+        }
+
+    def _restore_checkpoint_extra_state(self, state: dict) -> None:
+        """Restore gameplay archive members from checkpointed population records."""
+        archive_ids = set(state.get("gameplay_elite_archive_ids") or [])
+        by_id = {getattr(individual, "id", None): individual for individual in self.population}
+        self.gameplay_elite_archive = [
+            by_id[individual_id]
+            for individual_id in archive_ids
+            if individual_id in by_id and hasattr(by_id[individual_id], "gameplay_score")
+        ]
+        if not self.gameplay_elite_archive:
+            self.gameplay_elite_archive = [
+                individual for individual in self.population if hasattr(individual, "gameplay_score")
+            ]
+        self.gameplay_elite_archive = sorted(
+            self.gameplay_elite_archive,
+            key=lambda item: float(getattr(item, "gameplay_score", float("-inf"))),
+            reverse=True,
+        )[: max(1, self.config.population_size)]
+
     def _log_generation(self, generation, offspring, generation_context, log_dir) -> None:
         best_individual = (
             max(self.gameplay_elite_archive, key=lambda ind: float(getattr(ind, "gameplay_score", float("-inf"))))

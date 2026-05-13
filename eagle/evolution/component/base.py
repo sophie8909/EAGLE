@@ -12,6 +12,7 @@ from eagle.config import EAConfig
 from eagle.objectives.aggregation import aggregate_fitness
 from eagle.operators.registry import get_operator
 from eagle.project import EAGLE_LOGS_DIR
+from eagle.utils.checkpoint import CheckpointManager, deserialize_individual, serialize_individual
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.match_score_recorder import MatchScoreRecorder
 
@@ -282,15 +283,102 @@ class EA:
         """Return True when the shared loop should stop early."""
         return False
 
+    def _checkpoint_extra_state(self) -> dict[str, Any]:
+        """Return subclass-specific JSON-safe state for resume."""
+        return {}
+
+    def _restore_checkpoint_extra_state(self, state: dict[str, Any]) -> None:
+        """Restore subclass-specific state after population has been loaded."""
+        return None
+
+    def _restore_run_state(self, run_state: Any) -> Any:
+        """Normalize checkpointed run state after JSON deserialization."""
+        return run_state
+
+    def _checkpoint_state(
+        self,
+        *,
+        generation: int,
+        phase: str,
+        run_state: Any,
+    ) -> dict[str, Any]:
+        """Build a restartable checkpoint payload for the current algorithm state."""
+        return {
+            "phase": phase,
+            "algorithm": getattr(self.config, "algorithm", type(self).__name__),
+            "generation": generation,
+            "population": [serialize_individual(individual) for individual in self.population],
+            "run_state": run_state,
+            "extra_state": self._checkpoint_extra_state(),
+        }
+
+    def _save_checkpoint(
+        self,
+        checkpoint_manager: CheckpointManager,
+        *,
+        generation: int,
+        phase: str,
+        run_state: Any,
+    ) -> None:
+        """Persist a restartable checkpoint and append the checkpoint event log."""
+        checkpoint_manager.save_state(
+            self._checkpoint_state(
+                generation=generation,
+                phase=phase,
+                run_state=run_state,
+            )
+        )
+
+    def _restore_checkpoint(self, checkpoint_manager: CheckpointManager) -> tuple[int, Any] | None:
+        """Restore population and return the next generation index plus run state."""
+        state = checkpoint_manager.load_state()
+        if not state or not state.get("population"):
+            return None
+
+        self.population = [
+            deserialize_individual(payload)
+            for payload in list(state.get("population") or [])
+            if isinstance(payload, dict)
+        ]
+        generation = int(state.get("generation", -1))
+        self.current_generation = generation
+        run_state = state.get("run_state")
+        if run_state is None:
+            run_state = self._new_run_state()
+        run_state = self._restore_run_state(run_state)
+        extra_state = state.get("extra_state")
+        if isinstance(extra_state, dict):
+            self._restore_checkpoint_extra_state(extra_state)
+        next_generation = max(0, generation + 1)
+        print(
+            "[Checkpoint] resumed "
+            f"generation={generation} next_generation={next_generation} "
+            f"population={len(self.population)}",
+            flush=True,
+        )
+        return next_generation, run_state
+
     def run(self) -> list:
         """Run the shared generational EA flow."""
         log_dir = self.create_log_folder()
+        checkpoint_manager = CheckpointManager(Path(log_dir))
         evaluator = self.build_evaluator()
 
-        self._evaluate_initial_population(evaluator)
-        run_state = self._new_run_state()
+        restored = self._restore_checkpoint(checkpoint_manager)
+        if restored is None:
+            self._evaluate_initial_population(evaluator)
+            run_state = self._new_run_state()
+            self._save_checkpoint(
+                checkpoint_manager,
+                generation=-1,
+                phase="initial_population_complete",
+                run_state=run_state,
+            )
+            start_generation = 0
+        else:
+            start_generation, run_state = restored
 
-        for generation in range(self.config.num_generations):
+        for generation in range(start_generation, self.config.num_generations):
             print(
                 f"[Generation {generation + 1}/{self.config.num_generations}] start",
                 flush=True,
@@ -318,7 +406,15 @@ class EA:
                 flush=True,
             )
 
-            if self._after_generation(generation, offspring, generation_context, run_state):
+            should_stop = self._after_generation(generation, offspring, generation_context, run_state)
+            self._save_checkpoint(
+                checkpoint_manager,
+                generation=generation,
+                phase="generation_complete",
+                run_state=run_state,
+            )
+
+            if should_stop:
                 print(
                     f"[Generation {generation + 1}] convergence reached; stopping early",
                     flush=True,

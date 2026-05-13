@@ -350,6 +350,23 @@ class NSGA2(EA):
         """Keep first-front signatures for convergence detection."""
         return []
 
+    def _restore_run_state(self, run_state) -> List[List[Tuple]]:
+        """Restore JSON-loaded convergence signatures to tuple-based records."""
+        restored: List[List[Tuple]] = []
+        if not isinstance(run_state, list):
+            return restored
+        for signature in run_state:
+            if not isinstance(signature, list):
+                continue
+            restored_signature: List[Tuple] = []
+            for item in signature:
+                if isinstance(item, list):
+                    restored_signature.append(tuple(item))
+                else:
+                    restored_signature.append(item)
+            restored.append(restored_signature)
+        return restored
+
     def _before_survivor_selection(
         self,
         generation: int,

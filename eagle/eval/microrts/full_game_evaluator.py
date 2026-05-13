@@ -95,6 +95,7 @@ class FullGameEvaluator:
                 evaluation_mode=evaluation_mode,
                 generation=generation,
                 stats=result.get("stats", {}),
+                simulation_meta=simulation_meta,
                 match_score_recorder=match_score_recorder,
             )
 
@@ -519,10 +520,13 @@ class FullGameEvaluator:
         evaluation_mode: str,
         generation: int | None,
         stats: dict[str, float],
+        simulation_meta: dict[str, Any],
         match_score_recorder: MatchScoreRecorder | None,
     ) -> None:
         if match_score_recorder is None:
             return
+        parsed_log = simulation_meta.get("parsed_log")
+        summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else {}
         match_score_recorder.record_match_score(
             {
                 "individual_id": getattr(individual, "id", None),
@@ -532,6 +536,13 @@ class FullGameEvaluator:
                 "opponent": opponent,
                 "evaluation_mode": evaluation_mode,
                 "evaluation_time": stats.get("total_eval_time", 0.0),
+                "log_path": simulation_meta.get("log_path"),
+                "winner": simulation_meta.get("winner"),
+                "timeout": simulation_meta.get("timeout"),
+                "llm_calls": simulation_meta.get("llm_calls"),
+                "game_time_sec": simulation_meta.get("game_time_sec"),
+                "parsed_summary": summary,
+                "stats": dict(stats),
                 "components": {
                     "game_rule": individual.game_rule,
                     "component_indices": dict(individual.component_indices),

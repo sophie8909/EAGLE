@@ -305,10 +305,13 @@ def run_java_agent_game(
             "game_time_sec": game_time_sec,
             "microrts_root": str(microrts_root),
         }
+        summary = parsed_log.get("summary", {})
         print(
             "[DEBUG] gameplay parsed "
             f"ai1={ai1_class} opponent={opponent} winner={metadata['winner']} "
-            f"timeout={metadata['timeout']} score={match_score}",
+            f"timeout={metadata['timeout']} score={match_score} "
+            f"resource_rows={len(summary.get('resource_history') or [])} "
+            f"feature_rows={len(summary.get('feature_history') or [])}",
             flush=True,
         )
         if record_trace:

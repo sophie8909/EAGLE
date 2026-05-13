@@ -18,6 +18,7 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
         "component_indices": dict(getattr(individual, "component_indices", {}) or {}),
         "fitness": list(individual.fitness) if isinstance(individual.fitness, (list, tuple)) else individual.fitness,
         "rendered_prompt": getattr(individual, "rendered_prompt", ""),
+        "evaluation_mode": getattr(individual, "evaluation_mode", None),
         "metadata": dict(getattr(individual, "metadata", {}) or {}),
     }
 
@@ -28,6 +29,10 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
     mutation_metadata = getattr(individual, "mutation_metadata", None)
     if isinstance(mutation_metadata, dict):
         payload["mutation_metadata"] = dict(mutation_metadata)
+
+    reflection_metadata = getattr(individual, "reflection_metadata", None)
+    if isinstance(reflection_metadata, dict):
+        payload["reflection_metadata"] = dict(reflection_metadata)
 
     last_round_evaluation = getattr(individual, "last_round_evaluation", None)
     if isinstance(last_round_evaluation, dict):
@@ -41,7 +46,7 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
     if isinstance(last_surrogate_evaluation, dict):
         payload["last_surrogate_evaluation"] = dict(last_surrogate_evaluation)
 
-    for attr in ("pareto_rank", "crowding_distance", "ea_llm_call_time"):
+    for attr in ("pareto_rank", "crowding_distance", "ea_llm_call_time", "surrogate_score", "gameplay_score"):
         if hasattr(individual, attr):
             payload[attr] = getattr(individual, attr)
 
@@ -60,6 +65,7 @@ def deserialize_individual(payload: dict[str, Any]) -> Individual:
     if fitness is not None:
         individual.fitness = fitness
     individual.rendered_prompt = str(payload.get("rendered_prompt") or "")
+    individual.evaluation_mode = payload.get("evaluation_mode")
     metadata = payload.get("metadata")
     if isinstance(metadata, dict):
         individual.metadata = dict(metadata)
@@ -71,6 +77,10 @@ def deserialize_individual(payload: dict[str, Any]) -> Individual:
     mutation_metadata = payload.get("mutation_metadata")
     if isinstance(mutation_metadata, dict):
         individual.mutation_metadata = dict(mutation_metadata)
+
+    reflection_metadata = payload.get("reflection_metadata")
+    if isinstance(reflection_metadata, dict):
+        individual.reflection_metadata = dict(reflection_metadata)
 
     last_round_evaluation = payload.get("last_round_evaluation")
     if isinstance(last_round_evaluation, dict):
@@ -84,7 +94,7 @@ def deserialize_individual(payload: dict[str, Any]) -> Individual:
     if isinstance(last_surrogate_evaluation, dict):
         individual.last_surrogate_evaluation = dict(last_surrogate_evaluation)
 
-    for attr in ("pareto_rank", "crowding_distance", "ea_llm_call_time"):
+    for attr in ("pareto_rank", "crowding_distance", "ea_llm_call_time", "surrogate_score", "gameplay_score"):
         if attr in payload:
             setattr(individual, attr, payload[attr])
 

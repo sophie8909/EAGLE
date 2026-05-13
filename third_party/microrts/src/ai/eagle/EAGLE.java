@@ -260,7 +260,10 @@ public class EAGLE extends AbstractionLayerAI {
         // Stage 3: render the prompt, call Ollama, and reject malformed JSON before touching game actions.
         System.out.println("[EAGLE] call LLM: " + lastCallReason);
         PromptContext promptContext = buildPromptContext(player, gs);
+        logStateSnapshot(player, gs);
+        logDynamicPrompt(promptContext.dynamicPrompt);
         String response = prompt(promptContext.finalPrompt);
+        logRawLLMResponse(response);
         JsonObject jsonResponse;
 
         try {
@@ -325,7 +328,42 @@ public class EAGLE extends AbstractionLayerAI {
 
         valueTimestampAndScore = PhysicalGameStatePanel.info1;
         debugBlock("dynamic_prompt", dynamicPrompt);
-        return new PromptContext(finalPrompt, featureArrayForCsv);
+        return new PromptContext(finalPrompt, dynamicPrompt, featureArrayForCsv);
+    }
+
+    private void logStateSnapshot(int player, GameState gs) {
+        Player p0 = gs.getPlayer(0);
+        Player p1 = gs.getPlayer(1);
+        int currentTime = gs.getTime();
+
+        System.out.println("gs.gameover() = " + gs.gameover());
+        System.out.println("Running getAction for Player: " + player);
+        System.out.println(
+                " current time " + currentTime
+                        + " p0 player " + p0.getID() + "(" + p0.getResources() + ")"
+                        + " p1 player " + p1.getID() + "(" + p1.getResources() + ")"
+        );
+        System.out.printf(
+                "T: %d, P0: %d (%s), P1: %d (%s)%n",
+                currentTime,
+                p0.getID(), p0.getResources(),
+                p1.getID(), p1.getResources()
+        );
+    }
+
+    private void logDynamicPrompt(String dynamicPrompt) {
+        System.out.println("=== Dynamic Prompt ===");
+        System.out.print(dynamicPrompt == null ? "" : dynamicPrompt);
+        if (dynamicPrompt == null || !dynamicPrompt.endsWith("\n")) {
+            System.out.println();
+        }
+        System.out.println("========================");
+    }
+
+    private void logRawLLMResponse(String response) {
+        System.out.println("=== Raw LLM Response ===");
+        System.out.println(response == null ? "" : response);
+        System.out.println("========================");
     }
 
     private String formatFeature(Unit unit, int player, Player p, GameState gs) {
@@ -974,10 +1012,12 @@ public class EAGLE extends AbstractionLayerAI {
 
     private static class PromptContext {
         final String finalPrompt;
+        final String dynamicPrompt;
         final String featureArrayForCsv;
 
-        PromptContext(String finalPrompt, String featureArrayForCsv) {
+        PromptContext(String finalPrompt, String dynamicPrompt, String featureArrayForCsv) {
             this.finalPrompt = finalPrompt;
+            this.dynamicPrompt = dynamicPrompt;
             this.featureArrayForCsv = featureArrayForCsv;
         }
     }

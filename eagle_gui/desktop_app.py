@@ -3086,9 +3086,13 @@ def load_prompts(run_dir: Path | None) -> dict[str, dict[str, Any]]:
     if run_dir is None:
         return {}
     profile_records = latest_generation_profile_records(run_dir)
+    checkpoint_records = latest_generation_checkpoint_prompt_records(run_dir)
+    if profile_records and checkpoint_records:
+        if records_latest_generation(checkpoint_records) > records_latest_generation(profile_records):
+            return checkpoint_records
+        return profile_records
     if profile_records:
         return profile_records
-    checkpoint_records = latest_generation_checkpoint_prompt_records(run_dir)
     if checkpoint_records:
         return checkpoint_records
     return generation_log_prompt_records(run_dir)
@@ -3100,7 +3104,7 @@ def latest_generation_profile_records(run_dir: Path) -> dict[str, dict[str, Any]
     rows = [row for row in rows if row.get("record_type") == "evaluation"]
     if not rows:
         return {}
-    latest_generation = latest_value([row.get("generation") for row in rows])
+    latest_generation = latest_generation_value([row.get("generation") for row in rows])
     latest_rows = [row for row in rows if row.get("generation") == latest_generation]
     records: dict[str, dict[str, Any]] = {}
     for index, row in enumerate(latest_rows, start=1):
@@ -3108,6 +3112,8 @@ def latest_generation_profile_records(run_dir: Path) -> dict[str, dict[str, Any]
         if not prompt:
             continue
         record = dict(row)
+        record["raw_generation"] = row.get("generation")
+        record["generation"] = display_generation(row.get("generation"))
         record["prompt"] = prompt
         record["llm_output"] = llm_output_from_profile_record(record)
         record_id = prompt_record_id(record, index)
@@ -3123,7 +3129,7 @@ def latest_generation_checkpoint_prompt_records(run_dir: Path) -> dict[str, dict
         rows = [{"generation": "state", "phase": "run_state", "individual": item} for item in population]
     if not rows:
         return {}
-    latest_generation = latest_value([row.get("generation") for row in rows])
+    latest_generation = latest_generation_value([row.get("generation") for row in rows])
     latest_rows = [row for row in rows if row.get("generation") == latest_generation]
     records: dict[str, dict[str, Any]] = {}
     for index, row in enumerate(latest_rows, start=1):
@@ -3133,7 +3139,8 @@ def latest_generation_checkpoint_prompt_records(run_dir: Path) -> dict[str, dict
             continue
         evaluation = prompt_evaluation_from_individual(item)
         record = {
-            "generation": row.get("generation"),
+            "raw_generation": row.get("generation"),
+            "generation": display_generation(row.get("generation")),
             "phase": row.get("phase", ""),
             "individual_id": item.get("id"),
             "evaluation_mode": item.get("evaluation_mode") or evaluation.get("evaluation_mode", ""),
@@ -3168,6 +3175,37 @@ def generation_log_prompt_records(run_dir: Path) -> dict[str, dict[str, Any]]:
         }
         records[prompt_record_id(record, index)] = record
     return records
+
+
+def latest_generation_value(values: list[Any]) -> Any:
+    """Return the newest internal generation value, treating numeric generations as ordered."""
+    numeric_values: list[int] = []
+    for value in values:
+        try:
+            numeric_values.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    if numeric_values:
+        return max(numeric_values)
+    return latest_value(values)
+
+
+def records_latest_generation(records: dict[str, dict[str, Any]]) -> int:
+    """Return the newest internal generation value from loaded prompt records."""
+    values = [record.get("raw_generation", record.get("generation")) for record in records.values()]
+    generation = latest_generation_value(values)
+    try:
+        return int(generation)
+    except (TypeError, ValueError):
+        return -1
+
+
+def display_generation(value: Any) -> Any:
+    """Convert an internal zero-based generation into the GUI's human-readable generation."""
+    try:
+        return int(value) + 1
+    except (TypeError, ValueError):
+        return value
 
 
 def load_jsonl_rows(path: Path) -> list[dict[str, Any]]:
