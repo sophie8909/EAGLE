@@ -757,8 +757,28 @@ class EagleDesktopApp:
         self.prompt_table.grid(row=0, column=0, sticky="nsw", padx=(0, 8))
         self.prompt_table.bind("<<TreeviewSelect>>", self.show_selected_prompt)
 
-        self.prompt_output = ScrolledText(tab, wrap="word")
-        self.prompt_output.grid(row=0, column=1, sticky="nsew")
+        inspector = ttk.Frame(tab)
+        inspector.grid(row=0, column=1, sticky="nsew")
+        inspector.columnconfigure(0, weight=1)
+        inspector.rowconfigure(1, weight=1)
+        inspector.rowconfigure(3, weight=1)
+
+        self.prompt_metadata = StringVar(value="No prompt selected")
+        ttk.Label(inspector, textvariable=self.prompt_metadata).grid(row=0, column=0, sticky="w")
+
+        prompt_frame = ttk.LabelFrame(inspector, text="Individual prompt", padding=6)
+        prompt_frame.grid(row=1, column=0, sticky="nsew", pady=(4, 8))
+        prompt_frame.columnconfigure(0, weight=1)
+        prompt_frame.rowconfigure(0, weight=1)
+        self.individual_prompt_output = ScrolledText(prompt_frame, wrap="word", height=14)
+        self.individual_prompt_output.grid(row=0, column=0, sticky="nsew")
+
+        response_frame = ttk.LabelFrame(inspector, text="LLM response", padding=6)
+        response_frame.grid(row=3, column=0, sticky="nsew")
+        response_frame.columnconfigure(0, weight=1)
+        response_frame.rowconfigure(0, weight=1)
+        self.llm_response_output = ScrolledText(response_frame, wrap="word", height=12)
+        self.llm_response_output.grid(row=0, column=0, sticky="nsew")
         self.loaded_prompts: dict[str, dict[str, Any]] = {}
 
     def _build_java_gui_tab(self) -> None:
@@ -2459,9 +2479,20 @@ class EagleDesktopApp:
         prompt_id = self.selected_prompt_id()
         record = self.loaded_prompts.get(prompt_id or "")
         if not record:
-            self._set_text(self.prompt_output, "No prompt text found.")
+            self.prompt_metadata.set("No prompt selected")
+            self._set_text(self.individual_prompt_output, "No prompt text found.")
+            self._set_text(self.llm_response_output, "No LLM response selected.")
             return
-        self._set_text(self.prompt_output, format_prompt_record(record))
+        metadata = prompt_record_metadata(record)
+        self.prompt_metadata.set(" | ".join(metadata))
+        self._set_text(
+            self.individual_prompt_output,
+            str(record.get("prompt") or "No prompt text recorded."),
+        )
+        self._set_text(
+            self.llm_response_output,
+            str(record.get("llm_output") or "No LLM response recorded for this evaluation."),
+        )
 
     def selected_prompt_id(self) -> str | None:
         """Return the selected prompt ID."""
@@ -3258,22 +3289,20 @@ def resolve_runtime_log_path(path_text: str) -> Path:
     return resolve_repo_path(path_text)
 
 
-def format_prompt_record(record: dict[str, Any]) -> str:
-    """Format one prompt record for the right-side inspector."""
-    header = [
+def prompt_record_metadata(record: dict[str, Any]) -> list[str]:
+    """Format one prompt record's metadata for the prompt inspector header."""
+    metadata = [
         f"Generation: {record.get('generation', '')}",
         f"Individual: {record.get('individual_id', '')}",
         f"Mode: {record.get('evaluation_mode', '')}",
     ]
     opponent = record.get("opponent")
     if opponent:
-        header.append(f"Opponent: {opponent}")
+        metadata.append(f"Opponent: {opponent}")
     fitness = record.get("fitness")
     if fitness not in (None, ""):
-        header.append(f"Fitness: {fitness}")
-    prompt = str(record.get("prompt") or "No prompt text recorded.")
-    output = str(record.get("llm_output") or "No LLM output recorded for this evaluation.")
-    return "\n".join(header) + f"\n\nPrompt:\n{prompt}\n\nLLM output:\n{output}"
+        metadata.append(f"Fitness: {fitness}")
+    return metadata
 
 
 # ----------------------------------------------------------------------
