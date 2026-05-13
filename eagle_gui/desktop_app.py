@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 from collections import Counter
@@ -29,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = ROOT / "configs" / "evolution"
 EXPERIMENT_DIR = ROOT / "configs" / "experiments"
 LOG_DIR = ROOT / "logs" / "eagle"
+GUI_PROCESS_STATE_PATH = LOG_DIR / "gui_process_state.json"
 APP_ICON = ROOT / "assets" / "eagle.png"
 DEFAULT_CONFIG = CONFIG_DIR / "default.json"
 APPLICATION_CHOICES = ("microrts",)
@@ -87,6 +89,7 @@ class EagleDesktopApp:
         # Long-running child processes are tracked separately so experiment runs and
         # visible Java MicroRTS runs can be started/stopped independently.
         self.process: subprocess.Popen | None = None
+        self.monitored_process_pid: int | None = None
         self.process_log_path: Path | None = None
         self.microrts_gui_process: subprocess.Popen | None = None
         self.microrts_gui_log_path: Path | None = None
@@ -192,7 +195,9 @@ class EagleDesktopApp:
         self._build_java_gui_tab()
 
         self.load_base_config_into_form()
+        self.root.protocol("WM_DELETE_WINDOW", self.close_window)
         self.refresh_runs()
+        self.attach_existing_process()
         self._schedule_refresh()
 
     # ------------------------------------------------------------------
@@ -2279,7 +2284,8 @@ class EagleDesktopApp:
 
     def start_experiment(self) -> None:
         """Save current settings and start EAGLE in a background process."""
-        if self.process and self.process.poll() is None:
+        self.attach_existing_process()
+        if self.is_monitored_process_running():
             messagebox.showwarning("Process already running", "Stop the current process before starting another run.")
             return
         config_path = self.save_generated_config()
@@ -2323,6 +2329,13 @@ class EagleDesktopApp:
             stdout=log_handle,
             stderr=subprocess.STDOUT,
             text=True,
+        )
+        self.monitored_process_pid = int(self.process.pid)
+        self.write_process_state(
+            pid=self.monitored_process_pid,
+            command=command,
+            log_path=self.process_log_path,
+            config_path=config_path,
         )
         self.status.set(f"Started PID {self.process.pid}")
         self.refresh_all_views()
@@ -2400,11 +2413,16 @@ class EagleDesktopApp:
 
     def stop_process(self) -> None:
         """Terminate the process launched from this GUI."""
-        if not self.process or self.process.poll() is not None:
+        if not self.is_monitored_process_running():
             self.status.set("No running process")
             return
-        self.process.terminate()
-        self.status.set(f"Stopping PID {self.process.pid}")
+        pid = self.monitored_process_pid or (self.process.pid if self.process else None)
+        if self.process and self.process.poll() is None:
+            self.process.terminate()
+        elif pid is not None:
+            terminate_process_tree(pid)
+        self.mark_process_state_stopped()
+        self.status.set(f"Stopping PID {pid}")
 
     def refresh_runs(self) -> None:
         """Refresh run-directory choices."""
@@ -2424,10 +2442,95 @@ class EagleDesktopApp:
 
     def refresh_process_log(self) -> None:
         """Refresh process output and status."""
+        self.attach_existing_process()
         if self.process and self.process.poll() is not None:
             self.status.set(f"Process exited with code {self.process.returncode}")
+            self.mark_process_state_exited(self.process.returncode)
+        elif self.monitored_process_pid is not None:
+            if process_is_running(self.monitored_process_pid):
+                self.status.set(f"Monitoring PID {self.monitored_process_pid}")
+            else:
+                self.status.set(f"Process PID {self.monitored_process_pid} is not running")
+                self.mark_process_state_exited(None)
         if self.process_log_path:
             self._set_text_preserve_scroll(self.process_output, read_tail(self.process_log_path, 18000))
+
+    def attach_existing_process(self) -> None:
+        """Attach the GUI monitor to the last run process state if it is still alive."""
+        if self.process and self.process.poll() is None:
+            self.monitored_process_pid = int(self.process.pid)
+            return
+        state = load_json_file(GUI_PROCESS_STATE_PATH)
+        pid = parse_optional_pid(state.get("pid"))
+        log_path = resolve_repo_path(str(state.get("log_path") or "")) if state.get("log_path") else None
+        if log_path is not None and log_path.exists():
+            self.process_log_path = log_path
+        if pid is None:
+            return
+        self.monitored_process_pid = pid
+        if process_is_running(pid):
+            self.status.set(f"Monitoring existing PID {pid}")
+        elif state.get("status") == "running":
+            self.status.set(f"Last PID {pid} is not running")
+            self.mark_process_state_exited(None)
+
+    def is_monitored_process_running(self) -> bool:
+        """Return whether the current or restored experiment process is alive."""
+        if self.process and self.process.poll() is None:
+            self.monitored_process_pid = int(self.process.pid)
+            return True
+        if self.monitored_process_pid is not None:
+            return process_is_running(self.monitored_process_pid)
+        return False
+
+    def write_process_state(
+        self,
+        *,
+        pid: int,
+        command: list[str],
+        log_path: Path,
+        config_path: Path,
+    ) -> None:
+        """Persist enough process metadata for a reopened GUI to resume monitoring."""
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        write_json_file(
+            GUI_PROCESS_STATE_PATH,
+            {
+                "status": "running",
+                "pid": int(pid),
+                "command": list(command),
+                "cwd": str(ROOT),
+                "log_path": str(log_path),
+                "config_path": str(config_path),
+                "started_at": datetime.now().isoformat(timespec="seconds"),
+            },
+        )
+
+    def mark_process_state_stopped(self) -> None:
+        """Mark the persisted process state as intentionally stopped."""
+        state = load_json_file(GUI_PROCESS_STATE_PATH)
+        if not state:
+            return
+        state["status"] = "stopping"
+        state["stopped_at"] = datetime.now().isoformat(timespec="seconds")
+        write_json_file(GUI_PROCESS_STATE_PATH, state)
+
+    def mark_process_state_exited(self, returncode: int | None) -> None:
+        """Mark the persisted process state as no longer running."""
+        state = load_json_file(GUI_PROCESS_STATE_PATH)
+        if not state:
+            return
+        state["status"] = "exited"
+        state["exited_at"] = datetime.now().isoformat(timespec="seconds")
+        if returncode is not None:
+            state["returncode"] = int(returncode)
+        write_json_file(GUI_PROCESS_STATE_PATH, state)
+
+    def close_window(self) -> None:
+        """Close the GUI without terminating a running experiment process."""
+        if self.is_monitored_process_running():
+            self.status.set(f"Detached from PID {self.monitored_process_pid}")
+        self.root.destroy()
 
     def refresh_microrts_gui_log(self) -> None:
         """Refresh the Java MicroRTS GUI log panel."""
@@ -3048,6 +3151,72 @@ def load_json_file(path: Path) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def write_json_file(path: Path, payload: dict[str, Any]) -> None:
+    """Write one JSON mapping with stable formatting."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def parse_optional_pid(value: Any) -> int | None:
+    """Parse a process id from persisted GUI process state."""
+    try:
+        pid = int(value)
+    except (TypeError, ValueError):
+        return None
+    return pid if pid > 0 else None
+
+
+def process_is_running(pid: int | None) -> bool:
+    """Return whether a process id is currently alive."""
+    if pid is None:
+        return False
+    if os.name == "nt":
+        import ctypes
+
+        process_query_limited_information = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(
+            process_query_limited_information,
+            False,
+            int(pid),
+        )
+        if handle:
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return True
+        return ctypes.windll.kernel32.GetLastError() == 5
+    try:
+        os.kill(int(pid), 0)
+    except ValueError:
+        return False
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def terminate_process_tree(pid: int) -> None:
+    """Terminate a restored process id, including children where the platform supports it."""
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if process_is_running(pid):
+            try:
+                os.kill(int(pid), signal.SIGTERM)
+            except OSError:
+                return
+        return
+    try:
+        os.kill(int(pid), signal.SIGTERM)
+    except OSError:
+        return
 
 
 # ----------------------------------------------------------------------
