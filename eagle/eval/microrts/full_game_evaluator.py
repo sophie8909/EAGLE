@@ -330,6 +330,7 @@ class FullGameEvaluator:
                 llm_interval=llm_interval,
                 test=test,
             )
+        stats["microrts_compile_time"] = float(simulation_meta.get("compile_time_sec", 0.0) or 0.0)
         summarize_total_eval_time(stats)
 
         if profile_output_path is not None:
@@ -396,6 +397,7 @@ class FullGameEvaluator:
                     test=test,
                     log_prefix=log_prefix,
                 )
+        stats["microrts_compile_time"] = float(simulation_meta.get("compile_time_sec", 0.0) or 0.0)
         summarize_total_eval_time(stats)
         return {
             "prompt": rendered_prompt,
@@ -621,6 +623,7 @@ class FullGameEvaluator:
             "game_play_time",
             "log_parse_time",
             "bookkeeping_time",
+            "microrts_compile_time",
             "total_eval_time",
         ):
             record[key] = stats.get(key, 0.0)

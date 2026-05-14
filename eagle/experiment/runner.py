@@ -63,7 +63,13 @@ def run_experiment(
     if run_final_test and hasattr(algorithm, "run_final_test"):
         max_front = getattr(experiment.ea, "final_test_max_front", None)
         if max_front is None or int(max_front) >= 1:
-            algorithm.run_final_test()
+            timing_recorder = getattr(algorithm, "timing_recorder", None)
+            if timing_recorder is None:
+                algorithm.run_final_test()
+            else:
+                with timing_recorder.phase("final_test"):
+                    algorithm.run_final_test()
+                timing_recorder.write_summary(status="complete")
     return result
 
 

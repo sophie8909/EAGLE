@@ -15,6 +15,7 @@ from eagle.project import EAGLE_LOGS_DIR
 from eagle.utils.checkpoint import CheckpointManager, deserialize_individual, serialize_individual
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.match_score_recorder import MatchScoreRecorder
+from eagle.utils.profiler import RunTimingRecorder
 
 from .individual import Individual
 
@@ -45,6 +46,7 @@ class EA:
         self.population = self.initialize_population()
         self.current_log_dir: Path | None = None
         self.match_score_recorder: MatchScoreRecorder | None = None
+        self.timing_recorder: RunTimingRecorder | None = None
         self.current_generation = 0
         self.mutation_operator = get_operator(
             "mutation",
@@ -132,7 +134,15 @@ class EA:
                 f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
                 flush=True,
             )
-            self._evaluate_individual(evaluator, individual, generation=-1)
+            if self.timing_recorder is None:
+                self._evaluate_individual(evaluator, individual, generation=-1)
+            else:
+                with self.timing_recorder.phase(
+                    "evaluate_individual",
+                    generation=-1,
+                    metadata={"individual_id": getattr(individual, "id", None), "stage": "initial"},
+                ):
+                    self._evaluate_individual(evaluator, individual, generation=-1)
 
         print("[Initial Population] complete", flush=True)
         self.print_population_snapshot("initial population")
@@ -218,7 +228,15 @@ class EA:
                 f"{index + 1}/{len(offspring)} id={child.id}",
                 flush=True,
             )
-            self._evaluate_individual(evaluator, child, generation=generation)
+            if self.timing_recorder is None:
+                self._evaluate_individual(evaluator, child, generation=generation)
+            else:
+                with self.timing_recorder.phase(
+                    "evaluate_individual",
+                    generation=generation,
+                    metadata={"individual_id": getattr(child, "id", None), "stage": "offspring"},
+                ):
+                    self._evaluate_individual(evaluator, child, generation=generation)
             print(
                 f"[Generation {generation + 1}] {evaluator_label} result "
                 f"id={child.id} fitness={child.fitness}",
@@ -362,64 +380,81 @@ class EA:
         """Run the shared generational EA flow."""
         log_dir = self.create_log_folder()
         checkpoint_manager = CheckpointManager(Path(log_dir))
-        evaluator = self.build_evaluator()
+        assert self.timing_recorder is not None
+        with self.timing_recorder.phase("build_evaluator"):
+            evaluator = self.build_evaluator()
 
-        restored = self._restore_checkpoint(checkpoint_manager)
+        with self.timing_recorder.phase("restore_checkpoint"):
+            restored = self._restore_checkpoint(checkpoint_manager)
         if restored is None:
-            self._evaluate_initial_population(evaluator)
+            with self.timing_recorder.phase("evaluate_initial_population", generation=-1):
+                self._evaluate_initial_population(evaluator)
             run_state = self._new_run_state()
-            self._save_checkpoint(
-                checkpoint_manager,
-                generation=-1,
-                phase="initial_population_complete",
-                run_state=run_state,
-            )
+            with self.timing_recorder.phase("save_checkpoint", generation=-1):
+                self._save_checkpoint(
+                    checkpoint_manager,
+                    generation=-1,
+                    phase="initial_population_complete",
+                    run_state=run_state,
+                )
             start_generation = 0
         else:
             start_generation, run_state = restored
 
-        for generation in range(start_generation, self.config.num_generations):
-            print(
-                f"[Generation {generation + 1}/{self.config.num_generations}] start",
-                flush=True,
-            )
+        try:
+            for generation in range(start_generation, self.config.num_generations):
+                with self.timing_recorder.phase("generation_total", generation=generation):
+                    print(
+                        f"[Generation {generation + 1}/{self.config.num_generations}] start",
+                        flush=True,
+                    )
 
-            offspring = self._generate_offspring(generation)
-            print(
-                f"[Generation {generation + 1}] generated offspring ready: {len(offspring)}",
-                flush=True,
-            )
+                    with self.timing_recorder.phase("generate_offspring", generation=generation):
+                        offspring = self._generate_offspring(generation)
+                    print(
+                        f"[Generation {generation + 1}] generated offspring ready: {len(offspring)}",
+                        flush=True,
+                    )
 
-            self._evaluate_offspring(evaluator, offspring, generation)
-            generation_context = self._before_survivor_selection(generation, offspring)
+                    with self.timing_recorder.phase("evaluate_offspring", generation=generation):
+                        self._evaluate_offspring(evaluator, offspring, generation)
+                    with self.timing_recorder.phase("before_survivor_selection", generation=generation):
+                        generation_context = self._before_survivor_selection(generation, offspring)
 
-            print(
-                f"[Generation {generation + 1}] selecting survivors",
-                flush=True,
-            )
-            self.population = self.select_next_generation(self.population, offspring)
+                    print(
+                        f"[Generation {generation + 1}] selecting survivors",
+                        flush=True,
+                    )
+                    with self.timing_recorder.phase("select_survivors", generation=generation):
+                        self.population = self.select_next_generation(self.population, offspring)
 
-            self._log_generation(generation, offspring, generation_context, log_dir)
-            self.print_population_snapshot(f"generation {generation + 1} survivors")
-            print(
-                f"[Generation {generation + 1}] logged",
-                flush=True,
-            )
+                    with self.timing_recorder.phase("log_generation", generation=generation):
+                        self._log_generation(generation, offspring, generation_context, log_dir)
+                        self.print_population_snapshot(f"generation {generation + 1} survivors")
+                    print(
+                        f"[Generation {generation + 1}] logged",
+                        flush=True,
+                    )
 
-            should_stop = self._after_generation(generation, offspring, generation_context, run_state)
-            self._save_checkpoint(
-                checkpoint_manager,
-                generation=generation,
-                phase="generation_complete",
-                run_state=run_state,
-            )
+                    with self.timing_recorder.phase("after_generation", generation=generation):
+                        should_stop = self._after_generation(generation, offspring, generation_context, run_state)
+                    with self.timing_recorder.phase("save_checkpoint", generation=generation):
+                        self._save_checkpoint(
+                            checkpoint_manager,
+                            generation=generation,
+                            phase="generation_complete",
+                            run_state=run_state,
+                        )
 
-            if should_stop:
-                print(
-                    f"[Generation {generation + 1}] convergence reached; stopping early",
-                    flush=True,
-                )
-                break
+                    self.timing_recorder.write_summary(status="running")
+                    if should_stop:
+                        print(
+                            f"[Generation {generation + 1}] convergence reached; stopping early",
+                            flush=True,
+                        )
+                        break
+        finally:
+            self.timing_recorder.write_summary(status="complete")
 
         return self.population
        
@@ -462,6 +497,7 @@ class EA:
         log_dir.mkdir(parents=True, exist_ok=True)
         self.current_log_dir = log_dir
         self.match_score_recorder = MatchScoreRecorder(self.current_log_dir, self.config)
+        self.timing_recorder = RunTimingRecorder(self.current_log_dir)
         return str(log_dir)
 
     def attach_log_dir(self, log_dir: str | Path) -> str:
@@ -469,6 +505,7 @@ class EA:
         self.current_log_dir = Path(log_dir)
         self.current_log_dir.mkdir(parents=True, exist_ok=True)
         self.match_score_recorder = MatchScoreRecorder(self.current_log_dir, self.config)
+        self.timing_recorder = RunTimingRecorder(self.current_log_dir)
         return str(self.current_log_dir)
 
     def get_profile_log_path(self) -> Path:

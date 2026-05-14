@@ -270,8 +270,11 @@ def run_java_agent_game(
         f"ai1={ai1_class} opponent={opponent} compile_first={compile_first} prefix={log_prefix}",
         flush=True,
     )
+    compile_time_sec = 0.0
     if compile_first:
+        compile_started = time.perf_counter()
         compile_microrts(project_root)
+        compile_time_sec = time.perf_counter() - compile_started
 
     original_config = _config_path(project_root).read_text(encoding="utf-8")
     try:
@@ -303,6 +306,7 @@ def run_java_agent_game(
             "llm_calls": parsed_log.get("summary", {}).get("segment_count", 0),
             "exit_code": exit_code,
             "game_time_sec": game_time_sec,
+            "compile_time_sec": compile_time_sec,
             "microrts_root": str(microrts_root),
         }
         summary = parsed_log.get("summary", {})

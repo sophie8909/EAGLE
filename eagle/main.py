@@ -175,7 +175,23 @@ def main() -> None:
         default=None,
         help="Use a single opponent class for this run.",
     )
+    parser.add_argument(
+        "--precompile-python",
+        action="store_true",
+        help="Precompile EAGLE Python modules to bytecode before launching the run.",
+    )
     args = parser.parse_args()
+
+    if args.precompile_python:
+        from .utils.precompile import precompile_python_sources
+
+        metadata = precompile_python_sources()
+        print(
+            "[DEBUG] python precompile "
+            f"targets={metadata['targets']} ok={bool(metadata['ok'])} "
+            f"elapsed={float(metadata['elapsed_sec']):.2f}s",
+            flush=True,
+        )
 
     resume_log_dir = args.resume_log_dir
     if args.resume_latest and resume_log_dir is None:
@@ -226,7 +242,13 @@ def main() -> None:
     if hasattr(algorithm, "run_final_test"):
         if should_run_final_test:
             print(f"Running final test for {experiment_config.algorithm}...")
-            algorithm.run_final_test()
+            timing_recorder = getattr(algorithm, "timing_recorder", None)
+            if timing_recorder is None:
+                algorithm.run_final_test()
+            else:
+                with timing_recorder.phase("final_test"):
+                    algorithm.run_final_test()
+                timing_recorder.write_summary(status="complete")
         else:
             print("Skipping final test.")
 

@@ -16,7 +16,7 @@ from eagle.evolution.component.individual import Individual
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.log_parse import parse_dynamic_prompt_state
 from eagle.utils.move_validator import validate_llm_move_against_state
-from eagle.utils.profiler import build_base_record, write_jsonl
+from eagle.utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
 
 from .prompt_history import PromptHistory
 from .state_generator import StateGenerator
@@ -131,6 +131,7 @@ class Evaluator:
         theoretical_legality_max_total = 0.0
         resource_diff_sum = 0.0
         round_samples: list[dict[str, Any]] = []
+        stats: dict[str, float] = {}
         n = self.config.one_eval_rounds
         for i in range(n):
             print(
@@ -139,20 +140,25 @@ class Evaluator:
                 flush=True,
             )
             dynamic_prompt = self.state_generator.generate_text()
-            state = parse_dynamic_prompt_state(dynamic_prompt)
+            with timer("round_state_parse_time", stats):
+                state = parse_dynamic_prompt_state(dynamic_prompt)
             full_prompt = self._build_round_prompt(base_prompt, dynamic_prompt)
-            raw_response = self._ask_for_actions(full_prompt)
-            parsed_response = self._extract_first_json_object(raw_response)
-            format_valid, format_reason = self._validate_action_response_format(parsed_response)
+            with timer("round_llm_action_time", stats):
+                raw_response = self._ask_for_actions(full_prompt)
+            with timer("round_response_parse_time", stats):
+                parsed_response = self._extract_first_json_object(raw_response)
+                format_valid, format_reason = self._validate_action_response_format(parsed_response)
 
             if format_valid:
                 valid_json_count += 1
-                legality_raw, legality_details = self._score_legality(parsed_response, dynamic_prompt)
-                alignment_raw = self._score_strategy_alignment(
-                    base_prompt=base_prompt,
-                    dynamic_prompt=dynamic_prompt,
-                    raw_response=raw_response,
-                )
+                with timer("round_legality_score_time", stats):
+                    legality_raw, legality_details = self._score_legality(parsed_response, dynamic_prompt)
+                with timer("round_llm_alignment_time", stats):
+                    alignment_raw = self._score_strategy_alignment(
+                        base_prompt=base_prompt,
+                        dynamic_prompt=dynamic_prompt,
+                        raw_response=raw_response,
+                    )
             else:
                 legality_raw = -100.0
                 alignment_raw = -100.0
@@ -212,6 +218,7 @@ class Evaluator:
                 flush=True,
             )
 
+        summarize_total_eval_time(stats)
         latest_eval_result = {
             "eval_mode": "round",
             "evaluation_mode": "round_llm",
@@ -226,6 +233,7 @@ class Evaluator:
             "strategy_alignment_score": alignment_score_sum / n,
             "raw_legality_score": legality_raw_sum / n,
             "raw_strategy_alignment_score": alignment_raw_sum / n,
+            "timing": dict(stats),
         }
         eval_result = self._average_history_eval_result(
             cached_fitness,
@@ -262,6 +270,7 @@ class Evaluator:
             eval_result=eval_result,
             samples=round_samples,
             history_decision="fresh_average" if cached_fitness is not None else "fresh",
+            stats=stats,
         )
 
         self.history.save(
@@ -293,6 +302,7 @@ class Evaluator:
         eval_result: dict[str, Any],
         samples: list[dict[str, Any]],
         history_decision: str,
+        stats: dict[str, float] | None = None,
     ) -> None:
         """Append one prompt/output profile row for the GUI prompt inspector."""
         if profile_output_path is None:
@@ -314,6 +324,8 @@ class Evaluator:
                 "round_samples": samples,
             }
         )
+        for key, value in dict(stats or {}).items():
+            record[key] = value
         write_jsonl(record, profile_output_path)
 
     @staticmethod

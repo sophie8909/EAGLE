@@ -143,6 +143,7 @@ class EagleDesktopApp:
         self.enable_reflection_operator = BooleanVar(value=True)
         self.skip_final_test = BooleanVar(value=False)
         self.quick_run = BooleanVar(value=False)
+        self.precompile_python = BooleanVar(value=False)
         self.opponents_text = StringVar(value="ai.abstraction.LightRush, ai.abstraction.HeavyRush")
         self.objective_mode = StringVar(value="multi")
         self.single_objective = StringVar(value="resource_advantage")
@@ -191,6 +192,7 @@ class EagleDesktopApp:
         self._build_operators_tab()
         self._build_run_tab()
         self._build_analysis_tab()
+        self._build_timing_tab()
         self._build_prompt_tab()
         self._build_java_gui_tab()
 
@@ -481,9 +483,12 @@ class EagleDesktopApp:
         ttk.Checkbutton(tab, text="Skip final test", variable=self.skip_final_test).grid(
             row=6, column=3, sticky="w", pady=4
         )
+        ttk.Checkbutton(tab, text="Precompile Python", variable=self.precompile_python).grid(
+            row=7, column=0, columnspan=2, sticky="w", pady=4
+        )
 
         selection_frame = ttk.LabelFrame(tab, text="Selection", padding=8)
-        selection_frame.grid(row=7, column=0, columnspan=4, sticky="ew", pady=(14, 0))
+        selection_frame.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(14, 0))
         selection_frame.columnconfigure(1, weight=1)
         ttk.Label(selection_frame, text="Mutation").grid(row=0, column=0, sticky="w", pady=4)
         ttk.Label(selection_frame, textvariable=self.mutation_operator).grid(
@@ -512,12 +517,12 @@ class EagleDesktopApp:
         )
 
         self.surrogate_paths_frame = ttk.LabelFrame(tab, text="Surrogate Paths", padding=8)
-        self.surrogate_paths_frame.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(14, 0))
+        self.surrogate_paths_frame.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(14, 0))
         for index, line in enumerate(SURROGATE_PATH_LINES):
             ttk.Label(self.surrogate_paths_frame, text=line).grid(row=index, column=0, sticky="w")
 
         actions = ttk.Frame(tab)
-        actions.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(16, 0))
+        actions.grid(row=10, column=0, columnspan=4, sticky="ew", pady=(16, 0))
         ttk.Button(actions, text="Validate settings", command=self.validate_settings).pack(side="left")
         ttk.Button(actions, text="Save generated config", command=self.save_generated_config).pack(side="left", padx=(8, 0))
         self.refresh_surrogate_visibility()
@@ -738,6 +743,41 @@ class EagleDesktopApp:
         ttk.Label(tab, textvariable=self.analysis_summary).grid(row=1, column=0, sticky="w", pady=(8, 0))
         self.analysis_output = ScrolledText(tab, wrap="word")
         self.analysis_output.grid(row=2, column=0, sticky="nsew", pady=(8, 0))
+
+    def _build_timing_tab(self) -> None:
+        """Build timing-analysis controls."""
+        tab = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(tab, text="Time Analysis")
+        tab.columnconfigure(0, weight=1)
+        tab.rowconfigure(3, weight=1)
+
+        toolbar = ttk.Frame(tab)
+        toolbar.grid(row=0, column=0, sticky="ew")
+        ttk.Button(toolbar, text="Refresh", command=self.refresh_all_views).pack(side="left")
+
+        self.timing_summary = StringVar(value="No run selected")
+        ttk.Label(tab, textvariable=self.timing_summary).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+        self.timing_table = ttk.Treeview(
+            tab,
+            columns=("phase", "count", "total", "avg", "max"),
+            show="headings",
+            height=8,
+        )
+        self.timing_table.heading("phase", text="Phase")
+        self.timing_table.heading("count", text="Count")
+        self.timing_table.heading("total", text="Total sec")
+        self.timing_table.heading("avg", text="Avg sec")
+        self.timing_table.heading("max", text="Max sec")
+        self.timing_table.column("phase", width=260, anchor="w")
+        self.timing_table.column("count", width=80, anchor="e")
+        self.timing_table.column("total", width=100, anchor="e")
+        self.timing_table.column("avg", width=100, anchor="e")
+        self.timing_table.column("max", width=100, anchor="e")
+        self.timing_table.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+
+        self.timing_output = ScrolledText(tab, wrap="word")
+        self.timing_output.grid(row=3, column=0, sticky="nsew", pady=(8, 0))
 
     def _build_prompt_tab(self) -> None:
         """Build prompt inspection controls."""
@@ -2308,6 +2348,8 @@ class EagleDesktopApp:
             command.append("--quick-run")
         if self.skip_final_test.get():
             command.append("--skip-final-test")
+        if self.precompile_python.get():
+            command.append("--precompile-python")
 
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         self.process_log_path = LOG_DIR / f"gui_process_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -2438,6 +2480,7 @@ class EagleDesktopApp:
         self.refresh_process_log()
         run_dir = self.current_run_dir()
         self.refresh_analysis(run_dir)
+        self.refresh_timing(run_dir)
         self.refresh_prompts(run_dir)
 
     def refresh_process_log(self) -> None:
@@ -2550,6 +2593,31 @@ class EagleDesktopApp:
         self.analysis_summary.set(report.summary)
         self._set_text(self.analysis_output, report.body)
 
+    def refresh_timing(self, run_dir: Path | None) -> None:
+        """Refresh timing analysis for one run."""
+        if not hasattr(self, "timing_table"):
+            return
+        self.timing_table.delete(*self.timing_table.get_children())
+        if run_dir is None:
+            self.timing_summary.set("No run selected")
+            self._set_text(self.timing_output, "")
+            return
+        report = build_timing_analysis_report(run_dir)
+        self.timing_summary.set(report.summary)
+        for row in report.rows:
+            self.timing_table.insert(
+                "",
+                "end",
+                values=(
+                    row.get("phase", ""),
+                    row.get("count", ""),
+                    f"{float(row.get('total_sec', 0.0)):.3f}",
+                    f"{float(row.get('avg_sec', 0.0)):.3f}",
+                    f"{float(row.get('max_sec', 0.0)):.3f}",
+                ),
+            )
+        self._set_text(self.timing_output, report.body)
+
     def refresh_prompts(self, run_dir: Path | None) -> None:
         """Refresh prompt list from the latest generation evaluation profiles."""
         previous = self.selected_prompt_id()
@@ -2637,6 +2705,7 @@ class EagleDesktopApp:
         self.refresh_microrts_gui_log()
         run_dir = self.current_run_dir()
         self.refresh_analysis(run_dir)
+        self.refresh_timing(run_dir)
         self.refresh_prompts(run_dir)
         self.root.after(3000, self._schedule_refresh)
 
@@ -2648,10 +2717,11 @@ class EagleDesktopApp:
 class AnalysisReport:
     """Live-analysis display payload."""
 
-    def __init__(self, summary: str, body: str) -> None:
+    def __init__(self, summary: str, body: str, rows: list[dict[str, Any]] | None = None) -> None:
         """Store one summary line and full report body."""
         self.summary = summary
         self.body = body
+        self.rows = list(rows or [])
 
 
 def parse_int(value: str, field_name: str) -> int:
@@ -3546,6 +3616,111 @@ def build_live_analysis_report(run_dir: Path) -> AnalysisReport:
 
     summary = f"{mode} | generation={latest_generation if latest_generation is not None else 'unknown'} | phase={phase}"
     return AnalysisReport(summary=summary, body="\n".join(lines))
+
+
+def build_timing_analysis_report(run_dir: Path) -> AnalysisReport:
+    """Build timing analysis from run-level and per-evaluation profile artifacts."""
+    summary = load_json_file(run_dir / "timing_summary.json")
+    profile_rows = load_jsonl_rows(run_dir / "profiles.jsonl")
+    timing_rows = list(summary.get("top_phases") or [])
+    if not timing_rows:
+        timing_rows = aggregate_timing_rows_from_profiles(profile_rows)
+
+    report_path = run_dir / "timing_report.md"
+    lines = [
+        f"Run: {run_dir}",
+        f"Timing events: {summary.get('event_count', 0)}",
+        f"Total recorded seconds: {float(summary.get('total_recorded_sec', 0.0)):.3f}",
+        "",
+        "Bottlenecks:",
+    ]
+    if timing_rows:
+        for row in timing_rows[:12]:
+            lines.append(
+                f"  {row.get('phase')}: total={float(row.get('total_sec', 0.0)):.3f}s "
+                f"count={int(row.get('count', 0))} avg={float(row.get('avg_sec', 0.0)):.3f}s"
+            )
+    else:
+        lines.append("  no timing data found yet")
+
+    lines.extend(["", "Evaluation profile totals:"])
+    profile_totals = aggregate_named_profile_times(profile_rows)
+    if profile_totals:
+        for row in profile_totals[:12]:
+            lines.append(
+                f"  {row['phase']}: total={row['total_sec']:.3f}s "
+                f"count={row['count']} avg={row['avg_sec']:.3f}s"
+            )
+    else:
+        lines.append("  no profile timing rows found yet")
+
+    recommendations = list(summary.get("recommendations") or [])
+    for item in timing_recommendations(timing_rows, profile_totals):
+        if item not in recommendations:
+            recommendations.append(item)
+    lines.extend(["", "Recommendations:"])
+    for item in recommendations:
+        lines.append(f"  - {item}")
+
+    if report_path.exists():
+        lines.extend(["", "Saved report:", str(report_path)])
+    return AnalysisReport(
+        summary=f"timing phases={len(timing_rows)} profiles={len(profile_rows)}",
+        body="\n".join(lines),
+        rows=timing_rows,
+    )
+
+
+def aggregate_timing_rows_from_profiles(profile_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fallback phase rows when timing_summary.json is not available."""
+    return aggregate_named_profile_times(profile_rows)
+
+
+def aggregate_named_profile_times(profile_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Aggregate numeric `*_time` profile fields across evaluation rows."""
+    totals: dict[str, dict[str, float]] = {}
+    for row in profile_rows:
+        for key, value in row.items():
+            if not str(key).endswith("_time") or not is_number(value):
+                continue
+            stats = totals.setdefault(str(key), {"count": 0.0, "total_sec": 0.0, "max_sec": 0.0})
+            elapsed = float(value)
+            stats["count"] += 1.0
+            stats["total_sec"] += elapsed
+            stats["max_sec"] = max(stats["max_sec"], elapsed)
+    rows: list[dict[str, Any]] = []
+    for phase, stats in totals.items():
+        count = max(1.0, stats["count"])
+        rows.append(
+            {
+                "phase": phase,
+                "count": int(stats["count"]),
+                "total_sec": stats["total_sec"],
+                "avg_sec": stats["total_sec"] / count,
+                "max_sec": stats["max_sec"],
+            }
+        )
+    return sorted(rows, key=lambda item: item["total_sec"], reverse=True)
+
+
+def timing_recommendations(
+    timing_rows: list[dict[str, Any]],
+    profile_totals: list[dict[str, Any]],
+) -> list[str]:
+    """Return simple GUI recommendations from timing rows."""
+    rows = list(timing_rows) + list(profile_totals)
+    if not rows:
+        return ["No timing data has been recorded yet."]
+    top_phase = str(rows[0].get("phase") or "")
+    hints: list[str] = []
+    if "game" in top_phase or "evaluate" in top_phase:
+        hints.append("Evaluation is the main cost; reduce game seconds, opponents, gameplay_rate, or one_eval_rounds.")
+    if any(str(row.get("phase")) == "microrts_compile_time" and float(row.get("total_sec", 0.0)) > 1.0 for row in rows):
+        hints.append("MicroRTS compile time is visible; repeated runs should benefit from incremental compile skipping.")
+    if any("round_llm" in str(row.get("phase")) for row in rows):
+        hints.append("Round LLM calls are visible; prompt-history reuse and fewer round samples will speed iteration.")
+    hints.append("Python precompile is useful for import/startup overhead, not for Java or LLM-heavy sections.")
+    return hints
 
 
 def latest_value(values: list[Any]) -> Any:

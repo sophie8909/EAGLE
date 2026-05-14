@@ -40,6 +40,7 @@ configs/experiments/<config_name>.json
 ```
 
 Pressing `Start experiment` saves that config and launches EAGLE with the selected algorithm, evaluator, and surrogate settings.
+The GUI includes a `Time Analysis` tab that reads the selected run's timing artifacts and profile rows.
 
 ```bash
 python -m eagle.main --config configs/experiments/<config_name>.json --algorithm <algorithm> --evaluator <evaluator>
@@ -257,6 +258,7 @@ python -m scripts.run_evolution --algorithm round_nsga2
 python -m scripts.run_evolution --resume-latest
 python -m scripts.run_evolution --resume-log-dir logs/<run_dir>
 python -m scripts.run_evolution --opponent ai.PassiveAI
+python -m scripts.run_evolution --precompile-python
 ```
 
 Key options:
@@ -268,11 +270,13 @@ Key options:
 - `--resume-latest`: resume the newest run under `logs/`
 - `--resume-log-dir`: resume a specific log directory
 - `--opponent`: use one specific opponent class
+- `--precompile-python`: compile EAGLE Python modules to bytecode before launch; useful for startup/import overhead, not Java or LLM time
 
 Outputs:
 
 - per-run logs under `logs/eagle/<timestamp>/`
 - generation summaries, profiles, checkpoints, and run state in the run directory
+- timing events, `timing_summary.json`, and `timing_report.md` in the run directory
 
 Fitness conventions:
 
