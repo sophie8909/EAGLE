@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, ClassVar, List
 
@@ -240,45 +241,135 @@ class EA:
         """Evaluate one batch of individuals with bounded worker parallelism."""
         if not individuals:
             return
-        workers = self._individual_eval_parallel_workers(len(individuals))
+        prompt_groups = self._group_individuals_by_prompt(individuals)
+        leaders = [group[0] for group in prompt_groups]
+        duplicate_count = len(individuals) - len(leaders)
+        workers = self._individual_eval_parallel_workers(len(leaders))
         print(
             "[Individual Eval Queue] "
             f"label={label} generation={generation} stage={stage} "
-            f"individuals={len(individuals)} workers={workers}",
+            f"individuals={len(individuals)} unique_prompts={len(leaders)} "
+            f"prompt_cache_hits={duplicate_count} workers={workers}",
             flush=True,
         )
         if workers <= 1:
-            for index, individual in enumerate(individuals, start=1):
+            for index, group in enumerate(prompt_groups, start=1):
+                individual = group[0]
                 print(
-                    f"[{label}] evaluating individual {index}/{len(individuals)} id={individual.id}",
+                    f"[{label}] evaluating prompt {index}/{len(leaders)} "
+                    f"leader_id={individual.id} shared_by={len(group)}",
                     flush=True,
                 )
-                self._evaluate_individual_with_timing(
+                eval_result = self._evaluate_individual_with_timing(
                     individual,
                     generation=generation,
                     stage=stage,
                 )
+                self._apply_prompt_cache_followers(group, individual, eval_result)
             return
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            future_map = {
-                executor.submit(
-                    self._evaluate_individual_with_timing,
-                    individual,
-                    generation=generation,
-                    stage=stage,
-                ): individual
-                for individual in individuals
-            }
+            future_map = {}
+            for group in prompt_groups:
+                individual = group[0]
+                future_map[
+                    executor.submit(
+                        self._evaluate_individual_with_timing,
+                        individual,
+                        generation=generation,
+                        stage=stage,
+                    )
+                ] = group
             for future in as_completed(future_map):
-                individual = future_map[future]
-                future.result()
+                group = future_map[future]
+                individual = group[0]
+                eval_result = future.result()
+                self._apply_prompt_cache_followers(group, individual, eval_result)
                 print(
                     "[Individual Eval Queue] complete "
                     f"generation={generation} stage={stage} id={individual.id} "
-                    f"fitness={self._display_fitness(individual)}",
+                    f"fitness={self._display_fitness(individual)} shared_by={len(group)}",
                     flush=True,
                 )
+
+    def _group_individuals_by_prompt(self, individuals: List[Individual]) -> list[list[Individual]]:
+        """Group one evaluation batch by rendered prompt text."""
+        groups_by_prompt: dict[str, list[Individual]] = {}
+        fallback_groups: list[list[Individual]] = []
+        for individual in individuals:
+            try:
+                prompt = self._render_prompt_cache_key(individual)
+            except Exception as exc:
+                print(
+                    "[Individual Eval Queue] prompt cache skipped "
+                    f"id={getattr(individual, 'id', None)} reason={type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+                fallback_groups.append([individual])
+                continue
+            groups_by_prompt.setdefault(prompt, []).append(individual)
+        return list(groups_by_prompt.values()) + fallback_groups
+
+    def _render_prompt_cache_key(self, individual: Individual) -> str:
+        """Render the exact prompt text used to deduplicate one batch."""
+        prompt_lines = self.component_pool.render_prompt_lines(
+            individual.component_indices,
+            include_identity_component=self.config.include_strategy_identity_in_prompt,
+        )
+        return "\n".join(prompt_lines)
+
+    def _apply_prompt_cache_followers(
+        self,
+        group: list[Individual],
+        leader: Individual,
+        eval_result: dict[str, Any] | None,
+    ) -> None:
+        """Copy one leader's completed evaluation to same-prompt followers."""
+        if len(group) <= 1:
+            return
+        for follower in group[1:]:
+            self._copy_prompt_cached_evaluation(
+                target=follower,
+                source=leader,
+                eval_result=eval_result,
+            )
+            print(
+                "[Individual Eval Queue] prompt cache hit "
+                f"source_id={getattr(leader, 'id', None)} target_id={getattr(follower, 'id', None)} "
+                f"fitness={self._display_fitness(follower)}",
+                flush=True,
+            )
+
+    def _copy_prompt_cached_evaluation(
+        self,
+        *,
+        target: Individual,
+        source: Individual,
+        eval_result: dict[str, Any] | None,
+    ) -> None:
+        """Copy evaluation state from a same-prompt source individual."""
+        target.fitness = deepcopy(getattr(source, "fitness", None))
+        target.rendered_prompt = getattr(source, "rendered_prompt", "")
+        target.evaluation_mode = "prompt_cache"
+        for score_attr in ("surrogate_score", "gameplay_score"):
+            if hasattr(source, score_attr):
+                setattr(target, score_attr, deepcopy(getattr(source, score_attr)))
+        for attr in ("last_round_evaluation", "last_surrogate_evaluation", "last_gameplay_evaluation"):
+            if hasattr(source, attr):
+                copied = deepcopy(getattr(source, attr))
+                if isinstance(copied, dict):
+                    copied["prompt_cache_source_id"] = getattr(source, "id", None)
+                    copied["prompt_cache_target_id"] = getattr(target, "id", None)
+                setattr(target, attr, copied)
+        if isinstance(eval_result, dict):
+            cached_eval = deepcopy(eval_result)
+            cached_eval["evaluation_mode"] = "prompt_cache"
+            cached_eval["prompt_cache_source_id"] = getattr(source, "id", None)
+            cached_eval["prompt_cache_target_id"] = getattr(target, "id", None)
+            if cached_eval.get("eval_mode") == "round":
+                target.last_round_evaluation = {"eval_result": cached_eval}
+            elif cached_eval.get("eval_mode") in {"full_game", "java_surrogate"}:
+                target.last_gameplay_evaluation = {"eval_result": cached_eval}
 
     def _evaluate_individual_with_timing(
         self,
@@ -286,18 +377,17 @@ class EA:
         *,
         generation: int | None,
         stage: str,
-    ) -> None:
+    ) -> dict[str, Any]:
         """Evaluate one individual using a worker-local evaluator."""
         evaluator = self.build_evaluator(config_override=clone_config(self.config))
         if self.timing_recorder is None:
-            self._evaluate_individual(evaluator, individual, generation=generation)
-            return
+            return self._evaluate_individual(evaluator, individual, generation=generation)
         with self.timing_recorder.phase(
             "evaluate_individual",
             generation=generation,
             metadata={"individual_id": getattr(individual, "id", None), "stage": stage},
         ):
-            self._evaluate_individual(evaluator, individual, generation=generation)
+            return self._evaluate_individual(evaluator, individual, generation=generation)
 
     def _individual_eval_parallel_workers(self, individual_count: int) -> int:
         """Return the bounded worker count for per-generation individual evaluation."""

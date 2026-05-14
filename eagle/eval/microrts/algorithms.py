@@ -88,40 +88,51 @@ class MicroRTSGASurrogate(GA):
         candidates = list(individuals)
         if not candidates:
             return
-        workers = self._individual_eval_parallel_workers(len(candidates))
+        prompt_groups = self._group_individuals_by_prompt(candidates)
+        leaders = [group[0] for group in prompt_groups]
+        duplicate_count = len(candidates) - len(leaders)
+        workers = self._individual_eval_parallel_workers(len(leaders))
         print(
             "[Individual Eval Queue] "
             f"label={label} surrogate generation={generation} "
-            f"individuals={len(candidates)} workers={workers}",
+            f"individuals={len(candidates)} unique_prompts={len(leaders)} "
+            f"prompt_cache_hits={duplicate_count} workers={workers}",
             flush=True,
         )
         if workers <= 1:
-            for index, individual in enumerate(candidates, start=1):
+            for index, group in enumerate(prompt_groups, start=1):
+                individual = group[0]
                 print(
-                    f"[{label}] surrogate evaluation {index}/{len(candidates)} id={individual.id}",
+                    f"[{label}] surrogate prompt {index}/{len(leaders)} "
+                    f"leader_id={individual.id} shared_by={len(group)}",
                     flush=True,
                 )
                 evaluator = self.build_evaluator(config_override=clone_config(self.config))
-                self._evaluate_surrogate_individual(evaluator, individual, generation=generation)
+                eval_result = self._evaluate_surrogate_individual(evaluator, individual, generation=generation)
+                self._apply_prompt_cache_followers(group, individual, eval_result)
             return
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            future_map = {
-                executor.submit(
-                    self._evaluate_surrogate_individual,
-                    self.build_evaluator(config_override=clone_config(self.config)),
-                    individual,
-                    generation=generation,
-                ): individual
-                for individual in candidates
-            }
+            future_map = {}
+            for group in prompt_groups:
+                individual = group[0]
+                future_map[
+                    executor.submit(
+                        self._evaluate_surrogate_individual,
+                        self.build_evaluator(config_override=clone_config(self.config)),
+                        individual,
+                        generation=generation,
+                    )
+                ] = group
             for future in as_completed(future_map):
-                individual = future_map[future]
-                future.result()
+                group = future_map[future]
+                individual = group[0]
+                eval_result = future.result()
+                self._apply_prompt_cache_followers(group, individual, eval_result)
                 print(
                     "[Individual Eval Queue] complete "
                     f"surrogate generation={generation} id={individual.id} "
-                    f"fitness={getattr(individual, 'fitness', None)}",
+                    f"fitness={getattr(individual, 'fitness', None)} shared_by={len(group)}",
                     flush=True,
                 )
 
@@ -129,7 +140,7 @@ class MicroRTSGASurrogate(GA):
         interval = max(1, int(self.config.gameplay_refresh_interval))
         return (int(generation) + 1) % interval == 0
 
-    def _evaluate_surrogate_individual(self, evaluator, individual, *, generation: int | None) -> None:
+    def _evaluate_surrogate_individual(self, evaluator, individual, *, generation: int | None):
         eval_result = evaluator.surrogate(
             individual,
             generation=generation,
@@ -141,6 +152,7 @@ class MicroRTSGASurrogate(GA):
         individual.evaluation_mode = "surrogate"
         individual.surrogate_score = super()._fitness0(individual)
         individual.last_surrogate_evaluation = {"eval_result": dict(eval_result)}
+        return eval_result
 
     def _refresh_gameplay_archive(self, evaluator, candidates, *, generation: int | None, force: bool = False) -> None:
         selected = self._top_surrogate_candidates(list(candidates), force=force)
