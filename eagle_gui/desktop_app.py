@@ -2077,8 +2077,8 @@ class EagleDesktopApp:
             messagebox.showerror("Missing config", f"Config file does not exist:\n{path}")
             return
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
+            payload = load_complete_config_payload(path)
+        except (ValueError, json.JSONDecodeError) as exc:
             messagebox.showerror("Invalid config JSON", str(exc))
             return
         self.algorithm.set(
@@ -2199,7 +2199,7 @@ class EagleDesktopApp:
         path = EXPERIMENT_DIR / self.config_filename()
         if path.exists() and not messagebox.askyesno("Overwrite config", f"Overwrite existing config?\n{path}"):
             return None
-        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        write_json_file(path, payload)
         self.generated_config_path = path
         self.generated_config_label.set(f"Generated config: {path}")
         self.status.set(f"Saved {path.name}")
@@ -2208,7 +2208,7 @@ class EagleDesktopApp:
     def build_config_payload(self) -> dict[str, Any]:
         """Build one EAGLE config payload from the GUI controls."""
         base_path = Path(self.base_config_path.get())
-        payload = json.loads(base_path.read_text(encoding="utf-8")) if base_path.exists() else {}
+        payload = load_complete_config_payload(base_path)
         component_path = self.component_runtime_path.get().strip()
         if not component_path:
             raise ValueError("Runtime component path is required.")
@@ -2235,8 +2235,17 @@ class EagleDesktopApp:
                 "application": self.application.get(),
                 "evaluator": self.evaluator.get(),
                 "algorithm": self.algorithm.get(),
+                "surrogate": self.surrogate.get(),
                 "population_size": parse_int(self.population_size.get(), "population_size"),
                 "num_generations": parse_int(self.num_generations.get(), "num_generations"),
+                "run_time_per_game_sec": parse_int(self.run_time_per_game_sec.get(), "run_time_per_game_sec"),
+                "gameplay_rate": parse_float(self.gameplay_rate.get(), "gameplay_rate"),
+                "gameplay_refresh_interval": parse_int(
+                    self.gameplay_refresh_interval.get(),
+                    "gameplay_refresh_interval",
+                ),
+                "surrogate_top_ratio": parse_float(self.surrogate_top_ratio.get(), "surrogate_top_ratio"),
+                "archive_parent_ratio": parse_float(self.archive_parent_ratio.get(), "archive_parent_ratio"),
                 "objective_config": objective_config,
                 "training_example_sample_count": self.training_example_selection_value(),
                 "training_example_fixed_count": bool(self.training_example_fixed_count.get()),
@@ -2282,21 +2291,6 @@ class EagleDesktopApp:
                 "strategy_mutation": self.build_strategy_mutation_weights(),
             }
         )
-        if self.algorithm.get() == "ga_surrogate":
-            payload["surrogate"] = self.surrogate.get()
-            payload["gameplay_refresh_interval"] = parse_int(
-                self.gameplay_refresh_interval.get(),
-                "gameplay_refresh_interval",
-            )
-            payload["surrogate_top_ratio"] = parse_float(self.surrogate_top_ratio.get(), "surrogate_top_ratio")
-            payload["archive_parent_ratio"] = parse_float(self.archive_parent_ratio.get(), "archive_parent_ratio")
-            payload["run_time_per_game_sec"] = parse_int(self.run_time_per_game_sec.get(), "run_time_per_game_sec")
-        else:
-            payload.pop("surrogate", None)
-            payload.pop("gameplay_refresh_interval", None)
-            payload.pop("surrogate_top_ratio", None)
-            payload.pop("archive_parent_ratio", None)
-            payload["run_time_per_game_sec"] = parse_int(self.run_time_per_game_sec.get(), "run_time_per_game_sec")
         normalize_probability_map(payload["reproduction_operator_probs"], "reproduction_operator_probs")
         normalize_probability_map(payload["strategy_mutation"], "strategy_mutation")
         return payload
@@ -3188,6 +3182,38 @@ def normalize_probability_map(weights: dict[str, float], field_name: str) -> Non
         raise ValueError(f"{field_name} must have a positive total weight.")
     for key in list(weights):
         weights[key] = weights[key] / total
+
+
+def read_json_mapping_strict(path: Path) -> dict[str, Any]:
+    """Load one JSON object from disk and reject non-object payloads."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Config JSON must be an object: {path}")
+    return payload
+
+
+def merge_config_payload(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge config mappings while letting lists and scalars override."""
+    merged = dict(base)
+    for key, value in override.items():
+        current = merged.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = merge_config_payload(current, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_complete_config_payload(config_path: Path) -> dict[str, Any]:
+    """Return a complete config payload using default.json as the schema base."""
+    payload: dict[str, Any] = {}
+    if DEFAULT_CONFIG.exists():
+        payload = merge_config_payload(payload, read_json_mapping_strict(DEFAULT_CONFIG))
+    if config_path.exists() and config_path.resolve() != DEFAULT_CONFIG.resolve():
+        payload = merge_config_payload(payload, read_json_mapping_strict(config_path))
+    elif config_path.exists() and not payload:
+        payload = merge_config_payload(payload, read_json_mapping_strict(config_path))
+    return payload
 
 
 def resolve_repo_path(path_text: str) -> Path:
