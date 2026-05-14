@@ -97,5 +97,6 @@
   "surrogate_log_dir": "logs/microrts",
   "prompt_history_path": "./eagle_round_evol/history.jsonl",
   "one_eval_rounds": 8,
-  "round_eval_parallel_workers": 8
+  "round_eval_parallel_workers": 8,
+  "agent_eval_parallel_workers": 8
 }
