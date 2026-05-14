@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,9 @@ class Evaluator:
         "attack": 3.0,
     }
     THEORETICAL_ALIGNMENT_MAX = 100.0
+    _history_lock = threading.Lock()
+    _llm_semaphore_lock = threading.Lock()
+    _llm_semaphores: dict[int, threading.BoundedSemaphore] = {}
 
     def __init__(
         self,
@@ -69,7 +73,8 @@ class Evaluator:
         )
         
 
-        cached_record = self.history.get_record(base_prompt)
+        with self._history_lock:
+            cached_record = self.history.get_record(base_prompt)
         cached_fitness = cached_record.get("fitness") if cached_record is not None else None
         cached_metadata = dict(cached_record.get("metadata") or {}) if cached_record else {}
         cached_eval_result = dict(cached_metadata.get("eval_result") or {}) if cached_record else {}
@@ -218,18 +223,19 @@ class Evaluator:
             stats=stats,
         )
 
-        self.history.save(
-            prompt=base_prompt,
-            fitness=eval_result,
-            metadata={
-                "evaluation_mode": individual.evaluation_mode,
-                "fitness_sample_count": fitness_sample_count,
-                "latest_eval_result": latest_eval_result,
-                "eval_result": eval_result,
-                "cached_fitness": None,
-                "round": individual.last_round_evaluation,
-            }
-        )
+        with self._history_lock:
+            self.history.save(
+                prompt=base_prompt,
+                fitness=eval_result,
+                metadata={
+                    "evaluation_mode": individual.evaluation_mode,
+                    "fitness_sample_count": fitness_sample_count,
+                    "latest_eval_result": latest_eval_result,
+                    "eval_result": eval_result,
+                    "cached_fitness": None,
+                    "round": individual.last_round_evaluation,
+                }
+            )
         print(
             "[DEBUG] round evaluate complete "
             f"individual={individual.id} mode={eval_result.get('evaluation_mode')}",
@@ -1006,14 +1012,30 @@ class Evaluator:
         if json_format:
             payload["format"] = "json"
 
+        semaphore = self._llm_parallel_semaphore()
         try:
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json=payload,
-                timeout=120,
-            )
+            with semaphore:
+                response = requests.post(
+                    "http://localhost:11434/api/generate",
+                    json=payload,
+                    timeout=120,
+                )
             response.raise_for_status()
             data = response.json()
             return str(data.get("response", "")).strip()
         except Exception:
             return ""
+
+    def _llm_parallel_semaphore(self) -> threading.BoundedSemaphore:
+        """Return the process-wide LLM request throttle for round evaluation."""
+        try:
+            workers = int(getattr(self.config, "llm_parallel_workers", 8))
+        except (TypeError, ValueError):
+            workers = 8
+        workers = max(1, workers)
+        with self._llm_semaphore_lock:
+            semaphore = self._llm_semaphores.get(workers)
+            if semaphore is None:
+                semaphore = threading.BoundedSemaphore(workers)
+                self._llm_semaphores[workers] = semaphore
+            return semaphore

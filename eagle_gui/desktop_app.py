@@ -134,6 +134,8 @@ class EagleDesktopApp:
         self.one_eval_rounds = StringVar(value="8")
         self.round_eval_parallel_workers = StringVar(value="8")
         self.agent_eval_parallel_workers = StringVar(value="8")
+        self.individual_eval_parallel_workers = StringVar(value="8")
+        self.llm_parallel_workers = StringVar(value="8")
         self.final_test_max_front = StringVar(value="1")
         self.selection_method = StringVar(value="random")
         self.parent_selection_operator = StringVar(value=PARENT_SELECTION_BY_ALGORITHM["nsga2"])
@@ -494,6 +496,20 @@ class EagleDesktopApp:
             "agent_eval_parallel_workers",
             self.agent_eval_parallel_workers,
             2,
+            2,
+        )
+        self._labeled_entry(
+            self.surrogate_algorithm_frame,
+            "individual_eval_parallel_workers",
+            self.individual_eval_parallel_workers,
+            3,
+            0,
+        )
+        self._labeled_entry(
+            self.surrogate_algorithm_frame,
+            "llm_parallel_workers",
+            self.llm_parallel_workers,
+            3,
             2,
         )
         self._labeled_entry(tab, "Final-test max front", self.final_test_max_front, 5, 0)
@@ -2101,6 +2117,10 @@ class EagleDesktopApp:
         self.agent_eval_parallel_workers.set(
             str(payload.get("agent_eval_parallel_workers", self.agent_eval_parallel_workers.get()))
         )
+        self.individual_eval_parallel_workers.set(
+            str(payload.get("individual_eval_parallel_workers", self.individual_eval_parallel_workers.get()))
+        )
+        self.llm_parallel_workers.set(str(payload.get("llm_parallel_workers", self.llm_parallel_workers.get())))
         self.load_objective_config(payload.get("objective_config", {}))
         self.apply_training_example_sample_config(
             payload.get(
@@ -2250,6 +2270,11 @@ class EagleDesktopApp:
                     self.agent_eval_parallel_workers.get(),
                     "agent_eval_parallel_workers",
                 ),
+                "individual_eval_parallel_workers": parse_int(
+                    self.individual_eval_parallel_workers.get(),
+                    "individual_eval_parallel_workers",
+                ),
+                "llm_parallel_workers": parse_int(self.llm_parallel_workers.get(), "llm_parallel_workers"),
                 "reproduction_operator_probs": {
                     key: parse_float(variable.get(), key)
                     for key, variable in self.operator_weights.items()

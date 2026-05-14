@@ -5,10 +5,11 @@ Base class for evolutionary algorithms.
 from __future__ import annotations
 
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, ClassVar, List
 
-from eagle.config import EAConfig
+from eagle.config import EAConfig, clone_config
 from eagle.objectives.aggregation import aggregate_fitness
 from eagle.operators.registry import get_operator
 from eagle.project import EAGLE_LOGS_DIR
@@ -129,20 +130,12 @@ class EA:
         evaluator: Any,
     ):
         """Evaluate the starting population before the generational loop begins."""
-        for index, individual in enumerate(self.population):
-            print(
-                f"[Initial Population] evaluating individual {index + 1}/{len(self.population)}",
-                flush=True,
-            )
-            if self.timing_recorder is None:
-                self._evaluate_individual(evaluator, individual, generation=-1)
-            else:
-                with self.timing_recorder.phase(
-                    "evaluate_individual",
-                    generation=-1,
-                    metadata={"individual_id": getattr(individual, "id", None), "stage": "initial"},
-                ):
-                    self._evaluate_individual(evaluator, individual, generation=-1)
+        self._evaluate_individual_batch(
+            self.population,
+            generation=-1,
+            stage="initial",
+            label="Initial Population",
+        )
 
         print("[Initial Population] complete", flush=True)
         self.print_population_snapshot("initial population")
@@ -222,27 +215,97 @@ class EA:
     def _evaluate_offspring(self, evaluator: Any, offspring: List[Individual], generation: int) -> None:
         """Evaluate every generated child and update operator feedback."""
         evaluator_label = getattr(self, "evaluator_name", None) or getattr(self.config, "evaluator", "evaluation")
-        for index, child in enumerate(offspring):
-            print(
-                f"[Generation {generation + 1}] {evaluator_label} evaluation "
-                f"{index + 1}/{len(offspring)} id={child.id}",
-                flush=True,
-            )
-            if self.timing_recorder is None:
-                self._evaluate_individual(evaluator, child, generation=generation)
-            else:
-                with self.timing_recorder.phase(
-                    "evaluate_individual",
-                    generation=generation,
-                    metadata={"individual_id": getattr(child, "id", None), "stage": "offspring"},
-                ):
-                    self._evaluate_individual(evaluator, child, generation=generation)
+        self._evaluate_individual_batch(
+            offspring,
+            generation=generation,
+            stage="offspring",
+            label=f"Generation {generation + 1} {evaluator_label}",
+        )
+        for child in offspring:
             print(
                 f"[Generation {generation + 1}] {evaluator_label} result "
                 f"id={child.id} fitness={child.fitness}",
                 flush=True,
             )
             self._update_mutation_component_feedback(child)
+
+    def _evaluate_individual_batch(
+        self,
+        individuals: List[Individual],
+        *,
+        generation: int | None,
+        stage: str,
+        label: str,
+    ) -> None:
+        """Evaluate one batch of individuals with bounded worker parallelism."""
+        if not individuals:
+            return
+        workers = self._individual_eval_parallel_workers(len(individuals))
+        print(
+            "[Individual Eval Queue] "
+            f"label={label} generation={generation} stage={stage} "
+            f"individuals={len(individuals)} workers={workers}",
+            flush=True,
+        )
+        if workers <= 1:
+            for index, individual in enumerate(individuals, start=1):
+                print(
+                    f"[{label}] evaluating individual {index}/{len(individuals)} id={individual.id}",
+                    flush=True,
+                )
+                self._evaluate_individual_with_timing(
+                    individual,
+                    generation=generation,
+                    stage=stage,
+                )
+            return
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_map = {
+                executor.submit(
+                    self._evaluate_individual_with_timing,
+                    individual,
+                    generation=generation,
+                    stage=stage,
+                ): individual
+                for individual in individuals
+            }
+            for future in as_completed(future_map):
+                individual = future_map[future]
+                future.result()
+                print(
+                    "[Individual Eval Queue] complete "
+                    f"generation={generation} stage={stage} id={individual.id} "
+                    f"fitness={self._display_fitness(individual)}",
+                    flush=True,
+                )
+
+    def _evaluate_individual_with_timing(
+        self,
+        individual: Individual,
+        *,
+        generation: int | None,
+        stage: str,
+    ) -> None:
+        """Evaluate one individual using a worker-local evaluator."""
+        evaluator = self.build_evaluator(config_override=clone_config(self.config))
+        if self.timing_recorder is None:
+            self._evaluate_individual(evaluator, individual, generation=generation)
+            return
+        with self.timing_recorder.phase(
+            "evaluate_individual",
+            generation=generation,
+            metadata={"individual_id": getattr(individual, "id", None), "stage": stage},
+        ):
+            self._evaluate_individual(evaluator, individual, generation=generation)
+
+    def _individual_eval_parallel_workers(self, individual_count: int) -> int:
+        """Return the bounded worker count for per-generation individual evaluation."""
+        try:
+            configured = int(getattr(self.config, "individual_eval_parallel_workers", individual_count))
+        except (TypeError, ValueError):
+            configured = individual_count
+        return max(1, min(int(individual_count), configured))
 
     def _evaluate_individual(self, evaluator: Any, individual: Individual, *, generation: int | None) -> dict[str, Any]:
         """Run the evaluator and aggregate raw metrics into individual fitness."""
@@ -673,21 +736,22 @@ class EA:
             self.config,
         )
 
-    def build_evaluator(self) -> Any:
+    def build_evaluator(self, config_override: EAConfig | None = None) -> Any:
         """Create the evaluator supplied by the application layer."""
         evaluator_name = str(
             getattr(self, "evaluator_name", None) or getattr(self.config, "evaluator", "")
         ).strip()
+        active_config = config_override or self.config
         if evaluator_name:
             from eagle.core.registry import EVALUATORS
 
             evaluator_cls = EVALUATORS.get(evaluator_name)
-            return evaluator_cls(self.component_pool, self.config)
+            return evaluator_cls(self.component_pool, active_config)
         if self.evaluator_factory is None:
             raise ValueError(
                 "No evaluator_factory configured for this component evolution algorithm."
             )
-        return self.evaluator_factory(self.component_pool, self.config)
+        return self.evaluator_factory(self.component_pool, active_config)
 
     def run_final_test(self):
         """Replay the last saved generation against the configured final-test opponents."""

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import math
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from eagle.config import clone_config
 from eagle.core.registry import ALGORITHMS, EVALUATORS
 from eagle.objectives.aggregation import aggregate_fitness
 from eagle.evolution.component.ga import GA
@@ -59,25 +61,19 @@ class MicroRTSGASurrogate(GA):
         return super().select_parent()
 
     def _evaluate_initial_population(self, evaluator):
-        for index, individual in enumerate(self.population):
-            print(
-                f"[Initial Population] surrogate evaluation {index + 1}/{len(self.population)}",
-                flush=True,
-            )
-            self._evaluate_surrogate_individual(evaluator, individual, generation=-1)
+        self._evaluate_surrogate_batch(self.population, generation=-1, label="Initial Population")
         self._refresh_gameplay_archive(evaluator, self.population, generation=-1, force=True)
         print("[Initial Population] complete", flush=True)
         self.print_population_snapshot("initial population")
         self._log_initial_population_snapshot()
 
     def _evaluate_offspring(self, evaluator, offspring, generation: int) -> None:
-        for index, child in enumerate(offspring):
-            print(
-                f"[Generation {generation + 1}] surrogate evaluation "
-                f"{index + 1}/{len(offspring)} id={child.id}",
-                flush=True,
-            )
-            self._evaluate_surrogate_individual(evaluator, child, generation=generation)
+        self._evaluate_surrogate_batch(
+            offspring,
+            generation=generation,
+            label=f"Generation {generation + 1}",
+        )
+        for child in offspring:
             print(
                 f"[Generation {generation + 1}] surrogate result "
                 f"id={child.id} surrogate_score={getattr(child, 'surrogate_score', None)}",
@@ -86,6 +82,48 @@ class MicroRTSGASurrogate(GA):
             self._update_mutation_component_feedback(child)
         if self._is_gameplay_refresh_generation(generation):
             self._refresh_gameplay_archive(evaluator, offspring, generation=generation)
+
+    def _evaluate_surrogate_batch(self, individuals, *, generation: int | None, label: str) -> None:
+        """Evaluate one generation's surrogate candidates with bounded workers."""
+        candidates = list(individuals)
+        if not candidates:
+            return
+        workers = self._individual_eval_parallel_workers(len(candidates))
+        print(
+            "[Individual Eval Queue] "
+            f"label={label} surrogate generation={generation} "
+            f"individuals={len(candidates)} workers={workers}",
+            flush=True,
+        )
+        if workers <= 1:
+            for index, individual in enumerate(candidates, start=1):
+                print(
+                    f"[{label}] surrogate evaluation {index}/{len(candidates)} id={individual.id}",
+                    flush=True,
+                )
+                evaluator = self.build_evaluator(config_override=clone_config(self.config))
+                self._evaluate_surrogate_individual(evaluator, individual, generation=generation)
+            return
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_map = {
+                executor.submit(
+                    self._evaluate_surrogate_individual,
+                    self.build_evaluator(config_override=clone_config(self.config)),
+                    individual,
+                    generation=generation,
+                ): individual
+                for individual in candidates
+            }
+            for future in as_completed(future_map):
+                individual = future_map[future]
+                future.result()
+                print(
+                    "[Individual Eval Queue] complete "
+                    f"surrogate generation={generation} id={individual.id} "
+                    f"fitness={getattr(individual, 'fitness', None)}",
+                    flush=True,
+                )
 
     def _is_gameplay_refresh_generation(self, generation: int) -> bool:
         interval = max(1, int(self.config.gameplay_refresh_interval))
@@ -112,8 +150,13 @@ class MicroRTSGASurrogate(GA):
             f"[GA Surrogate] gameplay refresh generation={generation} candidates={len(selected)}",
             flush=True,
         )
+        self._evaluate_individual_batch(
+            selected,
+            generation=generation,
+            stage="gameplay_refresh",
+            label=f"GA Surrogate gameplay refresh {generation}",
+        )
         for individual in selected:
-            self._evaluate_individual(evaluator, individual, generation=generation)
             individual.gameplay_score = super()._fitness0(individual)
             individual.evaluation_mode = "gameplay"
             self._update_gameplay_archive(individual)

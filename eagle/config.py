@@ -145,6 +145,10 @@ class EAConfig:
     agent_eval_parallel_workers: int = field(
         default_factory=lambda: int(_default_config_value("agent_eval_parallel_workers"))
     )
+    individual_eval_parallel_workers: int = field(
+        default_factory=lambda: int(_default_config_value("individual_eval_parallel_workers"))
+    )
+    llm_parallel_workers: int = field(default_factory=lambda: int(_default_config_value("llm_parallel_workers")))
     prompt_history_path: str = field(default_factory=lambda: str(_default_config_value("prompt_history_path")))
 
 
@@ -213,6 +217,8 @@ class EAConfig:
         self.one_eval_rounds = max(1, int(self.one_eval_rounds))
         self.round_eval_parallel_workers = max(1, int(self.round_eval_parallel_workers))
         self.agent_eval_parallel_workers = max(1, int(self.agent_eval_parallel_workers))
+        self.individual_eval_parallel_workers = max(1, int(self.individual_eval_parallel_workers))
+        self.llm_parallel_workers = max(1, int(self.llm_parallel_workers))
         self.surrogate_top_ratio = min(1.0, max(0.0, float(self.surrogate_top_ratio)))
         self.archive_parent_ratio = min(1.0, max(0.0, float(self.archive_parent_ratio)))
 
@@ -325,6 +331,8 @@ class EAConfig:
             "one_eval_rounds": self.one_eval_rounds,
             "round_eval_parallel_workers": self.round_eval_parallel_workers,
             "agent_eval_parallel_workers": self.agent_eval_parallel_workers,
+            "individual_eval_parallel_workers": self.individual_eval_parallel_workers,
+            "llm_parallel_workers": self.llm_parallel_workers,
             "surrogate_log_dir": self.surrogate_log_dir,
         }
 

@@ -52,5 +52,7 @@
   "surrogate_log_dir": "logs/microrts",
   "one_eval_rounds": 8,
   "round_eval_parallel_workers": 8,
-  "agent_eval_parallel_workers": 8
+  "agent_eval_parallel_workers": 8,
+  "individual_eval_parallel_workers": 8,
+  "llm_parallel_workers": 8
 }
