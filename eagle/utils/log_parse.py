@@ -34,7 +34,9 @@ SCOREBOARD_RE = re.compile(
 )
 GAMEOVER_RE = re.compile(r"^\s*gs\.gameover\(\)\s*=\s*(?P<value>true|false)\s*$", re.MULTILINE)
 GAME_SETTING_AI_RE = re.compile(r"^\s*AI(?P<slot>[12]):\s*(?P<name>.+?)\s*$", re.MULTILINE)
-WINNER_RE = re.compile(r"^\s*WINNER\s*:?\s*(?P<winner>\d+)\s*$", re.MULTILINE | re.IGNORECASE)
+WINNER_RE = re.compile(r"^\s*WINNER\s*:?\s*(?P<winner>-?\d+)\s*$", re.MULTILINE | re.IGNORECASE)
+FINAL_TICK_RE = re.compile(r"^\s*FINAL_TICK\s*:?\s*(?P<tick>\d+)\s*$", re.MULTILINE | re.IGNORECASE)
+MAX_CYCLES_RE = re.compile(r"^\s*Max Cycles:\s*(?P<cycles>\d+)\s*$", re.MULTILINE | re.IGNORECASE)
 STACKTRACE_CLASS_RE = re.compile(r"\bat\s+(?P<class>[a-zA-Z_][\w.$]*)\.[\w$<>]+\(")
 
 APPLY_MOVE_RE = re.compile(
@@ -554,6 +556,22 @@ def extract_declared_winner(log_text: str) -> str | None:
     return match.group("winner")
 
 
+def extract_final_tick(log_text: str) -> int | None:
+    """Extract the final game tick printed by MicroRTS when available."""
+    match = FINAL_TICK_RE.search(log_text)
+    if not match:
+        return None
+    return int(match.group("tick"))
+
+
+def extract_max_cycles(log_text: str) -> int | None:
+    """Extract the configured MicroRTS max cycle count from the log header."""
+    match = MAX_CYCLES_RE.search(log_text)
+    if not match:
+        return None
+    return int(match.group("cycles"))
+
+
 def _class_name_variants(name: str) -> set[str]:
     """Generate plausible Java class-name variants for one configured agent name."""
     variants = {name.strip()}
@@ -855,6 +873,8 @@ def parse_log(log_text: str, target_agent: str = "EAGLE") -> dict[str, Any]:
         "applied_success_count": sum(s["applied_success_count"] for s in parsed_segments),
         "resource_history": resource_history,
         "feature_history": feature_history,
+        "final_tick": extract_final_tick(log_text),
+        "max_cycles": extract_max_cycles(log_text),
     }
     outcome = infer_winner(log_text, target_agent=target_agent)
     summary.update(

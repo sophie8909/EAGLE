@@ -228,6 +228,7 @@ def run_generation_result_test(
                 result = evaluator.run_prompt_based_agent(
                     prompt=prompt,
                     opponent=opponent,
+                    generation=generation,
                     llm_interval=llm_interval,
                     test=True,
                 )
@@ -261,6 +262,7 @@ def run_generation_result_test(
             result = evaluator.run_java_based_agent(
                 prompt=prompt,
                 opponent=opponent,
+                generation=generation,
                 test=True,
             )
             match_score = dict(result["match_score"])

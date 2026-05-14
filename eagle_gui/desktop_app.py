@@ -451,7 +451,7 @@ class EagleDesktopApp:
         self.game_seconds_frame = ttk.Frame(tab)
         self.game_seconds_frame.grid(row=3, column=2, columnspan=2, sticky="ew")
         self.game_seconds_frame.columnconfigure(1, weight=1)
-        self._labeled_entry(self.game_seconds_frame, "Game seconds", self.run_time_per_game_sec, 0, 0)
+        self._labeled_entry(self.game_seconds_frame, "Game ticks", self.run_time_per_game_sec, 0, 0)
         self.surrogate_algorithm_frame = ttk.Frame(tab)
         self.surrogate_algorithm_frame.grid(row=4, column=0, columnspan=4, sticky="ew")
         self.surrogate_algorithm_frame.columnconfigure(1, weight=1)
@@ -3277,15 +3277,22 @@ def microrts_trace_dir() -> Path:
 
 def microrts_trace_choices() -> list[Path]:
     """Return saved trace files newest first."""
-    trace_dir = microrts_trace_dir()
-    if not trace_dir.exists():
-        return []
-    paths = [
-        path
-        for pattern in ("*.xml", "*.zip")
-        for path in trace_dir.glob(pattern)
-        if path.is_file()
+    roots = [
+        microrts_trace_dir(),
+        ROOT / "logs" / "microrts",
+        ROOT / "logs" / "eagle",
     ]
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        if not root.exists():
+            continue
+        for pattern in ("*.xml", "*.zip"):
+            for path in root.rglob(pattern):
+                if not path.is_file() or path in seen:
+                    continue
+                seen.add(path)
+                paths.append(path)
     return sorted(paths, key=lambda path: path.stat().st_mtime, reverse=True)
 
 

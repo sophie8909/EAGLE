@@ -42,6 +42,26 @@ def _trace_logs_dir(project_root: Path | None = None, runtime_logs_dir: Path | N
     return trace_dir
 
 
+def _generation_folder_name(generation: int | None) -> str:
+    """Return the folder name used for one generation's match artifacts."""
+    if generation is None:
+        return "gen_unknown"
+    display_generation = max(0, int(generation) + 1)
+    return f"gen_{display_generation:02d}"
+
+
+def _generation_runtime_dir(
+    project_root: Path | None = None,
+    runtime_logs_dir: Path | None = None,
+    generation: int | None = None,
+) -> Path:
+    """Return the per-generation directory used for match logs and traces."""
+    base_dir = _runtime_logs_dir(project_root, runtime_logs_dir=runtime_logs_dir)
+    generation_dir = base_dir / _generation_folder_name(generation)
+    generation_dir.mkdir(parents=True, exist_ok=True)
+    return generation_dir
+
+
 def save_prompt(project_root: Path | None, prompt: str) -> Path:
     """Write the rendered EAGLE prompt for the next MicroRTS run."""
     prompt_path = _prompt_path(project_root)
@@ -135,9 +155,10 @@ def _make_trace_prefix(
     project_root: Path | None = None,
     prefix: str = "run_test",
     runtime_logs_dir: Path | None = None,
+    generation: int | None = None,
 ) -> Path:
     """Create a timestamped output prefix for one recorded trace."""
-    trace_dir = _trace_logs_dir(project_root, runtime_logs_dir=runtime_logs_dir)
+    trace_dir = _generation_runtime_dir(project_root, runtime_logs_dir=runtime_logs_dir, generation=generation)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     normalized_prefix = str(prefix or "run_test").strip().lower()
     return trace_dir / f"{normalized_prefix}_{timestamp}"
@@ -152,6 +173,8 @@ def launch_java_match(
     ai2_class: str | None = None,
     prompt_path: Path | None = None,
     llm_interval: int | None = None,
+    max_game_ticks: int | None = None,
+    trace_path: Path | None = None,
 ) -> tuple[int, bool, str, float]:
     """Launch one Java MicroRTS game and capture its combined log output."""
     microrts_root = locate_microrts_root(project_root)
@@ -163,7 +186,12 @@ def launch_java_match(
         command.append(f"-Dmicrorts.prompt={prompt_path}")
     if llm_interval is not None:
         command.append(f"-Dmicrorts.llm_interval={int(llm_interval)}")
+    if trace_path is not None:
+        command.append(f"-Dmicrorts.trace.path={trace_path}")
     command.extend(["-cp", classpath, "rts.MicroRTS"])
+    command.extend(["--headless", "true"])
+    if max_game_ticks is not None:
+        command.extend(["-c", str(int(max_game_ticks))])
     if ai1_class is not None:
         command.extend(["--ai1", ai1_class])
     if ai2_class is not None:
@@ -171,7 +199,7 @@ def launch_java_match(
 
     print(
         "[DEBUG] microrts launch "
-        f"cwd={microrts_root} timeout={run_time_per_game_sec} log={log_path} "
+        f"cwd={microrts_root} max_ticks={max_game_ticks or run_time_per_game_sec} log={log_path} "
         f"ai1={ai1_class} ai2={ai2_class}",
         flush=True,
     )
@@ -183,18 +211,19 @@ def launch_java_match(
             stdout=stream,
             stderr=subprocess.STDOUT,
             text=True,
-            env=os.environ.copy(),
+            env={**os.environ.copy(), "EAGLE_FORCE_EXIT_ON_GAME_OVER": "1"},
         )
         timed_out = False
+        wall_clock_safety_sec = max(3600, int(run_time_per_game_sec) * 30)
         try:
-            exit_code = process.wait(timeout=max(1, int(run_time_per_game_sec)))
+            exit_code = process.wait(timeout=wall_clock_safety_sec)
         except subprocess.TimeoutExpired:
             timed_out = True
             process.kill()
             exit_code = process.wait()
             with log_path.open("a", encoding="utf-8") as append_stream:
                 append_stream.write(
-                    f"\n[python-runner] timed out after {run_time_per_game_sec} seconds.\n"
+                    f"\n[python-runner] wall-clock safety stop after {wall_clock_safety_sec} seconds.\n"
                 )
     elapsed = time.perf_counter() - started
     print(
@@ -254,7 +283,21 @@ def record_java_match_trace(
 def detect_timeout(log_content: str) -> bool:
     """Heuristically detect whether the match log indicates timeout termination."""
     lowered = log_content.lower()
-    return "timed out" in lowered or "timeout" in lowered
+    return "wall-clock safety stop" in lowered
+
+
+def detect_tick_timeout(parsed_log: dict[str, Any], max_game_ticks: int) -> bool:
+    """Return whether MicroRTS ended by reaching the configured tick budget."""
+    summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else {}
+    final_tick = summary.get("final_tick")
+    if final_tick is None:
+        resource_history = list(summary.get("resource_history") or [])
+        if resource_history:
+            final_tick = resource_history[-1].get("time")
+    try:
+        return int(final_tick) >= int(max_game_ticks)
+    except (TypeError, ValueError):
+        return False
 
 
 def get_latest_log_file(project_root: Path | None = None) -> Path | None:
@@ -275,6 +318,8 @@ def run_java_agent_game(
     log_prefix: str = "run",
     runtime_logs_dir: Path | None = None,
     record_trace: bool = False,
+    generation: int | None = None,
+    individual_id: Any | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one MicroRTS game with explicit Java agent classes."""
     project_root = (project_root or PROJECT_ROOT).resolve()
@@ -292,21 +337,37 @@ def run_java_agent_game(
 
     prompt_path: Path | None = None
     if prompt is not None:
-        prompt_dir = _runtime_logs_dir(project_root, runtime_logs_dir=runtime_logs_dir) / "prompts"
+        generation_dir = _generation_runtime_dir(project_root, runtime_logs_dir=runtime_logs_dir, generation=generation)
+        prompt_dir = generation_dir / "prompts"
         prompt_dir.mkdir(parents=True, exist_ok=True)
         safe_ai_name = _target_agent_name(ai1_class)
         prompt_path = prompt_dir / f"prompt_{safe_ai_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S_%f')}.txt"
         prompt_path.write_text(prompt, encoding="utf-8")
     try:
-        log_path = _make_log_path(project_root, prefix=log_prefix, runtime_logs_dir=runtime_logs_dir)
+        generation_runtime_dir = _generation_runtime_dir(
+            project_root,
+            runtime_logs_dir=runtime_logs_dir,
+            generation=generation,
+        )
+        log_path = _make_log_path(project_root, prefix=log_prefix, runtime_logs_dir=generation_runtime_dir)
+        trace_stem_parts = [
+            str(log_prefix or "run"),
+            f"ind_{individual_id}" if individual_id is not None else "ind_unknown",
+            _target_agent_name(ai1_class),
+            datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f"),
+        ]
+        trace_path = generation_runtime_dir / ("trace_" + "_".join(trace_stem_parts) + ".xml")
+        max_game_ticks = int(config.run_time_per_game_sec)
         exit_code, timed_out, log_path_str, game_time_sec = launch_java_match(
             project_root=project_root,
-            run_time_per_game_sec=int(config.run_time_per_game_sec),
+            run_time_per_game_sec=max_game_ticks,
             log_path=log_path,
             ai1_class=ai1_class,
             ai2_class=opponent,
             prompt_path=prompt_path,
             llm_interval=config.active_llm_interval(),
+            max_game_ticks=max_game_ticks,
+            trace_path=trace_path,
         )
         log_content = Path(log_path_str).read_text(encoding="utf-8", errors="replace")
         parsed_log = parse_game_log(log_content, target_agent=_target_agent_name(ai1_class))
@@ -318,8 +379,10 @@ def run_java_agent_game(
         metadata = {
             "parsed_log": parsed_log,
             "winner": parsed_log.get("summary", {}).get("winner"),
-            "timeout": bool(timed_out or detect_timeout(log_content)),
+            "timeout": bool(timed_out or detect_timeout(log_content) or detect_tick_timeout(parsed_log, max_game_ticks)),
+            "timeout_type": "tick" if detect_tick_timeout(parsed_log, max_game_ticks) else "wall_clock" if timed_out else None,
             "log_path": log_path_str,
+            "trace_xml_path": str(trace_path) if trace_path.exists() else None,
             "llm_calls": parsed_log.get("summary", {}).get("segment_count", 0),
             "exit_code": exit_code,
             "game_time_sec": game_time_sec,
@@ -336,22 +399,6 @@ def run_java_agent_game(
             f"feature_rows={len(summary.get('feature_history') or [])}",
             flush=True,
         )
-        if record_trace:
-            config_properties = read_config_properties(project_root)
-            trace_info = record_java_match_trace(
-                project_root=project_root,
-                ai1_class=ai1_class,
-                ai2_class=str(opponent or config_properties.get("AI2", "ai.RandomAI")),
-                output_prefix=_make_trace_prefix(
-                    project_root,
-                    prefix=log_prefix,
-                    runtime_logs_dir=runtime_logs_dir,
-                ),
-                max_cycles=int(config_properties.get("max_cycles", 5000)),
-                map_location=str(config_properties.get("map_location", "maps/8x8/basesWorkers8x8.xml")),
-            )
-            if trace_info is not None:
-                metadata.update(trace_info)
         return match_score, metadata
     finally:
         pass
@@ -365,6 +412,8 @@ def run_prompt_based_game(
     opponent: str | None,
     test: bool = False,
     runtime_logs_dir: Path | None = None,
+    generation: int | None = None,
+    individual_id: Any | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one gameplay EAGLE-vs-opponent match driven by the prompt file."""
     return run_java_agent_game(
@@ -376,5 +425,7 @@ def run_prompt_based_game(
         compile_first=True,
         log_prefix="run" if not test else "run_test",
         runtime_logs_dir=runtime_logs_dir,
-        record_trace=bool(test and getattr(config, "save_trace_on_test", False)),
+        record_trace=True,
+        generation=generation,
+        individual_id=individual_id,
     )

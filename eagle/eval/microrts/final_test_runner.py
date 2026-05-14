@@ -189,6 +189,7 @@ def run_final_test_suite(
                 result = evaluator.run_prompt_based_agent(
                     prompt=prompt,
                     opponent=opponent,
+                    generation=generation_number,
                     llm_interval=llm_interval,
                     test=True,
                 )

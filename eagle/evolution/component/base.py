@@ -746,12 +746,14 @@ class EA:
             from eagle.core.registry import EVALUATORS
 
             evaluator_cls = EVALUATORS.get(evaluator_name)
-            return evaluator_cls(self.component_pool, active_config)
+            runtime_logs_dir = self.current_log_dir if self.current_log_dir is not None else None
+            return evaluator_cls(self.component_pool, active_config, runtime_logs_dir=runtime_logs_dir)
         if self.evaluator_factory is None:
             raise ValueError(
                 "No evaluator_factory configured for this component evolution algorithm."
             )
-        return self.evaluator_factory(self.component_pool, active_config)
+        runtime_logs_dir = self.current_log_dir if self.current_log_dir is not None else None
+        return self.evaluator_factory(self.component_pool, active_config, runtime_logs_dir=runtime_logs_dir)
 
     def run_final_test(self):
         """Replay the last saved generation against the configured final-test opponents."""

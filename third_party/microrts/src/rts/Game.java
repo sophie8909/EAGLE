@@ -5,6 +5,7 @@ import gui.PhysicalGameStatePanel;
 import java.lang.reflect.Constructor;
 import javax.swing.JFrame;
 
+import rts.units.Unit;
 import rts.units.UnitTypeTable;
 
 /**
@@ -69,6 +70,7 @@ public class Game {
     private Game(UnitTypeTable utt, String mapLocation, boolean headless, boolean partiallyObservable, int maxCycles,
                  int updateInterval) throws Exception {
 
+        this.utt = utt;
         PhysicalGameState pgs = PhysicalGameState.load(mapLocation, utt);
 
         gs = new GameState(pgs, utt);
@@ -199,6 +201,7 @@ public class Game {
         // Print clear game result for benchmark parsing
         int winner = gs.winner();
         int finalTick = gs.getTime();
+        printFinalStateSnapshot(finalTick);
         System.out.println();
         System.out.println("=== GAME RESULT ===");
         System.out.println("FINAL_TICK: " + finalTick);
@@ -228,5 +231,41 @@ public class Game {
         if ("1".equals(forceExit)) {
             System.exit(0);
         }
+    }
+
+    private void printFinalStateSnapshot(int finalTick) {
+        PhysicalGameState pgs = gs.getPhysicalGameState();
+        System.out.println(
+            "current time " + finalTick
+            + " p0 player 0(" + gs.getPlayer(0).getResources() + ")"
+            + " p1 player 1(" + gs.getPlayer(1).getResources() + ")"
+        );
+        System.out.println("=== Dynamic Prompt ===");
+        System.out.println("Map size: " + pgs.getWidth() + "x" + pgs.getHeight());
+        System.out.println("Turn: " + finalTick + "/" + maxCycles);
+        System.out.println("Feature locations:");
+        for (Unit unit : pgs.getUnits()) {
+            System.out.println(renderFeatureLine(unit));
+        }
+        System.out.println("======================");
+    }
+
+    private String renderFeatureLine(Unit unit) {
+        String team = unit.getPlayer() == 0 ? "Ally" : unit.getPlayer() == 1 ? "Enemy" : "Neutral";
+        String unitLabel = featureUnitLabel(unit);
+        String details = "{HP=" + unit.getHitPoints() + ", resources=" + unit.getResources() + "}";
+        return "(" + unit.getX() + "," + unit.getY() + ") " + team + " " + unitLabel + " " + details;
+    }
+
+    private String featureUnitLabel(Unit unit) {
+        String name = unit.getType().name;
+        if ("Resource".equalsIgnoreCase(name)) return "Resource Node";
+        if ("Base".equalsIgnoreCase(name)) return "Base Unit";
+        if ("Barracks".equalsIgnoreCase(name)) return "Barracks Unit";
+        if ("Worker".equalsIgnoreCase(name)) return "Worker Unit";
+        if ("Light".equalsIgnoreCase(name)) return "Light Unit";
+        if ("Heavy".equalsIgnoreCase(name)) return "Heavy Unit";
+        if ("Ranged".equalsIgnoreCase(name)) return "Ranged Unit";
+        return name + " Unit";
     }
 }

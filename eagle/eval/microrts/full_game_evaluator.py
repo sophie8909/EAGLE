@@ -118,6 +118,7 @@ class FullGameEvaluator:
                     "winner": simulation_meta.get("winner"),
                     "timeout": simulation_meta.get("timeout"),
                     "log_path": simulation_meta.get("log_path"),
+                    "trace_xml_path": simulation_meta.get("trace_xml_path"),
                     "parsed_summary": (parsed_log or {}).get("summary", {}) if isinstance(parsed_log, dict) else {},
                     "evaluation_mode": evaluation_mode,
                 }
@@ -217,6 +218,7 @@ class FullGameEvaluator:
                         individual=individual,
                         prompt=prompt,
                         opponent=opponent,
+                        generation=generation,
                     ),
                     label=surrogate,
                     individual_id=getattr(individual, "id", None),
@@ -294,6 +296,7 @@ class FullGameEvaluator:
         individual: Individual,
         prompt: str,
         opponent: str | None,
+        generation: int | None,
     ) -> dict[str, Any]:
         """Run one prepared Java-backed surrogate match for one opponent."""
         if surrogate == "java_agent":
@@ -305,6 +308,7 @@ class FullGameEvaluator:
                 log_prefix="run_eagle_java",
                 evaluation_mode="java_agent",
                 compile_first=False,
+                generation=generation,
             )
         if surrogate == "policy_agent":
             return self.run_java_based_agent(
@@ -315,6 +319,7 @@ class FullGameEvaluator:
                 log_prefix="run_eagle_policy",
                 evaluation_mode="policy_agent",
                 compile_first=False,
+                generation=generation,
             )
         raise ValueError(
             f"Unsupported surrogate={surrogate!r}. "
@@ -442,6 +447,8 @@ class FullGameEvaluator:
                 opponent,
                 llm_interval=llm_interval,
                 test=test,
+                generation=generation,
+                individual_id=getattr(individual, "id", None) if individual is not None else None,
             )
         stats["microrts_compile_time"] = float(simulation_meta.get("compile_time_sec", 0.0) or 0.0)
         summarize_total_eval_time(stats)
@@ -478,6 +485,7 @@ class FullGameEvaluator:
         log_prefix: str = "run_eagle_policy",
         evaluation_mode: str = "policy_agent",
         compile_first: bool = True,
+        generation: int | None = None,
     ) -> dict[str, Any]:
         """Run one policy-backed Java-agent match and return the raw single-match payload."""
         rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
@@ -494,6 +502,8 @@ class FullGameEvaluator:
                     test=test,
                     log_prefix=log_prefix,
                     compile_first=False,
+                    generation=generation,
+                    individual_id=getattr(individual, "id", None) if individual is not None else None,
                 )
             else:
                 match_score, simulation_meta = self._run_java_match(
@@ -504,6 +514,8 @@ class FullGameEvaluator:
                     test=test,
                     log_prefix=log_prefix,
                     compile_first=compile_first,
+                    generation=generation,
+                    individual_id=getattr(individual, "id", None) if individual is not None else None,
                 )
         stats["microrts_compile_time"] = float(simulation_meta.get("compile_time_sec", 0.0) or 0.0)
         summarize_total_eval_time(stats)
@@ -554,6 +566,8 @@ class FullGameEvaluator:
         *,
         llm_interval: int | None = None,
         test: bool = False,
+        generation: int | None = None,
+        individual_id: Any | None = None,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         original_interval = getattr(self.config, "_active_llm_interval", None)
         if llm_interval is not None:
@@ -566,6 +580,8 @@ class FullGameEvaluator:
                 opponent=opponent,
                 test=test,
                 runtime_logs_dir=self.runtime_logs_dir,
+                generation=generation,
+                individual_id=individual_id,
             )
             return self._normalize_match_score(match_score), simulation_meta
         finally:
@@ -581,6 +597,8 @@ class FullGameEvaluator:
         test: bool = False,
         log_prefix: str = "run_eagle_policy",
         compile_first: bool = True,
+        generation: int | None = None,
+        individual_id: Any | None = None,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         original_interval = getattr(self.config, "_active_llm_interval", None)
         if llm_interval is not None:
@@ -595,7 +613,9 @@ class FullGameEvaluator:
                 compile_first=compile_first,
                 log_prefix=log_prefix if not test else f"{log_prefix.replace('run_', 'run_test_', 1)}",
                 runtime_logs_dir=self.runtime_logs_dir,
-                record_trace=bool(test and getattr(self.config, "save_trace_on_test", False)),
+                record_trace=True,
+                generation=generation,
+                individual_id=individual_id,
             )
             return self._normalize_match_score(match_score), simulation_meta
         finally:
@@ -648,8 +668,10 @@ class FullGameEvaluator:
                 "evaluation_mode": evaluation_mode,
                 "evaluation_time": stats.get("total_eval_time", 0.0),
                 "log_path": simulation_meta.get("log_path"),
+                "trace_xml_path": simulation_meta.get("trace_xml_path"),
                 "winner": simulation_meta.get("winner"),
                 "timeout": simulation_meta.get("timeout"),
+                "timeout_type": simulation_meta.get("timeout_type"),
                 "llm_calls": simulation_meta.get("llm_calls"),
                 "game_time_sec": simulation_meta.get("game_time_sec"),
                 "parsed_summary": summary,
@@ -675,6 +697,7 @@ class FullGameEvaluator:
             "winner": simulation_meta.get("winner"),
             "timeout": timeout,
             "log_path": simulation_meta.get("log_path"),
+            "trace_xml_path": simulation_meta.get("trace_xml_path"),
             "parsed_log": parsed_log,
             "parsed_summary": summary,
             "reflection_context": Reflection.build_compact_reflection_context(
@@ -720,6 +743,7 @@ class FullGameEvaluator:
                 "ea_llm_call_time": 0.0,
                 "match_score": dict(match_score),
                 "log_path": simulation_meta.get("log_path"),
+                "trace_xml_path": simulation_meta.get("trace_xml_path"),
             }
         )
         for key in (
