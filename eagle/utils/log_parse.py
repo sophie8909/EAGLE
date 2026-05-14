@@ -37,6 +37,7 @@ GAME_SETTING_AI_RE = re.compile(r"^\s*AI(?P<slot>[12]):\s*(?P<name>.+?)\s*$", re
 WINNER_RE = re.compile(r"^\s*WINNER\s*:?\s*(?P<winner>-?\d+)\s*$", re.MULTILINE | re.IGNORECASE)
 FINAL_TICK_RE = re.compile(r"^\s*FINAL_TICK\s*:?\s*(?P<tick>\d+)\s*$", re.MULTILINE | re.IGNORECASE)
 MAX_CYCLES_RE = re.compile(r"^\s*Max Cycles:\s*(?P<cycles>\d+)\s*$", re.MULTILINE | re.IGNORECASE)
+LLM_CALL_RE = re.compile(r"^\s*\[EAGLE\]\s+call LLM:", re.MULTILINE)
 STACKTRACE_CLASS_RE = re.compile(r"\bat\s+(?P<class>[a-zA-Z_][\w.$]*)\.[\w$<>]+\(")
 
 APPLY_MOVE_RE = re.compile(
@@ -572,6 +573,11 @@ def extract_max_cycles(log_text: str) -> int | None:
     return int(match.group("cycles"))
 
 
+def count_llm_calls(log_text: str) -> int:
+    """Count actual Java EAGLE LLM call log entries."""
+    return len(LLM_CALL_RE.findall(log_text))
+
+
 def _class_name_variants(name: str) -> set[str]:
     """Generate plausible Java class-name variants for one configured agent name."""
     variants = {name.strip()}
@@ -866,6 +872,7 @@ def parse_log(log_text: str, target_agent: str = "EAGLE") -> dict[str, Any]:
     summary = {
         "target_agent": target_agent,
         "segment_count": len(parsed_segments),
+        "llm_call_count": count_llm_calls(log_text),
         "llm_move_count": sum(s["llm_move_count"] for s in parsed_segments),
         "direct_failure_count": sum(s["direct_failure_count"] for s in parsed_segments),
         "duplicate_skipped_count": sum(s["duplicate_skipped_count"] for s in parsed_segments),

@@ -93,7 +93,8 @@ def run_final_test_suite(
             "test_config_path": str(
                 Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
             ),
-            "run_time_per_game_sec": int(runtime_config.run_time_per_game_sec),
+            "tick_limit": int(runtime_config.tick_limit),
+            "llm_call_limit": int(runtime_config.llm_call_limit),
             "interval_runs": [],
             "results": {},
             "skipped": True,
@@ -148,7 +149,8 @@ def run_final_test_suite(
         "test_config_path": str(
             Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
         ),
-        "run_time_per_game_sec": int(runtime_config.run_time_per_game_sec),
+        "tick_limit": int(runtime_config.tick_limit),
+        "llm_call_limit": int(runtime_config.llm_call_limit),
         "interval_runs": interval_runs,
         "results": {},
     }

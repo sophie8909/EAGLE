@@ -119,6 +119,7 @@ class FullGameEvaluator:
                     "timeout": simulation_meta.get("timeout"),
                     "log_path": simulation_meta.get("log_path"),
                     "trace_xml_path": simulation_meta.get("trace_xml_path"),
+                    "map_location": simulation_meta.get("map_location"),
                     "parsed_summary": (parsed_log or {}).get("summary", {}) if isinstance(parsed_log, dict) else {},
                     "evaluation_mode": evaluation_mode,
                 }
@@ -669,10 +670,14 @@ class FullGameEvaluator:
                 "evaluation_time": stats.get("total_eval_time", 0.0),
                 "log_path": simulation_meta.get("log_path"),
                 "trace_xml_path": simulation_meta.get("trace_xml_path"),
+                "map_location": simulation_meta.get("map_location"),
+                "gameplay_map_dir": simulation_meta.get("gameplay_map_dir"),
                 "winner": simulation_meta.get("winner"),
                 "timeout": simulation_meta.get("timeout"),
                 "timeout_type": simulation_meta.get("timeout_type"),
                 "llm_calls": simulation_meta.get("llm_calls"),
+                "tick_limit": simulation_meta.get("tick_limit"),
+                "llm_call_limit": simulation_meta.get("llm_call_limit"),
                 "game_time_sec": simulation_meta.get("game_time_sec"),
                 "parsed_summary": summary,
                 "stats": dict(stats),
@@ -698,6 +703,7 @@ class FullGameEvaluator:
             "timeout": timeout,
             "log_path": simulation_meta.get("log_path"),
             "trace_xml_path": simulation_meta.get("trace_xml_path"),
+            "map_location": simulation_meta.get("map_location"),
             "parsed_log": parsed_log,
             "parsed_summary": summary,
             "reflection_context": Reflection.build_compact_reflection_context(
@@ -737,6 +743,8 @@ class FullGameEvaluator:
                 "winner": simulation_meta.get("winner"),
                 "timeout": simulation_meta.get("timeout", False),
                 "llm_calls": llm_calls,
+                "tick_limit": simulation_meta.get("tick_limit"),
+                "llm_call_limit": simulation_meta.get("llm_call_limit"),
                 "avg_llm_call_time": None,
                 "max_llm_call_time": None,
                 "game_llm_call_time": None,
@@ -744,6 +752,7 @@ class FullGameEvaluator:
                 "match_score": dict(match_score),
                 "log_path": simulation_meta.get("log_path"),
                 "trace_xml_path": simulation_meta.get("trace_xml_path"),
+                "map_location": simulation_meta.get("map_location"),
             }
         )
         for key in (

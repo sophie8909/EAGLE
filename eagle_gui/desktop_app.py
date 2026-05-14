@@ -126,7 +126,9 @@ class EagleDesktopApp:
         self.surrogate = StringVar(value="round")
         self.population_size = StringVar(value="10")
         self.num_generations = StringVar(value="50")
-        self.run_time_per_game_sec = StringVar(value="500")
+        self.tick_limit = StringVar(value="5000")
+        self.llm_call_limit = StringVar(value="50")
+        self.gameplay_map_dir = StringVar(value="8x8")
         self.gameplay_rate = StringVar(value="0.25")
         self.gameplay_refresh_interval = StringVar(value="5")
         self.surrogate_top_ratio = StringVar(value="0.3")
@@ -451,7 +453,17 @@ class EagleDesktopApp:
         self.game_seconds_frame = ttk.Frame(tab)
         self.game_seconds_frame.grid(row=3, column=2, columnspan=2, sticky="ew")
         self.game_seconds_frame.columnconfigure(1, weight=1)
-        self._labeled_entry(self.game_seconds_frame, "Game ticks", self.run_time_per_game_sec, 0, 0)
+        self._labeled_entry(self.game_seconds_frame, "Tick limit", self.tick_limit, 0, 0)
+        self._labeled_entry(self.game_seconds_frame, "LLM call limit", self.llm_call_limit, 0, 2)
+        eval_map_combo = self._labeled_combo(
+            self.game_seconds_frame,
+            "Eval map folder",
+            self.gameplay_map_dir,
+            microrts_map_dir_choices(),
+            1,
+            0,
+        )
+        eval_map_combo.configure(state="readonly")
         self.surrogate_algorithm_frame = ttk.Frame(tab)
         self.surrogate_algorithm_frame.grid(row=4, column=0, columnspan=4, sticky="ew")
         self.surrogate_algorithm_frame.columnconfigure(1, weight=1)
@@ -2103,7 +2115,11 @@ class EagleDesktopApp:
         self.refresh_surrogate_visibility()
         self.population_size.set(str(payload.get("population_size", self.population_size.get())))
         self.num_generations.set(str(payload.get("num_generations", self.num_generations.get())))
-        self.run_time_per_game_sec.set(str(payload.get("run_time_per_game_sec", self.run_time_per_game_sec.get())))
+        self.tick_limit.set(str(payload.get("tick_limit", self.tick_limit.get())))
+        self.llm_call_limit.set(str(payload.get("llm_call_limit", self.llm_call_limit.get())))
+        self.gameplay_map_dir.set(str(payload.get("gameplay_map_dir", self.gameplay_map_dir.get())))
+        if self.gameplay_map_dir.get() not in microrts_map_dir_choices():
+            self.gameplay_map_dir.set("8x8")
         self.gameplay_rate.set(str(payload.get("gameplay_rate", self.gameplay_rate.get())))
         self.gameplay_refresh_interval.set(
             str(payload.get("gameplay_refresh_interval", self.gameplay_refresh_interval.get()))
@@ -2218,6 +2234,8 @@ class EagleDesktopApp:
             raise ValueError(f"Unsupported application: {self.application.get()}.")
         if self.algorithm.get() not in ALGORITHM_CHOICES:
             raise ValueError(f"Unsupported algorithm: {self.algorithm.get()}.")
+        if self.gameplay_map_dir.get().strip() not in microrts_map_dir_choices():
+            raise ValueError(f"Unsupported eval map folder: {self.gameplay_map_dir.get()}.")
         self.evaluator.set("gameplay")
         if self.evaluator.get() not in EVALUATOR_CHOICES:
             raise ValueError(f"Unsupported evaluator: {self.evaluator.get()}.")
@@ -2238,7 +2256,9 @@ class EagleDesktopApp:
                 "surrogate": self.surrogate.get(),
                 "population_size": parse_int(self.population_size.get(), "population_size"),
                 "num_generations": parse_int(self.num_generations.get(), "num_generations"),
-                "run_time_per_game_sec": parse_int(self.run_time_per_game_sec.get(), "run_time_per_game_sec"),
+                "tick_limit": parse_int(self.tick_limit.get(), "tick_limit"),
+                "llm_call_limit": parse_int(self.llm_call_limit.get(), "llm_call_limit"),
+                "gameplay_map_dir": self.gameplay_map_dir.get().strip(),
                 "gameplay_rate": parse_float(self.gameplay_rate.get(), "gameplay_rate"),
                 "gameplay_refresh_interval": parse_int(
                     self.gameplay_refresh_interval.get(),

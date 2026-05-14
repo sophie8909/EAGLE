@@ -62,6 +62,8 @@ public class EAGLE extends AbstractionLayerAI {
 
     // Keep this tied to the Java runtime setting so GUI/config changes affect the real agent cadence.
     private static final int LLM_INTERVAL = readIntSetting("microrts.llm_interval", "LLM_INTERVAL", 1);
+    private static final int LLM_CALL_LIMIT = readIntSetting("microrts.llm_call_limit", "LLM_CALL_LIMIT", 50);
+    private static final int TICK_LIMIT = readIntSetting("microrts.tick_limit", "TICK_LIMIT", 5000);
     private static final String OLLAMA_FORMAT = "json";
     private static final String OLLAMA_HOST = System.getenv().getOrDefault("OLLAMA_HOST", "http://localhost:11434");
     private static final boolean OLLAMA_STREAM = false;
@@ -85,6 +87,7 @@ public class EAGLE extends AbstractionLayerAI {
     private int totalMovesGenerated = 0;
     private int totalMovesAccepted = 0;
     private int totalMovesRejected = 0;
+    private int llmCallCount = 0;
 
     private String numShot = "One-Shot";
     private String aiName1 = "";
@@ -203,6 +206,8 @@ public class EAGLE extends AbstractionLayerAI {
         metrics.addProperty("moves_generated", totalMovesGenerated);
         metrics.addProperty("moves_accepted", totalMovesAccepted);
         metrics.addProperty("moves_rejected", totalMovesRejected);
+        metrics.addProperty("llm_calls", llmCallCount);
+        metrics.addProperty("llm_call_limit", LLM_CALL_LIMIT);
         metrics.addProperty("end_time", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date()));
 
         try (FileWriter writer = new FileWriter("game_summary.json", true)) {
@@ -219,6 +224,7 @@ public class EAGLE extends AbstractionLayerAI {
         TIME_BUDGET = -1;
         ITERATIONS_BUDGET = -1;
         clearDecisionCache();
+        llmCallCount = 0;
         endGameLogged = false;
     }
 
@@ -262,6 +268,8 @@ public class EAGLE extends AbstractionLayerAI {
         PromptContext promptContext = buildPromptContext(player, gs);
         logStateSnapshot(player, gs);
         logDynamicPrompt(promptContext.dynamicPrompt);
+        llmCallCount++;
+        System.out.println("[EAGLE] llm_call_count=" + llmCallCount + "/" + LLM_CALL_LIMIT);
         String response = prompt(promptContext.finalPrompt);
         logRawLLMResponse(response);
         JsonObject jsonResponse;
@@ -318,7 +326,7 @@ public class EAGLE extends AbstractionLayerAI {
                 .collect(Collectors.joining(", ", "[", "]"));
 
         String dynamicPrompt =  "Map size: " + pgs.getWidth() + "x" + pgs.getHeight() + "\n"
-                                + "Turn: " + gs.getTime() + "/5000\n"
+                                + "Turn: " + gs.getTime() + "/" + TICK_LIMIT + "\n"
                                 + "Max actions: " + maxActions + "\n\n"
                                 + featuresPrompt + "\n";
         String finalPrompt = getBasePrompt() + "\n\n" +
@@ -485,6 +493,10 @@ public class EAGLE extends AbstractionLayerAI {
     }
 
     private boolean shouldCallLLM(GameState gs, DecisionContext context) {
+        if (llmCallCount >= LLM_CALL_LIMIT) {
+            lastSkipReason = "llm_call_limit reached (" + llmCallCount + "/" + LLM_CALL_LIMIT + ")";
+            return false;
+        }
         // Invalid or missing previous output forces a retry; valid cached actions can keep running.
         if (!lastResponseWasValid) {
             lastCallReason = "previous response was invalid or missing";

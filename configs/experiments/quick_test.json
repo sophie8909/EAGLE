@@ -29,7 +29,8 @@
     "building_types",
     "game_state_format"
   ],
-  "run_time_per_game_sec": 500,
+  "tick_limit": 500,
+  "llm_call_limit": 50,
   "gameplay_rate": 0.25,
   "gameplay_opponents": [
     "ai.abstraction.LightRush",

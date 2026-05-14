@@ -209,7 +209,8 @@ def run_generation_result_test(
         "max_front": max_front,
         "opponents": resolved_opponents,
         "test_config_path": str(Path(config_path) if config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH),
-        "run_time_per_game_sec": int(runtime_config.run_time_per_game_sec),
+        "tick_limit": int(runtime_config.tick_limit),
+        "llm_call_limit": int(runtime_config.llm_call_limit),
         "interval_runs": interval_runs,
         "results": {},
     }

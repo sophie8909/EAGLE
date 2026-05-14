@@ -28,12 +28,14 @@
     "building_types",
     "game_state_format"
   ],
-  "run_time_per_game_sec": 30,
+  "tick_limit": 30,
+  "llm_call_limit": 50,
   "gameplay_rate": 0.25,
   "gameplay_opponents": [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"
   ],
+  "gameplay_map_dir": "8x8",
   "llm_interval": [10],
   "resource_advantage_alpha": 2.0,
   "win_bonus": 2.0,
@@ -56,3 +58,4 @@
   "individual_eval_parallel_workers": 8,
   "llm_parallel_workers": 8
 }
+

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import random
 import subprocess
 import time
 from datetime import datetime
@@ -60,6 +61,23 @@ def _generation_runtime_dir(
     generation_dir = base_dir / _generation_folder_name(generation)
     generation_dir.mkdir(parents=True, exist_ok=True)
     return generation_dir
+
+
+def _configured_map_dir(config: Any) -> str:
+    """Return the configured maps/ subfolder used for gameplay evaluation."""
+    raw_dir = str(getattr(config, "gameplay_map_dir", "8x8") or "8x8").strip().strip("/\\")
+    return raw_dir or "8x8"
+
+
+def select_random_map_location(project_root: Path | None, config: Any) -> str:
+    """Select one XML map from the configured MicroRTS map folder."""
+    map_dir_name = _configured_map_dir(config)
+    maps_dir = locate_microrts_root(project_root) / "maps" / map_dir_name
+    candidates = sorted(path for path in maps_dir.glob("*.xml") if path.is_file())
+    if not candidates:
+        raise FileNotFoundError(f"No MicroRTS XML maps found under maps/{map_dir_name}.")
+    selected = random.choice(candidates)
+    return f"maps/{map_dir_name}/{selected.name}"
 
 
 def save_prompt(project_root: Path | None, prompt: str) -> Path:
@@ -167,14 +185,16 @@ def _make_trace_prefix(
 def launch_java_match(
     *,
     project_root: Path | None,
-    run_time_per_game_sec: int,
+    tick_limit: int,
     log_path: Path,
     ai1_class: str | None = None,
     ai2_class: str | None = None,
     prompt_path: Path | None = None,
     llm_interval: int | None = None,
+    llm_call_limit: int | None = None,
     max_game_ticks: int | None = None,
     trace_path: Path | None = None,
+    map_location: str | None = None,
 ) -> tuple[int, bool, str, float]:
     """Launch one Java MicroRTS game and capture its combined log output."""
     microrts_root = locate_microrts_root(project_root)
@@ -186,12 +206,18 @@ def launch_java_match(
         command.append(f"-Dmicrorts.prompt={prompt_path}")
     if llm_interval is not None:
         command.append(f"-Dmicrorts.llm_interval={int(llm_interval)}")
+    if llm_call_limit is not None:
+        command.append(f"-Dmicrorts.llm_call_limit={int(llm_call_limit)}")
+    if max_game_ticks is not None:
+        command.append(f"-Dmicrorts.tick_limit={int(max_game_ticks)}")
     if trace_path is not None:
         command.append(f"-Dmicrorts.trace.path={trace_path}")
     command.extend(["-cp", classpath, "rts.MicroRTS"])
     command.extend(["--headless", "true"])
     if max_game_ticks is not None:
         command.extend(["-c", str(int(max_game_ticks))])
+    if map_location is not None:
+        command.extend(["-m", map_location])
     if ai1_class is not None:
         command.extend(["--ai1", ai1_class])
     if ai2_class is not None:
@@ -199,8 +225,8 @@ def launch_java_match(
 
     print(
         "[DEBUG] microrts launch "
-        f"cwd={microrts_root} max_ticks={max_game_ticks or run_time_per_game_sec} log={log_path} "
-        f"ai1={ai1_class} ai2={ai2_class}",
+        f"cwd={microrts_root} max_ticks={max_game_ticks or tick_limit} log={log_path} "
+        f"map={map_location} ai1={ai1_class} ai2={ai2_class}",
         flush=True,
     )
     started = time.perf_counter()
@@ -214,7 +240,7 @@ def launch_java_match(
             env={**os.environ.copy(), "EAGLE_FORCE_EXIT_ON_GAME_OVER": "1"},
         )
         timed_out = False
-        wall_clock_safety_sec = max(3600, int(run_time_per_game_sec) * 30)
+        wall_clock_safety_sec = max(3600, int(tick_limit) * 30)
         try:
             exit_code = process.wait(timeout=wall_clock_safety_sec)
         except subprocess.TimeoutExpired:
@@ -357,17 +383,20 @@ def run_java_agent_game(
             datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f"),
         ]
         trace_path = generation_runtime_dir / ("trace_" + "_".join(trace_stem_parts) + ".xml")
-        max_game_ticks = int(config.run_time_per_game_sec)
+        max_game_ticks = int(getattr(config, "tick_limit", 5000))
+        map_location = select_random_map_location(project_root, config)
         exit_code, timed_out, log_path_str, game_time_sec = launch_java_match(
             project_root=project_root,
-            run_time_per_game_sec=max_game_ticks,
+            tick_limit=max_game_ticks,
             log_path=log_path,
             ai1_class=ai1_class,
             ai2_class=opponent,
             prompt_path=prompt_path,
             llm_interval=config.active_llm_interval(),
+            llm_call_limit=int(getattr(config, "llm_call_limit", 50)),
             max_game_ticks=max_game_ticks,
             trace_path=trace_path,
+            map_location=map_location,
         )
         log_content = Path(log_path_str).read_text(encoding="utf-8", errors="replace")
         parsed_log = parse_game_log(log_content, target_agent=_target_agent_name(ai1_class))
@@ -383,7 +412,14 @@ def run_java_agent_game(
             "timeout_type": "tick" if detect_tick_timeout(parsed_log, max_game_ticks) else "wall_clock" if timed_out else None,
             "log_path": log_path_str,
             "trace_xml_path": str(trace_path) if trace_path.exists() else None,
-            "llm_calls": parsed_log.get("summary", {}).get("segment_count", 0),
+            "map_location": map_location,
+            "gameplay_map_dir": _configured_map_dir(config),
+            "tick_limit": max_game_ticks,
+            "llm_call_limit": int(getattr(config, "llm_call_limit", 50)),
+            "llm_calls": parsed_log.get("summary", {}).get(
+                "llm_call_count",
+                parsed_log.get("summary", {}).get("segment_count", 0),
+            ),
             "exit_code": exit_code,
             "game_time_sec": game_time_sec,
             "compile_time_sec": compile_time_sec,

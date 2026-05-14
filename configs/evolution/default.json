@@ -62,7 +62,8 @@
   ],
   "component_pool_path": "eagle/prompts/components.json",
   "initial_population_seeds": [],
-  "run_time_per_game_sec": 500,
+  "tick_limit": 5000,
+  "llm_call_limit": 50,
   "gameplay_rate": 0.25,
   "gameplay_refresh_interval": 5,
   "surrogate_top_ratio": 0.3,
@@ -80,6 +81,7 @@
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"
   ],
+  "gameplay_map_dir": "8x8",
    "llm_interval": [10, 10, 5, 3, 1],
  
   "save_trace_on_test": false,
@@ -105,3 +107,4 @@
   "individual_eval_parallel_workers": 8,
   "llm_parallel_workers": 8
 }
+

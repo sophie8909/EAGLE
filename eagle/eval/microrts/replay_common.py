@@ -30,8 +30,10 @@ def apply_runtime_overrides(
     """Apply replay/final-test-specific runtime overrides onto one base config."""
     payload = load_override_payload(config_path)
     resolved = clone_config(base_config)
-    if "run_time_per_game_sec" in payload:
-        resolved.run_time_per_game_sec = int(payload["run_time_per_game_sec"])
+    if "tick_limit" in payload:
+        resolved.tick_limit = int(payload["tick_limit"])
+    if "llm_call_limit" in payload:
+        resolved.llm_call_limit = int(payload["llm_call_limit"])
     if "llm_interval" in payload:
         resolved.llm_interval = payload["llm_interval"]
     if "save_trace_on_test" in payload:

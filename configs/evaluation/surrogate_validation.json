@@ -1,5 +1,6 @@
 {
-  "run_time_per_game_sec": 10,
+  "tick_limit": 10,
+  "llm_call_limit": 50,
   "llm_intervals": [1, 10],
   "resource_advantage_alpha": 2.0,
   "win_bonus": 2.0,
@@ -17,3 +18,4 @@
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts"
 }
+

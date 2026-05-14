@@ -20,7 +20,7 @@ from ...utils.match_score_recorder import MatchScoreRecorder
 from ...evolution.component.individual import Individual
 from .full_game_evaluator import FullGameEvaluator
 from .surrogate_validation_outputs import refresh_experiment_outputs
-DEFAULT_SURROGATE_VALIDATION_TIMEOUT_SEC = 60
+DEFAULT_SURROGATE_VALIDATION_TICK_LIMIT = 60
 DEFAULT_QUICK_RUN_OPPONENT = "ai.PassiveAI"
 
 
@@ -224,7 +224,8 @@ def _history_record_to_result(
         "parsed_summary": history_record.get("parsed_summary"),
         "stats": history_record.get("stats"),
         "llm_interval": history_record.get("llm_interval"),
-        "run_time_per_game_sec": history_record.get("run_time_per_game_sec"),
+        "tick_limit": history_record.get("tick_limit"),
+        "llm_call_limit": history_record.get("llm_call_limit"),
         "runner_script": history_record.get("runner_script"),
         "ai1": history_record.get("ai1"),
         "ai2": history_record.get("ai2"),
@@ -296,7 +297,8 @@ def _record_match(
         "parsed_summary": parsed_summary,
         "stats": dict(stats or {}),
         "llm_interval": llm_interval,
-        "run_time_per_game_sec": int(recorder.config.run_time_per_game_sec),
+        "tick_limit": int(recorder.config.tick_limit),
+        "llm_call_limit": int(recorder.config.llm_call_limit),
         "runner_script": runner_script,
         "ai1": ai1,
         "ai2": ai2,
@@ -323,7 +325,8 @@ def _record_match(
         "parsed_summary": parsed_summary,
         "stats": dict(stats or {}),
         "llm_interval": llm_interval,
-        "run_time_per_game_sec": int(recorder.config.run_time_per_game_sec),
+        "tick_limit": int(recorder.config.tick_limit),
+        "llm_call_limit": int(recorder.config.llm_call_limit),
         "runner_script": runner_script,
         "ai1": ai1,
         "ai2": ai2,
@@ -460,7 +463,8 @@ def run_surrogate_validation_experiment(
         "timestamp": datetime.now().isoformat(),
         "log_dir": str(log_dir),
         "llm_interval": llm_interval,
-        "run_time_per_game_sec": int(config.run_time_per_game_sec),
+        "tick_limit": int(config.tick_limit),
+        "llm_call_limit": int(config.llm_call_limit),
         "population_size": int(config.population_size),
         "num_generations": int(config.num_generations),
         "num_individuals": int(num_individuals),
@@ -564,10 +568,10 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="How many random EA-style individuals to benchmark in one experiment run.",
     )
     parser.add_argument(
-        "--timeout-sec",
+        "--tick-limit",
         type=int,
-        default=DEFAULT_SURROGATE_VALIDATION_TIMEOUT_SEC,
-        help="Per-game timeout in seconds for surrogate-validation matches.",
+        default=DEFAULT_SURROGATE_VALIDATION_TICK_LIMIT,
+        help="Per-game MicroRTS tick limit for surrogate-validation matches.",
     )
     parser.add_argument(
         "--smoke-test",
@@ -592,7 +596,7 @@ def main() -> None:
         config = load_config_from_json(DEFAULT_SURROGATE_VALIDATION_CONFIG_PATH)
     else:
         config = EAConfig()
-    config.run_time_per_game_sec = max(1, int(args.timeout_sec))
+    config.tick_limit = max(1, int(args.tick_limit))
     config.validate()
     if args.smoke_test:
         results = run_surrogate_validation_smoke_test(

@@ -26,7 +26,7 @@ py -3 -m eagle_gui.app
 Main GUI functions:
 
 - `Components`: edit prompt components, choose candidates, preview the rendered prompt, and mark components as static.
-- `Algorithm`: choose algorithm settings such as GA/NSGA-II, population size, generations, surrogate mode, timeout, and quick-run options.
+- `Algorithm`: choose algorithm settings such as GA/NSGA-II, population size, generations, surrogate mode, tick/LLM-call limits, and quick-run options.
 - `Objectives`: choose objective scoring and target opponents.
 - `Operators`: choose crossover and mutation operators, including weighted mutation modes.
 - `Run`: save the generated config, start or stop an experiment, and view process output.
@@ -253,7 +253,7 @@ python -m scripts.run_evolution
 Useful examples:
 
 ```bash
-python -m scripts.run_evolution --quick-run --timeout-sec 60 --skip-final-test
+python -m scripts.run_evolution --quick-run --tick-limit 60 --skip-final-test
 python -m scripts.run_evolution --config configs/evolution/default.json
 python -m scripts.run_evolution --algorithm round_nsga2
 python -m scripts.run_evolution --resume-latest
@@ -266,7 +266,7 @@ Key options:
 
 - `--config`: load one base config JSON file
 - `--quick-run`: run a minimal end-to-end EA benchmark
-- `--timeout-sec`: override per-game timeout
+- `--tick-limit`: override per-game MicroRTS ticks
 - `--skip-final-test`: skip the extra final replay stage
 - `--resume-latest`: resume the newest run under `logs/`
 - `--resume-log-dir`: resume a specific log directory
@@ -306,7 +306,7 @@ Useful examples:
 
 ```bash
 python -m scripts.run_surrogate_validation --smoke-test
-python -m scripts.run_surrogate_validation --quick-run --timeout-sec 60
+python -m scripts.run_surrogate_validation --quick-run --tick-limit 60
 python -m scripts.run_surrogate_validation --config configs/evaluation/surrogate_validation.json
 python -m scripts.run_surrogate_validation --opponent ai.PassiveAI
 python -m scripts.run_surrogate_validation --num-individuals 3
@@ -317,7 +317,7 @@ Key options:
 - `--config`: load one surrogate-validation config JSON file
 - `--smoke-test`: verify prompt/spec generation and MicroRTS wiring without launching games
 - `--quick-run`: run one individual against one opponent using real matches
-- `--timeout-sec`: override per-game timeout
+- `--tick-limit`: override per-game MicroRTS ticks
 - `--opponent`: add one or more opponents
 - `--num-individuals`: control how many sampled prompts are benchmarked
 
@@ -375,8 +375,8 @@ Key options:
 - `--individual-id`: replay only one individual
 - `--max-front`: replay Pareto Front 1 up to N
 - `--all-fronts`: replay every saved individual in the generation
-- `--config`: optional replay/final-test override JSON for `run_time_per_game_sec`
-  and `llm_intervals`
+- `--config`: optional replay/final-test override JSON for `tick_limit`,
+  `llm_call_limit`, and `llm_intervals`
 - `--output`: write results to a custom JSON path
 
 Outputs:

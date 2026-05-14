@@ -63,6 +63,7 @@
     ]
   },
   "gameplay_opponents": [],
+  "gameplay_map_dir": "8x8",
   "llm_interval": [1],
   "save_trace_on_test": false,
   "resource_advantage_alpha": 2.0,
@@ -89,3 +90,4 @@
   "round_eval_model": "llama3.1:8b",
   "round_state_seed": 0
 }
+

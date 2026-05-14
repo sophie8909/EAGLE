@@ -74,14 +74,14 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     if args.surrogate and str(config.algorithm).strip().lower() == "ga_surrogate":
         config.surrogate = args.surrogate
 
-    if args.timeout_sec is not None:
-        config.run_time_per_game_sec = max(1, int(args.timeout_sec))
+    if args.tick_limit is not None:
+        config.tick_limit = max(1, int(args.tick_limit))
 
     if args.quick_run:
         config.population_size = max(2, min(config.population_size, 2))
         config.num_generations = 2
         config.gameplay_rate = 0.0
-        config.run_time_per_game_sec = 30
+        config.tick_limit = 30
         config.final_test_max_front = 0
 
     config.validate()
@@ -149,10 +149,10 @@ def main() -> None:
         help="Select the gameplay agent surrogate mode.",
     )
     parser.add_argument(
-        "--timeout-sec",
+        "--tick-limit",
         type=int,
         default=None,
-        help="Override the per-game MicroRTS timeout in seconds.",
+        help="Override the per-game MicroRTS tick limit.",
     )
     parser.add_argument(
         "--quick-run",

@@ -109,13 +109,15 @@ class EAConfig:
         default_factory=lambda: list(_default_config_value("initial_population_seeds"))
     )
 
-    run_time_per_game_sec: int = field(default_factory=lambda: int(_default_config_value("run_time_per_game_sec")))
+    tick_limit: int = field(default_factory=lambda: int(_default_config_value("tick_limit")))
+    llm_call_limit: int = field(default_factory=lambda: int(_default_config_value("llm_call_limit")))
     gameplay_rate: float = field(default_factory=lambda: float(_default_config_value("gameplay_rate")))
     gameplay_refresh_interval: int = field(default_factory=lambda: int(_default_config_value("gameplay_refresh_interval")))
     surrogate_top_ratio: float = field(default_factory=lambda: float(_default_config_value("surrogate_top_ratio")))
     archive_parent_ratio: float = field(default_factory=lambda: float(_default_config_value("archive_parent_ratio")))
     objective_config: dict[str, Any] = field(default_factory=lambda: dict(_default_config_value("objective_config")))
     gameplay_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("gameplay_opponents")))
+    gameplay_map_dir: str = field(default_factory=lambda: str(_default_config_value("gameplay_map_dir")))
     llm_interval: list[int] = field(default_factory=lambda: list(_default_config_value("llm_interval")))
     save_trace_on_test: bool = field(default_factory=lambda: bool(_default_config_value("save_trace_on_test")))
 
@@ -276,6 +278,11 @@ class EAConfig:
 
         self.strategy_mutation = strategy_mutation
 
+        self.gameplay_map_dir = str(self.gameplay_map_dir or "8x8").strip().strip("/\\")
+        if not self.gameplay_map_dir:
+            raise ValueError("gameplay_map_dir must be a non-empty maps/ subfolder name.")
+        self.tick_limit = max(1, int(self.tick_limit))
+        self.llm_call_limit = max(1, int(self.llm_call_limit))
         self.llm_interval = self._normalized_llm_interval_input(self.llm_interval)
 
     def evolution_settings(self) -> dict[str, object]:
@@ -306,6 +313,7 @@ class EAConfig:
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
             "objective_config": deepcopy(self.objective_config),
             "gameplay_opponents": list(self.gameplay_opponents),
+            "gameplay_map_dir": self.gameplay_map_dir,
             "gameplay_refresh_interval": self.gameplay_refresh_interval,
             "surrogate_top_ratio": self.surrogate_top_ratio,
             "archive_parent_ratio": self.archive_parent_ratio,

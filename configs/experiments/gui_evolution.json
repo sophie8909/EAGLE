@@ -55,7 +55,8 @@
   ],
   "component_pool_path": "eagle/prompts/components.json",
   "initial_population_seeds": [],
-  "run_time_per_game_sec": 500,
+  "tick_limit": 5000,
+  "llm_call_limit": 50,
   "gameplay_rate": 0.25,
   "gameplay_refresh_interval": 2,
   "surrogate_top_ratio": 0.3,
@@ -70,6 +71,7 @@
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"
   ],
+  "gameplay_map_dir": "8x8",
   "llm_interval": [
     10,
     10,
@@ -103,3 +105,4 @@
   "parent_selection_operator": "ga_fitness_tournament",
   "env_selection_operator": "ga_fitness_elitism"
 }
+
