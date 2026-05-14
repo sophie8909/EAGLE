@@ -430,7 +430,7 @@ class EA:
 
                     with self.timing_recorder.phase("log_generation", generation=generation):
                         self._log_generation(generation, offspring, generation_context, log_dir)
-                        self.print_population_snapshot(f"generation {generation + 1} survivors")
+                        self.print_generation_fitness_summary(generation)
                     print(
                         f"[Generation {generation + 1}] logged",
                         flush=True,
@@ -565,6 +565,31 @@ class EA:
             evaluation_mode = getattr(individual, "evaluation_mode", None) or "unknown"
             print(
                 f"  [{index}] id={getattr(individual, 'id', None)} "
+                f"fitness={self._display_fitness(individual)} "
+                f"eval_mode={evaluation_mode}",
+                flush=True,
+            )
+
+    def print_generation_fitness_summary(
+        self,
+        generation: int,
+        population: List[Individual] | None = None,
+    ) -> None:
+        """Print a clear end-of-generation fitness summary for every individual."""
+        snapshot = list(population if population is not None else self.population)
+        display_generation = generation + 1
+        print(
+            "[Generation Fitness Summary] "
+            f"generation={display_generation}/{self.config.num_generations} "
+            f"phase=end population={len(snapshot)}",
+            flush=True,
+        )
+        for index, individual in enumerate(snapshot, start=1):
+            evaluation_mode = getattr(individual, "evaluation_mode", None) or "unknown"
+            print(
+                "[Generation Fitness Summary] "
+                f"generation={display_generation} index={index} "
+                f"id={getattr(individual, 'id', None)} "
                 f"fitness={self._display_fitness(individual)} "
                 f"eval_mode={evaluation_mode}",
                 flush=True,

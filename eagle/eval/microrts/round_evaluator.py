@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import random
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -77,49 +76,43 @@ class Evaluator:
         cached_sample_count = self._history_sample_count(cached_record)
 
         if cached_fitness is not None:
-            if random.random() < 0.5:
-                print(
-                    f"Found cached fitness for prompt (hash={self.history._hash_prompt(base_prompt)}), "
-                    "using existing averaged fitness.",
-                    flush=True,
-                )
-                eval_result = self._round_eval_result_from_cached(cached_fitness, cached_eval_result)
-                eval_result.update(
-                    {
-                        "prompt": base_prompt,
-                        "evaluation_mode": "history_avg",
-                        "generation": generation,
-                        "history_decision": "use_existing_average",
-                    }
-                )
-                individual.last_round_evaluation = {
-                    "generation": generation,
-                    "base_prompt": base_prompt,
-                    "cached_fitness": cached_fitness,
-                    "cached_sample_count": cached_sample_count,
-                    "eval_result": eval_result,
-                    "history_decision": "use_existing_average",
-                }
-                self._write_round_profile(
-                    individual=individual,
-                    generation=generation,
-                    profile_output_path=profile_output_path,
-                    base_prompt=base_prompt,
-                    eval_result=eval_result,
-                    samples=[],
-                    history_decision="use_existing_average",
-                )
-                print(
-                    "[DEBUG] round evaluate complete "
-                    f"individual={individual.id} mode=history_avg",
-                    flush=True,
-                )
-                return eval_result
             print(
                 f"Found cached fitness for prompt (hash={self.history._hash_prompt(base_prompt)}), "
-                "running a fresh LLM evaluation and averaging.",
+                "using cached fitness.",
                 flush=True,
             )
+            eval_result = self._round_eval_result_from_cached(cached_fitness, cached_eval_result)
+            eval_result.update(
+                {
+                    "prompt": base_prompt,
+                    "evaluation_mode": "history_cache",
+                    "generation": generation,
+                    "history_decision": "use_cache",
+                }
+            )
+            individual.last_round_evaluation = {
+                "generation": generation,
+                "base_prompt": base_prompt,
+                "cached_fitness": cached_fitness,
+                "cached_sample_count": cached_sample_count,
+                "eval_result": eval_result,
+                "history_decision": "use_cache",
+            }
+            self._write_round_profile(
+                individual=individual,
+                generation=generation,
+                profile_output_path=profile_output_path,
+                base_prompt=base_prompt,
+                eval_result=eval_result,
+                samples=[],
+                history_decision="use_cache",
+            )
+            print(
+                "[DEBUG] round evaluate complete "
+                f"individual={individual.id} mode=history_cache",
+                flush=True,
+            )
+            return eval_result
 
         legality_score_sum = 0.0
         alignment_score_sum = 0.0
@@ -191,15 +184,10 @@ class Evaluator:
             "timing": dict(stats),
             "round_eval_parallel_workers": workers,
         }
-        eval_result = self._average_history_eval_result(
-            cached_fitness,
-            cached_eval_result,
-            latest_eval_result,
-            cached_sample_count,
-        )
+        eval_result = dict(latest_eval_result)
         eval_result.setdefault("round_score", float(eval_result.get("resource_diff", 0.0)))
         eval_result.setdefault("raw_resource_advantage_score", float(eval_result.get("resource_diff", 0.0)))
-        fitness_sample_count = cached_sample_count + 1 if cached_fitness is not None else 1
+        fitness_sample_count = 1
         individual.last_round_evaluation = {
             "generation": generation,
             "base_prompt": base_prompt,
@@ -213,8 +201,8 @@ class Evaluator:
             "raw_strategy_alignment_score": alignment_raw_sum / n,
             "latest_eval_result": latest_eval_result,
             "eval_result": eval_result,
-            "cached_fitness": cached_fitness,
-            "cached_sample_count": cached_sample_count,
+            "cached_fitness": None,
+            "cached_sample_count": 0,
             "fitness_sample_count": fitness_sample_count,
             "round_eval_parallel_workers": workers,
         }
@@ -226,7 +214,7 @@ class Evaluator:
             base_prompt=base_prompt,
             eval_result=eval_result,
             samples=round_samples,
-            history_decision="fresh_average" if cached_fitness is not None else "fresh",
+            history_decision="fresh",
             stats=stats,
         )
 
@@ -238,7 +226,7 @@ class Evaluator:
                 "fitness_sample_count": fitness_sample_count,
                 "latest_eval_result": latest_eval_result,
                 "eval_result": eval_result,
-                "cached_fitness": cached_fitness,
+                "cached_fitness": None,
                 "round": individual.last_round_evaluation,
             }
         )
@@ -474,36 +462,6 @@ class Evaluator:
             "resource_diff": float(values[0]) if len(values) > 0 else 0.0,
             "strategy_alignment_score": float(values[1]) if len(values) > 1 else 0.0,
         }
-
-    @classmethod
-    def _average_history_eval_result(
-        cls,
-        cached_fitness: Any,
-        cached_eval_result: dict[str, Any] | None,
-        latest_eval_result: dict[str, Any],
-        cached_sample_count: int,
-    ) -> dict[str, Any]:
-        """Average current round metrics with cached raw objective inputs."""
-        if cached_fitness is None:
-            return dict(latest_eval_result)
-        cached = cls._round_eval_result_from_cached(cached_fitness, cached_eval_result)
-        averaged = dict(latest_eval_result)
-        for key in (
-            "valid_json_count",
-            "legal_action_count",
-            "illegal_action_count",
-            "action_type_score_sum",
-            "theoretical_legality_max",
-            "resource_diff",
-            "strategy_alignment_score",
-        ):
-            averaged[key] = (
-                (float(cached.get(key, 0.0)) * cached_sample_count)
-                + float(latest_eval_result.get(key, 0.0))
-            ) / (cached_sample_count + 1)
-        averaged["valid_json"] = bool(averaged.get("valid_json_count", 0.0) >= 1.0)
-        averaged["evaluation_mode"] = "round_llm_history_avg"
-        return averaged
 
     def _round_resource_diff(self, state: dict[str, Any]) -> float:
         """Return weighted ally-minus-enemy resources/material for one round state."""

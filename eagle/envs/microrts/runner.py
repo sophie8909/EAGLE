@@ -108,7 +108,7 @@ def _make_log_path(
 ) -> Path:
     """Create a timestamped runtime log path under the shared log directory."""
     logs_dir = _runtime_logs_dir(project_root, runtime_logs_dir=runtime_logs_dir)
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
     normalized_prefix = str(prefix or "run").strip().lower()
     if normalized_prefix == "run":
         filename = f"run_{timestamp}.log"
@@ -148,17 +148,31 @@ def launch_java_match(
     project_root: Path | None,
     run_time_per_game_sec: int,
     log_path: Path,
-) -> tuple[int, bool, str]:
+    ai1_class: str | None = None,
+    ai2_class: str | None = None,
+    prompt_path: Path | None = None,
+    llm_interval: int | None = None,
+) -> tuple[int, bool, str, float]:
     """Launch one Java MicroRTS game and capture its combined log output."""
     microrts_root = locate_microrts_root(project_root)
     bin_dir = microrts_root / "bin"
     lib_dir = microrts_root / "lib"
     classpath = f"{lib_dir / '*'}{os.pathsep}{bin_dir}"
-    command = ["java", "-cp", classpath, "rts.MicroRTS"]
+    command = ["java"]
+    if prompt_path is not None:
+        command.append(f"-Dmicrorts.prompt={prompt_path}")
+    if llm_interval is not None:
+        command.append(f"-Dmicrorts.llm_interval={int(llm_interval)}")
+    command.extend(["-cp", classpath, "rts.MicroRTS"])
+    if ai1_class is not None:
+        command.extend(["--ai1", ai1_class])
+    if ai2_class is not None:
+        command.extend(["--ai2", ai2_class])
 
     print(
         "[DEBUG] microrts launch "
-        f"cwd={microrts_root} timeout={run_time_per_game_sec} log={log_path}",
+        f"cwd={microrts_root} timeout={run_time_per_game_sec} log={log_path} "
+        f"ai1={ai1_class} ai2={ai2_class}",
         flush=True,
     )
     started = time.perf_counter()
@@ -276,20 +290,23 @@ def run_java_agent_game(
         compile_microrts(project_root)
         compile_time_sec = time.perf_counter() - compile_started
 
-    original_config = _config_path(project_root).read_text(encoding="utf-8")
+    prompt_path: Path | None = None
+    if prompt is not None:
+        prompt_dir = _runtime_logs_dir(project_root, runtime_logs_dir=runtime_logs_dir) / "prompts"
+        prompt_dir.mkdir(parents=True, exist_ok=True)
+        safe_ai_name = _target_agent_name(ai1_class)
+        prompt_path = prompt_dir / f"prompt_{safe_ai_name}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S_%f')}.txt"
+        prompt_path.write_text(prompt, encoding="utf-8")
     try:
-        if prompt is not None:
-            save_prompt(project_root, prompt)
-        set_ai1(project_root, ai1_class)
-        if opponent is not None:
-            set_opponent(project_root, opponent)
-        set_llm_interval(project_root, config.active_llm_interval())
-
         log_path = _make_log_path(project_root, prefix=log_prefix, runtime_logs_dir=runtime_logs_dir)
         exit_code, timed_out, log_path_str, game_time_sec = launch_java_match(
             project_root=project_root,
             run_time_per_game_sec=int(config.run_time_per_game_sec),
             log_path=log_path,
+            ai1_class=ai1_class,
+            ai2_class=opponent,
+            prompt_path=prompt_path,
+            llm_interval=config.active_llm_interval(),
         )
         log_content = Path(log_path_str).read_text(encoding="utf-8", errors="replace")
         parsed_log = parse_game_log(log_content, target_agent=_target_agent_name(ai1_class))
@@ -308,6 +325,7 @@ def run_java_agent_game(
             "game_time_sec": game_time_sec,
             "compile_time_sec": compile_time_sec,
             "microrts_root": str(microrts_root),
+            "prompt_path": str(prompt_path) if prompt_path is not None else None,
         }
         summary = parsed_log.get("summary", {})
         print(
@@ -336,7 +354,7 @@ def run_java_agent_game(
                 metadata.update(trace_info)
         return match_score, metadata
     finally:
-        _config_path(project_root).write_text(original_config, encoding="utf-8")
+        pass
 
 
 def run_prompt_based_game(

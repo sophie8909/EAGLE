@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -67,13 +68,9 @@ class FullGameEvaluator:
         per_opponent_results: list[dict[str, Any]] = []
         evaluation_modes: list[str] = []
 
-        for opponent in resolved_opponents:
-            print(
-                "[DEBUG] gameplay opponent start "
-                f"individual={individual.id} opponent={opponent} surrogate={surrogate}",
-                flush=True,
-            )
-            result = self._run_gameplay_mode(
+        opponent_results = self._evaluate_agent_opponents_parallel(
+            resolved_opponents,
+            lambda opponent: self._run_gameplay_mode(
                 individual=individual,
                 prompt=prompt,
                 opponent=opponent,
@@ -81,7 +78,12 @@ class FullGameEvaluator:
                 profile_output_path=profile_output_path,
                 match_score_recorder=match_score_recorder,
                 allow_history_reuse=allow_history_reuse,
-            )
+            ),
+            label="gameplay",
+            individual_id=getattr(individual, "id", None),
+            generation=generation,
+        )
+        for opponent, result in opponent_results:
             match_score = dict(result["match_score"])
             simulation_meta = dict(result.get("simulation_meta") or {})
             evaluation_mode = str(result.get("evaluation_mode") or "gameplay")
@@ -172,48 +174,64 @@ class FullGameEvaluator:
 
         per_opponent_scores: list[dict[str, object]] = []
         surrogate = str(getattr(self.config, "surrogate", "round")).strip().lower()
-        for opponent in resolved_opponents:
-            if surrogate == "round":
-                print(
-                    "[GA Surrogate] using round surrogate "
-                    f"individual={getattr(individual, 'id', None)} generation={generation}",
-                    flush=True,
-                )
-                result = self.run_round_surrogate(
-                    individual=individual,
-                    prompt=prompt,
-                    opponent=opponent,
-                    generation=generation,
-                )
-            elif surrogate == "java_agent":
-                result = self.run_generated_java_agent(
-                    individual=individual,
-                    prompt=prompt,
-                    opponent=opponent,
-                )
-            elif surrogate == "policy_agent":
-                result = self.run_java_based_agent(
-                    individual=individual,
-                    prompt=prompt,
-                    opponent=opponent,
-                    ai1_class="ai.abstraction.eaglePolicy",
-                    log_prefix="run_eagle_policy",
-                    evaluation_mode="policy_agent",
-                )
-            else:
-                raise ValueError(
-                    f"Unsupported surrogate={surrogate!r}. "
-                    "Expected one of: round, policy_agent, java_agent."
-                )
+        if surrogate == "round":
+            print(
+                "[GA Surrogate] using round surrogate once "
+                f"individual={getattr(individual, 'id', None)} generation={generation} "
+                "opponents=none",
+                flush=True,
+            )
+            result = self.run_round_surrogate(
+                individual=individual,
+                prompt=prompt,
+                opponent=None,
+                generation=generation,
+            )
             match_score = dict(result["match_score"])
             raw_score = self._raw_resource_advantage_score(match_score)
-            per_opponent_scores.append(
+            per_opponent_scores = [
                 {
-                    "opponent": opponent,
-                    "match_score": match_score,
+                    "match_score": dict(match_score),
                     "raw_resource_advantage_score": raw_score,
                 }
-            )
+            ]
+            resolved_opponents = []
+        else:
+            if surrogate == "policy_agent":
+                self._prepare_policy_agent(prompt)
+            elif surrogate == "java_agent":
+                if not self._prepare_generated_java_agent(prompt):
+                    per_opponent_scores = [
+                        {
+                            "opponent": opponent,
+                            "match_score": {"win_score": 0.0, "raw_resource_advantage_score": 0.0},
+                            "raw_resource_advantage_score": 0.0,
+                        }
+                        for opponent in resolved_opponents
+                    ]
+            if not per_opponent_scores:
+                opponent_results = self._evaluate_agent_opponents_parallel(
+                    resolved_opponents,
+                    lambda opponent: self._run_surrogate_agent_opponent(
+                        surrogate=surrogate,
+                        individual=individual,
+                        prompt=prompt,
+                        opponent=opponent,
+                    ),
+                    label=surrogate,
+                    individual_id=getattr(individual, "id", None),
+                    generation=generation,
+                )
+                for opponent, result in opponent_results:
+                    match_score = dict(result["match_score"])
+                    raw_score = self._raw_resource_advantage_score(match_score)
+                    per_opponent_scores.append(
+                        {
+                            "opponent": opponent,
+                            "match_score": match_score,
+                            "raw_resource_advantage_score": raw_score,
+                        }
+                    )
 
         eval_result = self._aggregate_raw_eval_result({
             "eval_mode": "java_surrogate",
@@ -268,6 +286,101 @@ class FullGameEvaluator:
             "stats": {},
             "evaluation_mode": "round",
         }
+
+    def _run_surrogate_agent_opponent(
+        self,
+        *,
+        surrogate: str,
+        individual: Individual,
+        prompt: str,
+        opponent: str | None,
+    ) -> dict[str, Any]:
+        """Run one prepared Java-backed surrogate match for one opponent."""
+        if surrogate == "java_agent":
+            return self.run_java_based_agent(
+                individual=individual,
+                prompt=prompt,
+                opponent=opponent,
+                ai1_class="ai.abstraction.eagleJava",
+                log_prefix="run_eagle_java",
+                evaluation_mode="java_agent",
+                compile_first=False,
+            )
+        if surrogate == "policy_agent":
+            return self.run_java_based_agent(
+                individual=individual,
+                prompt=prompt,
+                opponent=opponent,
+                ai1_class="ai.abstraction.eaglePolicy",
+                log_prefix="run_eagle_policy",
+                evaluation_mode="policy_agent",
+                compile_first=False,
+            )
+        raise ValueError(
+            f"Unsupported surrogate={surrogate!r}. "
+            "Expected one of: round, policy_agent, java_agent."
+        )
+
+    def _evaluate_agent_opponents_parallel(
+        self,
+        opponents: list[str | None],
+        evaluate_one: Any,
+        *,
+        label: str,
+        individual_id: Any,
+        generation: int | None,
+    ) -> list[tuple[str | None, dict[str, Any]]]:
+        """Evaluate one Java-backed agent against opponents with bounded threads."""
+        if not opponents:
+            return []
+        workers = self._agent_eval_parallel_workers(len(opponents))
+        print(
+            "[DEBUG] agent parallel start "
+            f"label={label} individual={individual_id} generation={generation} "
+            f"opponents={len(opponents)} workers={workers}",
+            flush=True,
+        )
+        if workers <= 1:
+            return [(opponent, evaluate_one(opponent)) for opponent in opponents]
+
+        results: list[tuple[str | None, dict[str, Any]]] = []
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(evaluate_one, opponent): opponent
+                for opponent in opponents
+            }
+            for future in as_completed(futures):
+                opponent = futures[future]
+                results.append((opponent, future.result()))
+        order = {opponent: index for index, opponent in enumerate(opponents)}
+        return sorted(results, key=lambda item: order.get(item[0], 0))
+
+    def _agent_eval_parallel_workers(self, opponent_count: int) -> int:
+        """Return the bounded worker count for Java-backed agent evaluation."""
+        try:
+            configured = int(getattr(self.config, "agent_eval_parallel_workers", opponent_count))
+        except (TypeError, ValueError):
+            configured = opponent_count
+        return max(1, min(int(opponent_count), configured))
+
+    def _prepare_policy_agent(self, prompt: str) -> None:
+        """Render and compile the reusable policy agent once before parallel matches."""
+        from eagle.envs.microrts.compiler import compile_microrts
+        from eagle.surrogate.compiler.eagle_policy_spec import compile_prompt_to_eagle_policy_spec
+        from eagle.surrogate.eval.eagle_policy_renderer import render_eagle_policy_agent
+
+        eagle_policy_spec = compile_prompt_to_eagle_policy_spec(prompt)[1]
+        render_eagle_policy_agent(self.repo_root, prompt, eagle_policy_spec)
+        compile_microrts(self.repo_root)
+
+    def _prepare_generated_java_agent(self, prompt: str) -> bool:
+        """Render and compile the generated eagleJava agent once before parallel matches."""
+        from eagle.surrogate.java.eagle_java_compiler import compile_eagle_java_agent
+        from eagle.surrogate.java.eagle_java_renderer import render_eagle_java_from_prompt
+
+        cache_root = self.repo_root / "logs" / "eagle_java"
+        java_code = render_eagle_java_from_prompt(prompt)
+        return bool(compile_eagle_java_agent(java_code, str(cache_root)))
 
     def _run_gameplay_mode(
         self,
@@ -364,30 +477,24 @@ class FullGameEvaluator:
         test: bool = False,
         log_prefix: str = "run_eagle_policy",
         evaluation_mode: str = "policy_agent",
+        compile_first: bool = True,
     ) -> dict[str, Any]:
         """Run one policy-backed Java-agent match and return the raw single-match payload."""
         rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
         stats: dict[str, float] = {}
         with timer("game_play_time", stats):
             if ai1_class == "ai.abstraction.eaglePolicy":
-                from eagle.envs.microrts.adapter import run_surrogate_validation_case
-
-                original_interval = getattr(self.config, "_active_llm_interval", None)
-                if llm_interval is not None:
-                    self.config.set_active_llm_interval(int(llm_interval))
-                try:
-                    match_score, simulation_meta = run_surrogate_validation_case(
-                        project_root=self.repo_root,
-                        config=self.config,
-                        prompt=rendered_prompt,
-                        opponent=opponent,
-                        ai1_class=ai1_class,
-                        test=test,
-                        runtime_logs_dir=self.runtime_logs_dir,
-                    )
-                    match_score = self._normalize_match_score(match_score)
-                finally:
-                    self.config.set_active_llm_interval(original_interval)
+                if compile_first:
+                    self._prepare_policy_agent(rendered_prompt)
+                match_score, simulation_meta = self._run_java_match(
+                    rendered_prompt,
+                    opponent,
+                    ai1_class=ai1_class,
+                    llm_interval=llm_interval,
+                    test=test,
+                    log_prefix=log_prefix,
+                    compile_first=False,
+                )
             else:
                 match_score, simulation_meta = self._run_java_match(
                     rendered_prompt,
@@ -396,6 +503,7 @@ class FullGameEvaluator:
                     llm_interval=llm_interval,
                     test=test,
                     log_prefix=log_prefix,
+                    compile_first=compile_first,
                 )
         stats["microrts_compile_time"] = float(simulation_meta.get("compile_time_sec", 0.0) or 0.0)
         summarize_total_eval_time(stats)
@@ -472,6 +580,7 @@ class FullGameEvaluator:
         llm_interval: int | None = None,
         test: bool = False,
         log_prefix: str = "run_eagle_policy",
+        compile_first: bool = True,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         original_interval = getattr(self.config, "_active_llm_interval", None)
         if llm_interval is not None:
@@ -483,7 +592,7 @@ class FullGameEvaluator:
                 ai1_class=ai1_class,
                 opponent=opponent,
                 prompt=prompt,
-                compile_first=True,
+                compile_first=compile_first,
                 log_prefix=log_prefix if not test else f"{log_prefix.replace('run_', 'run_test_', 1)}",
                 runtime_logs_dir=self.runtime_logs_dir,
                 record_trace=bool(test and getattr(self.config, "save_trace_on_test", False)),
