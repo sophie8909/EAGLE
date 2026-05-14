@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import random
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -133,56 +134,29 @@ class Evaluator:
         round_samples: list[dict[str, Any]] = []
         stats: dict[str, float] = {}
         n = self.config.one_eval_rounds
-        for i in range(n):
-            print(
-                "[DEBUG] round sample start "
-                f"individual={individual.id} generation={generation} sample={i + 1}/{n}",
-                flush=True,
+        dynamic_prompts = [self.state_generator.generate_text() for _ in range(n)]
+        workers = self._round_eval_parallel_workers(n)
+        print(
+            "[DEBUG] round parallel samples "
+            f"individual={individual.id} generation={generation} rounds={n} workers={workers}",
+            flush=True,
+        )
+        with timer("round_parallel_wall_time", stats):
+            sample_results = self._evaluate_round_samples_parallel(
+                base_prompt=base_prompt,
+                dynamic_prompts=dynamic_prompts,
+                generation=generation,
+                individual_id=str(individual.id),
+                workers=workers,
             )
-            dynamic_prompt = self.state_generator.generate_text()
-            with timer("round_state_parse_time", stats):
-                state = parse_dynamic_prompt_state(dynamic_prompt)
-            full_prompt = self._build_round_prompt(base_prompt, dynamic_prompt)
-            with timer("round_llm_action_time", stats):
-                raw_response = self._ask_for_actions(full_prompt)
-            with timer("round_response_parse_time", stats):
-                parsed_response = self._extract_first_json_object(raw_response)
-                format_valid, format_reason = self._validate_action_response_format(parsed_response)
-
-            if format_valid:
-                valid_json_count += 1
-                with timer("round_legality_score_time", stats):
-                    legality_raw, legality_details = self._score_legality(parsed_response, dynamic_prompt)
-                with timer("round_llm_alignment_time", stats):
-                    alignment_raw = self._score_strategy_alignment(
-                        base_prompt=base_prompt,
-                        dynamic_prompt=dynamic_prompt,
-                        raw_response=raw_response,
-                    )
-            else:
-                legality_raw = -100.0
-                alignment_raw = -100.0
-                legality_details = {
-                    "parseable": isinstance(parsed_response, dict),
-                    "format_valid": False,
-                    "format_error": format_reason,
-                    "max_actions": self._extract_max_actions(dynamic_prompt),
-                    "applicable_actions": 0,
-                    "action_type_score_sum": 0.0,
-                    "returned_actions": 0,
-                    "moves": [],
-                }
-
-            legality_max = self._theoretical_legality_max(dynamic_prompt, legality_details)
-            alignment_max = self._theoretical_alignment_max()
-            missing_moves = self._has_missing_or_empty_moves(parsed_response)
-            if missing_moves:
-                legality_score = self.MISSING_MOVES_FITNESS_SCORE
-                alignment_score = self.MISSING_MOVES_FITNESS_SCORE
-            else:
-                legality_score = self._normalize_to_signed_unit_interval(legality_raw, legality_max)
-                alignment_score = self._normalize_to_signed_unit_interval(alignment_raw, alignment_max)
-
+        for result in sample_results:
+            sample = dict(result["sample_record"])
+            legality_details = dict(sample.get("legality") or {})
+            valid_json_count += int(bool(sample.get("format_valid")))
+            legality_raw = float(sample.get("raw_legality_score", 0.0))
+            alignment_raw = float(sample.get("raw_strategy_alignment_score", 0.0))
+            legality_score = float(sample.get("legality_score", 0.0))
+            alignment_score = float(sample.get("strategy_alignment_score", 0.0))
             legality_raw_sum += legality_raw
             alignment_raw_sum += alignment_raw
             legality_score_sum += legality_score
@@ -192,33 +166,14 @@ class Evaluator:
             legal_count = int(legality_details.get("applicable_actions", 0))
             illegal_action_count += max(0, returned_actions - legal_count)
             action_type_score_sum_total += float(legality_details.get("action_type_score_sum", 0.0))
-            theoretical_legality_max_total += legality_max
-            resource_diff_sum += self._round_resource_diff(state)
-            round_samples.append(
-                {
-                    "sample": i + 1,
-                    "dynamic_prompt": dynamic_prompt,
-                    "full_prompt": full_prompt,
-                    "raw_response": raw_response,
-                    "parsed_response": parsed_response,
-                    "format_valid": format_valid,
-                    "format_reason": format_reason,
-                    "legality": legality_details,
-                    "legality_score": legality_score,
-                    "strategy_alignment_score": alignment_score,
-                    "raw_legality_score": legality_raw,
-                    "raw_strategy_alignment_score": alignment_raw,
-                }
-            )
-            print(
-                "[DEBUG] round sample result "
-                f"individual={individual.id} sample={i + 1}/{n} "
-                f"format_valid={format_valid} legality={legality_score:.4f} "
-                f"alignment={alignment_score:.4f}",
-                flush=True,
-            )
+            theoretical_legality_max_total += float(result.get("legality_max", 0.0))
+            resource_diff_sum += float(result.get("resource_diff", 0.0))
+            self._merge_stats(stats, dict(result.get("stats") or {}))
+            round_samples.append(sample)
 
         summarize_total_eval_time(stats)
+        if "round_parallel_wall_time" in stats:
+            stats["total_eval_time"] = stats["round_parallel_wall_time"]
         latest_eval_result = {
             "eval_mode": "round",
             "evaluation_mode": "round_llm",
@@ -234,6 +189,7 @@ class Evaluator:
             "raw_legality_score": legality_raw_sum / n,
             "raw_strategy_alignment_score": alignment_raw_sum / n,
             "timing": dict(stats),
+            "round_eval_parallel_workers": workers,
         }
         eval_result = self._average_history_eval_result(
             cached_fitness,
@@ -260,6 +216,7 @@ class Evaluator:
             "cached_fitness": cached_fitness,
             "cached_sample_count": cached_sample_count,
             "fitness_sample_count": fitness_sample_count,
+            "round_eval_parallel_workers": workers,
         }
 
         self._write_round_profile(
@@ -291,6 +248,151 @@ class Evaluator:
             flush=True,
         )
         return eval_result
+
+    def _evaluate_round_samples_parallel(
+        self,
+        *,
+        base_prompt: str,
+        dynamic_prompts: list[str],
+        generation: int | None,
+        individual_id: str,
+        workers: int,
+    ) -> list[dict[str, Any]]:
+        """Evaluate generated round samples with bounded thread parallelism."""
+        if workers <= 1:
+            return [
+                self._evaluate_round_sample(
+                    base_prompt=base_prompt,
+                    dynamic_prompt=dynamic_prompt,
+                    sample_index=index,
+                    sample_count=len(dynamic_prompts),
+                    generation=generation,
+                    individual_id=individual_id,
+                )
+                for index, dynamic_prompt in enumerate(dynamic_prompts, start=1)
+            ]
+
+        results: list[dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [
+                executor.submit(
+                    self._evaluate_round_sample,
+                    base_prompt=base_prompt,
+                    dynamic_prompt=dynamic_prompt,
+                    sample_index=index,
+                    sample_count=len(dynamic_prompts),
+                    generation=generation,
+                    individual_id=individual_id,
+                )
+                for index, dynamic_prompt in enumerate(dynamic_prompts, start=1)
+            ]
+            for future in as_completed(futures):
+                results.append(future.result())
+        return sorted(results, key=lambda item: int(item["sample_record"]["sample"]))
+
+    def _evaluate_round_sample(
+        self,
+        *,
+        base_prompt: str,
+        dynamic_prompt: str,
+        sample_index: int,
+        sample_count: int,
+        generation: int | None,
+        individual_id: str,
+    ) -> dict[str, Any]:
+        """Evaluate one generated state sample and return aggregate-ready fields."""
+        stats: dict[str, float] = {}
+        print(
+            "[DEBUG] round sample start "
+            f"individual={individual_id} generation={generation} sample={sample_index}/{sample_count}",
+            flush=True,
+        )
+        with timer("round_state_parse_time", stats):
+            state = parse_dynamic_prompt_state(dynamic_prompt)
+        full_prompt = self._build_round_prompt(base_prompt, dynamic_prompt)
+        with timer("round_llm_action_time", stats):
+            raw_response = self._ask_for_actions(full_prompt)
+        with timer("round_response_parse_time", stats):
+            parsed_response = self._extract_first_json_object(raw_response)
+            format_valid, format_reason = self._validate_action_response_format(parsed_response)
+
+        if format_valid:
+            with timer("round_legality_score_time", stats):
+                legality_raw, legality_details = self._score_legality(parsed_response, dynamic_prompt)
+            with timer("round_llm_alignment_time", stats):
+                alignment_raw = self._score_strategy_alignment(
+                    base_prompt=base_prompt,
+                    dynamic_prompt=dynamic_prompt,
+                    raw_response=raw_response,
+                )
+        else:
+            legality_raw = -100.0
+            alignment_raw = -100.0
+            legality_details = {
+                "parseable": isinstance(parsed_response, dict),
+                "format_valid": False,
+                "format_error": format_reason,
+                "max_actions": self._extract_max_actions(dynamic_prompt),
+                "applicable_actions": 0,
+                "action_type_score_sum": 0.0,
+                "returned_actions": 0,
+                "moves": [],
+            }
+
+        legality_max = self._theoretical_legality_max(dynamic_prompt, legality_details)
+        alignment_max = self._theoretical_alignment_max()
+        missing_moves = self._has_missing_or_empty_moves(parsed_response)
+        if missing_moves:
+            legality_score = self.MISSING_MOVES_FITNESS_SCORE
+            alignment_score = self.MISSING_MOVES_FITNESS_SCORE
+        else:
+            legality_score = self._normalize_to_signed_unit_interval(legality_raw, legality_max)
+            alignment_score = self._normalize_to_signed_unit_interval(alignment_raw, alignment_max)
+
+        sample_record = {
+            "sample": sample_index,
+            "dynamic_prompt": dynamic_prompt,
+            "full_prompt": full_prompt,
+            "raw_response": raw_response,
+            "parsed_response": parsed_response,
+            "format_valid": format_valid,
+            "format_reason": format_reason,
+            "legality": legality_details,
+            "legality_score": legality_score,
+            "strategy_alignment_score": alignment_score,
+            "raw_legality_score": legality_raw,
+            "raw_strategy_alignment_score": alignment_raw,
+        }
+        print(
+            "[DEBUG] round sample result "
+            f"individual={individual_id} sample={sample_index}/{sample_count} "
+            f"format_valid={format_valid} legality={legality_score:.4f} "
+            f"alignment={alignment_score:.4f}",
+            flush=True,
+        )
+        return {
+            "sample_record": sample_record,
+            "legality_max": legality_max,
+            "resource_diff": self._round_resource_diff(state),
+            "stats": stats,
+        }
+
+    def _round_eval_parallel_workers(self, sample_count: int) -> int:
+        """Return the bounded worker count for round sample evaluation."""
+        try:
+            configured = int(getattr(self.config, "round_eval_parallel_workers", 1))
+        except (TypeError, ValueError):
+            configured = 1
+        return max(1, min(int(sample_count), configured))
+
+    @staticmethod
+    def _merge_stats(target: dict[str, float], source: dict[str, float]) -> None:
+        """Add numeric timing stats from one sample into the run-level stats."""
+        for key, value in source.items():
+            try:
+                target[key] = target.get(key, 0.0) + float(value)
+            except (TypeError, ValueError):
+                continue
 
     def _write_round_profile(
         self,

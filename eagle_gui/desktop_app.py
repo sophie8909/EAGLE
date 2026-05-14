@@ -131,6 +131,8 @@ class EagleDesktopApp:
         self.gameplay_refresh_interval = StringVar(value="5")
         self.surrogate_top_ratio = StringVar(value="0.3")
         self.archive_parent_ratio = StringVar(value="0.25")
+        self.one_eval_rounds = StringVar(value="8")
+        self.round_eval_parallel_workers = StringVar(value="8")
         self.final_test_max_front = StringVar(value="1")
         self.selection_method = StringVar(value="random")
         self.parent_selection_operator = StringVar(value=PARENT_SELECTION_BY_ALGORITHM["nsga2"])
@@ -470,6 +472,20 @@ class EagleDesktopApp:
             "archive_parent_ratio",
             self.archive_parent_ratio,
             1,
+            0,
+        )
+        self._labeled_entry(
+            self.surrogate_algorithm_frame,
+            "one_eval_rounds",
+            self.one_eval_rounds,
+            1,
+            2,
+        )
+        self._labeled_entry(
+            self.surrogate_algorithm_frame,
+            "round_eval_parallel_workers",
+            self.round_eval_parallel_workers,
+            2,
             0,
         )
         self._labeled_entry(tab, "Final-test max front", self.final_test_max_front, 5, 0)
@@ -2070,6 +2086,10 @@ class EagleDesktopApp:
         )
         self.surrogate_top_ratio.set(str(payload.get("surrogate_top_ratio", self.surrogate_top_ratio.get())))
         self.archive_parent_ratio.set(str(payload.get("archive_parent_ratio", self.archive_parent_ratio.get())))
+        self.one_eval_rounds.set(str(payload.get("one_eval_rounds", self.one_eval_rounds.get())))
+        self.round_eval_parallel_workers.set(
+            str(payload.get("round_eval_parallel_workers", self.round_eval_parallel_workers.get()))
+        )
         self.load_objective_config(payload.get("objective_config", {}))
         self.apply_training_example_sample_config(
             payload.get(
@@ -2210,6 +2230,11 @@ class EagleDesktopApp:
                 "component_pool_path": component_path,
                 "non_evolving_prompt_components": self.config_static_component_keys(),
                 "gameplay_opponents": objective_targets,
+                "one_eval_rounds": parse_int(self.one_eval_rounds.get(), "one_eval_rounds"),
+                "round_eval_parallel_workers": parse_int(
+                    self.round_eval_parallel_workers.get(),
+                    "round_eval_parallel_workers",
+                ),
                 "reproduction_operator_probs": {
                     key: parse_float(variable.get(), key)
                     for key, variable in self.operator_weights.items()

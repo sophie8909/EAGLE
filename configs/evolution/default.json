@@ -99,5 +99,6 @@
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts",
   "prompt_history_path": "logs/microrts/round_evol/history.jsonl",
-  "one_eval_rounds": 5
+  "one_eval_rounds": 8,
+  "round_eval_parallel_workers": 8
 }

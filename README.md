@@ -41,6 +41,7 @@ configs/experiments/<config_name>.json
 
 Pressing `Start experiment` saves that config and launches EAGLE with the selected algorithm, evaluator, and surrogate settings.
 The GUI includes a `Time Analysis` tab that reads the selected run's timing artifacts and profile rows.
+Round evaluation defaults to 8 samples with up to 8 parallel workers for fresh round evaluations.
 
 ```bash
 python -m eagle.main --config configs/experiments/<config_name>.json --algorithm <algorithm> --evaluator <evaluator>

@@ -139,6 +139,9 @@ class EAConfig:
     )
     surrogate_log_dir: str = field(default_factory=lambda: str(_default_config_value("surrogate_log_dir")))
     one_eval_rounds: int = field(default_factory=lambda: int(_default_config_value("one_eval_rounds")))
+    round_eval_parallel_workers: int = field(
+        default_factory=lambda: int(_default_config_value("round_eval_parallel_workers"))
+    )
     prompt_history_path: str = field(default_factory=lambda: str(_default_config_value("prompt_history_path")))
 
 
@@ -204,6 +207,8 @@ class EAConfig:
         if self.reflection_max_components_to_rewrite < 1:
             raise ValueError("reflection_max_components_to_rewrite must be >= 1.")
         self.gameplay_refresh_interval = max(1, int(self.gameplay_refresh_interval))
+        self.one_eval_rounds = max(1, int(self.one_eval_rounds))
+        self.round_eval_parallel_workers = max(1, int(self.round_eval_parallel_workers))
         self.surrogate_top_ratio = min(1.0, max(0.0, float(self.surrogate_top_ratio)))
         self.archive_parent_ratio = min(1.0, max(0.0, float(self.archive_parent_ratio)))
 
@@ -313,6 +318,8 @@ class EAConfig:
             "archive_parent_ratio": self.archive_parent_ratio,
             "surrogate_recent_match_window": self.surrogate_recent_match_window,
             "surrogate_round_samples_per_match": self.surrogate_round_samples_per_match,
+            "one_eval_rounds": self.one_eval_rounds,
+            "round_eval_parallel_workers": self.round_eval_parallel_workers,
             "surrogate_log_dir": self.surrogate_log_dir,
         }
 
