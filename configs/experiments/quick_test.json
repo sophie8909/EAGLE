@@ -1,0 +1,94 @@
+{
+  "algorithm": "ga_surrogate",
+  "population_size": 3,
+  "num_generations": 4,
+  "convergence_generations": 10,
+  "reproduction_operator_probs": {
+    "crossover": 0.7000000000000001,
+    "mutation": 0.20000000000000004,
+    "reflection": 0.10000000000000002
+  },
+  "enable_reflection_operator": true,
+  "reflection_max_components_to_rewrite": 1,
+  "strategy_mutation": {
+    "pool_replacement": 0.4,
+    "identity_preserving_rewrite": 0.35,
+    "identity_shift_rewrite": 0.25,
+    "bitmask_flip": 0.0
+  },
+  "selection_method": "random",
+  "tournament_size": 3,
+  "crossover": "uniform",
+  "crossover_repair_enabled": true,
+  "environment_selection_method": "ga_fitness_elitism",
+  "final_test_max_front": 1,
+  "evolving_prompt_components": [
+    "role",
+    "game_rules",
+    "unit_types",
+    "building_types",
+    "game_state_format"
+  ],
+  "run_time_per_game_sec": 500,
+  "gameplay_rate": 0.25,
+  "gameplay_opponents": [
+    "ai.abstraction.LightRush",
+    "ai.abstraction.HeavyRush"
+  ],
+  "llm_interval": [
+    10
+  ],
+  "resource_advantage_alpha": 2.0,
+  "win_bonus": 2.0,
+  "resource_advantage_weights": {
+    "base": 10.0,
+    "worker": 1.0,
+    "light": 2.0,
+    "heavy": 2.0,
+    "ranged": 2.0,
+    "resource": 1.0
+  },
+  "surrogate_version": "eaglePolicy",
+  "surrogate": "round",
+  "surrogate_recent_match_window": 10,
+  "surrogate_round_samples_per_match": 10,
+  "surrogate_log_dir": "logs/microrts",
+  "one_eval_rounds": 8,
+  "round_eval_parallel_workers": 8,
+  "application": "microrts",
+  "evaluator": "gameplay",
+  "objective_config": {
+    "mode": "single",
+    "objective": "resource_advantage"
+  },
+  "training_example_sample_count": "random_0_4",
+  "training_example_fixed_count": false,
+  "parent_selection_operator": "ga_fitness_tournament",
+  "crossover_operator": "uniform",
+  "mutation_operator": "mix",
+  "env_selection_operator": "ga_fitness_elitism",
+  "component_pool_path": "eagle/prompts/components.json",
+  "non_evolving_prompt_components": [
+    "actions",
+    "attack_style",
+    "barracks_ownership_rule",
+    "consistency_rule",
+    "critical_rules",
+    "current_game_state_marker",
+    "decision_logic",
+    "decision_process",
+    "example_safety_rule",
+    "field_requirements",
+    "game_objects",
+    "json_schema",
+    "memoryless_barracks_rule",
+    "raw_move_format",
+    "role",
+    "stable_worker_role_rule",
+    "start_game_rule",
+    "state_interpretation_step"
+  ],
+  "gameplay_refresh_interval": 2,
+  "surrogate_top_ratio": 0.3,
+  "archive_parent_ratio": 0.25
+}
