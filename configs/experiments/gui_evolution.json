@@ -1,13 +1,13 @@
 {
   "algorithm": "ga_surrogate",
   "evaluator": "gameplay",
-  "population_size": 10,
-  "num_generations": 50,
+  "population_size": 3,
+  "num_generations": 4,
   "convergence_generations": 10,
   "reproduction_operator_probs": {
-    "crossover": 0.7,
-    "mutation": 0.2,
-    "reflection": 0.1
+    "crossover": 0.7000000000000001,
+    "mutation": 0.20000000000000004,
+    "reflection": 0.10000000000000002
   },
   "enable_reflection_operator": true,
   "reflection_max_components_to_rewrite": 1,
@@ -17,11 +17,13 @@
     "identity_shift_rewrite": 0.25,
     "bitmask_flip": 0.0
   },
-  "selection_method": "tournament",
+  "mutation_operator": "mix",
+  "selection_method": "random",
   "tournament_size": 3,
   "crossover": "uniform",
+  "crossover_operator": "uniform",
   "crossover_repair_enabled": true,
-  "environment_selection_method": "elitism",
+  "environment_selection_method": "ga_fitness_elitism",
   "final_test_max_front": 1,
   "include_strategy_identity_in_prompt": false,
   "evolving_prompt_components": [
@@ -32,42 +34,38 @@
     "game_state_format"
   ],
   "non_evolving_prompt_components": [
-    "role",
-    "critical_rules",
-    "game_objects",
     "actions",
-    "raw_move_format",
-    "example_safety_rule",
-    "state_interpretation_step",
-    "decision_logic",
-    "decision_process",
-    "consistency_rule",
     "attack_style",
     "barracks_ownership_rule",
-    "start_game_rule",
-    "stable_worker_role_rule",
-    "memoryless_barracks_rule",
-    "field_requirements",
-    "json_schema",
+    "consistency_rule",
+    "critical_rules",
     "current_game_state_marker",
-    "training_example_no_workers",
-    "training_example_worker_bootstrap",
-    "training_example_build_barracks",
-    "training_example_repeat_barracks_low_resources",
-    "training_example_enemy_barracks_not_ally",
-    "training_example_many_workers_no_train_worker",
-    "training_example_ally_barracks_train_army"
+    "decision_logic",
+    "decision_process",
+    "example_safety_rule",
+    "field_requirements",
+    "game_objects",
+    "json_schema",
+    "memoryless_barracks_rule",
+    "raw_move_format",
+    "role",
+    "stable_worker_role_rule",
+    "start_game_rule",
+    "state_interpretation_step"
   ],
   "component_pool_path": "eagle/prompts/components.json",
   "initial_population_seeds": [],
+  "run_time_per_game_sec": 500,
   "gameplay_rate": 0.25,
-  "gameplay_refresh_interval": 5,
+  "gameplay_refresh_interval": 2,
   "surrogate_top_ratio": 0.3,
   "archive_parent_ratio": 0.25,
   "objective_config": {
     "mode": "single",
     "objective": "resource_advantage"
   },
+  "training_example_sample_count": "random_0_4",
+  "training_example_fixed_count": false,
   "gameplay_opponents": [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"
@@ -95,7 +93,10 @@
   "surrogate_recent_match_window": 10,
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts",
-  "prompt_history_path": "./eagle_round_evol/history.jsonl",
+  "prompt_history_path": "logs/microrts/round_evol/history.jsonl",
   "one_eval_rounds": 8,
-  "round_eval_parallel_workers": 8
+  "round_eval_parallel_workers": 8,
+  "application": "microrts",
+  "parent_selection_operator": "ga_fitness_tournament",
+  "env_selection_operator": "ga_fitness_elitism"
 }
