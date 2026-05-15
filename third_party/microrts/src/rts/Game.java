@@ -7,9 +7,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.lang.reflect.Constructor;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import javax.swing.JFrame;
 
+import ai.eagle.EAGLE;
 import rts.units.Unit;
 import rts.units.UnitTypeTable;
 
@@ -26,6 +30,8 @@ public class Game {
 
     private boolean partiallyObservable, headless;
     private int maxCycles, updateInterval;
+    private String resultJsonPath = "";
+    private boolean verboseLog = false;
 
     /**
      * Create a game from a GameSettings object.
@@ -39,13 +45,20 @@ public class Game {
                         gameSettings.getConflictPolicy()), gameSettings.getMapLocation(),
                 gameSettings.isHeadless(),
                 gameSettings.isPartiallyObservable(), gameSettings.getMaxCycles(), gameSettings.getUpdateInterval(),
-                gameSettings.getAI1(), gameSettings.getAI2());
+                gameSettings.getAI1(), gameSettings.getAI2(), gameSettings.getResultJsonPath(), gameSettings.isVerboseLog());
     }
 
 
     public Game(UnitTypeTable utt, String mapLocation, boolean headless, boolean partiallyObservable, int maxCycles,
                 int updateInterval, String ai1, String ai2) throws Exception {
+        this(utt, mapLocation, headless, partiallyObservable, maxCycles, updateInterval, ai1, ai2, "", false);
+    }
+
+    public Game(UnitTypeTable utt, String mapLocation, boolean headless, boolean partiallyObservable, int maxCycles,
+                int updateInterval, String ai1, String ai2, String resultJsonPath, boolean verboseLog) throws Exception {
         this(utt, mapLocation, headless, partiallyObservable, maxCycles, updateInterval);
+        this.resultJsonPath = resultJsonPath == null ? "" : resultJsonPath;
+        this.verboseLog = verboseLog;
 
         Constructor cons1 = Class.forName(ai1)
                 .getConstructor(UnitTypeTable.class);
@@ -208,19 +221,23 @@ public class Game {
         // Print clear game result for benchmark parsing
         int winner = gs.winner();
         int finalTick = gs.getTime();
-        printFinalStateSnapshot(finalTick);
-        System.out.println();
-        System.out.println("=== GAME RESULT ===");
-        System.out.println("FINAL_TICK: " + finalTick);
-        System.out.println("WINNER: " + winner);
-        if (winner == 0) {
-            System.out.println("Player 0 wins!");
-        } else if (winner == 1) {
-            System.out.println("Player 1 wins!");
-        } else {
-            System.out.println("Draw (no winner)");
+        boolean tickTimeout = !gameover && finalTick >= maxCycles;
+        writeResultJson(resultJsonPath, gameover, winner, finalTick, tickTimeout);
+        if (verboseLog) {
+            printFinalStateSnapshot(finalTick);
+            System.out.println();
+            System.out.println("=== GAME RESULT ===");
+            System.out.println("FINAL_TICK: " + finalTick);
+            System.out.println("WINNER: " + winner);
+            if (winner == 0) {
+                System.out.println("Player 0 wins!");
+            } else if (winner == 1) {
+                System.out.println("Player 1 wins!");
+            } else {
+                System.out.println("Draw (no winner)");
+            }
+            System.out.println("===================");
         }
-        System.out.println("===================");
         if (trace != null) {
             trace.toxml(tracePath);
             System.out.println("[MicroRTS] saved trace: " + tracePath);
@@ -237,6 +254,153 @@ public class Game {
         String forceExit = System.getenv("EAGLE_FORCE_EXIT_ON_GAME_OVER");
         if ("1".equals(forceExit)) {
             System.exit(0);
+        }
+    }
+
+    private void writeResultJson(String path, boolean gameover, int winner, int finalTick, boolean tickTimeout) {
+        if (path == null || path.isEmpty()) {
+            return;
+        }
+        Path resultPath = Paths.get(path);
+        Path tmpPath = Paths.get(path + ".tmp");
+        try {
+            Path parent = resultPath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            String content = buildResultJson(gameover, winner, finalTick, tickTimeout);
+            Files.write(tmpPath, content.getBytes(StandardCharsets.UTF_8));
+            try {
+                Files.move(tmpPath, resultPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(tmpPath, resultPath, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            System.err.println("[MicroRTS] failed to write result JSON: " + e.getMessage());
+        }
+    }
+
+    private String buildResultJson(boolean gameover, int winner, int finalTick, boolean tickTimeout) {
+        ResourceSnapshot p0 = buildPlayerSnapshot(0);
+        ResourceSnapshot p1 = buildPlayerSnapshot(1);
+        StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        appendJsonField(json, "gameover", String.valueOf(gameover), true);
+        appendJsonField(json, "winner", String.valueOf(winner), true);
+        appendJsonField(json, "result", quote(resultLabel(winner, tickTimeout)), true);
+        appendJsonField(json, "target_side", "0", true);
+        appendJsonField(json, "final_tick", String.valueOf(finalTick), true);
+        appendJsonField(json, "max_cycles", String.valueOf(maxCycles), true);
+        appendJsonField(json, "tick_timeout", String.valueOf(tickTimeout), true);
+        appendJsonField(json, "termination_reason", quote(tickTimeout ? "tick_timeout" : gameover ? "gameover" : "stopped"), true);
+        appendJsonField(json, "ai1", quote(ai1.getClass().getName()), true);
+        appendJsonField(json, "ai2", quote(ai2.getClass().getName()), true);
+        appendJsonField(json, "llm_calls", String.valueOf(llmCallCount(ai1)), true);
+        appendJsonField(json, "llm_call_limit", String.valueOf(llmCallLimit(ai1)), true);
+        appendJsonField(json, "llm_call_limit_reached", String.valueOf(llmCallLimitReached(ai1)), true);
+        json.append("  \"players\": {\n");
+        json.append("    \"p0\": ").append(snapshotJson(p0)).append(",\n");
+        json.append("    \"p1\": ").append(snapshotJson(p1)).append("\n");
+        json.append("  },\n");
+        json.append("  \"ally\": ").append(snapshotJson(p0)).append(",\n");
+        json.append("  \"enemy\": ").append(snapshotJson(p1)).append(",\n");
+        json.append("  \"final_scoreboard\": {")
+                .append("\"time\":").append(finalTick).append(",")
+                .append("\"p0_units\":").append(p0.unitCount).append(",")
+                .append("\"p1_units\":").append(p1.unitCount).append(",")
+                .append("\"p0_eval\":").append(p0.materialTotal).append(",")
+                .append("\"p1_eval\":").append(p1.materialTotal)
+                .append("}\n");
+        json.append("}\n");
+        return json.toString();
+    }
+
+    private ResourceSnapshot buildPlayerSnapshot(int player) {
+        ResourceSnapshot snapshot = new ResourceSnapshot(gs.getPlayer(player).getResources());
+        for (Unit unit : gs.getPhysicalGameState().getUnits()) {
+            if (unit.getPlayer() != player) {
+                continue;
+            }
+            snapshot.unitCount++;
+            snapshot.carriedResources += unit.getResources();
+            String typeName = unit.getType().name;
+            snapshot.unitTypes.put(typeName, snapshot.unitTypes.getOrDefault(typeName, 0) + 1);
+            snapshot.materialTotal += unit.getType().cost;
+        }
+        snapshot.resourceTotal = snapshot.playerResources + snapshot.carriedResources;
+        return snapshot;
+    }
+
+    private String resultLabel(int winner, boolean tickTimeout) {
+        if (winner == 0) {
+            return "p0_win";
+        }
+        if (winner == 1) {
+            return "p1_win";
+        }
+        return tickTimeout ? "timeout_draw" : "draw";
+    }
+
+    private int llmCallCount(AI ai) {
+        return ai instanceof EAGLE ? ((EAGLE) ai).getLlmCallCount() : 0;
+    }
+
+    private int llmCallLimit(AI ai) {
+        return ai instanceof EAGLE ? ((EAGLE) ai).getLlmCallLimit() : 0;
+    }
+
+    private boolean llmCallLimitReached(AI ai) {
+        return ai instanceof EAGLE && ((EAGLE) ai).hasLlmCallLimitReached();
+    }
+
+    private String snapshotJson(ResourceSnapshot snapshot) {
+        StringBuilder json = new StringBuilder();
+        json.append("{");
+        json.append("\"unit_count\":").append(snapshot.unitCount).append(",");
+        json.append("\"player_resources\":").append(snapshot.playerResources).append(",");
+        json.append("\"carried_resources\":").append(snapshot.carriedResources).append(",");
+        json.append("\"resource_total\":").append(snapshot.resourceTotal).append(",");
+        json.append("\"material_total\":").append(snapshot.materialTotal).append(",");
+        json.append("\"unit_types\":{");
+        boolean first = true;
+        for (Map.Entry<String, Integer> entry : snapshot.unitTypes.entrySet()) {
+            if (!first) {
+                json.append(",");
+            }
+            json.append(quote(entry.getKey())).append(":").append(entry.getValue());
+            first = false;
+        }
+        json.append("}}");
+        return json.toString();
+    }
+
+    private void appendJsonField(StringBuilder json, String name, String value, boolean comma) {
+        json.append("  ").append(quote(name)).append(": ").append(value);
+        if (comma) {
+            json.append(",");
+        }
+        json.append("\n");
+    }
+
+    private String quote(String value) {
+        String escaped = value == null ? "" : value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
+        return "\"" + escaped + "\"";
+    }
+
+    private static class ResourceSnapshot {
+        final int playerResources;
+        int unitCount = 0;
+        int carriedResources = 0;
+        int resourceTotal = 0;
+        int materialTotal = 0;
+        final Map<String, Integer> unitTypes = new LinkedHashMap<>();
+
+        ResourceSnapshot(int playerResources) {
+            this.playerResources = playerResources;
         }
     }
 

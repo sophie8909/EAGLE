@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import random
 import subprocess
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -195,6 +197,8 @@ def launch_java_match(
     max_game_ticks: int | None = None,
     trace_path: Path | None = None,
     round_state_dir: Path | None = None,
+    result_json_path: Path | None = None,
+    verbose_logs: bool = False,
     map_location: str | None = None,
 ) -> tuple[int, bool, str, float]:
     """Launch one Java MicroRTS game and capture its combined log output."""
@@ -217,6 +221,9 @@ def launch_java_match(
         command.append(f"-Dmicrorts.round_state_dir={round_state_dir}")
     command.extend(["-cp", classpath, "rts.MicroRTS"])
     command.extend(["--headless", "true"])
+    if result_json_path is not None:
+        command.extend(["--result-json", str(result_json_path)])
+    command.extend(["--verbose-log", "true" if verbose_logs else "false"])
     if max_game_ticks is not None:
         command.extend(["-c", str(int(max_game_ticks))])
     if map_location is not None:
@@ -337,6 +344,91 @@ def detect_tick_timeout(parsed_log: dict[str, Any], max_game_ticks: int) -> bool
         return False
 
 
+def _debug_log_fallback_enabled() -> bool:
+    """Return whether missing result JSON should fall back to verbose log parsing."""
+    return os.environ.get("EAGLE_DEBUG_LOG_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _verbose_microrts_logs_enabled(config: Any) -> bool:
+    """Return whether Java should print legacy verbose terminal logs."""
+    value = getattr(config, "verbose_microrts_logs", None)
+    if value is None:
+        value = os.environ.get("EAGLE_VERBOSE_MICRORTS_LOGS", "")
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _force_snapshot_from_result(snapshot: dict[str, Any]) -> dict[str, int]:
+    """Convert Java result unit types into the normalized Python force snapshot."""
+    unit_types = snapshot.get("unit_types", {}) if isinstance(snapshot, dict) else {}
+    mapping = {
+        "Base": "base",
+        "Worker": "worker",
+        "Light": "light",
+        "Heavy": "heavy",
+        "Ranged": "ranged",
+    }
+    normalized = {key: 0 for key in ("base", "worker", "light", "heavy", "ranged", "resource")}
+    for java_name, count in unit_types.items():
+        key = mapping.get(str(java_name))
+        if key is not None:
+            normalized[key] = int(count)
+    normalized["resource"] = int(snapshot.get("resource_total", snapshot.get("player_resources", 0)) or 0)
+    return normalized
+
+
+def _parsed_log_from_result_json(result: dict[str, Any], target_agent: str) -> dict[str, Any]:
+    """Adapt one Java result JSON into the summary shape consumed by scoring code."""
+    final_tick = int(result.get("final_tick", 0) or 0)
+    max_cycles = result.get("max_cycles")
+    winner = result.get("winner")
+    target_side = result.get("target_side", 0)
+    p0 = result.get("players", {}).get("p0", result.get("ally", {}))
+    p1 = result.get("players", {}).get("p1", result.get("enemy", {}))
+    feature_row = {
+        "time": final_tick,
+        "ally": _force_snapshot_from_result(p0),
+        "enemy": _force_snapshot_from_result(p1),
+        "neutral_resource": 0,
+    }
+    resource_row = {
+        "time": final_tick,
+        "p0_resources": int(p0.get("resource_total", p0.get("player_resources", 0)) or 0),
+        "p1_resources": int(p1.get("resource_total", p1.get("player_resources", 0)) or 0),
+    }
+    summary = {
+        "target_agent": target_agent,
+        "segment_count": int(result.get("llm_calls", 0) or 0),
+        "llm_call_count": int(result.get("llm_calls", 0) or 0),
+        "llm_move_count": 0,
+        "direct_failure_count": 0,
+        "duplicate_skipped_count": 0,
+        "applied_failure_count": 0,
+        "applied_success_count": 0,
+        "resource_history": [resource_row],
+        "feature_history": [feature_row],
+        "final_tick": final_tick,
+        "final_scoreboard": result.get("final_scoreboard"),
+        "max_cycles": int(max_cycles) if max_cycles is not None else None,
+        "tick_timeout": bool(result.get("tick_timeout", False)),
+        "wall_clock_timeout": False,
+        "llm_call_limit_reached": bool(result.get("llm_call_limit_reached", False)),
+        "winner": str(winner) if winner is not None else None,
+        "declared_winner": str(winner) if winner is not None else None,
+        "crashed_side": None,
+        "target_side": str(target_side),
+        "termination_reason": result.get("termination_reason"),
+    }
+    return {
+        "summary": summary,
+        "game_settings": {"AI1": result.get("ai1"), "AI2": result.get("ai2")},
+        "resource_history": [resource_row],
+        "feature_history": [feature_row],
+        "segments": [],
+        "all_move_results": [],
+        "result_json": result,
+    }
+
+
 def get_latest_log_file(project_root: Path | None = None) -> Path | None:
     """Return the newest shared runtime log file."""
     logs_dir = _runtime_logs_dir(project_root)
@@ -386,15 +478,19 @@ def run_java_agent_game(
             runtime_logs_dir=runtime_logs_dir,
             generation=generation,
         )
-        log_path = _make_log_path(project_root, prefix=log_prefix, runtime_logs_dir=generation_runtime_dir)
+        run_id = uuid.uuid4().hex
+        game_output_dir = generation_runtime_dir / "games" / run_id
+        game_output_dir.mkdir(parents=True, exist_ok=True)
+        log_path = game_output_dir / f"{log_prefix or 'run'}.log"
+        result_json_path = game_output_dir / "result.json"
         trace_stem_parts = [
             str(log_prefix or "run"),
             f"ind_{individual_id}" if individual_id is not None else "ind_unknown",
             _target_agent_name(ai1_class),
-            datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f"),
+            run_id,
         ]
-        trace_path = generation_runtime_dir / ("trace_" + "_".join(trace_stem_parts) + ".xml")
-        round_state_dir = generation_runtime_dir / "round_states" / "_".join(trace_stem_parts)
+        trace_path = game_output_dir / ("trace_" + "_".join(trace_stem_parts) + ".xml")
+        round_state_dir = game_output_dir / "round_states"
         max_game_ticks = int(getattr(config, "tick_limit", 5000))
         map_location = select_random_map_location(project_root, config)
         exit_code, timed_out, log_path_str, game_time_sec = launch_java_match(
@@ -409,24 +505,50 @@ def run_java_agent_game(
             max_game_ticks=max_game_ticks,
             trace_path=trace_path,
             round_state_dir=round_state_dir,
+            result_json_path=result_json_path,
+            verbose_logs=_verbose_microrts_logs_enabled(config),
             map_location=map_location,
         )
-        log_content = Path(log_path_str).read_text(encoding="utf-8", errors="replace")
         latest_round_log = latest_round_state_log(round_state_dir)
-        if latest_round_log is not None:
+        log_content = ""
+        if _debug_log_fallback_enabled():
+            log_content = Path(log_path_str).read_text(encoding="utf-8", errors="replace")
+        if latest_round_log is not None and _debug_log_fallback_enabled():
             log_content = (
                 log_content
                 + "\n\n=== LATEST ROUND STATE LOG ===\n"
                 + latest_round_log.read_text(encoding="utf-8", errors="replace")
             )
-        parsed_log = parse_game_log(log_content, target_agent=_target_agent_name(ai1_class))
-        match_score = calculate_match_score(
-            log_content,
-            resource_advantage_weights=config.resource_advantage_weights,
-            parsed_log=parsed_log,
-        )
+        target_agent = _target_agent_name(ai1_class)
+        result_payload: dict[str, Any] | None = None
+        result_error: str | None = None
+        if result_json_path.exists():
+            try:
+                result_payload = json.loads(result_json_path.read_text(encoding="utf-8"))
+                parsed_log = _parsed_log_from_result_json(result_payload, target_agent=target_agent)
+                match_score = calculate_match_score(
+                    "",
+                    resource_advantage_weights=config.resource_advantage_weights,
+                    parsed_log=parsed_log,
+                )
+            except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+                result_error = f"invalid result_json: {exc}"
+                parsed_log = {}
+                match_score = {"win_score": -1.0, "raw_resource_advantage_score": 0.0}
+        elif _debug_log_fallback_enabled():
+            result_error = "result_json missing; used debug log fallback"
+            parsed_log = parse_game_log(log_content, target_agent=target_agent)
+            match_score = calculate_match_score(
+                log_content,
+                resource_advantage_weights=config.resource_advantage_weights,
+                parsed_log=parsed_log,
+            )
+        else:
+            result_error = "result_json missing"
+            parsed_log = {}
+            match_score = {"win_score": -1.0, "raw_resource_advantage_score": 0.0}
         tick_timeout = detect_tick_timeout(parsed_log, max_game_ticks)
-        wall_clock_timeout = bool(timed_out or detect_timeout(log_content))
+        wall_clock_timeout = bool(timed_out or (_debug_log_fallback_enabled() and detect_timeout(log_content)))
         llm_call_limit_reached = bool(
             parsed_log.get("summary", {}).get("llm_call_limit_reached", False)
             if isinstance(parsed_log, dict)
@@ -437,13 +559,16 @@ def run_java_agent_game(
             timeout_type = "tick"
         elif wall_clock_timeout:
             timeout_type = "wall_clock"
-        elif llm_call_limit_reached:
-            timeout_type = "llm_call_limit"
         metadata = {
             "parsed_log": parsed_log,
             "winner": parsed_log.get("summary", {}).get("winner"),
-            "timeout": bool(tick_timeout or wall_clock_timeout or llm_call_limit_reached),
+            "timeout": bool(tick_timeout or wall_clock_timeout),
             "timeout_type": timeout_type,
+            "llm_call_limit_reached": llm_call_limit_reached,
+            "result_json_path": str(result_json_path),
+            "result_json_error": result_error,
+            "run_id": run_id,
+            "game_output_dir": str(game_output_dir),
             "log_path": log_path_str,
             "trace_xml_path": str(trace_path) if trace_path.exists() else None,
             "round_state_dir": str(round_state_dir),
@@ -457,6 +582,7 @@ def run_java_agent_game(
                 parsed_log.get("summary", {}).get("segment_count", 0),
             ),
             "exit_code": exit_code,
+            "result_json_present": result_json_path.exists(),
             "game_time_sec": game_time_sec,
             "compile_time_sec": compile_time_sec,
             "microrts_root": str(microrts_root),

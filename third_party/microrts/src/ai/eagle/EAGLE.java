@@ -68,6 +68,8 @@ public class EAGLE extends AbstractionLayerAI {
     private static final String OLLAMA_HOST = normalizeOllamaHost(
             System.getenv().getOrDefault("OLLAMA_HOST", "http://localhost:11434")
     );
+    private static final String LLM_LIMIT_EMPTY_RESPONSE =
+            "{\"thinking\":\"LLM call limit reached; no action issued.\",\"moves\":[]}";
     private static final boolean OLLAMA_STREAM = false;
     private static final boolean DEBUG_MODE = readBooleanSetting("eagle.debug", "EAGLE_DEBUG", false);
 
@@ -99,6 +101,7 @@ public class EAGLE extends AbstractionLayerAI {
     private boolean logsInitialized = false;
     private boolean namesInitialized = false;
     private boolean endGameLogged = false;
+    private boolean llmLimitReachedLogged = false;
 
     private JsonArray lastValidMoves = null;
     private Map<String, UnitSnapshot> lastSnapshot = null;
@@ -271,6 +274,19 @@ public class EAGLE extends AbstractionLayerAI {
         DecisionContext context = buildDecisionContext(player, gs, currentSnapshot);
 
         // Stage 2: reuse existing abstract actions unless the state and interval require a fresh LLM call.
+        if (isLlmCallLimitReached()) {
+            JsonObject emptyResponse = parseJsonStrictThenLenient(LLM_LIMIT_EMPTY_RESPONSE);
+            if (!llmLimitReachedLogged) {
+                System.out.println("[EAGLE] llm_call_limit reached (" + llmCallCount + "/" + LLM_CALL_LIMIT
+                        + "); skipping future LLM requests and continuing the game.");
+                logRawLLMResponse(LLM_LIMIT_EMPTY_RESPONSE);
+                llmLimitReachedLogged = true;
+            }
+            applyLLMMoves(player, gs, emptyResponse.getAsJsonArray("moves"));
+            updateDecisionCache(emptyResponse, currentSnapshot, true);
+            return translateActions(player, gs);
+        }
+
         if (!shouldCallLLM(gs, context)) {
             System.out.println("[EAGLE] skip LLM: " + lastSkipReason);
             return translateActions(player, gs);
@@ -506,10 +522,6 @@ public class EAGLE extends AbstractionLayerAI {
     }
 
     private boolean shouldCallLLM(GameState gs, DecisionContext context) {
-        if (llmCallCount >= LLM_CALL_LIMIT) {
-            lastSkipReason = "llm_call_limit reached (" + llmCallCount + "/" + LLM_CALL_LIMIT + ")";
-            return false;
-        }
         // Invalid or missing previous output forces a retry; valid cached actions can keep running.
         if (!lastResponseWasValid) {
             lastCallReason = "previous response was invalid or missing";
@@ -544,6 +556,22 @@ public class EAGLE extends AbstractionLayerAI {
             lastSkipReason = "no new decision required";
         }
         return false;
+    }
+
+    private boolean isLlmCallLimitReached() {
+        return LLM_CALL_LIMIT > 0 && llmCallCount >= LLM_CALL_LIMIT;
+    }
+
+    public int getLlmCallCount() {
+        return llmCallCount;
+    }
+
+    public int getLlmCallLimit() {
+        return LLM_CALL_LIMIT;
+    }
+
+    public boolean hasLlmCallLimitReached() {
+        return isLlmCallLimitReached();
     }
 
     private boolean isUnitFreeForNewDecision(Unit unit, GameState gs) {
@@ -762,6 +790,7 @@ public class EAGLE extends AbstractionLayerAI {
         lastResponseWasValid = false;
         lastSkipReason = "";
         lastCallReason = "";
+        llmLimitReachedLogged = false;
     }
 
     private void appendCsvLog(String response, String featureArrayForCsv) {

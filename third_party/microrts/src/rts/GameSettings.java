@@ -21,7 +21,9 @@ public class GameSettings {
                 "-u: unit type table version\n" +
                 "--conflict_policy: which conflict policy to use\n" +
                 "--ai1: name of the class to be instantiated for player 1\n" +
-                "--ai2: name of the class to be instantiated for player 2";
+                "--ai2: name of the class to be instantiated for player 2\n" +
+                "--result-json: path to a structured result JSON file\n" +
+                "--verbose-log: print verbose terminal state logs";
     }
 
     public enum LaunchMode {
@@ -55,12 +57,14 @@ public class GameSettings {
     // Opponents:
     private String AI2 = "ai.RandomAI";
     private String AI1 = "ai.RandomAI";
+    private String resultJsonPath = "";
+    private boolean verboseLog = false;
 
     public GameSettings(LaunchMode launchMode, String serverAddress, int serverPort,
         int serializationType, String mapLocation, int maxCycles, int updateInterval,
         boolean partiallyObservable, int uttVersion, int confictPolicy,
         boolean includeConstantsInState, boolean compressTerrain, boolean headless, String AI1,
-        String AI2) {
+        String AI2, String resultJsonPath, boolean verboseLog) {
         this.launchMode = launchMode;
         this.serverAddress = serverAddress;
         this.serverPort = serverPort;
@@ -76,6 +80,8 @@ public class GameSettings {
         this.headless = headless;
         this.AI1 = AI1;
         this.AI2 = AI2;
+        this.resultJsonPath = resultJsonPath == null ? "" : resultJsonPath;
+        this.verboseLog = verboseLog;
     }
 
     public String getServerAddress() {
@@ -136,6 +142,14 @@ public class GameSettings {
 
     public boolean isHeadless() {
         return headless;
+    }
+
+    public String getResultJsonPath() {
+        return resultJsonPath;
+    }
+
+    public boolean isVerboseLog() {
+        return verboseLog;
     }
 
     /**
@@ -209,6 +223,12 @@ public class GameSettings {
                 case "--ai2":
                     AI2 = args[i];
                     break;
+                case "--result-json":
+                    resultJsonPath = args[i];
+                    break;
+                case "--verbose-log":
+                    verboseLog = args[i].equals("1") || Boolean.parseBoolean(args[i]);
+                    break;
                 default:
                     break;
             }
@@ -261,10 +281,12 @@ public class GameSettings {
         boolean headless = Boolean.parseBoolean(prop.getProperty("headless", "false"));
         String AI1 = prop.getProperty("AI1", "ai.RandomAI");
         String AI2 = prop.getProperty("AI2", "ai.RandomAI");
+        String resultJsonPath = prop.getProperty("result_json", "");
+        boolean verboseLog = Boolean.parseBoolean(prop.getProperty("verbose_log", "false"));
 
         return new GameSettings(launchMode, serverAddress, serverPort, serializationType,
             mapLocation, maxCycles, updateInterval, partiallyObservable, uttVersion, conflictPolicy,
-            includeConstantsInState, compressTerrain, headless, AI1, AI2);
+            includeConstantsInState, compressTerrain, headless, AI1, AI2, resultJsonPath, verboseLog);
     }
     
     
@@ -290,6 +312,8 @@ public class GameSettings {
                 "Conflict Policy: " + getConflictPolicy() + "\n" +
                 "AI1: " + getAI1() + "\n" +
                 "AI2: " + getAI2() + "\n" +
+                "Result JSON: " + getResultJsonPath() + "\n" +
+                "Verbose Log: " + isVerboseLog() + "\n" +
                 "------------------------------------------------";
     }
 }

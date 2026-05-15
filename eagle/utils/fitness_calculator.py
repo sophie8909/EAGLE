@@ -85,7 +85,7 @@ def _should_use_terminal_scoreboard(summary: dict[str, Any], feature_history: li
     final_scoreboard = summary.get("final_scoreboard")
     if not isinstance(final_scoreboard, dict):
         return False
-    if summary.get("wall_clock_timeout") or summary.get("tick_timeout") or summary.get("llm_call_limit_reached"):
+    if summary.get("wall_clock_timeout") or summary.get("tick_timeout"):
         return False
     if summary.get("winner") is None:
         return False
