@@ -9,6 +9,7 @@ from ...config import EAConfig
 from ...main import OPPONENT_LIST
 from ...project import DEFAULT_FINAL_TEST_CONFIG_PATH
 from ...utils.component_pool import ComponentPool
+from ...utils.checkpoint import CheckpointManager, deserialize_individual
 from ...evolution.component.log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
 from .full_game_evaluator import FullGameEvaluator
 from .generation_replay import build_result_record, extract_individual_ids_up_to_front
@@ -26,38 +27,59 @@ def _resolve_final_test_max_front(config: EAConfig) -> int | None:
 
 
 def _extract_generation_number(path: Path) -> int:
-    """Extract the human-readable generation number from `generation_<N>_mo.txt`."""
-    match = re.match(r"generation_(\d+)_mo\.txt$", path.name)
+    """Extract the human-readable generation number from a saved generation log."""
+    match = re.match(r"generation_(\d+)(?:_mo)?\.txt$", path.name)
     if not match:
         return -1
     return int(match.group(1))
 
 
+def _is_multi_objective_generation_log(path: Path) -> bool:
+    """Return whether one generation log is an MO Pareto-front log."""
+    return path.name.endswith("_mo.txt")
+
+
 def _resolve_latest_generation_log_path(current_log_dir: str | Path) -> Path:
-    """Return the newest saved multi-objective generation log under one run directory."""
+    """Return the newest saved generation log under one run directory."""
     log_dir = Path(current_log_dir)
-    candidates = sorted(
-        log_dir.glob("generation_*_mo.txt"),
-        key=_extract_generation_number,
-    )
+    candidates = sorted(_generation_log_candidates(log_dir), key=_extract_generation_number)
     if not candidates:
-        raise FileNotFoundError(f"No multi-objective generation logs found under {log_dir}.")
+        raise FileNotFoundError(f"No generation logs found under {log_dir}.")
     return candidates[-1]
+
+
+def _generation_log_candidates(log_dir: Path) -> list[Path]:
+    """Return GA and MO generation logs from one run directory."""
+    return [
+        path
+        for path in log_dir.glob("generation_*.txt")
+        if _extract_generation_number(path) >= 0
+    ]
 
 
 def _resolve_final_generation_log_path(current_log_dir: str | Path, last_gen: int | None) -> Path:
     """Resolve the saved generation log for the final replay step."""
     log_dir = Path(current_log_dir)
     if last_gen is not None:
-        exact_match = log_dir / f"generation_{last_gen}_mo.txt"
-        if exact_match.exists():
-            return exact_match
-
-        one_based_match = log_dir / f"generation_{last_gen + 1}_mo.txt"
-        if one_based_match.exists():
-            return one_based_match
+        for generation_number in (last_gen, last_gen + 1):
+            for suffix in ("_mo", ""):
+                candidate = log_dir / f"generation_{generation_number}{suffix}.txt"
+                if candidate.exists():
+                    return candidate
 
     return _resolve_latest_generation_log_path(log_dir)
+
+
+def _load_checkpoint_population(log_dir: Path) -> list:
+    """Load the latest checkpointed population when text generation logs are absent."""
+    checkpoint_state = CheckpointManager(log_dir).load_state()
+    if not checkpoint_state or not checkpoint_state.get("population"):
+        return []
+    return [
+        deserialize_individual(payload)
+        for payload in list(checkpoint_state.get("population") or [])
+        if isinstance(payload, dict)
+    ]
 
 def _resolve_final_test_config(
     base_config: EAConfig,
@@ -101,50 +123,64 @@ def run_final_test_suite(
             "skip_reason": "final_test_max_front=0",
         }
 
-    generation_log_path = _resolve_final_generation_log_path(experiment_log_dir, last_gen)
-    individuals_by_front = parse_individuals_from_ea_log(str(generation_log_path))
-    population_snapshot = parse_population_snapshot_from_ea_log(str(generation_log_path))
-    selected_front_ids = set(
-        extract_individual_ids_up_to_front(
-            generation_log_path,
-            final_test_max_front,
+    try:
+        generation_log_path = _resolve_final_generation_log_path(experiment_log_dir, last_gen)
+    except FileNotFoundError:
+        generation_log_path = None
+        is_mo_log = False
+        generation_number = last_gen
+        selected_individuals = _load_checkpoint_population(experiment_log_dir)
+        if not selected_individuals:
+            raise
+    else:
+        individuals_by_front = parse_individuals_from_ea_log(str(generation_log_path))
+        population_snapshot = parse_population_snapshot_from_ea_log(str(generation_log_path))
+        is_mo_log = _is_multi_objective_generation_log(generation_log_path)
+        selected_front_ids = (
+            set(
+                extract_individual_ids_up_to_front(
+                    generation_log_path,
+                    final_test_max_front,
+                )
+            )
+            if is_mo_log
+            else set()
         )
-    )
 
-    # Final test should replay the survivor population saved in Population Snapshot,
-    # not the full parent+offspring union listed in Pareto Front sections.
-    if population_snapshot:
-        candidate_individuals = population_snapshot
-    else:
-        # Fallback for older logs that may not contain Population Snapshot.
-        seen_ids: set[str] = set()
-        candidate_individuals = []
-        for front in individuals_by_front:
-            for individual in front:
-                if individual.id in seen_ids:
-                    continue
-                seen_ids.add(individual.id)
-                candidate_individuals.append(individual)
+        # Final test should replay the survivor population saved in Population Snapshot,
+        # not the full parent+offspring union listed in Pareto Front sections.
+        if population_snapshot:
+            candidate_individuals = population_snapshot
+        else:
+            # Fallback for older logs that may not contain Population Snapshot.
+            seen_ids: set[str] = set()
+            candidate_individuals = []
+            for front in individuals_by_front:
+                for individual in front:
+                    if individual.id in seen_ids:
+                        continue
+                    seen_ids.add(individual.id)
+                    candidate_individuals.append(individual)
 
-    if selected_front_ids:
-        selected_individuals = [
-            individual
-            for individual in candidate_individuals
-            if individual.id in selected_front_ids
-        ]
-    else:
-        selected_individuals = candidate_individuals
+        if selected_front_ids:
+            selected_individuals = [
+                individual
+                for individual in candidate_individuals
+                if individual.id in selected_front_ids
+            ]
+        else:
+            selected_individuals = candidate_individuals
+        generation_number = _extract_generation_number(generation_log_path)
 
     interval_runs = build_interval_runs(final_test_config_path, runtime_config.llm_interval)
-    generation_number = _extract_generation_number(generation_log_path)
     results = {
         "generation": generation_number,
-        "generation_log": generation_log_path.name,
+        "generation_log": generation_log_path.name if generation_log_path is not None else "checkpoint_population",
         "selected_individual_count": len(selected_individuals),
         "selection_rule": (
             f"pareto_front_1_to_{final_test_max_front}"
-            if final_test_max_front is not None
-            else "all_fronts"
+            if is_mo_log and final_test_max_front is not None
+            else "checkpoint_population" if generation_log_path is None else "ga_final_population" if not is_mo_log else "all_fronts"
         ),
         "test_config_path": str(
             Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH

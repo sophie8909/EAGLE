@@ -65,7 +65,9 @@ public class EAGLE extends AbstractionLayerAI {
     private static final int LLM_CALL_LIMIT = readIntSetting("microrts.llm_call_limit", "LLM_CALL_LIMIT", 50);
     private static final int TICK_LIMIT = readIntSetting("microrts.tick_limit", "TICK_LIMIT", 5000);
     private static final String OLLAMA_FORMAT = "json";
-    private static final String OLLAMA_HOST = System.getenv().getOrDefault("OLLAMA_HOST", "http://localhost:11434");
+    private static final String OLLAMA_HOST = normalizeOllamaHost(
+            System.getenv().getOrDefault("OLLAMA_HOST", "http://localhost:11434")
+    );
     private static final boolean OLLAMA_STREAM = false;
     private static final boolean DEBUG_MODE = readBooleanSetting("eagle.debug", "EAGLE_DEBUG", false);
 
@@ -152,6 +154,17 @@ public class EAGLE extends AbstractionLayerAI {
                 || normalized.equals("true")
                 || normalized.equals("yes")
                 || normalized.equals("on");
+    }
+
+    private static String normalizeOllamaHost(String rawHost) {
+        String host = rawHost == null || rawHost.isBlank() ? "http://localhost:11434" : rawHost.trim();
+        if (!host.startsWith("http://") && !host.startsWith("https://")) {
+            host = "http://" + host;
+        }
+        while (host.endsWith("/")) {
+            host = host.substring(0, host.length() - 1);
+        }
+        return host;
     }
 
     private static void debugBlock(String title, String body) {
@@ -880,7 +893,7 @@ public class EAGLE extends AbstractionLayerAI {
             System.err.println("[EAGLE] unexpected Ollama payload: " + sb);
             return "{\"thinking\":\"invalid_ollama_payload\",\"moves\":[]}";
         } catch (Exception e) {
-            System.err.println("[EAGLE] Ollama exception: " + e.getMessage());
+            System.err.println("[EAGLE] Ollama exception (" + e.getClass().getSimpleName() + "): " + e.getMessage());
             return "{\"thinking\":\"exception\",\"moves\":[]}";
         }
     }

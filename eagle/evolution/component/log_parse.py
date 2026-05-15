@@ -54,6 +54,14 @@ def _parse_literal(value: str):
         return value
 
 
+def _parse_fitness_segment(fitness_segment: str):
+    """Parse a fitness value from GA or multi-objective generation logs."""
+    eval_mode_start = fitness_segment.find(" - EvalMode:")
+    if eval_mode_start != -1:
+        fitness_segment = fitness_segment[:eval_mode_start].strip()
+    return _parse_literal(fitness_segment)
+
+
 def _extract_individual_payload(line: str) -> str | None:
     """Extract the constructor payload from Individual(...) log lines."""
     for prefix in INDIVIDUAL_PREFIXES:
@@ -99,11 +107,7 @@ def parse_individuals_from_ea_log(log_file: str):
         fitness_start = line.find("Fitness:")
         if fitness_start != -1:
             fitness_segment = line[fitness_start + len("Fitness:"):].strip()
-            eval_mode_start = fitness_segment.find(" - EvalMode:")
-            if eval_mode_start != -1:
-                fitness_segment = fitness_segment[:eval_mode_start].strip()
-            if fitness_segment.startswith("[") and fitness_segment.endswith("]"):
-                individual.fitness = _parse_literal(fitness_segment)
+            individual.fitness = _parse_fitness_segment(fitness_segment)
 
         front.append(individual)
 
@@ -145,11 +149,7 @@ def parse_population_snapshot_from_ea_log(log_file: str) -> list[Individual]:
         fitness_start = line.find("Fitness:")
         if fitness_start != -1:
             fitness_segment = line[fitness_start + len("Fitness:"):].strip()
-            eval_mode_start = fitness_segment.find(" - EvalMode:")
-            if eval_mode_start != -1:
-                fitness_segment = fitness_segment[:eval_mode_start].strip()
-            if fitness_segment.startswith("[") and fitness_segment.endswith("]"):
-                individual.fitness = _parse_literal(fitness_segment)
+            individual.fitness = _parse_fitness_segment(fitness_segment)
 
         population.append(individual)
 
