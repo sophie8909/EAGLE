@@ -26,7 +26,7 @@ if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
   exit 0
 fi
 
-tmux new-session -d -s "$SESSION_NAME" -n services "bash '$WATCHDOG_SCRIPT'"
-tmux split-window -h -t "$SESSION_NAME:services" "bash '$OLLAMA_SCRIPT'"
+tmux new-session -d -s "$SESSION_NAME" -n services "bash '$OLLAMA_SCRIPT'"
+tmux split-window -h -t "$SESSION_NAME:services" "bash '$WATCHDOG_SCRIPT'"
 tmux select-pane -t "$SESSION_NAME:services.0"
 echo "Started tmux session: $SESSION_NAME"
