@@ -18,6 +18,7 @@ from eagle.utils.component_pool import ComponentPool
 from eagle.utils.log_parse import parse_dynamic_prompt_state
 from eagle.utils.move_validator import validate_llm_move_against_state
 from eagle.utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
+from eagle.utils.token_count import count_prompt_tokens
 
 from .prompt_history import PromptHistory
 from .state_generator import StateGenerator
@@ -90,6 +91,7 @@ class Evaluator:
             eval_result.update(
                 {
                     "prompt": base_prompt,
+                    "prompt_token_count": count_prompt_tokens(base_prompt)[0],
                     "evaluation_mode": "history_cache",
                     "generation": generation,
                     "history_decision": "use_cache",
@@ -176,6 +178,7 @@ class Evaluator:
             "eval_mode": "round",
             "evaluation_mode": "round_llm",
             "prompt": base_prompt,
+            "prompt_token_count": count_prompt_tokens(base_prompt)[0],
             "valid_json": valid_json_count == n,
             "valid_json_count": valid_json_count,
             "legal_action_count": legal_action_count,

@@ -58,3 +58,18 @@ class TimeToWinObjective(Objective):
             return 0.0
         ticks = max(1.0, float(eval_result["game_ticks"]))
         return 1.0 / ticks
+
+
+class PromptTokenCountObjective(Objective):
+    """Minimize the rendered prompt token count."""
+
+    key = "prompt_token_count"
+    label = "Prompt token count"
+    direction = "min"
+    application = "microrts"
+    eval_modes = {"round", "full_game", "java_surrogate"}
+    required_metrics = {"prompt_token_count"}
+
+    def compute(self, eval_result: dict[str, Any]) -> float:
+        """Return the rendered prompt token count."""
+        return float(eval_result["prompt_token_count"])

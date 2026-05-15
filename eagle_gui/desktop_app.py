@@ -24,6 +24,7 @@ from eagle.objectives.registry import get_objectives, list_objective_names, norm
 from eagle.operators.registry import list_operator_names
 from eagle.utils.log_parse import parse_log_file
 from eagle.utils.component_pool import ComponentPool
+from eagle.utils.token_count import count_prompt_tokens
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -755,7 +756,7 @@ class EagleDesktopApp:
             self.single_objective.set(choices[0] if choices else "")
         for key in choices:
             self.objective_weights.setdefault(key, StringVar(value="1.0"))
-            self.multi_objectives.setdefault(key, BooleanVar(value=True))
+            self.multi_objectives.setdefault(key, BooleanVar(value=False))
         for key in list(self.objective_weights):
             if key not in choices:
                 del self.objective_weights[key]
@@ -1091,7 +1092,7 @@ class EagleDesktopApp:
 
         self.objective_table.delete(*self.objective_table.get_children())
         for objective in get_objectives(self.application.get(), self.current_eval_mode()):
-            selected = self.multi_objectives.setdefault(objective.key, BooleanVar(value=True)).get()
+            selected = self.multi_objectives.setdefault(objective.key, BooleanVar(value=False)).get()
             weight = self.objective_weights.setdefault(objective.key, StringVar(value="1.0")).get()
             self.objective_table.insert(
                 "",
@@ -2386,7 +2387,7 @@ class EagleDesktopApp:
             weights = {
                 key: parse_float(variable.get(), f"weight for {key}")
                 for key, variable in self.objective_weights.items()
-                if key in choices and self.multi_objectives.setdefault(key, BooleanVar(value=True)).get()
+                if key in choices and self.multi_objectives.setdefault(key, BooleanVar(value=False)).get()
             }
             if not weights:
                 raise ValueError("weighted_mix requires at least one objective.")
@@ -2399,7 +2400,7 @@ class EagleDesktopApp:
         objectives = [
             key
             for key in self.objective_choices()
-            if self.multi_objectives.setdefault(key, BooleanVar(value=True)).get()
+            if self.multi_objectives.setdefault(key, BooleanVar(value=False)).get()
         ]
         if len(objectives) < 2:
             raise ValueError("multi mode requires at least two objectives.")
@@ -2972,21 +2973,6 @@ def parse_target_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     return []
-
-
-def count_prompt_tokens(prompt: str) -> tuple[int, bool]:
-    """Return a rendered prompt token count and whether it came from a tokenizer."""
-    if not prompt:
-        return 0, True
-    try:
-        import tiktoken
-
-        encoding = tiktoken.get_encoding("cl100k_base")
-        return len(encoding.encode(prompt)), True
-    except Exception:
-        # Local fallback: split words, numbers, punctuation, and CJK characters.
-        # This is an estimate, but it is stable and keeps the GUI independent of tokenizer packages.
-        return len(re.findall(r"[\u4e00-\u9fff]|[A-Za-z0-9_]+|[^\sA-Za-z0-9_]", prompt)), False
 
 
 # ----------------------------------------------------------------------

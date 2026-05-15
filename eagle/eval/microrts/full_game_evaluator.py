@@ -10,6 +10,7 @@ from typing import Any
 from ...config import EAConfig
 from ...envs.microrts.runner import run_java_agent_game, run_prompt_based_game
 from ...objectives.registry import objective_eval_mode
+from ...utils.token_count import count_prompt_tokens
 from ...reflection.microrts.game_log_reflection_context import Reflection, read_max_turn_hint
 from ...project import PROJECT_ROOT
 from ...utils.component_pool import ComponentPool
@@ -139,6 +140,7 @@ class FullGameEvaluator:
             "surrogate": surrogate,
             "opponents": resolved_opponents,
             "scores": per_opponent_results,
+            "prompt_token_count": count_prompt_tokens(prompt)[0],
         })
         individual.rendered_prompt = prompt
         individual.evaluation_mode = (
@@ -278,6 +280,7 @@ class FullGameEvaluator:
         round_score = self._round_surrogate_score(round_eval_result)
         return {
             "prompt": rendered_prompt,
+            "prompt_token_count": count_prompt_tokens(rendered_prompt)[0],
             "match_score": {
                 "win_score": 0.0,
                 "raw_resource_advantage_score": round_score,
@@ -470,6 +473,7 @@ class FullGameEvaluator:
 
         return {
             "prompt": rendered_prompt,
+            "prompt_token_count": count_prompt_tokens(rendered_prompt)[0],
             "match_score": dict(match_score),
             "simulation_meta": simulation_meta,
             "stats": stats,
@@ -524,6 +528,7 @@ class FullGameEvaluator:
         summarize_total_eval_time(stats)
         return {
             "prompt": rendered_prompt,
+            "prompt_token_count": count_prompt_tokens(rendered_prompt)[0],
             "match_score": dict(match_score),
             "simulation_meta": simulation_meta,
             "stats": stats,
@@ -549,6 +554,7 @@ class FullGameEvaluator:
         )
         return {
             "prompt": rendered_prompt,
+            "prompt_token_count": count_prompt_tokens(rendered_prompt)[0],
             "match_score": dict(match_score),
             "simulation_meta": {},
             "stats": {},
