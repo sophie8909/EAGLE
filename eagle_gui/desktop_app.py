@@ -2221,7 +2221,21 @@ class EagleDesktopApp:
             messagebox.showerror("Invalid settings", str(exc))
             return None
         EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
-        path = EXPERIMENT_DIR / self.config_filename()
+        filename = simpledialog.askstring(
+            "Save generated config",
+            "Config file name:",
+            initialvalue=self.config_filename(),
+            parent=self.root,
+        )
+        if filename is None:
+            return None
+        filename = filename.strip()
+        if not filename:
+            messagebox.showerror("Missing file name", "Enter a config JSON file name.")
+            return None
+        path = EXPERIMENT_DIR / Path(filename).name
+        if path.suffix.lower() != ".json":
+            path = path.with_suffix(".json")
         if path.exists() and not messagebox.askyesno("Overwrite config", f"Overwrite existing config?\n{path}"):
             return None
         write_json_file(path, payload)
