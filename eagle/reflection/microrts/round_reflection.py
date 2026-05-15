@@ -158,6 +158,7 @@ Rewrite rules:
                     "model": model,
                     "prompt": instruction,
                     "stream": False,
+                    "context": [],
                     "options": {"temperature": 0.4},
                 },
                 timeout=120,

@@ -878,6 +878,7 @@ public class EAGLE extends AbstractionLayerAI {
             body.addProperty("prompt", "/no_think " + finalPrompt);
             body.addProperty("stream", OLLAMA_STREAM);
             body.addProperty("format", OLLAMA_FORMAT);
+            body.add("context", new JsonArray());
 
             URL url = new URL(OLLAMA_HOST + "/api/generate");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();

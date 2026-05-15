@@ -46,6 +46,7 @@ class LLM:
                     "model": model,
                     "prompt": prompt,
                     "stream": False,
+                    "context": [],
                     "options": {
                         "temperature": temperature,
                     },
@@ -77,6 +78,7 @@ class LLM:
                     "prompt": prompt,
                     "stream": False,
                     "format": "json",
+                    "context": [],
                     "options": {
                         "temperature": temperature,
                     },
@@ -166,6 +168,7 @@ class LLM:
                     "prompt": generation_prompt,
                     "stream": False,
                     "format": "json",
+                    "context": [],
                     "options": {
                         "temperature": temperature,
                     },
@@ -253,6 +256,7 @@ class LLM:
                 "model": model,
                 "prompt": prompt,
                 "stream": False,
+                "context": [],
                 "options": {
                     "temperature": temperature,
                 },
@@ -295,6 +299,7 @@ class LLM:
                 "model": model,
                 "prompt": prompt,
                 "stream": False,
+                "context": [],
                 "options": {
                     "temperature": temperature,
                 },
@@ -396,6 +401,7 @@ class LLM:
                     "model": model,
                     "prompt": evaluation_prompt,
                     "stream": False,
+                    "context": [],
                     "options": {
                         "temperature": 0.2,
                     },
@@ -517,6 +523,7 @@ class LLM:
                     "model": model,
                     "prompt": evaluation_prompt,
                     "stream": False,
+                    "context": [],
                     "options": {
                         "temperature": 0.2,
                     },

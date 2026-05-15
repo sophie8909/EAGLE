@@ -1007,6 +1007,7 @@ class Evaluator:
             "model": self.model,
             "prompt": prompt,
             "stream": False,
+            "context": [],
             "options": {"temperature": temperature},
         }
         if json_format:
