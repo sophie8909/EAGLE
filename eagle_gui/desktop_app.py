@@ -158,6 +158,7 @@ class EagleDesktopApp:
         self.multi_objectives: dict[str, BooleanVar] = {}
         self.objective_targets: list[str] = ["ai.abstraction.LightRush", "ai.abstraction.HeavyRush"]
         self.objective_detail = StringVar(value="Select an objective to inspect its calculation.")
+        self.component_prompt_token_summary = StringVar(value="Prompt tokens: 0")
 
         # Java GUI settings are separate from experiment settings; they patch the vendored
         # MicroRTS config only when launching a visible Java game.
@@ -422,6 +423,10 @@ class EagleDesktopApp:
         rendered_prompt_header = ttk.Frame(preview)
         rendered_prompt_header.grid(row=2, column=0, sticky="ew")
         ttk.Label(rendered_prompt_header, text="Rendered prompt").pack(side="left")
+        ttk.Label(rendered_prompt_header, textvariable=self.component_prompt_token_summary).pack(
+            side="left",
+            padx=(12, 0),
+        )
         ttk.Button(
             rendered_prompt_header,
             text="Copy current prompt",
@@ -1952,6 +1957,7 @@ class EagleDesktopApp:
         """Render a prompt from the currently selected component candidates."""
         if not self.component_payload:
             self._set_text(self.component_prompt_output, "")
+            self.update_component_prompt_token_summary("")
             return
         try:
             pool = ComponentPool(self.component_payload)
@@ -1968,9 +1974,19 @@ class EagleDesktopApp:
                 include_identity_component=self.include_identity_component_in_preview(),
             )
         except (TypeError, ValueError) as exc:
-            self._set_text(self.component_prompt_output, f"Could not render prompt:\n{exc}")
+            error_text = f"Could not render prompt:\n{exc}"
+            self._set_text(self.component_prompt_output, error_text)
+            self.update_component_prompt_token_summary("")
             return
-        self._set_text(self.component_prompt_output, "\n".join(rendered_lines))
+        prompt = "\n".join(rendered_lines)
+        self._set_text(self.component_prompt_output, prompt)
+        self.update_component_prompt_token_summary(prompt)
+
+    def update_component_prompt_token_summary(self, prompt: str) -> None:
+        """Update the rendered-prompt token count label."""
+        token_count, exact = count_prompt_tokens(prompt)
+        prefix = "Prompt tokens" if exact else "Prompt tokens ~"
+        self.component_prompt_token_summary.set(f"{prefix}: {token_count:,}")
 
     def copy_current_prompt(self) -> None:
         """Copy the currently rendered prompt to the clipboard."""
@@ -2418,13 +2434,7 @@ class EagleDesktopApp:
             "eagle.main",
             "--config",
             str(config_path),
-            "--algorithm",
-            self.algorithm.get(),
-            "--evaluator",
-            self.evaluator.get(),
         ]
-        if self.algorithm.get() == "ga_surrogate":
-            command.extend(["--surrogate", self.surrogate.get()])
         if self.quick_run.get():
             command.append("--quick-run")
         if self.skip_final_test.get():
@@ -2439,6 +2449,7 @@ class EagleDesktopApp:
             debug_lines=[
                 "[DEBUG] gui start "
                 f"surrogate={self.surrogate.get() if self.algorithm.get() == 'ga_surrogate' else '(ignored)'} "
+                f"config={config_path} "
                 f"evaluator={self.evaluator.get()} "
                 f"objective_config={self.build_objective_config()} "
                 f"gameplay_refresh_interval={self.gameplay_refresh_interval.get()} "
@@ -2569,13 +2580,22 @@ class EagleDesktopApp:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         self.microrts_gui_log_path = LOG_DIR / f"microrts_gui_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         classpath = f"{microrts_root / 'lib' / '*'}{os.pathsep}{microrts_root / 'bin'}"
-        command = ["java", "-Deagle.debug=true", "-cp", classpath, "rts.MicroRTS"]
+        command = [
+            "java",
+            "-Deagle.debug=true",
+            f"-Dmicrorts.prompt={prompt_path}",
+            f"-Dmicrorts.llm_interval={llm_interval}",
+            f"-Dmicrorts.llm_call_limit={self.llm_call_limit.get()}",
+            "-cp",
+            classpath,
+            "rts.MicroRTS",
+        ]
         trace_path: Path | None = None
         if self.microrts_gui_save_trace.get():
             trace_dir = microrts_trace_dir()
             trace_dir.mkdir(parents=True, exist_ok=True)
             trace_path = trace_dir / f"gui_trace_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
-            command.insert(2, f"-Dmicrorts.trace.path={trace_path}")
+            command.insert(5, f"-Dmicrorts.trace.path={trace_path}")
         log_handle = self.microrts_gui_log_path.open("w", encoding="utf-8", errors="replace")
         log_handle.write("Command: " + " ".join(command) + "\n")
         log_handle.write(f"Prompt: {prompt_path}\nOpponent: {opponent}\nMap: {map_location}\n")
@@ -2952,6 +2972,21 @@ def parse_target_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     return []
+
+
+def count_prompt_tokens(prompt: str) -> tuple[int, bool]:
+    """Return a rendered prompt token count and whether it came from a tokenizer."""
+    if not prompt:
+        return 0, True
+    try:
+        import tiktoken
+
+        encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(prompt)), True
+    except Exception:
+        # Local fallback: split words, numbers, punctuation, and CJK characters.
+        # This is an estimate, but it is stable and keeps the GUI independent of tokenizer packages.
+        return len(re.findall(r"[\u4e00-\u9fff]|[A-Za-z0-9_]+|[^\sA-Za-z0-9_]", prompt)), False
 
 
 # ----------------------------------------------------------------------

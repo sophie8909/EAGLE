@@ -99,12 +99,15 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     return config
 
 
-def _resolve_opponent_list(args) -> list[str]:
+def _resolve_opponent_list(args, config: EAConfig) -> list[str]:
     """Resolve the opponent list used by the current run."""
     if args.opponent:
         return [args.opponent]
     if args.quick_run:
         return [DEFAULT_EA_QUICK_RUN_OPPONENT]
+    configured_opponents = list(getattr(config, "gameplay_opponents", []) or [])
+    if configured_opponents:
+        return configured_opponents
     return list(OPPONENT_LIST)
 
 
@@ -198,7 +201,7 @@ def main() -> None:
         resume_log_dir = _find_latest_log_dir()
 
     config = _build_runtime_config(args, resume_log_dir)
-    opponent_list = _resolve_opponent_list(args)
+    opponent_list = _resolve_opponent_list(args, config)
     should_run_final_test = _should_run_final_test(args, config)
     component_pool = ComponentPool.from_json(
         _resolve_component_pool_path_from_config(config, args, resume_log_dir)
