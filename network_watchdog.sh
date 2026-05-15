@@ -1,18 +1,25 @@
-# !/bin/bash
+#!/usr/bin/env bash
 
-INTERFACE="enp132s0"
-CHECK_IP="8.8.8.8"
+set -euo pipefail
+
+INTERFACE="${NETWORK_INTERFACE:-enp132s0}"
+CHECK_IP="${NETWORK_CHECK_IP:-8.8.8.8}"
+SLEEP_SECONDS="${NETWORK_WATCHDOG_INTERVAL:-60}"
 
 while true; do
-    ping -c 1 $CHECK_IP > /dev/null 2>&1
-    if ip a show $INTERFACE | grep "NO-CARRRIER"; then
-        echo "internet down. restarting network interface $INTERFACE"
-        sudo ip link set $INTERFACE down
+    if ! ip link show "$INTERFACE" >/dev/null 2>&1; then
+        echo "ERROR: network interface not found: $INTERFACE"
+        exit 1
+    fi
+
+    if ip link show "$INTERFACE" | grep -q "NO-CARRIER" || ! ping -c 1 -W 3 "$CHECK_IP" >/dev/null 2>&1; then
+        echo "network check failed. restarting interface $INTERFACE"
+        sudo ip link set "$INTERFACE" down
         sleep 5
-        sudo ip link set $INTERFACE up
+        sudo ip link set "$INTERFACE" up
         
         sudo systemctl restart NetworkManager
         sleep 10
     fi
-    sleep 60
+    sleep "$SLEEP_SECONDS"
 done

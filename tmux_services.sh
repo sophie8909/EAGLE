@@ -3,8 +3,11 @@
 set -euo pipefail
 
 SESSION_NAME="${1:-eagle-services}"
-WATCHDOG_SCRIPT="./network_watchdog.sh"
-OLLAMA_SCRIPT="./ollama_llama31_8b.sh"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+SCRIPT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
+WATCHDOG_SCRIPT="$SCRIPT_DIR/network_watchdog.sh"
+OLLAMA_SCRIPT="$SCRIPT_DIR/run_ollama.sh"
 
 if ! command -v tmux >/dev/null 2>&1; then
   echo "ERROR: tmux not found."
@@ -26,7 +29,8 @@ if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
   exit 0
 fi
 
-tmux new-session -d -s "$SESSION_NAME" -n services "bash '$OLLAMA_SCRIPT'"
-tmux split-window -h -t "$SESSION_NAME:services" "bash '$WATCHDOG_SCRIPT'"
+tmux new-session -d -s "$SESSION_NAME" -n services "cd '$SCRIPT_DIR' && exec bash ./run_ollama.sh"
+tmux split-window -h -t "$SESSION_NAME:services" "cd '$SCRIPT_DIR' && exec bash ./network_watchdog.sh"
 tmux select-pane -t "$SESSION_NAME:services.0"
 echo "Started tmux session: $SESSION_NAME"
+echo "Attach with: tmux attach -t $SESSION_NAME"
