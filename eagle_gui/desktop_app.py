@@ -2215,8 +2215,6 @@ class EagleDesktopApp:
 
     def save_generated_config(self) -> Path | None:
         """Write the current GUI settings to a JSON config file."""
-        if self.component_payload and self.save_runtime_component_snapshot() is None:
-            return None
         try:
             payload = self.build_config_payload()
         except (ValueError, OSError, json.JSONDecodeError) as exc:
@@ -2233,18 +2231,6 @@ class EagleDesktopApp:
         if self.config_name.get().strip().startswith("gui_evolution_"):
             self.config_name.set(timestamped_stem("gui_evolution"))
         return path
-
-    def save_runtime_component_snapshot(self) -> Path | None:
-        """Write the current in-memory component payload to a timestamped runtime JSON."""
-        EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
-        destination = EXPERIMENT_DIR / f"{timestamped_stem('components')}.json"
-        saved = self.write_component_payload(destination)
-        if saved is None:
-            return None
-        self.loaded_component_path = saved
-        self.component_runtime_path.set(relative_or_absolute(saved))
-        self.component_source_path.set(str(saved))
-        return saved
 
     def build_config_payload(self) -> dict[str, Any]:
         """Build one EAGLE config payload from the GUI controls."""
