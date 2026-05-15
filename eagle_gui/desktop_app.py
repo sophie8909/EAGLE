@@ -98,7 +98,7 @@ class EagleDesktopApp:
 
         # Component editor state owns the JSON payload and prompt-builder candidate selection.
         self.base_config_path = StringVar(value=str(DEFAULT_CONFIG))
-        self.config_name = StringVar(value="gui_evolution")
+        self.config_name = StringVar(value=timestamped_stem("gui_evolution"))
         self.component_source_path = StringVar(value="")
         self.component_runtime_path = StringVar(value="")
         self.loaded_component_path: Path | None = None
@@ -1222,17 +1222,7 @@ class EagleDesktopApp:
 
     def default_component_filename(self) -> str:
         """Return the filename shown by default in component save dialogs."""
-        if self.loaded_component_path is not None:
-            return self.loaded_component_path.name
-        for value in (
-            self.component_source_path.get(),
-            self.component_runtime_path.get(),
-        ):
-            if value:
-                name = Path(value).name
-                if name:
-                    return name
-        return "components.json"
+        return f"{timestamped_stem('components')}.json"
 
     def import_component(self) -> None:
         """Copy the selected component JSON into configs/experiments and use it for the next run."""
@@ -1246,7 +1236,7 @@ class EagleDesktopApp:
             messagebox.showerror("Invalid component JSON", str(exc))
             return
         EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
-        destination = EXPERIMENT_DIR / f"components_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        destination = EXPERIMENT_DIR / f"{timestamped_stem('components')}.json"
         shutil.copyfile(source, destination)
         self.component_runtime_path.set(relative_or_absolute(destination))
         self.preview_component(destination)
@@ -2225,6 +2215,8 @@ class EagleDesktopApp:
 
     def save_generated_config(self) -> Path | None:
         """Write the current GUI settings to a JSON config file."""
+        if self.component_payload and self.save_runtime_component_snapshot() is None:
+            return None
         try:
             payload = self.build_config_payload()
         except (ValueError, OSError, json.JSONDecodeError) as exc:
@@ -2238,7 +2230,21 @@ class EagleDesktopApp:
         self.generated_config_path = path
         self.generated_config_label.set(f"Generated config: {path}")
         self.status.set(f"Saved {path.name}")
+        if self.config_name.get().strip().startswith("gui_evolution_"):
+            self.config_name.set(timestamped_stem("gui_evolution"))
         return path
+
+    def save_runtime_component_snapshot(self) -> Path | None:
+        """Write the current in-memory component payload to a timestamped runtime JSON."""
+        EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
+        destination = EXPERIMENT_DIR / f"{timestamped_stem('components')}.json"
+        saved = self.write_component_payload(destination)
+        if saved is None:
+            return None
+        self.loaded_component_path = saved
+        self.component_runtime_path.set(relative_or_absolute(saved))
+        self.component_source_path.set(str(saved))
+        return saved
 
     def build_config_payload(self) -> dict[str, Any]:
         """Build one EAGLE config payload from the GUI controls."""
@@ -2410,7 +2416,7 @@ class EagleDesktopApp:
         """Return a safe config filename from the user-provided config name."""
         raw_name = self.config_name.get().strip()
         if not raw_name:
-            raw_name = f"gui_evolution_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            raw_name = timestamped_stem("gui_evolution")
         safe = "".join(char if char.isalnum() or char in {"-", "_", "."} else "_" for char in raw_name)
         if not safe.endswith(".json"):
             safe = f"{safe}.json"
@@ -2973,6 +2979,11 @@ def parse_target_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     return []
+
+
+def timestamped_stem(prefix: str) -> str:
+    """Return a filename stem with a microsecond timestamp suffix."""
+    return f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
 
 
 # ----------------------------------------------------------------------
