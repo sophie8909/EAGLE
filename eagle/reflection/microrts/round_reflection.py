@@ -185,9 +185,18 @@ Rewrite rules:
         legality = dict(feedback.get("legality") or {})
 
         return {
-            "fitness": list(getattr(individual, "fitness", []) or []),
+            "fitness": RoundReflection._fitness_summary_value(getattr(individual, "fitness", None)),
             "parseable": legality.get("parseable"),
             "applicable_actions": legality.get("applicable_actions"),
             "max_actions": legality.get("max_actions"),
             "strategy_alignment_score": feedback.get("strategy_alignment_score"),
         }
+
+    @staticmethod
+    def _fitness_summary_value(fitness: Any) -> Any:
+        """Return a JSON-safe fitness value without assuming sequence fitness."""
+        if isinstance(fitness, dict):
+            return dict(fitness)
+        if isinstance(fitness, (list, tuple)):
+            return list(fitness)
+        return fitness
