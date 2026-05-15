@@ -32,12 +32,20 @@ SCOREBOARD_RE = re.compile(
     r"^\s*T:\s*(?P<T>\d+),\s*P0:\s*(?P<P0_player>\d+)\s*\((?P<P0_value>\d+)\),\s*P1:\s*(?P<P1_player>\d+)\s*\((?P<P1_value>\d+)\)\s*$",
     re.MULTILINE,
 )
+FINAL_SCOREBOARD_RE = re.compile(
+    r"^\s*(?:.*?\s+info\s*:\s*)?T:\s*(?P<T>\d+),\s*"
+    r"P0:\s*(?P<P0_units>\d+)\s*\((?P<P0_eval>-?\d+(?:\.\d+)?)\),\s*"
+    r"P1:\s*(?P<P1_units>\d+)\s*\((?P<P1_eval>-?\d+(?:\.\d+)?)\)\s*$",
+    re.MULTILINE,
+)
 GAMEOVER_RE = re.compile(r"^\s*gs\.gameover\(\)\s*=\s*(?P<value>true|false)\s*$", re.MULTILINE)
 GAME_SETTING_AI_RE = re.compile(r"^\s*AI(?P<slot>[12]):\s*(?P<name>.+?)\s*$", re.MULTILINE)
 WINNER_RE = re.compile(r"^\s*WINNER\s*:?\s*(?P<winner>-?\d+)\s*$", re.MULTILINE | re.IGNORECASE)
 FINAL_TICK_RE = re.compile(r"^\s*FINAL_TICK\s*:?\s*(?P<tick>\d+)\s*$", re.MULTILINE | re.IGNORECASE)
 MAX_CYCLES_RE = re.compile(r"^\s*Max Cycles:\s*(?P<cycles>\d+)\s*$", re.MULTILINE | re.IGNORECASE)
 LLM_CALL_RE = re.compile(r"^\s*\[EAGLE\]\s+call LLM:", re.MULTILINE)
+LLM_CALL_LIMIT_RE = re.compile(r"llm_call_limit\s+reached", re.IGNORECASE)
+WALL_CLOCK_TIMEOUT_RE = re.compile(r"wall-clock safety stop", re.IGNORECASE)
 STACKTRACE_CLASS_RE = re.compile(r"\bat\s+(?P<class>[a-zA-Z_][\w.$]*)\.[\w$<>]+\(")
 
 APPLY_MOVE_RE = re.compile(
@@ -573,9 +581,42 @@ def extract_max_cycles(log_text: str) -> int | None:
     return int(match.group("cycles"))
 
 
+def extract_final_scoreboard(log_text: str) -> dict[str, Any] | None:
+    """Extract the last MicroRTS scoreboard line from a completed game log."""
+    matches = list(FINAL_SCOREBOARD_RE.finditer(log_text))
+    if not matches:
+        return None
+    match = matches[-1]
+    return {
+        "time": int(match.group("T")),
+        "p0_units": int(match.group("P0_units")),
+        "p1_units": int(match.group("P1_units")),
+        "p0_eval": float(match.group("P0_eval")),
+        "p1_eval": float(match.group("P1_eval")),
+    }
+
+
 def count_llm_calls(log_text: str) -> int:
     """Count actual Java EAGLE LLM call log entries."""
     return len(LLM_CALL_RE.findall(log_text))
+
+
+def detect_llm_call_limit(log_text: str) -> bool:
+    """Return whether the EAGLE agent reported that the LLM call limit was reached."""
+    return bool(LLM_CALL_LIMIT_RE.search(log_text))
+
+
+def detect_wall_clock_timeout(log_text: str) -> bool:
+    """Return whether the runtime log reports a wall-clock safety stop."""
+    return bool(WALL_CLOCK_TIMEOUT_RE.search(log_text))
+
+
+def detect_tick_timeout(final_tick: Any, max_cycles: Any) -> bool:
+    """Return whether the final tick reached the configured MicroRTS tick budget."""
+    try:
+        return int(final_tick) >= int(max_cycles)
+    except (TypeError, ValueError):
+        return False
 
 
 def _class_name_variants(name: str) -> set[str]:
@@ -868,6 +909,8 @@ def parse_log(log_text: str, target_agent: str = "EAGLE") -> dict[str, Any]:
         all_moves.extend(segment["move_results"])
     resource_history = extract_resource_history(log_text)
     feature_history = extract_feature_history(log_text)
+    final_tick = extract_final_tick(log_text)
+    max_cycles = extract_max_cycles(log_text)
 
     summary = {
         "target_agent": target_agent,
@@ -880,8 +923,12 @@ def parse_log(log_text: str, target_agent: str = "EAGLE") -> dict[str, Any]:
         "applied_success_count": sum(s["applied_success_count"] for s in parsed_segments),
         "resource_history": resource_history,
         "feature_history": feature_history,
-        "final_tick": extract_final_tick(log_text),
-        "max_cycles": extract_max_cycles(log_text),
+        "final_tick": final_tick,
+        "final_scoreboard": extract_final_scoreboard(log_text),
+        "max_cycles": max_cycles,
+        "tick_timeout": detect_tick_timeout(final_tick, max_cycles),
+        "wall_clock_timeout": detect_wall_clock_timeout(log_text),
+        "llm_call_limit_reached": detect_llm_call_limit(log_text),
     }
     outcome = infer_winner(log_text, target_agent=target_agent)
     summary.update(

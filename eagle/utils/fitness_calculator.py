@@ -46,8 +46,13 @@ def raw_resource_advantage_score(
     """Compute the final weighted ally-minus-enemy material/resource difference."""
     summary = parsed_log.get("summary", {})
     target_side = summary.get("target_side")
+    final_tick = summary.get("final_tick")
+    final_scoreboard = summary.get("final_scoreboard")
     feature_history = parsed_log.get("feature_history", [])
     resource_history = parsed_log.get("resource_history", [])
+
+    if _should_use_terminal_scoreboard(summary, feature_history):
+        return _scoreboard_advantage(final_scoreboard, target_side)
 
     ally_total = 0.0
     enemy_total = 0.0
@@ -73,6 +78,39 @@ def raw_resource_advantage_score(
         enemy_total += enemy_resources
 
     return ally_total - enemy_total
+
+
+def _should_use_terminal_scoreboard(summary: dict[str, Any], feature_history: list[dict[str, Any]]) -> bool:
+    """Return whether the completed game scoreboard is the best terminal state source."""
+    final_scoreboard = summary.get("final_scoreboard")
+    if not isinstance(final_scoreboard, dict):
+        return False
+    if summary.get("wall_clock_timeout") or summary.get("tick_timeout") or summary.get("llm_call_limit_reached"):
+        return False
+    if summary.get("winner") is None:
+        return False
+    return not _has_snapshot_at_tick(feature_history, summary.get("final_tick"))
+
+
+def _has_snapshot_at_tick(history: list[dict[str, Any]], tick: Any) -> bool:
+    """Return whether a parsed history includes the exact terminal tick."""
+    try:
+        target_tick = int(tick)
+    except (TypeError, ValueError):
+        return False
+    return any(int(row.get("time", -1)) == target_tick for row in history if isinstance(row, dict))
+
+
+def _scoreboard_advantage(scoreboard: dict[str, Any], target_side: Any) -> float:
+    """Return target-side advantage from the terminal MicroRTS scoreboard."""
+    try:
+        p0_eval = float(scoreboard.get("p0_eval", 0.0))
+        p1_eval = float(scoreboard.get("p1_eval", 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+    if str(target_side) == "1":
+        return p1_eval - p0_eval
+    return p0_eval - p1_eval
 
 
 def combined_match_score(

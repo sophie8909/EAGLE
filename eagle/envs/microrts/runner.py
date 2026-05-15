@@ -194,6 +194,7 @@ def launch_java_match(
     llm_call_limit: int | None = None,
     max_game_ticks: int | None = None,
     trace_path: Path | None = None,
+    round_state_dir: Path | None = None,
     map_location: str | None = None,
 ) -> tuple[int, bool, str, float]:
     """Launch one Java MicroRTS game and capture its combined log output."""
@@ -212,6 +213,8 @@ def launch_java_match(
         command.append(f"-Dmicrorts.tick_limit={int(max_game_ticks)}")
     if trace_path is not None:
         command.append(f"-Dmicrorts.trace.path={trace_path}")
+    if round_state_dir is not None:
+        command.append(f"-Dmicrorts.round_state_dir={round_state_dir}")
     command.extend(["-cp", classpath, "rts.MicroRTS"])
     command.extend(["--headless", "true"])
     if max_game_ticks is not None:
@@ -258,6 +261,14 @@ def launch_java_match(
         flush=True,
     )
     return exit_code, timed_out, str(log_path), elapsed
+
+
+def latest_round_state_log(round_state_dir: Path) -> Path | None:
+    """Return the newest per-round Java state log, if one was written."""
+    if not round_state_dir.exists():
+        return None
+    candidates = sorted(round_state_dir.glob("round_*.log"))
+    return candidates[-1] if candidates else None
 
 
 def record_java_match_trace(
@@ -383,6 +394,7 @@ def run_java_agent_game(
             datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f"),
         ]
         trace_path = generation_runtime_dir / ("trace_" + "_".join(trace_stem_parts) + ".xml")
+        round_state_dir = generation_runtime_dir / "round_states" / "_".join(trace_stem_parts)
         max_game_ticks = int(getattr(config, "tick_limit", 5000))
         map_location = select_random_map_location(project_root, config)
         exit_code, timed_out, log_path_str, game_time_sec = launch_java_match(
@@ -396,22 +408,46 @@ def run_java_agent_game(
             llm_call_limit=int(getattr(config, "llm_call_limit", 50)),
             max_game_ticks=max_game_ticks,
             trace_path=trace_path,
+            round_state_dir=round_state_dir,
             map_location=map_location,
         )
         log_content = Path(log_path_str).read_text(encoding="utf-8", errors="replace")
+        latest_round_log = latest_round_state_log(round_state_dir)
+        if latest_round_log is not None:
+            log_content = (
+                log_content
+                + "\n\n=== LATEST ROUND STATE LOG ===\n"
+                + latest_round_log.read_text(encoding="utf-8", errors="replace")
+            )
         parsed_log = parse_game_log(log_content, target_agent=_target_agent_name(ai1_class))
         match_score = calculate_match_score(
             log_content,
             resource_advantage_weights=config.resource_advantage_weights,
             parsed_log=parsed_log,
         )
+        tick_timeout = detect_tick_timeout(parsed_log, max_game_ticks)
+        wall_clock_timeout = bool(timed_out or detect_timeout(log_content))
+        llm_call_limit_reached = bool(
+            parsed_log.get("summary", {}).get("llm_call_limit_reached", False)
+            if isinstance(parsed_log, dict)
+            else False
+        )
+        timeout_type = None
+        if tick_timeout:
+            timeout_type = "tick"
+        elif wall_clock_timeout:
+            timeout_type = "wall_clock"
+        elif llm_call_limit_reached:
+            timeout_type = "llm_call_limit"
         metadata = {
             "parsed_log": parsed_log,
             "winner": parsed_log.get("summary", {}).get("winner"),
-            "timeout": bool(timed_out or detect_timeout(log_content) or detect_tick_timeout(parsed_log, max_game_ticks)),
-            "timeout_type": "tick" if detect_tick_timeout(parsed_log, max_game_ticks) else "wall_clock" if timed_out else None,
+            "timeout": bool(tick_timeout or wall_clock_timeout or llm_call_limit_reached),
+            "timeout_type": timeout_type,
             "log_path": log_path_str,
             "trace_xml_path": str(trace_path) if trace_path.exists() else None,
+            "round_state_dir": str(round_state_dir),
+            "latest_round_state_log": str(latest_round_log) if latest_round_log is not None else None,
             "map_location": map_location,
             "gameplay_map_dir": _configured_map_dir(config),
             "tick_limit": max_game_ticks,

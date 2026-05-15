@@ -127,6 +127,8 @@ class MatchScoreRecorder:
             "benchmark_mode": record.get("benchmark_mode"),
             "log_path": record.get("log_path"),
             "trace_xml_path": record.get("trace_xml_path"),
+            "round_state_dir": record.get("round_state_dir"),
+            "latest_round_state_log": record.get("latest_round_state_log"),
             "map_location": record.get("map_location"),
             "gameplay_map_dir": record.get("gameplay_map_dir"),
             "winner": record.get("winner"),

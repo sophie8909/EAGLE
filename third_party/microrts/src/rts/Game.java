@@ -2,6 +2,11 @@ package rts;
 
 import ai.core.AI;
 import gui.PhysicalGameStatePanel;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.lang.reflect.Constructor;
 import javax.swing.JFrame;
 
@@ -150,6 +155,7 @@ public class Game {
 
         boolean gameover = false;
         String tracePath = System.getProperty("microrts.trace.path", "").trim();
+        String roundStateDirPath = System.getProperty("microrts.round_state_dir", "").trim();
         Trace trace = tracePath.isEmpty() ? null : new Trace(utt);
 
         while (!gameover && gs.getTime() < maxCycles) {
@@ -175,6 +181,7 @@ public class Game {
 
             // simulate
             gameover = gs.cycle();
+            writeRoundStateSnapshot(roundStateDirPath, gs.getTime(), gameover);
 
             // if not headless mode, wait and repaint the window
             if (w != null) {
@@ -234,20 +241,44 @@ public class Game {
     }
 
     private void printFinalStateSnapshot(int finalTick) {
+        System.out.print(renderStateSnapshot(finalTick));
+    }
+
+    private void writeRoundStateSnapshot(String roundStateDirPath, int tick, boolean gameover) {
+        if (roundStateDirPath == null || roundStateDirPath.isEmpty()) {
+            return;
+        }
+        try {
+            Path roundStateDir = Paths.get(roundStateDirPath);
+            Files.createDirectories(roundStateDir);
+            String fileName = String.format("round_%06d.log", tick);
+            StringBuilder content = new StringBuilder();
+            content.append("ROUND_TICK: ").append(tick).append('\n');
+            content.append("GAMEOVER: ").append(gameover).append('\n');
+            content.append(renderStateSnapshot(tick));
+            Files.write(roundStateDir.resolve(fileName), content.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            System.err.println("[MicroRTS] failed to write round state snapshot: " + e.getMessage());
+        }
+    }
+
+    private String renderStateSnapshot(int tick) {
         PhysicalGameState pgs = gs.getPhysicalGameState();
-        System.out.println(
-            "current time " + finalTick
+        StringBuilder content = new StringBuilder();
+        content.append(
+            "current time " + tick
             + " p0 player 0(" + gs.getPlayer(0).getResources() + ")"
             + " p1 player 1(" + gs.getPlayer(1).getResources() + ")"
-        );
-        System.out.println("=== Dynamic Prompt ===");
-        System.out.println("Map size: " + pgs.getWidth() + "x" + pgs.getHeight());
-        System.out.println("Turn: " + finalTick + "/" + maxCycles);
-        System.out.println("Feature locations:");
+        ).append('\n');
+        content.append("=== Dynamic Prompt ===\n");
+        content.append("Map size: ").append(pgs.getWidth()).append('x').append(pgs.getHeight()).append('\n');
+        content.append("Turn: ").append(tick).append('/').append(maxCycles).append('\n');
+        content.append("Feature locations:\n");
         for (Unit unit : pgs.getUnits()) {
-            System.out.println(renderFeatureLine(unit));
+            content.append(renderFeatureLine(unit)).append('\n');
         }
-        System.out.println("======================");
+        content.append("======================\n");
+        return content.toString();
     }
 
     private String renderFeatureLine(Unit unit) {

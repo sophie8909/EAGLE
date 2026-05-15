@@ -768,6 +768,8 @@ class EagleDesktopApp:
         toolbar = ttk.Frame(tab)
         toolbar.grid(row=0, column=0, sticky="ew")
         ttk.Button(toolbar, text="Start experiment", command=self.start_experiment).pack(side="left")
+        ttk.Button(toolbar, text="Resume selected", command=self.resume_selected_experiment).pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar, text="Browse resume folder", command=self.browse_resume_experiment).pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="Stop process", command=self.stop_process).pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="Refresh", command=self.refresh_all_views).pack(side="left", padx=(8, 0))
         ttk.Label(toolbar, textvariable=self.status).pack(side="left", padx=(16, 0))
@@ -2430,19 +2432,93 @@ class EagleDesktopApp:
         if self.precompile_python.get():
             command.append("--precompile-python")
 
+        self.launch_experiment_process(
+            command=command,
+            config_path=config_path,
+            log_prefix="gui_process",
+            debug_lines=[
+                "[DEBUG] gui start "
+                f"surrogate={self.surrogate.get() if self.algorithm.get() == 'ga_surrogate' else '(ignored)'} "
+                f"evaluator={self.evaluator.get()} "
+                f"objective_config={self.build_objective_config()} "
+                f"gameplay_refresh_interval={self.gameplay_refresh_interval.get()} "
+                f"surrogate_top_ratio={self.surrogate_top_ratio.get()} "
+                f"archive_parent_ratio={self.archive_parent_ratio.get()}",
+            ],
+        )
+
+    def resume_selected_experiment(self) -> None:
+        """Resume the run selected in the run-directory selector."""
+        run_dir = self.current_run_dir()
+        if run_dir is None:
+            messagebox.showwarning("No run selected", "Select a run directory first.")
+            return
+        self.resume_experiment(run_dir)
+
+    def browse_resume_experiment(self) -> None:
+        """Choose one run directory and resume it from its checkpoint."""
         LOG_DIR.mkdir(parents=True, exist_ok=True)
-        self.process_log_path = LOG_DIR / f"gui_process_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        selected = filedialog.askdirectory(
+            title="Select EAGLE run folder to resume",
+            initialdir=str(LOG_DIR),
+        )
+        if not selected:
+            return
+        run_dir = Path(selected)
+        self.selected_run.set(str(run_dir))
+        self.resume_experiment(run_dir)
+
+    def resume_experiment(self, run_dir: Path) -> None:
+        """Launch EAGLE against an existing checkpointed run directory."""
+        self.attach_existing_process()
+        if self.is_monitored_process_running():
+            messagebox.showwarning("Process already running", "Stop the current process before resuming another run.")
+            return
+        try:
+            run_dir = validate_resume_run_dir(run_dir)
+        except ValueError as exc:
+            messagebox.showerror("Cannot resume run", str(exc))
+            return
+
+        command = [
+            sys.executable,
+            "-m",
+            "eagle.main",
+            "--resume-log-dir",
+            str(run_dir),
+        ]
+        if self.skip_final_test.get():
+            command.append("--skip-final-test")
+        if self.precompile_python.get():
+            command.append("--precompile-python")
+
+        self.selected_run.set(str(run_dir))
+        self.launch_experiment_process(
+            command=command,
+            config_path=run_dir / "config.json",
+            log_prefix="gui_resume",
+            debug_lines=[
+                "[DEBUG] gui resume "
+                f"run_dir={run_dir} checkpoint={run_dir / 'run_state.json'}",
+            ],
+        )
+
+    def launch_experiment_process(
+        self,
+        *,
+        command: list[str],
+        config_path: Path,
+        log_prefix: str,
+        debug_lines: list[str],
+    ) -> None:
+        """Launch an EAGLE process and persist GUI monitoring metadata."""
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        self.process_log_path = LOG_DIR / f"{log_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         log_handle = self.process_log_path.open("w", encoding="utf-8", errors="replace")
         log_handle.write("Command: " + " ".join(command) + "\n\n")
-        log_handle.write(
-            "[DEBUG] gui start "
-            f"surrogate={self.surrogate.get() if self.algorithm.get() == 'ga_surrogate' else '(ignored)'} "
-            f"evaluator={self.evaluator.get()} "
-            f"objective_config={self.build_objective_config()} "
-            f"gameplay_refresh_interval={self.gameplay_refresh_interval.get()} "
-            f"surrogate_top_ratio={self.surrogate_top_ratio.get()} "
-            f"archive_parent_ratio={self.archive_parent_ratio.get()}\n\n"
-        )
+        for line in debug_lines:
+            log_handle.write(line + "\n")
+        log_handle.write("\n")
         log_handle.flush()
         self.process = subprocess.Popen(
             command,
@@ -2812,6 +2888,23 @@ def parse_int(value: str, field_name: str) -> int:
     if parsed < 1:
         raise ValueError(f"{field_name} must be >= 1.")
     return parsed
+
+
+def validate_resume_run_dir(path: Path) -> Path:
+    """Return a valid checkpointed run directory for GUI resume."""
+    run_dir = path.expanduser().resolve()
+    if not run_dir.exists() or not run_dir.is_dir():
+        raise ValueError(f"Run folder does not exist:\n{run_dir}")
+    config_path = run_dir / "config.json"
+    state_path = run_dir / "run_state.json"
+    if not config_path.exists():
+        raise ValueError(f"Selected folder is missing config.json:\n{run_dir}")
+    if not state_path.exists():
+        raise ValueError(f"Selected folder is missing run_state.json:\n{run_dir}")
+    state = load_json_file(state_path)
+    if not isinstance(state.get("population"), list) or not state["population"]:
+        raise ValueError(f"Selected folder has no checkpointed population:\n{state_path}")
+    return run_dir
 
 
 def parse_optional_int(value: str, field_name: str) -> int | None:

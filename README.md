@@ -29,7 +29,7 @@ Main GUI functions:
 - `Algorithm`: choose algorithm settings such as GA/NSGA-II, population size, generations, surrogate mode, tick/LLM-call limits, and quick-run options.
 - `Objectives`: choose objective scoring and target opponents.
 - `Operators`: choose crossover and mutation operators, including weighted mutation modes.
-- `Run`: save the generated config, start or stop an experiment, and view process output.
+- `Run`: save the generated config, start, resume, or stop an experiment, and view process output.
 - `Live Analysis`: watch run progress from `logs/eagle/`.
 - `Prompts`: inspect prompts saved in generation logs and checkpoints.
 
@@ -40,6 +40,7 @@ configs/experiments/<config_name>.json
 ```
 
 Pressing `Start experiment` saves that config and launches EAGLE with the selected algorithm, evaluator, and surrogate settings.
+Pressing `Resume selected` or `Browse resume folder` continues a checkpointed run folder that contains `config.json` and `run_state.json`.
 The GUI includes a `Time Analysis` tab that reads the selected run's timing artifacts and profile rows.
 Round evaluation defaults to 8 samples with up to 8 parallel workers for fresh round evaluations.
 
