@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 import random
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from eagle.config import clone_config
 from eagle.core.registry import ALGORITHMS, EVALUATORS
@@ -84,57 +83,30 @@ class MicroRTSGASurrogate(GA):
             self._refresh_gameplay_archive(evaluator, offspring, generation=generation)
 
     def _evaluate_surrogate_batch(self, individuals, *, generation: int | None, label: str) -> None:
-        """Evaluate one generation's surrogate candidates with bounded workers."""
+        """Evaluate one generation's surrogate candidates sequentially."""
         candidates = list(individuals)
         if not candidates:
             return
         prompt_groups = self._group_individuals_by_prompt(candidates)
         leaders = [group[0] for group in prompt_groups]
         duplicate_count = len(candidates) - len(leaders)
-        workers = self._individual_eval_parallel_workers(len(leaders))
         print(
             "[Individual Eval Queue] "
             f"label={label} surrogate generation={generation} "
             f"individuals={len(candidates)} unique_prompts={len(leaders)} "
-            f"prompt_cache_hits={duplicate_count} workers={workers}",
+            f"prompt_cache_hits={duplicate_count}",
             flush=True,
         )
-        if workers <= 1:
-            for index, group in enumerate(prompt_groups, start=1):
-                individual = group[0]
-                print(
-                    f"[{label}] surrogate prompt {index}/{len(leaders)} "
-                    f"leader_id={individual.id} shared_by={len(group)}",
-                    flush=True,
-                )
-                evaluator = self.build_evaluator(config_override=clone_config(self.config))
-                eval_result = self._evaluate_surrogate_individual(evaluator, individual, generation=generation)
-                self._apply_prompt_cache_followers(group, individual, eval_result)
-            return
-
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            future_map = {}
-            for group in prompt_groups:
-                individual = group[0]
-                future_map[
-                    executor.submit(
-                        self._evaluate_surrogate_individual,
-                        self.build_evaluator(config_override=clone_config(self.config)),
-                        individual,
-                        generation=generation,
-                    )
-                ] = group
-            for future in as_completed(future_map):
-                group = future_map[future]
-                individual = group[0]
-                eval_result = future.result()
-                self._apply_prompt_cache_followers(group, individual, eval_result)
-                print(
-                    "[Individual Eval Queue] complete "
-                    f"surrogate generation={generation} id={individual.id} "
-                    f"fitness={getattr(individual, 'fitness', None)} shared_by={len(group)}",
-                    flush=True,
-                )
+        for index, group in enumerate(prompt_groups, start=1):
+            individual = group[0]
+            print(
+                f"[{label}] surrogate prompt {index}/{len(leaders)} "
+                f"leader_id={individual.id} shared_by={len(group)}",
+                flush=True,
+            )
+            evaluator = self.build_evaluator(config_override=clone_config(self.config))
+            eval_result = self._evaluate_surrogate_individual(evaluator, individual, generation=generation)
+            self._apply_prompt_cache_followers(group, individual, eval_result)
 
     def _is_gameplay_refresh_generation(self, generation: int) -> bool:
         interval = max(1, int(self.config.gameplay_refresh_interval))

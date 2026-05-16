@@ -5,7 +5,6 @@ Base class for evolutionary algorithms.
 from __future__ import annotations
 
 import random
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,7 +64,7 @@ class EvaluationBatchRunner:
         self.algorithm = algorithm
 
     def evaluate(self, request: EvaluationBatchRequest) -> None:
-        """Evaluate one batch with prompt deduplication and bounded workers.
+        """Evaluate one batch sequentially with prompt deduplication.
 
         Args:
             request: Batch metadata and individuals to evaluate.
@@ -81,19 +80,15 @@ class EvaluationBatchRunner:
         prompt_groups = self.group_by_prompt(individuals)
         leaders = [group[0] for group in prompt_groups]
         duplicate_count = len(individuals) - len(leaders)
-        workers = self.algorithm._individual_eval_parallel_workers(len(leaders))
         print(
             "[Individual Eval Queue] "
             f"label={request.label} generation={request.generation} stage={request.stage} "
             f"individuals={len(individuals)} unique_prompts={len(leaders)} "
-            f"prompt_cache_hits={duplicate_count} workers={workers}",
+            f"prompt_cache_hits={duplicate_count}",
             flush=True,
         )
 
-        if workers <= 1:
-            self._evaluate_serial(prompt_groups, request)
-            return
-        self._evaluate_parallel(prompt_groups, request, workers)
+        self._evaluate_serial(prompt_groups, request)
 
     def group_by_prompt(self, individuals: list[Individual]) -> list[list[Individual]]:
         """Group individuals by the exact rendered prompt used for evaluation.
@@ -215,44 +210,6 @@ class EvaluationBatchRunner:
                 stage=request.stage,
             )
             self.apply_prompt_cache_followers(group, individual, eval_result)
-
-    def _evaluate_parallel(
-        self,
-        prompt_groups: list[list[Individual]],
-        request: EvaluationBatchRequest,
-        workers: int,
-    ) -> None:
-        """Evaluate prompt leaders in parallel and copy cache followers afterward.
-
-        Args:
-            prompt_groups: Groups returned by `group_by_prompt()`.
-            request: Batch metadata for timing and logging labels.
-            workers: Maximum number of worker threads for leader evaluation.
-        """
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            future_map = {}
-            for group in prompt_groups:
-                individual = group[0]
-                future_map[
-                    executor.submit(
-                        self.algorithm._evaluate_individual_with_timing,
-                        individual,
-                        generation=request.generation,
-                        stage=request.stage,
-                    )
-                ] = group
-            for future in as_completed(future_map):
-                group = future_map[future]
-                individual = group[0]
-                eval_result = future.result()
-                self.apply_prompt_cache_followers(group, individual, eval_result)
-                print(
-                    "[Individual Eval Queue] complete "
-                    f"generation={request.generation} stage={request.stage} id={individual.id} "
-                    f"fitness={self.algorithm._display_fitness(individual)} shared_by={len(group)}",
-                    flush=True,
-                )
-
 
 class CheckpointFlow:
     """Small coordinator for checkpoint restore/save around `EA.run()`.
@@ -547,7 +504,7 @@ class EA:
         stage: str,
         label: str,
     ) -> None:
-        """Evaluate one batch of individuals with bounded worker parallelism."""
+        """Evaluate one batch of individuals sequentially with prompt deduplication."""
         self.evaluation_batches.evaluate(
             EvaluationBatchRequest(
                 individuals=list(individuals),
@@ -595,7 +552,7 @@ class EA:
         generation: int | None,
         stage: str,
     ) -> dict[str, Any]:
-        """Evaluate one individual using a worker-local evaluator."""
+        """Evaluate one individual using a fresh evaluator instance."""
         evaluator = self.build_evaluator(config_override=clone_config(self.config))
         if self.timing_recorder is None:
             return self._evaluate_individual(evaluator, individual, generation=generation)
@@ -605,14 +562,6 @@ class EA:
             metadata={"individual_id": getattr(individual, "id", None), "stage": stage},
         ):
             return self._evaluate_individual(evaluator, individual, generation=generation)
-
-    def _individual_eval_parallel_workers(self, individual_count: int) -> int:
-        """Return the bounded worker count for per-generation individual evaluation."""
-        try:
-            configured = int(getattr(self.config, "individual_eval_parallel_workers", individual_count))
-        except (TypeError, ValueError):
-            configured = individual_count
-        return max(1, min(int(individual_count), configured))
 
     def _evaluate_individual(self, evaluator: Any, individual: Individual, *, generation: int | None) -> dict[str, Any]:
         """Run the evaluator and aggregate raw metrics into individual fitness."""
@@ -764,7 +713,7 @@ class EA:
 
         Call flow:
             1. Create or reuse the run log directory.
-            2. Build one evaluator for setup and non-worker operations.
+            2. Build one evaluator for setup and shared run operations.
             3. Restore checkpoint if present; otherwise evaluate the initial population.
             4. For each generation, generate offspring, evaluate offspring, compute
                subclass context, select survivors, write logs, run subclass after-hooks,

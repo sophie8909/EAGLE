@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import random
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -86,7 +85,7 @@ class FullGameEvaluator:
         per_opponent_results: list[dict[str, Any]] = []
         evaluation_modes: list[str] = []
 
-        opponent_results = self._evaluate_agent_opponents_parallel(
+        opponent_results = self._evaluate_agent_opponents(
             resolved_opponents,
             lambda opponent: self._run_gameplay_mode(
                 individual=individual,
@@ -225,7 +224,7 @@ class FullGameEvaluator:
             elif surrogate == "java_agent":
                 self._prepare_generated_java_agent(prompt)
             if not per_opponent_scores:
-                opponent_results = self._evaluate_agent_opponents_parallel(
+                opponent_results = self._evaluate_agent_opponents(
                     resolved_opponents,
                     lambda opponent: self._run_surrogate_agent_opponent(
                         surrogate=surrogate,
@@ -322,7 +321,7 @@ class FullGameEvaluator:
             "Expected one of: round, policy_agent, java_agent."
         )
 
-    def _evaluate_agent_opponents_parallel(
+    def _evaluate_agent_opponents(
         self,
         opponents: list[str | None],
         evaluate_one: Any,
@@ -331,45 +330,23 @@ class FullGameEvaluator:
         individual_id: Any,
         generation: int | None,
     ) -> list[tuple[str | None, dict[str, Any]]]:
-        """Evaluate one Java-backed agent against opponents with bounded threads."""
+        """Evaluate one Java-backed agent against opponents sequentially."""
         if not opponents:
             return []
-        workers = self._agent_eval_parallel_workers(len(opponents))
         print(
-            "[DEBUG] agent parallel start "
+            "[DEBUG] agent opponent evaluation start "
             f"label={label} individual={individual_id} generation={generation} "
-            f"opponents={len(opponents)} workers={workers}",
+            f"opponents={len(opponents)}",
             flush=True,
         )
-        if workers <= 1:
-            return [(opponent, evaluate_one(opponent)) for opponent in opponents]
-
-        results: list[tuple[str | None, dict[str, Any]]] = []
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = {
-                executor.submit(evaluate_one, opponent): opponent
-                for opponent in opponents
-            }
-            for future in as_completed(futures):
-                opponent = futures[future]
-                results.append((opponent, future.result()))
-        order = {opponent: index for index, opponent in enumerate(opponents)}
-        return sorted(results, key=lambda item: order.get(item[0], 0))
-
-    def _agent_eval_parallel_workers(self, opponent_count: int) -> int:
-        """Return the bounded worker count for Java-backed agent evaluation."""
-        try:
-            configured = int(getattr(self.config, "agent_eval_parallel_workers", opponent_count))
-        except (TypeError, ValueError):
-            configured = opponent_count
-        return max(1, min(int(opponent_count), configured))
+        return [(opponent, evaluate_one(opponent)) for opponent in opponents]
 
     def _prepare_policy_agent(self, prompt: str) -> None:
-        """Render and compile the reusable policy agent once before parallel matches."""
+        """Render and compile the reusable policy agent once before matches."""
         self.java_match_evaluator.prepare_policy_agent(prompt)
 
     def _prepare_generated_java_agent(self, prompt: str) -> None:
-        """Render and compile the generated eagleJava agent once before parallel matches."""
+        """Render and compile the generated eagleJava agent once before matches."""
         self.java_match_evaluator.prepare_generated_java_agent(prompt)
 
     def _run_gameplay_mode(

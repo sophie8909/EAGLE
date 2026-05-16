@@ -147,16 +147,6 @@ class EAConfig:
     round_state_seed: int | None = field(default_factory=lambda: _default_config_value("round_state_seed"))
     surrogate_log_dir: str = field(default_factory=lambda: str(_default_config_value("surrogate_log_dir")))
     one_eval_rounds: int = field(default_factory=lambda: int(_default_config_value("one_eval_rounds")))
-    round_eval_parallel_workers: int = field(
-        default_factory=lambda: int(_default_config_value("round_eval_parallel_workers"))
-    )
-    agent_eval_parallel_workers: int = field(
-        default_factory=lambda: int(_default_config_value("agent_eval_parallel_workers"))
-    )
-    individual_eval_parallel_workers: int = field(
-        default_factory=lambda: int(_default_config_value("individual_eval_parallel_workers"))
-    )
-    llm_parallel_workers: int = field(default_factory=lambda: int(_default_config_value("llm_parallel_workers")))
     prompt_history_path: str = field(default_factory=lambda: str(_default_config_value("prompt_history_path")))
 
 
@@ -219,10 +209,6 @@ class EAConfig:
             raise ValueError("reflection_max_components_to_rewrite must be >= 1.")
         self.gameplay_refresh_interval = max(1, int(self.gameplay_refresh_interval))
         self.one_eval_rounds = max(1, int(self.one_eval_rounds))
-        self.round_eval_parallel_workers = max(1, int(self.round_eval_parallel_workers))
-        self.agent_eval_parallel_workers = max(1, int(self.agent_eval_parallel_workers))
-        self.individual_eval_parallel_workers = max(1, int(self.individual_eval_parallel_workers))
-        self.llm_parallel_workers = max(1, int(self.llm_parallel_workers))
         self.surrogate_top_ratio = min(1.0, max(0.0, float(self.surrogate_top_ratio)))
         self.archive_parent_ratio = min(1.0, max(0.0, float(self.archive_parent_ratio)))
 
@@ -346,10 +332,6 @@ class EAConfig:
             "round_eval_model": self.round_eval_model,
             "round_state_seed": self.round_state_seed,
             "one_eval_rounds": self.one_eval_rounds,
-            "round_eval_parallel_workers": self.round_eval_parallel_workers,
-            "agent_eval_parallel_workers": self.agent_eval_parallel_workers,
-            "individual_eval_parallel_workers": self.individual_eval_parallel_workers,
-            "llm_parallel_workers": self.llm_parallel_workers,
             "surrogate_log_dir": self.surrogate_log_dir,
         }
 

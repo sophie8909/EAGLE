@@ -81,10 +81,6 @@
   "surrogate_log_dir": "logs/microrts",
   "prompt_history_path": "logs/microrts/round_evol/history.jsonl",
   "one_eval_rounds": 8,
-  "round_eval_parallel_workers": 8,
-  "agent_eval_parallel_workers": 8,
-  "individual_eval_parallel_workers": 8,
-  "llm_parallel_workers": 8,
   "application": "microrts",
   "parent_selection_operator": "ga_fitness_tournament",
   "env_selection_operator": "ga_fitness_elitism"

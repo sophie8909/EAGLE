@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -36,9 +34,6 @@ class Evaluator:
         "attack": 3.0,
     }
     THEORETICAL_ALIGNMENT_MAX = 100.0
-    _history_lock = threading.Lock()
-    _llm_semaphore_lock = threading.Lock()
-    _llm_semaphores: dict[int, threading.BoundedSemaphore] = {}
 
     def __init__(
         self,
@@ -74,8 +69,7 @@ class Evaluator:
         )
         
 
-        with self._history_lock:
-            cached_record = self.history.get_record(base_prompt)
+        cached_record = self.history.get_record(base_prompt)
         cached_fitness = cached_record.get("fitness") if cached_record is not None else None
         cached_metadata = dict(cached_record.get("metadata") or {}) if cached_record else {}
         cached_eval_result = dict(cached_metadata.get("eval_result") or {}) if cached_record else {}
@@ -135,19 +129,17 @@ class Evaluator:
         stats: dict[str, float] = {}
         n = self.config.one_eval_rounds
         dynamic_prompts = [self.state_generator.generate_text() for _ in range(n)]
-        workers = self._round_eval_parallel_workers(n)
         print(
-            "[DEBUG] round parallel samples "
-            f"individual={individual.id} generation={generation} rounds={n} workers={workers}",
+            "[DEBUG] round samples "
+            f"individual={individual.id} generation={generation} rounds={n}",
             flush=True,
         )
-        with timer("round_parallel_wall_time", stats):
-            sample_results = self._evaluate_round_samples_parallel(
+        with timer("round_wall_time", stats):
+            sample_results = self._evaluate_round_samples(
                 base_prompt=base_prompt,
                 dynamic_prompts=dynamic_prompts,
                 generation=generation,
                 individual_id=str(individual.id),
-                workers=workers,
             )
         for result in sample_results:
             sample = dict(result["sample_record"])
@@ -172,8 +164,8 @@ class Evaluator:
             round_samples.append(sample)
 
         summarize_total_eval_time(stats)
-        if "round_parallel_wall_time" in stats:
-            stats["total_eval_time"] = stats["round_parallel_wall_time"]
+        if "round_wall_time" in stats:
+            stats["total_eval_time"] = stats["round_wall_time"]
         latest_eval_result = {
             "eval_mode": "round",
             "evaluation_mode": "round_llm",
@@ -190,7 +182,6 @@ class Evaluator:
             "raw_legality_score": legality_raw_sum / n,
             "raw_strategy_alignment_score": alignment_raw_sum / n,
             "timing": dict(stats),
-            "round_eval_parallel_workers": workers,
         }
         eval_result = dict(latest_eval_result)
         eval_result.setdefault("round_score", float(eval_result.get("resource_diff", 0.0)))
@@ -212,7 +203,6 @@ class Evaluator:
             "cached_fitness": None,
             "cached_sample_count": 0,
             "fitness_sample_count": fitness_sample_count,
-            "round_eval_parallel_workers": workers,
         }
 
         self._write_round_profile(
@@ -226,19 +216,18 @@ class Evaluator:
             stats=stats,
         )
 
-        with self._history_lock:
-            self.history.save(
-                prompt=base_prompt,
-                fitness=eval_result,
-                metadata={
-                    "evaluation_mode": individual.evaluation_mode,
-                    "fitness_sample_count": fitness_sample_count,
-                    "latest_eval_result": latest_eval_result,
-                    "eval_result": eval_result,
-                    "cached_fitness": None,
-                    "round": individual.last_round_evaluation,
-                }
-            )
+        self.history.save(
+            prompt=base_prompt,
+            fitness=eval_result,
+            metadata={
+                "evaluation_mode": individual.evaluation_mode,
+                "fitness_sample_count": fitness_sample_count,
+                "latest_eval_result": latest_eval_result,
+                "eval_result": eval_result,
+                "cached_fitness": None,
+                "round": individual.last_round_evaluation,
+            }
+        )
         print(
             "[DEBUG] round evaluate complete "
             f"individual={individual.id} mode={eval_result.get('evaluation_mode')}",
@@ -246,46 +235,26 @@ class Evaluator:
         )
         return eval_result
 
-    def _evaluate_round_samples_parallel(
+    def _evaluate_round_samples(
         self,
         *,
         base_prompt: str,
         dynamic_prompts: list[str],
         generation: int | None,
         individual_id: str,
-        workers: int,
     ) -> list[dict[str, Any]]:
-        """Evaluate generated round samples with bounded thread parallelism."""
-        if workers <= 1:
-            return [
-                self._evaluate_round_sample(
-                    base_prompt=base_prompt,
-                    dynamic_prompt=dynamic_prompt,
-                    sample_index=index,
-                    sample_count=len(dynamic_prompts),
-                    generation=generation,
-                    individual_id=individual_id,
-                )
-                for index, dynamic_prompt in enumerate(dynamic_prompts, start=1)
-            ]
-
-        results: list[dict[str, Any]] = []
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = [
-                executor.submit(
-                    self._evaluate_round_sample,
-                    base_prompt=base_prompt,
-                    dynamic_prompt=dynamic_prompt,
-                    sample_index=index,
-                    sample_count=len(dynamic_prompts),
-                    generation=generation,
-                    individual_id=individual_id,
-                )
-                for index, dynamic_prompt in enumerate(dynamic_prompts, start=1)
-            ]
-            for future in as_completed(futures):
-                results.append(future.result())
-        return sorted(results, key=lambda item: int(item["sample_record"]["sample"]))
+        """Evaluate generated round samples sequentially."""
+        return [
+            self._evaluate_round_sample(
+                base_prompt=base_prompt,
+                dynamic_prompt=dynamic_prompt,
+                sample_index=index,
+                sample_count=len(dynamic_prompts),
+                generation=generation,
+                individual_id=individual_id,
+            )
+            for index, dynamic_prompt in enumerate(dynamic_prompts, start=1)
+        ]
 
     def _evaluate_round_sample(
         self,
@@ -373,14 +342,6 @@ class Evaluator:
             "resource_diff": self._round_resource_diff(state),
             "stats": stats,
         }
-
-    def _round_eval_parallel_workers(self, sample_count: int) -> int:
-        """Return the bounded worker count for round sample evaluation."""
-        try:
-            configured = int(getattr(self.config, "round_eval_parallel_workers", 1))
-        except (TypeError, ValueError):
-            configured = 1
-        return max(1, min(int(sample_count), configured))
 
     @staticmethod
     def _merge_stats(target: dict[str, float], source: dict[str, float]) -> None:
@@ -1020,30 +981,14 @@ class Evaluator:
         if json_format:
             payload["format"] = "json"
 
-        semaphore = self._llm_parallel_semaphore()
-        with semaphore:
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json=payload,
-                timeout=120,
-            )
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json=payload,
+            timeout=120,
+        )
         response.raise_for_status()
         data = response.json()
         raw_response = str(data.get("response", "")).strip()
         if not raw_response:
             raise ValueError("Round evaluator LLM returned an empty response.")
         return raw_response
-
-    def _llm_parallel_semaphore(self) -> threading.BoundedSemaphore:
-        """Return the process-wide LLM request throttle for round evaluation."""
-        try:
-            workers = int(getattr(self.config, "llm_parallel_workers", 8))
-        except (TypeError, ValueError):
-            workers = 8
-        workers = max(1, workers)
-        with self._llm_semaphore_lock:
-            semaphore = self._llm_semaphores.get(workers)
-            if semaphore is None:
-                semaphore = threading.BoundedSemaphore(workers)
-                self._llm_semaphores[workers] = semaphore
-            return semaphore

@@ -55,7 +55,6 @@
   "surrogate_round_samples_per_match": 10,
   "surrogate_log_dir": "logs/microrts",
   "one_eval_rounds": 8,
-  "round_eval_parallel_workers": 8,
   "application": "microrts",
   "evaluator": "gameplay",
   "objective_config": {
