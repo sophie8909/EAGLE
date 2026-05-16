@@ -53,7 +53,7 @@
     "mode": "multi",
     "objectives": [
       "resource_advantage",
-      "strategy_alignment"
+      "win_score"
     ]
   },
   "gameplay_opponents": [],

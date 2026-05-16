@@ -143,6 +143,8 @@ class EAConfig:
     surrogate_round_samples_per_match: int = field(
         default_factory=lambda: int(_default_config_value("surrogate_round_samples_per_match"))
     )
+    round_eval_model: str = field(default_factory=lambda: str(_default_config_value("round_eval_model")))
+    round_state_seed: int | None = field(default_factory=lambda: _default_config_value("round_state_seed"))
     surrogate_log_dir: str = field(default_factory=lambda: str(_default_config_value("surrogate_log_dir")))
     one_eval_rounds: int = field(default_factory=lambda: int(_default_config_value("one_eval_rounds")))
     round_eval_parallel_workers: int = field(
@@ -199,10 +201,6 @@ class EAConfig:
             self.env_selection_operator,
             single_objective_algorithm,
         )
-        if self.objective_config == _default_config_value("objective_config"):
-            from eagle.objectives.registry import default_objective_config
-
-            self.objective_config = default_objective_config(self)
         from eagle.objectives.registry import validate_objective_config
 
         self.objective_config = validate_objective_config(self)
@@ -282,6 +280,11 @@ class EAConfig:
 
         self.strategy_mutation = strategy_mutation
 
+        self.surrogate_round_samples_per_match = max(1, int(self.surrogate_round_samples_per_match))
+        self.round_eval_model = str(self.round_eval_model or "").strip()
+        if not self.round_eval_model:
+            raise ValueError("round_eval_model must be a non-empty model name.")
+        self.round_state_seed = None if self.round_state_seed is None else int(self.round_state_seed)
         self.gameplay_map_dir = str(self.gameplay_map_dir or "8x8").strip().strip("/\\")
         if not self.gameplay_map_dir:
             raise ValueError("gameplay_map_dir must be a non-empty maps/ subfolder name.")
@@ -340,6 +343,8 @@ class EAConfig:
             "archive_parent_ratio": self.archive_parent_ratio,
             "surrogate_recent_match_window": self.surrogate_recent_match_window,
             "surrogate_round_samples_per_match": self.surrogate_round_samples_per_match,
+            "round_eval_model": self.round_eval_model,
+            "round_state_seed": self.round_state_seed,
             "one_eval_rounds": self.one_eval_rounds,
             "round_eval_parallel_workers": self.round_eval_parallel_workers,
             "agent_eval_parallel_workers": self.agent_eval_parallel_workers,
