@@ -21,13 +21,14 @@ class PromptHistory:
             return
 
         with self.path.open("r", encoding="utf-8") as f:
-            for line in f:
-                try:
-                    record = json.loads(line)
-                    key = record["prompt_hash"]
-                    self.history[key] = record
-                except Exception:
-                    continue  # skip broken line
+            for line_number, line in enumerate(f, start=1):
+                if not line.strip():
+                    continue
+                record = json.loads(line)
+                if not isinstance(record, dict):
+                    raise ValueError(f"Prompt history row must be an object: {self.path}:{line_number}")
+                key = record["prompt_hash"]
+                self.history[key] = record
 
     # ---------- get ----------
     def get(self, prompt: str) -> list[float] | None:

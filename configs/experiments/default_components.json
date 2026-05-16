@@ -1,54 +1,45 @@
 {
   "metadata": {
     "identity_component_key": "strategy_identity",
-
     "non_evolving_component_keys": [
-      "static_system_rules",
+      "build_rules",
+      "current_game_state_marker",
       "game_api",
       "output_format",
-      "state_parsing_rules",
-      "build_rules",
       "reasoning_template",
-      "current_game_state_marker"
+      "state_parsing_rules",
+      "static_system_rules"
     ],
-
     "reflection_format_keys": [
-      "output_format",
-      "reasoning_template"
+      "strategy_identity",
+      "early_game_plan",
+      "mid_game_plan",
+      "late_game_plan"
     ],
-
     "reflection_alignment_keys": [
       "strategy_identity",
       "early_game_plan",
       "mid_game_plan",
-      "late_game_plan",
-      "state_parsing_rules",
-      "build_rules"
-    ],
-
-    "rewrite_domain_guidance": "Mention specific MicroRTS concepts when useful: workers, bases, barracks, resources, light/heavy/ranged units, enemy base, enemy workers, combat units, idle units."
+      "late_game_plan"
+    ]
   },
-
   "strategy_identity": [
     [
       "Strategy identity: Economy-first stabilizer.",
       "Prioritize safe worker economy and reliable barracks construction before committing to attacks.",
       "Avoid risky early combat unless the Ally Base is directly threatened."
     ],
-
     [
       "Strategy identity: Balanced production-pressure agent.",
       "Build barracks early, maintain harvesting, continuously produce combat units, and apply controlled pressure.",
       "Use workers mainly for economy and construction; use army units for attacks."
     ],
-
     [
       "Strategy identity: Aggressive timing attacker.",
       "After reaching the minimum worker count and building barracks, prioritize fast combat production and early attacks.",
       "Keep basic harvesting active while pressuring the Enemy Base."
     ]
   ],
-
   "static_system_rules": [
     [
       "You are an AI playing a deterministic real-time strategy game.",
@@ -70,7 +61,6 @@
       "11. Do not trust current_action=\"idling\" as proof that a unit is free."
     ]
   ],
-
   "game_api": [
     [
       "Game objects:",
@@ -97,7 +87,6 @@
       "(x,y): unit_type action(arguments)"
     ]
   ],
-
   "output_format": [
     [
       "Output valid JSON only in this format:",
@@ -127,7 +116,6 @@
       "- (4,4): light attack((5,6))"
     ]
   ],
-
   "state_parsing_rules": [
     [
       "Parse only the CURRENT GAME STATE block.",
@@ -174,7 +162,6 @@
       "- Continue issuing barracks build commands from worker_2 until Ally Barracks Unit exists."
     ]
   ],
-
   "build_rules": [
     [
       "Barracks build target selection:",
@@ -202,7 +189,6 @@
       "(worker_2_x,worker_2_y): worker build((target_x,target_y), barracks)"
     ]
   ],
-
   "early_game_plan": [
     [
       "EARLY GAME:",
@@ -214,7 +200,6 @@
       "- Do not attack early unless Enemy units directly threaten Ally Base.",
       "- Enemy Barracks Unit does not count as Ally Barracks Unit."
     ],
-
     [
       "EARLY GAME:",
       "- Prioritize fast economy setup.",
@@ -223,7 +208,6 @@
       "- Keep all non-builder workers harvesting.",
       "- Avoid unnecessary worker combat."
     ],
-
     [
       "EARLY GAME:",
       "- Reach barracks timing as quickly as possible.",
@@ -232,7 +216,6 @@
       "- Otherwise prioritize economy and barracks completion."
     ]
   ],
-
   "mid_game_plan": [
     [
       "MID GAME:",
@@ -243,7 +226,6 @@
       "- Move combat units toward Enemy Base.",
       "- Attack nearby threatening Enemy units when they block the path or threaten Ally Base."
     ],
-
     [
       "MID GAME:",
       "- Continuously train light units for pressure.",
@@ -251,7 +233,6 @@
       "- Keep worker economy stable while attacking.",
       "- Do not stop army production if resources allow."
     ],
-
     [
       "MID GAME:",
       "- Prefer durable combat units and safer attacks.",
@@ -259,7 +240,6 @@
       "- Keep harvesting stable while gradually expanding military pressure."
     ]
   ],
-
   "late_game_plan": [
     [
       "LATE GAME:",
@@ -269,14 +249,12 @@
       "- Workers keep harvesting unless emergency defense is needed.",
       "- Finish remaining Enemy units and buildings."
     ],
-
     [
       "LATE GAME:",
       "- Fully commit combat units toward Enemy Base.",
       "- Ignore distant low-priority targets.",
       "- Focus on ending the game quickly through direct pressure."
     ],
-
     [
       "LATE GAME:",
       "- Maintain production while slowly eliminating remaining Enemy structures.",
@@ -284,14 +262,12 @@
       "- Keep at least part of the army near Ally Base if enemy threats still exist."
     ]
   ],
-
   "reasoning_template": [
     [
       "Your thinking field must include:",
       "worker_count=<number>; worker_status=<less_than_2/enough_workers>; has_ally_barracks=<True/False>; builder=<worker_2_position or none>; decision=<train_worker/build_barracks_with_worker_2/train_army_or_attack>; reason=..."
     ]
   ],
-
   "training_examples": [
     {
       "name": "bootstrap_worker",
@@ -328,7 +304,6 @@
         "}"
       ]
     },
-
     {
       "name": "build_barracks_with_worker_2",
       "content": [
@@ -372,7 +347,6 @@
         "}"
       ]
     },
-
     {
       "name": "army_phase",
       "content": [
@@ -417,7 +391,6 @@
       ]
     }
   ],
-
   "current_game_state_marker": [
     [
       "Ignore all training examples above.",

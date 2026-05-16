@@ -20,22 +20,20 @@ def normalize_algorithm_name(
     surrogate: Any = None,
     warn: bool = False,
 ) -> str:
-    """Normalize current algorithm names and explicitly handled legacy aliases."""
+    """Normalize one current algorithm key from config or CLI input.
+
+    Args:
+        algorithm: Raw algorithm name from JSON/YAML config or command-line arguments.
+        evaluator: Unused; retained only because existing call sites pass the active evaluator.
+        surrogate: Unused; retained only because existing call sites pass the active surrogate.
+        warn: Unused; old-name warning support was removed with legacy aliases.
+
+    Returns:
+        The normalized current algorithm key. Only spelling/case separators are normalized;
+        old algorithm names are intentionally not mapped to current names.
+    """
+    del evaluator, surrogate, warn
     normalized = str(algorithm or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if normalized == "round_nsga2":
-        if warn:
-            print("WARNING: round_nsga2 is deprecated; use nsga2. NSGA-II surrogate is removed.", flush=True)
-        return "nsga2"
-    if normalized == "round_ga":
-        evaluator_name = str(evaluator or "").strip().lower().replace("-", "_").replace(" ", "_")
-        surrogate_name = str(surrogate or "").strip().lower().replace("-", "_").replace(" ", "_")
-        if evaluator_name == "round" or surrogate_name in {"round", "policy_agent", "java_agent"}:
-            if warn:
-                print("WARNING: round_ga is deprecated; mapped to ga_surrogate.", flush=True)
-            return "ga_surrogate"
-        if warn:
-            print("WARNING: round_ga is deprecated; mapped to ga.", flush=True)
-        return "ga"
     return normalized or "nsga2"
 
 
@@ -116,6 +114,12 @@ class EAConfig:
     surrogate_top_ratio: float = field(default_factory=lambda: float(_default_config_value("surrogate_top_ratio")))
     archive_parent_ratio: float = field(default_factory=lambda: float(_default_config_value("archive_parent_ratio")))
     objective_config: dict[str, Any] = field(default_factory=lambda: dict(_default_config_value("objective_config")))
+    training_example_sample_count: str | int = field(
+        default_factory=lambda: _default_config_value("training_example_sample_count")
+    )
+    training_example_fixed_count: bool = field(
+        default_factory=lambda: bool(_default_config_value("training_example_fixed_count"))
+    )
     gameplay_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("gameplay_opponents")))
     gameplay_map_dir: str = field(default_factory=lambda: str(_default_config_value("gameplay_map_dir")))
     llm_interval: list[int] = field(default_factory=lambda: list(_default_config_value("llm_interval")))
@@ -471,24 +475,29 @@ def _config_with_defaults_unvalidated() -> EAConfig:
 
 
 def load_config_payload(payload: dict[str, Any] | None, *, validate: bool = True) -> EAConfig:
-    """Build one validated config from a JSON-like payload."""
+    """Build one config from a current-schema JSON-like payload.
+
+    Args:
+        payload: Mapping loaded from a current EAGLE config file.
+        validate: When true, normalize and validate the resulting config before returning.
+
+    Returns:
+        An `EAConfig` populated from current-schema fields.
+
+    Raises:
+        ValueError: If the payload contains fields that are not part of `EAConfig`.
+    """
     payload = dict(payload or {})
-    if "objective_config" not in payload and "objective_operator" in payload:
-        payload["objective_config"] = {
-            "mode": "single",
-            "objective": str(payload["objective_operator"]),
-        }
-    if "objective_config" not in payload and "objective" in payload:
-        payload["objective_config"] = {
-            "mode": "single",
-            "objective": str(payload["objective"]),
-        }
     config = _config_with_defaults_unvalidated()
     valid_fields = set(config.__dataclass_fields__.keys())
+    unknown_fields = sorted(key for key in payload if key not in valid_fields)
+    if unknown_fields:
+        raise ValueError(
+            "Unknown config fields are not accepted: "
+            f"{', '.join(unknown_fields)}."
+        )
 
     for key, value in payload.items():
-        if key not in valid_fields:
-            continue
         setattr(config, key, value)
 
     if validate:

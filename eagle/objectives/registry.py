@@ -17,26 +17,17 @@ def _normalize_name(name: str) -> str:
     return str(name).strip().lower().replace("-", "_").replace(" ", "_")
 
 
-_LEGACY_OBJECTIVE_KEYS = {
-    "round_legality_alignment": "resource_advantage",
-    "microrts_resource_weighted": "resource_advantage",
-    "microrts_win_loss": "win_score",
-    "full_game_resource_advantage": "resource_advantage",
-    "full_game_win_loss": "win_score",
-    "java_surrogate_resource_advantage": "resource_advantage",
-    "java_surrogate_win_loss": "win_score",
-    "round_legality": "resource_advantage",
-    "round_strategy_alignment": "strategy_alignment",
-    "action_type_score_ratio": "resource_advantage",
-    "action_legality_ratio": "resource_advantage",
-    "format_validity": "strategy_alignment",
-}
-
-
 def normalize_objective_key(key: str) -> str:
-    """Normalize current and legacy objective keys to the active key."""
-    normalized_key = _normalize_name(key)
-    return _LEGACY_OBJECTIVE_KEYS.get(normalized_key, normalized_key)
+    """Normalize one current objective key without applying legacy aliases.
+
+    Args:
+        key: Objective key from config, GUI state, or result analysis input.
+
+    Returns:
+        The separator/case-normalized objective key. Unsupported names are rejected by
+        `validate_objective_config` or `get_objective` instead of being silently mapped.
+    """
+    return _normalize_name(key)
 
 
 def _iter_plugin_modules() -> tuple[str, ...]:

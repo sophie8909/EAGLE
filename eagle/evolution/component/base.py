@@ -7,6 +7,7 @@ from __future__ import annotations
 import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, List
 
@@ -20,6 +21,312 @@ from eagle.utils.match_score_recorder import MatchScoreRecorder
 from eagle.utils.profiler import RunTimingRecorder
 
 from .individual import Individual
+
+
+@dataclass(frozen=True)
+class EvaluationBatchRequest:
+    """Parameters for one fail-fast individual evaluation batch.
+
+    Args:
+        individuals: Individuals that need evaluation. Individuals with identical
+            rendered prompts are deduplicated inside the batch.
+        generation: Zero-based generation index, or -1 for initial population.
+        stage: Stable machine-readable phase label used by timing/profile output.
+        label: Human-readable label printed to the live run log.
+
+    Call flow:
+        `EA._evaluate_initial_population()` or `EA._evaluate_offspring()` builds this
+        request, `EvaluationBatchRunner.evaluate()` groups by rendered prompt,
+        evaluates one leader per group, then copies the leader result to followers.
+    """
+
+    individuals: list[Individual]
+    generation: int | None
+    stage: str
+    label: str
+
+
+class EvaluationBatchRunner:
+    """Evaluate prompt-equivalent individuals once per batch.
+
+    The runner owns the evaluation hot path that is shared by initial population
+    evaluation, offspring evaluation, and gameplay refreshes. It deliberately
+    depends on the parent `EA` object instead of duplicating evaluator construction
+    or fitness aggregation, so algorithm-specific behavior remains in subclasses.
+    """
+
+    def __init__(self, algorithm: "EA") -> None:
+        """Bind the batch runner to one algorithm instance.
+
+        Args:
+            algorithm: Active EA instance. The runner calls its evaluator, timing,
+                prompt rendering, and prompt-cache copy hooks.
+        """
+        self.algorithm = algorithm
+
+    def evaluate(self, request: EvaluationBatchRequest) -> None:
+        """Evaluate one batch with prompt deduplication and bounded workers.
+
+        Args:
+            request: Batch metadata and individuals to evaluate.
+
+        Raises:
+            Any exception raised by prompt rendering, evaluator execution, or
+            fitness aggregation. The project policy is fail-fast for these paths.
+        """
+        individuals = list(request.individuals)
+        if not individuals:
+            return
+
+        prompt_groups = self.group_by_prompt(individuals)
+        leaders = [group[0] for group in prompt_groups]
+        duplicate_count = len(individuals) - len(leaders)
+        workers = self.algorithm._individual_eval_parallel_workers(len(leaders))
+        print(
+            "[Individual Eval Queue] "
+            f"label={request.label} generation={request.generation} stage={request.stage} "
+            f"individuals={len(individuals)} unique_prompts={len(leaders)} "
+            f"prompt_cache_hits={duplicate_count} workers={workers}",
+            flush=True,
+        )
+
+        if workers <= 1:
+            self._evaluate_serial(prompt_groups, request)
+            return
+        self._evaluate_parallel(prompt_groups, request, workers)
+
+    def group_by_prompt(self, individuals: list[Individual]) -> list[list[Individual]]:
+        """Group individuals by the exact rendered prompt used for evaluation.
+
+        Args:
+            individuals: Candidate individuals in evaluation order.
+
+        Returns:
+            Groups where the first individual is the evaluation leader and later
+            individuals are prompt-cache followers.
+        """
+        groups_by_prompt: dict[str, list[Individual]] = {}
+        for individual in individuals:
+            prompt = self.render_prompt_cache_key(individual)
+            groups_by_prompt.setdefault(prompt, []).append(individual)
+        return list(groups_by_prompt.values())
+
+    def render_prompt_cache_key(self, individual: Individual) -> str:
+        """Render the exact prompt text used as the prompt-cache key.
+
+        Args:
+            individual: Individual whose component indices define a prompt.
+
+        Returns:
+            Newline-joined prompt text. Rendering errors propagate and stop the run.
+        """
+        prompt_lines = self.algorithm.component_pool.render_prompt_lines(
+            individual.component_indices,
+            include_identity_component=self.algorithm.config.include_strategy_identity_in_prompt,
+        )
+        return "\n".join(prompt_lines)
+
+    def apply_prompt_cache_followers(
+        self,
+        group: list[Individual],
+        leader: Individual,
+        eval_result: dict[str, Any] | None,
+    ) -> None:
+        """Copy the leader's completed evaluation to all same-prompt followers.
+
+        Args:
+            group: Prompt-equivalent individuals, with `leader` at index 0.
+            leader: Evaluated individual that owns the source result.
+            eval_result: Raw evaluator payload returned for the leader.
+        """
+        if len(group) <= 1:
+            return
+        for follower in group[1:]:
+            self.copy_prompt_cached_evaluation(
+                target=follower,
+                source=leader,
+                eval_result=eval_result,
+            )
+            print(
+                "[Individual Eval Queue] prompt cache hit "
+                f"source_id={getattr(leader, 'id', None)} target_id={getattr(follower, 'id', None)} "
+                f"fitness={self.algorithm._display_fitness(follower)}",
+                flush=True,
+            )
+
+    def copy_prompt_cached_evaluation(
+        self,
+        *,
+        target: Individual,
+        source: Individual,
+        eval_result: dict[str, Any] | None,
+    ) -> None:
+        """Copy evaluation state from a same-prompt source individual.
+
+        Args:
+            target: Follower receiving copied evaluation data.
+            source: Evaluated leader individual.
+            eval_result: Raw evaluator payload used to annotate cache metadata.
+        """
+        target.fitness = deepcopy(getattr(source, "fitness", None))
+        target.rendered_prompt = getattr(source, "rendered_prompt", "")
+        target.evaluation_mode = "prompt_cache"
+        for score_attr in ("surrogate_score", "gameplay_score"):
+            if hasattr(source, score_attr):
+                setattr(target, score_attr, deepcopy(getattr(source, score_attr)))
+        for attr in ("last_round_evaluation", "last_surrogate_evaluation", "last_gameplay_evaluation"):
+            if hasattr(source, attr):
+                copied = deepcopy(getattr(source, attr))
+                if isinstance(copied, dict):
+                    copied["prompt_cache_source_id"] = getattr(source, "id", None)
+                    copied["prompt_cache_target_id"] = getattr(target, "id", None)
+                setattr(target, attr, copied)
+        if isinstance(eval_result, dict):
+            cached_eval = deepcopy(eval_result)
+            cached_eval["evaluation_mode"] = "prompt_cache"
+            cached_eval["prompt_cache_source_id"] = getattr(source, "id", None)
+            cached_eval["prompt_cache_target_id"] = getattr(target, "id", None)
+            if cached_eval.get("eval_mode") == "round":
+                target.last_round_evaluation = {"eval_result": cached_eval}
+            elif cached_eval.get("eval_mode") in {"full_game", "java_surrogate"}:
+                target.last_gameplay_evaluation = {"eval_result": cached_eval}
+
+    def _evaluate_serial(
+        self,
+        prompt_groups: list[list[Individual]],
+        request: EvaluationBatchRequest,
+    ) -> None:
+        """Evaluate leader groups one at a time.
+
+        Args:
+            prompt_groups: Groups returned by `group_by_prompt()`.
+            request: Batch metadata for timing and logging labels.
+        """
+        for index, group in enumerate(prompt_groups, start=1):
+            individual = group[0]
+            print(
+                f"[{request.label}] evaluating prompt {index}/{len(prompt_groups)} "
+                f"leader_id={individual.id} shared_by={len(group)}",
+                flush=True,
+            )
+            eval_result = self.algorithm._evaluate_individual_with_timing(
+                individual,
+                generation=request.generation,
+                stage=request.stage,
+            )
+            self.apply_prompt_cache_followers(group, individual, eval_result)
+
+    def _evaluate_parallel(
+        self,
+        prompt_groups: list[list[Individual]],
+        request: EvaluationBatchRequest,
+        workers: int,
+    ) -> None:
+        """Evaluate prompt leaders in parallel and copy cache followers afterward.
+
+        Args:
+            prompt_groups: Groups returned by `group_by_prompt()`.
+            request: Batch metadata for timing and logging labels.
+            workers: Maximum number of worker threads for leader evaluation.
+        """
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_map = {}
+            for group in prompt_groups:
+                individual = group[0]
+                future_map[
+                    executor.submit(
+                        self.algorithm._evaluate_individual_with_timing,
+                        individual,
+                        generation=request.generation,
+                        stage=request.stage,
+                    )
+                ] = group
+            for future in as_completed(future_map):
+                group = future_map[future]
+                individual = group[0]
+                eval_result = future.result()
+                self.apply_prompt_cache_followers(group, individual, eval_result)
+                print(
+                    "[Individual Eval Queue] complete "
+                    f"generation={request.generation} stage={request.stage} id={individual.id} "
+                    f"fitness={self.algorithm._display_fitness(individual)} shared_by={len(group)}",
+                    flush=True,
+                )
+
+
+class CheckpointFlow:
+    """Small coordinator for checkpoint restore/save around `EA.run()`.
+
+    The EA subclass still defines what extra state means. This object only keeps
+    the run bootstrap sequence explicit: build manager, restore if possible,
+    otherwise evaluate generation 0 and persist the initial checkpoint.
+    """
+
+    def __init__(self, algorithm: "EA") -> None:
+        """Bind checkpoint operations to one algorithm instance.
+
+        Args:
+            algorithm: Active EA instance that owns population, run state hooks,
+                and timing recorder.
+        """
+        self.algorithm = algorithm
+
+    def begin(self, log_dir: str, evaluator: Any) -> tuple[CheckpointManager, int, Any]:
+        """Create checkpoint manager and resolve the generation loop start.
+
+        Args:
+            log_dir: Active run directory.
+            evaluator: Evaluator instance used for initial population evaluation
+                when no checkpoint is available.
+
+        Returns:
+            Tuple of `(checkpoint_manager, start_generation, run_state)`.
+        """
+        checkpoint_manager = CheckpointManager(Path(log_dir))
+        timing_recorder = self.algorithm._require_timing_recorder()
+
+        with timing_recorder.phase("restore_checkpoint"):
+            restored = self.algorithm._restore_checkpoint(checkpoint_manager)
+        if restored is not None:
+            start_generation, run_state = restored
+            return checkpoint_manager, start_generation, run_state
+
+        with timing_recorder.phase("evaluate_initial_population", generation=-1):
+            self.algorithm._evaluate_initial_population(evaluator)
+        run_state = self.algorithm._new_run_state()
+        self.save(
+            checkpoint_manager,
+            generation=-1,
+            phase="initial_population_complete",
+            run_state=run_state,
+        )
+        return checkpoint_manager, 0, run_state
+
+    def save(
+        self,
+        checkpoint_manager: CheckpointManager,
+        *,
+        generation: int,
+        phase: str,
+        run_state: Any,
+    ) -> None:
+        """Persist one checkpoint inside the timing recorder's save phase.
+
+        Args:
+            checkpoint_manager: Manager bound to the current run directory.
+            generation: Internal zero-based generation, or -1 after initial eval.
+            phase: Stable checkpoint phase label.
+            run_state: Algorithm-specific restart state.
+        """
+        timing_recorder = self.algorithm._require_timing_recorder()
+        with timing_recorder.phase("save_checkpoint", generation=generation):
+            self.algorithm._save_checkpoint(
+                checkpoint_manager,
+                generation=generation,
+                phase=phase,
+                run_state=run_state,
+            )
+
 
 class EA:
     """Shared scaffolding for the single- and multi-objective EA variants.
@@ -50,6 +357,8 @@ class EA:
         self.match_score_recorder: MatchScoreRecorder | None = None
         self.timing_recorder: RunTimingRecorder | None = None
         self.current_generation = 0
+        self.evaluation_batches = EvaluationBatchRunner(self)
+        self.checkpoints = CheckpointFlow(self)
         self.mutation_operator = get_operator(
             "mutation",
             self._operator_name("mutation", self.default_mutation_operator_name),
@@ -239,84 +548,22 @@ class EA:
         label: str,
     ) -> None:
         """Evaluate one batch of individuals with bounded worker parallelism."""
-        if not individuals:
-            return
-        prompt_groups = self._group_individuals_by_prompt(individuals)
-        leaders = [group[0] for group in prompt_groups]
-        duplicate_count = len(individuals) - len(leaders)
-        workers = self._individual_eval_parallel_workers(len(leaders))
-        print(
-            "[Individual Eval Queue] "
-            f"label={label} generation={generation} stage={stage} "
-            f"individuals={len(individuals)} unique_prompts={len(leaders)} "
-            f"prompt_cache_hits={duplicate_count} workers={workers}",
-            flush=True,
+        self.evaluation_batches.evaluate(
+            EvaluationBatchRequest(
+                individuals=list(individuals),
+                generation=generation,
+                stage=stage,
+                label=label,
+            )
         )
-        if workers <= 1:
-            for index, group in enumerate(prompt_groups, start=1):
-                individual = group[0]
-                print(
-                    f"[{label}] evaluating prompt {index}/{len(leaders)} "
-                    f"leader_id={individual.id} shared_by={len(group)}",
-                    flush=True,
-                )
-                eval_result = self._evaluate_individual_with_timing(
-                    individual,
-                    generation=generation,
-                    stage=stage,
-                )
-                self._apply_prompt_cache_followers(group, individual, eval_result)
-            return
-
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            future_map = {}
-            for group in prompt_groups:
-                individual = group[0]
-                future_map[
-                    executor.submit(
-                        self._evaluate_individual_with_timing,
-                        individual,
-                        generation=generation,
-                        stage=stage,
-                    )
-                ] = group
-            for future in as_completed(future_map):
-                group = future_map[future]
-                individual = group[0]
-                eval_result = future.result()
-                self._apply_prompt_cache_followers(group, individual, eval_result)
-                print(
-                    "[Individual Eval Queue] complete "
-                    f"generation={generation} stage={stage} id={individual.id} "
-                    f"fitness={self._display_fitness(individual)} shared_by={len(group)}",
-                    flush=True,
-                )
 
     def _group_individuals_by_prompt(self, individuals: List[Individual]) -> list[list[Individual]]:
         """Group one evaluation batch by rendered prompt text."""
-        groups_by_prompt: dict[str, list[Individual]] = {}
-        fallback_groups: list[list[Individual]] = []
-        for individual in individuals:
-            try:
-                prompt = self._render_prompt_cache_key(individual)
-            except Exception as exc:
-                print(
-                    "[Individual Eval Queue] prompt cache skipped "
-                    f"id={getattr(individual, 'id', None)} reason={type(exc).__name__}: {exc}",
-                    flush=True,
-                )
-                fallback_groups.append([individual])
-                continue
-            groups_by_prompt.setdefault(prompt, []).append(individual)
-        return list(groups_by_prompt.values()) + fallback_groups
+        return self.evaluation_batches.group_by_prompt(list(individuals))
 
     def _render_prompt_cache_key(self, individual: Individual) -> str:
         """Render the exact prompt text used to deduplicate one batch."""
-        prompt_lines = self.component_pool.render_prompt_lines(
-            individual.component_indices,
-            include_identity_component=self.config.include_strategy_identity_in_prompt,
-        )
-        return "\n".join(prompt_lines)
+        return self.evaluation_batches.render_prompt_cache_key(individual)
 
     def _apply_prompt_cache_followers(
         self,
@@ -325,20 +572,7 @@ class EA:
         eval_result: dict[str, Any] | None,
     ) -> None:
         """Copy one leader's completed evaluation to same-prompt followers."""
-        if len(group) <= 1:
-            return
-        for follower in group[1:]:
-            self._copy_prompt_cached_evaluation(
-                target=follower,
-                source=leader,
-                eval_result=eval_result,
-            )
-            print(
-                "[Individual Eval Queue] prompt cache hit "
-                f"source_id={getattr(leader, 'id', None)} target_id={getattr(follower, 'id', None)} "
-                f"fitness={self._display_fitness(follower)}",
-                flush=True,
-            )
+        self.evaluation_batches.apply_prompt_cache_followers(group, leader, eval_result)
 
     def _copy_prompt_cached_evaluation(
         self,
@@ -348,28 +582,11 @@ class EA:
         eval_result: dict[str, Any] | None,
     ) -> None:
         """Copy evaluation state from a same-prompt source individual."""
-        target.fitness = deepcopy(getattr(source, "fitness", None))
-        target.rendered_prompt = getattr(source, "rendered_prompt", "")
-        target.evaluation_mode = "prompt_cache"
-        for score_attr in ("surrogate_score", "gameplay_score"):
-            if hasattr(source, score_attr):
-                setattr(target, score_attr, deepcopy(getattr(source, score_attr)))
-        for attr in ("last_round_evaluation", "last_surrogate_evaluation", "last_gameplay_evaluation"):
-            if hasattr(source, attr):
-                copied = deepcopy(getattr(source, attr))
-                if isinstance(copied, dict):
-                    copied["prompt_cache_source_id"] = getattr(source, "id", None)
-                    copied["prompt_cache_target_id"] = getattr(target, "id", None)
-                setattr(target, attr, copied)
-        if isinstance(eval_result, dict):
-            cached_eval = deepcopy(eval_result)
-            cached_eval["evaluation_mode"] = "prompt_cache"
-            cached_eval["prompt_cache_source_id"] = getattr(source, "id", None)
-            cached_eval["prompt_cache_target_id"] = getattr(target, "id", None)
-            if cached_eval.get("eval_mode") == "round":
-                target.last_round_evaluation = {"eval_result": cached_eval}
-            elif cached_eval.get("eval_mode") in {"full_game", "java_surrogate"}:
-                target.last_gameplay_evaluation = {"eval_result": cached_eval}
+        self.evaluation_batches.copy_prompt_cached_evaluation(
+            target=target,
+            source=source,
+            eval_result=eval_result,
+        )
 
     def _evaluate_individual_with_timing(
         self,
@@ -529,87 +746,128 @@ class EA:
         )
         return next_generation, run_state
 
+    def _require_timing_recorder(self) -> RunTimingRecorder:
+        """Return the active timing recorder or fail before entering the run loop.
+
+        Returns:
+            Run-level timing recorder created by `create_log_folder()` or `attach_log_dir()`.
+
+        Raises:
+            ValueError: If the run directory has not been initialized.
+        """
+        if self.timing_recorder is None:
+            raise ValueError("Timing recorder has not been initialized. Call create_log_folder() first.")
+        return self.timing_recorder
+
     def run(self) -> list:
-        """Run the shared generational EA flow."""
+        """Run the complete shared evolutionary lifecycle.
+
+        Call flow:
+            1. Create or reuse the run log directory.
+            2. Build one evaluator for setup and non-worker operations.
+            3. Restore checkpoint if present; otherwise evaluate the initial population.
+            4. For each generation, generate offspring, evaluate offspring, compute
+               subclass context, select survivors, write logs, run subclass after-hooks,
+               and checkpoint the completed generation.
+            5. Always write a final timing summary before returning the population.
+
+        Returns:
+            Final survivor population after configured generations or convergence stop.
+        """
         log_dir = self.create_log_folder()
-        checkpoint_manager = CheckpointManager(Path(log_dir))
-        assert self.timing_recorder is not None
-        with self.timing_recorder.phase("build_evaluator"):
+        timing_recorder = self._require_timing_recorder()
+        with timing_recorder.phase("build_evaluator"):
             evaluator = self.build_evaluator()
 
-        with self.timing_recorder.phase("restore_checkpoint"):
-            restored = self._restore_checkpoint(checkpoint_manager)
-        if restored is None:
-            with self.timing_recorder.phase("evaluate_initial_population", generation=-1):
-                self._evaluate_initial_population(evaluator)
-            run_state = self._new_run_state()
-            with self.timing_recorder.phase("save_checkpoint", generation=-1):
-                self._save_checkpoint(
-                    checkpoint_manager,
-                    generation=-1,
-                    phase="initial_population_complete",
-                    run_state=run_state,
-                )
-            start_generation = 0
-        else:
-            start_generation, run_state = restored
+        checkpoint_manager, start_generation, run_state = self.checkpoints.begin(log_dir, evaluator)
 
         try:
             for generation in range(start_generation, self.config.num_generations):
-                with self.timing_recorder.phase("generation_total", generation=generation):
-                    print(
-                        f"[Generation {generation + 1}/{self.config.num_generations}] start",
-                        flush=True,
-                    )
-
-                    with self.timing_recorder.phase("generate_offspring", generation=generation):
-                        offspring = self._generate_offspring(generation)
-                    print(
-                        f"[Generation {generation + 1}] generated offspring ready: {len(offspring)}",
-                        flush=True,
-                    )
-
-                    with self.timing_recorder.phase("evaluate_offspring", generation=generation):
-                        self._evaluate_offspring(evaluator, offspring, generation)
-                    with self.timing_recorder.phase("before_survivor_selection", generation=generation):
-                        generation_context = self._before_survivor_selection(generation, offspring)
-
-                    print(
-                        f"[Generation {generation + 1}] selecting survivors",
-                        flush=True,
-                    )
-                    with self.timing_recorder.phase("select_survivors", generation=generation):
-                        self.population = self.select_next_generation(self.population, offspring)
-
-                    with self.timing_recorder.phase("log_generation", generation=generation):
-                        self._log_generation(generation, offspring, generation_context, log_dir)
-                        self.print_generation_fitness_summary(generation)
-                    print(
-                        f"[Generation {generation + 1}] logged",
-                        flush=True,
-                    )
-
-                    with self.timing_recorder.phase("after_generation", generation=generation):
-                        should_stop = self._after_generation(generation, offspring, generation_context, run_state)
-                    with self.timing_recorder.phase("save_checkpoint", generation=generation):
-                        self._save_checkpoint(
-                            checkpoint_manager,
-                            generation=generation,
-                            phase="generation_complete",
-                            run_state=run_state,
-                        )
-
-                    self.timing_recorder.write_summary(status="running")
-                    if should_stop:
-                        print(
-                            f"[Generation {generation + 1}] convergence reached; stopping early",
-                            flush=True,
-                        )
-                        break
+                should_stop = self._run_generation(
+                    generation=generation,
+                    evaluator=evaluator,
+                    checkpoint_manager=checkpoint_manager,
+                    run_state=run_state,
+                    log_dir=log_dir,
+                )
+                if should_stop:
+                    break
         finally:
-            self.timing_recorder.write_summary(status="complete")
+            timing_recorder.write_summary(status="complete")
 
         return self.population
+
+    def _run_generation(
+        self,
+        *,
+        generation: int,
+        evaluator: Any,
+        checkpoint_manager: CheckpointManager,
+        run_state: Any,
+        log_dir: str,
+    ) -> bool:
+        """Execute one full generation and persist its checkpoint.
+
+        Args:
+            generation: Zero-based generation index.
+            evaluator: Shared evaluator instance used by subclass hooks.
+            checkpoint_manager: Current run checkpoint manager.
+            run_state: Algorithm-specific mutable state carried across generations.
+            log_dir: Current run log directory.
+
+        Returns:
+            True when the subclass convergence hook requests early stop.
+        """
+        timing_recorder = self._require_timing_recorder()
+        with timing_recorder.phase("generation_total", generation=generation):
+            print(
+                f"[Generation {generation + 1}/{self.config.num_generations}] start",
+                flush=True,
+            )
+
+            with timing_recorder.phase("generate_offspring", generation=generation):
+                offspring = self._generate_offspring(generation)
+            print(
+                f"[Generation {generation + 1}] generated offspring ready: {len(offspring)}",
+                flush=True,
+            )
+
+            with timing_recorder.phase("evaluate_offspring", generation=generation):
+                self._evaluate_offspring(evaluator, offspring, generation)
+            with timing_recorder.phase("before_survivor_selection", generation=generation):
+                generation_context = self._before_survivor_selection(generation, offspring)
+
+            print(
+                f"[Generation {generation + 1}] selecting survivors",
+                flush=True,
+            )
+            with timing_recorder.phase("select_survivors", generation=generation):
+                self.population = self.select_next_generation(self.population, offspring)
+
+            with timing_recorder.phase("log_generation", generation=generation):
+                self._log_generation(generation, offspring, generation_context, log_dir)
+                self.print_generation_fitness_summary(generation)
+            print(
+                f"[Generation {generation + 1}] logged",
+                flush=True,
+            )
+
+            with timing_recorder.phase("after_generation", generation=generation):
+                should_stop = self._after_generation(generation, offspring, generation_context, run_state)
+            self.checkpoints.save(
+                checkpoint_manager,
+                generation=generation,
+                phase="generation_complete",
+                run_state=run_state,
+            )
+
+            timing_recorder.write_summary(status="running")
+            if should_stop:
+                print(
+                    f"[Generation {generation + 1}] convergence reached; stopping early",
+                    flush=True,
+                )
+            return bool(should_stop)
        
     def _log_initial_population_snapshot(self) -> None:
         """Persist one generation-0 snapshot after initial gameplay evaluation."""
@@ -749,16 +1007,9 @@ class EA:
             )
 
     def _safe_construct_prompt(self, individual: Individual) -> str:
-        """Render prompts for logs without breaking on invalid component indices."""
+        """Render prompts for logs, failing the run when prompt construction is invalid."""
         evaluator = self.build_evaluator()
-        try:
-            return evaluator._construct_prompt(individual)
-        except Exception as exc:
-            return (
-                "[Prompt unavailable: failed to render with current component pool]\n"
-                f"Reason: {type(exc).__name__}: {exc}\n"
-                f"Individual: {individual}"
-            )
+        return evaluator._construct_prompt(individual)
             
     def save_component_pool(self, log_dir: str):
         """Store the evolving component pool so later analysis can reproduce runs."""
