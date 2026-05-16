@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Benchmark script for LLM agents vs RandomBiasedAI
-# Tests: llama3.1:8b and qwen3:14b (2 games each)
+# Benchmark script for LLM agents vs RandomBiasedAI.
+# Uses the currently running llama.cpp OpenAI-compatible server.
 
 GAMES_PER_MODEL=2
 RUN_TIME_PER_GAME_SEC="${RUN_TIME_PER_GAME_SEC:-120}"
-OLLAMA_HOST="${OLLAMA_HOST:-http://localhost:11434}"
+LLAMA_CPP_BASE_URL="${LLAMA_CPP_BASE_URL:-http://127.0.0.1:8080/v1}"
 RESULTS_FILE="benchmark_results_$(date +%Y-%m-%d_%H-%M-%S).txt"
 
-MODELS=("llama3.1:8b" "qwen3:14b")
+MODELS=("${LLAMA_CPP_MODEL:-local}")
 
 echo "==============================================="
 echo "MicroRTS LLM Benchmark"
@@ -22,29 +22,16 @@ echo "Results file: $RESULTS_FILE"
 echo "==============================================="
 echo ""
 
-# Check Ollama availability
-echo "Checking Ollama at $OLLAMA_HOST..."
-if ! curl -s --connect-timeout 5 "$OLLAMA_HOST/api/tags" > /dev/null 2>&1; then
-    echo "ERROR: Ollama is not responding at $OLLAMA_HOST"
+# Check llama.cpp availability
+echo "Checking llama.cpp at $LLAMA_CPP_BASE_URL..."
+if ! curl -s --connect-timeout 5 "$LLAMA_CPP_BASE_URL/models" > /dev/null 2>&1; then
+    echo "ERROR: llama.cpp is not responding at $LLAMA_CPP_BASE_URL"
     echo ""
-    echo "Please start Ollama with:"
-    echo "  ollama serve"
-    echo ""
-    echo "And ensure models are available:"
-    echo "  ollama pull llama3.1:8b"
-    echo "  ollama pull qwen3:14b"
+    echo "Start it from the repository root with:"
+    echo "  LLAMA_CPP_MODEL_PATH=/path/to/model.gguf ./run_llama_cpp.sh"
     exit 1
 fi
-echo "Ollama is running."
-
-# Check models
-echo "Checking required models..."
-for model in "${MODELS[@]}"; do
-    if ! curl -s "$OLLAMA_HOST/api/tags" | grep -q "\"$model\""; then
-        echo "WARNING: Model $model may not be available. Attempting to pull..."
-        ollama pull "$model" || echo "Could not pull $model"
-    fi
-done
+echo "llama.cpp is running."
 
 # Compile
 echo ""
@@ -67,7 +54,7 @@ for model in "${MODELS[@]}"; do
     echo "Testing model: $model"
     echo "==============================================="
 
-    export OLLAMA_MODEL="$model"
+    export LLAMA_CPP_MODEL="$model"
 
     for ((game=1; game<=GAMES_PER_MODEL; game++)); do
         echo ""

@@ -1,94 +1,117 @@
-"""Local Ollama helpers used by mutation, evaluation, and surrogate workflows."""
+"""Local llama.cpp helpers used by mutation, evaluation, and surrogate workflows."""
 
-import requests
+import os
 import re
 import ast
 import json
 
+from openai import OpenAI
+
+
+DEFAULT_MODEL = os.getenv("LLAMA_CPP_MODEL", "local")
+DEFAULT_MAX_TOKENS = int(os.getenv("LLAMA_CPP_MAX_TOKENS", "2048"))
+
+
+def _normalize_base_url(raw_url: str | None) -> str:
+    """Normalize llama.cpp's OpenAI-compatible base URL."""
+    base_url = (raw_url or "http://127.0.0.1:8080/v1").strip().rstrip("/")
+    if not base_url.startswith(("http://", "https://")):
+        base_url = "http://" + base_url
+    if not base_url.endswith("/v1"):
+        base_url += "/v1"
+    return base_url
+
+
+DEFAULT_BASE_URL = _normalize_base_url(os.getenv("LLAMA_CPP_BASE_URL"))
+
 
 class LLM:
-    """Local Ollama endpoint helpers used by the EA pipeline."""
+    """Local llama.cpp endpoint helpers used by the EA pipeline."""
+
+    _client: OpenAI | None = None
+
+    @classmethod
+    def _openai_client(cls) -> OpenAI:
+        """Return the OpenAI-compatible client backed by llama.cpp server."""
+        if cls._client is None:
+            cls._client = OpenAI(base_url=DEFAULT_BASE_URL, api_key="dummy")
+        return cls._client
+
+    @staticmethod
+    def _resolve_model(model: str | None) -> str:
+        """Resolve the model name sent to llama.cpp's OpenAI-compatible API."""
+        return os.getenv("LLAMA_CPP_MODEL") or model or DEFAULT_MODEL
+
+    @classmethod
+    def _generate_text(
+        cls,
+        *,
+        prompt: str,
+        model: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+    ) -> str:
+        """Generate one non-streaming chat completion through llama.cpp."""
+        response = cls._openai_client().chat.completions.create(
+            model=cls._resolve_model(model),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("llama.cpp returned an empty response.")
+        return content.strip()
 
     @staticmethod
     def _extract_first_json_object(raw_output: str) -> dict | None:
         """Parse one JSON object from model output, tolerating surrounding text."""
         if not raw_output:
-            raise ValueError("Ollama response was empty; expected one JSON object.")
+            raise ValueError("llama.cpp response was empty; expected one JSON object.")
         try:
             parsed = json.loads(raw_output)
             if not isinstance(parsed, dict):
-                raise ValueError(f"Ollama JSON response must be an object, got {type(parsed).__name__}.")
+                raise ValueError(f"llama.cpp JSON response must be an object, got {type(parsed).__name__}.")
             return parsed
         except json.JSONDecodeError:
             pass
 
         match = re.search(r"\{.*\}", raw_output, re.DOTALL)
         if not match:
-            raise ValueError("Ollama response did not contain a JSON object.")
+            raise ValueError("llama.cpp response did not contain a JSON object.")
 
         try:
             parsed = json.loads(match.group(0))
             if not isinstance(parsed, dict):
-                raise ValueError(f"Ollama JSON response must be an object, got {type(parsed).__name__}.")
+                raise ValueError(f"llama.cpp JSON response must be an object, got {type(parsed).__name__}.")
             return parsed
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Failed to parse JSON object from Ollama response: {exc}") from exc
+            raise ValueError(f"Failed to parse JSON object from llama.cpp response: {exc}") from exc
 
     @staticmethod
-    def ollama_generate_json_response(
+    def llama_cpp_generate_json_response(
         prompt: str,
-        model: str = "llama3.1:8b",
+        model: str = "local",
         temperature: float = 0.2,
     ) -> dict | None:
-        """Ask Ollama for a JSON move response and fail when the request or parse fails."""
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "context": [],
-                "options": {
-                    "temperature": temperature,
-                },
-            },
-            timeout=120,
-        )
-        response.raise_for_status()
-        data = response.json()
-        raw_output = data.get("response", "").strip()
+        """Ask llama.cpp for a JSON move response and fail when the request or parse fails."""
+        raw_output = LLM._generate_text(prompt=prompt, model=model, temperature=temperature)
         return LLM._extract_first_json_object(raw_output)
 
     @staticmethod
-    def ollama_generate_strict_json(
+    def llama_cpp_generate_strict_json(
         prompt: str,
-        model: str = "llama3.1:8b",
+        model: str = "local",
         temperature: float = 0.1,
     ) -> dict | None:
-        """Ask Ollama for one strict JSON object and fail when the call is invalid."""
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "format": "json",
-                "context": [],
-                "options": {
-                    "temperature": temperature,
-                },
-            },
-            timeout=120,
-        )
-        response.raise_for_status()
-        data = response.json()
-        raw_output = data.get("response", "").strip()
+        """Ask llama.cpp for one strict JSON object and fail when the call is invalid."""
+        raw_output = LLM._generate_text(prompt=prompt, model=model, temperature=temperature)
         return LLM._extract_first_json_object(raw_output)
 
     @staticmethod
-    def ollama_generate_surrogate_strategy_spec(
+    def llama_cpp_generate_surrogate_strategy_spec(
         strategy_prompt: str,
-        model: str = "llama3.1:8b",
+        model: str = "local",
         temperature: float = 0.1,
     ) -> dict:
         """Convert a strategy prompt into a constrained eaglePolicy spec."""
@@ -151,23 +174,8 @@ class LLM:
             "production_priority": [],
         }
 
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": model,
-                "prompt": generation_prompt,
-                "stream": False,
-                "format": "json",
-                "context": [],
-                "options": {
-                    "temperature": temperature,
-                },
-            },
-            timeout=120,
-        )
-        response.raise_for_status()
-        data = response.json()
-        parsed = LLM._extract_first_json_object(data.get("response", "").strip())
+        raw_output = LLM._generate_text(prompt=generation_prompt, model=model, temperature=temperature)
+        parsed = LLM._extract_first_json_object(raw_output)
         return LLM._normalize_surrogate_strategy_spec(parsed, fallback)
 
     @staticmethod
@@ -214,10 +222,10 @@ class LLM:
         return normalized
 
     @staticmethod
-    def ollama_rewrite_component(
+    def llama_cpp_rewrite_component(
             original_text: str,
             instruction: str,
-            model: str = "llama3.1:8b",
+            model: str = "local",
             temperature: float = 0.7,
         ) -> str:
         """Rewrite one prompt component using an instruction-guided LLM call."""
@@ -236,28 +244,14 @@ class LLM:
         {original_text}
         """.strip()
 
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "context": [],
-                "options": {
-                    "temperature": temperature,
-                },
-            },
-            timeout=120,
-        )
-        response.raise_for_status()
-        data = response.json()
-        return data["response"].strip()
+        return LLM._generate_text(prompt=prompt, model=model, temperature=temperature)
     
-    def ollama_combine_components(
+    @staticmethod
+    def llama_cpp_combine_components(
             component1: str,
             component2: str,
             instruction: str,
-            model: str = "llama3.1:8b",
+            model: str = "local",
             temperature: float = 0.7,
         ) -> str:
         """Merge two component texts into one combined component suggestion."""
@@ -279,29 +273,14 @@ class LLM:
         {component2}
         """.strip()
 
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "context": [],
-                "options": {
-                    "temperature": temperature,
-                },
-            },
-            timeout=120,
-        )
-        response.raise_for_status()
-        data = response.json()
-        return data["response"].strip()
+        return LLM._generate_text(prompt=prompt, model=model, temperature=temperature)
 
 
     @staticmethod
-    def ollama_evaluate_fitness(
+    def llama_cpp_evaluate_fitness(
         prompt: str,
         example=None,
-        model: str = "llama3.1:8b",
+        model: str = "local",
     ) -> list[float]:
         """Score a prompt with the prompt-only surrogate evaluator."""
         if example is None:
@@ -360,7 +339,7 @@ class LLM:
         def normalize_fitness(values) -> list[float]:
             """Normalize parsed surrogate outputs to four bounded dimensions."""
             if not isinstance(values, (list, tuple)):
-                raise ValueError(f"Ollama fitness response must be a list, got {type(values).__name__}.")
+                raise ValueError(f"llama.cpp fitness response must be a list, got {type(values).__name__}.")
 
             values = list(values)
 
@@ -373,23 +352,7 @@ class LLM:
 
             return normalized
 
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": model,
-                "prompt": evaluation_prompt,
-                "stream": False,
-                "context": [],
-                "options": {
-                    "temperature": 0.2,
-                },
-            },
-            timeout=120,
-        )
-
-        response.raise_for_status()
-        data = response.json()
-        raw_output = data.get("response", "").strip()
+        raw_output = LLM._generate_text(prompt=evaluation_prompt, model=model, temperature=0.2)
 
         try:
             parsed = ast.literal_eval(raw_output)
@@ -401,14 +364,14 @@ class LLM:
         if matches:
             parsed = [float(x) for x in matches[:4]]
             return normalize_fitness(parsed)
-        raise ValueError("Ollama fitness response did not contain parseable numeric scores.")
+        raise ValueError("llama.cpp fitness response did not contain parseable numeric scores.")
 
     @staticmethod
-    def ollama_evaluate_game_round_fitness(
+    def llama_cpp_evaluate_game_round_fitness(
         prompt: str,
         dynamic_prompt: str,
         example=None,
-        model: str = "llama3.1:8b",
+        model: str = "local",
     ) -> list[float]:
         """Score a prompt against one sampled Dynamic Prompt using the LLM surrogate."""
         if example is None:
@@ -469,7 +432,7 @@ class LLM:
         def normalize_scores(values) -> list[float]:
             """Normalize parsed game-round surrogate outputs into four bounded values."""
             if not isinstance(values, (list, tuple)):
-                raise ValueError(f"Ollama round fitness response must be a list, got {type(values).__name__}.")
+                raise ValueError(f"llama.cpp round fitness response must be a list, got {type(values).__name__}.")
 
             values = list(values)
             if len(values) < 4:
@@ -479,23 +442,7 @@ class LLM:
 
             return [clamp01(v) for v in values]
 
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": model,
-                "prompt": evaluation_prompt,
-                "stream": False,
-                "context": [],
-                "options": {
-                    "temperature": 0.2,
-                },
-            },
-            timeout=120,
-        )
-
-        response.raise_for_status()
-        data = response.json()
-        raw_output = data.get("response", "").strip()
+        raw_output = LLM._generate_text(prompt=evaluation_prompt, model=model, temperature=0.2)
 
         try:
             parsed = ast.literal_eval(raw_output)
@@ -507,4 +454,4 @@ class LLM:
         if matches:
             parsed = [float(x) for x in matches[:4]]
             return normalize_scores(parsed)
-        raise ValueError("Ollama round fitness response did not contain parseable numeric scores.")
+        raise ValueError("llama.cpp round fitness response did not contain parseable numeric scores.")

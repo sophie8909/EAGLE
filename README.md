@@ -55,7 +55,7 @@ Notes:
 - Run the GUI from the repository root so relative config, log, component, and MicroRTS paths resolve correctly.
 - The desktop GUI uses `tkinter`, which is bundled with normal Python installations. If your Python distribution omits Tk support, install the Tk package for that distribution.
 - Java-backed MicroRTS validation still requires `java` and `javac` on `PATH`.
-- LLM-backed mutation, reflection, and evaluation paths still require Ollama to be reachable from the environment that starts the desktop GUI.
+- LLM-backed mutation, reflection, and evaluation paths require a llama.cpp server with the OpenAI-compatible API reachable from the environment that starts the desktop GUI.
 
 
 ## Repository Structure
@@ -182,7 +182,8 @@ Python dependencies:
 - `matplotlib` for analysis plots
 - `Pillow` for GIF generation in evolution-result analysis
 - `PyYAML` for YAML experiment configs
-- `requests` for Ollama and local HTTP calls
+- `openai` for llama.cpp OpenAI-compatible local calls
+- `requests` for local HTTP calls
 
 Conda-only runtime dependency:
 
@@ -196,7 +197,14 @@ pip install -r requirements.txt
 
 Then make sure `java` and `javac` are available on `PATH`.
 
-If you use LLM-backed mutation, reflection, or evaluation paths, make sure Ollama is reachable from the environment where you run EAGLE. Run all commands from the repository root.
+If you use LLM-backed mutation, reflection, or evaluation paths, start llama.cpp's OpenAI-compatible server first. The default endpoint matches `test_llama`:
+
+```bash
+export LLAMA_CPP_MODEL_PATH=/path/to/model.gguf
+./run_llama_cpp.sh
+```
+
+EAGLE uses `LLAMA_CPP_BASE_URL=http://127.0.0.1:8080/v1` and `LLAMA_CPP_MODEL=local` by default. Run all commands from the repository root.
 
 ## Quick Start with `run.sh`
 
@@ -342,7 +350,7 @@ Useful examples:
 ```bash
 python -m eagle.eval.microrts.run_round_evolution --quick-run
 python -m eagle.eval.microrts.run_round_evolution --algorithm ga
-python -m eagle.eval.microrts.run_round_evolution --algorithm nsga2 --model llama3.1:8b
+python -m eagle.eval.microrts.run_round_evolution --algorithm nsga2 --model local
 python -m eagle.eval.microrts.run_round_evolution --config configs/evolution/microrts_round.json
 ```
 

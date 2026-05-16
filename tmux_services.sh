@@ -9,9 +9,9 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
 
 WATCHDOG_SCRIPT="$SCRIPT_DIR/network_watchdog.sh"
-OLLAMA_SCRIPT="$SCRIPT_DIR/run_ollama.sh"
+LLAMA_CPP_SCRIPT="$SCRIPT_DIR/run_llama_cpp.sh"
 
-OLLAMA_SESSION="${BASE_NAME}-ollama"
+LLAMA_CPP_SESSION="${BASE_NAME}-llama-cpp"
 WATCHDOG_SESSION="${BASE_NAME}-watchdog"
 
 if ! command -v tmux >/dev/null 2>&1; then
@@ -24,19 +24,19 @@ if [ ! -f "$WATCHDOG_SCRIPT" ]; then
   exit 1
 fi
 
-if [ ! -f "$OLLAMA_SCRIPT" ]; then
-  echo "ERROR: ollama script not found: $OLLAMA_SCRIPT"
+if [ ! -f "$LLAMA_CPP_SCRIPT" ]; then
+  echo "ERROR: llama.cpp script not found: $LLAMA_CPP_SCRIPT"
   exit 1
 fi
 
-# Start ollama session
-if tmux has-session -t "$OLLAMA_SESSION" 2>/dev/null; then
-  echo "tmux session already running: $OLLAMA_SESSION"
+# Start llama.cpp session
+if tmux has-session -t "$LLAMA_CPP_SESSION" 2>/dev/null; then
+  echo "tmux session already running: $LLAMA_CPP_SESSION"
 else
-  tmux new-session -d -s "$OLLAMA_SESSION" \
-    "cd '$SCRIPT_DIR' && exec bash ./run_ollama.sh"
+  tmux new-session -d -s "$LLAMA_CPP_SESSION" \
+    "cd '$SCRIPT_DIR' && exec bash ./run_llama_cpp.sh"
 
-  echo "Started tmux session: $OLLAMA_SESSION"
+  echo "Started tmux session: $LLAMA_CPP_SESSION"
 fi
 
 # Start watchdog session
@@ -50,8 +50,8 @@ else
 fi
 
 echo
-echo "Attach ollama:"
-echo "tmux attach -t $OLLAMA_SESSION"
+echo "Attach llama.cpp:"
+echo "tmux attach -t $LLAMA_CPP_SESSION"
 
 echo
 echo "Attach watchdog:"

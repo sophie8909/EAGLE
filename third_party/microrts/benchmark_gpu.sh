@@ -5,8 +5,8 @@
 #SBATCH --output=benchmark_slurm_%j.log
 #SBATCH --error=benchmark_slurm_%j.err
 
-# MicroRTS LLM Benchmark with GPU Support
-# Runs llama3.1:8b and qwen3:14b (2 games each) vs RandomBiasedAI
+# MicroRTS LLM Benchmark with GPU Support.
+# Uses llama.cpp's OpenAI-compatible server.
 
 set -euo pipefail
 
@@ -34,9 +34,11 @@ fi
 # Configuration
 GAMES_PER_MODEL=2
 RUN_TIME_PER_GAME_SEC="${RUN_TIME_PER_GAME_SEC:-300}"
-OLLAMA_HOST="${OLLAMA_HOST:-http://localhost:11434}"
+LLAMA_CPP_BASE_URL="${LLAMA_CPP_BASE_URL:-http://127.0.0.1:8080/v1}"
+LLAMA_CPP_SERVER_BIN="${LLAMA_CPP_SERVER_BIN:-llama-server}"
+LLAMA_CPP_MODEL_PATH="${LLAMA_CPP_MODEL_PATH:-}"
 RESULTS_FILE="benchmark_results_$(date +%Y-%m-%d_%H-%M-%S).txt"
-MODELS=("llama3.1:8b" "qwen3:14b")
+MODELS=("${LLAMA_CPP_MODEL:-local}")
 
 echo ""
 echo "Configuration:"
@@ -46,47 +48,35 @@ echo "  Timeout per game: ${RUN_TIME_PER_GAME_SEC}s"
 echo "  Results file: $RESULTS_FILE"
 echo "==============================================="
 
-# Start Ollama server
+# Start llama.cpp server
 echo ""
-echo "Starting Ollama server..."
-pkill -f "ollama serve" 2>/dev/null || true
+echo "Starting llama.cpp server..."
+if [ -z "$LLAMA_CPP_MODEL_PATH" ]; then
+    echo "ERROR: LLAMA_CPP_MODEL_PATH is required."
+    exit 1
+fi
+pkill -f "$LLAMA_CPP_SERVER_BIN" 2>/dev/null || true
 sleep 2
 
-nohup ollama serve > /tmp/ollama_benchmark.log 2>&1 &
-OLLAMA_PID=$!
-echo "Ollama PID: $OLLAMA_PID"
+nohup "$LLAMA_CPP_SERVER_BIN" --host 127.0.0.1 --port 8080 -m "$LLAMA_CPP_MODEL_PATH" -ngl 999 > /tmp/llama_cpp_benchmark.log 2>&1 &
+LLAMA_CPP_PID=$!
+echo "llama.cpp PID: $LLAMA_CPP_PID"
 
-# Wait for Ollama to be ready
-echo "Waiting for Ollama to start..."
+# Wait for llama.cpp to be ready
+echo "Waiting for llama.cpp to start..."
 for i in {1..30}; do
-    if curl -s --connect-timeout 2 "$OLLAMA_HOST/api/tags" > /dev/null 2>&1; then
-        echo "Ollama is ready."
+    if curl -s --connect-timeout 2 "$LLAMA_CPP_BASE_URL/models" > /dev/null 2>&1; then
+        echo "llama.cpp is ready."
         break
     fi
     sleep 1
 done
 
-# Verify Ollama sees GPU
+# Verify llama.cpp server log
 echo ""
-echo "Verifying Ollama GPU detection..."
+echo "Verifying llama.cpp server log..."
 sleep 5
-if grep -q "GPU" /tmp/ollama_benchmark.log 2>/dev/null; then
-    echo "Ollama detected GPU."
-else
-    echo "WARNING: Ollama may not be using GPU. Check /tmp/ollama_benchmark.log"
-fi
-
-# Check models are available
-echo ""
-echo "Checking models..."
-for model in "${MODELS[@]}"; do
-    if curl -s "$OLLAMA_HOST/api/tags" | grep -q "\"name\":\"$model\""; then
-        echo "  $model: available"
-    else
-        echo "  $model: pulling..."
-        ollama pull "$model"
-    fi
-done
+tail -40 /tmp/llama_cpp_benchmark.log || true
 
 # Compile MicroRTS
 echo ""
@@ -113,7 +103,7 @@ for model in "${MODELS[@]}"; do
     echo "Testing model: $model"
     echo "==============================================="
 
-    export OLLAMA_MODEL="$model"
+    export LLAMA_CPP_MODEL="$model"
 
     for ((game=1; game<=GAMES_PER_MODEL; game++)); do
         echo ""
@@ -163,8 +153,8 @@ done
 
 # Cleanup
 echo ""
-echo "Stopping Ollama..."
-kill $OLLAMA_PID 2>/dev/null || true
+echo "Stopping llama.cpp..."
+kill $LLAMA_CPP_PID 2>/dev/null || true
 
 echo ""
 echo "==============================================="

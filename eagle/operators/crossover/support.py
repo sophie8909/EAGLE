@@ -119,11 +119,11 @@ def combine_parent_component(
 
     start = time.perf_counter()
     try:
-        merged_text = LLM.ollama_combine_components(
+        merged_text = LLM.llama_cpp_combine_components(
             parent1_text,
             parent2_text,
             instruction,
-            model="llama3.1:8b",
+            model="local",
         )
         elapsed = time.perf_counter() - start
         merged_component = component_pool.parse_rewritten_component(component_key, merged_text)

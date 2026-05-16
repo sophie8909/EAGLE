@@ -5,10 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import requests
-
 from eagle.config import EAConfig
 from eagle.evolution.component.individual import Individual
+from eagle.llm import LLM
 from eagle.utils.component_pool import ComponentPool
 
 
@@ -44,7 +43,7 @@ class RoundReflection:
         rewritten_text = cls._rewrite_component(
             current_text=current_text,
             instruction=instruction,
-            model=str(getattr(config, "round_eval_model", "llama3.1:8b")),
+            model=str(getattr(config, "round_eval_model", "local")),
         )
 
         if not rewritten_text.strip():
@@ -150,22 +149,14 @@ Rewrite rules:
         instruction: str,
         model: str,
     ) -> str:
-        """Rewrite a component through the local Ollama endpoint."""
+        """Rewrite a component through the local llama.cpp endpoint."""
         try:
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": model,
-                    "prompt": instruction,
-                    "stream": False,
-                    "context": [],
-                    "options": {"temperature": 0.4},
-                },
-                timeout=120,
+            rewritten_text = LLM.llama_cpp_rewrite_component(
+                original_text=current_text,
+                instruction=instruction,
+                model=model,
+                temperature=0.4,
             )
-            response.raise_for_status()
-            data = response.json()
-            rewritten_text = str(data.get("response", "")).strip()
             return rewritten_text or current_text
         except Exception:
             return current_text

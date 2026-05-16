@@ -7,11 +7,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-import requests
-
 from eagle.config import EAConfig
-from eagle.project import MICRORTS_LOGS_DIR
 from eagle.evolution.component.individual import Individual
+from eagle.llm import LLM
+from eagle.project import MICRORTS_LOGS_DIR
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.log_parse import parse_dynamic_prompt_state
 from eagle.utils.move_validator import validate_llm_move_against_state
@@ -45,7 +44,7 @@ class Evaluator:
         self.config = config or EAConfig()
         self.runtime_logs_dir = Path(runtime_logs_dir) if runtime_logs_dir is not None else None
         self.state_generator = StateGenerator(seed=getattr(self.config, "round_state_seed", None))
-        self.model = str(getattr(self.config, "round_eval_model", "llama3.1:8b"))
+        self.model = str(getattr(self.config, "round_eval_model", "local"))
         default_history_path = MICRORTS_LOGS_DIR / "round_evol" / "history.jsonl"
         self.history = PromptHistory(
             getattr(self.config, "prompt_history_path", str(default_history_path))
@@ -466,7 +465,7 @@ class Evaluator:
                 """.strip()
 
     def _ask_for_actions(self, prompt: str) -> str:
-        return self._ollama_generate(prompt=prompt, temperature=0.2, json_format=True)
+        return self._llama_cpp_generate(prompt=prompt, temperature=0.2, json_format=True)
 
     def _score_strategy_alignment(
         self,
@@ -511,7 +510,7 @@ class Evaluator:
             Action response:
             {raw_response}
             """.strip()
-        raw_score = self._ollama_generate(prompt=judge_prompt, temperature=0.1, json_format=True)
+        raw_score = self._llama_cpp_generate(prompt=judge_prompt, temperature=0.1, json_format=True)
         # print(f"Raw score response:\n{raw_score}\n")
         parsed = self._extract_first_json_object(raw_score)
         if isinstance(parsed, dict):
@@ -970,25 +969,10 @@ class Evaluator:
         except json.JSONDecodeError as exc:
             raise ValueError(f"Failed to parse round evaluator LLM JSON: {exc}") from exc
 
-    def _ollama_generate(self, *, prompt: str, temperature: float, json_format: bool) -> str:
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": False,
-            "context": [],
-            "options": {"temperature": temperature},
-        }
+    def _llama_cpp_generate(self, *, prompt: str, temperature: float, json_format: bool) -> str:
         if json_format:
-            payload["format"] = "json"
-
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json=payload,
-            timeout=120,
-        )
-        response.raise_for_status()
-        data = response.json()
-        raw_response = str(data.get("response", "")).strip()
+            prompt = f"{prompt}\n\nReturn JSON only."
+        raw_response = LLM._generate_text(prompt=prompt, model=self.model, temperature=temperature)
         if not raw_response:
             raise ValueError("Round evaluator LLM returned an empty response.")
         return raw_response

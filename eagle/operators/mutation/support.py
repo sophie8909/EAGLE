@@ -217,10 +217,10 @@ def rewrite_component_with_llm(component: str, rewrite_instruction: str) -> tupl
     """Rewrite one strategy component through the LLM and time the call."""
     start = time.perf_counter()
     try:
-        rewritten_component = LLM.ollama_rewrite_component(
+        rewritten_component = LLM.llama_cpp_rewrite_component(
             original_text=component,
             instruction=rewrite_instruction,
-            model="llama3.1:8b",
+            model="local",
         )
     except Exception:
         rewritten_component = component

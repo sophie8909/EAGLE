@@ -64,16 +64,16 @@ public class EAGLE extends AbstractionLayerAI {
     private static final int LLM_INTERVAL = readIntSetting("microrts.llm_interval", "LLM_INTERVAL", 1);
     private static final int LLM_CALL_LIMIT = readIntSetting("microrts.llm_call_limit", "LLM_CALL_LIMIT", 50);
     private static final int TICK_LIMIT = readIntSetting("microrts.tick_limit", "TICK_LIMIT", 5000);
-    private static final String OLLAMA_FORMAT = "json";
-    private static final String OLLAMA_HOST = normalizeOllamaHost(
-            System.getenv().getOrDefault("OLLAMA_HOST", "http://localhost:11434")
+    private static final String LLAMA_CPP_BASE_URL = normalizeLlamaCppBaseUrl(
+            System.getenv().getOrDefault("LLAMA_CPP_BASE_URL", "http://127.0.0.1:8080/v1")
     );
+    private static final int LLAMA_CPP_MAX_TOKENS = readIntSetting("llama_cpp.max_tokens", "LLAMA_CPP_MAX_TOKENS", 2048);
     private static final String LLM_LIMIT_EMPTY_RESPONSE =
             "{\"thinking\":\"LLM call limit reached; no action issued.\",\"moves\":[]}";
-    private static final boolean OLLAMA_STREAM = false;
+    private static final boolean LLAMA_CPP_STREAM = false;
     private static final boolean DEBUG_MODE = readBooleanSetting("eagle.debug", "EAGLE_DEBUG", false);
 
-    static String MODEL = System.getenv().getOrDefault("OLLAMA_MODEL", "llama3.1:8b");
+    static String MODEL = System.getenv().getOrDefault("LLAMA_CPP_MODEL", "local");
     private static String PROMPT = null;
 
     protected UnitTypeTable utt;
@@ -159,13 +159,16 @@ public class EAGLE extends AbstractionLayerAI {
                 || normalized.equals("on");
     }
 
-    private static String normalizeOllamaHost(String rawHost) {
-        String host = rawHost == null || rawHost.isBlank() ? "http://localhost:11434" : rawHost.trim();
+    private static String normalizeLlamaCppBaseUrl(String rawHost) {
+        String host = rawHost == null || rawHost.isBlank() ? "http://127.0.0.1:8080/v1" : rawHost.trim();
         if (!host.startsWith("http://") && !host.startsWith("https://")) {
             host = "http://" + host;
         }
         while (host.endsWith("/")) {
             host = host.substring(0, host.length() - 1);
+        }
+        if (!host.endsWith("/v1")) {
+            host = host + "/v1";
         }
         return host;
     }
@@ -198,7 +201,7 @@ public class EAGLE extends AbstractionLayerAI {
             return;
         }
 
-        String a = (aiName1 == null || aiName1.isEmpty()) ? "LLM_Ollama" : aiName1;
+        String a = (aiName1 == null || aiName1.isEmpty()) ? "LLM_llama_cpp" : aiName1;
         String b = (aiName2 == null || aiName2.isEmpty()) ? "RandomBiasedAI" : aiName2;
         String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new Date());
         fileName = "Response" + timestamp + "_" + a + "_" + numShot + "_" + b + "_" + MODEL + ".csv";
@@ -292,7 +295,7 @@ public class EAGLE extends AbstractionLayerAI {
             return translateActions(player, gs);
         }
 
-        // Stage 3: render the prompt, call Ollama, and reject malformed JSON before touching game actions.
+        // Stage 3: render the prompt, call llama.cpp, and reject malformed JSON before touching game actions.
         System.out.println("[EAGLE] call LLM: " + lastCallReason);
         PromptContext promptContext = buildPromptContext(player, gs);
         logStateSnapshot(player, gs);
@@ -875,12 +878,18 @@ public class EAGLE extends AbstractionLayerAI {
         try {
             JsonObject body = new JsonObject();
             body.addProperty("model", MODEL);
-            body.addProperty("prompt", "/no_think " + finalPrompt);
-            body.addProperty("stream", OLLAMA_STREAM);
-            body.addProperty("format", OLLAMA_FORMAT);
-            body.add("context", new JsonArray());
+            body.addProperty("stream", LLAMA_CPP_STREAM);
+            body.addProperty("temperature", 0.2);
+            body.addProperty("max_tokens", LLAMA_CPP_MAX_TOKENS);
 
-            URL url = new URL(OLLAMA_HOST + "/api/generate");
+            JsonArray messages = new JsonArray();
+            JsonObject userMessage = new JsonObject();
+            userMessage.addProperty("role", "user");
+            userMessage.addProperty("content", "/no_think " + finalPrompt);
+            messages.add(userMessage);
+            body.add("messages", messages);
+
+            URL url = new URL(LLAMA_CPP_BASE_URL + "/chat/completions");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
@@ -904,26 +913,32 @@ public class EAGLE extends AbstractionLayerAI {
             latency = responseTime.toEpochMilli() - promptTime.toEpochMilli();
 
             if (code != HttpURLConnection.HTTP_OK) {
-                System.err.println("[EAGLE] Ollama error (" + code + "): " + sb);
-                return "{\"thinking\":\"ollama_error\",\"moves\":[]}";
+                System.err.println("[EAGLE] llama.cpp error (" + code + "): " + sb);
+                return "{\"thinking\":\"llama_cpp_error\",\"moves\":[]}";
             }
 
             JsonObject top = JsonParser.parseString(sb.toString()).getAsJsonObject();
-            if (top.has("response") && !top.get("response").getAsString().isEmpty()) {
-                String modelText = top.get("response").getAsString();
-                debugBlock("response", modelText);
-                return modelText;
+            if (top.has("choices") && top.get("choices").isJsonArray() && top.getAsJsonArray("choices").size() > 0) {
+                JsonObject choice = top.getAsJsonArray("choices").get(0).getAsJsonObject();
+                JsonObject message = choice.getAsJsonObject("message");
+                String modelText = message == null || !message.has("content") || message.get("content").isJsonNull()
+                        ? ""
+                        : message.get("content").getAsString();
+                if (!modelText.isEmpty()) {
+                    debugBlock("response", modelText);
+                    return modelText;
+                }
             }
-            if (top.has("thinking") && !top.get("thinking").isJsonNull()) {
-                String modelText = top.get("thinking").getAsString();
+            if (top.has("content") && !top.get("content").isJsonNull()) {
+                String modelText = top.get("content").getAsString();
                 debugBlock("response", modelText);
                 return modelText;
             }
 
-            System.err.println("[EAGLE] unexpected Ollama payload: " + sb);
-            return "{\"thinking\":\"invalid_ollama_payload\",\"moves\":[]}";
+            System.err.println("[EAGLE] unexpected llama.cpp payload: " + sb);
+            return "{\"thinking\":\"invalid_llama_cpp_payload\",\"moves\":[]}";
         } catch (Exception e) {
-            System.err.println("[EAGLE] Ollama exception (" + e.getClass().getSimpleName() + "): " + e.getMessage());
+            System.err.println("[EAGLE] llama.cpp exception (" + e.getClass().getSimpleName() + "): " + e.getMessage());
             return "{\"thinking\":\"exception\",\"moves\":[]}";
         }
     }

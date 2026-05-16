@@ -48,7 +48,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--model",
         type=str,
         default=None,
-        help="Ollama model name used by the round evaluator.",
+        help="llama.cpp model name used by the round evaluator.",
     )
     parser.add_argument(
         "--state-seed",

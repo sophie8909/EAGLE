@@ -93,7 +93,7 @@
   "surrogate": "round",
   "surrogate_recent_match_window": 10,
   "surrogate_round_samples_per_match": 10,
-  "round_eval_model": "llama3.1:8b",
+  "round_eval_model": "local",
   "round_state_seed": null,
   "surrogate_log_dir": "logs/microrts",
   "prompt_history_path": "logs/microrts/round_evol/history.jsonl",
