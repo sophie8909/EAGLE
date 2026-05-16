@@ -6,7 +6,6 @@ import json
 import os
 import re
 import shutil
-import signal
 import subprocess
 import sys
 from collections import Counter
@@ -25,6 +24,7 @@ from eagle.operators.registry import list_operator_names
 from eagle.utils.log_parse import parse_log_file
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.token_count import count_prompt_tokens
+from eagle_gui.services import analysis_service, config_service, process_service
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1428,21 +1428,31 @@ class EagleDesktopApp:
         if self.is_training_examples_category(category):
             self.refresh_training_example_units()
 
-    def apply_component_edit(self) -> None:
-        """Apply the editor text to the loaded in-memory component payload."""
+    def sync_component_editor_to_payload(self) -> None:
+        """Write the visible editor text into `component_payload`.
+
+        Args:
+            None.
+
+        Raises:
+            ValueError: If no component/candidate is selected, the selected index
+                is invalid, or the editor is empty.
+
+        Call flow:
+            `Save JSON`, `Save generated config`, and `Apply edit` all route
+            through this method so the text currently visible in Tkinter is the
+            same content that gets serialized into the component JSON.
+        """
         category = self.component_category.get()
         if category not in self.component_keys():
-            messagebox.showerror("No component selected", "Load a component JSON and select a component first.")
-            return
+            raise ValueError("Load a component JSON and select a component first.")
         index = self.selected_component_candidate_index()
         if index < 0 or index >= self.component_candidate_count(category):
-            messagebox.showerror("Invalid candidate", f"Candidate index out of range for {category}.")
-            return
+            raise ValueError(f"Candidate index out of range for {category}.")
         text = self.component_editor.get("1.0", "end").rstrip("\n")
         lines = [line.rstrip() for line in text.splitlines() if line.strip()]
         if not lines:
-            messagebox.showerror("Empty component", "Component content must contain at least one non-empty line.")
-            return
+            raise ValueError("Component content must contain at least one non-empty line.")
         if self.is_training_examples_category(category):
             examples = self.training_examples()
             item = examples[index]
@@ -1450,18 +1460,28 @@ class EagleDesktopApp:
                 item["content"] = lines
             else:
                 examples[index] = {"name": f"example_{index}", "content": lines}
+            return
+        candidates = self.component_payload.get(category)
+        if not isinstance(candidates, list):
+            raise ValueError(f"{category} is not a candidate list.")
+        candidates[index] = lines
+
+    def apply_component_edit(self) -> None:
+        """Apply the editor text to the loaded in-memory component payload."""
+        category = self.component_category.get()
+        try:
+            self.sync_component_editor_to_payload()
+        except ValueError as exc:
+            messagebox.showerror("Could not apply component edit", str(exc))
+            return
+        if self.is_training_examples_category(category):
             self.refresh_component_selection_table()
             self.render_selected_component_prompt()
-            self.component_status.set(f"Applied edit to training_examples[{index}]")
+            self.component_status.set(f"Applied edit to training_examples[{self.selected_component_candidate_index()}]")
             return
-        candidates = self.component_payload[category]
-        if not isinstance(candidates, list):
-            messagebox.showerror("Invalid component", f"{category} is not a candidate list.")
-            return
-        candidates[index] = lines
         self.refresh_component_selection_table()
         self.render_selected_component_prompt()
-        self.component_status.set(f"Applied edit to {category}[{index}]")
+        self.component_status.set(f"Applied edit to {category}[{self.selected_component_candidate_index()}]")
 
     def add_component_category(self) -> None:
         """Add a new component category with one candidate."""
@@ -1745,6 +1765,7 @@ class EagleDesktopApp:
     def write_component_payload(self, path: Path) -> Path | None:
         """Persist the current component payload to disk."""
         try:
+            self.sync_component_editor_to_payload()
             pool = ComponentPool(self.component_payload)
             payload = pool.to_component_dict()
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -1756,6 +1777,40 @@ class EagleDesktopApp:
         self.loaded_component_path = path
         self.component_status.set(f"Saved component JSON to {path}")
         return path
+
+    def persist_component_for_config(self, config_path: Path) -> Path:
+        """Write the GUI component state beside the generated config.
+
+        Args:
+            config_path: The config JSON path being saved.
+
+        Returns:
+            The component JSON path that the config should reference.
+
+        Raises:
+            ValueError: If the GUI has no component payload or the selected
+                editor row cannot be synchronized.
+            OSError: If the destination cannot be written.
+
+        Call flow:
+            `save_generated_config()` asks for the config filename first, then
+            calls this method. The method stores the component data as
+            `<config_stem>_components.json`, updates the GUI path fields, and
+            returns that path so `build_config_payload()` can serialize the
+            matching `component_pool_path`.
+        """
+        if not self.component_payload:
+            raise ValueError("Load a component JSON before saving a config.")
+        self.sync_component_editor_to_payload()
+        payload = ComponentPool(self.component_payload).to_component_dict()
+        destination = config_path.with_name(f"{config_path.stem}_components.json")
+        config_service.write_json_file(destination, payload)
+        self.component_payload = payload
+        self.loaded_component_path = destination
+        self.component_source_path.set(str(destination))
+        self.component_runtime_path.set(relative_or_absolute(destination))
+        self.component_status.set(f"Saved component JSON to {destination}")
+        return destination
 
     # ------------------------------------------------------------------
     # Prompt rendering and Java GUI prompt export
@@ -2098,7 +2153,7 @@ class EagleDesktopApp:
             messagebox.showerror("Missing config", f"Config file does not exist:\n{path}")
             return
         try:
-            payload = load_complete_config_payload(path)
+            payload = config_service.load_complete_config_payload(path, DEFAULT_CONFIG)
         except (ValueError, json.JSONDecodeError) as exc:
             messagebox.showerror("Invalid config JSON", str(exc))
             return
@@ -2173,7 +2228,15 @@ class EagleDesktopApp:
         )
         self.crossover_repair_enabled.set(bool(payload.get("crossover_repair_enabled", True)))
         self.enable_reflection_operator.set(bool(payload.get("enable_reflection_operator", True)))
-        self.component_runtime_path.set(str(payload.get("component_pool_path", self.component_runtime_path.get())))
+        configured_component_path = str(payload.get("component_pool_path", self.component_runtime_path.get())).strip()
+        if configured_component_path:
+            resolved_component_path = config_service.resolve_config_reference(
+                configured_component_path,
+                config_path=path,
+                repo_root=ROOT,
+            )
+            self.component_runtime_path.set(relative_or_absolute(resolved_component_path))
+            self.component_source_path.set(str(resolved_component_path))
         self.static_component_keys = set(
             str(key)
             for key in payload.get(
@@ -2198,10 +2261,19 @@ class EagleDesktopApp:
         self.refresh_objective_table()
         self.refresh_mutation_weight_visibility()
         self.refresh_crossover_repair_visibility()
-        component_path = resolve_repo_path(self.component_runtime_path.get())
+        component_path = config_service.resolve_config_reference(
+            self.component_runtime_path.get(),
+            config_path=path,
+            repo_root=ROOT,
+        )
         if component_path.exists():
             self.preview_component(component_path)
+        else:
+            self.component_status.set(f"Component JSON does not exist: {component_path}")
         self.on_algorithm_selected()
+        self.config_name.set(path.stem)
+        self.generated_config_path = path
+        self.generated_config_label.set(f"Generated config: {path}")
         self.status.set(f"Loaded {path}")
 
     def validate_settings(self) -> None:
@@ -2215,11 +2287,6 @@ class EagleDesktopApp:
 
     def save_generated_config(self) -> Path | None:
         """Write the current GUI settings to a JSON config file."""
-        try:
-            payload = self.build_config_payload()
-        except (ValueError, OSError, json.JSONDecodeError) as exc:
-            messagebox.showerror("Invalid settings", str(exc))
-            return None
         EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
         filename = simpledialog.askstring(
             "Save generated config",
@@ -2238,7 +2305,13 @@ class EagleDesktopApp:
             path = path.with_suffix(".json")
         if path.exists() and not messagebox.askyesno("Overwrite config", f"Overwrite existing config?\n{path}"):
             return None
-        write_json_file(path, payload)
+        try:
+            component_path = self.persist_component_for_config(path)
+            payload = self.build_config_payload(component_path_override=relative_or_absolute(component_path))
+            config_service.write_json_file(path, payload)
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            messagebox.showerror("Invalid settings", str(exc))
+            return None
         self.generated_config_path = path
         self.generated_config_label.set(f"Generated config: {path}")
         self.status.set(f"Saved {path.name}")
@@ -2246,11 +2319,11 @@ class EagleDesktopApp:
             self.config_name.set(timestamped_stem("gui_evolution"))
         return path
 
-    def build_config_payload(self) -> dict[str, Any]:
+    def build_config_payload(self, component_path_override: str | None = None) -> dict[str, Any]:
         """Build one EAGLE config payload from the GUI controls."""
         base_path = Path(self.base_config_path.get())
-        payload = load_complete_config_payload(base_path)
-        component_path = self.component_runtime_path.get().strip()
+        payload = config_service.load_complete_config_payload(base_path, DEFAULT_CONFIG)
+        component_path = (component_path_override or self.component_runtime_path.get()).strip()
         if not component_path:
             raise ValueError("Runtime component path is required.")
         if not resolve_repo_path(component_path).exists():
@@ -2644,7 +2717,7 @@ class EagleDesktopApp:
         if self.process and self.process.poll() is None:
             self.process.terminate()
         elif pid is not None:
-            terminate_process_tree(pid)
+            process_service.terminate_process_tree(pid)
         self.mark_process_state_stopped()
         self.status.set(f"Stopping PID {pid}")
 
@@ -2672,7 +2745,7 @@ class EagleDesktopApp:
             self.status.set(f"Process exited with code {self.process.returncode}")
             self.mark_process_state_exited(self.process.returncode)
         elif self.monitored_process_pid is not None:
-            if process_is_running(self.monitored_process_pid):
+            if process_service.process_is_running(self.monitored_process_pid):
                 self.status.set(f"Monitoring PID {self.monitored_process_pid}")
             else:
                 self.status.set(f"Process PID {self.monitored_process_pid} is not running")
@@ -2685,15 +2758,17 @@ class EagleDesktopApp:
         if self.process and self.process.poll() is None:
             self.monitored_process_pid = int(self.process.pid)
             return
-        state = load_json_file(GUI_PROCESS_STATE_PATH)
-        pid = parse_optional_pid(state.get("pid"))
+        if not GUI_PROCESS_STATE_PATH.exists():
+            return
+        state = process_service.load_process_state(GUI_PROCESS_STATE_PATH)
+        pid = process_service.parse_optional_pid(state.get("pid"))
         log_path = resolve_repo_path(str(state.get("log_path") or "")) if state.get("log_path") else None
         if log_path is not None and log_path.exists():
             self.process_log_path = log_path
         if pid is None:
             return
         self.monitored_process_pid = pid
-        if process_is_running(pid):
+        if process_service.process_is_running(pid):
             self.status.set(f"Monitoring existing PID {pid}")
         elif state.get("status") == "running":
             self.status.set(f"Last PID {pid} is not running")
@@ -2705,7 +2780,7 @@ class EagleDesktopApp:
             self.monitored_process_pid = int(self.process.pid)
             return True
         if self.monitored_process_pid is not None:
-            return process_is_running(self.monitored_process_pid)
+            return process_service.process_is_running(self.monitored_process_pid)
         return False
 
     def write_process_state(
@@ -2718,38 +2793,30 @@ class EagleDesktopApp:
     ) -> None:
         """Persist enough process metadata for a reopened GUI to resume monitoring."""
         LOG_DIR.mkdir(parents=True, exist_ok=True)
-        write_json_file(
+        process_service.write_process_state(
             GUI_PROCESS_STATE_PATH,
-            {
-                "status": "running",
-                "pid": int(pid),
-                "command": list(command),
-                "cwd": str(ROOT),
-                "log_path": str(log_path),
-                "config_path": str(config_path),
-                "started_at": datetime.now().isoformat(timespec="seconds"),
-            },
+            pid=pid,
+            command=command,
+            cwd=ROOT,
+            log_path=log_path,
+            config_path=config_path,
         )
 
     def mark_process_state_stopped(self) -> None:
         """Mark the persisted process state as intentionally stopped."""
-        state = load_json_file(GUI_PROCESS_STATE_PATH)
-        if not state:
+        if not GUI_PROCESS_STATE_PATH.exists():
             return
-        state["status"] = "stopping"
-        state["stopped_at"] = datetime.now().isoformat(timespec="seconds")
-        write_json_file(GUI_PROCESS_STATE_PATH, state)
+        process_service.mark_process_state(GUI_PROCESS_STATE_PATH, status="stopping")
 
     def mark_process_state_exited(self, returncode: int | None) -> None:
         """Mark the persisted process state as no longer running."""
-        state = load_json_file(GUI_PROCESS_STATE_PATH)
-        if not state:
+        if not GUI_PROCESS_STATE_PATH.exists():
             return
-        state["status"] = "exited"
-        state["exited_at"] = datetime.now().isoformat(timespec="seconds")
-        if returncode is not None:
-            state["returncode"] = int(returncode)
-        write_json_file(GUI_PROCESS_STATE_PATH, state)
+        process_service.mark_process_state(
+            GUI_PROCESS_STATE_PATH,
+            status="exited",
+            returncode=returncode,
+        )
 
     def close_window(self) -> None:
         """Close the GUI without terminating a running experiment process."""
@@ -2771,7 +2838,12 @@ class EagleDesktopApp:
             self.analysis_summary.set("No run selected")
             self._set_text(self.analysis_output, "")
             return
-        report = build_live_analysis_report(run_dir)
+        try:
+            report = analysis_service.build_live_analysis_report(run_dir)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            self.analysis_summary.set("Analysis load error")
+            self._set_text(self.analysis_output, str(exc))
+            return
         self.analysis_summary.set(report.summary)
         self._set_text(self.analysis_output, report.body)
 
@@ -2784,7 +2856,12 @@ class EagleDesktopApp:
             self.timing_summary.set("No run selected")
             self._set_text(self.timing_output, "")
             return
-        report = build_timing_analysis_report(run_dir)
+        try:
+            report = analysis_service.build_timing_analysis_report(run_dir)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            self.timing_summary.set("Timing load error")
+            self._set_text(self.timing_output, str(exc))
+            return
         self.timing_summary.set(report.summary)
         for row in report.rows:
             self.timing_table.insert(
@@ -2804,7 +2881,13 @@ class EagleDesktopApp:
         """Refresh prompt list from the latest generation evaluation profiles."""
         previous = self.selected_prompt_id()
         self.prompt_table.delete(*self.prompt_table.get_children())
-        self.loaded_prompts = load_prompts(run_dir) if run_dir else {}
+        try:
+            self.loaded_prompts = analysis_service.load_prompts(run_dir) if run_dir else {}
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            self.loaded_prompts = {}
+            self._set_text(self.individual_prompt_output, f"Prompt load error:\n{exc}")
+            self._set_text(self.llm_response_output, "")
+            return
         for prompt_id, record in self.loaded_prompts.items():
             self.prompt_table.insert(
                 "",
@@ -3329,38 +3412,6 @@ def normalize_probability_map(weights: dict[str, float], field_name: str) -> Non
         weights[key] = weights[key] / total
 
 
-def read_json_mapping_strict(path: Path) -> dict[str, Any]:
-    """Load one JSON object from disk and reject non-object payloads."""
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Config JSON must be an object: {path}")
-    return payload
-
-
-def merge_config_payload(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    """Recursively merge config mappings while letting lists and scalars override."""
-    merged = dict(base)
-    for key, value in override.items():
-        current = merged.get(key)
-        if isinstance(current, dict) and isinstance(value, dict):
-            merged[key] = merge_config_payload(current, value)
-        else:
-            merged[key] = value
-    return merged
-
-
-def load_complete_config_payload(config_path: Path) -> dict[str, Any]:
-    """Return a complete config payload using default.json as the schema base."""
-    payload: dict[str, Any] = {}
-    if DEFAULT_CONFIG.exists():
-        payload = merge_config_payload(payload, read_json_mapping_strict(DEFAULT_CONFIG))
-    if config_path.exists() and config_path.resolve() != DEFAULT_CONFIG.resolve():
-        payload = merge_config_payload(payload, read_json_mapping_strict(config_path))
-    elif config_path.exists() and not payload:
-        payload = merge_config_payload(payload, read_json_mapping_strict(config_path))
-    return payload
-
-
 def resolve_repo_path(path_text: str) -> Path:
     """Resolve a path against the repository root when it is relative."""
     path = Path(path_text)
@@ -3442,94 +3493,39 @@ def microrts_trace_choices() -> list[Path]:
 
 
 def read_tail(path: Path, limit: int) -> str:
-    """Read a text file tail."""
+    """Read a text file tail and fail when the log is missing."""
     if not path.exists():
-        return ""
+        raise FileNotFoundError(f"Log file does not exist: {path}")
     return path.read_text(encoding="utf-8", errors="replace")[-limit:]
 
 
 def read_text_file(path: Path) -> str:
     """Read a whole text file for log panels that must stay browseable from the start."""
     if not path.exists():
-        return ""
+        raise FileNotFoundError(f"Text file does not exist: {path}")
     return path.read_text(encoding="utf-8", errors="replace")
 
 
 def load_json_file(path: Path) -> dict[str, Any]:
-    """Load one JSON mapping, returning an empty mapping on missing or invalid data."""
+    """Load one JSON mapping for GUI state and artifact panels.
+
+    Args:
+        path: JSON file path to read.
+
+    Returns:
+        Parsed JSON object.
+
+    Raises:
+        FileNotFoundError: If the requested JSON file is missing.
+        json.JSONDecodeError: If the file is not valid JSON.
+        ValueError: If the JSON root is not an object.
+    """
     if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def write_json_file(path: Path, payload: dict[str, Any]) -> None:
-    """Write one JSON mapping with stable formatting."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def parse_optional_pid(value: Any) -> int | None:
-    """Parse a process id from persisted GUI process state."""
-    try:
-        pid = int(value)
-    except (TypeError, ValueError):
-        return None
-    return pid if pid > 0 else None
-
-
-def process_is_running(pid: int | None) -> bool:
-    """Return whether a process id is currently alive."""
-    if pid is None:
-        return False
-    if os.name == "nt":
-        import ctypes
-
-        process_query_limited_information = 0x1000
-        handle = ctypes.windll.kernel32.OpenProcess(
-            process_query_limited_information,
-            False,
-            int(pid),
-        )
-        if handle:
-            ctypes.windll.kernel32.CloseHandle(handle)
-            return True
-        return ctypes.windll.kernel32.GetLastError() == 5
-    try:
-        os.kill(int(pid), 0)
-    except ValueError:
-        return False
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
-
-
-def terminate_process_tree(pid: int) -> None:
-    """Terminate a restored process id, including children where the platform supports it."""
-    if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        if process_is_running(pid):
-            try:
-                os.kill(int(pid), signal.SIGTERM)
-            except OSError:
-                return
-        return
-    try:
-        os.kill(int(pid), signal.SIGTERM)
-    except OSError:
-        return
+        raise FileNotFoundError(f"JSON file does not exist: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"JSON file must contain an object: {path}")
+    return payload
 
 
 # ----------------------------------------------------------------------
@@ -3548,14 +3544,11 @@ def load_checkpoint_rows(run_dir: Path) -> list[dict[str, Any]]:
     path = run_dir / "checkpoints.jsonl"
     rows: list[dict[str, Any]] = []
     if not path.exists():
-        return rows
+        raise FileNotFoundError(f"Checkpoint log does not exist: {path}")
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         if not line.strip():
             continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+        payload = json.loads(line)
         generation = payload.get("generation")
         phase = payload.get("phase")
         for item in payload.get("population") or []:
@@ -3691,19 +3684,17 @@ def display_generation(value: Any) -> Any:
 
 
 def load_jsonl_rows(path: Path) -> list[dict[str, Any]]:
-    """Load JSONL rows, skipping malformed lines."""
+    """Load JSONL rows and fail on malformed records."""
     rows: list[dict[str, Any]] = []
     if not path.exists():
         return rows
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line_number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
         if not line.strip():
             continue
-        try:
-            payload = json.loads(line.lstrip("\ufeff"))
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
+        payload = json.loads(line.lstrip("\ufeff"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"JSONL row must be an object: {path}:{line_number}")
+        rows.append(payload)
     return rows
 
 
@@ -3780,11 +3771,8 @@ def llm_output_from_log_path(path_value: Any) -> str:
         return ""
     path = resolve_runtime_log_path(str(path_value))
     if not path.exists():
-        return f"Log file not found: {path_value}"
-    try:
-        parsed = parse_log_file(path)
-    except (OSError, ValueError) as exc:
-        return f"Could not parse log file {path}:\n{exc}"
+        raise FileNotFoundError(f"Log file not found: {path_value}")
+    parsed = parse_log_file(path)
     sections: list[str] = []
     for segment in parsed.get("segments", []):
         if not isinstance(segment, dict):

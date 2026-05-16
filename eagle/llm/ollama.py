@@ -13,22 +13,26 @@ class LLM:
     def _extract_first_json_object(raw_output: str) -> dict | None:
         """Parse one JSON object from model output, tolerating surrounding text."""
         if not raw_output:
-            return None
+            raise ValueError("Ollama response was empty; expected one JSON object.")
         try:
             parsed = json.loads(raw_output)
-            return parsed if isinstance(parsed, dict) else None
+            if not isinstance(parsed, dict):
+                raise ValueError(f"Ollama JSON response must be an object, got {type(parsed).__name__}.")
+            return parsed
         except json.JSONDecodeError:
             pass
 
         match = re.search(r"\{.*\}", raw_output, re.DOTALL)
         if not match:
-            return None
+            raise ValueError("Ollama response did not contain a JSON object.")
 
         try:
             parsed = json.loads(match.group(0))
-            return parsed if isinstance(parsed, dict) else None
-        except json.JSONDecodeError:
-            return None
+            if not isinstance(parsed, dict):
+                raise ValueError(f"Ollama JSON response must be an object, got {type(parsed).__name__}.")
+            return parsed
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Failed to parse JSON object from Ollama response: {exc}") from exc
 
     @staticmethod
     def ollama_generate_json_response(
@@ -36,32 +40,24 @@ class LLM:
         model: str = "llama3.1:8b",
         temperature: float = 0.2,
     ) -> dict | None:
-        """Ask Ollama for a JSON move response and parse it permissively."""
-        # The surrogate game-round path needs the raw move JSON, so this helper
-        # keeps parsing intentionally permissive and returns None on any failure.
-        try:
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "context": [],
-                    "options": {
-                        "temperature": temperature,
-                    },
+        """Ask Ollama for a JSON move response and fail when the request or parse fails."""
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "context": [],
+                "options": {
+                    "temperature": temperature,
                 },
-                timeout=120,
-            )
-            response.raise_for_status()
-            data = response.json()
-            raw_output = data.get("response", "").strip()
-            if not raw_output:
-                return None
-
-            return LLM._extract_first_json_object(raw_output)
-        except Exception:
-            return None
+            },
+            timeout=120,
+        )
+        response.raise_for_status()
+        data = response.json()
+        raw_output = data.get("response", "").strip()
+        return LLM._extract_first_json_object(raw_output)
 
     @staticmethod
     def ollama_generate_strict_json(
@@ -69,30 +65,25 @@ class LLM:
         model: str = "llama3.1:8b",
         temperature: float = 0.1,
     ) -> dict | None:
-        """Ask Ollama for one strict JSON object and return the parsed mapping."""
-        try:
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "format": "json",
-                    "context": [],
-                    "options": {
-                        "temperature": temperature,
-                    },
+        """Ask Ollama for one strict JSON object and fail when the call is invalid."""
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json",
+                "context": [],
+                "options": {
+                    "temperature": temperature,
                 },
-                timeout=120,
-            )
-            response.raise_for_status()
-            data = response.json()
-            raw_output = data.get("response", "").strip()
-            if not raw_output:
-                return None
-            return LLM._extract_first_json_object(raw_output)
-        except Exception:
-            return None
+            },
+            timeout=120,
+        )
+        response.raise_for_status()
+        data = response.json()
+        raw_output = data.get("response", "").strip()
+        return LLM._extract_first_json_object(raw_output)
 
     @staticmethod
     def ollama_generate_surrogate_strategy_spec(
@@ -160,29 +151,24 @@ class LLM:
             "production_priority": [],
         }
 
-        try:
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": model,
-                    "prompt": generation_prompt,
-                    "stream": False,
-                    "format": "json",
-                    "context": [],
-                    "options": {
-                        "temperature": temperature,
-                    },
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": model,
+                "prompt": generation_prompt,
+                "stream": False,
+                "format": "json",
+                "context": [],
+                "options": {
+                    "temperature": temperature,
                 },
-                timeout=120,
-            )
-            response.raise_for_status()
-            data = response.json()
-            parsed = LLM._extract_first_json_object(data.get("response", "").strip())
-            if not isinstance(parsed, dict):
-                return fallback
-            return LLM._normalize_surrogate_strategy_spec(parsed, fallback)
-        except Exception:
-            return fallback
+            },
+            timeout=120,
+        )
+        response.raise_for_status()
+        data = response.json()
+        parsed = LLM._extract_first_json_object(data.get("response", "").strip())
+        return LLM._normalize_surrogate_strategy_spec(parsed, fallback)
 
     @staticmethod
     def _normalize_surrogate_strategy_spec(spec: dict, fallback: dict | None = None) -> dict:
@@ -367,8 +353,6 @@ class LLM:
         Output:
         """.strip()
 
-        fallback_score = [0.0, 1.0, 0.0, 0.0]
-
         def clamp01(x: float) -> float:
             """Clamp one parsed surrogate score into the valid [0, 1] range."""
             return max(0.0, min(1.0, float(x)))
@@ -376,7 +360,7 @@ class LLM:
         def normalize_fitness(values) -> list[float]:
             """Normalize parsed surrogate outputs to four bounded dimensions."""
             if not isinstance(values, (list, tuple)):
-                return fallback_score
+                raise ValueError(f"Ollama fitness response must be a list, got {type(values).__name__}.")
 
             values = list(values)
 
@@ -387,53 +371,37 @@ class LLM:
 
             normalized = [clamp01(v) for v in values]
 
-            # Keep uncertainty conservative if parsing gave something weird.
-            # If all zeros, treat it as unreliable and restore fallback.
-            if normalized == [0.0, 0.0, 0.0, 0.0]:
-                return fallback_score
-
             return normalized
 
-        try:
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": model,
-                    "prompt": evaluation_prompt,
-                    "stream": False,
-                    "context": [],
-                    "options": {
-                        "temperature": 0.2,
-                    },
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": model,
+                "prompt": evaluation_prompt,
+                "stream": False,
+                "context": [],
+                "options": {
+                    "temperature": 0.2,
                 },
-                timeout=120,
-            )
+            },
+            timeout=120,
+        )
 
-            response.raise_for_status()
-            data = response.json()
-            raw_output = data.get("response", "").strip()
+        response.raise_for_status()
+        data = response.json()
+        raw_output = data.get("response", "").strip()
 
-            # Step 1: Parse a Python-style list directly.
-            try:
-                parsed = ast.literal_eval(raw_output)
-                return normalize_fitness(parsed)
-            except (ValueError, SyntaxError):
-                pass
+        try:
+            parsed = ast.literal_eval(raw_output)
+            return normalize_fitness(parsed)
+        except (ValueError, SyntaxError):
+            pass
 
-            # Step 2: Regex fallback for bracketed or noisy output.
-            matches = re.findall(r"-?\d*\.\d+|-?\d+", raw_output)
-            if matches:
-                parsed = [float(x) for x in matches[:4]]
-                return normalize_fitness(parsed)
-
-            # Step 3: Final fallback.
-            return fallback_score
-
-        except requests.exceptions.RequestException:
-            return fallback_score
-
-        except Exception:
-            return fallback_score
+        matches = re.findall(r"-?\d*\.\d+|-?\d+", raw_output)
+        if matches:
+            parsed = [float(x) for x in matches[:4]]
+            return normalize_fitness(parsed)
+        raise ValueError("Ollama fitness response did not contain parseable numeric scores.")
 
     @staticmethod
     def ollama_evaluate_game_round_fitness(
@@ -494,8 +462,6 @@ class LLM:
         Output:
         """.strip()
 
-        fallback_score = [0.0, 1.0, 0.0, 0.0]
-
         def clamp01(x: float) -> float:
             """Clamp one parsed surrogate score into the valid [0, 1] range."""
             return max(0.0, min(1.0, float(x)))
@@ -503,7 +469,7 @@ class LLM:
         def normalize_scores(values) -> list[float]:
             """Normalize parsed game-round surrogate outputs into four bounded values."""
             if not isinstance(values, (list, tuple)):
-                return fallback_score
+                raise ValueError(f"Ollama round fitness response must be a list, got {type(values).__name__}.")
 
             values = list(values)
             if len(values) < 4:
@@ -511,45 +477,34 @@ class LLM:
             elif len(values) > 4:
                 values = values[:4]
 
-            normalized = [clamp01(v) for v in values]
-            if normalized == [0.0, 0.0, 0.0, 0.0]:
-                return fallback_score
-            return normalized
+            return [clamp01(v) for v in values]
+
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": model,
+                "prompt": evaluation_prompt,
+                "stream": False,
+                "context": [],
+                "options": {
+                    "temperature": 0.2,
+                },
+            },
+            timeout=120,
+        )
+
+        response.raise_for_status()
+        data = response.json()
+        raw_output = data.get("response", "").strip()
 
         try:
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": model,
-                    "prompt": evaluation_prompt,
-                    "stream": False,
-                    "context": [],
-                    "options": {
-                        "temperature": 0.2,
-                    },
-                },
-                timeout=120,
-            )
+            parsed = ast.literal_eval(raw_output)
+            return normalize_scores(parsed)
+        except (ValueError, SyntaxError):
+            pass
 
-            response.raise_for_status()
-            data = response.json()
-            raw_output = data.get("response", "").strip()
-
-            try:
-                parsed = ast.literal_eval(raw_output)
-                return normalize_scores(parsed)
-            except (ValueError, SyntaxError):
-                pass
-
-            matches = re.findall(r"-?\d*\.\d+|-?\d+", raw_output)
-            if matches:
-                parsed = [float(x) for x in matches[:4]]
-                return normalize_scores(parsed)
-
-            return fallback_score
-
-        except requests.exceptions.RequestException:
-            return fallback_score
-
-        except Exception:
-            return fallback_score
+        matches = re.findall(r"-?\d*\.\d+|-?\d+", raw_output)
+        if matches:
+            parsed = [float(x) for x in matches[:4]]
+            return normalize_scores(parsed)
+        raise ValueError("Ollama round fitness response did not contain parseable numeric scores.")

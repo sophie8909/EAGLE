@@ -303,16 +303,13 @@ def record_java_match_trace(
         str(int(max_cycles)),
         str(map_location),
     ]
-    try:
-        subprocess.run(
-            command,
-            cwd=microrts_root,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
+    subprocess.run(
+        command,
+        cwd=microrts_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
     xml_path = output_prefix.with_suffix(".xml")
     json_path = output_prefix.with_suffix(".json")
@@ -520,33 +517,36 @@ def run_java_agent_game(
                 + latest_round_log.read_text(encoding="utf-8", errors="replace")
             )
         target_agent = _target_agent_name(ai1_class)
-        result_payload: dict[str, Any] | None = None
-        result_error: str | None = None
+        if exit_code != 0:
+            raise RuntimeError(
+                "MicroRTS Java process failed.\n"
+                f"exit_code={exit_code}\n"
+                f"log_path={log_path_str}"
+            )
+        if not result_json_path.exists() and not _debug_log_fallback_enabled():
+            raise FileNotFoundError(
+                "MicroRTS did not produce result JSON.\n"
+                f"expected={result_json_path}\n"
+                f"log_path={log_path_str}"
+            )
+
         if result_json_path.exists():
-            try:
-                result_payload = json.loads(result_json_path.read_text(encoding="utf-8"))
-                parsed_log = _parsed_log_from_result_json(result_payload, target_agent=target_agent)
-                match_score = calculate_match_score(
-                    "",
-                    resource_advantage_weights=config.resource_advantage_weights,
-                    parsed_log=parsed_log,
-                )
-            except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
-                result_error = f"invalid result_json: {exc}"
-                parsed_log = {}
-                match_score = {"win_score": -1.0, "raw_resource_advantage_score": 0.0}
-        elif _debug_log_fallback_enabled():
-            result_error = "result_json missing; used debug log fallback"
+            result_payload = json.loads(result_json_path.read_text(encoding="utf-8"))
+            parsed_log = _parsed_log_from_result_json(result_payload, target_agent=target_agent)
+            match_score = calculate_match_score(
+                "",
+                resource_advantage_weights=config.resource_advantage_weights,
+                parsed_log=parsed_log,
+            )
+            result_error = None
+        else:
             parsed_log = parse_game_log(log_content, target_agent=target_agent)
             match_score = calculate_match_score(
                 log_content,
                 resource_advantage_weights=config.resource_advantage_weights,
                 parsed_log=parsed_log,
             )
-        else:
-            result_error = "result_json missing"
-            parsed_log = {}
-            match_score = {"win_score": -1.0, "raw_resource_advantage_score": 0.0}
+            result_error = "result_json missing; used debug log fallback"
         tick_timeout = detect_tick_timeout(parsed_log, max_game_ticks)
         wall_clock_timeout = bool(timed_out or (_debug_log_fallback_enabled() and detect_timeout(log_content)))
         llm_call_limit_reached = bool(

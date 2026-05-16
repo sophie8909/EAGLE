@@ -44,13 +44,7 @@
     "field_requirements",
     "json_schema",
     "current_game_state_marker",
-    "training_example_no_workers",
-    "training_example_worker_bootstrap",
-    "training_example_build_barracks",
-    "training_example_repeat_barracks_low_resources",
-    "training_example_enemy_barracks_not_ally",
-    "training_example_many_workers_no_train_worker",
-    "training_example_ally_barracks_train_army"
+    "training_examples"
   ],
   "component_pool_path": "eagle/prompts/components.json",
   "initial_population_seeds": [],

@@ -256,7 +256,9 @@ Useful examples:
 ```bash
 python -m scripts.run_evolution --quick-run --tick-limit 60 --skip-final-test
 python -m scripts.run_evolution --config configs/evolution/default.json
-python -m scripts.run_evolution --algorithm round_nsga2
+python -m scripts.run_evolution --algorithm nsga2
+python -m scripts.run_evolution --algorithm ga
+python -m scripts.run_evolution --algorithm ga_surrogate --surrogate round
 python -m scripts.run_evolution --resume-latest
 python -m scripts.run_evolution --resume-log-dir logs/<run_dir>
 python -m scripts.run_evolution --opponent ai.PassiveAI
@@ -286,7 +288,7 @@ Fitness conventions:
 - `win_score` is the game outcome signal from one match.
 - `resource_score` is the weighted final resource/material advantage from that same match.
 - New result readers should treat `match_score` as the canonical raw single-match score field.
-- EA-level search fitness used by `round_ga` and `round_nsga2` stores one scalar per configured objective slot.
+- EA-level search fitness used by `ga`, `nsga2`, and `ga_surrogate` stores one scalar per configured objective slot.
 - The slot order is read from `gameplay_opponents` in the run config.
 - With the default config, EA-level fitness is `[LightRush_score, HeavyRush_score]`.
 - With `surrogate=round`, each opponent score is `raw_resource_advantage_score`.
@@ -339,8 +341,8 @@ Useful examples:
 
 ```bash
 python -m eagle.eval.microrts.run_round_evolution --quick-run
-python -m eagle.eval.microrts.run_round_evolution --algorithm round_ga
-python -m eagle.eval.microrts.run_round_evolution --algorithm round_nsga2 --model llama3.1:8b
+python -m eagle.eval.microrts.run_round_evolution --algorithm ga
+python -m eagle.eval.microrts.run_round_evolution --algorithm nsga2 --model llama3.1:8b
 python -m eagle.eval.microrts.run_round_evolution --config configs/evolution/microrts_round.json
 ```
 

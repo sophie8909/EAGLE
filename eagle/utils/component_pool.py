@@ -15,10 +15,20 @@ class ComponentPool:
 
     DEFAULT_NON_EVOLVING_COMPONENT_KEYS = {"json_schema"}
     TRAINING_EXAMPLES_KEY = "training_examples"
-    TRAINING_EXAMPLE_PREFIX = "training_example_"
     MAX_TRAINING_EXAMPLES_PER_RENDER = 4
 
     def __init__(self, components: Dict[str, Any]):
+        """Create a flattened prompt-component pool from the current JSON schema.
+
+        Args:
+            components: Current component-pool payload. The only training-example
+                schema accepted here is the merged `training_examples` list.
+
+        Call flow:
+            `ComponentPool.from_json()` loads JSON, this constructor normalizes current
+            component candidates, and EA evaluators later call `render_prompt_lines()`
+            to produce the exact prompt text for one individual.
+        """
         raw_components = dict(components or {})
         metadata = dict(raw_components.pop("metadata", {}) or {})
         self.metadata = metadata
@@ -31,11 +41,6 @@ class ComponentPool:
             if key == self.TRAINING_EXAMPLES_KEY:
                 self.training_examples = self._normalize_training_examples(value)
                 self.prompt_component_keys.append(key)
-                continue
-            if key.startswith(self.TRAINING_EXAMPLE_PREFIX):
-                self.training_examples.extend(self._legacy_training_examples(key, value))
-                if self.TRAINING_EXAMPLES_KEY not in self.prompt_component_keys:
-                    self.prompt_component_keys.append(self.TRAINING_EXAMPLES_KEY)
                 continue
             self.flat_components[key] = self._normalize_candidates(value)
             self.prompt_component_keys.append(key)
@@ -349,18 +354,6 @@ class ComponentPool:
             return bool(int(value))
         except (TypeError, ValueError):
             return True
-
-    @classmethod
-    def _legacy_training_examples(cls, key: str, value: Any) -> list[dict[str, Any]]:
-        """Convert one old training_example_* component into the merged schema."""
-        name = key.removeprefix(cls.TRAINING_EXAMPLE_PREFIX)
-        return [
-            {
-                "name": name,
-                "content": candidate,
-            }
-            for candidate in cls._normalize_candidates(value)
-        ]
 
     @staticmethod
     def _normalize_training_examples(value: Any) -> list[dict[str, Any]]:

@@ -989,21 +989,25 @@ class Evaluator:
     @staticmethod
     def _extract_first_json_object(raw_output: str) -> dict[str, Any] | None:
         if not raw_output:
-            return None
+            raise ValueError("Round evaluator LLM response was empty; expected JSON object.")
         try:
             parsed = json.loads(raw_output)
-            return parsed if isinstance(parsed, dict) else None
+            if not isinstance(parsed, dict):
+                raise ValueError(f"Round evaluator LLM JSON must be an object, got {type(parsed).__name__}.")
+            return parsed
         except json.JSONDecodeError:
             pass
 
         match = re.search(r"\{.*\}", raw_output, re.DOTALL)
         if not match:
-            return None
+            raise ValueError("Round evaluator LLM response did not contain a JSON object.")
         try:
             parsed = json.loads(match.group(0))
-            return parsed if isinstance(parsed, dict) else None
-        except json.JSONDecodeError:
-            return None
+            if not isinstance(parsed, dict):
+                raise ValueError(f"Round evaluator LLM JSON must be an object, got {type(parsed).__name__}.")
+            return parsed
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Failed to parse round evaluator LLM JSON: {exc}") from exc
 
     def _ollama_generate(self, *, prompt: str, temperature: float, json_format: bool) -> str:
         payload: dict[str, Any] = {
@@ -1017,18 +1021,18 @@ class Evaluator:
             payload["format"] = "json"
 
         semaphore = self._llm_parallel_semaphore()
-        try:
-            with semaphore:
-                response = requests.post(
-                    "http://localhost:11434/api/generate",
-                    json=payload,
-                    timeout=120,
-                )
-            response.raise_for_status()
-            data = response.json()
-            return str(data.get("response", "")).strip()
-        except Exception:
-            return ""
+        with semaphore:
+            response = requests.post(
+                "http://localhost:11434/api/generate",
+                json=payload,
+                timeout=120,
+            )
+        response.raise_for_status()
+        data = response.json()
+        raw_response = str(data.get("response", "")).strip()
+        if not raw_response:
+            raise ValueError("Round evaluator LLM returned an empty response.")
+        return raw_response
 
     def _llm_parallel_semaphore(self) -> threading.BoundedSemaphore:
         """Return the process-wide LLM request throttle for round evaluation."""
