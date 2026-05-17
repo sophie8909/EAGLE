@@ -184,7 +184,6 @@ class AppState:
     prompts: PromptState = field(default_factory=PromptState)
     microrts: MicroRTSState = field(default_factory=MicroRTSState)
     runtime: RuntimeState = field(default_factory=RuntimeState)
-    connected_clients: int = 0
 
     @property
     def is_stopping(self) -> bool:
