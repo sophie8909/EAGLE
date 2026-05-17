@@ -20,6 +20,7 @@ from eagle_gui_web.theme import (
     SUBTITLE_CLASS,
     TAB_CLASS,
     install_theme,
+    button_class,
     title_class,
 )
 from eagle_gui_web.views.analysis_view import build_analysis_view
@@ -50,12 +51,26 @@ def build_layout() -> dict[str, dict[str, Any]]:
     ui.query(".nicegui-content").classes(PAGE_CLASS)
 
     controls: dict[str, dict[str, Any]] = {}
+
+    async def shutdown() -> None:
+        if state.is_stopping:
+            ui.notify("Shutdown already in progress", type="warning")
+            return
+        ui.notify("Shutdown started")
+        message = await asyncio.to_thread(services.shutdown_runtime, state)
+        ui.notify(message, type="positive")
+        for group, name in (("run", "refresh_status"), ("final_test", "refresh_status"), ("microrts", "refresh_status")):
+            refresh = controls.get(group, {}).get(name)
+            if refresh:
+                await refresh()
+
     with ui.header().classes(f"{HEADER_CLASS} items-center justify-between"):
         with ui.row().classes(f"{BRAND_CLASS} items-center"):
             ui.image(EAGLE_IMAGE_URL).classes(BRAND_IMAGE_CLASS)
             with ui.column().classes("gap-0"):
                 ui.label("Eagle Observatory").classes(title_class("text-h5"))
                 ui.label("Research dashboard").classes(SUBTITLE_CLASS)
+        ui.button("Stop / Shutdown", on_click=shutdown).classes(button_class(danger=True))
 
     with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
         run_tab = ui.tab("Run").classes(TAB_CLASS)
@@ -135,9 +150,10 @@ async def refresh_analysis_timer() -> None:
     await controls["analysis"]["refresh_analysis"]()
 
 
-ui.timer(0.1, startup_refresh, once=True)
-ui.timer(3.0, refresh_log_timer)
-ui.timer(15.0, refresh_analysis_timer)
+startup_timer = ui.timer(0.1, startup_refresh, once=True)
+log_timer = ui.timer(3.0, refresh_log_timer)
+analysis_timer = ui.timer(15.0, refresh_analysis_timer)
+state.active_timers.extend([startup_timer, log_timer, analysis_timer])
 
 
 def main() -> None:

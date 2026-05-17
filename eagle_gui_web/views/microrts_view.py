@@ -56,7 +56,7 @@ def build_microrts_view(state: Any) -> dict[str, Any]:
 
     async def open_trace() -> None:
         try:
-            message = await asyncio.to_thread(services.open_trace, state.microrts.selected_trace)
+            message = await asyncio.to_thread(services.open_trace, state.microrts.selected_trace, state)
             ui.notify(message, type="positive")
         except (OSError, ValueError) as exc:
             ui.notify(str(exc), type="negative")

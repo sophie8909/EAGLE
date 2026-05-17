@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -538,12 +540,15 @@ def read_log_tail(limit: int = LOG_TAIL_LIMIT) -> str:
 
 def launch_web_process(
     *,
+    state: Any | None = None,
     command: list[str],
     config_path: Path,
     log_prefix: str,
     debug_lines: list[str] | None = None,
 ) -> tuple[bool, str]:
     """Launch one web-GUI managed process and persist monitor state."""
+    if state is not None and getattr(state, "is_stopping", False):
+        return False, "Shutdown is already in progress."
     if process_running():
         return False, "An experiment process is already running."
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -555,7 +560,7 @@ def launch_web_process(
     if debug_lines:
         log_handle.write("\n")
     log_handle.flush()
-    process = subprocess.Popen(command, cwd=ROOT, stdout=log_handle, stderr=subprocess.STDOUT, text=True)
+    process = _launch_tracked_process(command, cwd=ROOT, stdout=log_handle, state=state)
     process_service.write_process_state(
         GUI_WEB_PROCESS_STATE_PATH,
         pid=int(process.pid),
@@ -577,7 +582,7 @@ def start_experiment(state: Any) -> tuple[bool, str]:
         command.append("--skip-final-test")
     if state.run.precompile_python:
         command.append("--precompile-python")
-    return launch_web_process(command=command, config_path=config_path, log_prefix="gui_web_process")
+    return launch_web_process(state=state, command=command, config_path=config_path, log_prefix="gui_web_process")
 
 
 def start_final_test(state: Any) -> tuple[bool, str]:
@@ -591,6 +596,7 @@ def start_final_test(state: Any) -> tuple[bool, str]:
     if state.final_test.precompile_python:
         command.append("--precompile-python")
     return launch_web_process(
+        state=state,
         command=command,
         config_path=config_path,
         log_prefix="gui_web_final_test",
@@ -628,8 +634,126 @@ def stop_experiment() -> str:
     if pid is None or not process_service.process_is_running(pid):
         return "No running process."
     process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopping")
-    process_service.terminate_process_tree(pid)
+    terminate_pid_tree(pid)
     return f"Stopping PID {pid}"
+
+
+def shutdown_runtime(state: Any) -> str:
+    """Stop web-GUI-managed runtime work and leave the GUI process alive."""
+    state.is_stopping = True
+    _cancel_tasks(state)
+    _deactivate_timers(state)
+    pid = monitored_pid()
+    if pid is not None and process_service.process_is_running(pid):
+        process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopping")
+        terminate_pid_tree(pid)
+    stop_microrts_gui(wait=True)
+    _terminate_active_processes(state)
+    _reset_runtime_state(state)
+    state.is_stopping = False
+    return "Shutdown complete"
+
+
+def _launch_tracked_process(command: list[str], *, cwd: Path, stdout: Any, state: Any | None) -> subprocess.Popen:
+    """Launch a subprocess and register only this GUI-owned handle."""
+    options: dict[str, Any] = {}
+    if os.name != "nt":
+        options["start_new_session"] = True
+    process = subprocess.Popen(command, cwd=cwd, stdout=stdout, stderr=subprocess.STDOUT, text=True, **options)
+    if state is not None:
+        state.active_processes.append(process)
+    return process
+
+
+def terminate_pid_tree(pid: int, timeout_seconds: float = 5.0) -> None:
+    """Terminate one tracked process tree, then force-kill it if it remains alive."""
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(int(pid)), "/T"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        _wait_for_pid_exit(int(pid), timeout_seconds)
+        if process_service.process_is_running(pid):
+            subprocess.run(
+                ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        return
+    try:
+        os.killpg(int(pid), signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except OSError:
+        try:
+            os.kill(int(pid), signal.SIGTERM)
+        except OSError:
+            return
+    _wait_for_pid_exit(int(pid), timeout_seconds)
+    if process_service.process_is_running(pid):
+        try:
+            os.killpg(int(pid), signal.SIGKILL)
+        except OSError:
+            try:
+                os.kill(int(pid), signal.SIGKILL)
+            except OSError:
+                return
+
+
+def _wait_for_pid_exit(pid: int, timeout_seconds: float) -> None:
+    """Wait briefly for a process id to exit."""
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if not process_service.process_is_running(pid):
+            return
+        time.sleep(0.1)
+
+
+def _cancel_tasks(state: Any) -> None:
+    """Cancel asyncio tasks registered by the web GUI."""
+    for task in list(getattr(state, "active_tasks", [])):
+        if not task.done():
+            task.cancel()
+    state.active_tasks.clear()
+
+
+def _deactivate_timers(state: Any) -> None:
+    """Deactivate NiceGUI timers registered by the web GUI."""
+    for timer in list(getattr(state, "active_timers", [])):
+        deactivate = getattr(timer, "deactivate", None)
+        if callable(deactivate):
+            deactivate()
+        elif hasattr(timer, "active"):
+            timer.active = False
+
+
+def _terminate_active_processes(state: Any) -> None:
+    """Terminate Popen handles launched and registered by this GUI."""
+    processes = list(getattr(state, "active_processes", []))
+    for process in processes:
+        if process.poll() is None:
+            process.terminate()
+    for process in processes:
+        if process.poll() is None:
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+    state.active_processes.clear()
+
+
+def _reset_runtime_state(state: Any) -> None:
+    """Reset runtime-only state after shutdown."""
+    process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopped")
+    state.run.status_text = "not running"
+    state.run.log_text = ""
+    state.final_test.status_text = "not running"
+    state.final_test.log_text = ""
+    state.microrts.status = "Java GUI not running"
+    state.microrts.log_text = ""
 
 
 def build_analysis(run_dir: Path | None) -> tuple[str, str]:
@@ -685,6 +809,8 @@ def save_current_prompt_to_microrts(prompt: str) -> Path:
 def launch_microrts_gui(state: Any) -> str:
     """Launch the visible Java MicroRTS GUI."""
     global _microrts_process, _microrts_log_path
+    if getattr(state, "is_stopping", False):
+        raise RuntimeError("Shutdown is already in progress.")
     if _microrts_process and _microrts_process.poll() is None:
         raise RuntimeError("MicroRTS is already running.")
     prompt_path = save_current_prompt_to_microrts(state.microrts.prompt_text)
@@ -724,16 +850,21 @@ def launch_microrts_gui(state: Any) -> str:
     log_handle.write("Command: " + " ".join(command) + "\n")
     log_handle.write(f"Prompt: {prompt_path}\nOpponent: {opponent}\nMap: {map_location}\n\n")
     log_handle.flush()
-    _microrts_process = subprocess.Popen(command, cwd=microrts_root, stdout=log_handle, stderr=subprocess.STDOUT, text=True)
+    _microrts_process = _launch_tracked_process(command, cwd=microrts_root, stdout=log_handle, state=state)
     return f"MicroRTS PID {_microrts_process.pid}"
 
 
-def stop_microrts_gui() -> str:
+def stop_microrts_gui(wait: bool = False) -> str:
     """Stop the visible Java MicroRTS process."""
     global _microrts_process
     if not _microrts_process or _microrts_process.poll() is not None:
         return "Java GUI not running"
     _microrts_process.terminate()
+    if wait:
+        try:
+            _microrts_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _microrts_process.kill()
     return f"Stopping MicroRTS PID {_microrts_process.pid}"
 
 
@@ -755,19 +886,18 @@ def read_microrts_log() -> str:
     return _microrts_log_path.read_text(encoding="utf-8", errors="replace")
 
 
-def open_trace(trace_text: str) -> str:
+def open_trace(trace_text: str, state: Any | None = None) -> str:
     """Open a saved trace in the Java trace viewer."""
     trace_path = Path(trace_text)
     if not trace_path.exists():
         raise FileNotFoundError(f"Trace file does not exist: {trace_path}")
     microrts_root = require_microrts_class("gui/TraceViewerMain.class")
     classpath = f"{microrts_root / 'lib' / '*'}{os.pathsep}{microrts_root / 'bin'}"
-    subprocess.Popen(
+    _launch_tracked_process(
         ["java", "-cp", classpath, "gui.TraceViewerMain", str(trace_path)],
         cwd=microrts_root,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        text=True,
+        state=state,
     )
     return f"Opened trace {trace_path.name}"
 

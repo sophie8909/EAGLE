@@ -170,3 +170,7 @@ class AppState:
     analysis: AnalysisState = field(default_factory=AnalysisState)
     prompts: PromptState = field(default_factory=PromptState)
     microrts: MicroRTSState = field(default_factory=MicroRTSState)
+    is_stopping: bool = False
+    active_processes: list[Any] = field(default_factory=list)
+    active_timers: list[Any] = field(default_factory=list)
+    active_tasks: list[Any] = field(default_factory=list)
