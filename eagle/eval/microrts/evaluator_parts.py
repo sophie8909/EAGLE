@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from eagle.config import EAConfig
-from eagle.envs.microrts.runner import run_java_agent_game, run_prompt_based_game
+from eagle.envs.microrts.runner import (
+    DEFAULT_LLM_CALL_LIMIT,
+    run_java_agent_game,
+    run_prompt_based_game,
+)
 from eagle.surrogate.java.eagle_java_compiler import compile_eagle_java_agent
 from eagle.surrogate.java.eagle_java_renderer import render_eagle_java_from_prompt
 from eagle.surrogate.compiler.eagle_policy_spec import compile_prompt_to_eagle_policy_spec
@@ -259,6 +263,7 @@ class JavaMatchEvaluator:
         test: bool,
         generation: int | None,
         individual_id: Any | None,
+        llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         """Run one prompt-driven EAGLE Java match."""
         return self._with_llm_interval(
@@ -272,6 +277,7 @@ class JavaMatchEvaluator:
                 runtime_logs_dir=self.runtime_logs_dir,
                 generation=generation,
                 individual_id=individual_id,
+                llm_call_limit=llm_call_limit,
             ),
         )
 

@@ -16,12 +16,12 @@ from ...utils.match_score_recorder import MatchScoreRecorder
 from ...evolution.component.individual import Individual
 from ...utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
 from .evaluator_parts import (
+    DEFAULT_LLM_CALL_LIMIT,
     GameplayAggregator,
     JavaMatchEvaluator,
     PromptRenderer,
     RoundSurrogateEvaluator,
 )
-
 DEFAULT_GAMEPLAY_OPPONENTS = [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush",
@@ -382,6 +382,7 @@ class FullGameEvaluator:
         match_score_recorder: MatchScoreRecorder | None = None,
         allow_history_reuse: bool = False,
         llm_interval: int | None = None,
+        llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
         test: bool = False,
     ) -> dict[str, Any]:
         """Run one gameplay EAGLE match and return the raw single-match payload."""
@@ -449,6 +450,7 @@ class FullGameEvaluator:
         evaluation_mode: str = "policy_agent",
         compile_first: bool = True,
         generation: int | None = None,
+        llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
     ) -> dict[str, Any]:
         """Run one policy-backed Java-agent match and return the raw single-match payload."""
         rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
@@ -467,6 +469,7 @@ class FullGameEvaluator:
                     compile_first=False,
                     generation=generation,
                     individual_id=getattr(individual, "id", None) if individual is not None else None,
+                    llm_call_limit=llm_call_limit,
                 )
             else:
                 match_score, simulation_meta = self._run_java_match(
@@ -479,6 +482,7 @@ class FullGameEvaluator:
                     compile_first=compile_first,
                     generation=generation,
                     individual_id=getattr(individual, "id", None) if individual is not None else None,
+                    llm_call_limit=llm_call_limit,
                 )
         stats["microrts_compile_time"] = float(simulation_meta.get("compile_time_sec", 0.0) or 0.0)
         summarize_total_eval_time(stats)
@@ -526,6 +530,7 @@ class FullGameEvaluator:
         opponent: str | None,
         *,
         llm_interval: int | None = None,
+        llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
         test: bool = False,
         generation: int | None = None,
         individual_id: Any | None = None,
@@ -534,6 +539,7 @@ class FullGameEvaluator:
             prompt,
             opponent,
             llm_interval=llm_interval,
+            llm_call_limit=llm_call_limit,
             test=test,
             generation=generation,
             individual_id=individual_id,
@@ -551,6 +557,7 @@ class FullGameEvaluator:
         compile_first: bool = True,
         generation: int | None = None,
         individual_id: Any | None = None,
+        llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         return self.java_match_evaluator.run_java_match(
             prompt,
@@ -562,6 +569,7 @@ class FullGameEvaluator:
             compile_first=compile_first,
             generation=generation,
             individual_id=individual_id,
+            llm_call_limit=llm_call_limit,
         )
 
     def _configured_gameplay_opponents(self) -> list[str]:

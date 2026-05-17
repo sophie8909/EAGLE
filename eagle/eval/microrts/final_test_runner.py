@@ -116,7 +116,7 @@ def run_final_test_suite(
                 Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
             ),
             "tick_limit": int(runtime_config.tick_limit),
-            "llm_call_limit": int(runtime_config.llm_call_limit),
+            "llm_call_limit": None,
             "interval_runs": [],
             "results": {},
             "skipped": True,
@@ -186,7 +186,7 @@ def run_final_test_suite(
             Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
         ),
         "tick_limit": int(runtime_config.tick_limit),
-        "llm_call_limit": int(runtime_config.llm_call_limit),
+        "llm_call_limit": None,
         "interval_runs": interval_runs,
         "results": {},
     }
@@ -229,6 +229,7 @@ def run_final_test_suite(
                     opponent=opponent,
                     generation=generation_number,
                     llm_interval=llm_interval,
+                    llm_call_limit=None,
                     test=True,
                 )
                 match_score = dict(result["match_score"])

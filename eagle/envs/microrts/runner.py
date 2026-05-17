@@ -17,6 +17,7 @@ from ...utils.fitness_calculator import calculate_match_score
 from .compiler import compile_microrts, locate_microrts_root
 from .parser import parse_game_log
 
+DEFAULT_LLM_CALL_LIMIT = object()
 
 def _config_path(project_root: Path | None = None) -> Path:
     """Return the MicroRTS runtime properties file."""
@@ -446,6 +447,7 @@ def run_java_agent_game(
     record_trace: bool = False,
     generation: int | None = None,
     individual_id: Any | None = None,
+    llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one MicroRTS game with explicit Java agent classes."""
     project_root = (project_root or PROJECT_ROOT).resolve()
@@ -490,6 +492,18 @@ def run_java_agent_game(
         round_state_dir = game_output_dir / "round_states"
         max_game_ticks = int(getattr(config, "tick_limit", 5000))
         map_location = select_random_map_location(project_root, config)
+        resolved_llm_call_limit = (
+            int(getattr(config, "llm_call_limit", 50))
+            if llm_call_limit is DEFAULT_LLM_CALL_LIMIT
+            else llm_call_limit
+        )
+        print(
+            "[DEBUG] gameplay launch limits "
+            f"test={str(log_prefix).startswith('run_test')} "
+            f"tick_limit={max_game_ticks} "
+            f"llm_call_limit={resolved_llm_call_limit}",
+            flush=True,
+        )
         exit_code, timed_out, log_path_str, game_time_sec = launch_java_match(
             project_root=project_root,
             tick_limit=max_game_ticks,
@@ -498,7 +512,7 @@ def run_java_agent_game(
             ai2_class=opponent,
             prompt_path=prompt_path,
             llm_interval=config.active_llm_interval(),
-            llm_call_limit=int(getattr(config, "llm_call_limit", 50)),
+            llm_call_limit=resolved_llm_call_limit,
             max_game_ticks=max_game_ticks,
             trace_path=trace_path,
             round_state_dir=round_state_dir,
@@ -612,6 +626,7 @@ def run_prompt_based_game(
     runtime_logs_dir: Path | None = None,
     generation: int | None = None,
     individual_id: Any | None = None,
+    llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one gameplay EAGLE-vs-opponent match driven by the prompt file."""
     return run_java_agent_game(
@@ -626,4 +641,5 @@ def run_prompt_based_game(
         record_trace=True,
         generation=generation,
         individual_id=individual_id,
+        llm_call_limit=llm_call_limit,
     )
