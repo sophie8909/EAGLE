@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import math
 import re
@@ -18,6 +19,8 @@ from ..representation.fitness import fitness_values, normalize_fitness_dict
 GENERATION_LOG_PATTERN = re.compile(r"generation_(\d+)_mo\.txt$")
 GENERATION_MARKER_PATTERN = re.compile(r"\b(?:generation|gen)\s+\d+|generation_\d+", re.IGNORECASE)
 FITNESS_VECTOR_PATTERN = re.compile(r"fitness\s*(?:=|:)\s*[\[(]([^\])]+)[\])]", re.IGNORECASE)
+FITNESS_SCALAR_PATTERN = re.compile(r"fitness\s*(?:=|:)\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
+GA_GENERATION_PATTERN = re.compile(r"^Generation\s+(\d+)(?!.*Multi-objective).*$", re.IGNORECASE | re.MULTILINE)
 TIME_LINE_PATTERN = re.compile(
     r"(?P<label>total runtime|generation runtime|average generation time|evaluation time|llm call time|llm time)"
     r"\s*(?:=|:)\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>ms|s|sec|secs|seconds|m|min|mins|minutes)?",
@@ -95,6 +98,31 @@ def parse_final_test_analysis(log_text) -> dict:
     return {key: value for key, value in result.items() if value not in (None, [], {})}
 
 
+def parse_ga_convergence(log_text) -> dict:
+    """Parse single-objective generation fitness into convergence series."""
+    text = str(log_text or "")
+    if not build_analysis_context(text).get("is_single_objective"):
+        return {}
+    generations: list[int] = []
+    best_values: list[float] = []
+    average_values: list[float] = []
+    for generation, block in _ga_generation_blocks(text):
+        best = _ga_best_fitness(block)
+        population = _ga_population_fitness(block)
+        if best is None and population:
+            best = max(population)
+        if best is None:
+            continue
+        generations.append(generation)
+        best_values.append(best)
+        if population:
+            average_values.append(sum(population) / len(population))
+    result: dict[str, object] = {"generations": generations, "best_fitness": best_values}
+    if len(average_values) == len(generations):
+        result["average_fitness"] = average_values
+    return result if generations else {}
+
+
 def _contains_key(value: object, marker: str) -> bool:
     """Return whether a nested mapping/list contains a marker in any key."""
     if isinstance(value, dict):
@@ -163,6 +191,74 @@ def _final_test_payload_from_text(text: str) -> dict[str, object]:
         ):
             return payload
     return {}
+
+
+def _ga_generation_blocks(text: str) -> list[tuple[int, str]]:
+    """Split GA generation text into generation-numbered blocks."""
+    matches = list(GA_GENERATION_PATTERN.finditer(text))
+    blocks: list[tuple[int, str]] = []
+    for index, match in enumerate(matches):
+        start = match.start()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        blocks.append((int(match.group(1)), text[start:end]))
+    return blocks
+
+
+def _ga_best_fitness(block: str) -> float | None:
+    """Return the explicit best fitness from one GA generation block."""
+    before_population = block.split("\nPopulation:", 1)[0]
+    values = _fitness_numbers_from_text(before_population)
+    return values[-1] if values else None
+
+
+def _ga_population_fitness(block: str) -> list[float]:
+    """Return population fitness values from one GA generation block."""
+    if "\nPopulation:" not in block:
+        return []
+    return _fitness_numbers_from_text(block.split("\nPopulation:", 1)[1])
+
+
+def _fitness_numbers_from_text(text: str) -> list[float]:
+    """Return first fitness component values from matching log lines."""
+    values: list[float] = []
+    for line in text.splitlines():
+        if "fitness" not in line.lower():
+            continue
+        value = _first_fitness_number(line)
+        if value is not None:
+            values.append(value)
+    return values
+
+
+def _first_fitness_number(line: str) -> float | None:
+    """Return the first numeric component from a fitness log line."""
+    payload = _fitness_payload_from_line(line)
+    if isinstance(payload, (int, float)):
+        return float(payload)
+    if isinstance(payload, list) and len(payload) == 1:
+        return _safe_number(payload[0])
+    if isinstance(payload, dict) and len(payload) == 1:
+        return _safe_number(next(iter(payload.values())))
+    vector_match = FITNESS_VECTOR_PATTERN.search(line)
+    if vector_match:
+        parts = [part.strip() for part in vector_match.group(1).split(",") if part.strip()]
+        if len(parts) == 1:
+            return _safe_number(parts[0])
+        return None
+    scalar_match = FITNESS_SCALAR_PATTERN.search(line)
+    return _safe_number(scalar_match.group(1)) if scalar_match else None
+
+
+def _fitness_payload_from_line(line: str) -> object | None:
+    """Parse the Python-readable payload after a Fitness marker."""
+    marker = re.search(r"fitness\s*(?:=|:)\s*", line, flags=re.IGNORECASE)
+    if not marker:
+        return None
+    raw_payload = re.split(r"\s+-\s+EvalMode:", line[marker.end():], maxsplit=1)[0].strip()
+    try:
+        return ast.literal_eval(raw_payload)
+    except (SyntaxError, ValueError):
+        return None
 
 
 def _final_test_analysis_from_payload(payload: dict[str, object]) -> dict[str, object]:
@@ -385,10 +481,30 @@ def _fitness_dimension_from_data(value: object, in_fitness: bool = False) -> int
 def _fitness_dimension_from_log(text: str) -> int:
     """Infer objective count from logged fitness vectors."""
     dimension = 0
+    for line in text.splitlines():
+        if "fitness" not in line.lower():
+            continue
+        payload = _fitness_payload_from_line(line)
+        if isinstance(payload, dict) and payload and all(_is_number_like(value) for value in payload.values()):
+            dimension = max(dimension, len(payload))
+        elif isinstance(payload, list) and payload and all(_is_number_like(value) for value in payload):
+            dimension = max(dimension, len(payload))
+        elif isinstance(payload, (int, float)):
+            dimension = max(dimension, 1)
     for match in FITNESS_VECTOR_PATTERN.finditer(text):
         values = [part.strip() for part in match.group(1).split(",") if part.strip()]
         dimension = max(dimension, len(values))
+    if dimension == 0 and FITNESS_SCALAR_PATTERN.search(text):
+        return 1
     return dimension
+
+
+def _safe_number(value: object) -> float | None:
+    """Return a float for numeric-looking text."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _is_number_like(value: object) -> bool:

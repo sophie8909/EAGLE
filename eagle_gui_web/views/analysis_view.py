@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
 from typing import Any
 
 from nicegui import ui
 
-from eagle.analysis.evolution_result_analysis import parse_final_test_analysis, parse_time_analysis
+from eagle.analysis.evolution_result_analysis import (
+    build_analysis_context,
+    parse_final_test_analysis,
+    parse_ga_convergence,
+    parse_time_analysis,
+)
 from eagle_gui_web import services
 from eagle_gui_web.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
+    COLORS,
     ROW_CLASS,
     SECTION_HEADER_CLASS,
     TABLE_CLASS,
@@ -29,11 +36,14 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         try:
             summary, body = await asyncio.to_thread(services.build_analysis, state.run.current_run_dir)
             final_test_analysis = await asyncio.to_thread(_build_final_test_analysis_text, state.run.current_run_dir)
+            ga_convergence = await asyncio.to_thread(_build_ga_convergence_options, state.run.current_run_dir)
         except (OSError, ValueError) as exc:
             summary, body = "Analysis load error", str(exc)
             final_test_analysis = str(exc)
+            ga_convergence = None
         state.analysis.summary = summary
         state.analysis.body = body
+        _render_ga_convergence(ga_chart_container, ga_convergence)
         final_test_text.value = final_test_analysis
         final_test_text.update()
         summary_label.set_text(summary)
@@ -70,6 +80,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         body_text = ui.textarea(value=state.analysis.body).props("readonly").classes(
             f"{TEXTAREA_CLASS} {height_class(300)} w-full"
         )
+        ga_chart_container = ui.column().classes("w-full gap-3")
 
         ui.label("Final Test").classes(SECTION_HEADER_CLASS)
         final_test_text = ui.textarea(value="No final test data found.").props("readonly").classes(
@@ -99,6 +110,90 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
 
     controls["refresh_analysis"] = refresh_all
     return controls
+
+
+def _render_ga_convergence(container: Any, options: dict[str, Any] | None) -> None:
+    """Render the GA convergence chart only when data is available."""
+    container.clear()
+    if not options:
+        return
+    with container:
+        ui.label("GA Convergence").classes(SECTION_HEADER_CLASS)
+        ui.echart(options).classes("w-full h-80")
+
+
+def _build_ga_convergence_options(run_dir: Path | None) -> dict[str, Any] | None:
+    """Build ECharts options for single-objective GA convergence."""
+    if run_dir is None:
+        return None
+    log_text = _read_ga_convergence_text(run_dir)
+    if not build_analysis_context(log_text).get("is_single_objective"):
+        return None
+    data = parse_ga_convergence(log_text)
+    if not data:
+        return None
+    generations = list(data.get("generations", []))
+    series = [
+        {
+            "name": "Best fitness",
+            "type": "line",
+            "smooth": True,
+            "data": list(data.get("best_fitness", [])),
+            "lineStyle": {"color": COLORS["sky_blue"], "width": 3},
+            "itemStyle": {"color": COLORS["sky_blue"]},
+        }
+    ]
+    if data.get("average_fitness"):
+        series.append(
+            {
+                "name": "Average fitness",
+                "type": "line",
+                "smooth": True,
+                "data": list(data["average_fitness"]),
+                "lineStyle": {"color": COLORS["bronze"], "width": 2},
+                "itemStyle": {"color": COLORS["bronze"]},
+            }
+        )
+    return {
+        "backgroundColor": "transparent",
+        "color": [COLORS["sky_blue"], COLORS["bronze"]],
+        "tooltip": {"trigger": "axis"},
+        "legend": {"textStyle": {"color": COLORS["text"]}},
+        "grid": {"left": 48, "right": 24, "top": 48, "bottom": 44},
+        "xAxis": {
+            "type": "category",
+            "name": "generation",
+            "data": generations,
+            "axisLine": {"lineStyle": {"color": COLORS["border"]}},
+            "axisLabel": {"color": COLORS["muted"]},
+            "nameTextStyle": {"color": COLORS["muted"]},
+        },
+        "yAxis": {
+            "type": "value",
+            "name": "fitness",
+            "axisLine": {"lineStyle": {"color": COLORS["border"]}},
+            "axisLabel": {"color": COLORS["muted"]},
+            "splitLine": {"lineStyle": {"color": COLORS["border"]}},
+            "nameTextStyle": {"color": COLORS["muted"]},
+        },
+        "series": series,
+    }
+
+
+def _read_ga_convergence_text(run_dir: Path) -> str:
+    """Read GA generation logs without loading MO generation files."""
+    parts: list[str] = []
+    for path in sorted(run_dir.glob("generation_*.txt"), key=_generation_sort_key):
+        if path.name.endswith("_mo.txt"):
+            continue
+        parts.append(path.read_text(encoding="utf-8", errors="replace"))
+    return "\n".join(parts)
+
+
+def _generation_sort_key(path: Path) -> int:
+    """Sort generation logs by numeric generation suffix."""
+    match = re.search(r"generation_(\d+)", path.name)
+    return int(match.group(1)) if match else -1
 
 
 def _build_final_test_analysis_text(run_dir: Path | None) -> str:
