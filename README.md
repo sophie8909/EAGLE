@@ -182,8 +182,7 @@ Python dependencies:
 - `matplotlib` for analysis plots
 - `Pillow` for GIF generation in evolution-result analysis
 - `PyYAML` for YAML experiment configs
-- `openai` for llama.cpp OpenAI-compatible local calls
-- `requests` for local HTTP calls
+- `requests` for llama.cpp OpenAI-compatible local calls
 
 Conda-only runtime dependency:
 

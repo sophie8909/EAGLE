@@ -949,25 +949,24 @@ class Evaluator:
     @staticmethod
     def _extract_first_json_object(raw_output: str) -> dict[str, Any] | None:
         if not raw_output:
-            raise ValueError("Round evaluator LLM response was empty; expected JSON object.")
+            return None
         try:
             parsed = json.loads(raw_output)
             if not isinstance(parsed, dict):
-                raise ValueError(f"Round evaluator LLM JSON must be an object, got {type(parsed).__name__}.")
+                return None
             return parsed
         except json.JSONDecodeError:
             pass
 
-        match = re.search(r"\{.*\}", raw_output, re.DOTALL)
-        if not match:
-            raise ValueError("Round evaluator LLM response did not contain a JSON object.")
-        try:
-            parsed = json.loads(match.group(0))
-            if not isinstance(parsed, dict):
-                raise ValueError(f"Round evaluator LLM JSON must be an object, got {type(parsed).__name__}.")
-            return parsed
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Failed to parse round evaluator LLM JSON: {exc}") from exc
+        decoder = json.JSONDecoder()
+        for match in re.finditer(r"\{", raw_output):
+            try:
+                parsed, _ = decoder.raw_decode(raw_output[match.start() :])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+        return None
 
     def _llama_cpp_generate(self, *, prompt: str, temperature: float, json_format: bool) -> str:
         if json_format:

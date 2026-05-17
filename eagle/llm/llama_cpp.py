@@ -5,7 +5,7 @@ import re
 import ast
 import json
 
-from openai import OpenAI
+import requests
 
 
 DEFAULT_MODEL = os.getenv("LLAMA_CPP_MODEL", "local")
@@ -28,15 +28,6 @@ DEFAULT_BASE_URL = _normalize_base_url(os.getenv("LLAMA_CPP_BASE_URL"))
 class LLM:
     """Local llama.cpp endpoint helpers used by the EA pipeline."""
 
-    _client: OpenAI | None = None
-
-    @classmethod
-    def _openai_client(cls) -> OpenAI:
-        """Return the OpenAI-compatible client backed by llama.cpp server."""
-        if cls._client is None:
-            cls._client = OpenAI(base_url=DEFAULT_BASE_URL, api_key="dummy")
-        return cls._client
-
     @staticmethod
     def _resolve_model(model: str | None) -> str:
         """Resolve the model name sent to llama.cpp's OpenAI-compatible API."""
@@ -52,16 +43,27 @@ class LLM:
         max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> str:
         """Generate one non-streaming chat completion through llama.cpp."""
-        response = cls._openai_client().chat.completions.create(
-            model=cls._resolve_model(model),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            max_tokens=max_tokens,
+        response = requests.post(
+            f"{DEFAULT_BASE_URL}/chat/completions",
+            json={
+                "model": cls._resolve_model(model),
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": False,
+            },
+            timeout=120,
         )
-        content = response.choices[0].message.content
+        response.raise_for_status()
+        data = response.json()
+        choices = data.get("choices") or []
+        if not choices:
+            raise ValueError("llama.cpp returned no chat completion choices.")
+        message = choices[0].get("message") or {}
+        content = message.get("content")
         if not content:
             raise ValueError("llama.cpp returned an empty response.")
-        return content.strip()
+        return str(content).strip()
 
     @staticmethod
     def _extract_first_json_object(raw_output: str) -> dict | None:

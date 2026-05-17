@@ -4,7 +4,6 @@ channels:
 dependencies:
   - python>=3.10,<3.13
   - matplotlib>=3.8,<4
-  - openai>=1.0,<2
   - openjdk>=17
   - pillow>=10,<12
   - pyyaml>=6,<7
