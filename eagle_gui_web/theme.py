@@ -31,6 +31,10 @@ TABLE_CLASS = "eagle-table"
 
 PAGE_CLASS = "eagle-page"
 HEADER_CLASS = "eagle-header"
+BRAND_CLASS = "eagle-brand"
+BRAND_IMAGE_CLASS = "eagle-brand-image"
+TITLE_CLASS = "eagle-title"
+SUBTITLE_CLASS = "eagle-subtitle"
 SECTION_HEADER_CLASS = "eagle-section-header"
 ROW_CLASS = "eagle-row"
 GRID_CLASS = "eagle-grid"
@@ -56,6 +60,21 @@ def height_class(px: int) -> str:
     return f"h-[{int(px)}px]"
 
 
+def title_class(extra: str = "") -> str:
+    """Return major title classes with optional layout utilities."""
+    return f"{TITLE_CLASS} {extra}".strip()
+
+
+def section_header_class(extra: str = "") -> str:
+    """Return section heading classes with optional layout utilities."""
+    return f"{SECTION_HEADER_CLASS} {extra}".strip()
+
+
+def mono_class(extra: str = "") -> str:
+    """Return monospaced content classes with optional layout utilities."""
+    return f"{MONO_CLASS} {extra}".strip()
+
+
 def install_theme() -> None:
     """Install global dashboard colors and component CSS."""
     ui.colors(
@@ -68,19 +87,48 @@ def install_theme() -> None:
     )
     ui.add_head_html(
         f"""
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
         <style>
         body, .nicegui-content {{
             background: {COLORS["background"]};
             color: {COLORS["text"]};
+            font-family: Inter, ui-sans-serif, system-ui, sans-serif;
         }}
         .{PAGE_CLASS} {{
             background: {COLORS["background"]};
             color: {COLORS["text"]};
+            font-family: Inter, ui-sans-serif, system-ui, sans-serif;
         }}
         .{HEADER_CLASS} {{
             background: linear-gradient(90deg, {COLORS["surface"]}, {COLORS["raven_blue"]});
             border-bottom: 1px solid {COLORS["border"]};
             color: {COLORS["text"]};
+            min-height: 72px;
+        }}
+        .{BRAND_CLASS} {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+        .{BRAND_IMAGE_CLASS} {{
+            width: 44px;
+            height: 44px;
+            object-fit: contain;
+            filter: drop-shadow(0 0 10px rgba(176, 141, 87, 0.28));
+        }}
+        .{TITLE_CLASS} {{
+            font-family: Cinzel, Georgia, serif;
+            color: {COLORS["text"]};
+            font-weight: 650;
+            letter-spacing: 0;
+            line-height: 1.1;
+        }}
+        .{SUBTITLE_CLASS} {{
+            color: {COLORS["muted"]};
+            font-size: 0.9rem;
+            line-height: 1.2;
         }}
         .{CARD_CLASS} {{
             background: {COLORS["surface"]};
@@ -90,8 +138,9 @@ def install_theme() -> None:
             color: {COLORS["text"]};
         }}
         .{SECTION_HEADER_CLASS} {{
+            font-family: Cinzel, Georgia, serif;
             color: {COLORS["bronze"]};
-            font-weight: 650;
+            font-weight: 600;
             letter-spacing: 0;
         }}
         .{BUTTON_CLASS} {{
@@ -124,9 +173,10 @@ def install_theme() -> None:
         .{TEXTAREA_CLASS} .q-field__label {{
             color: {COLORS["text"]};
         }}
+        .{MONO_CLASS},
         .{TEXTAREA_CLASS} textarea {{
             color: {COLORS["text"]};
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }}
         .{BADGE_CLASS} {{
             background: {COLORS["surface_alt"]};

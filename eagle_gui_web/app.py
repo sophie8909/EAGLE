@@ -6,11 +6,22 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+from nicegui import app as nicegui_app
 from nicegui import ui
 
 from eagle_gui_web import services
 from eagle_gui_web.state import AppState
-from eagle_gui_web.theme import CARD_CLASS, HEADER_CLASS, PAGE_CLASS, TAB_CLASS, install_theme
+from eagle_gui_web.theme import (
+    BRAND_CLASS,
+    BRAND_IMAGE_CLASS,
+    CARD_CLASS,
+    HEADER_CLASS,
+    PAGE_CLASS,
+    SUBTITLE_CLASS,
+    TAB_CLASS,
+    install_theme,
+    title_class,
+)
 from eagle_gui_web.views.analysis_view import build_analysis_view
 from eagle_gui_web.views.components_view import build_components_view
 from eagle_gui_web.views.config_view import build_config_view
@@ -23,6 +34,7 @@ from eagle_gui_web.views.run_view import build_run_view
 
 
 state = AppState()
+EAGLE_IMAGE_URL = "/assets/eagle.png"
 
 
 def _selected_run_path(value: Any) -> Path | None:
@@ -33,13 +45,17 @@ def _selected_run_path(value: Any) -> Path | None:
 
 def build_layout() -> dict[str, dict[str, Any]]:
     """Build the tabbed NiceGUI layout and return view refresh handles."""
+    nicegui_app.add_static_files("/assets", services.ROOT / "assets")
     install_theme()
     ui.query(".nicegui-content").classes(PAGE_CLASS)
 
     controls: dict[str, dict[str, Any]] = {}
     with ui.header().classes(f"{HEADER_CLASS} items-center justify-between"):
-        ui.label("EAGLE").classes("text-h5")
-        ui.label("NiceGUI Workflow").classes("text-subtitle1")
+        with ui.row().classes(f"{BRAND_CLASS} items-center"):
+            ui.image(EAGLE_IMAGE_URL).classes(BRAND_IMAGE_CLASS)
+            with ui.column().classes("gap-0"):
+                ui.label("Eagle Observatory").classes(title_class("text-h5"))
+                ui.label("Research dashboard").classes(SUBTITLE_CLASS)
 
     with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
         run_tab = ui.tab("Run").classes(TAB_CLASS)
@@ -127,7 +143,7 @@ ui.timer(15.0, refresh_analysis_timer)
 def main() -> None:
     """Run the NiceGUI application."""
     port = services.find_available_port()
-    ui.run(title="EAGLE", reload=False, show=True, port=port)
+    ui.run(title="Eagle Observatory", favicon=EAGLE_IMAGE_URL, reload=False, show=True, port=port)
 
 
 if __name__ in {"__main__", "__mp_main__"}:
