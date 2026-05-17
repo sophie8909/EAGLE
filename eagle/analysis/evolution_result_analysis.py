@@ -18,6 +18,11 @@ from ..representation.fitness import fitness_values, normalize_fitness_dict
 GENERATION_LOG_PATTERN = re.compile(r"generation_(\d+)_mo\.txt$")
 GENERATION_MARKER_PATTERN = re.compile(r"\b(?:generation|gen)\s+\d+|generation_\d+", re.IGNORECASE)
 FITNESS_VECTOR_PATTERN = re.compile(r"fitness\s*(?:=|:)\s*[\[(]([^\])]+)[\])]", re.IGNORECASE)
+TIME_LINE_PATTERN = re.compile(
+    r"(?P<label>total runtime|generation runtime|average generation time|evaluation time|llm call time|llm time)"
+    r"\s*(?:=|:)\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>ms|s|sec|secs|seconds|m|min|mins|minutes)?",
+    re.IGNORECASE,
+)
 FINAL_TEST_CANDIDATES = ("final_test_results.json", "final_test_result.json")
 FINAL_TEST_MODES = ("interval_1", "interval_10", "java_agent_test")
 
@@ -60,6 +65,19 @@ def build_analysis_context(log_text, result_data=None) -> dict:
     }
 
 
+def parse_time_analysis(log_text) -> dict:
+    """Parse runtime timing values from log, JSONL, or timing-summary text."""
+    text = str(log_text or "")
+    summary, events = _time_records_from_text(text)
+    result = _time_analysis_from_summary(summary) if summary else {}
+    if events:
+        event_result = _time_analysis_from_events(events)
+        result = {**event_result, **result}
+    for key, value in _time_analysis_from_lines(text).items():
+        result.setdefault(key, value)
+    return {key: value for key, value in result.items() if value is not None}
+
+
 def _contains_key(value: object, marker: str) -> bool:
     """Return whether a nested mapping/list contains a marker in any key."""
     if isinstance(value, dict):
@@ -67,6 +85,136 @@ def _contains_key(value: object, marker: str) -> bool:
     if isinstance(value, list):
         return any(_contains_key(item, marker) for item in value)
     return False
+
+
+def _time_records_from_text(text: str) -> tuple[dict[str, object], list[dict[str, object]]]:
+    """Read timing JSON objects from mixed log text."""
+    summary: dict[str, object] = {}
+    events: list[dict[str, object]] = []
+    decoder = json.JSONDecoder()
+    index = 0
+    while index < len(text):
+        start = text.find("{", index)
+        if start < 0:
+            break
+        try:
+            payload, end = decoder.raw_decode(text[start:])
+        except json.JSONDecodeError:
+            index = start + 1
+            continue
+        if not isinstance(payload, dict):
+            index = start + max(end, 1)
+            continue
+        index = start + max(end, 1)
+        record_type = payload.get("record_type")
+        if record_type == "timing_summary":
+            summary = payload
+        elif record_type == "timing_event":
+            events.append(payload)
+    return summary, events
+
+
+def _time_analysis_from_summary(summary: dict[str, object]) -> dict[str, float]:
+    """Build timing fields from a profiler summary object."""
+    by_phase = summary.get("by_phase") if isinstance(summary.get("by_phase"), dict) else {}
+    by_generation = summary.get("by_generation") if isinstance(summary.get("by_generation"), dict) else {}
+    generation_values = [
+        _safe_float(value)
+        for generation, value in by_generation.items()
+        if str(generation) != "-1" and _safe_float(value) == _safe_float(value)
+    ]
+    generation_values = [value for value in generation_values if not math.isnan(value)]
+    total_runtime = _safe_float(summary.get("total_recorded_sec"))
+    generation_runtime = _phase_total(by_phase, "generation_total") or sum(generation_values)
+    return {
+        "total_runtime": total_runtime if not math.isnan(total_runtime) else None,
+        "generation_runtime": generation_runtime or None,
+        "average_generation_time": (sum(generation_values) / len(generation_values)) if generation_values else None,
+        "evaluation_time": _sum_phase_totals(by_phase, ("evaluate", "evaluation", "gameplay_match")) or None,
+        "llm_call_time": _sum_phase_totals(by_phase, ("llm", "ollama")) or None,
+    }
+
+
+def _time_analysis_from_events(events: list[dict[str, object]]) -> dict[str, float]:
+    """Build timing fields from profiler event rows."""
+    total = 0.0
+    generation_totals: dict[str, float] = {}
+    evaluation_time = 0.0
+    llm_call_time = 0.0
+    for event in events:
+        elapsed = _safe_float(event.get("elapsed_sec"))
+        if math.isnan(elapsed):
+            continue
+        phase = str(event.get("phase") or "").lower()
+        generation = event.get("generation")
+        total += elapsed
+        if generation is not None and str(generation) != "-1":
+            generation_totals[str(generation)] = generation_totals.get(str(generation), 0.0) + elapsed
+        if any(marker in phase for marker in ("evaluate", "evaluation", "gameplay_match")):
+            evaluation_time += elapsed
+        if "llm" in phase or "ollama" in phase:
+            llm_call_time += elapsed
+    generation_runtime = sum(generation_totals.values())
+    return {
+        "total_runtime": total or None,
+        "generation_runtime": generation_runtime or None,
+        "average_generation_time": (generation_runtime / len(generation_totals)) if generation_totals else None,
+        "evaluation_time": evaluation_time or None,
+        "llm_call_time": llm_call_time or None,
+    }
+
+
+def _time_analysis_from_lines(text: str) -> dict[str, float]:
+    """Build timing fields from simple human-readable log lines."""
+    result: dict[str, float] = {}
+    key_map = {
+        "total runtime": "total_runtime",
+        "generation runtime": "generation_runtime",
+        "average generation time": "average_generation_time",
+        "evaluation time": "evaluation_time",
+        "llm call time": "llm_call_time",
+        "llm time": "llm_call_time",
+    }
+    for match in TIME_LINE_PATTERN.finditer(text):
+        seconds = _duration_to_seconds(match.group("value"), match.group("unit"))
+        result[key_map[match.group("label").lower()]] = seconds
+    return result
+
+
+def _phase_total(by_phase: object, phase: str) -> float:
+    """Return total seconds for one named phase."""
+    if not isinstance(by_phase, dict):
+        return 0.0
+    row = by_phase.get(phase)
+    if not isinstance(row, dict):
+        return 0.0
+    value = _safe_float(row.get("total_sec"))
+    return 0.0 if math.isnan(value) else value
+
+
+def _sum_phase_totals(by_phase: object, markers: tuple[str, ...]) -> float:
+    """Sum phase totals whose names contain any marker."""
+    if not isinstance(by_phase, dict):
+        return 0.0
+    total = 0.0
+    for phase, row in by_phase.items():
+        if not isinstance(row, dict) or not any(marker in str(phase).lower() for marker in markers):
+            continue
+        value = _safe_float(row.get("total_sec"))
+        if not math.isnan(value):
+            total += value
+    return total
+
+
+def _duration_to_seconds(value: str, unit: str | None) -> float:
+    """Normalize a parsed duration value to seconds."""
+    amount = float(value)
+    normalized_unit = str(unit or "s").lower()
+    if normalized_unit == "ms":
+        return amount / 1000.0
+    if normalized_unit in {"m", "min", "mins", "minutes"}:
+        return amount * 60.0
+    return amount
 
 
 def _fitness_dimension_from_data(value: object, in_fitness: bool = False) -> int:

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 from nicegui import ui
 
+from eagle.analysis.evolution_result_analysis import parse_time_analysis
 from eagle_gui_web import services
 from eagle_gui_web.theme import (
     BUTTON_CLASS,
@@ -37,11 +39,15 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
     async def refresh_timing() -> None:
         try:
             summary, rows, body = await asyncio.to_thread(services.build_timing, state.run.current_run_dir)
+            time_analysis = await asyncio.to_thread(_build_time_analysis_text, state.run.current_run_dir)
         except (OSError, ValueError) as exc:
             summary, rows, body = "Timing load error", [], str(exc)
+            time_analysis = str(exc)
         state.analysis.timing_summary = summary
         state.analysis.timing_rows = rows
         state.analysis.timing_body = body
+        time_analysis_text.value = time_analysis
+        time_analysis_text.update()
         timing_summary_label.set_text(summary)
         timing_table.rows = rows
         timing_table.update()
@@ -61,7 +67,10 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             f"{TEXTAREA_CLASS} {height_class(300)} w-full"
         )
 
-        ui.label("Timing").classes(SECTION_HEADER_CLASS)
+        ui.label("Time Analysis").classes(SECTION_HEADER_CLASS)
+        time_analysis_text = ui.textarea(value="No timing data found.").props("readonly").classes(
+            f"{TEXTAREA_CLASS} {height_class(150)} w-full"
+        )
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
             timing_summary_label = ui.label(state.analysis.timing_summary)
             ui.button("Refresh timing", on_click=refresh_timing).classes(BUTTON_CLASS)
@@ -81,3 +90,36 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
 
     controls["refresh_analysis"] = refresh_all
     return controls
+
+
+def _build_time_analysis_text(run_dir: Path | None) -> str:
+    """Render a compact time-analysis summary from selected-run timing text."""
+    if run_dir is None:
+        return "No timing data found."
+    log_text = _read_time_analysis_text(run_dir)
+    timing = parse_time_analysis(log_text)
+    if not timing:
+        return "No timing data found."
+    labels = [
+        ("total_runtime", "Total runtime"),
+        ("generation_runtime", "Generation runtime"),
+        ("average_generation_time", "Average generation time"),
+        ("evaluation_time", "Evaluation time"),
+        ("llm_call_time", "LLM call time"),
+    ]
+    return "\n".join(f"{label}: {_format_seconds(timing[key])}" for key, label in labels if key in timing)
+
+
+def _read_time_analysis_text(run_dir: Path) -> str:
+    """Read timing artifacts without touching GA/MO/final-test analysis files."""
+    parts: list[str] = []
+    for filename in ("timing_summary.json", "timing_events.jsonl", "timing_report.md"):
+        path = run_dir / filename
+        if path.exists():
+            parts.append(path.read_text(encoding="utf-8", errors="replace"))
+    return "\n".join(parts)
+
+
+def _format_seconds(value: object) -> str:
+    """Format seconds for the compact time-analysis panel."""
+    return f"{float(value):.3f} sec"
