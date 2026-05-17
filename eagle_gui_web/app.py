@@ -36,12 +36,21 @@ from eagle_gui_web.views.run_view import build_run_view
 
 state = AppState()
 EAGLE_IMAGE_URL = "/assets/eagle.png"
+EAGLE_IMAGE_PATH = services.ROOT / "assets" / "eagle.png"
 
 
 def _selected_run_path(value: Any) -> Path | None:
     if not value:
         return None
     return Path(str(value))
+
+
+def _run_kwargs(port: int) -> dict[str, Any]:
+    """Build NiceGUI run options with a filesystem favicon path when available."""
+    kwargs: dict[str, Any] = {"title": "Eagle", "reload": False, "show": True, "port": port}
+    if EAGLE_IMAGE_PATH.exists():
+        kwargs["favicon"] = str(EAGLE_IMAGE_PATH.resolve())
+    return kwargs
 
 
 def build_layout() -> dict[str, dict[str, Any]]:
@@ -186,7 +195,7 @@ nicegui_app.on_disconnect(_on_client_disconnect)
 def main() -> None:
     """Run the NiceGUI application."""
     port = services.find_available_port()
-    ui.run(title="Eagle", favicon=EAGLE_IMAGE_URL, reload=False, show=True, port=port)
+    ui.run(**_run_kwargs(port))
 
 
 if __name__ in {"__main__", "__mp_main__"}:
