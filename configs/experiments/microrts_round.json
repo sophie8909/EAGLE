@@ -5,17 +5,17 @@
   "num_generations": 50,
   "convergence_generations": 10,
   "reproduction_operator_probs": {
-    "crossover": 0.7000000000000001,
-    "mutation": 0.20000000000000004,
-    "reflection": 0.10000000000000002
+    "crossover": 0.2,
+    "mutation": 0.5,
+    "reflection": 0.3
   },
   "enable_reflection_operator": true,
   "reflection_max_components_to_rewrite": 1,
   "strategy_mutation": {
-    "pool_replacement": 0.4,
-    "identity_preserving_rewrite": 0.35,
-    "identity_shift_rewrite": 0.25,
-    "bitmask_flip": 0.0
+    "pool_replacement": 0.2,
+    "identity_preserving_rewrite": 0.6,
+    "identity_shift_rewrite": 0.1,
+    "bitmask_flip": 0.1
   },
   "mutation_operator": "mix",
   "selection_method": "random",
@@ -23,25 +23,36 @@
   "crossover": "uniform",
   "crossover_operator": "uniform",
   "crossover_repair_enabled": true,
-  "environment_selection_method": "ga_fitness_elitism",
-  "final_test_max_front": 1,
+  "environment_selection_method": "nsga2_environmental",
+  "final_test_max_front": 0,
   "include_strategy_identity_in_prompt": false,
-  "evolving_prompt_components": [
-    "role",
-    "game_rules",
-    "unit_types",
-    "building_types",
-    "game_state_format"
-  ],
+  "evolving_prompt_components": [],
   "non_evolving_prompt_components": [
+    "actions",
+    "attack_style",
+    "barracks_ownership_rule",
+    "consistency_rule",
+    "critical_rules",
     "current_game_state_marker",
-    "json_schema"
+    "decision_logic",
+    "decision_process",
+    "example_safety_rule",
+    "field_requirements",
+    "game_objects",
+    "json_schema",
+    "memoryless_barracks_rule",
+    "raw_move_format",
+    "role",
+    "stable_worker_role_rule",
+    "start_game_rule",
+    "state_interpretation_step",
+    "training_examples"
   ],
-  "component_pool_path": "configs/experiments/default_components.json",
+  "component_pool_path": "configs/experiments/microrts_round_components.json",
   "initial_population_seeds": [],
   "tick_limit": 5000,
   "llm_call_limit": 50,
-  "gameplay_rate": 0.25,
+  "gameplay_rate": 1.0,
   "gameplay_refresh_interval": 5,
   "surrogate_top_ratio": 0.3,
   "archive_parent_ratio": 0.25,
@@ -57,10 +68,6 @@
   ],
   "gameplay_map_dir": "8x8",
   "llm_interval": [
-    10,
-    10,
-    5,
-    3,
     1
   ],
   "save_trace_on_test": false,
@@ -77,13 +84,13 @@
   "surrogate_version": "eaglePolicy",
   "surrogate": "round",
   "surrogate_recent_match_window": 10,
-  "surrogate_round_samples_per_match": 10,
+  "surrogate_round_samples_per_match": 1,
   "round_eval_model": "local",
-  "round_state_seed": null,
+  "round_state_seed": 0,
   "surrogate_log_dir": "logs/microrts",
   "prompt_history_path": "logs/microrts/round_evol/history.jsonl",
-  "one_eval_rounds": 8,
+  "one_eval_rounds": 5,
   "application": "microrts",
-  "parent_selection_operator": "ga_fitness_tournament",
-  "env_selection_operator": "ga_fitness_elitism"
+  "parent_selection_operator": "nsga2_tournament",
+  "env_selection_operator": "nsga2_environmental"
 }
