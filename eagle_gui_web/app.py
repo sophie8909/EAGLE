@@ -54,8 +54,8 @@ def build_layout() -> dict[str, dict[str, Any]]:
         with ui.row().classes(f"{BRAND_CLASS} items-center"):
             ui.image(EAGLE_IMAGE_URL).classes(BRAND_IMAGE_CLASS)
             with ui.column().classes("gap-0"):
-                ui.label("Eagle Observatory").classes(title_class("text-h5"))
-                ui.label("Research dashboard").classes(SUBTITLE_CLASS)
+                ui.label("Eagle").classes(title_class("text-h5"))
+                ui.label("EA for Gameplay LLM-agEnt").classes(SUBTITLE_CLASS)
 
     with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
         run_tab = ui.tab("Run").classes(TAB_CLASS)
