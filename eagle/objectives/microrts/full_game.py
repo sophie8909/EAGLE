@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from eagle.objectives.base import Objective
+from eagle.utils.token_count import count_prompt_tokens
 
 
 class ResourceAdvantageObjective(Objective):
@@ -73,3 +74,27 @@ class PromptTokenCountObjective(Objective):
     def compute(self, eval_result: dict[str, Any]) -> float:
         """Return the rendered prompt token count."""
         return float(eval_result["prompt_token_count"])
+
+
+class TokenLengthMinimumObjective(Objective):
+    """Reward prompts that meet a configured minimum token length."""
+
+    key = "token_length_minimum"
+    label = "Token length minimum"
+    direction = "max"
+    application = "microrts"
+    eval_modes = {"round", "full_game", "java_surrogate"}
+    required_metrics = set()
+
+    def compute(self, eval_result: dict[str, Any]) -> float:
+        """Return a bounded length-sufficiency score in [0, 1]."""
+        min_length = max(1.0, float(eval_result.get("min_token_length", 1) or 1))
+        token_length = self._token_length(eval_result)
+        return max(0.0, min(1.0, token_length / min_length))
+
+    def _token_length(self, eval_result: dict[str, Any]) -> float:
+        """Read existing token count, falling back to the shared prompt counter."""
+        value = eval_result.get("prompt_token_count")
+        if value is not None:
+            return max(0.0, float(value))
+        return float(count_prompt_tokens(str(eval_result.get("prompt", "")))[0])

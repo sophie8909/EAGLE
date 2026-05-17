@@ -113,6 +113,7 @@ class EAConfig:
     gameplay_refresh_interval: int = field(default_factory=lambda: int(_default_config_value("gameplay_refresh_interval")))
     surrogate_top_ratio: float = field(default_factory=lambda: float(_default_config_value("surrogate_top_ratio")))
     archive_parent_ratio: float = field(default_factory=lambda: float(_default_config_value("archive_parent_ratio")))
+    min_token_length: int = field(default_factory=lambda: int(_default_config_value("min_token_length")))
     objective_config: dict[str, Any] = field(default_factory=lambda: dict(_default_config_value("objective_config")))
     training_example_sample_count: str | int = field(
         default_factory=lambda: _default_config_value("training_example_sample_count")
@@ -276,6 +277,7 @@ class EAConfig:
             raise ValueError("gameplay_map_dir must be a non-empty maps/ subfolder name.")
         self.tick_limit = max(1, int(self.tick_limit))
         self.llm_call_limit = max(1, int(self.llm_call_limit))
+        self.min_token_length = max(1, int(self.min_token_length))
         self.llm_interval = self._normalized_llm_interval_input(self.llm_interval)
 
     def evolution_settings(self) -> dict[str, object]:
@@ -318,6 +320,7 @@ class EAConfig:
             "resource_advantage_alpha": self.resource_advantage_alpha,
             "win_bonus": self.win_bonus,
             "resource_advantage_weights": dict(self.resource_advantage_weights),
+            "min_token_length": self.min_token_length,
         }
 
     def surrogate_settings(self) -> dict[str, object]:

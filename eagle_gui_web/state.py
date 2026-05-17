@@ -31,6 +31,7 @@ class ConfigState:
     gameplay_refresh_interval: str = "5"
     surrogate_top_ratio: str = "0.3"
     archive_parent_ratio: str = "0.25"
+    min_token_length: str = "1"
     one_eval_rounds: str = "8"
     final_test_max_front: str = "1"
     opponents_text: str = "ai.abstraction.LightRush, ai.abstraction.HeavyRush"

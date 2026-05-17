@@ -129,6 +129,7 @@ def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path)
         "gameplay_refresh_interval",
         "surrogate_top_ratio",
         "archive_parent_ratio",
+        "min_token_length",
         "one_eval_rounds",
         "final_test_max_front",
     ):
@@ -366,6 +367,7 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
             "gameplay_refresh_interval": parse_int(cfg.gameplay_refresh_interval, "gameplay_refresh_interval"),
             "surrogate_top_ratio": parse_float(cfg.surrogate_top_ratio, "surrogate_top_ratio"),
             "archive_parent_ratio": parse_float(cfg.archive_parent_ratio, "archive_parent_ratio"),
+            "min_token_length": parse_int(cfg.min_token_length, "min_token_length"),
             "objective_config": build_objective_config(state),
             "training_example_sample_count": training_example_selection_value(state),
             "training_example_fixed_count": bool(cfg.training_example_fixed_count),

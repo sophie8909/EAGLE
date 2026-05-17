@@ -62,6 +62,7 @@
   "gameplay_refresh_interval": 5,
   "surrogate_top_ratio": 0.3,
   "archive_parent_ratio": 0.25,
+  "min_token_length": 1,
   "objective_config": {
     "mode": "multi",
     "objectives": [

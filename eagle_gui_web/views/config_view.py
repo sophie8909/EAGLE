@@ -96,6 +96,7 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 ("gameplay_refresh_interval", "Gameplay refresh"),
                 ("surrogate_top_ratio", "Surrogate top ratio"),
                 ("archive_parent_ratio", "Archive parent ratio"),
+                ("min_token_length", "Min token length"),
                 ("one_eval_rounds", "One eval rounds"),
                 ("final_test_max_front", "Final max front"),
                 ("opponents_text", "Gameplay opponents"),
