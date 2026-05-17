@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ from eagle.analysis.evolution_result_analysis import (
     build_analysis_context,
     parse_final_test_analysis,
     parse_ga_convergence,
+    parse_mo_analysis,
     parse_time_analysis,
 )
 from eagle_gui_web import services
@@ -35,15 +37,19 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
     async def refresh_analysis() -> None:
         try:
             summary, body = await asyncio.to_thread(services.build_analysis, state.run.current_run_dir)
+            mo_analysis = await asyncio.to_thread(_build_mo_analysis_text, state.run.current_run_dir)
             final_test_analysis = await asyncio.to_thread(_build_final_test_analysis_text, state.run.current_run_dir)
             ga_convergence = await asyncio.to_thread(_build_ga_convergence_options, state.run.current_run_dir)
         except (OSError, ValueError) as exc:
             summary, body = "Analysis load error", str(exc)
+            mo_analysis = str(exc)
             final_test_analysis = str(exc)
             ga_convergence = None
         state.analysis.summary = summary
         state.analysis.body = body
         _render_ga_convergence(ga_chart_container, ga_convergence)
+        mo_analysis_text.value = mo_analysis
+        mo_analysis_text.update()
         final_test_text.value = final_test_analysis
         final_test_text.update()
         summary_label.set_text(summary)
@@ -82,6 +88,11 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         )
         ga_chart_container = ui.column().classes("w-full gap-3")
 
+        ui.label("MO Analysis").classes(SECTION_HEADER_CLASS)
+        mo_analysis_text = ui.textarea(value="No multi-objective data found.").props("readonly").classes(
+            f"{TEXTAREA_CLASS} {height_class(220)} w-full"
+        )
+
         ui.label("Final Test").classes(SECTION_HEADER_CLASS)
         final_test_text = ui.textarea(value="No final test data found.").props("readonly").classes(
             f"{TEXTAREA_CLASS} {height_class(170)} w-full"
@@ -110,6 +121,49 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
 
     controls["refresh_analysis"] = refresh_all
     return controls
+
+
+def _build_mo_analysis_text(run_dir: Path | None) -> str:
+    """Render multi-objective analysis separately from GA/final-test panels."""
+    if run_dir is None:
+        return "No multi-objective data found."
+    log_text = _read_mo_analysis_text(run_dir)
+    if not build_analysis_context(log_text).get("is_multi_objective"):
+        return "No multi-objective data found."
+    analysis = parse_mo_analysis(log_text)
+    if not analysis:
+        return "No multi-objective data found."
+    lines = [
+        f"Pareto front count: {analysis.get('pareto_front_count', 0)}",
+    ]
+    if analysis.get("objective_names"):
+        lines.append("Objectives: " + ", ".join(str(name) for name in analysis["objective_names"]))
+    front_rows = list(analysis.get("final_pareto_front_individuals", []))
+    if front_rows:
+        lines.append("Final Pareto front individuals:")
+        for row in front_rows[:12]:
+            lines.append(f"- {row.get('id')}: {_format_fitness(row.get('fitness'))}")
+    best_rows = list(analysis.get("objective_best", []))
+    if best_rows:
+        lines.append("Objective best:")
+        for row in best_rows:
+            lines.append(f"- {row.get('objective')}: {row.get('individual')} = {float(row.get('value', 0.0)):.4g}")
+    trends = analysis.get("objective_trends")
+    if isinstance(trends, dict) and trends.get("generations"):
+        lines.append("Objective trends:")
+        lines.append(f"- generations: {', '.join(str(item) for item in trends['generations'])}")
+        for objective in analysis.get("objective_names", []):
+            if objective in trends:
+                lines.append(f"- {objective}: {', '.join(_format_float(item) for item in trends[objective])}")
+    return "\n".join(lines)
+
+
+def _read_mo_analysis_text(run_dir: Path) -> str:
+    """Read only MO generation logs for the MO analysis section."""
+    parts: list[str] = []
+    for path in sorted(run_dir.glob("generation_*_mo.txt"), key=_generation_sort_key):
+        parts.append(path.read_text(encoding="utf-8", errors="replace"))
+    return "\n".join(parts)
 
 
 def _render_ga_convergence(container: Any, options: dict[str, Any] | None) -> None:
@@ -271,6 +325,24 @@ def _read_time_analysis_text(run_dir: Path) -> str:
         if path.exists():
             parts.append(path.read_text(encoding="utf-8", errors="replace"))
     return "\n".join(parts)
+
+
+def _format_fitness(value: object) -> str:
+    """Format one objective-fitness mapping for display."""
+    if not isinstance(value, dict):
+        return str(value)
+    return ", ".join(f"{key}={_format_float(item)}" for key, item in value.items())
+
+
+def _format_float(value: object) -> str:
+    """Format a compact numeric value."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if math.isnan(number):
+        return "n/a"
+    return f"{number:.4g}"
 
 
 def _format_seconds(value: object) -> str:

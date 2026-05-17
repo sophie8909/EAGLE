@@ -21,6 +21,9 @@ GENERATION_MARKER_PATTERN = re.compile(r"\b(?:generation|gen)\s+\d+|generation_\
 FITNESS_VECTOR_PATTERN = re.compile(r"fitness\s*(?:=|:)\s*[\[(]([^\])]+)[\])]", re.IGNORECASE)
 FITNESS_SCALAR_PATTERN = re.compile(r"fitness\s*(?:=|:)\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
 GA_GENERATION_PATTERN = re.compile(r"^Generation\s+(\d+)(?!.*Multi-objective).*$", re.IGNORECASE | re.MULTILINE)
+MO_GENERATION_PATTERN = re.compile(r"^Generation\s+(\d+).*$", re.IGNORECASE | re.MULTILINE)
+PARETO_FRONT_PATTERN = re.compile(r"^Pareto Front\s+(\d+):", re.IGNORECASE | re.MULTILINE)
+INDIVIDUAL_FITNESS_PATTERN = re.compile(r"^Individual.*?\s+-\s+Fitness\s*(?:=|:)\s*.+$", re.IGNORECASE)
 TIME_LINE_PATTERN = re.compile(
     r"(?P<label>total runtime|generation runtime|average generation time|evaluation time|llm call time|llm time)"
     r"\s*(?:=|:)\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>ms|s|sec|secs|seconds|m|min|mins|minutes)?",
@@ -123,6 +126,32 @@ def parse_ga_convergence(log_text) -> dict:
     return result if generations else {}
 
 
+def parse_mo_analysis(log_text) -> dict:
+    """Parse Pareto and objective-level summaries from multi-objective logs."""
+    text = str(log_text or "")
+    if not build_analysis_context(text).get("is_multi_objective"):
+        return {}
+    blocks = _mo_generation_blocks(text)
+    if not blocks:
+        blocks = [(0, text)]
+    final_generation, final_block = blocks[-1]
+    objective_names = _mo_objective_names(text)
+    final_records = _mo_records_from_block(final_block, objective_names)
+    front_one = [record for record in final_records if record.get("front") == 1]
+    objective_best = _mo_objective_best(final_records, objective_names)
+    trends = _mo_objective_trends(blocks, objective_names)
+    result: dict[str, object] = {
+        "final_generation": final_generation,
+        "pareto_front_count": _mo_front_count(final_block),
+        "final_pareto_front_individuals": front_one,
+        "objective_names": objective_names,
+        "objective_best": objective_best,
+    }
+    if trends:
+        result["objective_trends"] = trends
+    return result
+
+
 def _contains_key(value: object, marker: str) -> bool:
     """Return whether a nested mapping/list contains a marker in any key."""
     if isinstance(value, dict):
@@ -202,6 +231,123 @@ def _ga_generation_blocks(text: str) -> list[tuple[int, str]]:
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         blocks.append((int(match.group(1)), text[start:end]))
     return blocks
+
+
+def _mo_generation_blocks(text: str) -> list[tuple[int, str]]:
+    """Split multi-objective text into generation-numbered blocks."""
+    matches = list(MO_GENERATION_PATTERN.finditer(text))
+    blocks: list[tuple[int, str]] = []
+    for index, match in enumerate(matches):
+        start = match.start()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        block = text[start:end]
+        if build_analysis_context(block).get("is_multi_objective"):
+            blocks.append((int(match.group(1)), block))
+    return blocks
+
+
+def _mo_front_count(block: str) -> int:
+    """Return the number of Pareto front markers in one block."""
+    return len(PARETO_FRONT_PATTERN.findall(block))
+
+
+def _mo_records_from_block(block: str, objective_names: list[str]) -> list[dict[str, object]]:
+    """Parse individual fitness rows from one MO generation block."""
+    records: list[dict[str, object]] = []
+    current_front: int | None = None
+    fallback_index = 1
+    for line in block.splitlines():
+        if line.strip().startswith("Population Snapshot"):
+            current_front = None
+            continue
+        front_match = PARETO_FRONT_PATTERN.match(line.strip())
+        if front_match:
+            current_front = int(front_match.group(1))
+            continue
+        if not INDIVIDUAL_FITNESS_PATTERN.match(line.strip()):
+            continue
+        values, names = _fitness_vector_from_line(line)
+        if len(values) < 2:
+            continue
+        if not objective_names and names:
+            objective_names.extend(names)
+        if not objective_names:
+            objective_names.extend(f"objective_{index + 1}" for index in range(len(values)))
+        individual_id = _individual_id_from_line(line) or f"individual_{fallback_index}"
+        fallback_index += 1
+        records.append(
+            {
+                "id": individual_id,
+                "front": current_front,
+                "fitness": {name: values[index] for index, name in enumerate(objective_names[: len(values)])},
+            }
+        )
+    return records
+
+
+def _mo_objective_names(text: str) -> list[str]:
+    """Return objective names from keyed fitness, or generated names by dimension."""
+    dimension = 0
+    for line in text.splitlines():
+        if "fitness" not in line.lower():
+            continue
+        values, names = _fitness_vector_from_line(line)
+        if names:
+            return names
+        dimension = max(dimension, len(values))
+    return [f"objective_{index + 1}" for index in range(dimension)] if dimension else []
+
+
+def _mo_objective_best(records: list[dict[str, object]], objective_names: list[str]) -> list[dict[str, object]]:
+    """Return best individual and value for each objective."""
+    best_rows: list[dict[str, object]] = []
+    for objective in objective_names:
+        candidates = [
+            (record, float(record["fitness"][objective]))
+            for record in records
+            if isinstance(record.get("fitness"), dict) and objective in record["fitness"]
+        ]
+        if not candidates:
+            continue
+        best_record, best_value = max(candidates, key=lambda item: item[1])
+        best_rows.append({"objective": objective, "individual": best_record.get("id"), "value": best_value})
+    return best_rows
+
+
+def _mo_objective_trends(blocks: list[tuple[int, str]], objective_names: list[str]) -> dict[str, list[float]]:
+    """Return per-generation best objective values when multiple generations exist."""
+    if len(blocks) < 2:
+        return {}
+    trends: dict[str, list[float]] = {"generations": []}
+    for objective in objective_names:
+        trends[objective] = []
+    for generation, block in blocks:
+        records = _mo_records_from_block(block, list(objective_names))
+        best_rows = {row["objective"]: row["value"] for row in _mo_objective_best(records, objective_names)}
+        if not best_rows:
+            continue
+        trends["generations"].append(generation)
+        for objective in objective_names:
+            trends[objective].append(best_rows.get(objective, float("nan")))
+    return trends if trends["generations"] else {}
+
+
+def _fitness_vector_from_line(line: str) -> tuple[list[float], list[str]]:
+    """Return numeric fitness vector and optional objective names from one line."""
+    payload = _fitness_payload_from_line(line)
+    if isinstance(payload, dict):
+        pairs = [(str(key), float(value)) for key, value in payload.items() if _is_number_like(value)]
+        return [value for _, value in pairs], [name for name, _ in pairs]
+    if isinstance(payload, list):
+        values = [float(value) for value in payload if _is_number_like(value)]
+        return values, []
+    return [], []
+
+
+def _individual_id_from_line(line: str) -> str | None:
+    """Extract an individual id from a logged Individual repr."""
+    match = re.search(r"\bid=([^,\)]+)", line)
+    return match.group(1).strip().strip("'\"") if match else None
 
 
 def _ga_best_fitness(block: str) -> float | None:
