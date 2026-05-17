@@ -8,7 +8,7 @@ from typing import Any
 
 from nicegui import ui
 
-from eagle.analysis.evolution_result_analysis import parse_time_analysis
+from eagle.analysis.evolution_result_analysis import parse_final_test_analysis, parse_time_analysis
 from eagle_gui_web import services
 from eagle_gui_web.theme import (
     BUTTON_CLASS,
@@ -28,10 +28,14 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
     async def refresh_analysis() -> None:
         try:
             summary, body = await asyncio.to_thread(services.build_analysis, state.run.current_run_dir)
+            final_test_analysis = await asyncio.to_thread(_build_final_test_analysis_text, state.run.current_run_dir)
         except (OSError, ValueError) as exc:
             summary, body = "Analysis load error", str(exc)
+            final_test_analysis = str(exc)
         state.analysis.summary = summary
         state.analysis.body = body
+        final_test_text.value = final_test_analysis
+        final_test_text.update()
         summary_label.set_text(summary)
         body_text.value = body
         body_text.update()
@@ -67,6 +71,11 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             f"{TEXTAREA_CLASS} {height_class(300)} w-full"
         )
 
+        ui.label("Final Test").classes(SECTION_HEADER_CLASS)
+        final_test_text = ui.textarea(value="No final test data found.").props("readonly").classes(
+            f"{TEXTAREA_CLASS} {height_class(170)} w-full"
+        )
+
         ui.label("Time Analysis").classes(SECTION_HEADER_CLASS)
         time_analysis_text = ui.textarea(value="No timing data found.").props("readonly").classes(
             f"{TEXTAREA_CLASS} {height_class(150)} w-full"
@@ -90,6 +99,55 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
 
     controls["refresh_analysis"] = refresh_all
     return controls
+
+
+def _build_final_test_analysis_text(run_dir: Path | None) -> str:
+    """Render final-test analysis separately from evolution analysis."""
+    if run_dir is None:
+        return "No final test data found."
+    log_text = _read_final_test_analysis_text(run_dir)
+    analysis = parse_final_test_analysis(log_text)
+    if not analysis.get("has_final_test"):
+        return "No final test data found."
+    lines: list[str] = []
+    if "games" in analysis:
+        lines.append(f"Final test games: {analysis['games']}")
+    for key, label in (("wins", "Wins"), ("losses", "Losses"), ("draws", "Draws")):
+        if key in analysis:
+            lines.append(f"{label}: {analysis[key]}")
+    if "win_rate" in analysis:
+        lines.append(f"Win rate: {float(analysis['win_rate']) * 100:.1f}%")
+    if analysis.get("maps"):
+        lines.append("Maps: " + ", ".join(str(item) for item in analysis["maps"]))
+    if analysis.get("opponents"):
+        lines.append("Opponents: " + ", ".join(str(item) for item in analysis["opponents"]))
+    if "skipped_games" in analysis:
+        lines.append(f"Skipped games: {analysis['skipped_games']}")
+    if "failed_games" in analysis:
+        lines.append(f"Failed games: {analysis['failed_games']}")
+    if analysis.get("skip_reason"):
+        lines.append(f"Skip reason: {analysis['skip_reason']}")
+    return "\n".join(lines) if lines else "FINAL_TEST markers found, but no detailed results are available yet."
+
+
+def _read_final_test_analysis_text(run_dir: Path) -> str:
+    """Read final-test artifacts without mixing them into evolution analysis."""
+    parts: list[str] = []
+    for filename in ("final_test_results.json", "final_test_result.json"):
+        path = run_dir / filename
+        if path.exists():
+            parts.append(path.read_text(encoding="utf-8", errors="replace"))
+    log_files = sorted(run_dir.glob("*.log"), key=lambda path: path.stat().st_mtime, reverse=True)
+    for path in log_files[:3]:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if "FINAL_TEST" in text.upper() or "Final Test" in text:
+            parts.append(text)
+    process_log_path = services.process_log_path()
+    if process_log_path and process_log_path.exists():
+        text = process_log_path.read_text(encoding="utf-8", errors="replace")
+        if ("FINAL_TEST" in text.upper() or "Final Test" in text) and str(run_dir) in text:
+            parts.append(text)
+    return "\n".join(parts)
 
 
 def _build_time_analysis_text(run_dir: Path | None) -> str:

@@ -23,6 +23,7 @@ TIME_LINE_PATTERN = re.compile(
     r"\s*(?:=|:)\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>ms|s|sec|secs|seconds|m|min|mins|minutes)?",
     re.IGNORECASE,
 )
+FINAL_TEST_MARKER_PATTERN = re.compile(r"final[_\s-]*test", re.IGNORECASE)
 FINAL_TEST_CANDIDATES = ("final_test_results.json", "final_test_result.json")
 FINAL_TEST_MODES = ("interval_1", "interval_10", "java_agent_test")
 
@@ -78,6 +79,22 @@ def parse_time_analysis(log_text) -> dict:
     return {key: value for key, value in result.items() if value is not None}
 
 
+def parse_final_test_analysis(log_text) -> dict:
+    """Parse final-test results from JSON payloads or partial log markers."""
+    text = str(log_text or "")
+    payload = _final_test_payload_from_text(text)
+    result = _final_test_analysis_from_payload(payload) if payload else {}
+    marker_result = _final_test_analysis_from_lines(text)
+    for key, value in marker_result.items():
+        if key == "has_final_test":
+            result[key] = bool(result.get(key)) or bool(value)
+        elif key in {"maps", "opponents"}:
+            result[key] = sorted(set(result.get(key, [])) | set(value))
+        else:
+            result.setdefault(key, value)
+    return {key: value for key, value in result.items() if value not in (None, [], {})}
+
+
 def _contains_key(value: object, marker: str) -> bool:
     """Return whether a nested mapping/list contains a marker in any key."""
     if isinstance(value, dict):
@@ -112,6 +129,139 @@ def _time_records_from_text(text: str) -> tuple[dict[str, object], list[dict[str
         elif record_type == "timing_event":
             events.append(payload)
     return summary, events
+
+
+def _json_objects_from_text(text: str) -> list[dict[str, object]]:
+    """Read JSON objects embedded in plain text."""
+    objects: list[dict[str, object]] = []
+    decoder = json.JSONDecoder()
+    index = 0
+    while index < len(text):
+        start = text.find("{", index)
+        if start < 0:
+            break
+        try:
+            payload, end = decoder.raw_decode(text[start:])
+        except json.JSONDecodeError:
+            index = start + 1
+            continue
+        index = start + max(end, 1)
+        if not isinstance(payload, dict):
+            continue
+        objects.append(payload)
+    return objects
+
+
+def _final_test_payload_from_text(text: str) -> dict[str, object]:
+    """Return the first final-test-shaped JSON object from mixed text."""
+    for payload in _json_objects_from_text(text):
+        if payload.get("results") is not None and (
+            payload.get("generation_log") is not None
+            or payload.get("selection_rule") is not None
+            or payload.get("selected_individual_count") is not None
+            or payload.get("skipped") is not None
+        ):
+            return payload
+    return {}
+
+
+def _final_test_analysis_from_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Build final-test fields from final_test_results.json data."""
+    records = _final_test_records(payload.get("results"))
+    wins = losses = draws = skipped_games = failed_games = 0
+    maps: set[str] = set()
+    opponents: set[str] = set()
+    for record in records:
+        outcome = _final_test_outcome(record)
+        wins += int(outcome == "win")
+        losses += int(outcome == "loss")
+        draws += int(outcome == "draw")
+        skipped_games += int(outcome == "skipped")
+        failed_games += int(outcome == "failed")
+        _add_optional_text(opponents, record.get("opponent"))
+        _add_optional_text(maps, record.get("map") or record.get("map_name") or record.get("map_location"))
+    completed_games = wins + losses + draws
+    total_games = len(records)
+    return {
+        "has_final_test": True,
+        "games": total_games,
+        "wins": wins,
+        "losses": losses,
+        "draws": draws,
+        "win_rate": (wins / completed_games) if completed_games else None,
+        "maps": sorted(maps),
+        "opponents": sorted(opponents),
+        "skipped_games": skipped_games or (total_games if payload.get("skipped") else 0),
+        "failed_games": failed_games,
+        "skipped": bool(payload.get("skipped")),
+        "skip_reason": str(payload.get("skip_reason")) if payload.get("skip_reason") else None,
+    }
+
+
+def _final_test_records(results: object) -> list[dict[str, object]]:
+    """Flatten final-test result rows from supported result payloads."""
+    if isinstance(results, dict):
+        rows: list[dict[str, object]] = []
+        for value in results.values():
+            if isinstance(value, list):
+                rows.extend(item for item in value if isinstance(item, dict))
+            elif isinstance(value, dict):
+                rows.append(value)
+        return rows
+    if isinstance(results, list):
+        return [item for item in results if isinstance(item, dict)]
+    return []
+
+
+def _final_test_analysis_from_lines(text: str) -> dict[str, object]:
+    """Build partial final-test fields from log markers."""
+    result: dict[str, object] = {"has_final_test": True} if FINAL_TEST_MARKER_PATTERN.search(text) else {}
+    if not result:
+        return result
+    opponents = set(re.findall(r"opponent\s+\d+/\d+:\s*([^\s(]+)", text, flags=re.IGNORECASE))
+    maps = set(re.findall(r"\bmap(?:_location)?[=:]\s*([^\s,]+)", text, flags=re.IGNORECASE))
+    if opponents:
+        result["opponents"] = sorted(opponents)
+    if maps:
+        result["maps"] = sorted(maps)
+    skipped = len(re.findall(r"\bskipped?\b", text, flags=re.IGNORECASE))
+    failed = len(re.findall(r"\b(?:failed|error)\b", text, flags=re.IGNORECASE))
+    if skipped:
+        result["skipped_games"] = skipped
+        result["skipped"] = True
+    if failed:
+        result["failed_games"] = failed
+    return result
+
+
+def _final_test_outcome(record: dict[str, object]) -> str:
+    """Normalize one final-test row outcome."""
+    status = str(record.get("status") or record.get("result") or "").strip().lower()
+    if status in {"win", "loss", "draw", "skipped", "failed"}:
+        return status
+    if record.get("skipped") is True:
+        return "skipped"
+    if record.get("failed") is True or record.get("error"):
+        return "failed"
+    score = record.get("win_score")
+    if score is None and isinstance(record.get("match_score"), dict):
+        score = record["match_score"].get("win_score")
+    try:
+        win_score = float(score)
+    except (TypeError, ValueError):
+        return "unknown"
+    if win_score == 1.0:
+        return "win"
+    if win_score == 0.0:
+        return "loss"
+    return "draw"
+
+
+def _add_optional_text(values: set[str], value: object) -> None:
+    """Add a non-empty text value to a set."""
+    text = str(value or "").strip()
+    if text:
+        values.add(text)
 
 
 def _time_analysis_from_summary(summary: dict[str, object]) -> dict[str, float]:
