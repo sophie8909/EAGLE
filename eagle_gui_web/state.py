@@ -171,6 +171,8 @@ class AppState:
     prompts: PromptState = field(default_factory=PromptState)
     microrts: MicroRTSState = field(default_factory=MicroRTSState)
     is_stopping: bool = False
+    is_shutting_down: bool = False
+    connected_clients: int = 0
     active_processes: list[Any] = field(default_factory=list)
     active_timers: list[Any] = field(default_factory=list)
     active_tasks: list[Any] = field(default_factory=list)

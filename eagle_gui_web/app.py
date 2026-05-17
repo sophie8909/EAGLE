@@ -159,6 +159,29 @@ analysis_timer = ui.timer(15.0, refresh_analysis_timer)
 state.active_timers.extend([startup_timer, log_timer, analysis_timer])
 
 
+async def _shutdown_after_final_disconnect() -> None:
+    """Clean runtime state, then ask NiceGUI to stop serving."""
+    if state.is_shutting_down:
+        return
+    state.is_shutting_down = True
+    await asyncio.to_thread(services.shutdown_runtime, state)
+    services.shutdown_app(state, nicegui_app)
+
+
+def _on_client_connect(*_: Any) -> None:
+    state.connected_clients += 1
+
+
+def _on_client_disconnect(*_: Any) -> None:
+    state.connected_clients = max(0, state.connected_clients - 1)
+    if state.connected_clients == 0 and not state.is_shutting_down:
+        asyncio.create_task(_shutdown_after_final_disconnect())
+
+
+nicegui_app.on_connect(_on_client_connect)
+nicegui_app.on_disconnect(_on_client_disconnect)
+
+
 def main() -> None:
     """Run the NiceGUI application."""
     port = services.find_available_port()

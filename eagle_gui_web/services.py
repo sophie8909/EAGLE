@@ -654,6 +654,16 @@ def shutdown_runtime(state: Any) -> str:
     return "Shutdown complete"
 
 
+def shutdown_app(state: Any, app_object: Any) -> str:
+    """Request a NiceGUI server shutdown after runtime cleanup."""
+    state.is_shutting_down = True
+    shutdown = getattr(app_object, "shutdown", None)
+    if not callable(shutdown):
+        raise RuntimeError("NiceGUI app shutdown is not available.")
+    shutdown()
+    return "GUI shutdown requested"
+
+
 def _launch_tracked_process(command: list[str], *, cwd: Path, stdout: Any, state: Any | None) -> subprocess.Popen:
     """Launch a subprocess and register only this GUI-owned handle."""
     options: dict[str, Any] = {}
