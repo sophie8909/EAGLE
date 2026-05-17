@@ -95,6 +95,7 @@ class EagleDesktopApp:
         self.microrts_gui_process: subprocess.Popen | None = None
         self.microrts_gui_log_path: Path | None = None
         self.generated_config_path: Path | None = None
+        self.prompt_artifact_signature: tuple[str | None, tuple[tuple[str, int | None], ...]] | None = None
 
         # Component editor state owns the JSON payload and prompt-builder candidate selection.
         self.base_config_path = StringVar(value=str(DEFAULT_CONFIG))
@@ -200,12 +201,15 @@ class EagleDesktopApp:
         self._build_timing_tab()
         self._build_prompt_tab()
         self._build_java_gui_tab()
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_notebook_tab_changed)
 
         self.load_base_config_into_form()
         self.root.protocol("WM_DELETE_WINDOW", self.close_window)
         self.refresh_runs()
         self.attach_existing_process()
-        self._schedule_refresh()
+        self._schedule_log_refresh()
+        self._schedule_analysis_refresh()
+        self._schedule_prompt_refresh()
 
     # ------------------------------------------------------------------
     # Window and tab construction
@@ -2681,7 +2685,7 @@ class EagleDesktopApp:
         run_dir = self.current_run_dir()
         self.refresh_analysis(run_dir)
         self.refresh_timing(run_dir)
-        self.refresh_prompts(run_dir)
+        self.refresh_prompts(run_dir, force=True)
 
     def refresh_process_log(self) -> None:
         """Refresh process output and status."""
@@ -2822,17 +2826,22 @@ class EagleDesktopApp:
             )
         self._set_text(self.timing_output, report.body)
 
-    def refresh_prompts(self, run_dir: Path | None) -> None:
+    def refresh_prompts(self, run_dir: Path | None, *, force: bool = False) -> None:
         """Refresh prompt list from the latest generation evaluation profiles."""
+        artifact_signature = self.prompt_mtime_signature(run_dir)
+        if not force and artifact_signature == self.prompt_artifact_signature:
+            return
         previous = self.selected_prompt_id()
         self.prompt_table.delete(*self.prompt_table.get_children())
         try:
             self.loaded_prompts = analysis_service.load_prompts(run_dir) if run_dir else {}
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             self.loaded_prompts = {}
+            self.prompt_artifact_signature = artifact_signature
             self._set_text(self.individual_prompt_output, f"Prompt load error:\n{exc}")
             self._set_text(self.llm_response_output, "")
             return
+        self.prompt_artifact_signature = artifact_signature
         for prompt_id, record in self.loaded_prompts.items():
             self.prompt_table.insert(
                 "",
@@ -2850,6 +2859,24 @@ class EagleDesktopApp:
         elif self.loaded_prompts:
             self.prompt_table.selection_set(next(iter(self.loaded_prompts)))
         self.show_selected_prompt()
+
+    def prompt_mtime_signature(self, run_dir: Path | None) -> tuple[str | None, tuple[tuple[str, int | None], ...]]:
+        """Return the prompt-source file mtimes for cache invalidation."""
+        if run_dir is None:
+            return None, ()
+        mtimes: list[tuple[str, int | None]] = []
+        for name in ("profiles.jsonl", "checkpoints.jsonl", "run_state.json"):
+            path = run_dir / name
+            try:
+                mtimes.append((name, path.stat().st_mtime_ns))
+            except OSError:
+                mtimes.append((name, None))
+        return str(run_dir), tuple(mtimes)
+
+    def on_notebook_tab_changed(self, _event: object | None = None) -> None:
+        """Refresh prompt records once when the Prompts tab becomes active."""
+        if self.selected_notebook_tab_text() == "Prompts":
+            self.refresh_prompts(self.current_run_dir())
 
     # ------------------------------------------------------------------
     # Current selection helpers and text widget helpers
@@ -2909,15 +2936,29 @@ class EagleDesktopApp:
             except Exception:
                 pass
 
-    def _schedule_refresh(self) -> None:
-        """Periodically refresh process output and selected-run analysis."""
+    def selected_notebook_tab_text(self) -> str:
+        """Return the label for the currently selected notebook tab."""
+        selected = self.notebook.select()
+        return str(self.notebook.tab(selected, "text")) if selected else ""
+
+    def _schedule_log_refresh(self) -> None:
+        """Periodically refresh process and Java GUI logs."""
         self.refresh_process_log()
         self.refresh_microrts_gui_log()
+        self.root.after(3000, self._schedule_log_refresh)
+
+    def _schedule_analysis_refresh(self) -> None:
+        """Periodically refresh selected-run analysis views."""
         run_dir = self.current_run_dir()
         self.refresh_analysis(run_dir)
         self.refresh_timing(run_dir)
-        self.refresh_prompts(run_dir)
-        self.root.after(3000, self._schedule_refresh)
+        self.root.after(15000, self._schedule_analysis_refresh)
+
+    def _schedule_prompt_refresh(self) -> None:
+        """Periodically refresh prompt records only while the Prompts tab is active."""
+        if self.selected_notebook_tab_text() == "Prompts":
+            self.refresh_prompts(self.current_run_dir())
+        self.root.after(30000, self._schedule_prompt_refresh)
 
 
 # ----------------------------------------------------------------------
