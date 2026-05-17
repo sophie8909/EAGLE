@@ -89,9 +89,12 @@ def build_layout() -> dict[str, dict[str, Any]]:
             controls["microrts"] = build_microrts_view(state)
 
     async def on_tab_change(event: Any) -> None:
-        if event.value == prompts_tab:
+        selected = event.args
+
+        if selected == prompts_tab:
             await controls["prompts"]["refresh_prompts"](True)
-        if event.value == analysis_tab:
+
+        if selected == analysis_tab:
             await controls["analysis"]["refresh_analysis"]()
 
     tabs.on("update:model-value", on_tab_change)
