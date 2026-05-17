@@ -21,6 +21,7 @@ from eagle_gui_web.theme import (
     height_class,
     status_badge_class,
 )
+from eagle_gui_web.ui_actions import safe_click
 
 
 def build_run_view(state: Any) -> dict[str, Any]:
@@ -37,7 +38,7 @@ def build_run_view(state: Any) -> dict[str, Any]:
         await refresh_log()
 
     async def stop() -> None:
-        message = await asyncio.to_thread(services.stop_experiment)
+        message = await asyncio.to_thread(services.stop_experiment, state)
         ui.notify(message)
         await refresh_status()
 
@@ -69,10 +70,14 @@ def build_run_view(state: Any) -> dict[str, Any]:
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Run").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
-            ui.button("Start experiment", on_click=start).classes(button_class(success=True))
-            ui.button("Stop process", on_click=stop).classes(button_class(danger=True))
-            ui.button("Refresh runs", on_click=refresh_runs).classes(BUTTON_CLASS)
-            ui.button("Refresh log", on_click=refresh_log).classes(BUTTON_CLASS)
+            ui.button("Start experiment", on_click=safe_click(start, label="Start experiment")).classes(
+                button_class(success=True)
+            )
+            ui.button("Stop Experiment", on_click=safe_click(stop, label="Stop Experiment")).classes(
+                button_class(danger=True)
+            )
+            ui.button("Refresh runs", on_click=safe_click(refresh_runs, label="Refresh runs")).classes(BUTTON_CLASS)
+            ui.button("Refresh log", on_click=safe_click(refresh_log, label="Refresh log")).classes(BUTTON_CLASS)
             status_badge = ui.badge(state.run.status_text).classes(BADGE_CLASS)
         with ui.row().classes(f"{ROW_CLASS} gap-6"):
             ui.checkbox(

@@ -17,6 +17,7 @@ from eagle_gui_web.theme import (
     TEXTAREA_CLASS,
     height_class,
 )
+from eagle_gui_web.ui_actions import safe_click
 
 
 def build_prompts_view(state: Any) -> dict[str, Any]:
@@ -73,7 +74,7 @@ def build_prompts_view(state: Any) -> dict[str, Any]:
             prompt_select = ui.select({}, label="Prompt record", on_change=on_prompt_changed).classes(
                 f"{INPUT_CLASS} grow"
             )
-            ui.button("Refresh prompts", on_click=refresh_prompts).classes(BUTTON_CLASS)
+            ui.button("Refresh prompts", on_click=safe_click(refresh_prompts, label="Refresh prompts")).classes(BUTTON_CLASS)
         metadata_label = ui.label(state.prompts.metadata)
         with ui.row().classes(f"{ROW_CLASS} w-full gap-4"):
             prompt_text = ui.textarea("Prompt", value=state.prompts.selected_prompt).props("readonly").classes(

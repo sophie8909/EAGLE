@@ -159,6 +159,18 @@ class MicroRTSState:
 
 
 @dataclass
+class RuntimeState:
+    """Runtime handles owned by the NiceGUI process."""
+
+    is_running: bool = False
+    is_stopping: bool = False
+    is_shutting_down: bool = False
+    active_tasks: list[Any] = field(default_factory=list)
+    active_processes: list[Any] = field(default_factory=list)
+    active_timers: list[Any] = field(default_factory=list)
+
+
+@dataclass
 class AppState:
     """Single mutable NiceGUI state object shared by all views."""
 
@@ -171,9 +183,33 @@ class AppState:
     analysis: AnalysisState = field(default_factory=AnalysisState)
     prompts: PromptState = field(default_factory=PromptState)
     microrts: MicroRTSState = field(default_factory=MicroRTSState)
-    is_stopping: bool = False
-    is_shutting_down: bool = False
+    runtime: RuntimeState = field(default_factory=RuntimeState)
     connected_clients: int = 0
-    active_processes: list[Any] = field(default_factory=list)
-    active_timers: list[Any] = field(default_factory=list)
-    active_tasks: list[Any] = field(default_factory=list)
+
+    @property
+    def is_stopping(self) -> bool:
+        return self.runtime.is_stopping
+
+    @is_stopping.setter
+    def is_stopping(self, value: bool) -> None:
+        self.runtime.is_stopping = bool(value)
+
+    @property
+    def is_shutting_down(self) -> bool:
+        return self.runtime.is_shutting_down
+
+    @is_shutting_down.setter
+    def is_shutting_down(self, value: bool) -> None:
+        self.runtime.is_shutting_down = bool(value)
+
+    @property
+    def active_processes(self) -> list[Any]:
+        return self.runtime.active_processes
+
+    @property
+    def active_timers(self) -> list[Any]:
+        return self.runtime.active_timers
+
+    @property
+    def active_tasks(self) -> list[Any]:
+        return self.runtime.active_tasks

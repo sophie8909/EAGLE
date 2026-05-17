@@ -8,6 +8,7 @@ from nicegui import ui
 
 from eagle_gui_web import services
 from eagle_gui_web.theme import BUTTON_CLASS, CARD_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS, TABLE_CLASS
+from eagle_gui_web.ui_actions import safe_click
 
 
 def build_objectives_view(state: Any) -> dict[str, Any]:
@@ -74,8 +75,8 @@ def build_objectives_view(state: Any) -> dict[str, Any]:
             ).classes(f"{INPUT_CLASS} w-72")
             selected_key = ui.select([], label="Selected row").classes(f"{INPUT_CLASS} w-72")
             weight_input = ui.input("Weight", value="1.0").classes(f"{INPUT_CLASS} w-32")
-            ui.button("Toggle selected", on_click=toggle_selected).classes(BUTTON_CLASS)
-            ui.button("Set weight", on_click=update_weight).classes(BUTTON_CLASS)
+            ui.button("Toggle selected", on_click=safe_click(toggle_selected, label="Toggle objective")).classes(BUTTON_CLASS)
+            ui.button("Set weight", on_click=safe_click(update_weight, label="Set objective weight")).classes(BUTTON_CLASS)
 
         table = ui.table(
             columns=[

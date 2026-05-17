@@ -10,6 +10,7 @@ from nicegui import ui
 
 from eagle_gui_web import services
 from eagle_gui_web.theme import BUTTON_CLASS, CARD_CLASS, GRID_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS, button_class
+from eagle_gui_web.ui_actions import safe_click
 
 
 def _bind_input(label: str, value: str, setter: Any, classes: str = "w-56") -> Any:
@@ -58,8 +59,10 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 value=state.config.base_config_path,
                 on_change=lambda event: setattr(state.config, "base_config_path", str(event.value or "")),
             ).classes(f"{INPUT_CLASS} min-w-[420px]")
-            ui.button("Load", on_click=load_base_config).classes(BUTTON_CLASS)
-            ui.button("Save generated config", on_click=save_config).classes(button_class(success=True))
+            ui.button("Load", on_click=safe_click(load_base_config, label="Load config")).classes(BUTTON_CLASS)
+            ui.button("Save generated config", on_click=safe_click(save_config, label="Save config")).classes(
+                button_class(success=True)
+            )
 
         generated_label = ui.label("Generated config: (none)")
         component_path_label = ui.label(f"Component path: {state.config.component_pool_path or '(none)'}")

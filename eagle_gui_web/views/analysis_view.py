@@ -28,6 +28,7 @@ from eagle_gui_web.theme import (
     TEXTAREA_CLASS,
     height_class,
 )
+from eagle_gui_web.ui_actions import safe_click
 
 
 def build_analysis_view(state: Any) -> dict[str, Any]:
@@ -82,7 +83,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         ui.label("Analysis").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
             summary_label = ui.label(state.analysis.summary)
-            ui.button("Refresh analysis", on_click=refresh_all).classes(BUTTON_CLASS)
+            ui.button("Refresh analysis", on_click=safe_click(refresh_all, label="Refresh analysis")).classes(BUTTON_CLASS)
         body_text = ui.textarea(value=state.analysis.body).props("readonly").classes(
             f"{TEXTAREA_CLASS} {height_class(300)} w-full"
         )
@@ -104,7 +105,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         )
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
             timing_summary_label = ui.label(state.analysis.timing_summary)
-            ui.button("Refresh timing", on_click=refresh_timing).classes(BUTTON_CLASS)
+            ui.button("Refresh timing", on_click=safe_click(refresh_timing, label="Refresh timing")).classes(BUTTON_CLASS)
         timing_table = ui.table(
             columns=[
                 {"name": "phase", "label": "Phase", "field": "phase", "align": "left"},

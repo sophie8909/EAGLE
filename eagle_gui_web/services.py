@@ -566,6 +566,8 @@ def launch_web_process(
         log_handle.write("\n")
     log_handle.flush()
     process = _launch_tracked_process(command, cwd=ROOT, stdout=log_handle, state=state)
+    if state is not None:
+        state.runtime.is_running = True
     process_service.write_process_state(
         GUI_WEB_PROCESS_STATE_PATH,
         pid=int(process.pid),
@@ -633,14 +635,25 @@ def apply_final_test_max_front(config_path: Path, max_front: str) -> None:
     config_service.write_json_file(config_path, payload)
 
 
-def stop_experiment() -> str:
-    """Terminate the persisted experiment process tree."""
+def stop_experiment(state: Any | None = None) -> str:
+    """Terminate GUI-owned experiment work while keeping NiceGUI alive."""
+    if state is not None:
+        state.is_stopping = True
+        _cancel_tasks(state)
     pid = monitored_pid()
+    messages: list[str] = []
     if pid is None or not process_service.process_is_running(pid):
-        return "No running process."
-    process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopping")
-    terminate_pid_tree(pid)
-    return f"Stopping PID {pid}"
+        messages.append("No running experiment process.")
+    else:
+        process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopping")
+        terminate_pid_tree(pid)
+        messages.append(f"Stopping PID {pid}")
+    if state is not None:
+        stop_microrts_gui(wait=True)
+        _terminate_active_processes(state)
+        _reset_runtime_state(state, clear_logs=False)
+        state.is_stopping = False
+    return " ".join(messages)
 
 
 def shutdown_runtime(state: Any) -> str:
@@ -654,7 +667,7 @@ def shutdown_runtime(state: Any) -> str:
         terminate_pid_tree(pid)
     stop_microrts_gui(wait=True)
     _terminate_active_processes(state)
-    _reset_runtime_state(state)
+    _reset_runtime_state(state, clear_logs=True)
     state.is_stopping = False
     return "Shutdown complete"
 
@@ -761,15 +774,17 @@ def _terminate_active_processes(state: Any) -> None:
     state.active_processes.clear()
 
 
-def _reset_runtime_state(state: Any) -> None:
+def _reset_runtime_state(state: Any, *, clear_logs: bool) -> None:
     """Reset runtime-only state after shutdown."""
     process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopped")
+    state.runtime.is_running = False
     state.run.status_text = "not running"
-    state.run.log_text = ""
     state.final_test.status_text = "not running"
-    state.final_test.log_text = ""
     state.microrts.status = "Java GUI not running"
-    state.microrts.log_text = ""
+    if clear_logs:
+        state.run.log_text = ""
+        state.final_test.log_text = ""
+        state.microrts.log_text = ""
 
 
 def build_analysis(run_dir: Path | None) -> tuple[str, str]:

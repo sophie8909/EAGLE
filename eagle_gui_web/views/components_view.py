@@ -21,6 +21,7 @@ from eagle_gui_web.theme import (
     button_class,
     height_class,
 )
+from eagle_gui_web.ui_actions import safe_click
 
 
 def build_components_view(state: Any) -> dict[str, Any]:
@@ -160,13 +161,15 @@ def build_components_view(state: Any) -> dict[str, Any]:
                 value=state.config.component_pool_path,
                 placeholder="eagle/prompts/components.json",
             ).classes(f"{INPUT_CLASS} min-w-[460px]")
-            ui.button("Load", on_click=load_components).classes(BUTTON_CLASS)
-            ui.button("Save", on_click=save_components).classes(button_class(success=True))
+            ui.button("Load", on_click=safe_click(load_components, label="Load components")).classes(BUTTON_CLASS)
+            ui.button("Save", on_click=safe_click(save_components, label="Save components")).classes(
+                button_class(success=True)
+            )
         with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
             save_as_input = ui.input("Save as", value="configs/experiments/gui_web_components.json").classes(
                 f"{INPUT_CLASS} min-w-[460px]"
             )
-            ui.button("Save as", on_click=save_components_as).classes(BUTTON_CLASS)
+            ui.button("Save as", on_click=safe_click(save_components_as, label="Save components as")).classes(BUTTON_CLASS)
             status_label = ui.label(state.components.status)
 
         with ui.row().classes(f"{ROW_CLASS} w-full gap-4"):
@@ -184,10 +187,12 @@ def build_components_view(state: Any) -> dict[str, Any]:
                     on_change=lambda event: setattr(state.components, "editor_text", str(event.value or "")),
                 ).classes(f"{TEXTAREA_CLASS} {height_class(360)} w-full")
                 with ui.row().classes(f"{ROW_CLASS} gap-2"):
-                    ui.button("Use in prompt", on_click=use_in_prompt).classes(BUTTON_CLASS)
-                    ui.button("Toggle static", on_click=toggle_static).classes(BUTTON_CLASS)
-                    ui.button("Reset selection", on_click=reset_selection).classes(BUTTON_CLASS)
-                    ui.button("Render selected prompt", on_click=render_prompt).classes(button_class(success=True))
+                    ui.button("Use in prompt", on_click=safe_click(use_in_prompt, label="Use in prompt")).classes(BUTTON_CLASS)
+                    ui.button("Toggle static", on_click=safe_click(toggle_static, label="Toggle static")).classes(BUTTON_CLASS)
+                    ui.button("Reset selection", on_click=safe_click(reset_selection, label="Reset selection")).classes(BUTTON_CLASS)
+                    ui.button("Render selected prompt", on_click=safe_click(render_prompt, label="Render prompt")).classes(
+                        button_class(success=True)
+                    )
 
                 selection_table = ui.table(
                     columns=[
@@ -203,7 +208,7 @@ def build_components_view(state: Any) -> dict[str, Any]:
             with ui.column().classes("w-1/2 gap-2"):
                 with ui.row().classes("items-center justify-between w-full"):
                     token_label = ui.label(state.components.prompt_token_summary)
-                    ui.button("Copy prompt", on_click=copy_prompt).classes(BUTTON_CLASS)
+                    ui.button("Copy prompt", on_click=safe_click(copy_prompt, label="Copy prompt")).classes(BUTTON_CLASS)
                 prompt_output = ui.textarea(value=state.components.rendered_prompt).props("readonly").classes(
                     f"{TEXTAREA_CLASS} {height_class(620)} w-full"
                 )

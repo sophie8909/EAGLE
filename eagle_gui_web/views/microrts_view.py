@@ -18,6 +18,7 @@ from eagle_gui_web.theme import (
     button_class,
     height_class,
 )
+from eagle_gui_web.ui_actions import safe_click
 
 
 def build_microrts_view(state: Any) -> dict[str, Any]:
@@ -122,11 +123,15 @@ def build_microrts_view(state: Any) -> dict[str, Any]:
             )
 
         with ui.row().classes(f"{ROW_CLASS} gap-2"):
-            ui.button("Load current prompt", on_click=load_rendered_prompt).classes(BUTTON_CLASS)
-            ui.button("Save prompt.txt", on_click=save_prompt).classes(BUTTON_CLASS)
-            ui.button("Launch Java GUI", on_click=launch).classes(button_class(success=True))
-            ui.button("Stop Java GUI", on_click=stop).classes(button_class(danger=True))
-            ui.button("Refresh", on_click=refresh_status).classes(BUTTON_CLASS)
+            ui.button("Load current prompt", on_click=safe_click(load_rendered_prompt, label="Load current prompt")).classes(
+                BUTTON_CLASS
+            )
+            ui.button("Save prompt.txt", on_click=safe_click(save_prompt, label="Save prompt")).classes(BUTTON_CLASS)
+            ui.button("Launch Java GUI", on_click=safe_click(launch, label="Launch Java GUI")).classes(
+                button_class(success=True)
+            )
+            ui.button("Stop Java GUI", on_click=safe_click(stop, label="Stop Java GUI")).classes(button_class(danger=True))
+            ui.button("Refresh", on_click=safe_click(refresh_status, label="Refresh MicroRTS")).classes(BUTTON_CLASS)
             status_label = ui.label(state.microrts.status)
 
         prompt_text = ui.textarea(
@@ -141,7 +146,7 @@ def build_microrts_view(state: Any) -> dict[str, Any]:
                 label="Saved trace",
                 on_change=lambda event: setattr(state.microrts, "selected_trace", str(event.value or "")),
             ).classes(f"{INPUT_CLASS} grow")
-            ui.button("Open trace", on_click=open_trace).classes(BUTTON_CLASS)
+            ui.button("Open trace", on_click=safe_click(open_trace, label="Open trace")).classes(BUTTON_CLASS)
         log_text = ui.textarea(value=state.microrts.log_text).props("readonly").classes(
             f"{TEXTAREA_CLASS} {height_class(300)} w-full"
         )

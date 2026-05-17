@@ -23,6 +23,7 @@ from eagle_gui_web.theme import (
     button_class,
     title_class,
 )
+from eagle_gui_web.ui_actions import safe_click
 from eagle_gui_web.views.analysis_view import build_analysis_view
 from eagle_gui_web.views.components_view import build_components_view
 from eagle_gui_web.views.config_view import build_config_view
@@ -61,12 +62,12 @@ def build_layout() -> dict[str, dict[str, Any]]:
 
     controls: dict[str, dict[str, Any]] = {}
 
-    async def stop_runtime() -> None:
+    async def stop_experiment() -> None:
         if state.is_stopping:
-            ui.notify("Shutdown already in progress", type="warning")
+            ui.notify("Stop already in progress", type="warning")
             return
-        ui.notify("Runtime shutdown started")
-        message = await asyncio.to_thread(services.shutdown_runtime, state)
+        ui.notify("Stopping experiment...")
+        message = await asyncio.to_thread(services.stop_experiment, state)
         ui.notify(message, type="positive")
         for group, name in (("run", "refresh_status"), ("final_test", "refresh_status"), ("microrts", "refresh_status")):
             refresh = controls.get(group, {}).get(name)
@@ -90,8 +91,12 @@ def build_layout() -> dict[str, dict[str, Any]]:
                 ui.label("Eagle").classes(title_class("text-h5"))
                 ui.label("EA for Gameplay LLM-agEnt").classes(SUBTITLE_CLASS)
         with ui.row().classes("items-center gap-2"):
-            ui.button("Stop Runtime", on_click=stop_runtime).classes(button_class(danger=True))
-            ui.button("Shutdown GUI", on_click=shutdown_gui).classes(button_class(danger=True))
+            ui.button("Stop Experiment", on_click=safe_click(stop_experiment, label="Stop Experiment")).classes(
+                button_class(danger=True)
+            )
+            ui.button("Shutdown GUI", on_click=safe_click(shutdown_gui, label="Shutdown GUI")).classes(
+                button_class(danger=True)
+            )
 
     with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
         run_tab = ui.tab("Run").classes(TAB_CLASS)
@@ -174,9 +179,9 @@ async def refresh_analysis_timer() -> None:
     await controls["analysis"]["refresh_analysis"]()
 
 
-startup_timer = ui.timer(0.1, startup_refresh, once=True)
-log_timer = ui.timer(3.0, refresh_log_timer)
-analysis_timer = ui.timer(15.0, refresh_analysis_timer)
+startup_timer = ui.timer(0.1, safe_click(startup_refresh, label="Startup refresh"), once=True)
+log_timer = ui.timer(3.0, safe_click(refresh_log_timer, label="Log refresh"))
+analysis_timer = ui.timer(15.0, safe_click(refresh_analysis_timer, label="Analysis refresh"))
 state.active_timers.extend([startup_timer, log_timer, analysis_timer])
 
 
