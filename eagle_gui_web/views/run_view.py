@@ -83,7 +83,7 @@ def build_run_view(state: Any) -> dict[str, Any]:
             ui.checkbox(
                 "Skip final test",
                 value=state.run.skip_final_test,
-                on_change=lambda event: setattr(state.run, "skip_final_test", bool(event.value)),
+                on_change=lambda event: setattr(state.run, "skip_final_test", event.value is True),
             )
             ui.checkbox(
                 "Precompile Python",

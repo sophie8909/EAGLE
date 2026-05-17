@@ -544,7 +544,7 @@ def start_experiment(state: Any) -> tuple[bool, str]:
     command = [sys.executable, "-m", "eagle.main", "--config", str(config_path)]
     if state.run.quick_run:
         command.append("--quick-run")
-    if state.run.skip_final_test:
+    if state.run.skip_final_test is True:
         command.append("--skip-final-test")
     if state.run.precompile_python:
         command.append("--precompile-python")
