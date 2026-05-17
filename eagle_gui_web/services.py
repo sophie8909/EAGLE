@@ -8,6 +8,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -662,10 +663,11 @@ def shutdown_app(state: Any, app_object: Any) -> str:
     """Request a NiceGUI server shutdown after runtime cleanup."""
     state.is_shutting_down = True
     shutdown = getattr(app_object, "shutdown", None)
-    if not callable(shutdown):
-        raise RuntimeError("NiceGUI app shutdown is not available.")
-    shutdown()
-    return "GUI shutdown requested"
+    if callable(shutdown):
+        shutdown()
+        return "GUI shutdown requested"
+    threading.Timer(0.25, os._exit, args=(0,)).start()
+    return "GUI shutdown fallback scheduled"
 
 
 def _launch_tracked_process(command: list[str], *, cwd: Path, stdout: Any, state: Any | None) -> subprocess.Popen:

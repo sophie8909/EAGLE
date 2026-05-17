@@ -52,11 +52,11 @@ def build_layout() -> dict[str, dict[str, Any]]:
 
     controls: dict[str, dict[str, Any]] = {}
 
-    async def shutdown() -> None:
+    async def stop_runtime() -> None:
         if state.is_stopping:
             ui.notify("Shutdown already in progress", type="warning")
             return
-        ui.notify("Shutdown started")
+        ui.notify("Runtime shutdown started")
         message = await asyncio.to_thread(services.shutdown_runtime, state)
         ui.notify(message, type="positive")
         for group, name in (("run", "refresh_status"), ("final_test", "refresh_status"), ("microrts", "refresh_status")):
@@ -64,13 +64,25 @@ def build_layout() -> dict[str, dict[str, Any]]:
             if refresh:
                 await refresh()
 
+    async def shutdown_gui() -> None:
+        if state.is_shutting_down:
+            ui.notify("GUI shutdown already in progress", type="warning")
+            return
+        state.is_shutting_down = True
+        ui.notify("Shutting down GUI...")
+        await asyncio.sleep(0.2)
+        await asyncio.to_thread(services.shutdown_runtime, state)
+        services.shutdown_app(state, nicegui_app)
+
     with ui.header().classes(f"{HEADER_CLASS} items-center justify-between"):
         with ui.row().classes(f"{BRAND_CLASS} items-center"):
             ui.image(EAGLE_IMAGE_URL).classes(BRAND_IMAGE_CLASS)
             with ui.column().classes("gap-0"):
                 ui.label("Eagle").classes(title_class("text-h5"))
                 ui.label("EA for Gameplay LLM-agEnt").classes(SUBTITLE_CLASS)
-        ui.button("Stop / Shutdown", on_click=shutdown).classes(button_class(danger=True))
+        with ui.row().classes("items-center gap-2"):
+            ui.button("Stop Runtime", on_click=stop_runtime).classes(button_class(danger=True))
+            ui.button("Shutdown GUI", on_click=shutdown_gui).classes(button_class(danger=True))
 
     with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
         run_tab = ui.tab("Run").classes(TAB_CLASS)
@@ -159,23 +171,12 @@ analysis_timer = ui.timer(15.0, refresh_analysis_timer)
 state.active_timers.extend([startup_timer, log_timer, analysis_timer])
 
 
-async def _shutdown_after_final_disconnect() -> None:
-    """Clean runtime state, then ask NiceGUI to stop serving."""
-    if state.is_shutting_down:
-        return
-    state.is_shutting_down = True
-    await asyncio.to_thread(services.shutdown_runtime, state)
-    services.shutdown_app(state, nicegui_app)
-
-
 def _on_client_connect(*_: Any) -> None:
     state.connected_clients += 1
 
 
 def _on_client_disconnect(*_: Any) -> None:
     state.connected_clients = max(0, state.connected_clients - 1)
-    if state.connected_clients == 0 and not state.is_shutting_down:
-        asyncio.create_task(_shutdown_after_final_disconnect())
 
 
 nicegui_app.on_connect(_on_client_connect)
