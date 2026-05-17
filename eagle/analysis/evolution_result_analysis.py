@@ -16,6 +16,8 @@ from ..representation.fitness import fitness_values, normalize_fitness_dict
 
 
 GENERATION_LOG_PATTERN = re.compile(r"generation_(\d+)_mo\.txt$")
+GENERATION_MARKER_PATTERN = re.compile(r"\b(?:generation|gen)\s+\d+|generation_\d+", re.IGNORECASE)
+FITNESS_VECTOR_PATTERN = re.compile(r"fitness\s*(?:=|:)\s*[\[(]([^\])]+)[\])]", re.IGNORECASE)
 FINAL_TEST_CANDIDATES = ("final_test_results.json", "final_test_result.json")
 FINAL_TEST_MODES = ("interval_1", "interval_10", "java_agent_test")
 
@@ -40,6 +42,64 @@ def _require_pillow():
             "Pillow is required for GIF generation. Install requirements.txt before running analysis."
         ) from exc
     return Image
+
+
+def build_analysis_context(log_text, result_data=None) -> dict:
+    """Build lightweight feature flags for analysis UI detection."""
+    text = str(log_text or "")
+    fitness_dimension = max(_fitness_dimension_from_data(result_data), _fitness_dimension_from_log(text))
+    has_pareto = "Pareto Front" in text or fitness_dimension > 1
+    is_multi_objective = has_pareto or fitness_dimension > 1
+    return {
+        "has_generation_log": bool(GENERATION_MARKER_PATTERN.search(text)) or _contains_key(result_data, "generation"),
+        "has_final_test": "FINAL_TEST" in text.upper() or _contains_key(result_data, "final_test"),
+        "has_pareto": has_pareto,
+        "fitness_dimension": fitness_dimension,
+        "is_multi_objective": is_multi_objective,
+        "is_single_objective": fitness_dimension == 1 and not is_multi_objective,
+    }
+
+
+def _contains_key(value: object, marker: str) -> bool:
+    """Return whether a nested mapping/list contains a marker in any key."""
+    if isinstance(value, dict):
+        return any(marker in str(key).lower() or _contains_key(item, marker) for key, item in value.items())
+    if isinstance(value, list):
+        return any(_contains_key(item, marker) for item in value)
+    return False
+
+
+def _fitness_dimension_from_data(value: object, in_fitness: bool = False) -> int:
+    """Infer objective count from nested result data without using algorithm names."""
+    if isinstance(value, dict):
+        if "fitness" in value:
+            return _fitness_dimension_from_data(value["fitness"], True)
+        if in_fitness and value and all(_is_number_like(item) for item in value.values()):
+            return len(value)
+        return max((_fitness_dimension_from_data(item) for item in value.values()), default=0)
+    if isinstance(value, (list, tuple)):
+        if in_fitness and value and all(_is_number_like(item) for item in value):
+            return len(value)
+        return max((_fitness_dimension_from_data(item) for item in value), default=0)
+    return 0
+
+
+def _fitness_dimension_from_log(text: str) -> int:
+    """Infer objective count from logged fitness vectors."""
+    dimension = 0
+    for match in FITNESS_VECTOR_PATTERN.finditer(text):
+        values = [part.strip() for part in match.group(1).split(",") if part.strip()]
+        dimension = max(dimension, len(values))
+    return dimension
+
+
+def _is_number_like(value: object) -> bool:
+    """Return whether a value can represent a numeric fitness component."""
+    try:
+        float(value)
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def _extract_generation_number(path: Path) -> int:
