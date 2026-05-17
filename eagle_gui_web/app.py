@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 from pathlib import Path
 from typing import Any
 
@@ -242,9 +243,23 @@ ui.timer(3.0, refresh_log)
 ui.timer(15.0, refresh_analysis)
 
 
+def find_available_port(start: int = 8080, attempts: int = 50) -> int:
+    """Return the first available local TCP port at or above the start port."""
+    for port in range(start, start + attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                probe.bind(("0.0.0.0", port))
+            except OSError:
+                continue
+            return port
+    raise RuntimeError(f"No available port found from {start} to {start + attempts - 1}.")
+
+
 def main() -> None:
     """Run the NiceGUI dashboard."""
-    ui.run(title="EAGLE Dashboard", reload=False, show=True)
+    port = find_available_port()
+    ui.run(title="EAGLE Dashboard", reload=False, show=True, port=port)
 
 
 if __name__ in {"__main__", "__mp_main__"}:
