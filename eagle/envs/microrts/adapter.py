@@ -48,6 +48,7 @@ def run_surrogate_validation_case(
         log_prefix="run_eagle_policy" if not test else "run_test_eagle_policy",
         runtime_logs_dir=runtime_logs_dir,
         record_trace=bool(test and getattr(config, "save_trace_on_test", False)),
+        llm_call_limit=int(getattr(config, "llm_call_limit", 50)),
     )
 
 

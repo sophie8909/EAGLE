@@ -13,7 +13,12 @@ from ...utils.checkpoint import CheckpointManager, deserialize_individual
 from ...evolution.component.log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
 from .full_game_evaluator import FullGameEvaluator
 from .generation_replay import build_result_record, extract_individual_ids_up_to_front
-from .replay_common import apply_runtime_overrides, build_interval_runs, write_results_snapshot
+from .replay_common import (
+    apply_runtime_overrides,
+    build_interval_runs,
+    resolve_final_test_llm_call_limit,
+    write_results_snapshot,
+)
 
 
 def _resolve_final_test_max_front(config: EAConfig) -> int | None:
@@ -99,6 +104,7 @@ def run_final_test_suite(
     experiment_log_dir = Path(current_log_dir)
     base_config = config or EAConfig()
     runtime_config = _resolve_final_test_config(base_config, final_test_config_path)
+    final_test_llm_call_limit = resolve_final_test_llm_call_limit(final_test_config_path)
     evaluator = FullGameEvaluator(
         ComponentPool.from_json(str(experiment_log_dir / "component_pool.json")),
         runtime_config,
@@ -116,7 +122,7 @@ def run_final_test_suite(
                 Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
             ),
             "tick_limit": int(runtime_config.tick_limit),
-            "llm_call_limit": None,
+            "llm_call_limit": final_test_llm_call_limit,
             "interval_runs": [],
             "results": {},
             "skipped": True,
@@ -186,7 +192,7 @@ def run_final_test_suite(
             Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
         ),
         "tick_limit": int(runtime_config.tick_limit),
-        "llm_call_limit": None,
+        "llm_call_limit": final_test_llm_call_limit,
         "interval_runs": interval_runs,
         "results": {},
     }
@@ -229,7 +235,7 @@ def run_final_test_suite(
                     opponent=opponent,
                     generation=generation_number,
                     llm_interval=llm_interval,
-                    llm_call_limit=None,
+                    llm_call_limit=final_test_llm_call_limit,
                     test=True,
                 )
                 match_score = dict(result["match_score"])

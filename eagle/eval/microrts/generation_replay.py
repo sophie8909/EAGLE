@@ -11,7 +11,12 @@ from ...project import DEFAULT_FINAL_TEST_CONFIG_PATH
 from ...utils.component_pool import ComponentPool
 from ...evolution.component.log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
 from .full_game_evaluator import FullGameEvaluator
-from .replay_common import build_interval_runs, load_runtime_config, write_results_snapshot
+from .replay_common import (
+    build_interval_runs,
+    load_runtime_config,
+    resolve_final_test_llm_call_limit,
+    write_results_snapshot,
+)
 
 # CLI examples:
 # `py -m eagle.eval.microrts.generation_replay --log-dir logs/eagle/20260409_123456 --generation 20`
@@ -201,6 +206,7 @@ def run_generation_result_test(
     )
 
     interval_runs = build_interval_runs(config_path, runtime_config.llm_interval)
+    final_test_llm_call_limit = resolve_final_test_llm_call_limit(config_path)
     resolved_opponents = list(opponents or OPPONENT_LIST)
     results = {
         "generation": generation,
@@ -210,7 +216,7 @@ def run_generation_result_test(
         "opponents": resolved_opponents,
         "test_config_path": str(Path(config_path) if config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH),
         "tick_limit": int(runtime_config.tick_limit),
-        "llm_call_limit": int(runtime_config.llm_call_limit),
+        "llm_call_limit": final_test_llm_call_limit,
         "interval_runs": interval_runs,
         "results": {},
     }
@@ -231,6 +237,7 @@ def run_generation_result_test(
                     opponent=opponent,
                     generation=generation,
                     llm_interval=llm_interval,
+                    llm_call_limit=final_test_llm_call_limit,
                     test=True,
                 )
                 match_score = dict(result["match_score"])
@@ -264,6 +271,7 @@ def run_generation_result_test(
                 prompt=prompt,
                 opponent=opponent,
                 generation=generation,
+                llm_call_limit=final_test_llm_call_limit,
                 test=True,
             )
             match_score = dict(result["match_score"])

@@ -17,8 +17,6 @@ from ...utils.fitness_calculator import calculate_match_score
 from .compiler import compile_microrts, locate_microrts_root
 from .parser import parse_game_log
 
-DEFAULT_LLM_CALL_LIMIT = object()
-
 def _config_path(project_root: Path | None = None) -> Path:
     """Return the MicroRTS runtime properties file."""
     return locate_microrts_root(project_root) / "resources" / "config.properties"
@@ -237,6 +235,7 @@ def launch_java_match(
     print(
         "[DEBUG] microrts launch "
         f"cwd={microrts_root} max_ticks={max_game_ticks or tick_limit} log={log_path} "
+        f"llm_call_limit={llm_call_limit if llm_call_limit is not None else 'unlimited'} "
         f"map={map_location} ai1={ai1_class} ai2={ai2_class}",
         flush=True,
     )
@@ -447,7 +446,7 @@ def run_java_agent_game(
     record_trace: bool = False,
     generation: int | None = None,
     individual_id: Any | None = None,
-    llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
+    llm_call_limit: int | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one MicroRTS game with explicit Java agent classes."""
     project_root = (project_root or PROJECT_ROOT).resolve()
@@ -492,16 +491,12 @@ def run_java_agent_game(
         round_state_dir = game_output_dir / "round_states"
         max_game_ticks = int(getattr(config, "tick_limit", 5000))
         map_location = select_random_map_location(project_root, config)
-        resolved_llm_call_limit = (
-            int(getattr(config, "llm_call_limit", 50))
-            if llm_call_limit is DEFAULT_LLM_CALL_LIMIT
-            else llm_call_limit
-        )
+        resolved_llm_call_limit = None if llm_call_limit is None else int(llm_call_limit)
         print(
             "[DEBUG] gameplay launch limits "
             f"test={str(log_prefix).startswith('run_test')} "
             f"tick_limit={max_game_ticks} "
-            f"llm_call_limit={resolved_llm_call_limit}",
+            f"llm_call_limit={resolved_llm_call_limit if resolved_llm_call_limit is not None else 'unlimited'}",
             flush=True,
         )
         exit_code, timed_out, log_path_str, game_time_sec = launch_java_match(
@@ -590,7 +585,7 @@ def run_java_agent_game(
             "map_location": map_location,
             "gameplay_map_dir": _configured_map_dir(config),
             "tick_limit": max_game_ticks,
-            "llm_call_limit": int(getattr(config, "llm_call_limit", 50)),
+            "llm_call_limit": resolved_llm_call_limit,
             "llm_calls": parsed_log.get("summary", {}).get(
                 "llm_call_count",
                 parsed_log.get("summary", {}).get("segment_count", 0),
@@ -626,7 +621,7 @@ def run_prompt_based_game(
     runtime_logs_dir: Path | None = None,
     generation: int | None = None,
     individual_id: Any | None = None,
-    llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
+    llm_call_limit: int | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one gameplay EAGLE-vs-opponent match driven by the prompt file."""
     return run_java_agent_game(

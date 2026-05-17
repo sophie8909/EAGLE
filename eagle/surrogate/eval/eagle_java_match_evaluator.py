@@ -43,6 +43,7 @@ def evaluate_with_eagle_java(
         log_prefix="run_eagle_java",
         runtime_logs_dir=getattr(config, "runtime_logs_dir", None),
         record_trace=bool(getattr(config, "save_trace_on_test", False)),
+        llm_call_limit=int(getattr(config, "llm_call_limit", 50)),
     )
     if metadata.get("exit_code", 1) != 0:
         raise RuntimeError(f"eagleJava match failed with exit_code={metadata.get('exit_code')}.")

@@ -7,7 +7,6 @@ from typing import Any
 
 from eagle.config import EAConfig
 from eagle.envs.microrts.runner import (
-    DEFAULT_LLM_CALL_LIMIT,
     run_java_agent_game,
     run_prompt_based_game,
 )
@@ -263,7 +262,7 @@ class JavaMatchEvaluator:
         test: bool,
         generation: int | None,
         individual_id: Any | None,
-        llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
+        llm_call_limit: int | None = None,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         """Run one prompt-driven EAGLE Java match."""
         return self._with_llm_interval(
@@ -293,6 +292,7 @@ class JavaMatchEvaluator:
         compile_first: bool,
         generation: int | None,
         individual_id: Any | None,
+        llm_call_limit: int | None = None,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         """Run one prepared Java-agent match."""
         return self._with_llm_interval(
@@ -309,6 +309,7 @@ class JavaMatchEvaluator:
                 record_trace=True,
                 generation=generation,
                 individual_id=individual_id,
+                llm_call_limit=llm_call_limit,
             ),
         )
 

@@ -16,7 +16,6 @@ from ...utils.match_score_recorder import MatchScoreRecorder
 from ...evolution.component.individual import Individual
 from ...utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
 from .evaluator_parts import (
-    DEFAULT_LLM_CALL_LIMIT,
     GameplayAggregator,
     JavaMatchEvaluator,
     PromptRenderer,
@@ -304,6 +303,7 @@ class FullGameEvaluator:
                 evaluation_mode="java_agent",
                 compile_first=False,
                 generation=generation,
+                llm_call_limit=int(getattr(self.config, "llm_call_limit", 50)),
             )
         if surrogate == "policy_agent":
             return self.run_java_based_agent(
@@ -315,6 +315,7 @@ class FullGameEvaluator:
                 evaluation_mode="policy_agent",
                 compile_first=False,
                 generation=generation,
+                llm_call_limit=int(getattr(self.config, "llm_call_limit", 50)),
             )
         raise ValueError(
             f"Unsupported surrogate={surrogate!r}. "
@@ -369,6 +370,7 @@ class FullGameEvaluator:
             profile_output_path=profile_output_path,
             match_score_recorder=match_score_recorder,
             allow_history_reuse=allow_history_reuse,
+            llm_call_limit=int(getattr(self.config, "llm_call_limit", 50)),
         )
 
     def run_prompt_based_agent(
@@ -382,7 +384,7 @@ class FullGameEvaluator:
         match_score_recorder: MatchScoreRecorder | None = None,
         allow_history_reuse: bool = False,
         llm_interval: int | None = None,
-        llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
+        llm_call_limit: int | None = None,
         test: bool = False,
     ) -> dict[str, Any]:
         """Run one gameplay EAGLE match and return the raw single-match payload."""
@@ -412,6 +414,7 @@ class FullGameEvaluator:
                 test=test,
                 generation=generation,
                 individual_id=getattr(individual, "id", None) if individual is not None else None,
+                llm_call_limit=llm_call_limit,
             )
         stats["microrts_compile_time"] = float(simulation_meta.get("compile_time_sec", 0.0) or 0.0)
         summarize_total_eval_time(stats)
@@ -450,7 +453,7 @@ class FullGameEvaluator:
         evaluation_mode: str = "policy_agent",
         compile_first: bool = True,
         generation: int | None = None,
-        llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
+        llm_call_limit: int | None = None,
     ) -> dict[str, Any]:
         """Run one policy-backed Java-agent match and return the raw single-match payload."""
         rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
@@ -530,7 +533,7 @@ class FullGameEvaluator:
         opponent: str | None,
         *,
         llm_interval: int | None = None,
-        llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
+        llm_call_limit: int | None = None,
         test: bool = False,
         generation: int | None = None,
         individual_id: Any | None = None,
@@ -557,7 +560,7 @@ class FullGameEvaluator:
         compile_first: bool = True,
         generation: int | None = None,
         individual_id: Any | None = None,
-        llm_call_limit: int | None | object = DEFAULT_LLM_CALL_LIMIT,
+        llm_call_limit: int | None = None,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         return self.java_match_evaluator.run_java_match(
             prompt,
