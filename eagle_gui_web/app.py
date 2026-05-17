@@ -185,7 +185,7 @@ nicegui_app.on_disconnect(_on_client_disconnect)
 def main() -> None:
     """Run the NiceGUI application."""
     port = services.find_available_port()
-    ui.run(title="Eagle Observatory", favicon=EAGLE_IMAGE_URL, reload=False, show=True, port=port)
+    ui.run(title="Eagle", favicon=EAGLE_IMAGE_URL, reload=False, show=True, port=port)
 
 
 if __name__ in {"__main__", "__mp_main__"}:
