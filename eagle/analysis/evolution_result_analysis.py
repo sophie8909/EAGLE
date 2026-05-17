@@ -109,20 +109,23 @@ def parse_ga_convergence(log_text) -> dict:
     generations: list[int] = []
     best_values: list[float] = []
     average_values: list[float] = []
+    warnings: list[str] = []
     for generation, block in _ga_generation_blocks(text):
-        best = _ga_best_fitness(block)
         population = _ga_population_fitness(block)
-        if best is None and population:
-            best = max(population)
-        if best is None:
+        if not population:
             continue
+        best = max(population)
+        average = sum(population) / len(population)
         generations.append(generation)
         best_values.append(best)
-        if population:
-            average_values.append(sum(population) / len(population))
+        average_values.append(average)
+        if best < average:
+            warnings.append(f"generation {generation}: best fitness {best} is below average fitness {average}")
     result: dict[str, object] = {"generations": generations, "best_fitness": best_values}
     if len(average_values) == len(generations):
         result["average_fitness"] = average_values
+    if warnings:
+        result["warnings"] = warnings
     return result if generations else {}
 
 
