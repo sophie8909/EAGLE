@@ -9,10 +9,13 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.theme import BUTTON_CLASS, CARD_CLASS, GRID_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS, button_class
 
 
 def _bind_input(label: str, value: str, setter: Any, classes: str = "w-56") -> Any:
-    return ui.input(label, value=value, on_change=lambda event: setter(str(event.value or ""))).classes(classes)
+    return ui.input(label, value=value, on_change=lambda event: setter(str(event.value or ""))).classes(
+        f"{INPUT_CLASS} {classes}"
+    )
 
 
 def build_config_view(state: Any) -> dict[str, Any]:
@@ -46,21 +49,22 @@ def build_config_view(state: Any) -> dict[str, Any]:
         component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
         generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
 
-    with ui.column().classes("w-full gap-3"):
-        with ui.row().classes("items-end gap-3"):
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("Config").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3"):
             controls["config.base_config_path"] = ui.select(
                 services.config_choices(),
                 label="Base config",
                 value=state.config.base_config_path,
                 on_change=lambda event: setattr(state.config, "base_config_path", str(event.value or "")),
-            ).classes("min-w-[420px]")
-            ui.button("Load", on_click=load_base_config)
-            ui.button("Save generated config", on_click=save_config)
+            ).classes(f"{INPUT_CLASS} min-w-[420px]")
+            ui.button("Load", on_click=load_base_config).classes(BUTTON_CLASS)
+            ui.button("Save generated config", on_click=save_config).classes(button_class(success=True))
 
         generated_label = ui.label("Generated config: (none)")
         component_path_label = ui.label(f"Component path: {state.config.component_pool_path or '(none)'}")
 
-        with ui.grid(columns=4).classes("w-full gap-3"):
+        with ui.grid(columns=4).classes(f"{GRID_CLASS} w-full gap-3"):
             controls["config.config_name"] = _bind_input(
                 "Config name", state.config.config_name, lambda value: setattr(state.config, "config_name", value)
             )
@@ -69,19 +73,19 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 label="Algorithm",
                 value=state.config.algorithm,
                 on_change=lambda event: _set_algorithm(state, str(event.value or "nsga2")),
-            ).classes("w-56")
+            ).classes(f"{INPUT_CLASS} w-56")
             controls["config.surrogate"] = ui.select(
                 list(services.SURROGATE_CHOICES),
                 label="Surrogate",
                 value=state.config.surrogate,
                 on_change=lambda event: setattr(state.config, "surrogate", str(event.value or "round")),
-            ).classes("w-56")
+            ).classes(f"{INPUT_CLASS} w-56")
             controls["config.gameplay_map_dir"] = ui.select(
                 list(services.microrts_map_dir_choices()),
                 label="Eval map folder",
                 value=state.config.gameplay_map_dir,
                 on_change=lambda event: setattr(state.config, "gameplay_map_dir", str(event.value or "8x8")),
-            ).classes("w-56")
+            ).classes(f"{INPUT_CLASS} w-56")
 
             for name, label in (
                 ("population_size", "Population"),
@@ -102,7 +106,7 @@ def build_config_view(state: Any) -> dict[str, Any]:
                     lambda value, field=name: setattr(state.config, field, value),
                 )
 
-        with ui.row().classes("items-center gap-6"):
+        with ui.row().classes(f"{ROW_CLASS} items-center gap-6"):
             ui.checkbox(
                 "Include identity in prompt preview",
                 value=state.config.include_strategy_identity_in_prompt,
@@ -118,7 +122,7 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 on_change=lambda event: setattr(state.config, "training_example_fixed_count", bool(event.value)),
             )
 
-        with ui.row().classes("gap-3"):
+        with ui.row().classes(f"{ROW_CLASS} gap-3"):
             for name, label in (
                 ("training_example_sample_min", "Sample min"),
                 ("training_example_sample_max", "Sample max"),

@@ -8,6 +8,15 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.theme import (
+    BUTTON_CLASS,
+    CARD_CLASS,
+    INPUT_CLASS,
+    ROW_CLASS,
+    SECTION_HEADER_CLASS,
+    TEXTAREA_CLASS,
+    height_class,
+)
 
 
 def build_prompts_view(state: Any) -> dict[str, Any]:
@@ -58,16 +67,21 @@ def build_prompts_view(state: Any) -> dict[str, Any]:
         state.prompts.selected_record_id = str(event.value or "")
         render_selected_prompt()
 
-    with ui.column().classes("w-full gap-3"):
-        with ui.row().classes("items-end gap-3 w-full"):
-            prompt_select = ui.select({}, label="Prompt record", on_change=on_prompt_changed).classes("grow")
-            ui.button("Refresh prompts", on_click=refresh_prompts)
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("Prompts").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
+            prompt_select = ui.select({}, label="Prompt record", on_change=on_prompt_changed).classes(
+                f"{INPUT_CLASS} grow"
+            )
+            ui.button("Refresh prompts", on_click=refresh_prompts).classes(BUTTON_CLASS)
         metadata_label = ui.label(state.prompts.metadata)
-        with ui.row().classes("w-full gap-4"):
-            prompt_text = ui.textarea("Prompt", value=state.prompts.selected_prompt).props("readonly").classes("grow font-mono")
-            response_text = ui.textarea("LLM output", value=state.prompts.selected_llm_output).props("readonly").classes("grow font-mono")
-        prompt_text.style("height: 620px")
-        response_text.style("height: 620px")
+        with ui.row().classes(f"{ROW_CLASS} w-full gap-4"):
+            prompt_text = ui.textarea("Prompt", value=state.prompts.selected_prompt).props("readonly").classes(
+                f"{TEXTAREA_CLASS} {height_class(620)} grow"
+            )
+            response_text = ui.textarea("LLM output", value=state.prompts.selected_llm_output).props("readonly").classes(
+                f"{TEXTAREA_CLASS} {height_class(620)} grow"
+            )
 
     controls["refresh_prompts"] = refresh_prompts
     controls["render_selected_prompt"] = render_selected_prompt

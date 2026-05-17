@@ -10,6 +10,17 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.theme import (
+    BUTTON_CLASS,
+    CARD_CLASS,
+    INPUT_CLASS,
+    ROW_CLASS,
+    SECTION_HEADER_CLASS,
+    TABLE_CLASS,
+    TEXTAREA_CLASS,
+    button_class,
+    height_class,
+)
 
 
 def build_components_view(state: Any) -> dict[str, Any]:
@@ -141,36 +152,42 @@ def build_components_view(state: Any) -> dict[str, Any]:
         selection_table.rows = rows
         selection_table.update()
 
-    with ui.column().classes("w-full gap-3"):
-        with ui.row().classes("items-end gap-3 w-full"):
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("Components").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
             path_input = ui.input(
                 "Component JSON",
                 value=state.config.component_pool_path,
                 placeholder="eagle/prompts/components.json",
-            ).classes("min-w-[460px]")
-            ui.button("Load", on_click=load_components)
-            ui.button("Save", on_click=save_components)
-        with ui.row().classes("items-end gap-3 w-full"):
-            save_as_input = ui.input("Save as", value="configs/experiments/gui_web_components.json").classes("min-w-[460px]")
-            ui.button("Save as", on_click=save_components_as)
+            ).classes(f"{INPUT_CLASS} min-w-[460px]")
+            ui.button("Load", on_click=load_components).classes(BUTTON_CLASS)
+            ui.button("Save", on_click=save_components).classes(button_class(success=True))
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
+            save_as_input = ui.input("Save as", value="configs/experiments/gui_web_components.json").classes(
+                f"{INPUT_CLASS} min-w-[460px]"
+            )
+            ui.button("Save as", on_click=save_components_as).classes(BUTTON_CLASS)
             status_label = ui.label(state.components.status)
 
-        with ui.row().classes("w-full gap-4"):
+        with ui.row().classes(f"{ROW_CLASS} w-full gap-4"):
             with ui.column().classes("w-1/2 gap-3"):
-                with ui.row().classes("gap-3 w-full"):
-                    category_select = ui.select([], label="Component", on_change=on_category_changed).classes("grow")
-                    candidate_select = ui.select([], label="Candidate", on_change=on_candidate_changed).classes("w-32")
+                with ui.row().classes(f"{ROW_CLASS} gap-3 w-full"):
+                    category_select = ui.select([], label="Component", on_change=on_category_changed).classes(
+                        f"{INPUT_CLASS} grow"
+                    )
+                    candidate_select = ui.select([], label="Candidate", on_change=on_candidate_changed).classes(
+                        f"{INPUT_CLASS} w-32"
+                    )
                 editor = ui.textarea(
                     "Candidate text",
                     value=state.components.editor_text,
                     on_change=lambda event: setattr(state.components, "editor_text", str(event.value or "")),
-                ).classes("w-full font-mono")
-                editor.style("height: 360px")
-                with ui.row().classes("gap-2"):
-                    ui.button("Use in prompt", on_click=use_in_prompt)
-                    ui.button("Toggle static", on_click=toggle_static)
-                    ui.button("Reset selection", on_click=reset_selection)
-                    ui.button("Render selected prompt", on_click=render_prompt)
+                ).classes(f"{TEXTAREA_CLASS} {height_class(360)} w-full")
+                with ui.row().classes(f"{ROW_CLASS} gap-2"):
+                    ui.button("Use in prompt", on_click=use_in_prompt).classes(BUTTON_CLASS)
+                    ui.button("Toggle static", on_click=toggle_static).classes(BUTTON_CLASS)
+                    ui.button("Reset selection", on_click=reset_selection).classes(BUTTON_CLASS)
+                    ui.button("Render selected prompt", on_click=render_prompt).classes(button_class(success=True))
 
                 selection_table = ui.table(
                     columns=[
@@ -181,14 +198,15 @@ def build_components_view(state: Any) -> dict[str, Any]:
                     ],
                     rows=[],
                     row_key="component",
-                ).classes("w-full")
+                ).classes(f"{TABLE_CLASS} w-full")
 
             with ui.column().classes("w-1/2 gap-2"):
                 with ui.row().classes("items-center justify-between w-full"):
                     token_label = ui.label(state.components.prompt_token_summary)
-                    ui.button("Copy prompt", on_click=copy_prompt)
-                prompt_output = ui.textarea(value=state.components.rendered_prompt).props("readonly").classes("w-full font-mono")
-                prompt_output.style("height: 620px")
+                    ui.button("Copy prompt", on_click=copy_prompt).classes(BUTTON_CLASS)
+                prompt_output = ui.textarea(value=state.components.rendered_prompt).props("readonly").classes(
+                    f"{TEXTAREA_CLASS} {height_class(620)} w-full"
+                )
 
     controls["refresh"] = refresh_all
     return controls

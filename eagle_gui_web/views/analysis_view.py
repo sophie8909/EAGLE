@@ -8,6 +8,15 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.theme import (
+    BUTTON_CLASS,
+    CARD_CLASS,
+    ROW_CLASS,
+    SECTION_HEADER_CLASS,
+    TABLE_CLASS,
+    TEXTAREA_CLASS,
+    height_class,
+)
 
 
 def build_analysis_view(state: Any) -> dict[str, Any]:
@@ -43,16 +52,19 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         await refresh_analysis()
         await refresh_timing()
 
-    with ui.column().classes("w-full gap-3"):
-        with ui.row().classes("items-center gap-3"):
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("Analysis").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
             summary_label = ui.label(state.analysis.summary)
-            ui.button("Refresh analysis", on_click=refresh_all)
-        body_text = ui.textarea(value=state.analysis.body).props("readonly").classes("w-full font-mono")
-        body_text.style("height: 300px")
+            ui.button("Refresh analysis", on_click=refresh_all).classes(BUTTON_CLASS)
+        body_text = ui.textarea(value=state.analysis.body).props("readonly").classes(
+            f"{TEXTAREA_CLASS} {height_class(300)} w-full"
+        )
 
-        with ui.row().classes("items-center gap-3"):
+        ui.label("Timing").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
             timing_summary_label = ui.label(state.analysis.timing_summary)
-            ui.button("Refresh timing", on_click=refresh_timing)
+            ui.button("Refresh timing", on_click=refresh_timing).classes(BUTTON_CLASS)
         timing_table = ui.table(
             columns=[
                 {"name": "phase", "label": "Phase", "field": "phase", "align": "left"},
@@ -62,9 +74,10 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
                 {"name": "max_sec", "label": "Max sec", "field": "max_sec"},
             ],
             rows=[],
-        ).classes("w-full")
-        timing_text = ui.textarea(value=state.analysis.timing_body).props("readonly").classes("w-full font-mono")
-        timing_text.style("height: 300px")
+        ).classes(f"{TABLE_CLASS} w-full")
+        timing_text = ui.textarea(value=state.analysis.timing_body).props("readonly").classes(
+            f"{TEXTAREA_CLASS} {height_class(300)} w-full"
+        )
 
     controls["refresh_analysis"] = refresh_all
     return controls

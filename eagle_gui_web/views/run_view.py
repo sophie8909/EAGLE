@@ -9,6 +9,18 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.theme import (
+    BADGE_CLASS,
+    BUTTON_CLASS,
+    CARD_CLASS,
+    INPUT_CLASS,
+    ROW_CLASS,
+    SECTION_HEADER_CLASS,
+    TEXTAREA_CLASS,
+    button_class,
+    height_class,
+    status_badge_class,
+)
 
 
 def build_run_view(state: Any) -> dict[str, Any]:
@@ -43,7 +55,7 @@ def build_run_view(state: Any) -> dict[str, Any]:
     async def refresh_status() -> None:
         state.run.status_text = await asyncio.to_thread(services.process_status_text)
         status_badge.set_text(state.run.status_text)
-        status_badge.props(f"color={'positive' if state.run.status_text.startswith('running') else 'grey'}")
+        status_badge.classes(replace=status_badge_class(state.run.status_text))
 
     async def refresh_log() -> None:
         await refresh_status()
@@ -54,14 +66,15 @@ def build_run_view(state: Any) -> dict[str, Any]:
     def on_run_changed(event: Any) -> None:
         state.run.current_run_dir = Path(str(event.value)) if event.value else None
 
-    with ui.column().classes("w-full gap-3"):
-        with ui.row().classes("items-center gap-3"):
-            ui.button("Start experiment", on_click=start)
-            ui.button("Stop process", on_click=stop, color="negative")
-            ui.button("Refresh runs", on_click=refresh_runs)
-            ui.button("Refresh log", on_click=refresh_log)
-            status_badge = ui.badge(state.run.status_text, color="grey")
-        with ui.row().classes("gap-6"):
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("Run").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
+            ui.button("Start experiment", on_click=start).classes(button_class(success=True))
+            ui.button("Stop process", on_click=stop).classes(button_class(danger=True))
+            ui.button("Refresh runs", on_click=refresh_runs).classes(BUTTON_CLASS)
+            ui.button("Refresh log", on_click=refresh_log).classes(BUTTON_CLASS)
+            status_badge = ui.badge(state.run.status_text).classes(BADGE_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} gap-6"):
             ui.checkbox(
                 "Quick run",
                 value=state.run.quick_run,
@@ -77,9 +90,10 @@ def build_run_view(state: Any) -> dict[str, Any]:
                 value=state.run.precompile_python,
                 on_change=lambda event: setattr(state.run, "precompile_python", bool(event.value)),
             )
-        run_select = ui.select([], label="Run folder", on_change=on_run_changed).classes("w-full")
-        log_textarea = ui.textarea(value=state.run.log_text).props("readonly").classes("w-full font-mono")
-        log_textarea.style("height: 560px")
+        run_select = ui.select([], label="Run folder", on_change=on_run_changed).classes(f"{INPUT_CLASS} w-full")
+        log_textarea = ui.textarea(value=state.run.log_text).props("readonly").classes(
+            f"{TEXTAREA_CLASS} {height_class(560)} w-full"
+        )
 
     controls.update({"refresh_runs": refresh_runs, "refresh_status": refresh_status, "refresh_log": refresh_log})
     return controls

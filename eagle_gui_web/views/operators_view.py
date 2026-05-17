@@ -7,6 +7,7 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.theme import CARD_CLASS, GRID_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS
 
 
 def build_operators_view(state: Any) -> dict[str, Any]:
@@ -25,36 +26,37 @@ def build_operators_view(state: Any) -> dict[str, Any]:
         setattr(state.operators, name, value)
         refresh()
 
-    with ui.column().classes("w-full gap-4"):
-        with ui.grid(columns=4).classes("gap-3"):
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-4"):
+        ui.label("Operators").classes(SECTION_HEADER_CLASS)
+        with ui.grid(columns=4).classes(f"{GRID_CLASS} gap-3"):
             selects = {
                 "parent_selection_operator": ui.select(
                     list(services.operator_choices("parent_selection")),
                     label="Parent selection",
                     value=state.operators.parent_selection_operator,
                     on_change=lambda event: update_select("parent_selection_operator", str(event.value or "")),
-                ).classes("w-64"),
+                ).classes(f"{INPUT_CLASS} w-64"),
                 "env_selection_operator": ui.select(
                     list(services.operator_choices("env_selection")),
                     label="Environment selection",
                     value=state.operators.env_selection_operator,
                     on_change=lambda event: update_select("env_selection_operator", str(event.value or "")),
-                ).classes("w-64"),
+                ).classes(f"{INPUT_CLASS} w-64"),
                 "crossover_operator": ui.select(
                     list(services.operator_choices("crossover")),
                     label="Crossover",
                     value=state.operators.crossover_operator,
                     on_change=lambda event: update_select("crossover_operator", str(event.value or "")),
-                ).classes("w-64"),
+                ).classes(f"{INPUT_CLASS} w-64"),
                 "mutation_operator": ui.select(
                     list(services.operator_choices("mutation")),
                     label="Mutation",
                     value=state.operators.mutation_operator,
                     on_change=lambda event: update_select("mutation_operator", str(event.value or "")),
-                ).classes("w-64"),
+                ).classes(f"{INPUT_CLASS} w-64"),
             }
 
-        with ui.row().classes("gap-6") as repair_row:
+        with ui.row().classes(f"{ROW_CLASS} gap-6") as repair_row:
             ui.checkbox(
                 "Crossover repair",
                 value=state.operators.crossover_repair_enabled,
@@ -66,8 +68,8 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             on_change=lambda event: setattr(state.operators, "enable_reflection_operator", bool(event.value)),
         )
 
-        ui.label("Reproduction operator weights").classes("text-subtitle1")
-        with ui.grid(columns=3).classes("gap-3"):
+        ui.label("Reproduction operator weights").classes(SECTION_HEADER_CLASS)
+        with ui.grid(columns=3).classes(f"{GRID_CLASS} gap-3"):
             for key in ("crossover", "mutation", "reflection"):
                 ui.input(
                     key,
@@ -76,10 +78,10 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                         item,
                         str(event.value or "0"),
                     ),
-                ).classes("w-44")
+                ).classes(f"{INPUT_CLASS} w-44")
 
-        ui.label("Mutation mix weights").classes("text-subtitle1")
-        with ui.grid(columns=4).classes("gap-3") as mutation_weight_grid:
+        ui.label("Mutation mix weights").classes(SECTION_HEADER_CLASS)
+        with ui.grid(columns=4).classes(f"{GRID_CLASS} gap-3") as mutation_weight_grid:
             for key in services.operator_choices("mutation"):
                 if key == "mix":
                     continue
@@ -91,7 +93,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                         item,
                         str(event.value or "0"),
                     ),
-                ).classes("w-56")
+                ).classes(f"{INPUT_CLASS} w-56")
 
     controls["refresh"] = refresh
     refresh()

@@ -7,6 +7,7 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.theme import BUTTON_CLASS, CARD_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS, TABLE_CLASS
 
 
 def build_objectives_view(state: Any) -> dict[str, Any]:
@@ -56,24 +57,25 @@ def build_objectives_view(state: Any) -> dict[str, Any]:
             else f"{row['key']}: {row['label']}; direction={row['direction']}; eval_mode=full_game."
         )
 
-    with ui.column().classes("w-full gap-3"):
-        with ui.row().classes("items-end gap-3"):
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("Objectives").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3"):
             mode_select = ui.select(
                 ["single", "weighted_mix", "multi"],
                 label="Mode",
                 value=state.objectives.mode,
                 on_change=lambda event: _set_mode(state, str(event.value or "multi"), refresh),
-            ).classes("w-52")
+            ).classes(f"{INPUT_CLASS} w-52")
             single_select = ui.select(
                 initial_choices,
                 label="Single objective",
                 value=state.objectives.single_objective,
                 on_change=lambda event: setattr(state.objectives, "single_objective", str(event.value or "")),
-            ).classes("w-72")
-            selected_key = ui.select([], label="Selected row").classes("w-72")
-            weight_input = ui.input("Weight", value="1.0").classes("w-32")
-            ui.button("Toggle selected", on_click=toggle_selected)
-            ui.button("Set weight", on_click=update_weight)
+            ).classes(f"{INPUT_CLASS} w-72")
+            selected_key = ui.select([], label="Selected row").classes(f"{INPUT_CLASS} w-72")
+            weight_input = ui.input("Weight", value="1.0").classes(f"{INPUT_CLASS} w-32")
+            ui.button("Toggle selected", on_click=toggle_selected).classes(BUTTON_CLASS)
+            ui.button("Set weight", on_click=update_weight).classes(BUTTON_CLASS)
 
         table = ui.table(
             columns=[
@@ -86,7 +88,7 @@ def build_objectives_view(state: Any) -> dict[str, Any]:
             rows=[],
             row_key="key",
             on_select=lambda event: _on_select(event, selected_key, weight_input, state, update_detail),
-        ).classes("w-full")
+        ).classes(f"{TABLE_CLASS} w-full")
         detail_label = ui.label(state.objectives.detail).classes("w-full")
 
     controls["refresh"] = refresh

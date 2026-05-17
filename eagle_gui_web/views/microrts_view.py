@@ -8,6 +8,16 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.theme import (
+    BUTTON_CLASS,
+    CARD_CLASS,
+    INPUT_CLASS,
+    ROW_CLASS,
+    SECTION_HEADER_CLASS,
+    TEXTAREA_CLASS,
+    button_class,
+    height_class,
+)
 
 
 def build_microrts_view(state: Any) -> dict[str, Any]:
@@ -74,66 +84,67 @@ def build_microrts_view(state: Any) -> dict[str, Any]:
         trace_select.value = state.microrts.selected_trace or None
         trace_select.update()
 
-    with ui.column().classes("w-full gap-3"):
-        with ui.row().classes("items-end gap-3"):
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("MicroRTS").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3"):
             ui.select(
                 list(services.MICRORTS_OPPONENT_CHOICES),
                 label="Opponent",
                 value=state.microrts.opponent,
                 on_change=lambda event: setattr(state.microrts, "opponent", str(event.value or "")),
-            ).classes("w-72")
+            ).classes(f"{INPUT_CLASS} w-72")
             ui.select(
                 list(services.microrts_map_dir_choices()),
                 label="Map folder",
                 value=state.microrts.map_dir,
                 on_change=on_map_dir_changed,
-            ).classes("w-44")
+            ).classes(f"{INPUT_CLASS} w-44")
             map_file_select = ui.select(
                 list(services.microrts_map_file_choices(state.microrts.map_dir)),
                 label="Map file",
                 value=state.microrts.map_file,
                 on_change=lambda event: setattr(state.microrts, "map_file", str(event.value or "")),
-            ).classes("w-72")
+            ).classes(f"{INPUT_CLASS} w-72")
             ui.input(
                 "Update interval",
                 value=state.microrts.update_interval,
                 on_change=lambda event: setattr(state.microrts, "update_interval", str(event.value or "")),
-            ).classes("w-36")
+            ).classes(f"{INPUT_CLASS} w-36")
             ui.input(
                 "LLM interval",
                 value=state.microrts.llm_interval,
                 on_change=lambda event: setattr(state.microrts, "llm_interval", str(event.value or "")),
-            ).classes("w-36")
+            ).classes(f"{INPUT_CLASS} w-36")
             ui.checkbox(
                 "Save trace",
                 value=state.microrts.save_trace,
                 on_change=lambda event: setattr(state.microrts, "save_trace", bool(event.value)),
             )
 
-        with ui.row().classes("gap-2"):
-            ui.button("Load current prompt", on_click=load_rendered_prompt)
-            ui.button("Save prompt.txt", on_click=save_prompt)
-            ui.button("Launch Java GUI", on_click=launch)
-            ui.button("Stop Java GUI", on_click=stop, color="negative")
-            ui.button("Refresh", on_click=refresh_status)
+        with ui.row().classes(f"{ROW_CLASS} gap-2"):
+            ui.button("Load current prompt", on_click=load_rendered_prompt).classes(BUTTON_CLASS)
+            ui.button("Save prompt.txt", on_click=save_prompt).classes(BUTTON_CLASS)
+            ui.button("Launch Java GUI", on_click=launch).classes(button_class(success=True))
+            ui.button("Stop Java GUI", on_click=stop).classes(button_class(danger=True))
+            ui.button("Refresh", on_click=refresh_status).classes(BUTTON_CLASS)
             status_label = ui.label(state.microrts.status)
 
         prompt_text = ui.textarea(
             "Prompt for Java GUI",
             value=state.microrts.prompt_text,
             on_change=lambda event: setattr(state.microrts, "prompt_text", str(event.value or "")),
-        ).classes("w-full font-mono")
-        prompt_text.style("height: 280px")
+        ).classes(f"{TEXTAREA_CLASS} {height_class(280)} w-full")
 
-        with ui.row().classes("items-end gap-3 w-full"):
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
             trace_select = ui.select(
                 [],
                 label="Saved trace",
                 on_change=lambda event: setattr(state.microrts, "selected_trace", str(event.value or "")),
-            ).classes("grow")
-            ui.button("Open trace", on_click=open_trace)
-        log_text = ui.textarea(value=state.microrts.log_text).props("readonly").classes("w-full font-mono")
-        log_text.style("height: 300px")
+            ).classes(f"{INPUT_CLASS} grow")
+            ui.button("Open trace", on_click=open_trace).classes(BUTTON_CLASS)
+        log_text = ui.textarea(value=state.microrts.log_text).props("readonly").classes(
+            f"{TEXTAREA_CLASS} {height_class(300)} w-full"
+        )
 
     controls["refresh_status"] = refresh_status
     controls["refresh_trace_choices"] = refresh_trace_choices

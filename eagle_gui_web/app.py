@@ -10,6 +10,7 @@ from nicegui import ui
 
 from eagle_gui_web import services
 from eagle_gui_web.state import AppState
+from eagle_gui_web.theme import CARD_CLASS, HEADER_CLASS, PAGE_CLASS, TAB_CLASS, install_theme
 from eagle_gui_web.views.analysis_view import build_analysis_view
 from eagle_gui_web.views.components_view import build_components_view
 from eagle_gui_web.views.config_view import build_config_view
@@ -31,25 +32,25 @@ def _selected_run_path(value: Any) -> Path | None:
 
 def build_layout() -> dict[str, dict[str, Any]]:
     """Build the tabbed NiceGUI layout and return view refresh handles."""
-    ui.colors(primary="#286f6b", secondary="#395d7a", accent="#8f6b35")
-    ui.query(".nicegui-content").classes("bg-slate-50")
+    install_theme()
+    ui.query(".nicegui-content").classes(PAGE_CLASS)
 
     controls: dict[str, dict[str, Any]] = {}
-    with ui.header().classes("items-center justify-between"):
+    with ui.header().classes(f"{HEADER_CLASS} items-center justify-between"):
         ui.label("EAGLE").classes("text-h5")
         ui.label("NiceGUI Workflow").classes("text-subtitle1")
 
-    with ui.tabs().classes("w-full") as tabs:
-        run_tab = ui.tab("Run")
-        config_tab = ui.tab("Config")
-        components_tab = ui.tab("Components")
-        objectives_tab = ui.tab("Objectives")
-        operators_tab = ui.tab("Operators")
-        analysis_tab = ui.tab("Analysis")
-        prompts_tab = ui.tab("Prompts")
-        microrts_tab = ui.tab("MicroRTS")
+    with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
+        run_tab = ui.tab("Run").classes(TAB_CLASS)
+        config_tab = ui.tab("Config").classes(TAB_CLASS)
+        components_tab = ui.tab("Components").classes(TAB_CLASS)
+        objectives_tab = ui.tab("Objectives").classes(TAB_CLASS)
+        operators_tab = ui.tab("Operators").classes(TAB_CLASS)
+        analysis_tab = ui.tab("Analysis").classes(TAB_CLASS)
+        prompts_tab = ui.tab("Prompts").classes(TAB_CLASS)
+        microrts_tab = ui.tab("MicroRTS").classes(TAB_CLASS)
 
-    with ui.tab_panels(tabs, value=run_tab).classes("w-full"):
+    with ui.tab_panels(tabs, value=run_tab).classes(f"{PAGE_CLASS} w-full"):
         with ui.tab_panel(run_tab):
             controls["run"] = build_run_view(state)
         with ui.tab_panel(config_tab):
