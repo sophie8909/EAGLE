@@ -180,8 +180,8 @@ class EAConfig:
             )
         self.surrogate = normalized_surrogate
         algorithm_name = str(self.algorithm or "").strip().lower()
-        if algorithm_name not in {"ga", "nsga2", "ga_surrogate"}:
-            raise ValueError("algorithm must be one of: ga, nsga2, ga_surrogate.")
+        if algorithm_name not in {"ga", "nsga2", "ga_surrogate", "nsga2_surrogate"}:
+            raise ValueError("algorithm must be one of: ga, nsga2, ga_surrogate, nsga2_surrogate.")
         single_objective_algorithm = algorithm_name in {"ga", "ga_surrogate"}
         self.parent_selection_operator = self._normalized_parent_selection_operator(
             self.parent_selection_operator,

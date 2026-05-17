@@ -33,20 +33,22 @@ GUI_WEB_PROCESS_STATE_PATH = LOG_DIR / "gui_web_process_state.json"
 LOG_TAIL_LIMIT = 18_000
 
 APPLICATION_CHOICES = ("microrts",)
-ALGORITHM_CHOICES = ("ga", "nsga2", "ga_surrogate")
+ALGORITHM_CHOICES = ("ga", "nsga2", "ga_surrogate", "nsga2_surrogate")
 EVALUATOR_CHOICES = ("gameplay",)
 SURROGATE_CHOICES = ("round", "policy_agent", "java_agent")
 GA_ALGORITHMS = {"ga", "ga_surrogate"}
-SURROGATE_ALGORITHMS = {"ga_surrogate"}
+SURROGATE_ALGORITHMS = {"ga_surrogate", "nsga2_surrogate"}
 PARENT_SELECTION_BY_ALGORITHM = {
     "ga": "ga_fitness_tournament",
     "ga_surrogate": "ga_fitness_tournament",
     "nsga2": "nsga2_tournament",
+    "nsga2_surrogate": "nsga2_tournament",
 }
 ENV_SELECTION_BY_ALGORITHM = {
     "ga": "ga_fitness_elitism",
     "ga_surrogate": "ga_fitness_elitism",
     "nsga2": "nsga2_environmental",
+    "nsga2_surrogate": "nsga2_environmental",
 }
 MICRORTS_OPPONENT_CHOICES = (
     "ai.abstraction.HeavyRush",

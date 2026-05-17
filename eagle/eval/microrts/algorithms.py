@@ -36,6 +36,74 @@ class MicroRTSNSGA2(NSGA2):
     reflection_operator = RoundReflection
 
 
+@ALGORITHMS.register("nsga2_surrogate")
+class MicroRTSNSGA2Surrogate(NSGA2):
+    """NSGA-II component evolution that evaluates candidates through surrogate scoring."""
+
+    evaluator_factory = FullGameEvaluator
+    reflection_operator = RoundReflection
+
+    def _evaluate_initial_population(self, evaluator):
+        self._evaluate_surrogate_batch(self.population, generation=-1, label="Initial Population")
+        print("[Initial Population] complete", flush=True)
+        self.print_population_snapshot("initial population")
+        self._log_initial_population_snapshot()
+
+    def _evaluate_offspring(self, evaluator, offspring, generation: int) -> None:
+        self._evaluate_surrogate_batch(
+            offspring,
+            generation=generation,
+            label=f"Generation {generation + 1}",
+        )
+        for child in offspring:
+            print(
+                f"[Generation {generation + 1}] surrogate result "
+                f"id={child.id} fitness={getattr(child, 'fitness', None)}",
+                flush=True,
+            )
+            self._update_mutation_component_feedback(child)
+
+    def _evaluate_surrogate_batch(self, individuals, *, generation: int | None, label: str) -> None:
+        """Evaluate one generation's NSGA-II surrogate candidates sequentially."""
+        candidates = list(individuals)
+        if not candidates:
+            return
+        prompt_groups = self._group_individuals_by_prompt(candidates)
+        leaders = [group[0] for group in prompt_groups]
+        duplicate_count = len(candidates) - len(leaders)
+        print(
+            "[Individual Eval Queue] "
+            f"label={label} surrogate generation={generation} "
+            f"individuals={len(candidates)} unique_prompts={len(leaders)} "
+            f"prompt_cache_hits={duplicate_count}",
+            flush=True,
+        )
+        for index, group in enumerate(prompt_groups, start=1):
+            individual = group[0]
+            print(
+                f"[{label}] surrogate prompt {index}/{len(leaders)} "
+                f"leader_id={individual.id} shared_by={len(group)}",
+                flush=True,
+            )
+            evaluator = self.build_evaluator(config_override=clone_config(self.config))
+            eval_result = self._evaluate_surrogate_individual(evaluator, individual, generation=generation)
+            self._apply_prompt_cache_followers(group, individual, eval_result)
+
+    def _evaluate_surrogate_individual(self, evaluator, individual, *, generation: int | None):
+        eval_result = evaluator.surrogate(
+            individual,
+            generation=generation,
+            opponents=self.opponent_list or None,
+        )
+        fitness = aggregate_fitness(eval_result, self.config)
+        individual.fitness = fitness
+        individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
+        individual.evaluation_mode = "surrogate"
+        individual.surrogate_score = fitness
+        individual.last_surrogate_evaluation = {"eval_result": dict(eval_result)}
+        return eval_result
+
+
 @ALGORITHMS.register("ga_surrogate")
 class MicroRTSGASurrogate(GA):
     """GA that ranks mostly by surrogate scores and refreshes elites with gameplay."""

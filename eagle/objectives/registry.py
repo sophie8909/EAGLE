@@ -144,7 +144,7 @@ def objective_eval_mode(config: Any, eval_result: dict | None = None) -> str:
             return "java_surrogate"
 
     algorithm = _normalize_name(getattr(config, "algorithm", "nsga2"))
-    if algorithm != "ga_surrogate":
+    if algorithm not in {"ga_surrogate", "nsga2_surrogate"}:
         return "full_game"
 
     surrogate = _normalize_name(getattr(config, "surrogate", "round"))

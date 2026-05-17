@@ -19,6 +19,7 @@ OPPONENT_LIST = [
     # "ai.abstraction.WorkerRush",
 ]
 DEFAULT_EA_QUICK_RUN_OPPONENT = "ai.PassiveAI"
+SURROGATE_ALGORITHMS = {"ga_surrogate", "nsga2_surrogate"}
 
 
 def _find_latest_log_dir() -> str | None:
@@ -71,7 +72,7 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     if args.evaluator:
         config.evaluator = args.evaluator
 
-    if args.surrogate and str(config.algorithm).strip().lower() == "ga_surrogate":
+    if args.surrogate and str(config.algorithm).strip().lower() in SURROGATE_ALGORITHMS:
         config.surrogate = args.surrogate
 
     if args.tick_limit is not None:
@@ -88,7 +89,7 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     print(
         "[DEBUG] runtime_config "
         f"algorithm={config.algorithm} evaluator={config.evaluator} "
-        f"surrogate={config.surrogate if config.algorithm == 'ga_surrogate' else '(ignored)'} "
+        f"surrogate={config.surrogate if config.algorithm in SURROGATE_ALGORITHMS else '(ignored)'} "
         f"objective_config={config.objective_config} "
         f"population={config.population_size} generations={config.num_generations} "
         f"gameplay_refresh_interval={config.gameplay_refresh_interval} "
@@ -135,7 +136,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--algorithm",
-        choices=["ga", "nsga2", "ga_surrogate"],
+        choices=["ga", "nsga2", "ga_surrogate", "nsga2_surrogate"],
         default=None,
         help="Override the algorithm for this run.",
     )
@@ -224,7 +225,7 @@ def main() -> None:
     if args.evaluator:
         experiment_config.evaluator = args.evaluator
         config.evaluator = args.evaluator
-    if args.surrogate and config.algorithm == "ga_surrogate":
+    if args.surrogate and config.algorithm in SURROGATE_ALGORITHMS:
         experiment_config.evaluator = config.evaluator
 
     print(
