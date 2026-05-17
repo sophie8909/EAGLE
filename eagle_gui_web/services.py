@@ -536,22 +536,24 @@ def read_log_tail(limit: int = LOG_TAIL_LIMIT) -> str:
     return path.read_text(encoding="utf-8", errors="replace")[-limit:]
 
 
-def start_experiment(state: Any) -> tuple[bool, str]:
-    """Save config and start `python -m eagle.main --config <config>`."""
+def launch_web_process(
+    *,
+    command: list[str],
+    config_path: Path,
+    log_prefix: str,
+    debug_lines: list[str] | None = None,
+) -> tuple[bool, str]:
+    """Launch one web-GUI managed process and persist monitor state."""
     if process_running():
         return False, "An experiment process is already running."
-    config_path = save_generated_config(state)
-    command = [sys.executable, "-m", "eagle.main", "--config", str(config_path)]
-    if state.run.quick_run:
-        command.append("--quick-run")
-    if state.run.skip_final_test is True:
-        command.append("--skip-final-test")
-    if state.run.precompile_python:
-        command.append("--precompile-python")
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = LOG_DIR / f"gui_web_process_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    log_path = LOG_DIR / f"{log_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
     log_handle = log_path.open("w", encoding="utf-8", errors="replace")
     log_handle.write("Command: " + " ".join(command) + "\n\n")
+    for line in debug_lines or []:
+        log_handle.write(line + "\n")
+    if debug_lines:
+        log_handle.write("\n")
     log_handle.flush()
     process = subprocess.Popen(command, cwd=ROOT, stdout=log_handle, stderr=subprocess.STDOUT, text=True)
     process_service.write_process_state(
@@ -563,6 +565,61 @@ def start_experiment(state: Any) -> tuple[bool, str]:
         config_path=config_path,
     )
     return True, f"Started PID {process.pid}"
+
+
+def start_experiment(state: Any) -> tuple[bool, str]:
+    """Save config and start `python -m eagle.main --config <config>`."""
+    config_path = save_generated_config(state)
+    command = [sys.executable, "-m", "eagle.main", "--config", str(config_path)]
+    if state.run.quick_run:
+        command.append("--quick-run")
+    if state.run.skip_final_test is True:
+        command.append("--skip-final-test")
+    if state.run.precompile_python:
+        command.append("--precompile-python")
+    return launch_web_process(command=command, config_path=config_path, log_prefix="gui_web_process")
+
+
+def start_final_test(state: Any) -> tuple[bool, str]:
+    """Launch final testing for the selected existing run folder."""
+    run_dir = validate_run_dir(state.final_test.selected_run_dir)
+    config_path = run_dir / "config.json"
+    apply_final_test_max_front(config_path, state.final_test.max_front)
+    command = [sys.executable, "-m", "eagle.main", "--resume-log-dir", str(run_dir)]
+    if state.final_test.quick_run:
+        command.append("--quick-run")
+    if state.final_test.precompile_python:
+        command.append("--precompile-python")
+    return launch_web_process(
+        command=command,
+        config_path=config_path,
+        log_prefix="gui_web_final_test",
+        debug_lines=[f"[DEBUG] gui web final test run_dir={run_dir}"],
+    )
+
+
+def validate_run_dir(run_dir: Path | None) -> Path:
+    """Return a selected run directory that contains a config."""
+    if run_dir is None:
+        raise ValueError("Select a run folder first.")
+    path = run_dir.expanduser().resolve()
+    if not path.exists() or not path.is_dir():
+        raise ValueError(f"Run folder does not exist: {path}")
+    config_path = path / "config.json"
+    if not config_path.exists():
+        raise ValueError(f"Selected run is missing config.json: {config_path}")
+    return path
+
+
+def apply_final_test_max_front(config_path: Path, max_front: str) -> None:
+    """Persist max-front override because `eagle.main` has no CLI flag for it."""
+    text = str(max_front or "").strip()
+    if not text:
+        return
+    parsed = parse_optional_nonnegative_int(text, "final_test_max_front")
+    payload = config_service.read_json_mapping_strict(config_path)
+    payload["final_test_max_front"] = parsed
+    config_service.write_json_file(config_path, payload)
 
 
 def stop_experiment() -> str:

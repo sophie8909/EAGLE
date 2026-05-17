@@ -14,6 +14,7 @@ from eagle_gui_web.theme import CARD_CLASS, HEADER_CLASS, PAGE_CLASS, TAB_CLASS,
 from eagle_gui_web.views.analysis_view import build_analysis_view
 from eagle_gui_web.views.components_view import build_components_view
 from eagle_gui_web.views.config_view import build_config_view
+from eagle_gui_web.views.final_test_view import build_final_test_view
 from eagle_gui_web.views.microrts_view import build_microrts_view
 from eagle_gui_web.views.objectives_view import build_objectives_view
 from eagle_gui_web.views.operators_view import build_operators_view
@@ -42,6 +43,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
 
     with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
         run_tab = ui.tab("Run").classes(TAB_CLASS)
+        final_test_tab = ui.tab("Final Test").classes(TAB_CLASS)
         config_tab = ui.tab("Config").classes(TAB_CLASS)
         components_tab = ui.tab("Components").classes(TAB_CLASS)
         objectives_tab = ui.tab("Objectives").classes(TAB_CLASS)
@@ -53,6 +55,8 @@ def build_layout() -> dict[str, dict[str, Any]]:
     with ui.tab_panels(tabs, value=run_tab).classes(f"{PAGE_CLASS} w-full"):
         with ui.tab_panel(run_tab):
             controls["run"] = build_run_view(state)
+        with ui.tab_panel(final_test_tab):
+            controls["final_test"] = build_final_test_view(state)
         with ui.tab_panel(config_tab):
             controls["config"] = build_config_view(state)
         with ui.tab_panel(components_tab):
@@ -99,12 +103,14 @@ async def startup_refresh() -> None:
         if refresh:
             refresh()
     await controls["run"]["refresh_runs"]()
+    await controls["final_test"]["refresh_runs"]()
     await controls["run"]["refresh_log"]()
 
 
 async def refresh_log_timer() -> None:
     """Refresh process logs only; prompt loading is intentionally excluded."""
     await controls["run"]["refresh_log"]()
+    await controls["final_test"]["refresh_log"]()
     await controls["microrts"]["refresh_status"]()
 
 

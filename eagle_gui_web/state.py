@@ -107,6 +107,18 @@ class RunState:
 
 
 @dataclass
+class FinalTestState:
+    """Final-test launch state for an existing run folder."""
+
+    selected_run_dir: Path | None = None
+    max_front: str = ""
+    quick_run: bool = False
+    precompile_python: bool = False
+    status_text: str = "not running"
+    log_text: str = ""
+
+
+@dataclass
 class AnalysisState:
     """Live analysis payloads refreshed independently from process logs."""
 
@@ -154,6 +166,7 @@ class AppState:
     objectives: ObjectiveState = field(default_factory=ObjectiveState)
     operators: OperatorState = field(default_factory=OperatorState)
     run: RunState = field(default_factory=RunState)
+    final_test: FinalTestState = field(default_factory=FinalTestState)
     analysis: AnalysisState = field(default_factory=AnalysisState)
     prompts: PromptState = field(default_factory=PromptState)
     microrts: MicroRTSState = field(default_factory=MicroRTSState)
