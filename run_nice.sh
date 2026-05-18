@@ -5,36 +5,33 @@ set -e
 ENV_NAME="eagle"
 PYTHON_VERSION="3.11"
 
-GUI_MODE=false
+INSTALL_MODE=true
 
 for arg in "$@"; do
-  case $arg in
+  case "$arg" in
     --gui)
-      GUI_MODE=true
-      shift
+      INSTALL_MODE=false
+      ;;
+    --setup|--install)
+      INSTALL_MODE=true
       ;;
   esac
 done
 
-# -----------------------------
-# Fast path
-# -----------------------------
-if [ "$GUI_MODE" = true ]; then
-  python -m eagle_gui_web.app
-  exit 0
-fi
-
-# -----------------------------
-# Setup
-# -----------------------------
 echo "[1/3] Checking conda..."
 
 if ! command -v conda >/dev/null 2>&1; then
-  echo "ERROR: conda not found."
-  exit 1
+  if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+    source "$HOME/miniconda3/etc/profile.d/conda.sh"
+  elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+    source "$HOME/anaconda3/etc/profile.d/conda.sh"
+  else
+    echo "ERROR: conda not found."
+    exit 1
+  fi
+else
+  source "$(conda info --base)/etc/profile.d/conda.sh"
 fi
-
-source "$(conda info --base)/etc/profile.d/conda.sh"
 
 echo "[2/3] Checking environment..."
 
@@ -45,15 +42,17 @@ fi
 
 conda activate "$ENV_NAME"
 
-echo "[Install] Installing packages..."
+if [ "$INSTALL_MODE" = true ]; then
+  echo "[Install] Installing packages..."
 
-python -m pip install --upgrade pip
+  python -m pip install --upgrade pip
 
-if [ -f "requirements.txt" ]; then
-  pip install -r requirements.txt
-else
-  echo "ERROR: requirements.txt not found"
-  exit 1
+  if [ -f "requirements.txt" ]; then
+    pip install -r requirements.txt
+  else
+    echo "ERROR: requirements.txt not found"
+    exit 1
+  fi
 fi
 
 echo "[3/3] Launching NiceGUI dashboard..."
