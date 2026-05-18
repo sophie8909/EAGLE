@@ -157,10 +157,15 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows["config_path"].set_text(str(state.config.generated_config_path or state.config.base_config_path))
         rows["component_path"].set_text(state.config.component_pool_path or "(none)")
         rows["algorithm"].set_text(state.config.algorithm)
+        rows["evaluator"].set_text(state.config.evaluator)
+        rows["surrogate"].set_text(state.config.surrogate)
+        rows["surrogate_top_ratio"].set_text(state.config.surrogate_top_ratio)
+        rows["archive_parent_ratio"].set_text(state.config.archive_parent_ratio)
         rows["parent_selection"].set_text(state.operators.parent_selection_operator)
         rows["environmental_selection"].set_text(state.operators.env_selection_operator)
         rows["crossover"].set_text(state.operators.crossover_operator)
         rows["mutation"].set_text(state.operators.mutation_operator)
+        rows["mutation_mix_weights"].set_text(_format_mutation_weights(state))
         rows["crossover_repair"].set_text(str(state.operators.crossover_repair_enabled))
         rows["reflection"].set_text(str(state.operators.enable_reflection_operator))
         rows["objective_mode"].set_text(state.objectives.mode)
@@ -178,10 +183,15 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows.update(
             {
                 "algorithm": _summary_row("Algorithm"),
+                "evaluator": _summary_row("Eval mode"),
+                "surrogate": _summary_row("Surrogate mode"),
+                "surrogate_top_ratio": _summary_row("Surrogate top ratio"),
+                "archive_parent_ratio": _summary_row("Archive parent ratio"),
                 "parent_selection": _summary_row("Parent selection"),
                 "environmental_selection": _summary_row("Environmental selection"),
                 "crossover": _summary_row("Crossover"),
                 "mutation": _summary_row("Mutation"),
+                "mutation_mix_weights": _summary_row("Mutation mix weights"),
                 "crossover_repair": _summary_row("Crossover repair"),
                 "reflection": _summary_row("Reflection"),
             }
@@ -220,6 +230,13 @@ def _format_objective_weights(state: Any) -> str:
     if not state.objectives.weights:
         return "(none)"
     return "\n".join(f"{key}  {value}" for key, value in sorted(state.objectives.weights.items()))
+
+
+def _format_mutation_weights(state: Any) -> str:
+    """Return mutation mix weights as one wrapped line per operator."""
+    if not state.operators.mutation_weights:
+        return "(none)"
+    return "\n".join(f"{key}  {value}" for key, value in sorted(state.operators.mutation_weights.items()))
 
 
 def _set_algorithm(state: Any, value: str) -> None:

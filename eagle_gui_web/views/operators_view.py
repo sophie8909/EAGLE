@@ -21,11 +21,25 @@ def build_operators_view(state: Any) -> dict[str, Any]:
         algorithm_select.update()
         evaluator_select.value = state.config.evaluator
         evaluator_select.update()
+        surrogate_section.visible = services.is_surrogate_algorithm(state.config.algorithm)
+        for name, control in config_controls.items():
+            control.value = getattr(state.config, name)
+            control.update()
         for name, control in selects.items():
             control.value = getattr(state.operators, name)
             control.update()
+        for key, control in reproduction_weight_inputs.items():
+            control.value = state.operators.reproduction_weights.get(key, "0.0")
+            control.update()
+        mutation_mix_enabled = state.operators.mutation_operator == "mix"
+        for key, control in mutation_weight_inputs.items():
+            control.value = state.operators.mutation_weights.get(key, "0.0")
+            if mutation_mix_enabled:
+                control.enable()
+            else:
+                control.disable()
+            control.update()
         repair_row.visible = state.operators.crossover_operator == "uniform"
-        mutation_weight_grid.visible = state.operators.mutation_operator == "mix"
 
     def update_select(name: str, value: str) -> None:
         setattr(state.operators, name, value)
@@ -40,6 +54,10 @@ def build_operators_view(state: Any) -> dict[str, Any]:
 
     def update_evaluator(value: str) -> None:
         state.config.evaluator = value
+        refresh_config_summary(state)
+
+    def update_config(name: str, value: str) -> None:
+        setattr(state.config, name, value)
         refresh_config_summary(state)
 
     def update_flag(name: str, value: bool) -> None:
@@ -70,7 +88,31 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                 on_change=lambda event: update_evaluator(str(event.value or "gameplay")),
             ).classes(f"{INPUT_CLASS} w-64")
 
-        with ui.grid(columns=4).classes(f"{GRID_CLASS} gap-3"):
+        with ui.column().classes("w-full gap-3") as surrogate_section:
+            ui.label("Surrogate").classes(SECTION_HEADER_CLASS)
+            with ui.grid(columns=3).classes(f"{GRID_CLASS} gap-3"):
+                config_controls = {
+                    "surrogate": ui.select(
+                        list(services.SURROGATE_CHOICES),
+                        label="Surrogate mode",
+                        value=state.config.surrogate,
+                        on_change=lambda event: update_config("surrogate", str(event.value or "round")),
+                    ).classes(f"{INPUT_CLASS} w-64"),
+                    "surrogate_top_ratio": ui.input(
+                        "Surrogate top ratio",
+                        value=state.config.surrogate_top_ratio,
+                        on_change=lambda event: update_config("surrogate_top_ratio", str(event.value or "")),
+                    ).classes(f"{INPUT_CLASS} w-44"),
+                    "archive_parent_ratio": ui.input(
+                        "Archive parent ratio",
+                        value=state.config.archive_parent_ratio,
+                        on_change=lambda event: update_config("archive_parent_ratio", str(event.value or "")),
+                    ).classes(f"{INPUT_CLASS} w-44"),
+                }
+
+        ui.label("Operators").classes(SECTION_HEADER_CLASS)
+        ui.label("Selection").classes(SECTION_HEADER_CLASS)
+        with ui.grid(columns=2).classes(f"{GRID_CLASS} gap-3"):
             selects = {
                 "parent_selection_operator": ui.select(
                     list(services.operator_choices("parent_selection")),
@@ -84,6 +126,12 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                     value=state.operators.env_selection_operator,
                     on_change=lambda event: update_select("env_selection_operator", str(event.value or "")),
                 ).classes(f"{INPUT_CLASS} w-64"),
+            }
+
+        ui.label("Crossover / Mutation").classes(SECTION_HEADER_CLASS)
+        with ui.grid(columns=2).classes(f"{GRID_CLASS} gap-3"):
+            selects.update(
+                {
                 "crossover_operator": ui.select(
                     list(services.operator_choices("crossover")),
                     label="Crossover",
@@ -96,7 +144,8 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                     value=state.operators.mutation_operator,
                     on_change=lambda event: update_select("mutation_operator", str(event.value or "")),
                 ).classes(f"{INPUT_CLASS} w-64"),
-            }
+                }
+            )
 
         with ui.row().classes(f"{ROW_CLASS} gap-6") as repair_row:
             ui.checkbox(
@@ -112,20 +161,22 @@ def build_operators_view(state: Any) -> dict[str, Any]:
 
         ui.label("Reproduction operator weights").classes(SECTION_HEADER_CLASS)
         with ui.grid(columns=3).classes(f"{GRID_CLASS} gap-3"):
+            reproduction_weight_inputs = {}
             for key in ("crossover", "mutation", "reflection"):
-                ui.input(
+                reproduction_weight_inputs[key] = ui.input(
                     key,
                     value=state.operators.reproduction_weights.get(key, "0.0"),
                     on_change=lambda event, item=key: update_reproduction_weight(item, str(event.value or "0")),
                 ).classes(f"{INPUT_CLASS} w-44")
 
         ui.label("Mutation mix weights").classes(SECTION_HEADER_CLASS)
-        with ui.grid(columns=4).classes(f"{GRID_CLASS} gap-3") as mutation_weight_grid:
+        with ui.grid(columns=4).classes(f"{GRID_CLASS} gap-3"):
+            mutation_weight_inputs = {}
             for key in services.operator_choices("mutation"):
                 if key == "mix":
                     continue
                 state.operators.mutation_weights.setdefault(key, "0.0")
-                ui.input(
+                mutation_weight_inputs[key] = ui.input(
                     key,
                     value=state.operators.mutation_weights[key],
                     on_change=lambda event, item=key: update_mutation_weight(item, str(event.value or "0")),

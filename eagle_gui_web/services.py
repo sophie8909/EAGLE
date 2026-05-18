@@ -66,6 +66,11 @@ _microrts_log_path: Path | None = None
 LOGGER = logging.getLogger(__name__)
 
 
+def is_surrogate_algorithm(algorithm: str) -> bool:
+    """Return whether an algorithm name uses a surrogate flow."""
+    return "surrogate" in str(algorithm or "").lower()
+
+
 def configure_runtime_logging() -> None:
     """Configure terminal and file logging for NiceGUI runtime diagnostics."""
     root_logger = logging.getLogger()
