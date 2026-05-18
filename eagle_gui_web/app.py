@@ -47,10 +47,6 @@ state = AppState()
 EAGLE_IMAGE_URL = "/assets/eagle.png"
 HEARTBEAT_INTERVAL_SEC = 2.0
 HEARTBEAT_WARN_DELAY_SEC = 5.0
-LOG_REFRESH_INTERVAL_SEC = 5.0
-ANALYSIS_REFRESH_INTERVAL_SEC = 20.0
-log_refresh_lock = asyncio.Lock()
-analysis_refresh_lock = asyncio.Lock()
 
 
 def on_client_connect(client: Any | None = None) -> None:
@@ -130,6 +126,27 @@ def build_layout() -> dict[str, dict[str, Any]]:
         await asyncio.to_thread(services.shutdown_runtime, state)
         services.shutdown_app(state, nicegui_app)
 
+    async def refresh_current_page() -> None:
+        page = state.runtime.current_page
+        LOGGER.info("manual refresh start page=%s", page)
+        if page == "run":
+            await controls["run"]["refresh_log"]()
+        elif page == "final_test":
+            await controls["final_test"]["refresh_log"]()
+        elif page == "analysis":
+            await controls["analysis"]["refresh_analysis"]()
+        elif page == "prompts":
+            await controls["prompts"]["refresh_prompts"](True)
+        elif page == "microrts":
+            await controls["microrts"]["refresh_status"]()
+        else:
+            refresh = controls.get(page, {}).get("refresh")
+            if refresh:
+                result = refresh()
+                if asyncio.iscoroutine(result):
+                    await result
+        LOGGER.info("manual refresh end page=%s", page)
+
     with ui.header().classes(f"{HEADER_CLASS} items-center justify-between"):
         with ui.row().classes(f"{BRAND_CLASS} items-center"):
             ui.image(EAGLE_IMAGE_URL).classes(BRAND_IMAGE_CLASS)
@@ -137,6 +154,9 @@ def build_layout() -> dict[str, dict[str, Any]]:
                 ui.label("Eagle").classes(title_class("text-h5"))
                 ui.label("EA for Gameplay LLM-agEnt").classes(SUBTITLE_CLASS)
         with ui.row().classes("items-center gap-2"):
+            ui.button("Refresh", on_click=safe_click(refresh_current_page, label="Refresh current page")).classes(
+                button_class(success=True)
+            )
             ui.button("Stop Experiment", on_click=safe_click(stop_experiment, label="Stop Experiment")).classes(
                 button_class(danger=True)
             )
@@ -178,11 +198,28 @@ def build_layout() -> dict[str, dict[str, Any]]:
     async def on_tab_change(event: Any) -> None:
         selected = event.args
 
-        if selected == prompts_tab:
+        if selected == run_tab:
+            state.runtime.current_page = "run"
+            await controls["run"]["refresh_log"]()
+        elif selected == final_test_tab:
+            state.runtime.current_page = "final_test"
+            await controls["final_test"]["refresh_log"]()
+        elif selected == config_tab:
+            state.runtime.current_page = "config"
+        elif selected == components_tab:
+            state.runtime.current_page = "components"
+        elif selected == objectives_tab:
+            state.runtime.current_page = "objectives"
+        elif selected == operators_tab:
+            state.runtime.current_page = "operators"
+        elif selected == prompts_tab:
+            state.runtime.current_page = "prompts"
             await controls["prompts"]["refresh_prompts"](True)
-
-        if selected == analysis_tab:
+        elif selected == analysis_tab:
+            state.runtime.current_page = "analysis"
             await controls["analysis"]["refresh_analysis"]()
+        elif selected == microrts_tab:
+            state.runtime.current_page = "microrts"
 
     tabs.on("update:model-value", on_tab_change)
     return controls
@@ -214,41 +251,9 @@ async def startup_refresh() -> None:
     await controls["run"]["refresh_log"]()
 
 
-async def refresh_log_timer() -> None:
-    """Refresh process logs only; prompt loading is intentionally excluded."""
-    if state.runtime.connected_client_count <= 0:
-        LOGGER.info("log refresh skipped reason=no_connected_clients")
-        return
-    if log_refresh_lock.locked():
-        LOGGER.info("log refresh skipped reason=previous_refresh_running")
-        return
-    async with log_refresh_lock:
-        LOGGER.info("log refresh start")
-        await controls["run"]["refresh_log"]()
-        await controls["final_test"]["refresh_log"]()
-        await controls["microrts"]["refresh_status"]()
-        LOGGER.info("log refresh end")
-
-
-async def refresh_analysis_timer() -> None:
-    """Refresh analysis independently from the log timer."""
-    if state.runtime.connected_client_count <= 0:
-        LOGGER.info("analysis refresh skipped reason=no_connected_clients")
-        return
-    if analysis_refresh_lock.locked():
-        LOGGER.info("analysis refresh skipped reason=previous_refresh_running")
-        return
-    async with analysis_refresh_lock:
-        LOGGER.info("analysis refresh start")
-        await controls["analysis"]["refresh_analysis"]()
-        LOGGER.info("analysis refresh end")
-
-
 startup_timer = ui.timer(0.1, safe_click(startup_refresh, label="Startup refresh"), once=True)
-log_timer = ui.timer(LOG_REFRESH_INTERVAL_SEC, safe_click(refresh_log_timer, label="Log refresh"))
-analysis_timer = ui.timer(ANALYSIS_REFRESH_INTERVAL_SEC, safe_click(refresh_analysis_timer, label="Analysis refresh"))
 heartbeat_timer = ui.timer(HEARTBEAT_INTERVAL_SEC, heartbeat)
-state.active_timers.extend([startup_timer, log_timer, analysis_timer, heartbeat_timer])
+state.active_timers.extend([startup_timer, heartbeat_timer])
 
 
 def main() -> None:
