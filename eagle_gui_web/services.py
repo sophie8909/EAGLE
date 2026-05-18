@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import signal
 import socket
@@ -25,6 +26,7 @@ from eagle_gui.services import analysis_service, config_service, process_service
 
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_LOG_PATH = ROOT / "logs" / "gui_runtime.log"
 CONFIG_DIR = ROOT / "configs" / "evolution"
 EXPERIMENT_DIR = ROOT / "configs" / "experiments"
 LOG_DIR = ROOT / "logs" / "eagle"
@@ -61,6 +63,71 @@ MICRORTS_OPPONENT_CHOICES = (
 
 _microrts_process: subprocess.Popen | None = None
 _microrts_log_path: Path | None = None
+LOGGER = logging.getLogger(__name__)
+
+
+def configure_runtime_logging() -> None:
+    """Configure terminal and file logging for NiceGUI runtime diagnostics."""
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+
+    if not any(getattr(handler, "_eagle_gui_runtime_stream", False) for handler in root_logger.handlers):
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        stream_handler._eagle_gui_runtime_stream = True
+        root_logger.addHandler(stream_handler)
+
+    if any(getattr(handler, "_eagle_gui_runtime_file", False) for handler in root_logger.handlers):
+        return
+
+    try:
+        RUNTIME_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(RUNTIME_LOG_PATH, encoding="utf-8")
+    except OSError as exc:
+        LOGGER.warning("GUI runtime file logging unavailable path=%s error=%s", RUNTIME_LOG_PATH, exc)
+        return
+    file_handler.setFormatter(formatter)
+    file_handler._eagle_gui_runtime_file = True
+    root_logger.addHandler(file_handler)
+
+
+class LoggedOperation:
+    """Log duration for one GUI-triggered operation without handling failures."""
+
+    def __init__(self, name: str, **details: Any) -> None:
+        self.name = name
+        self.details = details
+        self.started_at = 0.0
+
+    def __enter__(self) -> "LoggedOperation":
+        self.started_at = time.monotonic()
+        LOGGER.info("operation start name=%s %s", self.name, format_log_details(self.details))
+        return self
+
+    def __exit__(self, exc_type: Any, exc: BaseException | None, traceback: Any) -> bool:
+        duration = time.monotonic() - self.started_at
+        if exc_type is None:
+            LOGGER.info(
+                "operation end name=%s duration_sec=%.3f %s",
+                self.name,
+                duration,
+                format_log_details(self.details),
+            )
+        else:
+            LOGGER.info(
+                "operation failed name=%s duration_sec=%.3f error_type=%s %s",
+                self.name,
+                duration,
+                getattr(exc_type, "__name__", str(exc_type)),
+                format_log_details(self.details),
+            )
+        return False
+
+
+def format_log_details(details: dict[str, Any]) -> str:
+    """Return stable key-value detail text for runtime logs."""
+    return " ".join(f"{key}={value}" for key, value in details.items() if value is not None)
 
 
 def timestamped_stem(prefix: str) -> str:
@@ -535,12 +602,14 @@ def process_log_path() -> Path | None:
 
 def read_log_tail(limit: int = LOG_TAIL_LIMIT) -> str:
     """Read the current experiment log tail."""
-    path = process_log_path()
-    if path is None:
-        return "No process log selected."
-    if not path.exists():
-        return f"Log file does not exist: {path}"
-    return path.read_text(encoding="utf-8", errors="replace")[-limit:]
+    with LoggedOperation("read experiment log tail", limit=limit):
+        path = process_log_path()
+        if path is None:
+            return "No process log selected."
+        if not path.exists():
+            return f"Log file does not exist: {path}"
+        LOGGER.info("reading large file path=%s", path)
+        return path.read_text(encoding="utf-8", errors="replace")[-limit:]
 
 
 def launch_web_process(
@@ -552,63 +621,66 @@ def launch_web_process(
     debug_lines: list[str] | None = None,
 ) -> tuple[bool, str]:
     """Launch one web-GUI managed process and persist monitor state."""
-    if state is not None and getattr(state, "is_stopping", False):
-        return False, "Shutdown is already in progress."
-    if process_running():
-        return False, "An experiment process is already running."
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = LOG_DIR / f"{log_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-    log_handle = log_path.open("w", encoding="utf-8", errors="replace")
-    log_handle.write("Command: " + " ".join(command) + "\n\n")
-    for line in debug_lines or []:
-        log_handle.write(line + "\n")
-    if debug_lines:
-        log_handle.write("\n")
-    log_handle.flush()
-    process = _launch_tracked_process(command, cwd=ROOT, stdout=log_handle, state=state)
-    if state is not None:
-        state.runtime.is_running = True
-    process_service.write_process_state(
-        GUI_WEB_PROCESS_STATE_PATH,
-        pid=int(process.pid),
-        command=command,
-        cwd=ROOT,
-        log_path=log_path,
-        config_path=config_path,
-    )
-    return True, f"Started PID {process.pid}"
+    with LoggedOperation("launch web process", log_prefix=log_prefix, config_path=config_path):
+        if state is not None and getattr(state, "is_stopping", False):
+            return False, "Shutdown is already in progress."
+        if process_running():
+            return False, "An experiment process is already running."
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_path = LOG_DIR / f"{log_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        log_handle = log_path.open("w", encoding="utf-8", errors="replace")
+        log_handle.write("Command: " + " ".join(command) + "\n\n")
+        for line in debug_lines or []:
+            log_handle.write(line + "\n")
+        if debug_lines:
+            log_handle.write("\n")
+        log_handle.flush()
+        process = _launch_tracked_process(command, cwd=ROOT, stdout=log_handle, state=state)
+        if state is not None:
+            state.runtime.is_running = True
+        process_service.write_process_state(
+            GUI_WEB_PROCESS_STATE_PATH,
+            pid=int(process.pid),
+            command=command,
+            cwd=ROOT,
+            log_path=log_path,
+            config_path=config_path,
+        )
+        return True, f"Started PID {process.pid}"
 
 
 def start_experiment(state: Any) -> tuple[bool, str]:
     """Save config and start `python -m eagle.main --config <config>`."""
-    config_path = save_generated_config(state)
-    command = [sys.executable, "-m", "eagle.main", "--config", str(config_path)]
-    if state.run.quick_run:
-        command.append("--quick-run")
-    if state.run.skip_final_test is True:
-        command.append("--skip-final-test")
-    if state.run.precompile_python:
-        command.append("--precompile-python")
-    return launch_web_process(state=state, command=command, config_path=config_path, log_prefix="gui_web_process")
+    with LoggedOperation("starting EA"):
+        config_path = save_generated_config(state)
+        command = [sys.executable, "-m", "eagle.main", "--config", str(config_path)]
+        if state.run.quick_run:
+            command.append("--quick-run")
+        if state.run.skip_final_test is True:
+            command.append("--skip-final-test")
+        if state.run.precompile_python:
+            command.append("--precompile-python")
+        return launch_web_process(state=state, command=command, config_path=config_path, log_prefix="gui_web_process")
 
 
 def start_final_test(state: Any) -> tuple[bool, str]:
     """Launch final testing for the selected existing run folder."""
-    run_dir = validate_run_dir(state.final_test.selected_run_dir)
-    config_path = run_dir / "config.json"
-    apply_final_test_max_front(config_path, state.final_test.max_front)
-    command = [sys.executable, "-m", "eagle.main", "--resume-log-dir", str(run_dir)]
-    if state.final_test.quick_run:
-        command.append("--quick-run")
-    if state.final_test.precompile_python:
-        command.append("--precompile-python")
-    return launch_web_process(
-        state=state,
-        command=command,
-        config_path=config_path,
-        log_prefix="gui_web_final_test",
-        debug_lines=[f"[DEBUG] gui web final test run_dir={run_dir}"],
-    )
+    with LoggedOperation("running final test"):
+        run_dir = validate_run_dir(state.final_test.selected_run_dir)
+        config_path = run_dir / "config.json"
+        apply_final_test_max_front(config_path, state.final_test.max_front)
+        command = [sys.executable, "-m", "eagle.main", "--resume-log-dir", str(run_dir)]
+        if state.final_test.quick_run:
+            command.append("--quick-run")
+        if state.final_test.precompile_python:
+            command.append("--precompile-python")
+        return launch_web_process(
+            state=state,
+            command=command,
+            config_path=config_path,
+            log_prefix="gui_web_final_test",
+            debug_lines=[f"[DEBUG] gui web final test run_dir={run_dir}"],
+        )
 
 
 def validate_run_dir(run_dir: Path | None) -> Path:
@@ -637,23 +709,24 @@ def apply_final_test_max_front(config_path: Path, max_front: str) -> None:
 
 def stop_experiment(state: Any | None = None) -> str:
     """Terminate GUI-owned experiment work while keeping NiceGUI alive."""
-    if state is not None:
-        state.is_stopping = True
-        _cancel_tasks(state)
-    pid = monitored_pid()
-    messages: list[str] = []
-    if pid is None or not process_service.process_is_running(pid):
-        messages.append("No running experiment process.")
-    else:
-        process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopping")
-        terminate_pid_tree(pid)
-        messages.append(f"Stopping PID {pid}")
-    if state is not None:
-        stop_microrts_gui(wait=True)
-        _terminate_active_processes(state)
-        _reset_runtime_state(state, clear_logs=False)
-        state.is_stopping = False
-    return " ".join(messages)
+    with LoggedOperation("stopping EA"):
+        if state is not None:
+            state.is_stopping = True
+            _cancel_tasks(state)
+        pid = monitored_pid()
+        messages: list[str] = []
+        if pid is None or not process_service.process_is_running(pid):
+            messages.append("No running experiment process.")
+        else:
+            process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopping")
+            terminate_pid_tree(pid)
+            messages.append(f"Stopping PID {pid}")
+        if state is not None:
+            stop_microrts_gui(wait=True)
+            _terminate_active_processes(state)
+            _reset_runtime_state(state, clear_logs=False)
+            state.is_stopping = False
+        return " ".join(messages)
 
 
 def shutdown_runtime(state: Any) -> str:
@@ -685,13 +758,15 @@ def shutdown_app(state: Any, app_object: Any) -> str:
 
 def _launch_tracked_process(command: list[str], *, cwd: Path, stdout: Any, state: Any | None) -> subprocess.Popen:
     """Launch a subprocess and register only this GUI-owned handle."""
-    options: dict[str, Any] = {}
-    if os.name != "nt":
-        options["start_new_session"] = True
-    process = subprocess.Popen(command, cwd=cwd, stdout=stdout, stderr=subprocess.STDOUT, text=True, **options)
-    if state is not None:
-        state.active_processes.append(process)
-    return process
+    with LoggedOperation("launching subprocess", cwd=cwd, command=command[0] if command else ""):
+        options: dict[str, Any] = {}
+        if os.name != "nt":
+            options["start_new_session"] = True
+        process = subprocess.Popen(command, cwd=cwd, stdout=stdout, stderr=subprocess.STDOUT, text=True, **options)
+        if state is not None:
+            state.active_processes.append(process)
+        LOGGER.info("subprocess launched pid=%s command=%s", process.pid, command)
+        return process
 
 
 def terminate_pid_tree(pid: int, timeout_seconds: float = 5.0) -> None:
@@ -734,11 +809,12 @@ def terminate_pid_tree(pid: int, timeout_seconds: float = 5.0) -> None:
 
 def _wait_for_pid_exit(pid: int, timeout_seconds: float) -> None:
     """Wait briefly for a process id to exit."""
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
-        if not process_service.process_is_running(pid):
-            return
-        time.sleep(0.1)
+    with LoggedOperation("waiting for subprocess", pid=pid, timeout_seconds=timeout_seconds):
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if not process_service.process_is_running(pid):
+                return
+            time.sleep(0.1)
 
 
 def _cancel_tasks(state: Any) -> None:
@@ -761,17 +837,19 @@ def _deactivate_timers(state: Any) -> None:
 
 def _terminate_active_processes(state: Any) -> None:
     """Terminate Popen handles launched and registered by this GUI."""
-    processes = list(getattr(state, "active_processes", []))
-    for process in processes:
-        if process.poll() is None:
-            process.terminate()
-    for process in processes:
-        if process.poll() is None:
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-    state.active_processes.clear()
+    with LoggedOperation("terminating active subprocesses", count=len(getattr(state, "active_processes", []))):
+        processes = list(getattr(state, "active_processes", []))
+        for process in processes:
+            if process.poll() is None:
+                process.terminate()
+        for process in processes:
+            if process.poll() is None:
+                LOGGER.info("waiting for subprocess pid=%s timeout_seconds=5", process.pid)
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+        state.active_processes.clear()
 
 
 def _reset_runtime_state(state: Any, *, clear_logs: bool) -> None:
@@ -789,23 +867,26 @@ def _reset_runtime_state(state: Any, *, clear_logs: bool) -> None:
 
 def build_analysis(run_dir: Path | None) -> tuple[str, str]:
     """Build the existing live-analysis report for one run."""
-    if run_dir is None:
-        return "No run selected", ""
-    report = analysis_service.build_live_analysis_report(run_dir)
-    return str(report.summary), str(report.body)
+    with LoggedOperation("parsing logs", kind="live_analysis", run_dir=run_dir):
+        if run_dir is None:
+            return "No run selected", ""
+        report = analysis_service.build_live_analysis_report(run_dir)
+        return str(report.summary), str(report.body)
 
 
 def build_timing(run_dir: Path | None) -> tuple[str, list[dict[str, Any]], str]:
     """Build the existing timing report for one run."""
-    if run_dir is None:
-        return "No run selected", [], ""
-    report = analysis_service.build_timing_analysis_report(run_dir)
-    return str(report.summary), list(getattr(report, "rows", []) or []), str(report.body)
+    with LoggedOperation("parsing logs", kind="timing_analysis", run_dir=run_dir):
+        if run_dir is None:
+            return "No run selected", [], ""
+        report = analysis_service.build_timing_analysis_report(run_dir)
+        return str(report.summary), list(getattr(report, "rows", []) or []), str(report.body)
 
 
 def load_prompt_records(run_dir: Path | None) -> dict[str, dict[str, Any]]:
     """Load prompt records through the existing desktop service."""
-    return analysis_service.load_prompts(run_dir)
+    with LoggedOperation("parsing logs", kind="prompt_records", run_dir=run_dir):
+        return analysis_service.load_prompts(run_dir)
 
 
 def prompt_record_label(record_id: str, record: dict[str, Any]) -> str:
@@ -840,63 +921,66 @@ def save_current_prompt_to_microrts(prompt: str) -> Path:
 def launch_microrts_gui(state: Any) -> str:
     """Launch the visible Java MicroRTS GUI."""
     global _microrts_process, _microrts_log_path
-    if getattr(state, "is_stopping", False):
-        raise RuntimeError("Shutdown is already in progress.")
-    if _microrts_process and _microrts_process.poll() is None:
-        raise RuntimeError("MicroRTS is already running.")
-    prompt_path = save_current_prompt_to_microrts(state.microrts.prompt_text)
-    microrts_root = require_microrts_class("rts/MicroRTS.class")
-    update_interval = parse_int(state.microrts.update_interval, "update_interval")
-    llm_interval = parse_int(state.microrts.llm_interval, "llm_interval")
-    opponent = state.microrts.opponent.strip()
-    map_location = selected_microrts_map(state)
-    if not opponent:
-        raise ValueError("Opponent is required.")
-    set_config_property(ROOT, "launch_mode", "STANDALONE")
-    set_config_property(ROOT, "headless", "false")
-    set_config_property(ROOT, "map_location", map_location)
-    set_config_property(ROOT, "AI1", "ai.eagle.EAGLE")
-    set_config_property(ROOT, "AI2", opponent)
-    set_config_property(ROOT, "update_interval", str(update_interval))
-    set_config_property(ROOT, "llm_interval", str(llm_interval))
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    _microrts_log_path = LOG_DIR / f"microrts_gui_web_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-    classpath = f"{microrts_root / 'lib' / '*'}{os.pathsep}{microrts_root / 'bin'}"
-    command = [
-        "java",
-        "-Deagle.debug=true",
-        f"-Dmicrorts.prompt={prompt_path}",
-        f"-Dmicrorts.llm_interval={llm_interval}",
-        f"-Dmicrorts.llm_call_limit={state.config.llm_call_limit}",
-        "-cp",
-        classpath,
-        "rts.MicroRTS",
-    ]
-    if state.microrts.save_trace:
-        trace_path = microrts_trace_dir() / f"gui_trace_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
-        trace_path.parent.mkdir(parents=True, exist_ok=True)
-        command.insert(5, f"-Dmicrorts.trace.path={trace_path}")
-        state.microrts.selected_trace = str(trace_path)
-    log_handle = _microrts_log_path.open("w", encoding="utf-8", errors="replace")
-    log_handle.write("Command: " + " ".join(command) + "\n")
-    log_handle.write(f"Prompt: {prompt_path}\nOpponent: {opponent}\nMap: {map_location}\n\n")
-    log_handle.flush()
-    _microrts_process = _launch_tracked_process(command, cwd=microrts_root, stdout=log_handle, state=state)
-    return f"MicroRTS PID {_microrts_process.pid}"
+    with LoggedOperation("launching MicroRTS"):
+        if getattr(state, "is_stopping", False):
+            raise RuntimeError("Shutdown is already in progress.")
+        if _microrts_process and _microrts_process.poll() is None:
+            raise RuntimeError("MicroRTS is already running.")
+        prompt_path = save_current_prompt_to_microrts(state.microrts.prompt_text)
+        microrts_root = require_microrts_class("rts/MicroRTS.class")
+        update_interval = parse_int(state.microrts.update_interval, "update_interval")
+        llm_interval = parse_int(state.microrts.llm_interval, "llm_interval")
+        opponent = state.microrts.opponent.strip()
+        map_location = selected_microrts_map(state)
+        if not opponent:
+            raise ValueError("Opponent is required.")
+        set_config_property(ROOT, "launch_mode", "STANDALONE")
+        set_config_property(ROOT, "headless", "false")
+        set_config_property(ROOT, "map_location", map_location)
+        set_config_property(ROOT, "AI1", "ai.eagle.EAGLE")
+        set_config_property(ROOT, "AI2", opponent)
+        set_config_property(ROOT, "update_interval", str(update_interval))
+        set_config_property(ROOT, "llm_interval", str(llm_interval))
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        _microrts_log_path = LOG_DIR / f"microrts_gui_web_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        classpath = f"{microrts_root / 'lib' / '*'}{os.pathsep}{microrts_root / 'bin'}"
+        command = [
+            "java",
+            "-Deagle.debug=true",
+            f"-Dmicrorts.prompt={prompt_path}",
+            f"-Dmicrorts.llm_interval={llm_interval}",
+            f"-Dmicrorts.llm_call_limit={state.config.llm_call_limit}",
+            "-cp",
+            classpath,
+            "rts.MicroRTS",
+        ]
+        if state.microrts.save_trace:
+            trace_path = microrts_trace_dir() / f"gui_trace_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
+            trace_path.parent.mkdir(parents=True, exist_ok=True)
+            command.insert(5, f"-Dmicrorts.trace.path={trace_path}")
+            state.microrts.selected_trace = str(trace_path)
+        log_handle = _microrts_log_path.open("w", encoding="utf-8", errors="replace")
+        log_handle.write("Command: " + " ".join(command) + "\n")
+        log_handle.write(f"Prompt: {prompt_path}\nOpponent: {opponent}\nMap: {map_location}\n\n")
+        log_handle.flush()
+        _microrts_process = _launch_tracked_process(command, cwd=microrts_root, stdout=log_handle, state=state)
+        return f"MicroRTS PID {_microrts_process.pid}"
 
 
 def stop_microrts_gui(wait: bool = False) -> str:
     """Stop the visible Java MicroRTS process."""
     global _microrts_process
-    if not _microrts_process or _microrts_process.poll() is not None:
-        return "Java GUI not running"
-    _microrts_process.terminate()
-    if wait:
-        try:
-            _microrts_process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            _microrts_process.kill()
-    return f"Stopping MicroRTS PID {_microrts_process.pid}"
+    with LoggedOperation("stopping MicroRTS", wait=wait):
+        if not _microrts_process or _microrts_process.poll() is not None:
+            return "Java GUI not running"
+        _microrts_process.terminate()
+        if wait:
+            LOGGER.info("waiting for subprocess pid=%s timeout_seconds=5", _microrts_process.pid)
+            try:
+                _microrts_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                _microrts_process.kill()
+        return f"Stopping MicroRTS PID {_microrts_process.pid}"
 
 
 def microrts_status_text() -> str:
@@ -910,27 +994,30 @@ def microrts_status_text() -> str:
 
 def read_microrts_log() -> str:
     """Read the current Java GUI log."""
-    if _microrts_log_path is None:
-        return ""
-    if not _microrts_log_path.exists():
-        return f"Log file does not exist: {_microrts_log_path}"
-    return _microrts_log_path.read_text(encoding="utf-8", errors="replace")
+    with LoggedOperation("read MicroRTS log"):
+        if _microrts_log_path is None:
+            return ""
+        if not _microrts_log_path.exists():
+            return f"Log file does not exist: {_microrts_log_path}"
+        LOGGER.info("reading large file path=%s", _microrts_log_path)
+        return _microrts_log_path.read_text(encoding="utf-8", errors="replace")
 
 
 def open_trace(trace_text: str, state: Any | None = None) -> str:
     """Open a saved trace in the Java trace viewer."""
-    trace_path = Path(trace_text)
-    if not trace_path.exists():
-        raise FileNotFoundError(f"Trace file does not exist: {trace_path}")
-    microrts_root = require_microrts_class("gui/TraceViewerMain.class")
-    classpath = f"{microrts_root / 'lib' / '*'}{os.pathsep}{microrts_root / 'bin'}"
-    _launch_tracked_process(
-        ["java", "-cp", classpath, "gui.TraceViewerMain", str(trace_path)],
-        cwd=microrts_root,
-        stdout=subprocess.DEVNULL,
-        state=state,
-    )
-    return f"Opened trace {trace_path.name}"
+    with LoggedOperation("launching MicroRTS trace viewer"):
+        trace_path = Path(trace_text)
+        if not trace_path.exists():
+            raise FileNotFoundError(f"Trace file does not exist: {trace_path}")
+        microrts_root = require_microrts_class("gui/TraceViewerMain.class")
+        classpath = f"{microrts_root / 'lib' / '*'}{os.pathsep}{microrts_root / 'bin'}"
+        _launch_tracked_process(
+            ["java", "-cp", classpath, "gui.TraceViewerMain", str(trace_path)],
+            cwd=microrts_root,
+            stdout=subprocess.DEVNULL,
+            state=state,
+        )
+        return f"Opened trace {trace_path.name}"
 
 
 def microrts_root_path() -> Path:

@@ -165,6 +165,9 @@ class RuntimeState:
     is_running: bool = False
     is_stopping: bool = False
     is_shutting_down: bool = False
+    connected_client_count: int = 0
+    last_heartbeat_monotonic: float | None = None
+    last_heartbeat_timestamp: str = ""
     active_tasks: list[Any] = field(default_factory=list)
     active_processes: list[Any] = field(default_factory=list)
     active_timers: list[Any] = field(default_factory=list)

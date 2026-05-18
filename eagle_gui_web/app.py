@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
+import sys
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from nicegui import app as nicegui_app
+from nicegui import Client
 from nicegui import ui
 
 from eagle_gui_web import services
@@ -35,8 +41,59 @@ from eagle_gui_web.views.prompts_view import build_prompts_view
 from eagle_gui_web.views.run_view import build_run_view
 
 
+services.configure_runtime_logging()
+LOGGER = logging.getLogger(__name__)
 state = AppState()
 EAGLE_IMAGE_URL = "/assets/eagle.png"
+HEARTBEAT_INTERVAL_SEC = 2.0
+HEARTBEAT_WARN_DELAY_SEC = 5.0
+
+
+def on_client_connect(client: Any | None = None) -> None:
+    """Log NiceGUI client connections without changing runtime behavior."""
+    state.runtime.connected_client_count = connected_client_count()
+    LOGGER.info(
+        "client connected client_id=%s connected_client_count=%s",
+        getattr(client, "id", None),
+        state.runtime.connected_client_count,
+    )
+
+
+def on_client_disconnect(client: Any | None = None) -> None:
+    """Log NiceGUI client disconnections without stopping the GUI or experiments."""
+    state.runtime.connected_client_count = connected_client_count()
+    LOGGER.info(
+        "client disconnected client_id=%s connected_client_count=%s",
+        getattr(client, "id", None),
+        state.runtime.connected_client_count,
+    )
+
+
+def connected_client_count() -> int:
+    """Return the number of NiceGUI client documents with an active socket."""
+    count = 0
+    for client in Client.instances.values():
+        connections = getattr(client, "_num_connections", {})
+        count += sum(1 for value in connections.values() if value > 0)
+    return count
+
+
+def heartbeat() -> None:
+    """Record event-loop heartbeat timing for disconnect diagnostics."""
+    now = time.monotonic()
+    previous = state.runtime.last_heartbeat_monotonic
+    state.runtime.last_heartbeat_monotonic = now
+    state.runtime.last_heartbeat_timestamp = datetime.now().isoformat(timespec="seconds")
+    if previous is None:
+        LOGGER.info("event loop heartbeat started timestamp=%s", state.runtime.last_heartbeat_timestamp)
+        return
+    delay = now - previous
+    if delay > HEARTBEAT_WARN_DELAY_SEC:
+        LOGGER.warning("event loop heartbeat delayed delay_sec=%.3f", delay)
+
+
+nicegui_app.on_connect(on_client_connect)
+nicegui_app.on_disconnect(on_client_disconnect)
 
 
 def build_layout() -> dict[str, dict[str, Any]]:
@@ -136,6 +193,7 @@ async def startup_refresh() -> None:
         payload = await asyncio.to_thread(services.load_config_payload, Path(state.config.base_config_path))
         services.apply_config_payload(state, payload, Path(state.config.base_config_path))
     except (OSError, ValueError):
+        LOGGER.exception("Startup refresh failed to load initial config path=%s", state.config.base_config_path)
         pass
     for group, name in (
         ("config", "refresh"),
@@ -167,13 +225,25 @@ async def refresh_analysis_timer() -> None:
 startup_timer = ui.timer(0.1, safe_click(startup_refresh, label="Startup refresh"), once=True)
 log_timer = ui.timer(3.0, safe_click(refresh_log_timer, label="Log refresh"))
 analysis_timer = ui.timer(15.0, safe_click(refresh_analysis_timer, label="Analysis refresh"))
-state.active_timers.extend([startup_timer, log_timer, analysis_timer])
+heartbeat_timer = ui.timer(HEARTBEAT_INTERVAL_SEC, heartbeat)
+state.active_timers.extend([startup_timer, log_timer, analysis_timer, heartbeat_timer])
 
 
 def main() -> None:
     """Run the NiceGUI application."""
     port = services.find_available_port()
-    ui.run(title="Eagle", reload=False, show=True, port=port)
+    host = None
+    reload = False
+    show = True
+    native = False
+    LOGGER.info("GUI starting")
+    LOGGER.info("host=%s", host or "NiceGUI default")
+    LOGGER.info("port=%s", port)
+    LOGGER.info("reload=%s native=%s show=%s", reload, native, show)
+    LOGGER.info("python_version=%s", sys.version.replace(os.linesep, " "))
+    LOGGER.info("working_directory=%s", Path.cwd())
+    LOGGER.info("runtime_log_path=%s", services.RUNTIME_LOG_PATH)
+    ui.run(title="Eagle", reload=reload, show=show, port=port)
 
 
 if __name__ in {"__main__", "__mp_main__"}:

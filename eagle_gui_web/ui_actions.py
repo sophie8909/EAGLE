@@ -18,15 +18,18 @@ def safe_click(action: Callable[..., Any], *, label: str) -> Callable[..., None]
 
     def handle(*args: Any, **kwargs: Any) -> None:
         async def run() -> None:
+            LOGGER.info("GUI callback start label=%s", label)
             try:
                 result = action(*args, **kwargs)
                 if inspect.isawaitable(result):
                     await result
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:
-                LOGGER.exception("%s failed", label)
-                ui.notify(f"{label} failed: {exc}", type="negative")
+            except Exception:
+                LOGGER.exception("GUI callback failed label=%s", label)
+                ui.notify("GUI error: check terminal/logs/gui_runtime.log", type="negative")
+            else:
+                LOGGER.info("GUI callback end label=%s", label)
 
         asyncio.create_task(run())
 

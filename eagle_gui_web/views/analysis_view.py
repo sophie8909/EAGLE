@@ -126,45 +126,47 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
 
 def _build_mo_analysis_text(run_dir: Path | None) -> str:
     """Render multi-objective analysis separately from GA/final-test panels."""
-    if run_dir is None:
-        return "No multi-objective data found."
-    log_text = _read_mo_analysis_text(run_dir)
-    if not build_analysis_context(log_text).get("is_multi_objective"):
-        return "No multi-objective data found."
-    analysis = parse_mo_analysis(log_text)
-    if not analysis:
-        return "No multi-objective data found."
-    lines = [
-        f"Pareto front count: {analysis.get('pareto_front_count', 0)}",
-    ]
-    if analysis.get("objective_names"):
-        lines.append("Objectives: " + ", ".join(str(name) for name in analysis["objective_names"]))
-    front_rows = list(analysis.get("final_pareto_front_individuals", []))
-    if front_rows:
-        lines.append("Final Pareto front individuals:")
-        for row in front_rows[:12]:
-            lines.append(f"- {row.get('id')}: {_format_fitness(row.get('fitness'))}")
-    best_rows = list(analysis.get("objective_best", []))
-    if best_rows:
-        lines.append("Objective best:")
-        for row in best_rows:
-            lines.append(f"- {row.get('objective')}: {row.get('individual')} = {float(row.get('value', 0.0)):.4g}")
-    trends = analysis.get("objective_trends")
-    if isinstance(trends, dict) and trends.get("generations"):
-        lines.append("Objective trends:")
-        lines.append(f"- generations: {', '.join(str(item) for item in trends['generations'])}")
-        for objective in analysis.get("objective_names", []):
-            if objective in trends:
-                lines.append(f"- {objective}: {', '.join(_format_float(item) for item in trends[objective])}")
-    return "\n".join(lines)
+    with services.LoggedOperation("parsing logs", kind="mo_analysis", run_dir=run_dir):
+        if run_dir is None:
+            return "No multi-objective data found."
+        log_text = _read_mo_analysis_text(run_dir)
+        if not build_analysis_context(log_text).get("is_multi_objective"):
+            return "No multi-objective data found."
+        analysis = parse_mo_analysis(log_text)
+        if not analysis:
+            return "No multi-objective data found."
+        lines = [
+            f"Pareto front count: {analysis.get('pareto_front_count', 0)}",
+        ]
+        if analysis.get("objective_names"):
+            lines.append("Objectives: " + ", ".join(str(name) for name in analysis["objective_names"]))
+        front_rows = list(analysis.get("final_pareto_front_individuals", []))
+        if front_rows:
+            lines.append("Final Pareto front individuals:")
+            for row in front_rows[:12]:
+                lines.append(f"- {row.get('id')}: {_format_fitness(row.get('fitness'))}")
+        best_rows = list(analysis.get("objective_best", []))
+        if best_rows:
+            lines.append("Objective best:")
+            for row in best_rows:
+                lines.append(f"- {row.get('objective')}: {row.get('individual')} = {float(row.get('value', 0.0)):.4g}")
+        trends = analysis.get("objective_trends")
+        if isinstance(trends, dict) and trends.get("generations"):
+            lines.append("Objective trends:")
+            lines.append(f"- generations: {', '.join(str(item) for item in trends['generations'])}")
+            for objective in analysis.get("objective_names", []):
+                if objective in trends:
+                    lines.append(f"- {objective}: {', '.join(_format_float(item) for item in trends[objective])}")
+        return "\n".join(lines)
 
 
 def _read_mo_analysis_text(run_dir: Path) -> str:
     """Read only MO generation logs for the MO analysis section."""
-    parts: list[str] = []
-    for path in sorted(run_dir.glob("generation_*_mo.txt"), key=_generation_sort_key):
-        parts.append(path.read_text(encoding="utf-8", errors="replace"))
-    return "\n".join(parts)
+    with services.LoggedOperation("reading large files", kind="mo_generation_logs", run_dir=run_dir):
+        parts: list[str] = []
+        for path in sorted(run_dir.glob("generation_*_mo.txt"), key=_generation_sort_key):
+            parts.append(path.read_text(encoding="utf-8", errors="replace"))
+        return "\n".join(parts)
 
 
 def _render_ga_convergence(container: Any, options: dict[str, Any] | None) -> None:
@@ -179,70 +181,72 @@ def _render_ga_convergence(container: Any, options: dict[str, Any] | None) -> No
 
 def _build_ga_convergence_options(run_dir: Path | None) -> dict[str, Any] | None:
     """Build ECharts options for single-objective GA convergence."""
-    if run_dir is None:
-        return None
-    log_text = _read_ga_convergence_text(run_dir)
-    if not build_analysis_context(log_text).get("is_single_objective"):
-        return None
-    data = parse_ga_convergence(log_text)
-    if not data:
-        return None
-    generations = list(data.get("generations", []))
-    series = [
-        {
-            "name": "Best fitness",
-            "type": "line",
-            "smooth": True,
-            "data": list(data.get("best_fitness", [])),
-            "lineStyle": {"color": COLORS["sky_blue"], "width": 3},
-            "itemStyle": {"color": COLORS["sky_blue"]},
-        }
-    ]
-    if data.get("average_fitness"):
-        series.append(
+    with services.LoggedOperation("parsing logs", kind="ga_convergence", run_dir=run_dir):
+        if run_dir is None:
+            return None
+        log_text = _read_ga_convergence_text(run_dir)
+        if not build_analysis_context(log_text).get("is_single_objective"):
+            return None
+        data = parse_ga_convergence(log_text)
+        if not data:
+            return None
+        generations = list(data.get("generations", []))
+        series = [
             {
-                "name": "Average fitness",
+                "name": "Best fitness",
                 "type": "line",
                 "smooth": True,
-                "data": list(data["average_fitness"]),
-                "lineStyle": {"color": COLORS["bronze"], "width": 2},
-                "itemStyle": {"color": COLORS["bronze"]},
+                "data": list(data.get("best_fitness", [])),
+                "lineStyle": {"color": COLORS["sky_blue"], "width": 3},
+                "itemStyle": {"color": COLORS["sky_blue"]},
             }
-        )
-    return {
-        "backgroundColor": "transparent",
-        "color": [COLORS["sky_blue"], COLORS["bronze"]],
-        "tooltip": {"trigger": "axis"},
-        "legend": {"textStyle": {"color": COLORS["text"]}},
-        "grid": {"left": 48, "right": 24, "top": 48, "bottom": 44},
-        "xAxis": {
-            "type": "category",
-            "name": "generation",
-            "data": generations,
-            "axisLine": {"lineStyle": {"color": COLORS["border"]}},
-            "axisLabel": {"color": COLORS["muted"]},
-            "nameTextStyle": {"color": COLORS["muted"]},
-        },
-        "yAxis": {
-            "type": "value",
-            "name": "fitness",
-            "axisLine": {"lineStyle": {"color": COLORS["border"]}},
-            "axisLabel": {"color": COLORS["muted"]},
-            "splitLine": {"lineStyle": {"color": COLORS["border"]}},
-            "nameTextStyle": {"color": COLORS["muted"]},
-        },
-        "series": series,
-    }
+        ]
+        if data.get("average_fitness"):
+            series.append(
+                {
+                    "name": "Average fitness",
+                    "type": "line",
+                    "smooth": True,
+                    "data": list(data["average_fitness"]),
+                    "lineStyle": {"color": COLORS["bronze"], "width": 2},
+                    "itemStyle": {"color": COLORS["bronze"]},
+                }
+            )
+        return {
+            "backgroundColor": "transparent",
+            "color": [COLORS["sky_blue"], COLORS["bronze"]],
+            "tooltip": {"trigger": "axis"},
+            "legend": {"textStyle": {"color": COLORS["text"]}},
+            "grid": {"left": 48, "right": 24, "top": 48, "bottom": 44},
+            "xAxis": {
+                "type": "category",
+                "name": "generation",
+                "data": generations,
+                "axisLine": {"lineStyle": {"color": COLORS["border"]}},
+                "axisLabel": {"color": COLORS["muted"]},
+                "nameTextStyle": {"color": COLORS["muted"]},
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "fitness",
+                "axisLine": {"lineStyle": {"color": COLORS["border"]}},
+                "axisLabel": {"color": COLORS["muted"]},
+                "splitLine": {"lineStyle": {"color": COLORS["border"]}},
+                "nameTextStyle": {"color": COLORS["muted"]},
+            },
+            "series": series,
+        }
 
 
 def _read_ga_convergence_text(run_dir: Path) -> str:
     """Read GA generation logs without loading MO generation files."""
-    parts: list[str] = []
-    for path in sorted(run_dir.glob("generation_*.txt"), key=_generation_sort_key):
-        if path.name.endswith("_mo.txt"):
-            continue
-        parts.append(path.read_text(encoding="utf-8", errors="replace"))
-    return "\n".join(parts)
+    with services.LoggedOperation("reading large files", kind="ga_generation_logs", run_dir=run_dir):
+        parts: list[str] = []
+        for path in sorted(run_dir.glob("generation_*.txt"), key=_generation_sort_key):
+            if path.name.endswith("_mo.txt"):
+                continue
+            parts.append(path.read_text(encoding="utf-8", errors="replace"))
+        return "\n".join(parts)
 
 
 def _generation_sort_key(path: Path) -> int:
@@ -253,79 +257,83 @@ def _generation_sort_key(path: Path) -> int:
 
 def _build_final_test_analysis_text(run_dir: Path | None) -> str:
     """Render final-test analysis separately from evolution analysis."""
-    if run_dir is None:
-        return "No final test data found."
-    log_text = _read_final_test_analysis_text(run_dir)
-    analysis = parse_final_test_analysis(log_text)
-    if not analysis.get("has_final_test"):
-        return "No final test data found."
-    lines: list[str] = []
-    if "games" in analysis:
-        lines.append(f"Final test games: {analysis['games']}")
-    for key, label in (("wins", "Wins"), ("losses", "Losses"), ("draws", "Draws")):
-        if key in analysis:
-            lines.append(f"{label}: {analysis[key]}")
-    if "win_rate" in analysis:
-        lines.append(f"Win rate: {float(analysis['win_rate']) * 100:.1f}%")
-    if analysis.get("maps"):
-        lines.append("Maps: " + ", ".join(str(item) for item in analysis["maps"]))
-    if analysis.get("opponents"):
-        lines.append("Opponents: " + ", ".join(str(item) for item in analysis["opponents"]))
-    if "skipped_games" in analysis:
-        lines.append(f"Skipped games: {analysis['skipped_games']}")
-    if "failed_games" in analysis:
-        lines.append(f"Failed games: {analysis['failed_games']}")
-    if analysis.get("skip_reason"):
-        lines.append(f"Skip reason: {analysis['skip_reason']}")
-    return "\n".join(lines) if lines else "FINAL_TEST markers found, but no detailed results are available yet."
+    with services.LoggedOperation("parsing logs", kind="final_test_analysis", run_dir=run_dir):
+        if run_dir is None:
+            return "No final test data found."
+        log_text = _read_final_test_analysis_text(run_dir)
+        analysis = parse_final_test_analysis(log_text)
+        if not analysis.get("has_final_test"):
+            return "No final test data found."
+        lines: list[str] = []
+        if "games" in analysis:
+            lines.append(f"Final test games: {analysis['games']}")
+        for key, label in (("wins", "Wins"), ("losses", "Losses"), ("draws", "Draws")):
+            if key in analysis:
+                lines.append(f"{label}: {analysis[key]}")
+        if "win_rate" in analysis:
+            lines.append(f"Win rate: {float(analysis['win_rate']) * 100:.1f}%")
+        if analysis.get("maps"):
+            lines.append("Maps: " + ", ".join(str(item) for item in analysis["maps"]))
+        if analysis.get("opponents"):
+            lines.append("Opponents: " + ", ".join(str(item) for item in analysis["opponents"]))
+        if "skipped_games" in analysis:
+            lines.append(f"Skipped games: {analysis['skipped_games']}")
+        if "failed_games" in analysis:
+            lines.append(f"Failed games: {analysis['failed_games']}")
+        if analysis.get("skip_reason"):
+            lines.append(f"Skip reason: {analysis['skip_reason']}")
+        return "\n".join(lines) if lines else "FINAL_TEST markers found, but no detailed results are available yet."
 
 
 def _read_final_test_analysis_text(run_dir: Path) -> str:
     """Read final-test artifacts without mixing them into evolution analysis."""
-    parts: list[str] = []
-    for filename in ("final_test_results.json", "final_test_result.json"):
-        path = run_dir / filename
-        if path.exists():
-            parts.append(path.read_text(encoding="utf-8", errors="replace"))
-    log_files = sorted(run_dir.glob("*.log"), key=lambda path: path.stat().st_mtime, reverse=True)
-    for path in log_files[:3]:
-        text = path.read_text(encoding="utf-8", errors="replace")
-        if "FINAL_TEST" in text.upper() or "Final Test" in text:
-            parts.append(text)
-    process_log_path = services.process_log_path()
-    if process_log_path and process_log_path.exists():
-        text = process_log_path.read_text(encoding="utf-8", errors="replace")
-        if ("FINAL_TEST" in text.upper() or "Final Test" in text) and str(run_dir) in text:
-            parts.append(text)
-    return "\n".join(parts)
+    with services.LoggedOperation("reading large files", kind="final_test_logs", run_dir=run_dir):
+        parts: list[str] = []
+        for filename in ("final_test_results.json", "final_test_result.json"):
+            path = run_dir / filename
+            if path.exists():
+                parts.append(path.read_text(encoding="utf-8", errors="replace"))
+        log_files = sorted(run_dir.glob("*.log"), key=lambda path: path.stat().st_mtime, reverse=True)
+        for path in log_files[:3]:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if "FINAL_TEST" in text.upper() or "Final Test" in text:
+                parts.append(text)
+        process_log_path = services.process_log_path()
+        if process_log_path and process_log_path.exists():
+            text = process_log_path.read_text(encoding="utf-8", errors="replace")
+            if ("FINAL_TEST" in text.upper() or "Final Test" in text) and str(run_dir) in text:
+                parts.append(text)
+        return "\n".join(parts)
 
 
 def _build_time_analysis_text(run_dir: Path | None) -> str:
     """Render a compact time-analysis summary from selected-run timing text."""
-    if run_dir is None:
-        return "No timing data found."
-    log_text = _read_time_analysis_text(run_dir)
-    timing = parse_time_analysis(log_text)
-    if not timing:
-        return "No timing data found."
-    labels = [
-        ("total_runtime", "Total runtime"),
-        ("generation_runtime", "Generation runtime"),
-        ("average_generation_time", "Average generation time"),
-        ("evaluation_time", "Evaluation time"),
-        ("llm_call_time", "LLM call time"),
-    ]
-    return "\n".join(f"{label}: {_format_seconds(timing[key])}" for key, label in labels if key in timing)
+    with services.LoggedOperation("parsing logs", kind="time_analysis", run_dir=run_dir):
+        if run_dir is None:
+            return "No timing data found."
+        log_text = _read_time_analysis_text(run_dir)
+        timing = parse_time_analysis(log_text)
+        if not timing:
+            return "No timing data found."
+        labels = [
+            ("total_runtime", "Total runtime"),
+            ("generation_runtime", "Generation runtime"),
+            ("average_generation_time", "Average generation time"),
+            ("evaluation_time", "Evaluation time"),
+            ("llm_call_time", "LLM call time"),
+        ]
+        return "\n".join(f"{label}: {_format_seconds(timing[key])}" for key, label in labels if key in timing)
 
 
 def _read_time_analysis_text(run_dir: Path) -> str:
     """Read timing artifacts without touching GA/MO/final-test analysis files."""
-    parts: list[str] = []
-    for filename in ("timing_summary.json", "timing_events.jsonl", "timing_report.md"):
-        path = run_dir / filename
-        if path.exists():
-            parts.append(path.read_text(encoding="utf-8", errors="replace"))
-    return "\n".join(parts)
+    with services.LoggedOperation("reading large files", kind="timing_logs", run_dir=run_dir):
+        parts: list[str] = []
+        for filename in ("timing_summary.json", "timing_events.jsonl", "timing_report.md"):
+            path = run_dir / filename
+            if path.exists():
+                parts.append(path.read_text(encoding="utf-8", errors="replace"))
+        return "\n".join(parts)
 
 
 def _format_fitness(value: object) -> str:
