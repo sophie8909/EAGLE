@@ -164,6 +164,23 @@ def config_choices() -> list[str]:
     return [str(path) for path in paths] or [str(DEFAULT_CONFIG)]
 
 
+def component_json_choices() -> list[str]:
+    """Return repository-relative component or prompt JSON candidates."""
+    roots = [ROOT / "eagle" / "prompts", EXPERIMENT_DIR, ROOT / "configs"]
+    default_path = ROOT / "eagle" / "prompts" / "components.json"
+    paths: set[Path] = set()
+    if default_path.exists():
+        paths.add(default_path.resolve())
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*.json"):
+            text = str(path.relative_to(ROOT) if path.is_relative_to(ROOT) else path).lower()
+            if any(marker in text for marker in ("component", "components", "prompt")):
+                paths.add(path.resolve())
+    return sorted(relative_or_absolute(path) for path in paths)
+
+
 def run_choices() -> list[str]:
     """Return EAGLE run directories newest first."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)

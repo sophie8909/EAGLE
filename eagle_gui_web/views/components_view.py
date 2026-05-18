@@ -29,6 +29,14 @@ def build_components_view(state: Any) -> dict[str, Any]:
     """Build the component editor view."""
     controls: dict[str, Any] = {}
 
+    def component_path_options() -> list[str]:
+        options = {"", *services.component_json_choices()}
+        if state.config.component_pool_path:
+            options.add(str(state.config.component_pool_path))
+        if state.components.loaded_path:
+            options.add(services.relative_or_absolute(state.components.loaded_path))
+        return sorted(options)
+
     async def load_components() -> None:
         try:
             path = services.resolve_repo_path(path_input.value)
@@ -119,6 +127,17 @@ def build_components_view(state: Any) -> dict[str, Any]:
         ui.notify("Copied current prompt")
 
     def refresh_all() -> None:
+        options = component_path_options()
+        next_value = (
+            services.relative_or_absolute(state.components.loaded_path)
+            if state.components.loaded_path
+            else state.config.component_pool_path or ""
+        )
+        if next_value not in options:
+            options.insert(0, next_value)
+        path_input.options = options
+        path_input.value = next_value
+        path_input.update()
         keys = services.component_keys(state)
         category_select.options = keys
         category_select.value = state.components.selected_category or (keys[0] if keys else None)
@@ -127,8 +146,6 @@ def build_components_view(state: Any) -> dict[str, Any]:
         load_editor_text()
         refresh_selection_table()
         status_label.set_text(state.components.status)
-        path_input.value = str(state.components.loaded_path or state.config.component_pool_path or "")
-        path_input.update()
 
     def refresh_candidate_options() -> None:
         count = services.component_candidate_count(state, state.components.selected_category)
@@ -160,14 +177,37 @@ def build_components_view(state: Any) -> dict[str, Any]:
         selection_table.rows = rows
         selection_table.update()
 
+    def update_component_path(event: Any) -> None:
+        state.config.component_pool_path = str(event.value or "")
+
+    def create_component_path_select(options: list[str], value: str) -> Any:
+        try:
+            return ui.select(
+                options,
+                label="Component JSON",
+                value=value,
+                on_change=update_component_path,
+                with_input=True,
+                clearable=True,
+            )
+        except TypeError:
+            return ui.select(
+                options,
+                label="Component JSON",
+                value=value,
+                on_change=update_component_path,
+            ).props("use-input clearable new-value-mode=add-unique")
+
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Components").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
-            path_input = ui.input(
-                "Component JSON",
-                value=state.config.component_pool_path,
-                placeholder="eagle/prompts/components.json",
-            ).classes(f"{INPUT_CLASS} min-w-[460px]")
+            initial_options = component_path_options()
+            initial_value = state.config.component_pool_path or ""
+            if initial_value not in initial_options:
+                initial_options.insert(0, initial_value)
+            path_input = create_component_path_select(initial_options, initial_value).classes(
+                f"{INPUT_CLASS} min-w-[460px]"
+            )
             ui.button("Load", on_click=safe_click(load_components, label="Load components")).classes(BUTTON_CLASS)
             ui.button("Save", on_click=safe_click(save_components, label="Save components")).classes(
                 button_class(success=True)
