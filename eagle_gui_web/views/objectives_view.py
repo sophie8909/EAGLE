@@ -9,6 +9,7 @@ from nicegui import ui
 from eagle_gui_web import services
 from eagle_gui_web.theme import BUTTON_CLASS, CARD_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS, TABLE_CLASS
 from eagle_gui_web.ui_actions import safe_click
+from eagle_gui_web.views.config_view import refresh_config_summary
 
 
 def build_objectives_view(state: Any) -> dict[str, Any]:
@@ -41,12 +42,18 @@ def build_objectives_view(state: Any) -> dict[str, Any]:
         else:
             state.objectives.selected.add(key)
         refresh()
+        refresh_config_summary(state)
 
     def update_weight() -> None:
         key = selected_key.value
         if key:
             state.objectives.weights[key] = str(weight_input.value or "1.0")
         refresh()
+        refresh_config_summary(state)
+
+    def update_single_objective(value: str) -> None:
+        state.objectives.single_objective = value
+        refresh_config_summary(state)
 
     def update_detail() -> None:
         key = state.objectives.single_objective if state.objectives.mode == "single" else selected_key.value
@@ -71,7 +78,7 @@ def build_objectives_view(state: Any) -> dict[str, Any]:
                 initial_choices,
                 label="Single objective",
                 value=state.objectives.single_objective,
-                on_change=lambda event: setattr(state.objectives, "single_objective", str(event.value or "")),
+                on_change=lambda event: update_single_objective(str(event.value or "")),
             ).classes(f"{INPUT_CLASS} w-72")
             selected_key = ui.select([], label="Selected row").classes(f"{INPUT_CLASS} w-72")
             weight_input = ui.input("Weight", value="1.0").classes(f"{INPUT_CLASS} w-32")
@@ -103,6 +110,7 @@ def _set_mode(state: Any, value: str, refresh: Any) -> None:
     else:
         state.objectives.mode = value
     refresh()
+    refresh_config_summary(state)
 
 
 def _on_select(event: Any, selected_key: Any, weight_input: Any, state: Any, update_detail: Any) -> None:

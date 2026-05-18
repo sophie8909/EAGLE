@@ -22,6 +22,7 @@ from eagle_gui_web.theme import (
     height_class,
 )
 from eagle_gui_web.ui_actions import safe_click
+from eagle_gui_web.views.config_view import refresh_config_summary
 
 
 def build_components_view(state: Any) -> dict[str, Any]:
@@ -38,6 +39,7 @@ def build_components_view(state: Any) -> dict[str, Any]:
             ui.notify(str(exc), type="negative")
             return
         refresh_all()
+        refresh_config_summary(state)
         await render_prompt()
 
     async def save_components() -> None:
@@ -48,6 +50,7 @@ def build_components_view(state: Any) -> dict[str, Any]:
             ui.notify(str(exc), type="negative")
             return
         refresh_all()
+        refresh_config_summary(state)
 
     async def save_components_as() -> None:
         try:
@@ -58,6 +61,7 @@ def build_components_view(state: Any) -> dict[str, Any]:
             ui.notify(str(exc), type="negative")
             return
         refresh_all()
+        refresh_config_summary(state)
 
     async def render_prompt() -> None:
         try:
@@ -91,6 +95,7 @@ def build_components_view(state: Any) -> dict[str, Any]:
         else:
             state.components.prompt_selection[key] = int(state.components.selected_candidate)
         refresh_selection_table()
+        refresh_config_summary(state)
 
     def toggle_static() -> None:
         key = state.components.selected_category
@@ -102,10 +107,12 @@ def build_components_view(state: Any) -> dict[str, Any]:
             state.config.non_evolving_prompt_components.add(key)
             state.components.prompt_selection[key] = 0
         refresh_selection_table()
+        refresh_config_summary(state)
 
     def reset_selection() -> None:
         state.components.prompt_selection = {key: 0 for key in services.component_keys(state)}
         refresh_selection_table()
+        refresh_config_summary(state)
 
     def copy_prompt() -> None:
         ui.clipboard.write(state.components.rendered_prompt)

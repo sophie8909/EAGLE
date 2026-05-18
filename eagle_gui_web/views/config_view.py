@@ -16,7 +16,6 @@ from eagle_gui_web.theme import (
     INPUT_CLASS,
     ROW_CLASS,
     SECTION_HEADER_CLASS,
-    TEXTAREA_CLASS,
     button_class,
 )
 from eagle_gui_web.ui_actions import safe_click
@@ -155,43 +154,75 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
     """Build a read-only summary of the active experiment configuration."""
 
     def refresh() -> None:
-        config_path_label.set_text(f"Config path: {state.config.generated_config_path or state.config.base_config_path}")
-        component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
-        operator_summary.value = "\n".join(
-            [
-                f"Algorithm: {state.config.algorithm}",
-                f"Parent selection: {state.operators.parent_selection_operator}",
-                f"Environment selection: {state.operators.env_selection_operator}",
-                f"Crossover: {state.operators.crossover_operator}",
-                f"Mutation: {state.operators.mutation_operator}",
-                f"Crossover repair: {state.operators.crossover_repair_enabled}",
-                f"Reflection: {state.operators.enable_reflection_operator}",
-                f"Reproduction weights: {state.operators.reproduction_weights}",
-                f"Mutation weights: {state.operators.mutation_weights}",
-            ]
-        )
-        objective_summary.value = "\n".join(
-            [
-                f"Mode: {state.objectives.mode}",
-                f"Single objective: {state.objectives.single_objective}",
-                f"Selected objectives: {', '.join(sorted(state.objectives.selected)) or '(none)'}",
-                f"Weights: {state.objectives.weights}",
-            ]
-        )
-        operator_summary.update()
-        objective_summary.update()
+        rows["config_path"].set_text(str(state.config.generated_config_path or state.config.base_config_path))
+        rows["component_path"].set_text(state.config.component_pool_path or "(none)")
+        rows["algorithm"].set_text(state.config.algorithm)
+        rows["parent_selection"].set_text(state.operators.parent_selection_operator)
+        rows["environmental_selection"].set_text(state.operators.env_selection_operator)
+        rows["crossover"].set_text(state.operators.crossover_operator)
+        rows["mutation"].set_text(state.operators.mutation_operator)
+        rows["crossover_repair"].set_text(str(state.operators.crossover_repair_enabled))
+        rows["reflection"].set_text(str(state.operators.enable_reflection_operator))
+        rows["objective_mode"].set_text(state.objectives.mode)
+        rows["single_objective"].set_text(state.objectives.single_objective)
+        rows["selected_objectives"].set_text(", ".join(sorted(state.objectives.selected)) or "(none)")
+        rows["objective_weights"].set_text(_format_objective_weights(state))
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Config Summary").classes(SECTION_HEADER_CLASS)
-        config_path_label = ui.label()
-        component_path_label = ui.label()
-        operator_summary = ui.textarea("Operator settings").props("readonly").classes(f"{TEXTAREA_CLASS} w-full h-[190px]")
-        objective_summary = ui.textarea("Objective settings").props("readonly").classes(f"{TEXTAREA_CLASS} w-full h-[130px]")
+        rows = {
+            "config_path": _summary_row("Config path"),
+            "component_path": _summary_row("Component path"),
+        }
+        ui.label("Operator Settings").classes(SECTION_HEADER_CLASS)
+        rows.update(
+            {
+                "algorithm": _summary_row("Algorithm"),
+                "parent_selection": _summary_row("Parent selection"),
+                "environmental_selection": _summary_row("Environmental selection"),
+                "crossover": _summary_row("Crossover"),
+                "mutation": _summary_row("Mutation"),
+                "crossover_repair": _summary_row("Crossover repair"),
+                "reflection": _summary_row("Reflection"),
+            }
+        )
+        ui.label("Objective Settings").classes(SECTION_HEADER_CLASS)
+        rows.update(
+            {
+                "objective_mode": _summary_row("Mode"),
+                "single_objective": _summary_row("Single objective"),
+                "selected_objectives": _summary_row("Selected objectives"),
+                "objective_weights": _summary_row("Weights"),
+            }
+        )
 
+    state.runtime.config_summary_refresh = refresh
     refresh()
     return {"refresh": refresh}
+
+
+def refresh_config_summary(state: Any) -> None:
+    """Refresh the registered Experiment config summary if it exists."""
+    refresh = getattr(state.runtime, "config_summary_refresh", None)
+    if callable(refresh):
+        refresh()
+
+
+def _summary_row(label: str) -> Any:
+    """Build one compact summary row and return its value label."""
+    with ui.row().classes(f"{ROW_CLASS} w-full items-start gap-3"):
+        ui.label(f"{label}:").classes("w-44 shrink-0")
+        return ui.label().classes("grow whitespace-pre-wrap break-words max-h-28 overflow-y-auto")
+
+
+def _format_objective_weights(state: Any) -> str:
+    """Return objective weights as one wrapped line per objective."""
+    if not state.objectives.weights:
+        return "(none)"
+    return "\n".join(f"{key}  {value}" for key, value in sorted(state.objectives.weights.items()))
 
 
 def _set_algorithm(state: Any, value: str) -> None:
     state.config.algorithm = value
     services.sync_algorithm_operator_defaults(state)
+    refresh_config_summary(state)

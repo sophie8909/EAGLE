@@ -167,6 +167,7 @@ class RuntimeState:
     is_shutting_down: bool = False
     connected_client_count: int = 0
     current_page: str = "experiment"
+    config_summary_refresh: Any | None = None
     last_heartbeat_monotonic: float | None = None
     last_heartbeat_timestamp: str = ""
     active_tasks: list[Any] = field(default_factory=list)

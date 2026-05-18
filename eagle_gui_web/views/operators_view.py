@@ -8,6 +8,7 @@ from nicegui import ui
 
 from eagle_gui_web import services
 from eagle_gui_web.theme import CARD_CLASS, GRID_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS
+from eagle_gui_web.views.config_view import refresh_config_summary
 
 
 def build_operators_view(state: Any) -> dict[str, Any]:
@@ -25,6 +26,19 @@ def build_operators_view(state: Any) -> dict[str, Any]:
     def update_select(name: str, value: str) -> None:
         setattr(state.operators, name, value)
         refresh()
+        refresh_config_summary(state)
+
+    def update_flag(name: str, value: bool) -> None:
+        setattr(state.operators, name, value)
+        refresh_config_summary(state)
+
+    def update_reproduction_weight(key: str, value: str) -> None:
+        state.operators.reproduction_weights[key] = value
+        refresh_config_summary(state)
+
+    def update_mutation_weight(key: str, value: str) -> None:
+        state.operators.mutation_weights[key] = value
+        refresh_config_summary(state)
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-4"):
         ui.label("Operators").classes(SECTION_HEADER_CLASS)
@@ -60,12 +74,12 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             ui.checkbox(
                 "Crossover repair",
                 value=state.operators.crossover_repair_enabled,
-                on_change=lambda event: setattr(state.operators, "crossover_repair_enabled", bool(event.value)),
+                on_change=lambda event: update_flag("crossover_repair_enabled", bool(event.value)),
             )
         ui.checkbox(
             "Enable reflection operator",
             value=state.operators.enable_reflection_operator,
-            on_change=lambda event: setattr(state.operators, "enable_reflection_operator", bool(event.value)),
+            on_change=lambda event: update_flag("enable_reflection_operator", bool(event.value)),
         )
 
         ui.label("Reproduction operator weights").classes(SECTION_HEADER_CLASS)
@@ -74,10 +88,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                 ui.input(
                     key,
                     value=state.operators.reproduction_weights.get(key, "0.0"),
-                    on_change=lambda event, item=key: state.operators.reproduction_weights.__setitem__(
-                        item,
-                        str(event.value or "0"),
-                    ),
+                    on_change=lambda event, item=key: update_reproduction_weight(item, str(event.value or "0")),
                 ).classes(f"{INPUT_CLASS} w-44")
 
         ui.label("Mutation mix weights").classes(SECTION_HEADER_CLASS)
@@ -89,10 +100,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                 ui.input(
                     key,
                     value=state.operators.mutation_weights[key],
-                    on_change=lambda event, item=key: state.operators.mutation_weights.__setitem__(
-                        item,
-                        str(event.value or "0"),
-                    ),
+                    on_change=lambda event, item=key: update_mutation_weight(item, str(event.value or "0")),
                 ).classes(f"{INPUT_CLASS} w-56")
 
     controls["refresh"] = refresh
