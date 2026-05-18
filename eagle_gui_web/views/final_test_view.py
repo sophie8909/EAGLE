@@ -28,14 +28,13 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
     """Build the final-test process controls and live log view."""
     controls: dict[str, Any] = {}
 
-    async def run_final_test() -> None:
+    async def run_final_test() -> tuple[bool, str]:
         try:
             success, message = await asyncio.to_thread(services.start_final_test, state)
         except (OSError, ValueError) as exc:
-            ui.notify(str(exc), type="negative")
-            return
-        ui.notify(message, type="positive" if success else "warning")
+            return False, str(exc)
         await refresh_log()
+        return success, message
 
     async def stop() -> None:
         message = await asyncio.to_thread(services.stop_experiment, state)
@@ -72,9 +71,10 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Final Test").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
-            ui.button("Run final test", on_click=safe_click(run_final_test, label="Run final test")).classes(
-                button_class(success=True)
-            )
+            ui.button(
+                "Run final test",
+                on_click=safe_click(run_final_test, label="Run final test", notify_result=True),
+            ).classes(button_class(success=True))
             ui.button("Stop Experiment", on_click=safe_click(stop, label="Stop Experiment")).classes(
                 button_class(danger=True)
             )
