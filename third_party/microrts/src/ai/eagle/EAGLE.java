@@ -34,6 +34,9 @@ import java.io.StringWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -72,6 +75,11 @@ public class EAGLE extends AbstractionLayerAI {
             "{\"thinking\":\"LLM call limit reached; no action issued.\",\"moves\":[]}";
     private static final boolean LLAMA_CPP_STREAM = false;
     private static final boolean DEBUG_MODE = readBooleanSetting("eagle.debug", "EAGLE_DEBUG", false);
+    private static final String LLM_DEBUG_DIR = System.getProperty(
+            "eagle.llm_debug_dir",
+            System.getenv().getOrDefault("EAGLE_LLM_DEBUG_DIR", "")
+    );
+    private static final Gson LLM_DEBUG_GSON = new GsonBuilder().disableHtmlEscaping().create();
 
     static String MODEL = System.getenv().getOrDefault("LLAMA_CPP_MODEL", "local");
     private static String PROMPT = null;
@@ -875,20 +883,21 @@ public class EAGLE extends AbstractionLayerAI {
     }
 
     public String prompt(String finalPrompt) {
+        String requestPrompt = "/no_think " + finalPrompt;
+        JsonObject body = new JsonObject();
+        body.addProperty("model", MODEL);
+        body.addProperty("stream", LLAMA_CPP_STREAM);
+        body.addProperty("temperature", 0.2);
+        body.addProperty("max_tokens", LLAMA_CPP_MAX_TOKENS);
+
+        JsonArray messages = new JsonArray();
+        JsonObject userMessage = new JsonObject();
+        userMessage.addProperty("role", "user");
+        userMessage.addProperty("content", requestPrompt);
+        messages.add(userMessage);
+        body.add("messages", messages);
+        String rawResponseBody = "";
         try {
-            JsonObject body = new JsonObject();
-            body.addProperty("model", MODEL);
-            body.addProperty("stream", LLAMA_CPP_STREAM);
-            body.addProperty("temperature", 0.2);
-            body.addProperty("max_tokens", LLAMA_CPP_MAX_TOKENS);
-
-            JsonArray messages = new JsonArray();
-            JsonObject userMessage = new JsonObject();
-            userMessage.addProperty("role", "user");
-            userMessage.addProperty("content", "/no_think " + finalPrompt);
-            messages.add(userMessage);
-            body.add("messages", messages);
-
             URL url = new URL(LLAMA_CPP_BASE_URL + "/chat/completions");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -908,16 +917,19 @@ public class EAGLE extends AbstractionLayerAI {
                     sb.append(line);
                 }
             }
+            rawResponseBody = sb.toString();
 
             responseTime = Instant.now();
             latency = responseTime.toEpochMilli() - promptTime.toEpochMilli();
 
             if (code != HttpURLConnection.HTTP_OK) {
                 System.err.println("[EAGLE] llama.cpp error (" + code + "): " + sb);
-                return "{\"thinking\":\"llama_cpp_error\",\"moves\":[]}";
+                String fallback = "{\"thinking\":\"llama_cpp_error\",\"moves\":[]}";
+                appendLlmDebugRecord(requestPrompt, body, rawResponseBody, "", fallback, "HTTP " + code);
+                return fallback;
             }
 
-            JsonObject top = JsonParser.parseString(sb.toString()).getAsJsonObject();
+            JsonObject top = JsonParser.parseString(rawResponseBody).getAsJsonObject();
             if (top.has("choices") && top.get("choices").isJsonArray() && top.getAsJsonArray("choices").size() > 0) {
                 JsonObject choice = top.getAsJsonArray("choices").get(0).getAsJsonObject();
                 JsonObject message = choice.getAsJsonObject("message");
@@ -926,21 +938,78 @@ public class EAGLE extends AbstractionLayerAI {
                         : message.get("content").getAsString();
                 if (!modelText.isEmpty()) {
                     debugBlock("response", modelText);
+                    appendLlmDebugRecord(requestPrompt, body, rawResponseBody, modelText, "", null);
                     return modelText;
                 }
             }
             if (top.has("content") && !top.get("content").isJsonNull()) {
                 String modelText = top.get("content").getAsString();
                 debugBlock("response", modelText);
+                appendLlmDebugRecord(requestPrompt, body, rawResponseBody, modelText, "", null);
                 return modelText;
             }
 
             System.err.println("[EAGLE] unexpected llama.cpp payload: " + sb);
-            return "{\"thinking\":\"invalid_llama_cpp_payload\",\"moves\":[]}";
+            String fallback = "{\"thinking\":\"invalid_llama_cpp_payload\",\"moves\":[]}";
+            appendLlmDebugRecord(requestPrompt, body, rawResponseBody, "", fallback, "invalid llama.cpp payload");
+            return fallback;
         } catch (Exception e) {
             System.err.println("[EAGLE] llama.cpp exception (" + e.getClass().getSimpleName() + "): " + e.getMessage());
-            return "{\"thinking\":\"exception\",\"moves\":[]}";
+            String fallback = "{\"thinking\":\"exception\",\"moves\":[]}";
+            appendLlmDebugRecord(requestPrompt, body, rawResponseBody, "", fallback, e.getClass().getSimpleName() + ": " + e.getMessage());
+            return fallback;
         }
+    }
+
+    private static void appendLlmDebugRecord(
+            String prompt,
+            JsonObject requestPayload,
+            String rawResponseBody,
+            String parsedResponse,
+            String fallbackResponse,
+            String error
+    ) {
+        if (LLM_DEBUG_DIR == null || LLM_DEBUG_DIR.isBlank()) {
+            return;
+        }
+        JsonObject record = new JsonObject();
+        record.addProperty("timestamp", Instant.now().toString());
+        record.addProperty("log_dir", LLM_DEBUG_DIR);
+        record.addProperty("generation", System.getProperty("eagle.generation", ""));
+        record.addProperty("individual_id", System.getProperty("eagle.individual_id", ""));
+        record.addProperty("evaluation_mode", "gameplay");
+        record.addProperty("opponent", System.getProperty("eagle.opponent", ""));
+        record.addProperty("model", MODEL);
+        record.addProperty("prompt_char_length", prompt == null ? 0 : prompt.length());
+        record.addProperty("prompt", prompt == null ? "" : prompt);
+        record.addProperty("prompt_tail", promptTail(prompt));
+        record.add("request_payload", requestPayload == null ? new JsonObject() : requestPayload);
+        record.addProperty("raw_response_body", rawResponseBody == null ? "" : rawResponseBody);
+        record.addProperty("parsed_response", parsedResponse == null ? "" : parsedResponse);
+        record.addProperty("parser_result", "");
+        record.addProperty("fallback_response", fallbackResponse == null ? "" : fallbackResponse);
+        record.addProperty("error", error == null ? "" : error);
+
+        Path path = Paths.get(LLM_DEBUG_DIR).resolve("llm_debug.jsonl");
+        try {
+            Files.createDirectories(path.getParent());
+            try (FileWriter writer = new FileWriter(path.toFile(), true)) {
+                writer.write(LLM_DEBUG_GSON.toJson(record));
+                writer.write(System.lineSeparator());
+            }
+        } catch (IOException writeError) {
+            System.err.println("[EAGLE] llm debug write failed path=" + path + " error=" + writeError.getMessage());
+            return;
+        }
+        System.out.println("[EAGLE] llm debug record written path=" + path);
+    }
+
+    private static String promptTail(String prompt) {
+        if (prompt == null) {
+            return "";
+        }
+        int start = Math.max(0, prompt.length() - 3000);
+        return prompt.substring(start);
     }
 
     @Override

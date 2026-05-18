@@ -4,8 +4,12 @@ import os
 import re
 import ast
 import json
+from pathlib import Path
+from typing import Any
 
 import requests
+
+from eagle.utils.llm_debug import append_llm_debug_record
 
 
 DEFAULT_MODEL = os.getenv("LLAMA_CPP_MODEL", "local")
@@ -41,29 +45,85 @@ class LLM:
         model: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        debug_log_dir: str | Path | None = None,
+        debug_context: dict[str, Any] | None = None,
+        debug_record: dict[str, Any] | None = None,
+        defer_debug_write: bool = False,
     ) -> str:
         """Generate one non-streaming chat completion through llama.cpp."""
-        response = requests.post(
-            f"{DEFAULT_BASE_URL}/chat/completions",
-            json={
-                "model": cls._resolve_model(model),
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "stream": False,
-            },
-            timeout=120,
-        )
-        response.raise_for_status()
-        data = response.json()
+        resolved_model = cls._resolve_model(model)
+        request_payload = {
+            "model": resolved_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+        context = dict(debug_context or {})
+        debug_values: dict[str, Any] = {
+            "generation": context.get("generation", ""),
+            "individual_id": context.get("individual_id", ""),
+            "mode": context.get("mode", ""),
+            "opponent": context.get("opponent", ""),
+            "model": resolved_model,
+            "prompt": prompt,
+            "request_payload": request_payload,
+            "raw_response_body": "",
+            "parsed_response": "",
+            "fallback_response": "",
+            "error": None,
+        }
+        if debug_record is not None:
+            debug_record.update(debug_values)
+        response = None
+        try:
+            response = requests.post(
+                f"{DEFAULT_BASE_URL}/chat/completions",
+                json=request_payload,
+                timeout=120,
+            )
+            raw_response_body = response.text
+            debug_values["raw_response_body"] = raw_response_body
+            if debug_record is not None:
+                debug_record.update(debug_values)
+            response.raise_for_status()
+            data = response.json()
+        except requests.RequestException as exc:
+            if response is not None:
+                debug_values["raw_response_body"] = response.text
+            debug_values["error"] = exc
+            if debug_record is not None:
+                debug_record.update(debug_values)
+            append_llm_debug_record(debug_log_dir, **debug_values)
+            raise
+        except json.JSONDecodeError as exc:
+            debug_values["error"] = exc
+            if debug_record is not None:
+                debug_record.update(debug_values)
+            append_llm_debug_record(debug_log_dir, **debug_values)
+            raise
         choices = data.get("choices") or []
         if not choices:
+            debug_values["error"] = "llama.cpp returned no chat completion choices."
+            if debug_record is not None:
+                debug_record.update(debug_values)
+            append_llm_debug_record(debug_log_dir, **debug_values)
             raise ValueError("llama.cpp returned no chat completion choices.")
         message = choices[0].get("message") or {}
         content = message.get("content")
         if not content:
+            debug_values["error"] = "llama.cpp returned an empty response."
+            if debug_record is not None:
+                debug_record.update(debug_values)
+            append_llm_debug_record(debug_log_dir, **debug_values)
             raise ValueError("llama.cpp returned an empty response.")
-        return str(content).strip()
+        parsed_response = str(content).strip()
+        debug_values["parsed_response"] = parsed_response
+        if debug_record is not None:
+            debug_record.update(debug_values)
+        if not defer_debug_write:
+            append_llm_debug_record(debug_log_dir, **debug_values)
+        return parsed_response
 
     @staticmethod
     def _extract_first_json_object(raw_output: str) -> dict | None:

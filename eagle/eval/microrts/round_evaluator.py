@@ -13,6 +13,7 @@ from eagle.llm import LLM
 from eagle.project import MICRORTS_LOGS_DIR
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.log_parse import parse_dynamic_prompt_state
+from eagle.utils.llm_debug import append_llm_debug_record
 from eagle.utils.move_validator import validate_llm_move_against_state
 from eagle.utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
 from eagle.utils.token_count import count_prompt_tokens
@@ -276,10 +277,24 @@ class Evaluator:
             state = parse_dynamic_prompt_state(dynamic_prompt)
         full_prompt = self._build_round_prompt(base_prompt, dynamic_prompt)
         with timer("round_llm_action_time", stats):
-            raw_response = self._ask_for_actions(full_prompt)
+            raw_response, llm_debug_record = self._ask_for_actions(
+                full_prompt,
+                generation=generation,
+                individual_id=individual_id,
+            )
         with timer("round_response_parse_time", stats):
             parsed_response = self._extract_first_json_object(raw_response)
             format_valid, format_reason = self._validate_action_response_format(parsed_response)
+        llm_debug_record.update(
+            {
+                "parser_result": parsed_response,
+                "fallback_response": "" if format_valid else {"format_valid": False, "format_reason": format_reason},
+            }
+        )
+        append_llm_debug_record(
+            self.runtime_logs_dir,
+            **llm_debug_record,
+        )
 
         if format_valid:
             with timer("round_legality_score_time", stats):
@@ -464,8 +479,24 @@ class Evaluator:
                 {dynamic_prompt.strip()}
                 """.strip()
 
-    def _ask_for_actions(self, prompt: str) -> str:
-        return self._llama_cpp_generate(prompt=prompt, temperature=0.2, json_format=True)
+    def _ask_for_actions(
+        self,
+        prompt: str,
+        *,
+        generation: int | None,
+        individual_id: str,
+    ) -> tuple[str, dict[str, Any]]:
+        debug_record: dict[str, Any] = {}
+        response = self._llama_cpp_generate(
+            prompt=prompt,
+            temperature=0.2,
+            json_format=True,
+            generation=generation,
+            individual_id=individual_id,
+            mode="round_action",
+            debug_record=debug_record,
+        )
+        return response, debug_record
 
     def _score_strategy_alignment(
         self,
@@ -510,7 +541,14 @@ class Evaluator:
             Action response:
             {raw_response}
             """.strip()
-        raw_score = self._llama_cpp_generate(prompt=judge_prompt, temperature=0.1, json_format=True)
+        raw_score = self._llama_cpp_generate(
+            prompt=judge_prompt,
+            temperature=0.1,
+            json_format=True,
+            generation="",
+            individual_id="",
+            mode="round_alignment",
+        )
         # print(f"Raw score response:\n{raw_score}\n")
         parsed = self._extract_first_json_object(raw_score)
         if isinstance(parsed, dict):
@@ -968,10 +1006,34 @@ class Evaluator:
                 return parsed
         return None
 
-    def _llama_cpp_generate(self, *, prompt: str, temperature: float, json_format: bool) -> str:
+    def _llama_cpp_generate(
+        self,
+        *,
+        prompt: str,
+        temperature: float,
+        json_format: bool,
+        generation: int | str | None = "",
+        individual_id: str = "",
+        mode: str = "round",
+        opponent: str = "",
+        debug_record: dict[str, Any] | None = None,
+    ) -> str:
         if json_format:
             prompt = f"{prompt}\n\nReturn JSON only."
-        raw_response = LLM._generate_text(prompt=prompt, model=self.model, temperature=temperature)
+        raw_response = LLM._generate_text(
+            prompt=prompt,
+            model=self.model,
+            temperature=temperature,
+            debug_log_dir=self.runtime_logs_dir,
+            debug_context={
+                "generation": generation,
+                "individual_id": individual_id,
+                "mode": mode,
+                "opponent": opponent,
+            },
+            debug_record=debug_record,
+            defer_debug_write=debug_record is not None,
+        )
         if not raw_response:
             raise ValueError("Round evaluator LLM returned an empty response.")
         return raw_response

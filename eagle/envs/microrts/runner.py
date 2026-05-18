@@ -197,6 +197,9 @@ def launch_java_match(
     trace_path: Path | None = None,
     round_state_dir: Path | None = None,
     result_json_path: Path | None = None,
+    llm_debug_dir: Path | None = None,
+    generation: int | None = None,
+    individual_id: Any | None = None,
     verbose_logs: bool = False,
     map_location: str | None = None,
 ) -> tuple[int, bool, str, float]:
@@ -214,6 +217,14 @@ def launch_java_match(
         command.append(f"-Dmicrorts.llm_call_limit={int(llm_call_limit)}")
     if max_game_ticks is not None:
         command.append(f"-Dmicrorts.tick_limit={int(max_game_ticks)}")
+    if llm_debug_dir is not None:
+        command.append(f"-Deagle.llm_debug_dir={llm_debug_dir}")
+    if generation is not None:
+        command.append(f"-Deagle.generation={generation}")
+    if individual_id is not None:
+        command.append(f"-Deagle.individual_id={individual_id}")
+    if ai2_class is not None:
+        command.append(f"-Deagle.opponent={ai2_class}")
     if trace_path is not None:
         command.append(f"-Dmicrorts.trace.path={trace_path}")
     if round_state_dir is not None:
@@ -512,6 +523,9 @@ def run_java_agent_game(
             trace_path=trace_path,
             round_state_dir=round_state_dir,
             result_json_path=result_json_path,
+            llm_debug_dir=runtime_logs_dir or game_output_dir,
+            generation=generation,
+            individual_id=individual_id,
             verbose_logs=_verbose_microrts_logs_enabled(config),
             map_location=map_location,
         )
