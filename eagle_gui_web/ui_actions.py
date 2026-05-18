@@ -8,8 +8,6 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from nicegui import ui
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -27,7 +25,6 @@ def safe_click(action: Callable[..., Any], *, label: str) -> Callable[..., None]
                 raise
             except Exception:
                 LOGGER.exception("GUI callback failed label=%s", label)
-                ui.notify("GUI error: check terminal/logs/gui_runtime.log", type="negative")
             else:
                 LOGGER.info("GUI callback end label=%s", label)
 
