@@ -135,6 +135,10 @@ class PromptState:
     """Prompt inspection records for the selected run."""
 
     records: dict[str, dict[str, Any]] = field(default_factory=dict)
+    trace_records: list[dict[str, Any]] = field(default_factory=list)
+    selected_generation: str = ""
+    selected_individual_id: str = ""
+    selected_call_id: str = ""
     selected_record_id: str = ""
     selected_prompt: str = ""
     selected_llm_output: str = ""

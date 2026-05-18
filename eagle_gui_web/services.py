@@ -911,6 +911,93 @@ def load_prompt_records(run_dir: Path | None) -> dict[str, dict[str, Any]]:
         return analysis_service.load_prompts(run_dir)
 
 
+def load_llm_trace_records(run_dir: Path | None) -> list[dict[str, Any]]:
+    """Load normalized runtime LLM debug records from a run directory."""
+    if run_dir is None:
+        return []
+    path = Path(run_dir) / "llm_debug.jsonl"
+    if not path.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    group_counts: dict[tuple[str, str], int] = {}
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        generation = _trace_text(payload.get("generation"))
+        individual_id = _trace_text(payload.get("individual_id"))
+        group_key = (generation, individual_id)
+        group_counts[group_key] = group_counts.get(group_key, 0) + 1
+        call_index = _trace_int(payload.get("call_index"), group_counts[group_key])
+        prompt = _trace_text(payload.get("prompt", payload.get("input", "")))
+        record_id = f"{generation}|{individual_id}|{call_index}|{line_number}"
+        records.append(
+            {
+                "record_id": record_id,
+                "generation": generation,
+                "individual_id": individual_id,
+                "mode": _trace_text(payload.get("mode", payload.get("evaluation_mode", ""))),
+                "opponent": _trace_text(payload.get("opponent")),
+                "turn": _trace_text(payload.get("turn")) or _extract_prompt_turn(prompt),
+                "call_index": call_index,
+                "timestamp": _trace_text(payload.get("timestamp")),
+                "prompt": prompt,
+                "raw_response_body": _trace_text(payload.get("raw_response_body")),
+                "parsed_response": _trace_text(payload.get("parsed_response")),
+                "fallback_response": _trace_text(payload.get("fallback_response", payload.get("llm_output", ""))),
+                "error": _trace_text(payload.get("error")),
+            }
+        )
+    return sorted(records, key=_trace_sort_key)
+
+
+def generation_choices(trace_records: list[dict[str, Any]]) -> list[str]:
+    """Return sorted generation choices for LLM trace records."""
+    return _sort_trace_values({str(record.get("generation", "")) for record in trace_records})
+
+
+def individual_choices(trace_records: list[dict[str, Any]], generation: str) -> list[str]:
+    """Return sorted individual choices for one generation."""
+    return _sort_trace_values(
+        {
+            str(record.get("individual_id", ""))
+            for record in trace_records
+            if str(record.get("generation", "")) == str(generation)
+        }
+    )
+
+
+def llm_call_choices(trace_records: list[dict[str, Any]], generation: str, individual_id: str) -> dict[str, str]:
+    """Return LLM call selector options for one generation and individual."""
+    return {
+        str(record.get("record_id", "")): llm_trace_label(record)
+        for record in trace_records
+        if str(record.get("generation", "")) == str(generation)
+        and str(record.get("individual_id", "")) == str(individual_id)
+    }
+
+
+def llm_trace_label(record: dict[str, Any]) -> str:
+    """Return a compact label for one LLM debug record."""
+    parts = [f"call {record.get('call_index', '')}"]
+    if record.get("turn"):
+        parts.append(f"turn {record.get('turn')}")
+    if record.get("mode"):
+        parts.append(str(record.get("mode")))
+    if record.get("timestamp"):
+        parts.append(str(record.get("timestamp")))
+    return " | ".join(parts)
+
+
 def prompt_record_label(record_id: str, record: dict[str, Any]) -> str:
     """Return a compact prompt selector label."""
     return (
@@ -931,6 +1018,55 @@ def prompt_record_metadata(record: dict[str, Any]) -> str:
     if record.get("fitness") not in (None, ""):
         parts.append(f"Fitness: {record.get('fitness')}")
     return " | ".join(parts)
+
+
+def _trace_text(value: Any) -> str:
+    """Return trace values as display-safe text."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _trace_int(value: Any, default: int) -> int:
+    """Return an integer trace value with a stable fallback."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _extract_prompt_turn(prompt: str) -> str:
+    """Extract the first MicroRTS Turn value from a prompt when present."""
+    import re
+
+    match = re.search(r"^\s*Turn:\s*([^\n]+)\s*$", str(prompt or ""), re.MULTILINE)
+    return match.group(1).strip() if match else ""
+
+
+def _trace_sort_key(record: dict[str, Any]) -> tuple[Any, ...]:
+    """Sort trace records by generation, individual, call index, and timestamp."""
+    return (
+        _numeric_sort_value(record.get("generation")),
+        str(record.get("individual_id", "")),
+        int(record.get("call_index", 0)),
+        str(record.get("timestamp", "")),
+    )
+
+
+def _sort_trace_values(values: set[str]) -> list[str]:
+    """Sort trace selector values numerically when possible."""
+    return sorted((value for value in values if value != ""), key=_numeric_sort_value)
+
+
+def _numeric_sort_value(value: Any) -> tuple[int, Any]:
+    """Return a key that sorts numeric text before lexical text."""
+    text = str(value or "")
+    try:
+        return (0, int(text))
+    except ValueError:
+        return (1, text)
 
 
 def save_current_prompt_to_microrts(prompt: str) -> Path:

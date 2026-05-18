@@ -65,6 +65,8 @@ class LLM:
             "individual_id": context.get("individual_id", ""),
             "mode": context.get("mode", ""),
             "opponent": context.get("opponent", ""),
+            "turn": context.get("turn", ""),
+            "call_index": context.get("call_index", ""),
             "model": resolved_model,
             "prompt": prompt,
             "request_payload": request_payload,

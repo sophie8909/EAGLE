@@ -979,6 +979,8 @@ public class EAGLE extends AbstractionLayerAI {
         record.addProperty("individual_id", System.getProperty("eagle.individual_id", ""));
         record.addProperty("evaluation_mode", "gameplay");
         record.addProperty("opponent", System.getProperty("eagle.opponent", ""));
+        record.addProperty("turn", "");
+        record.addProperty("call_index", llmCallCount);
         record.addProperty("model", MODEL);
         record.addProperty("prompt_char_length", prompt == null ? 0 : prompt.length());
         record.addProperty("prompt", prompt == null ? "" : prompt);
