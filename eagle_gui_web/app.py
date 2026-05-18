@@ -47,6 +47,10 @@ state = AppState()
 EAGLE_IMAGE_URL = "/assets/eagle.png"
 HEARTBEAT_INTERVAL_SEC = 2.0
 HEARTBEAT_WARN_DELAY_SEC = 5.0
+LOG_REFRESH_INTERVAL_SEC = 5.0
+ANALYSIS_REFRESH_INTERVAL_SEC = 20.0
+log_refresh_lock = asyncio.Lock()
+analysis_refresh_lock = asyncio.Lock()
 
 
 def on_client_connect(client: Any | None = None) -> None:
@@ -212,19 +216,37 @@ async def startup_refresh() -> None:
 
 async def refresh_log_timer() -> None:
     """Refresh process logs only; prompt loading is intentionally excluded."""
-    await controls["run"]["refresh_log"]()
-    await controls["final_test"]["refresh_log"]()
-    await controls["microrts"]["refresh_status"]()
+    if state.runtime.connected_client_count <= 0:
+        LOGGER.info("log refresh skipped reason=no_connected_clients")
+        return
+    if log_refresh_lock.locked():
+        LOGGER.info("log refresh skipped reason=previous_refresh_running")
+        return
+    async with log_refresh_lock:
+        LOGGER.info("log refresh start")
+        await controls["run"]["refresh_log"]()
+        await controls["final_test"]["refresh_log"]()
+        await controls["microrts"]["refresh_status"]()
+        LOGGER.info("log refresh end")
 
 
 async def refresh_analysis_timer() -> None:
     """Refresh analysis independently from the log timer."""
-    await controls["analysis"]["refresh_analysis"]()
+    if state.runtime.connected_client_count <= 0:
+        LOGGER.info("analysis refresh skipped reason=no_connected_clients")
+        return
+    if analysis_refresh_lock.locked():
+        LOGGER.info("analysis refresh skipped reason=previous_refresh_running")
+        return
+    async with analysis_refresh_lock:
+        LOGGER.info("analysis refresh start")
+        await controls["analysis"]["refresh_analysis"]()
+        LOGGER.info("analysis refresh end")
 
 
 startup_timer = ui.timer(0.1, safe_click(startup_refresh, label="Startup refresh"), once=True)
-log_timer = ui.timer(3.0, safe_click(refresh_log_timer, label="Log refresh"))
-analysis_timer = ui.timer(15.0, safe_click(refresh_analysis_timer, label="Analysis refresh"))
+log_timer = ui.timer(LOG_REFRESH_INTERVAL_SEC, safe_click(refresh_log_timer, label="Log refresh"))
+analysis_timer = ui.timer(ANALYSIS_REFRESH_INTERVAL_SEC, safe_click(refresh_analysis_timer, label="Analysis refresh"))
 heartbeat_timer = ui.timer(HEARTBEAT_INTERVAL_SEC, heartbeat)
 state.active_timers.extend([startup_timer, log_timer, analysis_timer, heartbeat_timer])
 
