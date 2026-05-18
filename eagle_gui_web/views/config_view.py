@@ -9,7 +9,16 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
-from eagle_gui_web.theme import BUTTON_CLASS, CARD_CLASS, GRID_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS, button_class
+from eagle_gui_web.theme import (
+    BUTTON_CLASS,
+    CARD_CLASS,
+    GRID_CLASS,
+    INPUT_CLASS,
+    ROW_CLASS,
+    SECTION_HEADER_CLASS,
+    TEXTAREA_CLASS,
+    button_class,
+)
 from eagle_gui_web.ui_actions import safe_click
 
 
@@ -140,6 +149,47 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 )
 
     return {"refresh": refresh_form}
+
+
+def build_config_summary_view(state: Any) -> dict[str, Any]:
+    """Build a read-only summary of the active experiment configuration."""
+
+    def refresh() -> None:
+        config_path_label.set_text(f"Config path: {state.config.generated_config_path or state.config.base_config_path}")
+        component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
+        operator_summary.value = "\n".join(
+            [
+                f"Algorithm: {state.config.algorithm}",
+                f"Parent selection: {state.operators.parent_selection_operator}",
+                f"Environment selection: {state.operators.env_selection_operator}",
+                f"Crossover: {state.operators.crossover_operator}",
+                f"Mutation: {state.operators.mutation_operator}",
+                f"Crossover repair: {state.operators.crossover_repair_enabled}",
+                f"Reflection: {state.operators.enable_reflection_operator}",
+                f"Reproduction weights: {state.operators.reproduction_weights}",
+                f"Mutation weights: {state.operators.mutation_weights}",
+            ]
+        )
+        objective_summary.value = "\n".join(
+            [
+                f"Mode: {state.objectives.mode}",
+                f"Single objective: {state.objectives.single_objective}",
+                f"Selected objectives: {', '.join(sorted(state.objectives.selected)) or '(none)'}",
+                f"Weights: {state.objectives.weights}",
+            ]
+        )
+        operator_summary.update()
+        objective_summary.update()
+
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("Config Summary").classes(SECTION_HEADER_CLASS)
+        config_path_label = ui.label()
+        component_path_label = ui.label()
+        operator_summary = ui.textarea("Operator settings").props("readonly").classes(f"{TEXTAREA_CLASS} w-full h-[190px]")
+        objective_summary = ui.textarea("Objective settings").props("readonly").classes(f"{TEXTAREA_CLASS} w-full h-[130px]")
+
+    refresh()
+    return {"refresh": refresh}
 
 
 def _set_algorithm(state: Any, value: str) -> None:

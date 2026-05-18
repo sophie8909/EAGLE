@@ -32,7 +32,7 @@ from eagle_gui_web.theme import (
 from eagle_gui_web.ui_actions import safe_click
 from eagle_gui_web.views.analysis_view import build_analysis_view
 from eagle_gui_web.views.components_view import build_components_view
-from eagle_gui_web.views.config_view import build_config_view
+from eagle_gui_web.views.config_view import build_config_summary_view
 from eagle_gui_web.views.final_test_view import build_final_test_view
 from eagle_gui_web.views.microrts_view import build_microrts_view
 from eagle_gui_web.views.objectives_view import build_objectives_view
@@ -129,7 +129,13 @@ def build_layout() -> dict[str, dict[str, Any]]:
     async def refresh_current_page() -> None:
         page = state.runtime.current_page
         LOGGER.info("manual refresh start page=%s", page)
-        if page == "run":
+        if page == "experiment":
+            for group in ("components", "operators", "objectives", "config_summary"):
+                refresh = controls.get(group, {}).get("refresh")
+                if refresh:
+                    refresh()
+            await controls["run"]["refresh_log"]()
+        elif page == "run":
             await controls["run"]["refresh_log"]()
         elif page == "final_test":
             await controls["final_test"]["refresh_log"]()
@@ -165,29 +171,32 @@ def build_layout() -> dict[str, dict[str, Any]]:
             )
 
     with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
-        run_tab = ui.tab("Run").classes(TAB_CLASS)
+        experiment_tab = ui.tab("Experiment").classes(TAB_CLASS)
         final_test_tab = ui.tab("Final Test").classes(TAB_CLASS)
-        config_tab = ui.tab("Config").classes(TAB_CLASS)
-        components_tab = ui.tab("Components").classes(TAB_CLASS)
-        objectives_tab = ui.tab("Objectives").classes(TAB_CLASS)
-        operators_tab = ui.tab("Operators").classes(TAB_CLASS)
         analysis_tab = ui.tab("Analysis").classes(TAB_CLASS)
         prompts_tab = ui.tab("Prompts").classes(TAB_CLASS)
         microrts_tab = ui.tab("MicroRTS").classes(TAB_CLASS)
 
-    with ui.tab_panels(tabs, value=run_tab).classes(f"{PAGE_CLASS} w-full"):
-        with ui.tab_panel(run_tab):
-            controls["run"] = build_run_view(state)
+    with ui.tab_panels(tabs, value=experiment_tab).classes(f"{PAGE_CLASS} w-full"):
+        with ui.tab_panel(experiment_tab):
+            with ui.row().classes("w-full gap-4 items-start no-wrap"):
+                with ui.column().classes("w-[60%] gap-3"):
+                    with ui.tabs().classes(f"{CARD_CLASS} w-full") as experiment_tabs:
+                        components_tab = ui.tab("Components").classes(TAB_CLASS)
+                        operators_tab = ui.tab("Operators").classes(TAB_CLASS)
+                        objectives_tab = ui.tab("Objectives").classes(TAB_CLASS)
+                    with ui.tab_panels(experiment_tabs, value=components_tab).classes(f"{PAGE_CLASS} w-full"):
+                        with ui.tab_panel(components_tab):
+                            controls["components"] = build_components_view(state)
+                        with ui.tab_panel(operators_tab):
+                            controls["operators"] = build_operators_view(state)
+                        with ui.tab_panel(objectives_tab):
+                            controls["objectives"] = build_objectives_view(state)
+                with ui.column().classes("w-[40%] gap-3"):
+                    controls["run"] = build_run_view(state, log_height=300)
+                    controls["config_summary"] = build_config_summary_view(state)
         with ui.tab_panel(final_test_tab):
             controls["final_test"] = build_final_test_view(state)
-        with ui.tab_panel(config_tab):
-            controls["config"] = build_config_view(state)
-        with ui.tab_panel(components_tab):
-            controls["components"] = build_components_view(state)
-        with ui.tab_panel(objectives_tab):
-            controls["objectives"] = build_objectives_view(state)
-        with ui.tab_panel(operators_tab):
-            controls["operators"] = build_operators_view(state)
         with ui.tab_panel(analysis_tab):
             controls["analysis"] = build_analysis_view(state)
         with ui.tab_panel(prompts_tab):
@@ -198,20 +207,12 @@ def build_layout() -> dict[str, dict[str, Any]]:
     async def on_tab_change(event: Any) -> None:
         selected = event.args
 
-        if selected == run_tab:
-            state.runtime.current_page = "run"
+        if selected == experiment_tab:
+            state.runtime.current_page = "experiment"
             await controls["run"]["refresh_log"]()
         elif selected == final_test_tab:
             state.runtime.current_page = "final_test"
             await controls["final_test"]["refresh_log"]()
-        elif selected == config_tab:
-            state.runtime.current_page = "config"
-        elif selected == components_tab:
-            state.runtime.current_page = "components"
-        elif selected == objectives_tab:
-            state.runtime.current_page = "objectives"
-        elif selected == operators_tab:
-            state.runtime.current_page = "operators"
         elif selected == prompts_tab:
             state.runtime.current_page = "prompts"
             await controls["prompts"]["refresh_prompts"](True)
@@ -237,10 +238,10 @@ async def startup_refresh() -> None:
         LOGGER.exception("Startup refresh failed to load initial config path=%s", state.config.base_config_path)
         pass
     for group, name in (
-        ("config", "refresh"),
         ("objectives", "refresh"),
         ("operators", "refresh"),
         ("components", "refresh"),
+        ("config_summary", "refresh"),
         ("microrts", "refresh_trace_choices"),
     ):
         refresh = controls.get(group, {}).get(name)

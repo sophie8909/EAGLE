@@ -24,7 +24,7 @@ from eagle_gui_web.theme import (
 from eagle_gui_web.ui_actions import safe_click
 
 
-def build_run_view(state: Any) -> dict[str, Any]:
+def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
     """Build the run process controls and log view."""
     controls: dict[str, Any] = {}
 
@@ -68,7 +68,7 @@ def build_run_view(state: Any) -> dict[str, Any]:
         state.run.current_run_dir = Path(str(event.value)) if event.value else None
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
-        ui.label("Run").classes(SECTION_HEADER_CLASS)
+        ui.label("Run Control").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
             ui.button("Start experiment", on_click=safe_click(start, label="Start experiment")).classes(
                 button_class(success=True)
@@ -97,7 +97,7 @@ def build_run_view(state: Any) -> dict[str, Any]:
             )
         run_select = ui.select([], label="Run folder", on_change=on_run_changed).classes(f"{INPUT_CLASS} w-full")
         log_textarea = ui.textarea(value=state.run.log_text).props("readonly").classes(
-            f"{TEXTAREA_CLASS} {height_class(560)} w-full"
+            f"{TEXTAREA_CLASS} {height_class(log_height)} w-full"
         )
 
     controls.update({"refresh_runs": refresh_runs, "refresh_status": refresh_status, "refresh_log": refresh_log})
