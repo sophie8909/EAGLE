@@ -10,7 +10,16 @@ from eagle_gui_web import services
 from eagle_gui_web.theme import CARD_CLASS, GRID_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS
 from eagle_gui_web.views.config_view import refresh_config_summary
 
-
+def _field_card(title: str) -> Any:
+    """Create a compact settings card."""
+    card_classes = (
+        "rounded-xl border border-[#2d4059] bg-[#0f1d2e] "
+        "p-4 shadow-sm"
+    )
+    with ui.card().classes(f"{card_classes} w-full"):
+        ui.label(title).classes(SECTION_HEADER_CLASS)
+        return ui.column().classes("w-full gap-3")
+    
 def build_operators_view(state: Any) -> dict[str, Any]:
     """Build the operator controls view."""
     controls: dict[str, Any] = {}
@@ -72,105 +81,198 @@ def build_operators_view(state: Any) -> dict[str, Any]:
         state.operators.mutation_weights[key] = value
         refresh_config_summary(state)
 
-    with ui.column().classes(f"{CARD_CLASS} w-full gap-4"):
+    with ui.column().classes(
+        "w-full gap-3 rounded-xl border border-[#2d4059] bg-[#0f1d2e] p-4"
+    ):
         ui.label("Algorithm").classes(SECTION_HEADER_CLASS)
-        with ui.grid(columns=2).classes(f"{GRID_CLASS} gap-3"):
+
+        with ui.grid(columns=2).classes("w-full gap-3"):
             algorithm_select = ui.select(
                 list(services.ALGORITHM_CHOICES),
                 label="Algorithm",
                 value=state.config.algorithm,
                 on_change=lambda event: update_algorithm(str(event.value or "nsga2")),
-            ).classes(f"{INPUT_CLASS} w-64")
+            ).classes(f"{INPUT_CLASS} w-full")
+
             evaluator_select = ui.select(
                 list(services.EVALUATOR_CHOICES),
                 label="Eval mode",
                 value=state.config.evaluator,
                 on_change=lambda event: update_evaluator(str(event.value or "gameplay")),
-            ).classes(f"{INPUT_CLASS} w-64")
+            ).classes(f"{INPUT_CLASS} w-full")
+
+        ui.separator().classes("opacity-20")
+
+        ui.label("Experiment").classes(SECTION_HEADER_CLASS)
+
+        with ui.grid(columns=3).classes("w-full gap-3"):
+            config_controls = {
+                "config_name": ui.input(
+                    "Config name",
+                    value=state.config.config_name,
+                    on_change=lambda event: update_config("config_name", str(event.value or "")),
+                ).classes(f"{INPUT_CLASS} w-full"),
+                "population_size": ui.input(
+                    "Population size",
+                    value=state.config.population_size,
+                    on_change=lambda event: update_config("population_size", str(event.value or "")),
+                ).classes(f"{INPUT_CLASS} w-full"),
+                "num_generations": ui.input(
+                    "Generations",
+                    value=state.config.num_generations,
+                    on_change=lambda event: update_config("num_generations", str(event.value or "")),
+                ).classes(f"{INPUT_CLASS} w-full"),
+                "tick_limit": ui.input(
+                    "Tick limit",
+                    value=state.config.tick_limit,
+                    on_change=lambda event: update_config("tick_limit", str(event.value or "")),
+                ).classes(f"{INPUT_CLASS} w-full"),
+                "llm_call_limit": ui.input(
+                    "LLM call limit",
+                    value=state.config.llm_call_limit,
+                    on_change=lambda event: update_config("llm_call_limit", str(event.value or "")),
+                ).classes(f"{INPUT_CLASS} w-full"),
+                "gameplay_map_dir": ui.select(
+                    list(services.microrts_map_dir_choices()),
+                    label="Eval map folder",
+                    value=state.config.gameplay_map_dir,
+                    on_change=lambda event: update_config("gameplay_map_dir", str(event.value or "8x8")),
+                ).classes(f"{INPUT_CLASS} w-full"),
+            }
 
         with ui.column().classes("w-full gap-3") as surrogate_section:
             ui.label("Surrogate").classes(SECTION_HEADER_CLASS)
             with ui.grid(columns=3).classes(f"{GRID_CLASS} gap-3"):
-                config_controls = {
-                    "surrogate": ui.select(
-                        list(services.SURROGATE_CHOICES),
-                        label="Surrogate mode",
-                        value=state.config.surrogate,
-                        on_change=lambda event: update_config("surrogate", str(event.value or "round")),
-                    ).classes(f"{INPUT_CLASS} w-64"),
-                    "surrogate_top_ratio": ui.input(
-                        "Surrogate top ratio",
-                        value=state.config.surrogate_top_ratio,
-                        on_change=lambda event: update_config("surrogate_top_ratio", str(event.value or "")),
-                    ).classes(f"{INPUT_CLASS} w-44"),
-                    "archive_parent_ratio": ui.input(
-                        "Archive parent ratio",
-                        value=state.config.archive_parent_ratio,
-                        on_change=lambda event: update_config("archive_parent_ratio", str(event.value or "")),
-                    ).classes(f"{INPUT_CLASS} w-44"),
-                }
-
+                config_controls.update(
+                    {
+                        "surrogate": ui.select(
+                            list(services.SURROGATE_CHOICES),
+                            label="Surrogate mode",
+                            value=state.config.surrogate,
+                            on_change=lambda event: update_config("surrogate", str(event.value or "round")),
+                        ).classes(f"{INPUT_CLASS} w-64"),
+                        "surrogate_top_ratio": ui.input(
+                            "Surrogate top ratio",
+                            value=state.config.surrogate_top_ratio,
+                            on_change=lambda event: update_config("surrogate_top_ratio", str(event.value or "")),
+                        ).classes(f"{INPUT_CLASS} w-44"),
+                        "archive_parent_ratio": ui.input(
+                            "Archive parent ratio",
+                            value=state.config.archive_parent_ratio,
+                            on_change=lambda event: update_config("archive_parent_ratio", str(event.value or "")),
+                        ).classes(f"{INPUT_CLASS} w-44"),
+                        "gameplay_refresh_interval": ui.input(
+                            "Gameplay refresh interval",
+                            value=state.config.gameplay_refresh_interval,
+                            on_change=lambda event: update_config(
+                                "gameplay_refresh_interval",
+                                str(event.value or ""),
+                            ),
+                        ).classes(f"{INPUT_CLASS} w-44"),
+                    }
+                )
+    with ui.column().classes(
+        "w-full gap-4 rounded-xl border border-[#2d4059] bg-[#0f1d2e] p-4"
+    ):
         ui.label("Operators").classes(SECTION_HEADER_CLASS)
-        ui.label("Selection").classes(SECTION_HEADER_CLASS)
-        with ui.grid(columns=2).classes(f"{GRID_CLASS} gap-3"):
-            selects = {
-                "parent_selection_operator": ui.select(
-                    list(services.operator_choices("parent_selection")),
-                    label="Parent selection",
-                    value=state.operators.parent_selection_operator,
-                    on_change=lambda event: update_select("parent_selection_operator", str(event.value or "")),
-                ).classes(f"{INPUT_CLASS} w-64"),
-                "env_selection_operator": ui.select(
-                    list(services.operator_choices("env_selection")),
-                    label="Environment selection",
-                    value=state.operators.env_selection_operator,
-                    on_change=lambda event: update_select("env_selection_operator", str(event.value or "")),
-                ).classes(f"{INPUT_CLASS} w-64"),
-            }
 
-        ui.label("Crossover / Mutation").classes(SECTION_HEADER_CLASS)
-        with ui.grid(columns=2).classes(f"{GRID_CLASS} gap-3"):
-            selects.update(
-                {
-                "crossover_operator": ui.select(
-                    list(services.operator_choices("crossover")),
-                    label="Crossover",
-                    value=state.operators.crossover_operator,
-                    on_change=lambda event: update_select("crossover_operator", str(event.value or "")),
-                ).classes(f"{INPUT_CLASS} w-64"),
-                "mutation_operator": ui.select(
-                    list(services.operator_choices("mutation")),
-                    label="Mutation",
-                    value=state.operators.mutation_operator,
-                    on_change=lambda event: update_select("mutation_operator", str(event.value or "")),
-                ).classes(f"{INPUT_CLASS} w-64"),
-                }
-            )
+        with ui.row().classes("w-full gap-6 items-start"):
+            with ui.column().classes("w-1/2 gap-3"):
+                ui.label("Selection").classes("text-xs uppercase tracking-widest text-[#b08d57]")
 
-        with ui.row().classes(f"{ROW_CLASS} gap-6") as repair_row:
-            ui.checkbox(
-                "Crossover repair",
-                value=state.operators.crossover_repair_enabled,
-                on_change=lambda event: update_flag("crossover_repair_enabled", bool(event.value)),
-            )
-        ui.checkbox(
-            "Enable reflection operator",
-            value=state.operators.enable_reflection_operator,
-            on_change=lambda event: update_flag("enable_reflection_operator", bool(event.value)),
+                with ui.grid(columns=1).classes("w-full gap-3"):
+                    selects = {
+                        "parent_selection_operator": ui.select(
+                            list(services.operator_choices("parent_selection")),
+                            label="Parent selection",
+                            value=state.operators.parent_selection_operator,
+                            on_change=lambda event: update_select(
+                                "parent_selection_operator",
+                                str(event.value or ""),
+                            ),
+                        ).classes(f"{INPUT_CLASS} w-full"),
+                        "env_selection_operator": ui.select(
+                            list(services.operator_choices("env_selection")),
+                            label="Environment selection",
+                            value=state.operators.env_selection_operator,
+                            on_change=lambda event: update_select(
+                                "env_selection_operator",
+                                str(event.value or ""),
+                            ),
+                        ).classes(f"{INPUT_CLASS} w-full"),
+                    }
+
+            with ui.column().classes("w-1/2 gap-3"):
+                ui.label("Crossover / Mutation").classes(
+                    "text-xs uppercase tracking-widest text-[#b08d57]"
+                )
+
+                with ui.grid(columns=1).classes("w-full gap-3"):
+                    selects.update(
+                        {
+                            "crossover_operator": ui.select(
+                                list(services.operator_choices("crossover")),
+                                label="Crossover",
+                                value=state.operators.crossover_operator,
+                                on_change=lambda event: update_select(
+                                    "crossover_operator",
+                                    str(event.value or ""),
+                                ),
+                            ).classes(f"{INPUT_CLASS} w-full"),
+                            "mutation_operator": ui.select(
+                                list(services.operator_choices("mutation")),
+                                label="Mutation",
+                                value=state.operators.mutation_operator,
+                                on_change=lambda event: update_select(
+                                    "mutation_operator",
+                                    str(event.value or ""),
+                                ),
+                            ).classes(f"{INPUT_CLASS} w-full"),
+                        }
+                    )
+
+                with ui.column().classes("gap-2 pt-1") as repair_row:
+                    ui.checkbox(
+                        "Crossover repair",
+                        value=state.operators.crossover_repair_enabled,
+                        on_change=lambda event: update_flag(
+                            "crossover_repair_enabled",
+                            bool(event.value),
+                        ),
+                    )
+
+                ui.checkbox(
+                    "Enable reflection operator",
+                    value=state.operators.enable_reflection_operator,
+                    on_change=lambda event: update_flag(
+                        "enable_reflection_operator",
+                        bool(event.value),
+                    ),
+                )
+
+        ui.separator().classes("opacity-20")
+
+        ui.label("Reproduction weights").classes(
+            "text-xs uppercase tracking-widest text-[#b08d57]"
         )
 
-        ui.label("Reproduction operator weights").classes(SECTION_HEADER_CLASS)
-        with ui.grid(columns=3).classes(f"{GRID_CLASS} gap-3"):
+        with ui.grid(columns=3).classes("w-full gap-3"):
             reproduction_weight_inputs = {}
             for key in ("crossover", "mutation", "reflection"):
                 reproduction_weight_inputs[key] = ui.input(
                     key,
                     value=state.operators.reproduction_weights.get(key, "0.0"),
-                    on_change=lambda event, item=key: update_reproduction_weight(item, str(event.value or "0")),
-                ).classes(f"{INPUT_CLASS} w-44")
+                    on_change=lambda event, item=key: update_reproduction_weight(
+                        item,
+                        str(event.value or "0"),
+                    ),
+                ).classes(f"{INPUT_CLASS} w-full")
 
-        ui.label("Mutation mix weights").classes(SECTION_HEADER_CLASS)
-        with ui.grid(columns=4).classes(f"{GRID_CLASS} gap-3"):
+        ui.label("Mutation mix weights").classes(
+            "text-xs uppercase tracking-widest text-[#b08d57]"
+        )
+
+        with ui.grid(columns=4).classes("w-full gap-3"):
             mutation_weight_inputs = {}
             for key in services.operator_choices("mutation"):
                 if key == "mix":
@@ -179,8 +281,11 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                 mutation_weight_inputs[key] = ui.input(
                     key,
                     value=state.operators.mutation_weights[key],
-                    on_change=lambda event, item=key: update_mutation_weight(item, str(event.value or "0")),
-                ).classes(f"{INPUT_CLASS} w-56")
+                    on_change=lambda event, item=key: update_mutation_weight(
+                        item,
+                        str(event.value or "0"),
+                    ),
+                ).classes(f"{INPUT_CLASS} w-full")
 
     controls["refresh"] = refresh
     refresh()
