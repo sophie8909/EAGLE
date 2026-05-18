@@ -183,7 +183,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
                 with ui.column().classes("w-[60%] gap-3"):
                     with ui.tabs().classes(f"{CARD_CLASS} w-full") as experiment_tabs:
                         components_tab = ui.tab("Components").classes(TAB_CLASS)
-                        operators_tab = ui.tab("Operators").classes(TAB_CLASS)
+                        operators_tab = ui.tab("Algorithm").classes(TAB_CLASS)
                         objectives_tab = ui.tab("Objectives").classes(TAB_CLASS)
                     with ui.tab_panels(experiment_tabs, value=components_tab).classes(f"{PAGE_CLASS} w-full"):
                         with ui.tab_panel(components_tab):

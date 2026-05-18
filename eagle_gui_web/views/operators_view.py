@@ -17,6 +17,10 @@ def build_operators_view(state: Any) -> dict[str, Any]:
 
     def refresh() -> None:
         services.sync_algorithm_operator_defaults(state)
+        algorithm_select.value = state.config.algorithm
+        algorithm_select.update()
+        evaluator_select.value = state.config.evaluator
+        evaluator_select.update()
         for name, control in selects.items():
             control.value = getattr(state.operators, name)
             control.update()
@@ -26,6 +30,16 @@ def build_operators_view(state: Any) -> dict[str, Any]:
     def update_select(name: str, value: str) -> None:
         setattr(state.operators, name, value)
         refresh()
+        refresh_config_summary(state)
+
+    def update_algorithm(value: str) -> None:
+        state.config.algorithm = value
+        services.sync_algorithm_operator_defaults(state)
+        refresh()
+        refresh_config_summary(state)
+
+    def update_evaluator(value: str) -> None:
+        state.config.evaluator = value
         refresh_config_summary(state)
 
     def update_flag(name: str, value: bool) -> None:
@@ -41,7 +55,21 @@ def build_operators_view(state: Any) -> dict[str, Any]:
         refresh_config_summary(state)
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-4"):
-        ui.label("Operators").classes(SECTION_HEADER_CLASS)
+        ui.label("Algorithm").classes(SECTION_HEADER_CLASS)
+        with ui.grid(columns=2).classes(f"{GRID_CLASS} gap-3"):
+            algorithm_select = ui.select(
+                list(services.ALGORITHM_CHOICES),
+                label="Algorithm",
+                value=state.config.algorithm,
+                on_change=lambda event: update_algorithm(str(event.value or "nsga2")),
+            ).classes(f"{INPUT_CLASS} w-64")
+            evaluator_select = ui.select(
+                list(services.EVALUATOR_CHOICES),
+                label="Eval mode",
+                value=state.config.evaluator,
+                on_change=lambda event: update_evaluator(str(event.value or "gameplay")),
+            ).classes(f"{INPUT_CLASS} w-64")
+
         with ui.grid(columns=4).classes(f"{GRID_CLASS} gap-3"):
             selects = {
                 "parent_selection_operator": ui.select(

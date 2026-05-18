@@ -174,7 +174,7 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
             "config_path": _summary_row("Config path"),
             "component_path": _summary_row("Component path"),
         }
-        ui.label("Operator Settings").classes(SECTION_HEADER_CLASS)
+        ui.label("Algorithm Settings").classes(SECTION_HEADER_CLASS)
         rows.update(
             {
                 "algorithm": _summary_row("Algorithm"),
