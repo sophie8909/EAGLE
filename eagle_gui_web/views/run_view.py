@@ -37,7 +37,7 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         ui.notify(message, type="positive" if success else "warning")
         await asyncio.sleep(0.2)
         await refresh_status()
-        await refresh_runs(select_latest=True)
+        await refresh_runs()
         await refresh_log()
 
     async def stop() -> None:
@@ -45,21 +45,20 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         ui.notify(message)
         await refresh_status()
 
-    async def refresh_runs(select_latest: bool = False) -> None:
+    async def refresh_runs() -> None:
         runs = await asyncio.to_thread(services.run_choices)
-        run_select.options = runs
+        run_select.options = [""] + runs
 
-        if select_latest and runs:
-            state.run.current_run_dir = Path(runs[0])
-            run_select.value = runs[0]
-        elif state.run.current_run_dir is None and runs:
-            state.run.current_run_dir = Path(runs[0])
-            run_select.value = runs[0]
-        elif state.run.current_run_dir is not None and str(state.run.current_run_dir) not in runs:
-            state.run.current_run_dir = Path(runs[0]) if runs else None
-            run_select.value = str(state.run.current_run_dir) if state.run.current_run_dir else None
+        if state.run.current_run_dir is None:
+            run_select.value = ""
+        elif str(state.run.current_run_dir) in runs:
+            run_select.value = str(state.run.current_run_dir)
+        else:
+            state.run.current_run_dir = None
+            run_select.value = ""
 
         run_select.update()
+        refresh_start_button()
 
     async def refresh_status() -> None:
         state.run.status_text = await asyncio.to_thread(services.process_status_text)
@@ -72,21 +71,29 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         log_textarea.value = state.run.log_text
         log_textarea.update()
 
+    def refresh_start_button() -> None:
+        """Update the start button label based on whether a run is selected."""
+        if state.run.current_run_dir is None:
+            start_button.set_text("Start experiment")
+        else:
+            start_button.set_text("Resume experiment")
+
     def on_run_changed(event: Any) -> None:
         state.run.current_run_dir = Path(str(event.value)) if event.value else None
-
+        refresh_start_button()
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Run Control").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
-            ui.button("Start experiment", on_click=safe_click(start, label="Start experiment")).classes(
-                button_class(success=True)
-            )
+            start_button = ui.button(
+                "Start experiment",
+                on_click=safe_click(start, label="Start experiment"),
+            ).classes(button_class(success=True))
             ui.button("Stop Experiment", on_click=safe_click(stop, label="Stop Experiment")).classes(
                 button_class(danger=True)
             )
             ui.button(
                 "Refresh runs",
-                on_click=safe_click(lambda: refresh_runs(select_latest=True), label="Refresh runs"),
+                on_click=safe_click(refresh_runs, label="Refresh runs"),
             ).classes(BUTTON_CLASS)
             ui.button("Refresh log", on_click=safe_click(refresh_log, label="Refresh log")).classes(BUTTON_CLASS)
             status_badge = ui.badge(state.run.status_text).classes(BADGE_CLASS)
