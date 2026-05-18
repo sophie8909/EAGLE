@@ -7,141 +7,148 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
-from eagle_gui_web.theme import BUTTON_CLASS, CARD_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS, TABLE_CLASS
-from eagle_gui_web.ui_actions import safe_click
+from eagle_gui_web.theme import CARD_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS
 from eagle_gui_web.views.config_view import refresh_config_summary
 
 
-OBJECTIVE_MODE_OPTIONS = ("single", "multi", "mix")
+OBJECTIVE_MODE_OPTIONS = ("single", "multi")
 
 
 def build_objectives_view(state: Any) -> dict[str, Any]:
     """Build the objective registry and selection view."""
     controls: dict[str, Any] = {}
+    objective_controls: dict[str, dict[str, Any]] = {}
     initial_choices = list(services.objective_choices(state))
-    if initial_choices and state.objectives.single_objective not in initial_choices:
-        state.objectives.single_objective = initial_choices[0]
+    _ensure_valid_objective_state(state, initial_choices)
 
     def refresh() -> None:
-        _ensure_valid_mode(state)
         choices = list(services.objective_choices(state))
+        _ensure_valid_objective_state(state, choices)
+        rows = {row["key"]: row for row in services.objective_rows(state)}
+
+        mode_select.options = list(OBJECTIVE_MODE_OPTIONS)
+        mode_select.value = state.objectives.mode
+        mode_select.update()
+
+        single_panel.visible = state.objectives.mode == "single"
+        multi_panel.visible = state.objectives.mode == "multi"
+
         single_select.options = choices
-        if state.objectives.single_objective not in choices and choices:
-            state.objectives.single_objective = choices[0]
         single_select.value = state.objectives.single_objective
         single_select.update()
-        mode_select.options = list(OBJECTIVE_MODE_OPTIONS)
-        mode_select.value = _mode_to_select_value(state.objectives.mode)
-        mode_select.update()
-        table.rows = services.objective_rows(state)
-        table.update()
-        update_detail()
+        selected_row = rows.get(state.objectives.single_objective, {})
+        single_direction.set_text(str(selected_row.get("direction", "")))
+        single_weight.value = state.objectives.weights.get(state.objectives.single_objective, "1.0")
+        single_weight.update()
 
-    def toggle_selected() -> None:
-        key = selected_key.value
-        if not key:
-            return
-        if key in state.objectives.selected:
-            state.objectives.selected.remove(key)
-        else:
-            state.objectives.selected.add(key)
-        refresh()
+        for key, row_controls in objective_controls.items():
+            selected = key in state.objectives.selected
+            row_controls["checkbox"].value = selected
+            row_controls["checkbox"].update()
+            row_controls["weight"].value = state.objectives.weights.get(key, "1.0")
+            if selected:
+                row_controls["weight"].enable()
+            else:
+                row_controls["weight"].disable()
+            row_controls["weight"].update()
         refresh_config_summary(state)
 
-    def update_weight() -> None:
-        key = selected_key.value
-        if key:
-            state.objectives.weights[key] = str(weight_input.value or "1.0")
+    def update_mode(value: str) -> None:
+        state.objectives.mode = value if value in OBJECTIVE_MODE_OPTIONS else "multi"
+        choices = list(services.objective_choices(state))
+        _ensure_valid_objective_state(state, choices)
         refresh()
-        refresh_config_summary(state)
 
     def update_single_objective(value: str) -> None:
-        state.objectives.single_objective = value
+        if value:
+            state.objectives.single_objective = value
+            state.objectives.weights.setdefault(value, "1.0")
+        _ensure_single_selection(state)
+        refresh()
+
+    def update_single_weight(value: str) -> None:
+        key = state.objectives.single_objective
+        if key:
+            state.objectives.weights[key] = value or "1.0"
         refresh_config_summary(state)
 
-    def update_detail() -> None:
-        key = state.objectives.single_objective if state.objectives.mode == "single" else selected_key.value
-        rows = {row["key"]: row for row in services.objective_rows(state)}
-        row = rows.get(key or "")
-        detail_label.set_text(
-            "No objective selected."
-            if not row
-            else f"{row['key']}: {row['label']}; direction={row['direction']}; eval_mode=full_game."
-        )
+    def update_multi_selected(key: str, selected: bool) -> None:
+        if selected:
+            state.objectives.selected.add(key)
+            state.objectives.weights.setdefault(key, "1.0")
+        else:
+            state.objectives.selected.discard(key)
+        refresh()
+
+    def update_multi_weight(key: str, value: str) -> None:
+        state.objectives.weights[key] = value or "1.0"
+        refresh_config_summary(state)
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Objectives").classes(SECTION_HEADER_CLASS)
-        with ui.row().classes(f"{ROW_CLASS} items-end gap-3"):
-            mode_select = ui.select(
-                list(OBJECTIVE_MODE_OPTIONS),
-                label="Mode",
-                value=_mode_to_select_value(state.objectives.mode),
-                on_change=lambda event: _set_mode(state, str(event.value or "multi"), refresh),
-            ).classes(f"{INPUT_CLASS} w-52")
+        mode_select = ui.select(
+            list(OBJECTIVE_MODE_OPTIONS),
+            label="Mode",
+            value=state.objectives.mode,
+            on_change=lambda event: update_mode(str(event.value or "multi")),
+        ).classes(f"{INPUT_CLASS} w-52")
+
+        with ui.column().classes("w-full gap-3") as single_panel:
             single_select = ui.select(
                 initial_choices,
-                label="Single objective",
+                label="Objective",
                 value=state.objectives.single_objective,
                 on_change=lambda event: update_single_objective(str(event.value or "")),
             ).classes(f"{INPUT_CLASS} w-72")
-            selected_key = ui.select([], label="Selected row").classes(f"{INPUT_CLASS} w-72")
-            weight_input = ui.input("Weight", value="1.0").classes(f"{INPUT_CLASS} w-32")
-            ui.button("Toggle selected", on_click=safe_click(toggle_selected, label="Toggle objective")).classes(BUTTON_CLASS)
-            ui.button("Set weight", on_click=safe_click(update_weight, label="Set objective weight")).classes(BUTTON_CLASS)
+            with ui.row().classes(f"{ROW_CLASS} items-end gap-3"):
+                ui.label("Direction:").classes("w-24")
+                single_direction = ui.label().classes("w-48")
+                single_weight = ui.input(
+                    "Weight",
+                    value=state.objectives.weights.get(state.objectives.single_objective, "1.0"),
+                    on_change=lambda event: update_single_weight(str(event.value or "1.0")),
+                ).classes(f"{INPUT_CLASS} w-32")
 
-        table = ui.table(
-            columns=[
-                {"name": "selected", "label": "Use", "field": "selected"},
-                {"name": "key", "label": "Objective key", "field": "key", "align": "left"},
-                {"name": "label", "label": "Label", "field": "label", "align": "left"},
-                {"name": "direction", "label": "Direction", "field": "direction"},
-                {"name": "weight", "label": "Weight", "field": "weight"},
-            ],
-            rows=[],
-            row_key="key",
-            on_select=lambda event: _on_select(event, selected_key, weight_input, state, update_detail),
-        ).classes(f"{TABLE_CLASS} w-full")
-        detail_label = ui.label(state.objectives.detail).classes("w-full")
+        with ui.column().classes("w-full gap-2") as multi_panel:
+            ui.label("Available objectives").classes(SECTION_HEADER_CLASS)
+            for row in services.objective_rows(state):
+                key = row["key"]
+                with ui.row().classes(f"{ROW_CLASS} w-full items-center gap-3"):
+                    checkbox = ui.checkbox(
+                        key,
+                        value=key in state.objectives.selected,
+                        on_change=lambda event, item=key: update_multi_selected(item, bool(event.value)),
+                    ).classes("w-72")
+                    ui.label(row["direction"]).classes("w-28")
+                    ui.label(row["label"]).classes("grow")
+                    weight = ui.input(
+                        "Weight",
+                        value=state.objectives.weights.get(key, "1.0"),
+                        on_change=lambda event, item=key: update_multi_weight(item, str(event.value or "1.0")),
+                    ).classes(f"{INPUT_CLASS} w-32")
+                    objective_controls[key] = {"checkbox": checkbox, "weight": weight}
 
     controls["refresh"] = refresh
     refresh()
     return controls
 
 
-def _set_mode(state: Any, value: str, refresh: Any) -> None:
-    state.objectives.mode = _mode_from_select_value(value)
-    refresh()
-    refresh_config_summary(state)
+def _ensure_valid_objective_state(state: Any, choices: list[str]) -> None:
+    """Keep objective mode and selected objective values inside current choices."""
+    if state.objectives.mode == "weighted_mix":
+        state.objectives.mode = "multi"
+    if state.objectives.mode not in OBJECTIVE_MODE_OPTIONS:
+        state.objectives.mode = "multi"
+    if choices and state.objectives.single_objective not in choices:
+        state.objectives.single_objective = choices[0]
+    for key in choices:
+        state.objectives.weights.setdefault(key, "1.0")
+    state.objectives.selected.intersection_update(choices)
+    if state.objectives.mode == "single":
+        _ensure_single_selection(state)
 
 
-def _ensure_valid_mode(state: Any) -> None:
-    state.objectives.mode = _mode_from_select_value(_mode_to_select_value(state.objectives.mode))
-
-
-def _mode_to_select_value(value: str) -> str:
-    if value == "weighted_mix":
-        return "mix"
-    if value in OBJECTIVE_MODE_OPTIONS:
-        return value
-    return "multi"
-
-
-def _mode_from_select_value(value: str) -> str:
-    if value == "mix":
-        return "weighted_mix"
-    if value in {"single", "multi"}:
-        return value
-    return "multi"
-
-
-def _on_select(event: Any, selected_key: Any, weight_input: Any, state: Any, update_detail: Any) -> None:
-    rows = event.selection or []
-    if not rows:
-        return
-    key = str(rows[0].get("key", ""))
-    selected_key.options = [key]
-    selected_key.value = key
-    selected_key.update()
-    weight_input.value = state.objectives.weights.get(key, "1.0")
-    weight_input.update()
-    update_detail()
+def _ensure_single_selection(state: Any) -> None:
+    """Store the single objective as the only enabled objective."""
+    if state.objectives.single_objective:
+        state.objectives.selected = {state.objectives.single_objective}

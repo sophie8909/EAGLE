@@ -248,11 +248,15 @@ def apply_objective_config(state: Any, objective_config: Any) -> None:
     config = dict(objective_config or {})
     objectives = state.objectives
     mode = str(config.get("mode", objectives.mode)).strip().lower()
-    if mode in {"single", "weighted_mix", "multi"}:
+    if mode in {"single", "multi"}:
         objectives.mode = mode
+    elif mode == "weighted_mix":
+        objectives.mode = "multi"
     objective = normalize_objective_key(str(config.get("objective", objectives.single_objective)))
     if objective:
         objectives.single_objective = objective
+    if objectives.mode == "single" and objective:
+        objectives.selected = {objective}
     weights = dict(config.get("weights") or {})
     if weights:
         objectives.weights = {normalize_objective_key(str(key)): str(value) for key, value in weights.items()}
@@ -496,23 +500,23 @@ def build_objective_config(state: Any) -> dict[str, Any]:
     """Build objective_config for GA and multi-objective algorithms."""
     choices = set(objective_choices(state))
     objectives = state.objectives
+    if objectives.mode == "single":
+        objective = objectives.single_objective
+        if objective not in choices:
+            raise ValueError(f"Objective {objective!r} is not available.")
+        return {"mode": "single", "objective": objective}
+    selected = [key for key in objective_choices(state) if key in objectives.selected]
     if state.config.algorithm in GA_ALGORITHMS:
-        if objectives.mode == "single":
-            objective = objectives.single_objective
-            if objective not in choices:
-                raise ValueError(f"Objective {objective!r} is not available.")
-            return {"mode": "single", "objective": objective}
         weights = {
             key: parse_float(value, f"weight for {key}")
             for key, value in objectives.weights.items()
-            if key in choices and key in objectives.selected
+            if key in choices and key in selected
         }
         weights = {key: value for key, value in weights.items() if value > 0}
         if not weights:
             raise ValueError("weighted_mix requires at least one positive weight.")
         total = sum(weights.values())
         return {"mode": "weighted_mix", "weights": {key: value / total for key, value in weights.items()}}
-    selected = [key for key in objective_choices(state) if key in objectives.selected]
     if len(selected) < 2:
         raise ValueError("multi mode requires at least two objectives.")
     return {"mode": "multi", "objectives": selected}
@@ -536,10 +540,6 @@ def sync_algorithm_operator_defaults(state: Any) -> None:
     )
     state.operators.crossover_operator = ensure_operator_choice(state.operators.crossover_operator, "crossover", "uniform")
     state.operators.mutation_operator = ensure_operator_choice(state.operators.mutation_operator, "mutation", "mix")
-    if algorithm not in GA_ALGORITHMS:
-        state.objectives.mode = "multi"
-    elif state.objectives.mode == "multi":
-        state.objectives.mode = "single"
 
 
 def operator_choices(operator_type: str) -> tuple[str, ...]:
