@@ -35,6 +35,9 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
             ui.notify(str(exc), type="negative")
             return
         ui.notify(message, type="positive" if success else "warning")
+        await asyncio.sleep(0.2)
+        await refresh_status()
+        await refresh_runs(select_latest=True)
         await refresh_log()
 
     async def stop() -> None:
@@ -42,15 +45,20 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         ui.notify(message)
         await refresh_status()
 
-    async def refresh_runs() -> None:
+    async def refresh_runs(select_latest: bool = False) -> None:
         runs = await asyncio.to_thread(services.run_choices)
         run_select.options = runs
-        if state.run.current_run_dir is None and runs:
+
+        if select_latest and runs:
+            state.run.current_run_dir = Path(runs[0])
+            run_select.value = runs[0]
+        elif state.run.current_run_dir is None and runs:
             state.run.current_run_dir = Path(runs[0])
             run_select.value = runs[0]
         elif state.run.current_run_dir is not None and str(state.run.current_run_dir) not in runs:
             state.run.current_run_dir = Path(runs[0]) if runs else None
             run_select.value = str(state.run.current_run_dir) if state.run.current_run_dir else None
+
         run_select.update()
 
     async def refresh_status() -> None:
@@ -76,7 +84,10 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
             ui.button("Stop Experiment", on_click=safe_click(stop, label="Stop Experiment")).classes(
                 button_class(danger=True)
             )
-            ui.button("Refresh runs", on_click=safe_click(refresh_runs, label="Refresh runs")).classes(BUTTON_CLASS)
+            ui.button(
+                "Refresh runs",
+                on_click=safe_click(lambda: refresh_runs(select_latest=True), label="Refresh runs"),
+            ).classes(BUTTON_CLASS)
             ui.button("Refresh log", on_click=safe_click(refresh_log, label="Refresh log")).classes(BUTTON_CLASS)
             status_badge = ui.badge(state.run.status_text).classes(BADGE_CLASS)
         with ui.row().classes(f"{ROW_CLASS} gap-6"):
