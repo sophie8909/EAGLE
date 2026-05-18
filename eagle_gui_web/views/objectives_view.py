@@ -12,6 +12,9 @@ from eagle_gui_web.ui_actions import safe_click
 from eagle_gui_web.views.config_view import refresh_config_summary
 
 
+OBJECTIVE_MODE_OPTIONS = ("single", "multi", "mix")
+
+
 def build_objectives_view(state: Any) -> dict[str, Any]:
     """Build the objective registry and selection view."""
     controls: dict[str, Any] = {}
@@ -20,14 +23,15 @@ def build_objectives_view(state: Any) -> dict[str, Any]:
         state.objectives.single_objective = initial_choices[0]
 
     def refresh() -> None:
-        services.sync_algorithm_operator_defaults(state)
+        _ensure_valid_mode(state)
         choices = list(services.objective_choices(state))
         single_select.options = choices
         if state.objectives.single_objective not in choices and choices:
             state.objectives.single_objective = choices[0]
         single_select.value = state.objectives.single_objective
         single_select.update()
-        mode_select.value = state.objectives.mode
+        mode_select.options = list(OBJECTIVE_MODE_OPTIONS)
+        mode_select.value = _mode_to_select_value(state.objectives.mode)
         mode_select.update()
         table.rows = services.objective_rows(state)
         table.update()
@@ -69,9 +73,9 @@ def build_objectives_view(state: Any) -> dict[str, Any]:
         ui.label("Objectives").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-end gap-3"):
             mode_select = ui.select(
-                ["single", "weighted_mix", "multi"],
+                list(OBJECTIVE_MODE_OPTIONS),
                 label="Mode",
-                value=state.objectives.mode,
+                value=_mode_to_select_value(state.objectives.mode),
                 on_change=lambda event: _set_mode(state, str(event.value or "multi"), refresh),
             ).classes(f"{INPUT_CLASS} w-52")
             single_select = ui.select(
@@ -105,12 +109,29 @@ def build_objectives_view(state: Any) -> dict[str, Any]:
 
 
 def _set_mode(state: Any, value: str, refresh: Any) -> None:
-    if state.config.algorithm not in services.GA_ALGORITHMS:
-        state.objectives.mode = "multi"
-    else:
-        state.objectives.mode = value
+    state.objectives.mode = _mode_from_select_value(value)
     refresh()
     refresh_config_summary(state)
+
+
+def _ensure_valid_mode(state: Any) -> None:
+    state.objectives.mode = _mode_from_select_value(_mode_to_select_value(state.objectives.mode))
+
+
+def _mode_to_select_value(value: str) -> str:
+    if value == "weighted_mix":
+        return "mix"
+    if value in OBJECTIVE_MODE_OPTIONS:
+        return value
+    return "multi"
+
+
+def _mode_from_select_value(value: str) -> str:
+    if value == "mix":
+        return "weighted_mix"
+    if value in {"single", "multi"}:
+        return value
+    return "multi"
 
 
 def _on_select(event: Any, selected_key: Any, weight_input: Any, state: Any, update_detail: Any) -> None:
