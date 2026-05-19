@@ -1,4 +1,4 @@
-"""Best-effort per-generation JSON logging for LLM backend calls."""
+"""Best-effort per-generation JSONL logging for LLM backend calls."""
 
 from __future__ import annotations
 
@@ -34,20 +34,22 @@ def record_llm_call(
     raw_response_body: str = "",
     parsed_response: str = "",
     final_response: str = "",
+    fallback_response: str = "",
     error: str | None = None,
 ) -> None:
-    """Append one LLM call to the generation JSON file without affecting evaluation."""
+    """Append one LLM call to the generation JSONL file without affecting evaluation."""
     if log_dir is None:
         return
     generation_value = "unknown" if generation is None or str(generation).strip() == "" else generation
-    path = Path(log_dir) / "llm_calls" / f"generation_{_safe_generation_name(generation_value)}.json"
+    path = Path(log_dir) / "llm_calls" / f"generation_{_safe_generation_name(generation_value)}.jsonl"
     input_value = "" if input_text is None else str(input_text)
     try:
-        records: list[dict[str, Any]] = []
+        call_index_value = call_index
         if path.exists():
-            existing = json.loads(path.read_text(encoding="utf-8"))
-            records = list(existing.get("records") or [])
-        resolved_call_index = len(records) + 1 if call_index is None else int(call_index)
+            existing_lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            if call_index_value is None:
+                call_index_value = sum(1 for line in existing_lines if line.strip()) + 1
+        resolved_call_index = _resolve_call_index(call_index_value)
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "generation": generation_value,
@@ -64,13 +66,22 @@ def record_llm_call(
             "raw_response_body": "" if raw_response_body is None else str(raw_response_body),
             "parsed_response": "" if parsed_response is None else str(parsed_response),
             "final_response": "" if final_response is None else str(final_response),
+            "fallback_response": "" if fallback_response is None else str(fallback_response),
             "error": None if error is None else str(error),
         }
-        records.append(record)
-        payload = {"generation": generation_value, "records": records}
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = path.with_name(f"{path.name}.tmp")
-        tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp_path.replace(path)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False, default=str))
+            handle.write("\n")
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         return
+
+
+def _resolve_call_index(call_index: int | str | None) -> int:
+    """Return a stable integer call index for one trace record."""
+    if call_index is None or str(call_index).strip() == "":
+        return 1
+    try:
+        return int(call_index)
+    except (TypeError, ValueError):
+        return 1

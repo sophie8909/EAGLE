@@ -114,14 +114,14 @@ class LLM:
             debug_values["error"] = exc
             if debug_record is not None:
                 debug_record.update(debug_values)
-            cls._record_generation_llm_call(call_log_dir, debug_values, final_response="", error=repr(exc))
+            cls._record_generation_llm_call(call_log_dir, debug_values, final_response="", fallback_response="", error=repr(exc))
             append_llm_debug_record(debug_log_dir, **debug_values)
             raise
         except json.JSONDecodeError as exc:
             debug_values["error"] = exc
             if debug_record is not None:
                 debug_record.update(debug_values)
-            cls._record_generation_llm_call(call_log_dir, debug_values, final_response="", error=repr(exc))
+            cls._record_generation_llm_call(call_log_dir, debug_values, final_response="", fallback_response="", error=repr(exc))
             append_llm_debug_record(debug_log_dir, **debug_values)
             raise
         choices = data.get("choices") or []
@@ -133,6 +133,7 @@ class LLM:
                 call_log_dir,
                 debug_values,
                 final_response="",
+                fallback_response="",
                 error=repr(ValueError(debug_values["error"])),
             )
             append_llm_debug_record(debug_log_dir, **debug_values)
@@ -147,6 +148,7 @@ class LLM:
                 call_log_dir,
                 debug_values,
                 final_response="",
+                fallback_response="",
                 error=repr(ValueError(debug_values["error"])),
             )
             append_llm_debug_record(debug_log_dir, **debug_values)
@@ -155,7 +157,13 @@ class LLM:
         debug_values["parsed_response"] = parsed_response
         if debug_record is not None:
             debug_record.update(debug_values)
-        cls._record_generation_llm_call(call_log_dir, debug_values, final_response=parsed_response, error=None)
+        cls._record_generation_llm_call(
+            call_log_dir,
+            debug_values,
+            final_response=parsed_response,
+            fallback_response=str(debug_values.get("fallback_response", "") or ""),
+            error=None,
+        )
         if not defer_debug_write:
             append_llm_debug_record(debug_log_dir, **debug_values)
         return parsed_response
@@ -166,6 +174,7 @@ class LLM:
         debug_values: dict[str, Any],
         *,
         final_response: str,
+        fallback_response: str,
         error: str | None,
     ) -> None:
         """Mirror one backend call into the per-generation JSON log."""
@@ -188,6 +197,7 @@ class LLM:
             raw_response_body=str(debug_values.get("raw_response_body", "") or ""),
             parsed_response=str(debug_values.get("parsed_response", "") or ""),
             final_response=final_response,
+            fallback_response=fallback_response,
             error=error,
         )
 
