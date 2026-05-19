@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -15,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from eagle.analysis.evolution_result_analysis import analyze_evolution_run
 from eagle.config import normalize_algorithm_name
 from eagle.envs.microrts.runner import save_prompt as save_microrts_prompt
 from eagle.envs.microrts.runner import set_config_property
@@ -911,6 +913,28 @@ def load_prompt_records(run_dir: Path | None) -> dict[str, dict[str, Any]]:
         return analysis_service.load_prompts(run_dir)
 
 
+def generate_mo_analysis_artifacts(run_dir: Path | None) -> dict[str, Any]:
+    """Generate the existing MO Pareto plots and return their artifact paths."""
+    if run_dir is None:
+        return {"animation_path": "", "generation_choices": [], "static_plot_paths": {}}
+    analysis_result = analyze_evolution_run(Path(run_dir))
+    generation_choices: set[str] = set()
+    static_plot_paths: dict[str, str] = {}
+    for path_text in analysis_result.get("generation_scatter_figures", []) or []:
+        path = Path(str(path_text))
+        generation = _extract_mo_generation(path)
+        if generation is None:
+            continue
+        generation_text = str(generation)
+        generation_choices.add(generation_text)
+        static_plot_paths[generation_text] = str(path)
+    return {
+        "animation_path": str(analysis_result.get("generation_animation_gif") or ""),
+        "generation_choices": _sort_trace_values(generation_choices),
+        "static_plot_paths": static_plot_paths,
+    }
+
+
 def load_llm_trace_records(run_dir: Path | None) -> list[dict[str, Any]]:
     """Load normalized runtime LLM debug records from a run directory."""
     if run_dir is None:
@@ -1222,6 +1246,14 @@ def _extract_ollama_response(raw_response_body: str) -> str:
     if isinstance(payload, dict):
         return _trace_text(payload.get("response"))
     return ""
+
+
+def _extract_mo_generation(path: Path) -> int | None:
+    """Extract the generation number from one Pareto scatter plot path."""
+    match = re.search(r"generation_(\d+)_fitness_scatter\.png$", path.name)
+    if match is None:
+        return None
+    return int(match.group(1))
 
 
 def _extract_generation_name(path: Path) -> str:

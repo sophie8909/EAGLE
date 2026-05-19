@@ -128,6 +128,12 @@ class AnalysisState:
     timing_summary: str = "No run selected"
     timing_body: str = ""
     timing_rows: list[dict[str, Any]] = field(default_factory=list)
+    mo_visible: bool = False
+    mo_summary: str = "No multi-objective data found."
+    mo_animation_path: str = ""
+    mo_generation_choices: list[str] = field(default_factory=list)
+    mo_selected_generation: str = ""
+    mo_static_plot_paths: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
