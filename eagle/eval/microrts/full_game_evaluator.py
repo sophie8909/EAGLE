@@ -253,6 +253,7 @@ class FullGameEvaluator:
             "surrogate": surrogate,
             "opponents": resolved_opponents,
             "scores": per_opponent_scores,
+            "prompt_token_count": count_prompt_tokens(prompt)[0],
         })
         individual.rendered_prompt = prompt
         individual.evaluation_mode = "surrogate"

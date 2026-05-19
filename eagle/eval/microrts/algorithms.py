@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+from typing import Any
 
 from eagle.config import clone_config
 from eagle.core.registry import ALGORITHMS, EVALUATORS
@@ -11,6 +12,7 @@ from eagle.objectives.aggregation import aggregate_fitness
 from eagle.evolution.component.ga import GA
 from eagle.evolution.component.nsga2 import NSGA2
 from eagle.reflection.microrts.round_reflection import RoundReflection
+from eagle.utils.token_count import count_prompt_tokens
 
 from .full_game_evaluator import FullGameEvaluator
 from .round_evaluator import Evaluator as RoundEvaluator
@@ -18,6 +20,27 @@ from .round_evaluator import Evaluator as RoundEvaluator
 
 EVALUATORS.register("round", RoundEvaluator)
 EVALUATORS.register("gameplay", FullGameEvaluator)
+
+
+def add_prompt_metrics(
+    eval_result: dict[str, Any],
+    individual: Any,
+    config: Any,
+    *,
+    rendered_prompt: str | None = None,
+) -> dict[str, Any]:
+    """Add static rendered-prompt metrics required by objective aggregation."""
+    if "prompt_token_count" in eval_result:
+        return eval_result
+    prompt = str(eval_result.get("prompt") or rendered_prompt or getattr(individual, "rendered_prompt", "") or "")
+    if not prompt:
+        raise ValueError(
+            "Cannot compute prompt_token_count because the rendered static prompt is missing "
+            f"for individual {getattr(individual, 'id', None)}."
+        )
+    eval_result.setdefault("prompt", prompt)
+    eval_result["prompt_token_count"] = count_prompt_tokens(prompt)[0]
+    return eval_result
 
 
 @ALGORITHMS.register("ga")
@@ -94,6 +117,18 @@ class MicroRTSNSGA2Surrogate(NSGA2):
             individual,
             generation=generation,
             opponents=self.opponent_list or None,
+        )
+        add_prompt_metrics(
+            eval_result,
+            individual,
+            self.config,
+            rendered_prompt=self._render_prompt_cache_key(individual),
+        )
+        print(
+            "[DEBUG] surrogate eval_result metrics before aggregation "
+            f"individual={getattr(individual, 'id', None)} "
+            f"prompt_token_count={eval_result.get('prompt_token_count')}",
+            flush=True,
         )
         fitness = aggregate_fitness(eval_result, self.config)
         individual.fitness = fitness
@@ -185,6 +220,18 @@ class MicroRTSGASurrogate(GA):
             individual,
             generation=generation,
             opponents=self.opponent_list or None,
+        )
+        add_prompt_metrics(
+            eval_result,
+            individual,
+            self.config,
+            rendered_prompt=self._render_prompt_cache_key(individual),
+        )
+        print(
+            "[DEBUG] surrogate eval_result metrics before aggregation "
+            f"individual={getattr(individual, 'id', None)} "
+            f"prompt_token_count={eval_result.get('prompt_token_count')}",
+            flush=True,
         )
         fitness = aggregate_fitness(eval_result, self.config)
         individual.fitness = fitness
