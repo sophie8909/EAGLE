@@ -252,14 +252,12 @@ def launch_java_match(
     )
     started = time.perf_counter()
     eagle_run_dir = llm_debug_dir
-    env = {
-        **os.environ.copy(),
-        "EAGLE_FORCE_EXIT_ON_GAME_OVER": "1",
-        "EAGLE_RUN_DIR": str(eagle_run_dir) if eagle_run_dir is not None else "",
-        "EAGLE_GENERATION": "" if generation is None else str(generation),
-        "EAGLE_INDIVIDUAL_ID": "" if individual_id is None else str(individual_id),
-        "EAGLE_TRACE_MODE": "gameplay",
-    }
+    env = os.environ.copy()
+    env["EAGLE_FORCE_EXIT_ON_GAME_OVER"] = "1"
+    env["EAGLE_RUN_DIR"] = str(eagle_run_dir) if eagle_run_dir is not None else ""
+    env["EAGLE_GENERATION"] = "" if generation is None else str(generation)
+    env["EAGLE_INDIVIDUAL_ID"] = "" if individual_id is None else str(individual_id)
+    env["EAGLE_TRACE_MODE"] = "gameplay"
     with log_path.open("w", encoding="utf-8") as stream:
         process = subprocess.Popen(
             command,
