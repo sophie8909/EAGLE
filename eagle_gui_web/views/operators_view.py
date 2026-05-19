@@ -30,29 +30,43 @@ def _field_card(title: str) -> Any:
     with ui.card().classes(f"{card_classes} w-full"):
         ui.label(title).classes(SECTION_HEADER_CLASS)
         return ui.column().classes("w-full gap-3")
+
+
+def _options_with_value(options: Any, value: Any) -> list[Any]:
+    """Return select options with the current value included."""
+    result = list(options or [])
+    if value not in (None, "") and value not in result:
+        result.insert(0, value)
+    return result
+
+
+def _set_select_options(control: Any, options: Any, value: Any) -> None:
+    """Update select options before assigning its value."""
+    safe_options = _options_with_value(options, value)
+    control.options = safe_options
+    control.value = value if value in safe_options else ""
     
 def build_operators_view(state: Any) -> dict[str, Any]:
     """Build the operator controls view."""
     controls: dict[str, Any] = {}
 
-    def base_config_options() -> list[str]:
-        options = list(services.config_choices())
-        current = str(state.config.base_config_path or "")
-        if current and current not in options:
-            options.insert(0, current)
-        if "" not in options:
-            options.insert(0, "")
+    def config_path_options() -> list[str]:
+        options = ["", *services.config_choices()]
+        for path in (state.config.base_config_path, state.config.generated_config_path):
+            value = str(path or "")
+            if value and value not in options:
+                options.insert(1, value)
         return options
 
     async def load_base_config() -> None:
-        selected_path = str(base_config_select.value or "")
-        if not selected_path:
+        if not state.config.base_config_path:
             ui.notify("Select a base config first.", type="warning")
             return
         try:
-            payload = await asyncio.to_thread(services.load_config_payload, Path(selected_path))
-            services.apply_config_payload(state, payload, Path(selected_path))
-            ui.notify(f"Loaded {selected_path}", type="positive")
+            config_path = Path(state.config.base_config_path)
+            payload = await asyncio.to_thread(services.load_config_payload, config_path)
+            services.apply_config_payload(state, payload, config_path)
+            ui.notify(f"Loaded {config_path}", type="positive")
         except (OSError, ValueError) as exc:
             ui.notify(str(exc), type="negative")
             return
@@ -97,21 +111,28 @@ def build_operators_view(state: Any) -> dict[str, Any]:
 
     def refresh() -> None:
         services.sync_algorithm_operator_defaults(state)
-        base_config_select.options = base_config_options()
-        base_config_select.value = state.config.base_config_path or ""
+        _set_select_options(base_config_select, config_path_options(), state.config.base_config_path or "")
         base_config_select.update()
         generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
         component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
-        algorithm_select.value = state.config.algorithm
+        _set_select_options(algorithm_select, services.ALGORITHM_CHOICES, state.config.algorithm)
         algorithm_select.update()
-        evaluator_select.value = state.config.evaluator
+        _set_select_options(evaluator_select, services.EVALUATOR_CHOICES, state.config.evaluator)
         evaluator_select.update()
         surrogate_section.visible = services.is_surrogate_algorithm(state.config.algorithm)
         for name, control in config_controls.items():
-            control.value = getattr(state.config, name)
+            value = getattr(state.config, name, "")
+            if hasattr(control, "options"):
+                _set_select_options(control, getattr(control, "options", []), value)
+            else:
+                control.value = value
             control.update()
         for name, control in selects.items():
-            control.value = getattr(state.operators, name)
+            value = getattr(state.operators, name, "")
+            if hasattr(control, "options"):
+                _set_select_options(control, getattr(control, "options", []), value)
+            else:
+                control.value = value
             control.update()
         for key, control in reproduction_weight_inputs.items():
             control.value = state.operators.reproduction_weights.get(key, "0.0")
@@ -161,7 +182,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
         ui.label("Config").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
             base_config_select = create_base_config_select(
-                base_config_options(),
+                config_path_options(),
                 state.config.base_config_path or "",
             ).classes(f"{INPUT_CLASS} grow min-w-[420px]")
             ui.button("Load", on_click=safe_click(load_base_config, label="Load config")).classes(BUTTON_CLASS)
@@ -178,14 +199,14 @@ def build_operators_view(state: Any) -> dict[str, Any]:
 
         with ui.grid(columns=2).classes("w-full gap-3"):
             algorithm_select = ui.select(
-                list(services.ALGORITHM_CHOICES),
+                _options_with_value(services.ALGORITHM_CHOICES, state.config.algorithm),
                 label="Algorithm",
                 value=state.config.algorithm,
                 on_change=lambda event: update_algorithm(str(event.value or "nsga2")),
             ).classes(f"{INPUT_CLASS} w-full")
 
             evaluator_select = ui.select(
-                list(services.EVALUATOR_CHOICES),
+                _options_with_value(services.EVALUATOR_CHOICES, state.config.evaluator),
                 label="Eval mode",
                 value=state.config.evaluator,
                 on_change=lambda event: update_evaluator(str(event.value or "gameplay")),
@@ -223,7 +244,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                     on_change=lambda event: update_config("llm_call_limit", str(event.value or "")),
                 ).classes(f"{INPUT_CLASS} w-full"),
                 "gameplay_map_dir": ui.select(
-                    list(services.microrts_map_dir_choices()),
+                    _options_with_value(services.microrts_map_dir_choices(), state.config.gameplay_map_dir),
                     label="Eval map folder",
                     value=state.config.gameplay_map_dir,
                     on_change=lambda event: update_config("gameplay_map_dir", str(event.value or "8x8")),
@@ -236,7 +257,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                 config_controls.update(
                     {
                         "surrogate": ui.select(
-                            list(services.SURROGATE_CHOICES),
+                            _options_with_value(services.SURROGATE_CHOICES, state.config.surrogate),
                             label="Surrogate mode",
                             value=state.config.surrogate,
                             on_change=lambda event: update_config("surrogate", str(event.value or "round")),
@@ -273,7 +294,10 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                 with ui.grid(columns=1).classes("w-full gap-3"):
                     selects = {
                         "parent_selection_operator": ui.select(
-                            list(services.operator_choices("parent_selection")),
+                            _options_with_value(
+                                services.operator_choices("parent_selection"),
+                                state.operators.parent_selection_operator,
+                            ),
                             label="Parent selection",
                             value=state.operators.parent_selection_operator,
                             on_change=lambda event: update_select(
@@ -282,7 +306,10 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                             ),
                         ).classes(f"{INPUT_CLASS} w-full"),
                         "env_selection_operator": ui.select(
-                            list(services.operator_choices("env_selection")),
+                            _options_with_value(
+                                services.operator_choices("env_selection"),
+                                state.operators.env_selection_operator,
+                            ),
                             label="Environment selection",
                             value=state.operators.env_selection_operator,
                             on_change=lambda event: update_select(
@@ -301,7 +328,10 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                     selects.update(
                         {
                             "crossover_operator": ui.select(
-                                list(services.operator_choices("crossover")),
+                                _options_with_value(
+                                    services.operator_choices("crossover"),
+                                    state.operators.crossover_operator,
+                                ),
                                 label="Crossover",
                                 value=state.operators.crossover_operator,
                                 on_change=lambda event: update_select(
@@ -310,7 +340,10 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                                 ),
                             ).classes(f"{INPUT_CLASS} w-full"),
                             "mutation_operator": ui.select(
-                                list(services.operator_choices("mutation")),
+                                _options_with_value(
+                                    services.operator_choices("mutation"),
+                                    state.operators.mutation_operator,
+                                ),
                                 label="Mutation",
                                 value=state.operators.mutation_operator,
                                 on_change=lambda event: update_select(
