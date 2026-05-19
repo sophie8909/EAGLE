@@ -22,6 +22,7 @@ from eagle_gui_web.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
     COLORS,
+    INPUT_CLASS,
     ROW_CLASS,
     SECTION_HEADER_CLASS,
     TABLE_CLASS,
@@ -38,19 +39,21 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
     async def refresh_analysis() -> None:
         try:
             summary, body = await asyncio.to_thread(services.build_analysis, state.run.current_run_dir)
-            mo_analysis = await asyncio.to_thread(_build_mo_analysis_text, state.run.current_run_dir)
+            mo_summary = await asyncio.to_thread(_build_mo_analysis_text, state.run.current_run_dir)
             final_test_analysis = await asyncio.to_thread(_build_final_test_analysis_text, state.run.current_run_dir)
             ga_convergence = await asyncio.to_thread(_build_ga_convergence_options, state.run.current_run_dir)
+            await refresh_mo_section()
         except (OSError, ValueError) as exc:
             summary, body = "Analysis load error", str(exc)
-            mo_analysis = str(exc)
+            mo_summary = str(exc)
             final_test_analysis = str(exc)
             ga_convergence = None
+            _set_mo_hidden(str(exc))
         state.analysis.summary = summary
         state.analysis.body = body
         _render_ga_convergence(ga_chart_container, ga_convergence)
-        mo_analysis_text.value = mo_analysis
-        mo_analysis_text.update()
+        mo_summary_text.value = mo_summary
+        mo_summary_text.update()
         final_test_text.value = final_test_analysis
         final_test_text.update()
         summary_label.set_text(summary)
@@ -79,6 +82,110 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         await refresh_analysis()
         await refresh_timing()
 
+    async def refresh_mo_section(*, force_generate: bool = False) -> None:
+        run_dir = state.run.current_run_dir
+        if run_dir is None:
+            _set_mo_hidden("No run selected.")
+            return
+
+        mo_summary = await asyncio.to_thread(_build_mo_analysis_text, run_dir)
+        if mo_summary == "No multi-objective data found.":
+            _set_mo_hidden(mo_summary)
+            return
+
+        artifact_data = await asyncio.to_thread(
+            services.generate_mo_analysis_artifacts, run_dir
+        ) if force_generate else _discover_mo_artifacts(run_dir)
+
+        state.analysis.mo_visible = True
+        state.analysis.mo_summary = mo_summary
+        state.analysis.mo_animation_path = str(artifact_data.get("animation_path") or "")
+        state.analysis.mo_generation_choices = list(artifact_data.get("generation_choices") or [])
+        state.analysis.mo_static_plot_paths = dict(artifact_data.get("static_plot_paths") or {})
+        if state.analysis.mo_selected_generation not in state.analysis.mo_generation_choices:
+            state.analysis.mo_selected_generation = (
+                state.analysis.mo_generation_choices[-1] if state.analysis.mo_generation_choices else ""
+            )
+        mo_section.visible = True
+        mo_summary_text.value = state.analysis.mo_summary
+        mo_summary_text.update()
+        _refresh_mo_options()
+        _render_mo_artifacts()
+
+    def _set_mo_hidden(message: str) -> None:
+        state.analysis.mo_visible = False
+        state.analysis.mo_summary = message
+        state.analysis.mo_animation_path = ""
+        state.analysis.mo_generation_choices = []
+        state.analysis.mo_selected_generation = ""
+        state.analysis.mo_static_plot_paths = {}
+        mo_section.visible = False
+        mo_summary_text.value = message
+        mo_summary_text.update()
+        _refresh_mo_options()
+        _render_mo_artifacts()
+
+    def _refresh_mo_options() -> None:
+        generation_select.options = list(state.analysis.mo_generation_choices)
+        if state.analysis.mo_selected_generation not in state.analysis.mo_generation_choices:
+            state.analysis.mo_selected_generation = (
+                state.analysis.mo_generation_choices[-1] if state.analysis.mo_generation_choices else ""
+            )
+        generation_select.value = state.analysis.mo_selected_generation or None
+        generation_select.update()
+
+    def _render_mo_artifacts() -> None:
+        animation_container.clear()
+        static_plot_container.clear()
+
+        animation_path = state.analysis.mo_animation_path
+        if animation_path and Path(animation_path).exists():
+            with animation_container:
+                ui.label("Pareto animation").classes(SECTION_HEADER_CLASS)
+                ui.image(animation_path).classes("w-full max-w-5xl")
+        elif state.analysis.mo_visible:
+            with animation_container:
+                ui.label("Pareto animation").classes(SECTION_HEADER_CLASS)
+                ui.label("No Pareto animation generated yet.")
+
+        static_plot_path = state.analysis.mo_static_plot_paths.get(state.analysis.mo_selected_generation, "")
+        if static_plot_path and Path(static_plot_path).exists():
+            with static_plot_container:
+                ui.label(f"Generation {state.analysis.mo_selected_generation} Pareto front").classes(
+                    SECTION_HEADER_CLASS
+                )
+                ui.image(static_plot_path).classes("w-full max-w-5xl")
+        elif state.analysis.mo_visible:
+            with static_plot_container:
+                ui.label("Static Pareto front").classes(SECTION_HEADER_CLASS)
+                ui.label("No static Pareto front generated for the selected generation.")
+
+    def _discover_mo_artifacts(run_dir: Path) -> dict[str, Any]:
+        analysis_dir = run_dir / "analysis" / "evolution"
+        generation_dir = analysis_dir / "generation_fitness"
+        animation_path = generation_dir / "generation_fitness_animation.gif"
+        static_plot_paths: dict[str, str] = {}
+        generation_choices: list[str] = []
+        if generation_dir.exists():
+            for path in sorted(generation_dir.glob("generation_*_fitness_scatter.png"), key=_generation_sort_key):
+                if path.name == "generation_fitness_scatter_all.png":
+                    continue
+                match = re.search(r"generation_(\d+)_fitness_scatter\.png$", path.name)
+                if not match:
+                    continue
+                generation = match.group(1)
+                generation_choices.append(generation)
+                static_plot_paths[generation] = str(path)
+        return {
+            "animation_path": str(animation_path) if animation_path.exists() else "",
+            "generation_choices": generation_choices,
+            "static_plot_paths": static_plot_paths,
+        }
+
+    def on_mo_generation_changed(event: Any) -> None:
+        state.analysis.mo_selected_generation = str(event.value or "")
+        _render_mo_artifacts()
+
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Analysis").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
@@ -89,10 +196,24 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         )
         ga_chart_container = ui.column().classes("w-full gap-3")
 
-        ui.label("MO Analysis").classes(SECTION_HEADER_CLASS)
-        mo_analysis_text = ui.textarea(value="No multi-objective data found.").props("readonly").classes(
-            f"{TEXTAREA_CLASS} {height_class(220)} w-full"
-        )
+        with ui.column().classes("w-full gap-3") as mo_section:
+            ui.label("MO Analysis").classes(SECTION_HEADER_CLASS)
+            with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
+                ui.button(
+                    "Generate MO Analysis",
+                    on_click=safe_click(
+                        lambda: refresh_mo_section(force_generate=True),
+                        label="Generate MO Analysis",
+                    ),
+                ).classes(BUTTON_CLASS)
+                generation_select = ui.select([], label="Generation", on_change=on_mo_generation_changed).classes(
+                    f"{INPUT_CLASS} w-64"
+                )
+            mo_summary_text = ui.textarea(value=state.analysis.mo_summary).props("readonly").classes(
+                f"{TEXTAREA_CLASS} {height_class(220)} w-full"
+            )
+            animation_container = ui.column().classes("w-full gap-3")
+            static_plot_container = ui.column().classes("w-full gap-3")
 
         ui.label("Final Test").classes(SECTION_HEADER_CLASS)
         final_test_text = ui.textarea(value="No final test data found.").props("readonly").classes(
@@ -120,7 +241,12 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             f"{TEXTAREA_CLASS} {height_class(300)} w-full"
         )
 
+    mo_section.visible = False
+    _refresh_mo_options()
+    _render_mo_artifacts()
+
     controls["refresh_analysis"] = refresh_all
+    controls["refresh_mo_section"] = refresh_mo_section
     return controls
 
 
