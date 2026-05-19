@@ -45,6 +45,7 @@ services.configure_runtime_logging()
 LOGGER = logging.getLogger(__name__)
 state = AppState()
 EAGLE_IMAGE_URL = "/assets/eagle.png"
+EAGLE_FAVICON_URL = "/assets/eagle.png"
 HEARTBEAT_INTERVAL_SEC = 2.0
 HEARTBEAT_WARN_DELAY_SEC = 5.0
 
@@ -100,6 +101,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
     """Build the tabbed NiceGUI layout and return view refresh handles."""
     nicegui_app.add_static_files("/assets", services.ROOT / "assets")
     install_theme()
+    ui.add_head_html(f'<link rel="icon" type="image/png" href="{EAGLE_FAVICON_URL}">')
     ui.query(".nicegui-content").classes(PAGE_CLASS)
 
     controls: dict[str, dict[str, Any]] = {}
