@@ -449,7 +449,12 @@ class EA:
             operator = self._sample_reproduction_operator()
             if operator == "crossover":
                 parent1, parent2 = self.select_parents()
-                child = self.crossover(parent1, parent2)
+                with self._llm_call_context(
+                    generation=generation,
+                    mode="crossover",
+                    individual_id=f"{parent1.id},{parent2.id}",
+                ):
+                    child = self.crossover(parent1, parent2)
             elif operator == "mutation":
                 parent = self.select_parent()
                 print(
@@ -457,7 +462,12 @@ class EA:
                     f"id={parent.id} {parent}",
                     flush=True,
                 )
-                child = self.mutate(parent)
+                with self._llm_call_context(
+                    generation=generation,
+                    mode="mutation",
+                    individual_id=str(parent.id),
+                ):
+                    child = self.mutate(parent)
                 setattr(child, "_mutation_parent_snapshot", self._mutation_parent_snapshot(parent))
                 print(
                     f"[Generation {generation + 1}] created child from mutation: "
@@ -465,7 +475,13 @@ class EA:
                     flush=True,
                 )
             elif operator == "reflection":
-                child = self.reflect(self.select_parent())
+                parent = self.select_parent()
+                with self._llm_call_context(
+                    generation=generation,
+                    mode="reflection",
+                    individual_id=str(parent.id),
+                ):
+                    child = self.reflect(parent)
             else:
                 raise ValueError(f"Unsupported reproduction operator: {operator}")
 
@@ -478,6 +494,17 @@ class EA:
             )
 
         return offspring[:target_count]
+
+    def _llm_call_context(self, *, generation: int | None, mode: str, individual_id: str = ""):
+        """Return a metadata context for nested Python LLM backend calls."""
+        from eagle.llm import LLM
+
+        return LLM.call_context(
+            log_dir=self.current_log_dir,
+            generation="" if generation is None else generation,
+            individual_id=individual_id,
+            mode=mode,
+        )
 
     def _evaluate_offspring(self, evaluator: Any, offspring: List[Individual], generation: int) -> None:
         """Evaluate every generated child and update operator feedback."""

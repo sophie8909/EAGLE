@@ -304,6 +304,8 @@ class Evaluator:
                     base_prompt=base_prompt,
                     dynamic_prompt=dynamic_prompt,
                     raw_response=raw_response,
+                    generation=generation,
+                    individual_id=individual_id,
                 )
         else:
             legality_raw = -100.0
@@ -504,6 +506,8 @@ class Evaluator:
         base_prompt: str,
         dynamic_prompt: str,
         raw_response: str,
+        generation: int | None,
+        individual_id: str,
     ) -> float:
         judge_prompt = f"""
             You are a strict evaluator for a MicroRTS LLM agent response.
@@ -545,8 +549,8 @@ class Evaluator:
             prompt=judge_prompt,
             temperature=0.1,
             json_format=True,
-            generation="",
-            individual_id="",
+            generation=generation,
+            individual_id=individual_id,
             mode="round_alignment",
         )
         # print(f"Raw score response:\n{raw_score}\n")

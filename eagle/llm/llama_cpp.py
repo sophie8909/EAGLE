@@ -4,16 +4,20 @@ import os
 import re
 import ast
 import json
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
 import requests
 
+from eagle.utils.llm_call_logger import record_llm_call
 from eagle.utils.llm_debug import append_llm_debug_record
 
 
 DEFAULT_MODEL = os.getenv("LLAMA_CPP_MODEL", "local")
 DEFAULT_MAX_TOKENS = int(os.getenv("LLAMA_CPP_MAX_TOKENS", "2048"))
+_LLM_CALL_CONTEXT: ContextVar[dict[str, Any]] = ContextVar("llm_call_context", default={})
 
 
 def _normalize_base_url(raw_url: str | None) -> str:
@@ -31,6 +35,18 @@ DEFAULT_BASE_URL = _normalize_base_url(os.getenv("LLAMA_CPP_BASE_URL"))
 
 class LLM:
     """Local llama.cpp endpoint helpers used by the EA pipeline."""
+
+    @staticmethod
+    @contextmanager
+    def call_context(**metadata: Any):
+        """Temporarily attach run metadata to nested LLM backend calls."""
+        current = dict(_LLM_CALL_CONTEXT.get() or {})
+        current.update({key: value for key, value in metadata.items() if value is not None})
+        token = _LLM_CALL_CONTEXT.set(current)
+        try:
+            yield
+        finally:
+            _LLM_CALL_CONTEXT.reset(token)
 
     @staticmethod
     def _resolve_model(model: str | None) -> str:
@@ -59,7 +75,8 @@ class LLM:
             "max_tokens": max_tokens,
             "stream": False,
         }
-        context = dict(debug_context or {})
+        context = dict(_LLM_CALL_CONTEXT.get() or {})
+        context.update(dict(debug_context or {}))
         debug_values: dict[str, Any] = {
             "generation": context.get("generation", ""),
             "individual_id": context.get("individual_id", ""),
@@ -75,6 +92,7 @@ class LLM:
             "fallback_response": "",
             "error": None,
         }
+        call_log_dir = debug_log_dir if debug_log_dir is not None else context.get("log_dir")
         if debug_record is not None:
             debug_record.update(debug_values)
         response = None
@@ -96,12 +114,14 @@ class LLM:
             debug_values["error"] = exc
             if debug_record is not None:
                 debug_record.update(debug_values)
+            cls._record_generation_llm_call(call_log_dir, debug_values, final_response="", error=repr(exc))
             append_llm_debug_record(debug_log_dir, **debug_values)
             raise
         except json.JSONDecodeError as exc:
             debug_values["error"] = exc
             if debug_record is not None:
                 debug_record.update(debug_values)
+            cls._record_generation_llm_call(call_log_dir, debug_values, final_response="", error=repr(exc))
             append_llm_debug_record(debug_log_dir, **debug_values)
             raise
         choices = data.get("choices") or []
@@ -109,6 +129,12 @@ class LLM:
             debug_values["error"] = "llama.cpp returned no chat completion choices."
             if debug_record is not None:
                 debug_record.update(debug_values)
+            cls._record_generation_llm_call(
+                call_log_dir,
+                debug_values,
+                final_response="",
+                error=repr(ValueError(debug_values["error"])),
+            )
             append_llm_debug_record(debug_log_dir, **debug_values)
             raise ValueError("llama.cpp returned no chat completion choices.")
         message = choices[0].get("message") or {}
@@ -117,15 +143,53 @@ class LLM:
             debug_values["error"] = "llama.cpp returned an empty response."
             if debug_record is not None:
                 debug_record.update(debug_values)
+            cls._record_generation_llm_call(
+                call_log_dir,
+                debug_values,
+                final_response="",
+                error=repr(ValueError(debug_values["error"])),
+            )
             append_llm_debug_record(debug_log_dir, **debug_values)
             raise ValueError("llama.cpp returned an empty response.")
         parsed_response = str(content).strip()
         debug_values["parsed_response"] = parsed_response
         if debug_record is not None:
             debug_record.update(debug_values)
+        cls._record_generation_llm_call(call_log_dir, debug_values, final_response=parsed_response, error=None)
         if not defer_debug_write:
             append_llm_debug_record(debug_log_dir, **debug_values)
         return parsed_response
+
+    @staticmethod
+    def _record_generation_llm_call(
+        log_dir: str | Path | None,
+        debug_values: dict[str, Any],
+        *,
+        final_response: str,
+        error: str | None,
+    ) -> None:
+        """Mirror one backend call into the per-generation JSON log."""
+        call_index = debug_values.get("call_index")
+        try:
+            resolved_call_index = None if call_index in {None, ""} else int(call_index)
+        except (TypeError, ValueError):
+            resolved_call_index = None
+        record_llm_call(
+            log_dir,
+            generation=debug_values.get("generation", ""),
+            individual_id=str(debug_values.get("individual_id", "") or ""),
+            call_index=resolved_call_index,
+            mode=str(debug_values.get("mode", "") or ""),
+            opponent=str(debug_values.get("opponent", "") or ""),
+            turn=debug_values.get("turn", ""),
+            model=str(debug_values.get("model", "") or ""),
+            input_text=str(debug_values.get("prompt", "") or ""),
+            request_payload=debug_values.get("request_payload") or {},
+            raw_response_body=str(debug_values.get("raw_response_body", "") or ""),
+            parsed_response=str(debug_values.get("parsed_response", "") or ""),
+            final_response=final_response,
+            error=error,
+        )
 
     @staticmethod
     def _extract_first_json_object(raw_output: str) -> dict | None:

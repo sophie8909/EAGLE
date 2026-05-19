@@ -37,6 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -100,6 +101,7 @@ public class EAGLE extends AbstractionLayerAI {
     private int totalMovesAccepted = 0;
     private int totalMovesRejected = 0;
     private int llmCallCount = 0;
+    private int currentPromptTurn = -1;
 
     private String numShot = "One-Shot";
     private String aiName1 = "";
@@ -309,6 +311,7 @@ public class EAGLE extends AbstractionLayerAI {
         logStateSnapshot(player, gs);
         logDynamicPrompt(promptContext.dynamicPrompt);
         llmCallCount++;
+        currentPromptTurn = gs.getTime();
         System.out.println("[EAGLE] llm_call_count=" + llmCallCount + "/" + LLM_CALL_LIMIT);
         String response = prompt(promptContext.finalPrompt);
         logRawLLMResponse(response);
@@ -961,7 +964,7 @@ public class EAGLE extends AbstractionLayerAI {
         }
     }
 
-    private static void appendLlmDebugRecord(
+    private void appendLlmDebugRecord(
             String prompt,
             JsonObject requestPayload,
             String rawResponseBody,
@@ -992,6 +995,7 @@ public class EAGLE extends AbstractionLayerAI {
         record.addProperty("fallback_response", fallbackResponse == null ? "" : fallbackResponse);
         record.addProperty("error", error == null ? "" : error);
 
+        appendLlmGenerationRecord(prompt, requestPayload, rawResponseBody, parsedResponse, fallbackResponse, error);
         Path path = Paths.get(LLM_DEBUG_DIR).resolve("llm_debug.jsonl");
         try {
             Files.createDirectories(path.getParent());
@@ -1004,6 +1008,77 @@ public class EAGLE extends AbstractionLayerAI {
             return;
         }
         System.out.println("[EAGLE] llm debug record written path=" + path);
+    }
+
+    private static String safeGenerationName(String generation) {
+        if (generation == null || generation.isBlank()) {
+            return "unknown";
+        }
+        return generation.replaceAll("[^A-Za-z0-9_-]", "_");
+    }
+
+    private void appendLlmGenerationRecord(
+            String prompt,
+            JsonObject requestPayload,
+            String rawResponseBody,
+            String parsedResponse,
+            String fallbackResponse,
+            String error
+    ) {
+        if (LLM_DEBUG_DIR == null || LLM_DEBUG_DIR.isBlank()) {
+            return;
+        }
+        String generation = System.getProperty("eagle.generation", "");
+        String generationValue = generation == null || generation.isBlank() ? "unknown" : generation;
+        Path path = Paths.get(LLM_DEBUG_DIR)
+                .resolve("llm_calls")
+                .resolve("generation_" + safeGenerationName(generationValue) + ".json");
+        try {
+            JsonArray records = new JsonArray();
+            if (Files.exists(path)) {
+                String existingText = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+                JsonObject existing = JsonParser.parseString(existingText).getAsJsonObject();
+                if (existing.has("records") && existing.get("records").isJsonArray()) {
+                    records = existing.getAsJsonArray("records");
+                }
+            }
+            String input = prompt == null ? "" : prompt;
+            String finalResponse = fallbackResponse != null && !fallbackResponse.isBlank()
+                    ? fallbackResponse
+                    : (parsedResponse == null ? "" : parsedResponse);
+            JsonObject record = new JsonObject();
+            record.addProperty("timestamp", Instant.now().toString());
+            record.addProperty("generation", generationValue);
+            record.addProperty("individual_id", System.getProperty("eagle.individual_id", ""));
+            record.addProperty("call_index", llmCallCount);
+            record.addProperty("mode", "gameplay");
+            record.addProperty("opponent", System.getProperty("eagle.opponent", ""));
+            record.addProperty("turn", currentPromptTurn < 0 ? "" : Integer.toString(currentPromptTurn));
+            record.addProperty("model", MODEL);
+            record.addProperty("prompt_chars", input.length());
+            record.addProperty("input", input);
+            record.addProperty("input_tail", promptTail(input));
+            record.add("request_payload", requestPayload == null ? new JsonObject() : requestPayload);
+            record.addProperty("raw_response_body", rawResponseBody == null ? "" : rawResponseBody);
+            record.addProperty("parsed_response", parsedResponse == null ? "" : parsedResponse);
+            record.addProperty("final_response", finalResponse);
+            if (error == null) {
+                record.add("error", null);
+            } else {
+                record.addProperty("error", error);
+            }
+            records.add(record);
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("generation", generationValue);
+            payload.add("records", records);
+            Files.createDirectories(path.getParent());
+            Path tmpPath = path.resolveSibling(path.getFileName().toString() + ".tmp");
+            Files.write(tmpPath, LLM_DEBUG_GSON.toJson(payload).getBytes(StandardCharsets.UTF_8));
+            Files.move(tmpPath, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException | JsonSyntaxException | IllegalStateException writeError) {
+            System.err.println("[EAGLE] llm call JSON write failed path=" + path + " error=" + writeError.getMessage());
+        }
     }
 
     private static String promptTail(String prompt) {
