@@ -915,54 +915,20 @@ def load_llm_trace_records(run_dir: Path | None) -> list[dict[str, Any]]:
     """Load normalized runtime LLM debug records from a run directory."""
     if run_dir is None:
         return []
-    path = Path(run_dir) / "llm_debug.jsonl"
-    if not path.exists():
-        return []
-    records: list[dict[str, Any]] = []
-    group_counts: dict[tuple[str, str], int] = {}
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return []
-    for line_number, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(payload, dict):
-            continue
-        generation = _trace_text(payload.get("generation"))
-        individual_id = _trace_text(payload.get("individual_id"))
-        group_key = (generation, individual_id)
-        group_counts[group_key] = group_counts.get(group_key, 0) + 1
-        call_index = _trace_int(payload.get("call_index"), group_counts[group_key])
-        prompt = _trace_text(payload.get("prompt", payload.get("input", "")))
-        record_id = f"{generation}|{individual_id}|{call_index}|{line_number}"
-        records.append(
-            {
-                "record_id": record_id,
-                "generation": generation,
-                "individual_id": individual_id,
-                "mode": _trace_text(payload.get("mode", payload.get("evaluation_mode", ""))),
-                "opponent": _trace_text(payload.get("opponent")),
-                "turn": _trace_text(payload.get("turn")) or _extract_prompt_turn(prompt),
-                "call_index": call_index,
-                "timestamp": _trace_text(payload.get("timestamp")),
-                "prompt": prompt,
-                "raw_response_body": _trace_text(payload.get("raw_response_body")),
-                "parsed_response": _trace_text(payload.get("parsed_response")),
-                "fallback_response": _trace_text(payload.get("fallback_response", payload.get("llm_output", ""))),
-                "error": _trace_text(payload.get("error")),
-            }
-        )
-    return sorted(records, key=_trace_sort_key)
+    run_dir = Path(run_dir)
+    generation_path_root = run_dir / "llm_calls"
+    generation_paths = list(generation_path_root.glob("generation_*.json")) if generation_path_root.exists() else []
+    if generation_paths:
+        return _load_generation_trace_records(run_dir)
+    llm_debug_path = run_dir / "llm_debug.jsonl"
+    if llm_debug_path.exists():
+        return _load_llm_debug_trace_records(llm_debug_path)
+    return _load_legacy_prompt_trace_records(run_dir)
 
 
 def generation_choices(trace_records: list[dict[str, Any]]) -> list[str]:
     """Return sorted generation choices for LLM trace records."""
-    return _sort_trace_values({str(record.get("generation", "")) for record in trace_records})
+    return _sort_trace_values({str(record.get("generation", "")) for record in trace_records if record.get("generation", "") != ""})
 
 
 def individual_choices(trace_records: list[dict[str, Any]], generation: str) -> list[str]:
@@ -978,24 +944,29 @@ def individual_choices(trace_records: list[dict[str, Any]], generation: str) -> 
 
 def llm_call_choices(trace_records: list[dict[str, Any]], generation: str, individual_id: str) -> dict[str, str]:
     """Return LLM call selector options for one generation and individual."""
-    return {
-        str(record.get("record_id", "")): llm_trace_label(record)
-        for record in trace_records
-        if str(record.get("generation", "")) == str(generation)
-        and str(record.get("individual_id", "")) == str(individual_id)
-    }
+    options: dict[str, str] = {}
+    for record in trace_records:
+        if str(record.get("generation", "")) != str(generation):
+            continue
+        if str(record.get("individual_id", "")) != str(individual_id):
+            continue
+        record_id = str(record.get("record_id", ""))
+        if record_id:
+            options[record_id] = llm_trace_label(record)
+    return options
+
+
+def get_llm_trace_record(records: list[dict[str, Any]], record_id: str) -> dict[str, Any] | None:
+    """Return one normalized LLM trace record by record id."""
+    for record in records:
+        if str(record.get("record_id", "")) == str(record_id):
+            return record
+    return None
 
 
 def llm_trace_label(record: dict[str, Any]) -> str:
     """Return a compact label for one LLM debug record."""
-    parts = [f"call {record.get('call_index', '')}"]
-    if record.get("turn"):
-        parts.append(f"turn {record.get('turn')}")
-    if record.get("mode"):
-        parts.append(str(record.get("mode")))
-    if record.get("timestamp"):
-        parts.append(str(record.get("timestamp")))
-    return " | ".join(parts)
+    return f"call {record.get('call_index', '')} | turn {record.get('turn', '')} | {record.get('mode', '')}"
 
 
 def prompt_record_label(record_id: str, record: dict[str, Any]) -> str:
@@ -1035,6 +1006,201 @@ def _trace_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return int(default)
+
+
+def _load_generation_trace_records(run_dir: Path) -> list[dict[str, Any]]:
+    """Load runtime trace records from per-generation JSON files."""
+    path_root = run_dir / "llm_calls"
+    if not path_root.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for generation_path in sorted(path_root.glob("generation_*.json"), key=lambda path: _numeric_sort_value(_extract_generation_name(path))):
+        try:
+            payload = json.loads(generation_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        generation = _trace_text(payload.get("generation"))
+        generation_records = payload.get("records")
+        if not isinstance(generation_records, list):
+            continue
+        for index, raw_record in enumerate(generation_records, start=1):
+            if not isinstance(raw_record, dict):
+                continue
+            records.append(
+                _normalize_generation_trace_record(
+                    raw_record,
+                    generation=generation,
+                    default_call_index=index,
+                    record_seed=f"{generation_path.name}:{index}",
+                )
+            )
+    return sorted(records, key=_trace_sort_key)
+
+
+def _load_llm_debug_trace_records(path: Path) -> list[dict[str, Any]]:
+    """Load runtime trace records from the JSONL debug file."""
+    records: list[dict[str, Any]] = []
+    group_counts: dict[tuple[str, str], int] = {}
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        normalized = _normalize_llm_debug_record(payload, line_number=line_number, group_counts=group_counts)
+        if normalized is not None:
+            records.append(normalized)
+    return sorted(records, key=_trace_sort_key)
+
+
+def _load_legacy_prompt_trace_records(run_dir: Path) -> list[dict[str, Any]]:
+    """Load legacy prompt records when trace files are unavailable."""
+    try:
+        prompt_records = analysis_service.load_prompts(run_dir)
+    except (OSError, ValueError):
+        return []
+    trace_records: list[dict[str, Any]] = []
+    for index, (record_id, record) in enumerate(prompt_records.items(), start=1):
+        generation = _trace_text(record.get("generation"))
+        individual_id = _trace_text(record.get("individual_id"))
+        trace_records.append(
+            {
+                "record_id": str(record_id),
+                "generation": generation,
+                "individual_id": individual_id,
+                "mode": _trace_text(record.get("evaluation_mode")),
+                "opponent": _trace_text(record.get("opponent")),
+                "turn": "",
+                "call_index": index,
+                "timestamp": "",
+                "input": _trace_text(record.get("prompt")),
+                "raw_response_body": "",
+                "parsed_response": "",
+                "final_response": _trace_text(record.get("llm_output")),
+                "fallback_response": _trace_text(record.get("llm_output")),
+                "llm_output": _trace_text(record.get("llm_output")),
+                "error": "",
+            }
+        )
+    return sorted(trace_records, key=_trace_sort_key)
+
+
+def _normalize_generation_trace_record(
+    raw_record: dict[str, Any], *, generation: str, default_call_index: int, record_seed: str
+) -> dict[str, Any]:
+    """Normalize one per-generation trace record."""
+    input_text = _trace_text(
+        raw_record.get("input")
+        or raw_record.get("prompt")
+        or raw_record.get("llm_input")
+        or raw_record.get("request_prompt")
+    )
+    raw_response_body = _trace_text(
+        raw_record.get("raw_response_body")
+        or raw_record.get("raw_response")
+        or raw_record.get("response_body")
+    )
+    parsed_response = _trace_text(raw_record.get("parsed_response") or raw_record.get("parsed_text") or raw_record.get("model_text") or raw_record.get("response"))
+    if not parsed_response:
+        extracted_response = _extract_ollama_response(raw_response_body)
+        if extracted_response:
+            parsed_response = extracted_response
+    final_response = _trace_text(raw_record.get("final_response") or raw_record.get("llm_output"))
+    fallback_response = _trace_text(raw_record.get("fallback_response") or raw_record.get("llm_output"))
+    llm_output = _trace_text(raw_record.get("llm_output") or raw_record.get("final_response"))
+    record_id = _trace_text(raw_record.get("record_id"))
+    if not record_id:
+        record_id = record_seed
+    return {
+        "record_id": record_id,
+        "generation": _trace_text(raw_record.get("generation") if raw_record.get("generation") not in (None, "") else generation),
+        "individual_id": _trace_text(raw_record.get("individual_id")),
+        "call_index": _trace_int(raw_record.get("call_index"), default_call_index),
+        "mode": _trace_text(raw_record.get("mode") if raw_record.get("mode") not in (None, "") else raw_record.get("evaluation_mode")),
+        "opponent": _trace_text(raw_record.get("opponent")),
+        "turn": _trace_text(raw_record.get("turn")),
+        "timestamp": _trace_text(raw_record.get("timestamp")),
+        "input": input_text,
+        "raw_response_body": raw_response_body,
+        "parsed_response": parsed_response,
+        "final_response": final_response,
+        "fallback_response": fallback_response,
+        "llm_output": llm_output or final_response or fallback_response,
+        "error": _trace_text(raw_record.get("error")),
+    }
+
+
+def _normalize_llm_debug_record(
+    payload: dict[str, Any], *, line_number: int, group_counts: dict[tuple[str, str], int]
+) -> dict[str, Any] | None:
+    """Normalize one JSONL debug record into the viewer schema."""
+    generation = _trace_text(payload.get("generation"))
+    individual_id = _trace_text(payload.get("individual_id"))
+    group_key = (generation, individual_id)
+    group_counts[group_key] = group_counts.get(group_key, 0) + 1
+    call_index = _trace_int(payload.get("call_index"), group_counts[group_key])
+    input_text = _trace_text(payload.get("prompt") or payload.get("input") or "")
+    parsed_response = _trace_text(
+        payload.get("parsed_response")
+        or payload.get("parsed_text")
+        or payload.get("model_text")
+        or payload.get("response")
+    )
+    if not parsed_response:
+        extracted_response = _extract_ollama_response(_trace_text(payload.get("raw_response_body")))
+        if extracted_response:
+            parsed_response = extracted_response
+    final_response = _trace_text(payload.get("final_response") or payload.get("llm_output"))
+    fallback_response = _trace_text(payload.get("fallback_response") or payload.get("llm_output") or "")
+    raw_response_body = _trace_text(payload.get("raw_response_body") or payload.get("raw_response") or payload.get("response_body") or "")
+    record_id = _trace_text(payload.get("record_id")) or f"{generation}|{individual_id}|{call_index}|{line_number}"
+    return {
+        "record_id": record_id,
+        "generation": generation,
+        "individual_id": individual_id,
+        "mode": _trace_text(payload.get("mode") if payload.get("mode") not in (None, "") else payload.get("evaluation_mode")),
+        "opponent": _trace_text(payload.get("opponent")),
+        "turn": _trace_text(payload.get("turn")) or _extract_prompt_turn(input_text),
+        "call_index": call_index,
+        "timestamp": _trace_text(payload.get("timestamp")),
+        "input": input_text,
+        "raw_response_body": raw_response_body,
+        "parsed_response": parsed_response,
+        "final_response": final_response,
+        "fallback_response": fallback_response,
+        "llm_output": _trace_text(payload.get("llm_output")) or final_response or fallback_response,
+        "error": _trace_text(payload.get("error")),
+    }
+
+
+def _extract_ollama_response(raw_response_body: str) -> str:
+    """Extract an Ollama `response` field from a raw JSON response body."""
+    if not raw_response_body.strip():
+        return ""
+    try:
+        payload = json.loads(raw_response_body)
+    except json.JSONDecodeError:
+        return ""
+    if isinstance(payload, dict):
+        return _trace_text(payload.get("response"))
+    return ""
+
+
+def _extract_generation_name(path: Path) -> str:
+    """Return the generation name embedded in a generation JSON file path."""
+    import re
+
+    match = re.search(r"generation_(.+)\.json$", path.name)
+    return match.group(1) if match else path.stem
 
 
 def _extract_prompt_turn(prompt: str) -> str:
