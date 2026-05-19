@@ -13,6 +13,7 @@ from eagle.llm import LLM
 from eagle.project import MICRORTS_LOGS_DIR
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.log_parse import parse_dynamic_prompt_state
+from eagle.utils.llm_call_logger import record_llm_call
 from eagle.utils.llm_debug import append_llm_debug_record
 from eagle.utils.move_validator import validate_llm_move_against_state
 from eagle.utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
@@ -294,6 +295,23 @@ class Evaluator:
         append_llm_debug_record(
             self.runtime_logs_dir,
             **llm_debug_record,
+        )
+        record_llm_call(
+            self.runtime_logs_dir,
+            generation=generation if generation is not None else "",
+            individual_id=individual_id,
+            call_index=llm_debug_record.get("call_index", ""),
+            mode="round_surrogate",
+            opponent=llm_debug_record.get("opponent", ""),
+            turn=llm_debug_record.get("turn", ""),
+            model=llm_debug_record.get("model", ""),
+            input_text=llm_debug_record.get("prompt", ""),
+            request_payload=llm_debug_record.get("request_payload") or {},
+            raw_response_body=llm_debug_record.get("raw_response_body", ""),
+            parsed_response=_trace_value_text(parsed_response),
+            final_response=raw_response,
+            fallback_response=_trace_value_text(llm_debug_record.get("fallback_response", "")),
+            error=_trace_value_text(llm_debug_record.get("error", "")),
         )
 
         if format_valid:
@@ -1041,3 +1059,12 @@ class Evaluator:
         if not raw_response:
             raise ValueError("Round evaluator LLM returned an empty response.")
         return raw_response
+
+
+def _trace_value_text(value: Any) -> str:
+    """Return one trace value as display-safe text for unified JSONL logging."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False, default=str)
