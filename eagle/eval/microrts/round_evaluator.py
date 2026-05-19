@@ -495,7 +495,7 @@ class Evaluator:
             json_format=True,
             generation=generation,
             individual_id=individual_id,
-            mode="round_action",
+            mode="round_surrogate",
             debug_record=debug_record,
         )
         return response, debug_record
@@ -551,7 +551,7 @@ class Evaluator:
             json_format=True,
             generation=generation,
             individual_id=individual_id,
-            mode="round_alignment",
+            mode="surrogate",
         )
         # print(f"Raw score response:\n{raw_score}\n")
         parsed = self._extract_first_json_object(raw_score)
