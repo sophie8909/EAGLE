@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -278,10 +279,25 @@ class Evaluator:
             state = parse_dynamic_prompt_state(dynamic_prompt)
         full_prompt = self._build_round_prompt(base_prompt, dynamic_prompt)
         with timer("round_llm_action_time", stats):
+            print(
+                "[ROUND_SURROGATE_LLM] start "
+                f"generation={generation} individual={individual_id} sample={sample_index}/{sample_count}",
+                flush=True,
+            )
+            print(
+                "[ROUND_SURROGATE_LLM] prompt_chars="
+                f"{len(full_prompt)}",
+                flush=True,
+            )
             raw_response, llm_debug_record = self._ask_for_actions(
                 full_prompt,
                 generation=generation,
                 individual_id=individual_id,
+            )
+            print(
+                "[ROUND_SURROGATE_LLM] response_chars="
+                f"{len(raw_response)}",
+                flush=True,
             )
         with timer("round_response_parse_time", stats):
             parsed_response = self._extract_first_json_object(raw_response)
@@ -313,6 +329,24 @@ class Evaluator:
             fallback_response=_trace_value_text(llm_debug_record.get("fallback_response", "")),
             error=_trace_value_text(llm_debug_record.get("error", "")),
         )
+        debug_path = _append_round_surrogate_debug_jsonl(
+            self.runtime_logs_dir,
+            generation=generation,
+            record={
+                "individual_id": individual_id,
+                "sample_index": sample_index,
+                "sample_count": sample_count,
+                "prompt_chars": len(full_prompt),
+                "input": full_prompt,
+                "raw_response": raw_response,
+                "parsed_response": parsed_response,
+                "format_valid": format_valid,
+                "format_reason": format_reason,
+                "error": llm_debug_record.get("error", ""),
+            },
+        )
+        if debug_path is not None:
+            print(f"[ROUND_SURROGATE_LLM] wrote {debug_path}", flush=True)
 
         if format_valid:
             with timer("round_legality_score_time", stats):
@@ -1068,3 +1102,39 @@ def _trace_value_text(value: Any) -> str:
     if isinstance(value, str):
         return value
     return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _append_round_surrogate_debug_jsonl(
+    runtime_logs_dir: Path | None,
+    generation: int | None,
+    record: dict[str, Any],
+) -> Path | None:
+    """Append one isolated round-surrogate trace line for terminal debugging."""
+    if runtime_logs_dir is None:
+        return None
+    generation_suffix = "unknown" if generation is None else str(generation).strip() or "unknown"
+    path = Path(runtime_logs_dir) / "llm_calls" / "surrogate" / f"gen_{generation_suffix}.jsonl"
+    payload = {
+        "trace_type": "round_surrogate_llm_call",
+        "timestamp": record.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+        "generation": generation if generation is not None else "unknown",
+        "individual_id": "" if record.get("individual_id") is None else str(record.get("individual_id")),
+        "sample_index": record.get("sample_index"),
+        "sample_count": record.get("sample_count"),
+        "prompt_chars": record.get("prompt_chars", 0),
+        "input": "" if record.get("input") is None else str(record.get("input")),
+        "raw_response": "" if record.get("raw_response") is None else str(record.get("raw_response")),
+        "parsed_response": _trace_value_text(record.get("parsed_response")),
+        "format_valid": bool(record.get("format_valid")),
+        "format_reason": "" if record.get("format_reason") is None else str(record.get("format_reason")),
+        "error": "" if record.get("error") is None else str(record.get("error")),
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False, default=str))
+            handle.write("\n")
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        print(f"[ROUND_SURROGATE_LLM] write error path={path} error={exc}", flush=True)
+        return None
+    return path
