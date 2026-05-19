@@ -972,6 +972,7 @@ public class EAGLE extends AbstractionLayerAI {
             String fallbackResponse,
             String error
     ) {
+        appendLlmGenerationRecord(prompt, requestPayload, rawResponseBody, parsedResponse, fallbackResponse, error);
         if (LLM_DEBUG_DIR == null || LLM_DEBUG_DIR.isBlank()) {
             return;
         }
@@ -995,7 +996,6 @@ public class EAGLE extends AbstractionLayerAI {
         record.addProperty("fallback_response", fallbackResponse == null ? "" : fallbackResponse);
         record.addProperty("error", error == null ? "" : error);
 
-        appendLlmGenerationRecord(prompt, requestPayload, rawResponseBody, parsedResponse, fallbackResponse, error);
         Path path = Paths.get(LLM_DEBUG_DIR).resolve("llm_debug.jsonl");
         try {
             Files.createDirectories(path.getParent());
@@ -1025,23 +1025,19 @@ public class EAGLE extends AbstractionLayerAI {
             String fallbackResponse,
             String error
     ) {
-        if (LLM_DEBUG_DIR == null || LLM_DEBUG_DIR.isBlank()) {
+        String runDir = System.getenv("EAGLE_RUN_DIR");
+        if (runDir == null || runDir.isBlank()) {
             return;
         }
-        String generation = System.getProperty("eagle.generation", "");
+        String generation = System.getenv("EAGLE_GENERATION");
         String generationValue = generation == null || generation.isBlank() ? "unknown" : generation;
-        Path path = Paths.get(LLM_DEBUG_DIR)
+        String traceMode = System.getenv("EAGLE_TRACE_MODE");
+        String resolvedTraceMode = traceMode == null || traceMode.isBlank() ? "gameplay" : traceMode;
+        String individualId = System.getenv("EAGLE_INDIVIDUAL_ID");
+        Path path = Paths.get(runDir)
                 .resolve("llm_calls")
-                .resolve("generation_" + safeGenerationName(generationValue) + ".json");
+                .resolve("generation_" + safeGenerationName(generationValue) + ".jsonl");
         try {
-            JsonArray records = new JsonArray();
-            if (Files.exists(path)) {
-                String existingText = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
-                JsonObject existing = JsonParser.parseString(existingText).getAsJsonObject();
-                if (existing.has("records") && existing.get("records").isJsonArray()) {
-                    records = existing.getAsJsonArray("records");
-                }
-            }
             String input = prompt == null ? "" : prompt;
             String finalResponse = fallbackResponse != null && !fallbackResponse.isBlank()
                     ? fallbackResponse
@@ -1049,9 +1045,9 @@ public class EAGLE extends AbstractionLayerAI {
             JsonObject record = new JsonObject();
             record.addProperty("timestamp", Instant.now().toString());
             record.addProperty("generation", generationValue);
-            record.addProperty("individual_id", System.getProperty("eagle.individual_id", ""));
+            record.addProperty("individual_id", individualId == null ? "" : individualId);
             record.addProperty("call_index", llmCallCount);
-            record.addProperty("mode", "gameplay");
+            record.addProperty("mode", resolvedTraceMode);
             record.addProperty("opponent", System.getProperty("eagle.opponent", ""));
             record.addProperty("turn", currentPromptTurn < 0 ? "" : Integer.toString(currentPromptTurn));
             record.addProperty("model", MODEL);
@@ -1062,22 +1058,19 @@ public class EAGLE extends AbstractionLayerAI {
             record.addProperty("raw_response_body", rawResponseBody == null ? "" : rawResponseBody);
             record.addProperty("parsed_response", parsedResponse == null ? "" : parsedResponse);
             record.addProperty("final_response", finalResponse);
+            record.addProperty("fallback_response", fallbackResponse == null ? "" : fallbackResponse);
             if (error == null) {
                 record.add("error", null);
             } else {
                 record.addProperty("error", error);
             }
-            records.add(record);
-
-            JsonObject payload = new JsonObject();
-            payload.addProperty("generation", generationValue);
-            payload.add("records", records);
             Files.createDirectories(path.getParent());
-            Path tmpPath = path.resolveSibling(path.getFileName().toString() + ".tmp");
-            Files.write(tmpPath, LLM_DEBUG_GSON.toJson(payload).getBytes(StandardCharsets.UTF_8));
-            Files.move(tmpPath, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            try (FileWriter writer = new FileWriter(path.toFile(), true)) {
+                writer.write(LLM_DEBUG_GSON.toJson(record));
+                writer.write(System.lineSeparator());
+            }
         } catch (IOException | JsonSyntaxException | IllegalStateException writeError) {
-            System.err.println("[EAGLE] llm call JSON write failed path=" + path + " error=" + writeError.getMessage());
+            System.err.println("[EAGLE] llm call JSONL write failed path=" + path + " error=" + writeError.getMessage());
         }
     }
 
