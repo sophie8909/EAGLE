@@ -188,10 +188,12 @@ def build_layout() -> dict[str, dict[str, Any]]:
                     with ui.tab_panels(experiment_tabs, value=components_tab).classes(f"{PAGE_CLASS} w-full"):
                         with ui.tab_panel(components_tab):
                             controls["components"] = build_components_view(state)
+                            state.runtime.components_refresh = controls["components"].get("refresh")
                         with ui.tab_panel(operators_tab):
                             controls["operators"] = build_operators_view(state)
                         with ui.tab_panel(objectives_tab):
                             controls["objectives"] = build_objectives_view(state)
+                            state.runtime.objectives_refresh = controls["objectives"].get("refresh")
                 with ui.column().classes("w-[40%] gap-3"):
                     controls["run"] = build_run_view(state, log_height=300)
                     controls["config_summary"] = build_config_summary_view(state)

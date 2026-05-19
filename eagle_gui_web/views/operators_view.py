@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
+from pathlib import Path
 from typing import Any
 
 from nicegui import ui
 
 from eagle_gui_web import services
-from eagle_gui_web.theme import CARD_CLASS, GRID_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS
+from eagle_gui_web.theme import (
+    BUTTON_CLASS,
+    CARD_CLASS,
+    GRID_CLASS,
+    INPUT_CLASS,
+    ROW_CLASS,
+    SECTION_HEADER_CLASS,
+    button_class,
+)
+from eagle_gui_web.ui_actions import safe_click
 from eagle_gui_web.views.config_view import refresh_config_summary
 
 def _field_card(title: str) -> Any:
@@ -24,8 +35,73 @@ def build_operators_view(state: Any) -> dict[str, Any]:
     """Build the operator controls view."""
     controls: dict[str, Any] = {}
 
+    def base_config_options() -> list[str]:
+        options = list(services.config_choices())
+        current = str(state.config.base_config_path or "")
+        if current and current not in options:
+            options.insert(0, current)
+        if "" not in options:
+            options.insert(0, "")
+        return options
+
+    async def load_base_config() -> None:
+        selected_path = str(base_config_select.value or "")
+        if not selected_path:
+            ui.notify("Select a base config first.", type="warning")
+            return
+        try:
+            payload = await asyncio.to_thread(services.load_config_payload, Path(selected_path))
+            services.apply_config_payload(state, payload, Path(selected_path))
+            ui.notify(f"Loaded {selected_path}", type="positive")
+        except (OSError, ValueError) as exc:
+            ui.notify(str(exc), type="negative")
+            return
+        refresh()
+        refresh_config_summary(state)
+        for refresh_handle_name in ("objectives_refresh", "components_refresh"):
+            refresh_handle = getattr(state.runtime, refresh_handle_name, None)
+            if callable(refresh_handle):
+                refresh_handle()
+
+    async def save_config() -> None:
+        try:
+            path = await asyncio.to_thread(services.save_generated_config, state)
+            ui.notify(f"Saved {path}", type="positive")
+        except (OSError, ValueError) as exc:
+            ui.notify(str(exc), type="negative")
+            return
+        generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
+        component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
+        refresh_config_summary(state)
+
+    def update_base_config_path(value: str) -> None:
+        state.config.base_config_path = value
+
+    def create_base_config_select(options: list[str], value: str) -> Any:
+        try:
+            return ui.select(
+                options,
+                label="Base config",
+                value=value,
+                on_change=lambda event: update_base_config_path(str(event.value or "")),
+                with_input=True,
+                clearable=True,
+            )
+        except TypeError:
+            return ui.select(
+                options,
+                label="Base config",
+                value=value,
+                on_change=lambda event: update_base_config_path(str(event.value or "")),
+            ).props("use-input clearable new-value-mode=add-unique")
+
     def refresh() -> None:
         services.sync_algorithm_operator_defaults(state)
+        base_config_select.options = base_config_options()
+        base_config_select.value = state.config.base_config_path or ""
+        base_config_select.update()
+        generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
+        component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
         algorithm_select.value = state.config.algorithm
         algorithm_select.update()
         evaluator_select.value = state.config.evaluator
@@ -80,6 +156,20 @@ def build_operators_view(state: Any) -> dict[str, Any]:
     def update_mutation_weight(key: str, value: str) -> None:
         state.operators.mutation_weights[key] = value
         refresh_config_summary(state)
+
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("Config").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
+            base_config_select = create_base_config_select(
+                base_config_options(),
+                state.config.base_config_path or "",
+            ).classes(f"{INPUT_CLASS} grow min-w-[420px]")
+            ui.button("Load", on_click=safe_click(load_base_config, label="Load config")).classes(BUTTON_CLASS)
+            ui.button("Save generated config", on_click=safe_click(save_config, label="Save config")).classes(
+                button_class(success=True)
+            )
+        generated_label = ui.label(f"Generated config: {state.config.generated_config_path or '(none)'}")
+        component_path_label = ui.label(f"Component path: {state.config.component_pool_path or '(none)'}")
 
     with ui.column().classes(
         "w-full gap-3 rounded-xl border border-[#2d4059] bg-[#0f1d2e] p-4"
