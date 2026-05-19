@@ -46,3 +46,4 @@ third_party/microrts/prompt.txt
 third_party/microrts/resources/config.properties
 third_party/microrts/bin/.microrts_compile_stamp
 *.sources
+/logs_legecy
