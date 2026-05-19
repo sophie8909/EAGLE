@@ -917,9 +917,13 @@ def load_llm_trace_records(run_dir: Path | None) -> list[dict[str, Any]]:
         return []
     run_dir = Path(run_dir)
     generation_path_root = run_dir / "llm_calls"
-    generation_paths = list(generation_path_root.glob("generation_*.json")) if generation_path_root.exists() else []
-    if generation_paths:
-        return _load_generation_trace_records(run_dir)
+    if generation_path_root.exists():
+        generation_jsonl_paths = list(generation_path_root.glob("generation_*.jsonl"))
+        if generation_jsonl_paths:
+            return _load_generation_trace_jsonl_records(generation_path_root)
+        generation_json_paths = list(generation_path_root.glob("generation_*.json"))
+        if generation_json_paths:
+            return _load_generation_trace_json_records(generation_path_root)
     llm_debug_path = run_dir / "llm_debug.jsonl"
     if llm_debug_path.exists():
         return _load_llm_debug_trace_records(llm_debug_path)
@@ -1008,11 +1012,36 @@ def _trace_int(value: Any, default: int) -> int:
         return int(default)
 
 
-def _load_generation_trace_records(run_dir: Path) -> list[dict[str, Any]]:
-    """Load runtime trace records from per-generation JSON files."""
-    path_root = run_dir / "llm_calls"
-    if not path_root.exists():
-        return []
+def _load_generation_trace_jsonl_records(path_root: Path) -> list[dict[str, Any]]:
+    """Load runtime trace records from per-generation JSONL files."""
+    records: list[dict[str, Any]] = []
+    for generation_path in sorted(path_root.glob("generation_*.jsonl"), key=lambda path: _numeric_sort_value(_extract_generation_name(path))):
+        try:
+            lines = generation_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for line_number, line in enumerate(lines, start=1):
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            records.append(
+                _normalize_generation_trace_record(
+                    payload,
+                    generation=_trace_text(payload.get("generation")),
+                    default_call_index=line_number,
+                    record_seed=f"{generation_path.name}:{line_number}",
+                )
+            )
+    return sorted(records, key=_trace_sort_key)
+
+
+def _load_generation_trace_json_records(path_root: Path) -> list[dict[str, Any]]:
+    """Load runtime trace records from legacy per-generation JSON files."""
     records: list[dict[str, Any]] = []
     for generation_path in sorted(path_root.glob("generation_*.json"), key=lambda path: _numeric_sort_value(_extract_generation_name(path))):
         try:
@@ -1199,7 +1228,7 @@ def _extract_generation_name(path: Path) -> str:
     """Return the generation name embedded in a generation JSON file path."""
     import re
 
-    match = re.search(r"generation_(.+)\.json$", path.name)
+    match = re.search(r"generation_(.+)\.jsonl?$", path.name)
     return match.group(1) if match else path.stem
 
 

@@ -19,7 +19,7 @@ from eagle_gui_web.theme import (
 )
 from eagle_gui_web.ui_actions import safe_click
 NO_RUN_MESSAGE = "No run folder selected."
-NO_TRACE_MESSAGE = "No LLM trace files found. Expected <run_dir>/llm_calls/generation_*.json."
+NO_TRACE_MESSAGE = "No LLM trace files found. Expected <run_dir>/llm_calls/generation_*.jsonl."
 NO_CALL_MESSAGE = "No LLM call selected."
 NO_RESPONSE_MESSAGE = "No response field found in this trace record."
 
@@ -212,7 +212,8 @@ def _has_generation_trace_files(run_dir: Any) -> bool:
     """Return whether the selected run has per-generation trace JSON files."""
     if run_dir is None:
         return False
-    return any((run_dir / "llm_calls").glob("generation_*.json"))
+    trace_root = run_dir / "llm_calls"
+    return any(trace_root.glob("generation_*.jsonl")) or any(trace_root.glob("generation_*.json"))
 
 
 def _has_llm_debug_trace_file(run_dir: Any) -> bool:
