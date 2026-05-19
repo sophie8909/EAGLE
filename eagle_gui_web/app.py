@@ -37,7 +37,7 @@ from eagle_gui_web.views.final_test_view import build_final_test_view
 from eagle_gui_web.views.microrts_view import build_microrts_view
 from eagle_gui_web.views.objectives_view import build_objectives_view
 from eagle_gui_web.views.operators_view import build_operators_view
-from eagle_gui_web.views.prompts_view import build_prompts_view
+from eagle_gui_web.views.llm_calls_view import build_llm_calls_view
 from eagle_gui_web.views.run_view import build_run_view
 
 
@@ -143,8 +143,8 @@ def build_layout() -> dict[str, dict[str, Any]]:
             await controls["final_test"]["refresh_log"]()
         elif page == "analysis":
             await controls["analysis"]["refresh_analysis"]()
-        elif page == "prompts":
-            await controls["prompts"]["refresh_prompts"](True)
+        elif page == "LLM Calls":
+            await controls["llm_calls"]["refresh_llm_calls"](True)
         elif page == "microrts":
             await controls["microrts"]["refresh_status"]()
         else:
@@ -176,7 +176,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
         experiment_tab = ui.tab("Experiment").classes(TAB_CLASS)
         final_test_tab = ui.tab("Final Test").classes(TAB_CLASS)
         analysis_tab = ui.tab("Analysis").classes(TAB_CLASS)
-        prompts_tab = ui.tab("Prompts").classes(TAB_CLASS)
+        llm_calls_tab = ui.tab("LLM Calls").classes(TAB_CLASS)
         microrts_tab = ui.tab("MicroRTS").classes(TAB_CLASS)
 
     with ui.tab_panels(tabs, value=experiment_tab).classes(f"{PAGE_CLASS} w-full"):
@@ -203,8 +203,8 @@ def build_layout() -> dict[str, dict[str, Any]]:
             controls["final_test"] = build_final_test_view(state)
         with ui.tab_panel(analysis_tab):
             controls["analysis"] = build_analysis_view(state)
-        with ui.tab_panel(prompts_tab):
-            controls["prompts"] = build_prompts_view(state)
+        with ui.tab_panel(llm_calls_tab):
+            controls["llm_calls"] = build_llm_calls_view(state)
         with ui.tab_panel(microrts_tab):
             controls["microrts"] = build_microrts_view(state)
 
@@ -217,9 +217,9 @@ def build_layout() -> dict[str, dict[str, Any]]:
         elif selected == final_test_tab:
             state.runtime.current_page = "final_test"
             await controls["final_test"]["refresh_log"]()
-        elif selected == prompts_tab:
-            state.runtime.current_page = "prompts"
-            await controls["prompts"]["refresh_prompts"](True)
+        elif selected == llm_calls_tab:
+            state.runtime.current_page = "llm_calls"
+            await controls["llm_calls"]["refresh_llm_calls"](True)
         elif selected == analysis_tab:
             state.runtime.current_page = "analysis"
             await controls["analysis"]["refresh_analysis"]()

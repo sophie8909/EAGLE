@@ -24,11 +24,11 @@ NO_CALL_MESSAGE = "No LLM call selected."
 NO_RESPONSE_MESSAGE = "No response field found in this trace record."
 
 
-def build_prompts_view(state: Any) -> dict[str, Any]:
+def build_llm_calls_view(state: Any) -> dict[str, Any]:
     """Build runtime LLM trace selectors and input/response panes."""
     controls: dict[str, Any] = {}
 
-    async def refresh_prompts(force: bool = True) -> None:
+    async def refresh_llm_calls(force: bool = True) -> None:
         if state.run.current_run_dir is None:
             state.prompts.trace_records = []
             _set_empty(NO_RUN_MESSAGE)
@@ -153,7 +153,7 @@ def build_prompts_view(state: Any) -> dict[str, Any]:
                 f"{INPUT_CLASS} w-64"
             )
             call_select = ui.select({}, label="LLM call", on_change=on_call_changed).classes(f"{INPUT_CLASS} grow")
-            ui.button("Refresh prompts", on_click=safe_click(refresh_prompts, label="Refresh prompts")).classes(BUTTON_CLASS)
+            ui.button("Refresh prompts", on_click=safe_click(refresh_llm_calls, label="Refresh prompts")).classes(BUTTON_CLASS)
         metadata_label = ui.label(state.prompts.metadata)
         with ui.row().classes(f"{ROW_CLASS} w-full gap-4"):
             prompt_text = ui.textarea("LLM INPUT", value=state.prompts.selected_prompt).props("readonly").classes(
@@ -163,7 +163,7 @@ def build_prompts_view(state: Any) -> dict[str, Any]:
                 "readonly"
             ).classes(f"{TEXTAREA_CLASS} {height_class(620)} grow")
 
-    controls["refresh_prompts"] = refresh_prompts
+    controls["refresh_llm_calls"] = refresh_llm_calls
     controls["render_selected_call"] = render_selected_call
     return controls
 
