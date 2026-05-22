@@ -559,6 +559,7 @@ def _final_test_record_metrics(record: dict[str, object], weights: dict[str, flo
     """Return derived raw metrics for one final-test replay record."""
     ally = dict(record.get("ally") or {})
     enemy = dict(record.get("enemy") or {})
+    # TODO: Verify whether this derived metric is suitable for final-test analysis.
     ally_total = _snapshot_total_resources(ally)
     enemy_total = _snapshot_total_resources(enemy)
     weights = dict(weights or {})
@@ -569,7 +570,9 @@ def _final_test_record_metrics(record: dict[str, object], weights: dict[str, flo
         "enemy_resources": _safe_float(enemy.get("resources")),
         "total_ally_resources": ally_total,
         "total_enemy_resources": enemy_total,
+        # TODO: Verify whether this derived metric is suitable for final-test analysis.
         "resource_difference": ally_total - enemy_total,
+        # TODO: Verify whether this derived metric is suitable for final-test analysis.
         "weighted_resource_score": _weighted_resource_score(ally, weights),
     }
 
