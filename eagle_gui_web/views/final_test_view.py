@@ -14,7 +14,6 @@ from eagle_gui_web.components.selectors import (
     create_aggregation_selector,
     create_map_selector,
     create_metric_selector,
-    create_mode_selector,
     create_opponent_selector,
     create_run_selector,
 )
@@ -198,8 +197,8 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
         selected_label.set_text(f"Selected folder: {state.final_test.selected_run_dir or '(none)'}")
         asyncio.create_task(refresh_all())
 
-    def on_map_selection_changed(event: Any) -> None:
-        state.final_test.map_selection = str(event.value or "single")
+    def on_map_changed(event: Any) -> None:
+        state.final_test.map = str(event.value or "all")
 
     def on_opponent_changed(event: Any) -> None:
         state.final_test.opponent = str(event.value or "all")
@@ -242,12 +241,12 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
         selected_label = ui.label("Selected folder: (none)")
 
         with ui.row().classes(f"{ROW_CLASS} gap-4"):
-            create_mode_selector(
-                label="Map selection",
-                value=state.final_test.map_selection,
-                on_change=on_map_selection_changed,
+            create_map_selector(
+                label="Map folder",
+                value=state.final_test.map,
+                on_change=on_map_changed,
+                include_all=True,
             ).classes(f"{INPUT_CLASS} w-48")
-            create_map_selector(label="Single map").props("disable").classes(f"{INPUT_CLASS} w-64")
             create_opponent_selector(
                 value=state.final_test.opponent,
                 on_change=on_opponent_changed,

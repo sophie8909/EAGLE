@@ -51,10 +51,14 @@ def create_map_selector(
     label: str = "Map",
     value: str | None = None,
     on_change: Callable[[Any], None] | None = None,
+    include_all: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """Create a MicroRTS map selector."""
-    return _create_selector(label, _map_options(), value, on_change, **kwargs)
+    """Create a MicroRTS map-folder selector."""
+    options = _map_options()
+    if include_all:
+        options = {"all": "All", **options}
+    return _create_selector(label, options, value, on_change, **kwargs)
 
 
 def create_opponent_selector(
@@ -135,16 +139,9 @@ def _run_options() -> dict[str, str]:
 
 
 def _map_options() -> dict[str, str]:
-    """Discover MicroRTS XML maps under third_party/microrts/maps."""
+    """Discover immediate MicroRTS map folders."""
     maps_root = services.ROOT / "third_party" / "microrts" / "maps"
     if not maps_root.exists():
-        return {"maps/8x8/basesWorkers8x8.xml": "8x8 / basesWorkers8x8.xml"}
-    options: dict[str, str] = {}
-    for path in sorted(maps_root.rglob("*.xml")):
-        if not path.is_file():
-            continue
-        relative_path = path.relative_to(maps_root)
-        key = f"maps/{relative_path.as_posix()}"
-        label = " / ".join(relative_path.parts)
-        options[key] = label
-    return options or {"maps/8x8/basesWorkers8x8.xml": "8x8 / basesWorkers8x8.xml"}
+        return {"8x8": "8x8"}
+    options = {path.name: path.name for path in sorted(maps_root.iterdir()) if path.is_dir()}
+    return options or {"8x8": "8x8"}

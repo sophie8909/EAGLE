@@ -112,7 +112,7 @@ class FinalTestState:
     """Final-test launch state for an existing run folder."""
 
     selected_run_dir: Path | None = None
-    map_selection: str = "single"
+    map: str = "all"
     opponent: str = "all"
     analysis_metric: str = "win_rate"
     analysis_aggregation: str = "mean"

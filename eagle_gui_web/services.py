@@ -729,7 +729,7 @@ def start_final_test(state: Any) -> tuple[bool, str]:
         try:
             run_final_test_batch(
                 run_dir,
-                map_selection=state.final_test.map_selection,
+                map_folder=state.final_test.map,
                 opponent=state.final_test.opponent,
             )
             results_path = latest_final_test_results_path(run_dir)

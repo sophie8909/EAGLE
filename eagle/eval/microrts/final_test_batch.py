@@ -25,7 +25,7 @@ FINAL_TEST_REPEATS = 10
 def run_final_test_batch(
     run_dir: str | Path,
     *,
-    map_selection: str = "single",
+    map_folder: str = "all",
     opponent: str = "all",
     repeats: int = FINAL_TEST_REPEATS,
 ) -> dict[str, Any]:
@@ -40,7 +40,7 @@ def run_final_test_batch(
     if not selected_individuals:
         raise ValueError(f"No final-test candidates found under {resolved_run_dir}.")
 
-    map_locations = _resolve_map_locations(config, map_selection)
+    map_records = _resolve_map_records(map_folder)
     opponents = _resolve_opponents(opponent)
     if repeats < 1:
         raise ValueError("repeats must be >= 1.")
@@ -64,7 +64,7 @@ def run_final_test_batch(
             "individual_ids": [individual.id for individual in selected_individuals],
         },
         "config": {
-            "maps": list(map_locations),
+            "maps": [record["map"] for record in map_records],
             "opponents": list(opponents),
             "repeats": int(repeats),
         },
@@ -73,7 +73,7 @@ def run_final_test_batch(
 
     for individual in selected_individuals:
         prompt = evaluator._construct_prompt(individual)
-        for map_location in map_locations:
+        for map_record in map_records:
             for opponent in opponents:
                 for repeat in range(repeats):
                     result = evaluator.run_prompt_based_agent(
@@ -82,7 +82,7 @@ def run_final_test_batch(
                         opponent=opponent,
                         test=True,
                         llm_call_limit=None,
-                        map_location=map_location,
+                        map_location=map_record["runtime_map"],
                     )
                     match_score = dict(result.get("match_score") or {})
                     simulation_meta = dict(result.get("simulation_meta") or {})
@@ -90,7 +90,8 @@ def run_final_test_batch(
                     payload["results"].append(
                         _build_raw_result_record(
                             individual_id=individual.id,
-                            map_location=map_location,
+                            map_folder=map_record["map_folder"],
+                            map_path=map_record["map"],
                             opponent=opponent,
                             repeat=repeat,
                             match_score=match_score,
@@ -182,16 +183,34 @@ def _load_checkpoint_population(run_dir: Path) -> list[Any]:
     ]
 
 
-def _resolve_map_locations(config: Any, map_selection: str) -> list[str]:
-    """Return one deterministic map or every map in the configured folder."""
-    map_dir = str(getattr(config, "gameplay_map_dir", "8x8") or "8x8").strip().strip("/\\") or "8x8"
-    maps_root = PROJECT_ROOT / "third_party" / "microrts" / "maps" / map_dir
-    candidates = sorted(path for path in maps_root.glob("*.xml") if path.is_file())
-    if not candidates:
-        raise FileNotFoundError(f"No MicroRTS maps found under maps/{map_dir}.")
-    if str(map_selection).strip().lower() == "all":
-        return [f"maps/{map_dir}/{path.name}" for path in candidates]
-    return [f"maps/{map_dir}/{candidates[0].name}"]
+def _resolve_map_records(map_folder: str) -> list[dict[str, str]]:
+    """Return map records for all folders or one selected map folder."""
+    maps_root = PROJECT_ROOT / "third_party" / "microrts" / "maps"
+    if not maps_root.exists():
+        raise FileNotFoundError(f"MicroRTS maps directory does not exist: {maps_root}.")
+    selected_folder = str(map_folder or "all").strip().strip("/\\") or "all"
+    folders = [path for path in sorted(maps_root.iterdir()) if path.is_dir()]
+    if selected_folder != "all":
+        selected_path = maps_root / selected_folder
+        if not selected_path.is_dir():
+            raise FileNotFoundError(f"MicroRTS map folder does not exist: maps/{selected_folder}.")
+        folders = [selected_path]
+
+    records: list[dict[str, str]] = []
+    for folder in folders:
+        for path in sorted(folder.rglob("*.xml")):
+            relative_path = path.relative_to(maps_root).as_posix()
+            records.append(
+                {
+                    "map_folder": folder.name,
+                    "map": relative_path,
+                    "runtime_map": f"maps/{relative_path}",
+                }
+            )
+    if not records:
+        folder_text = selected_folder if selected_folder != "all" else "all map folders"
+        raise FileNotFoundError(f"No MicroRTS maps found under {folder_text}.")
+    return records
 
 
 def _resolve_opponents(opponent: str) -> list[str]:
@@ -207,7 +226,8 @@ def _resolve_opponents(opponent: str) -> list[str]:
 def _build_raw_result_record(
     *,
     individual_id: str,
-    map_location: str,
+    map_folder: str,
+    map_path: str,
     opponent: str,
     repeat: int,
     match_score: dict[str, float],
@@ -220,7 +240,8 @@ def _build_raw_result_record(
     ally_snapshot, enemy_snapshot = _result_snapshots(raw_result, target_side)
     return {
         "individual_id": individual_id,
-        "map": map_location,
+        "map_folder": map_folder,
+        "map": map_path,
         "opponent": opponent,
         "repeat": int(repeat),
         "win": bool(win_score >= 1.0),
