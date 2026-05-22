@@ -113,7 +113,7 @@ class FinalTestState:
 
     selected_run_dir: Path | None = None
     map_selection: str = "single"
-    opponent_selection: str = "single"
+    opponent: str = "all"
     analysis_metric: str = "win_rate"
     analysis_aggregation: str = "mean"
     weight_resources: str = "1.0"

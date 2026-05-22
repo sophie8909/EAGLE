@@ -201,8 +201,8 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
     def on_map_selection_changed(event: Any) -> None:
         state.final_test.map_selection = str(event.value or "single")
 
-    def on_opponent_selection_changed(event: Any) -> None:
-        state.final_test.opponent_selection = str(event.value or "single")
+    def on_opponent_changed(event: Any) -> None:
+        state.final_test.opponent = str(event.value or "all")
 
     def on_metric_changed(event: Any) -> None:
         state.final_test.analysis_metric = str(event.value or "win_rate")
@@ -248,12 +248,11 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
                 on_change=on_map_selection_changed,
             ).classes(f"{INPUT_CLASS} w-48")
             create_map_selector(label="Single map").props("disable").classes(f"{INPUT_CLASS} w-64")
-            create_mode_selector(
-                label="Opponent selection",
-                value=state.final_test.opponent_selection,
-                on_change=on_opponent_selection_changed,
-            ).classes(f"{INPUT_CLASS} w-48")
-            create_opponent_selector(label="Single opponent").props("disable").classes(f"{INPUT_CLASS} w-56")
+            create_opponent_selector(
+                value=state.final_test.opponent,
+                on_change=on_opponent_changed,
+                include_all=True,
+            ).classes(f"{INPUT_CLASS} w-56")
             ui.label(f"Repeats: {REPEAT_COUNT}")
 
         ui.label("Final Test Results").classes(SECTION_HEADER_CLASS)

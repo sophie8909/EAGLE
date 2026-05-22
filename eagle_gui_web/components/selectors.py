@@ -62,10 +62,12 @@ def create_opponent_selector(
     label: str = "Opponent",
     value: str | None = None,
     on_change: Callable[[Any], None] | None = None,
+    include_all: bool = False,
     **kwargs: Any,
 ) -> Any:
     """Create a MicroRTS opponent selector."""
-    return _create_selector(label, OPPONENT_OPTIONS, value, on_change, **kwargs)
+    options = {"all": "All", **OPPONENT_OPTIONS} if include_all else OPPONENT_OPTIONS
+    return _create_selector(label, options, value, on_change, **kwargs)
 
 
 def create_metric_selector(

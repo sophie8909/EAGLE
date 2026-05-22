@@ -730,7 +730,7 @@ def start_final_test(state: Any) -> tuple[bool, str]:
             run_final_test_batch(
                 run_dir,
                 map_selection=state.final_test.map_selection,
-                opponent_selection=state.final_test.opponent_selection,
+                opponent=state.final_test.opponent,
             )
             results_path = latest_final_test_results_path(run_dir)
             state.final_test.status_text = "final test complete"

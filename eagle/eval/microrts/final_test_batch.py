@@ -26,7 +26,7 @@ def run_final_test_batch(
     run_dir: str | Path,
     *,
     map_selection: str = "single",
-    opponent_selection: str = "single",
+    opponent: str = "all",
     repeats: int = FINAL_TEST_REPEATS,
 ) -> dict[str, Any]:
     """Replay one saved run into a timestamped raw final-test results JSON payload."""
@@ -41,7 +41,7 @@ def run_final_test_batch(
         raise ValueError(f"No final-test candidates found under {resolved_run_dir}.")
 
     map_locations = _resolve_map_locations(config, map_selection)
-    opponents = _resolve_opponents(config, opponent_selection)
+    opponents = _resolve_opponents(opponent)
     if repeats < 1:
         raise ValueError("repeats must be >= 1.")
 
@@ -194,13 +194,14 @@ def _resolve_map_locations(config: Any, map_selection: str) -> list[str]:
     return [f"maps/{map_dir}/{candidates[0].name}"]
 
 
-def _resolve_opponents(config: Any, opponent_selection: str) -> list[str]:
-    """Return one deterministic opponent or the full configured list."""
-    configured = [str(item) for item in list(getattr(config, "gameplay_opponents", []) or []) if str(item).strip()]
-    opponents = configured or list(OPPONENT_LIST)
-    if str(opponent_selection).strip().lower() == "all":
-        return opponents
-    return [opponents[0]]
+def _resolve_opponents(opponent: str) -> list[str]:
+    """Return all supported opponents or one selected opponent."""
+    selected_opponent = str(opponent or "all").strip()
+    if selected_opponent == "all":
+        return list(OPPONENT_LIST)
+    if selected_opponent not in OPPONENT_LIST:
+        raise ValueError(f"Unsupported final-test opponent: {selected_opponent}")
+    return [selected_opponent]
 
 
 def _build_raw_result_record(
