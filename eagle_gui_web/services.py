@@ -1123,6 +1123,27 @@ def build_final_test_results_text(run_dir: Path | None) -> str:
     return "\n".join(lines)
 
 
+def final_test_individual_choices(run_dir: Path | None) -> list[str]:
+    """Return individual ids present in the newest final-test results."""
+    results_path = latest_final_test_results_path(run_dir)
+    if results_path is None:
+        return []
+    try:
+        payload = json.loads(results_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    records = payload.get("results") if isinstance(payload, dict) else []
+    if not isinstance(records, list):
+        return []
+    return sorted(
+        {
+            str(record.get("individual_id"))
+            for record in records
+            if isinstance(record, dict) and record.get("individual_id")
+        }
+    )
+
+
 def load_prompt_records(run_dir: Path | None) -> dict[str, dict[str, Any]]:
     """Load prompt records through the existing desktop service."""
     with LoggedOperation("parsing logs", kind="prompt_records", run_dir=run_dir):

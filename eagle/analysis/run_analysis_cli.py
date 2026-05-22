@@ -54,6 +54,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--weight-light", default="1.0", help="Weighted resource score light weight.")
     parser.add_argument("--weight-heavy", default="1.0", help="Weighted resource score heavy weight.")
     parser.add_argument("--weight-ranged", default="1.0", help="Weighted resource score ranged weight.")
+    parser.add_argument("--individual", default="all", help="Final-test individual id filter, or all.")
     return parser
 
 
@@ -99,6 +100,7 @@ def run_analysis(
     analysis_type: str,
     metric: str = "win_rate",
     aggregation: str = "mean",
+    individual: str = "all",
     weights: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Run one supported analysis type and return a JSON-serializable result."""
@@ -113,6 +115,7 @@ def run_analysis(
             output_dir=resolved_output_dir,
             metric=str(metric or "win_rate"),
             aggregation=str(aggregation or "mean"),
+            individual=str(individual or "all"),
             weights=weights,
         )
     else:
@@ -149,6 +152,7 @@ def main() -> int:
             analysis_type=analysis_type,
             metric=str(args.metric),
             aggregation=str(args.aggregation),
+            individual=str(args.individual),
             weights=weights,
         )
     except Exception as exc:

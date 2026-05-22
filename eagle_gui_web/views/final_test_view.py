@@ -93,6 +93,7 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
             results_textarea.value = state.final_test.analysis_text
             results_textarea.update()
             results_path_label.set_text(f"Latest results: {exc}")
+        await refresh_individuals()
 
     async def refresh_analysis() -> None:
         run_dir = state.final_test.selected_run_dir
@@ -145,6 +146,33 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
         await refresh_results()
         await refresh_analysis()
 
+    async def refresh_individuals() -> None:
+        individual_ids = await asyncio.to_thread(
+            services.final_test_individual_choices,
+            state.final_test.selected_run_dir,
+        )
+        if len(individual_ids) > 1:
+            individual_options = {"all": "All individuals", **{item: f"Individual {item}" for item in individual_ids}}
+            if state.final_test.analysis_individual not in individual_options:
+                state.final_test.analysis_individual = "all"
+            individual_select.options = individual_options
+            individual_select.value = state.final_test.analysis_individual
+            individual_select.visible = True
+            individual_select.enable()
+        elif len(individual_ids) == 1:
+            state.final_test.analysis_individual = individual_ids[0]
+            individual_select.options = {individual_ids[0]: f"Individual {individual_ids[0]}"}
+            individual_select.value = individual_ids[0]
+            individual_select.visible = False
+            individual_select.disable()
+        else:
+            state.final_test.analysis_individual = "all"
+            individual_select.options = {"all": "All individuals"}
+            individual_select.value = "all"
+            individual_select.visible = False
+            individual_select.disable()
+        individual_select.update()
+
     def _set_analysis_hidden(message: str) -> None:
         analysis_textarea.value = message
         analysis_textarea.update()
@@ -190,6 +218,8 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
             state.final_test.weight_heavy,
             "--weight-ranged",
             state.final_test.weight_ranged,
+            "--individual",
+            state.final_test.analysis_individual,
         ]
 
     def on_run_changed(event: Any) -> None:
@@ -209,6 +239,10 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
 
     def on_aggregation_changed(event: Any) -> None:
         state.final_test.analysis_aggregation = str(event.value or "mean")
+        asyncio.create_task(refresh_analysis())
+
+    def on_individual_changed(event: Any) -> None:
+        state.final_test.analysis_individual = str(event.value or "all")
         asyncio.create_task(refresh_analysis())
 
     def on_weight_changed(field_name: str):
@@ -270,6 +304,12 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
                 value=state.final_test.analysis_aggregation,
                 on_change=on_aggregation_changed,
             ).classes(f"{INPUT_CLASS} w-40")
+            individual_select = ui.select(
+                {"all": "All individuals"},
+                label="Individual",
+                value=state.final_test.analysis_individual,
+                on_change=on_individual_changed,
+            ).classes(f"{INPUT_CLASS} w-56")
             analysis_button = ui.button("Refresh analysis", on_click=safe_click(refresh_analysis, label="Refresh analysis")).classes(
                 BUTTON_CLASS
             )

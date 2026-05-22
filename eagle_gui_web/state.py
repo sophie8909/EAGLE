@@ -116,6 +116,7 @@ class FinalTestState:
     opponent: str = "all"
     analysis_metric: str = "win_rate"
     analysis_aggregation: str = "mean"
+    analysis_individual: str = "all"
     weight_resources: str = "1.0"
     weight_base: str = "1.0"
     weight_barracks: str = "1.0"

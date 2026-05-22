@@ -632,6 +632,7 @@ def analyze_final_test_run(
     output_dir: str | Path | None = None,
     metric: str = "win_rate",
     aggregation: str = "mean",
+    individual: str = "all",
     weights: dict[str, float] | None = None,
 ) -> dict[str, object]:
     """Analyze one raw final-test results directory and render a heatmap plot."""
@@ -642,22 +643,33 @@ def analyze_final_test_run(
     payload = json.loads(results_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"Unexpected final test payload in {results_path}.")
+    individual_ids = _final_test_individual_ids(payload)
+    selected_individual = _normalize_final_test_individual(individual, individual_ids)
+    analysis_payload = _filter_final_test_payload_by_individual(payload, selected_individual)
+    individual_label = _final_test_individual_label(selected_individual)
 
     resolved_output_dir = ensure_directory(Path(output_dir).resolve()) if output_dir is not None else ensure_directory(
         results_path.parent / "analysis"
     )
-    summary = _final_test_analysis_summary(payload, metric=metric, aggregation=aggregation, weights=weights)
-    pair_rows = _final_test_pair_rows(payload, metric=metric, weights=weights)
+    summary = _final_test_analysis_summary(analysis_payload, metric=metric, aggregation=aggregation, weights=weights)
+    summary["individual"] = selected_individual
+    summary["individual_label"] = individual_label
+    pair_rows = _final_test_pair_rows(analysis_payload, metric=metric, weights=weights)
     plot_path = _plot_final_test_heatmap(
         pair_rows,
         metric=metric,
         aggregation=aggregation,
+        individual_label=individual_label,
+        individual_slug=_final_test_individual_slug(selected_individual),
         output_dir=resolved_output_dir,
     )
     summary_payload = {
         **summary,
         "results_path": str(results_path),
         "analysis_dir": str(resolved_output_dir),
+        "individual": selected_individual,
+        "individual_label": individual_label,
+        "individual_ids": individual_ids,
         "metric": metric,
         "aggregation": aggregation,
         "pair_rows": pair_rows,
@@ -671,9 +683,56 @@ def analyze_final_test_run(
         "analysis_summary_json": str(summary_path),
         "metric_heatmap": str(plot_path) if plot_path is not None else "",
         "pair_rows_json": str(_write_pair_rows_json(resolved_output_dir, pair_rows)),
+        "individual": selected_individual,
         "metric": metric,
         "aggregation": aggregation,
     }
+
+
+def _final_test_individual_ids(payload: dict[str, object]) -> list[str]:
+    """Return sorted individual ids present in a final-test payload."""
+    return sorted(
+        {
+            str(record.get("individual_id"))
+            for record in _final_test_records(payload.get("results"))
+            if record.get("individual_id")
+        }
+    )
+
+
+def _normalize_final_test_individual(individual: str, individual_ids: list[str]) -> str:
+    """Return a valid individual filter value."""
+    selected = str(individual or "all").strip() or "all"
+    if selected == "all":
+        return selected
+    if selected in individual_ids:
+        return selected
+    return "all"
+
+
+def _filter_final_test_payload_by_individual(payload: dict[str, object], individual: str) -> dict[str, object]:
+    """Return a payload copy filtered to one individual id for analysis."""
+    if individual == "all":
+        return payload
+    filtered_payload = dict(payload)
+    filtered_payload["results"] = [
+        record
+        for record in _final_test_records(payload.get("results"))
+        if str(record.get("individual_id")) == individual
+    ]
+    return filtered_payload
+
+
+def _final_test_individual_label(individual: str) -> str:
+    """Return the display label for one final-test individual filter."""
+    if individual == "all":
+        return "All individuals"
+    return f"Individual {individual}"
+
+
+def _final_test_individual_slug(individual: str) -> str:
+    """Return a filesystem-safe label for one individual filter."""
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", individual or "all").strip("_") or "all"
 
 
 def _resolve_final_test_results_path(run_dir: Path) -> Path | None:
@@ -795,6 +854,8 @@ def _plot_final_test_heatmap(
     *,
     metric: str,
     aggregation: str,
+    individual_label: str,
+    individual_slug: str,
     output_dir: Path,
 ) -> Path | None:
     """Render one map/opponent heatmap for the selected final-test metric."""
@@ -824,7 +885,7 @@ def _plot_final_test_heatmap(
     plt.yticks(range(len(maps)), maps)
     plt.xlabel("Opponent")
     plt.ylabel("Map")
-    plt.title(_compose_plot_title(f"Final Test {metric} ({aggregation})", None))
+    plt.title(_compose_plot_title(f"Final Test {metric} ({aggregation}) - {individual_label}", None))
     colorbar = plt.colorbar(image)
     colorbar.set_label(metric.replace("_", " ").title())
     for row_index, row_values in enumerate(matrix):
@@ -832,7 +893,7 @@ def _plot_final_test_heatmap(
             if math.isnan(value):
                 continue
             plt.text(col_index, row_index, f"{value:.2f}", ha="center", va="center", fontsize=8, color="black")
-    figure_path = output_dir / f"final_test_{metric}_{aggregation}.png"
+    figure_path = output_dir / f"final_test_{metric}_{aggregation}_{individual_slug}.png"
     plt.tight_layout()
     plt.savefig(figure_path, dpi=200)
     plt.close()
@@ -851,6 +912,7 @@ def _final_test_text_lines(
         f"Source run: {summary.get('source_run_dir')}",
         f"Mode: {summary.get('mode')}",
         f"Selection: {dict(summary.get('selection') or {}).get('type', 'unknown')}",
+        f"Individual: {summary.get('individual_label', 'All individuals')}",
         f"Games: {summary.get('games', 0)}",
     ]
     if summary.get("win_rate") is not None:
