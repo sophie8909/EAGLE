@@ -19,6 +19,8 @@ from typing import Any
 from eagle.config import normalize_algorithm_name
 from eagle.envs.microrts.runner import save_prompt as save_microrts_prompt
 from eagle.envs.microrts.runner import set_config_property
+from eagle.analysis.evolution_result_analysis import parse_final_test_analysis
+from eagle.eval.microrts.final_test_batch import run_final_test_batch
 from eagle.objectives.registry import get_objectives, list_objective_names, normalize_objective_key
 from eagle.operators.registry import list_operator_names
 from eagle.utils.component_pool import ComponentPool
@@ -720,23 +722,30 @@ def start_experiment(state: Any) -> tuple[bool, str]:
 
 
 def start_final_test(state: Any) -> tuple[bool, str]:
-    """Launch final testing for the selected existing run folder."""
+    """Run batch final-test replay for the selected existing run folder."""
     with LoggedOperation("running final test"):
         run_dir = validate_run_dir(state.final_test.selected_run_dir)
-        config_path = run_dir / "config.json"
-        apply_final_test_max_front(config_path, state.final_test.max_front)
-        command = [sys.executable, "-m", "eagle.main", "--resume-log-dir", str(run_dir)]
-        if state.final_test.quick_run:
-            command.append("--quick-run")
-        if state.final_test.precompile_python:
-            command.append("--precompile-python")
-        return launch_web_process(
-            state=state,
-            command=command,
-            config_path=config_path,
-            log_prefix="gui_web_final_test",
-            debug_lines=[f"[DEBUG] gui web final test run_dir={run_dir}"],
-        )
+        state.final_test.status_text = "running"
+        try:
+            run_final_test_batch(
+                run_dir,
+                map_selection=state.final_test.map_selection,
+                opponent_selection=state.final_test.opponent_selection,
+            )
+            results_path = latest_final_test_results_path(run_dir)
+            state.final_test.status_text = "final test complete"
+            state.final_test.analysis_output_path = str(results_path) if results_path is not None else ""
+            state.final_test.analysis_text = build_final_test_results_text(run_dir)
+            state.final_test.log_text = state.final_test.analysis_text
+            return (
+                True,
+                f"Saved final test results to {results_path}" if results_path is not None else "Final test complete",
+            )
+        except (FileNotFoundError, OSError, ValueError, RuntimeError) as exc:
+            state.final_test.status_text = "final test failed"
+            state.final_test.analysis_text = str(exc)
+            state.final_test.log_text = str(exc)
+            return False, str(exc)
 
 
 def validate_run_dir(run_dir: Path | None) -> Path:
@@ -934,6 +943,7 @@ def run_analysis_subprocess(
     run_dir: Path | None,
     output_dir: Path | None,
     analysis_type: str,
+    extra_args: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run analysis plotting in a subprocess and return a stable result object."""
     run_path = Path(run_dir).resolve() if run_dir is not None else None
@@ -959,6 +969,8 @@ def run_analysis_subprocess(
     ]
     if output_path is not None:
         command.extend(["--output-dir", str(output_path)])
+    if extra_args:
+        command.extend(str(arg) for arg in extra_args)
 
     try:
         completed = subprocess.run(
@@ -1035,6 +1047,80 @@ def build_timing(run_dir: Path | None) -> tuple[str, list[dict[str, Any]], str]:
             return "No run selected", [], ""
         report = analysis_service.build_timing_analysis_report(run_dir)
         return str(report.summary), list(getattr(report, "rows", []) or []), str(report.body)
+
+
+def latest_final_test_results_dir(run_dir: Path | None) -> Path | None:
+    """Return the newest timestamped final-test results directory for one run."""
+    if run_dir is None:
+        return None
+    path = Path(run_dir).resolve() / "final_test"
+    if not path.exists():
+        return None
+    candidates = [
+        candidate
+        for candidate in path.iterdir()
+        if candidate.is_dir() and (candidate / "results.json").exists()
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda candidate: (candidate.stat().st_mtime, candidate.name))
+
+
+def latest_final_test_results_path(run_dir: Path | None) -> Path | None:
+    """Return the newest final-test results.json path for one run."""
+    results_dir = latest_final_test_results_dir(run_dir)
+    if results_dir is None:
+        return None
+    return results_dir / "results.json"
+
+
+def build_final_test_results_text(run_dir: Path | None) -> str:
+    """Render the latest batch final-test results as a compact text summary."""
+    if run_dir is None:
+        return "No final test results found."
+    results_path = latest_final_test_results_path(run_dir)
+    if results_path is None:
+        return "No final test results found."
+    try:
+        payload = json.loads(results_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return str(exc)
+    analysis = parse_final_test_analysis(json.dumps(payload, ensure_ascii=False))
+    if not analysis.get("has_final_test"):
+        return "No final test results found."
+    lines: list[str] = []
+    lines.append(f"Source run: {analysis.get('source_run_dir', run_dir)}")
+    lines.append(f"Mode: {analysis.get('mode', 'unknown')}")
+    selection = dict(analysis.get("selection") or {})
+    if selection:
+        lines.append(
+            "Selection: "
+            f"{selection.get('type', 'unknown')} "
+            f"({len(list(selection.get('individual_ids') or []))} individuals)"
+        )
+    config = dict(analysis.get("config") or {})
+    if config.get("maps"):
+        lines.append("Maps: " + ", ".join(str(item) for item in config["maps"]))
+    if config.get("opponents"):
+        lines.append("Opponents: " + ", ".join(str(item) for item in config["opponents"]))
+    if "games" in analysis:
+        lines.append(f"Games: {analysis['games']}")
+    if analysis.get("win_rate") is not None:
+        lines.append(f"Win rate: {float(analysis['win_rate']) * 100:.1f}%")
+    for key, label in (
+        ("mean_score", "Mean score"),
+        ("worst_score", "Worst score"),
+        ("best_score", "Best score"),
+        ("mean_resource_difference", "Mean resource difference"),
+        ("mean_weighted_resource_score", "Mean weighted resource score"),
+    ):
+        if analysis.get(key) is not None:
+            lines.append(f"{label}: {float(analysis[key]):.4g}")
+    if analysis.get("selection_type"):
+        lines.append(f"Selection type: {analysis['selection_type']}")
+    if analysis.get("results_path"):
+        lines.append(f"Results file: {analysis['results_path']}")
+    return "\n".join(lines)
 
 
 def load_prompt_records(run_dir: Path | None) -> dict[str, dict[str, Any]]:

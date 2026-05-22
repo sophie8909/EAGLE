@@ -215,11 +215,13 @@ def _json_objects_from_text(text: str) -> list[dict[str, object]]:
 def _final_test_payload_from_text(text: str) -> dict[str, object]:
     """Return the first final-test-shaped JSON object from mixed text."""
     for payload in _json_objects_from_text(text):
-        if payload.get("results") is not None and (
-            payload.get("generation_log") is not None
-            or payload.get("selection_rule") is not None
-            or payload.get("selected_individual_count") is not None
-            or payload.get("skipped") is not None
+        if payload.get("results") is None:
+            continue
+        if any(key in payload for key in ("source_run_dir", "selection", "config", "mode")):
+            return payload
+        if any(
+            payload.get(key) is not None
+            for key in ("generation_log", "selection_rule", "selected_individual_count", "skipped")
         ):
             return payload
     return {}
@@ -410,12 +412,40 @@ def _fitness_payload_from_line(line: str) -> object | None:
         return None
 
 
-def _final_test_analysis_from_payload(payload: dict[str, object]) -> dict[str, object]:
-    """Build final-test fields from final_test_results.json data."""
+def _final_test_analysis_from_payload(
+    payload: dict[str, object],
+    *,
+    metric: str | None = None,
+    aggregation: str = "mean",
+    weights: dict[str, float] | None = None,
+) -> dict[str, object]:
+    """Build final-test fields from final-test result data."""
     records = _final_test_records(payload.get("results"))
+    if not records:
+        return {
+            "has_final_test": False,
+            "games": 0,
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "win_rate": None,
+            "maps": [],
+            "opponents": [],
+        }
+
     wins = losses = draws = skipped_games = failed_games = 0
     maps: set[str] = set()
     opponents: set[str] = set()
+    metric_values: dict[str, list[float]] = {
+        "win_rate": [],
+        "score": [],
+        "ally_resources": [],
+        "enemy_resources": [],
+        "total_ally_resources": [],
+        "total_enemy_resources": [],
+        "resource_difference": [],
+        "weighted_resource_score": [],
+    }
     for record in records:
         outcome = _final_test_outcome(record)
         wins += int(outcome == "win")
@@ -425,9 +455,13 @@ def _final_test_analysis_from_payload(payload: dict[str, object]) -> dict[str, o
         failed_games += int(outcome == "failed")
         _add_optional_text(opponents, record.get("opponent"))
         _add_optional_text(maps, record.get("map") or record.get("map_name") or record.get("map_location"))
+        record_metrics = _final_test_record_metrics(record, weights=weights)
+        for key in metric_values:
+            metric_values[key].append(float(record_metrics[key]))
+
     completed_games = wins + losses + draws
     total_games = len(records)
-    return {
+    summary = {
         "has_final_test": True,
         "games": total_games,
         "wins": wins,
@@ -440,12 +474,29 @@ def _final_test_analysis_from_payload(payload: dict[str, object]) -> dict[str, o
         "failed_games": failed_games,
         "skipped": bool(payload.get("skipped")),
         "skip_reason": str(payload.get("skip_reason")) if payload.get("skip_reason") else None,
+        "source_run_dir": payload.get("source_run_dir"),
+        "created_at": payload.get("created_at"),
+        "mode": payload.get("mode"),
+        "selection": payload.get("selection") or {},
+        "config": payload.get("config") or {},
     }
+    for key, values in metric_values.items():
+        summary[f"mean_{key}"] = _safe_average(values)
+        summary[f"best_{key}"] = max(values) if values else None
+        summary[f"worst_{key}"] = min(values) if values else None
+    if metric is not None:
+        metric_values_for_key = metric_values.get(metric, [])
+        summary["selected_metric"] = metric
+        summary["selected_aggregation"] = aggregation
+        summary["selected_metric_value"] = _aggregate_metric_values(metric_values_for_key, aggregation)
+    return summary
 
 
 def _final_test_records(results: object) -> list[dict[str, object]]:
     """Flatten final-test result rows from supported result payloads."""
     if isinstance(results, dict):
+        if isinstance(results.get("results"), list):
+            return [item for item in list(results.get("results") or []) if isinstance(item, dict)]
         rows: list[dict[str, object]] = []
         for value in results.values():
             if isinstance(value, list):
@@ -481,6 +532,8 @@ def _final_test_analysis_from_lines(text: str) -> dict[str, object]:
 
 def _final_test_outcome(record: dict[str, object]) -> str:
     """Normalize one final-test row outcome."""
+    if "win" in record:
+        return "win" if bool(record.get("win")) else "loss"
     status = str(record.get("status") or record.get("result") or "").strip().lower()
     if status in {"win", "loss", "draw", "skipped", "failed"}:
         return status
@@ -500,6 +553,337 @@ def _final_test_outcome(record: dict[str, object]) -> str:
     if win_score == 0.0:
         return "loss"
     return "draw"
+
+
+def _final_test_record_metrics(record: dict[str, object], weights: dict[str, float] | None = None) -> dict[str, float]:
+    """Return derived raw metrics for one final-test replay record."""
+    ally = dict(record.get("ally") or {})
+    enemy = dict(record.get("enemy") or {})
+    ally_total = _snapshot_total_resources(ally)
+    enemy_total = _snapshot_total_resources(enemy)
+    weights = dict(weights or {})
+    return {
+        "win_rate": 1.0 if bool(record.get("win")) else 0.0,
+        "score": _safe_float(record.get("score")),
+        "ally_resources": _safe_float(ally.get("resources")),
+        "enemy_resources": _safe_float(enemy.get("resources")),
+        "total_ally_resources": ally_total,
+        "total_enemy_resources": enemy_total,
+        "resource_difference": ally_total - enemy_total,
+        "weighted_resource_score": _weighted_resource_score(ally, weights),
+    }
+
+
+def _snapshot_total_resources(snapshot: dict[str, object]) -> float:
+    """Return the total resource and unit count for one player snapshot."""
+    return sum(
+        _safe_float(snapshot.get(key))
+        for key in ("resources", "base_count", "barracks_count", "worker_count", "light_count", "heavy_count", "ranged_count")
+    )
+
+
+def _weighted_resource_score(snapshot: dict[str, object], weights: dict[str, float]) -> float:
+    """Return the weighted resource score for one player snapshot."""
+    if not weights:
+        weights = {
+            "resources": 1.0,
+            "base": 1.0,
+            "barracks": 1.0,
+            "worker": 1.0,
+            "light": 1.0,
+            "heavy": 1.0,
+            "ranged": 1.0,
+        }
+    key_map = {
+        "resources": "resources",
+        "base": "base_count",
+        "barracks": "barracks_count",
+        "worker": "worker_count",
+        "light": "light_count",
+        "heavy": "heavy_count",
+        "ranged": "ranged_count",
+    }
+    return sum(_safe_float(snapshot.get(field)) * float(weights.get(weight_key, 0.0)) for weight_key, field in key_map.items())
+
+
+def _safe_average(values: list[float]) -> float | None:
+    """Return the arithmetic mean for one numeric series."""
+    numeric_values = [value for value in values if value == value]
+    if not numeric_values:
+        return None
+    return sum(numeric_values) / len(numeric_values)
+
+
+def _aggregate_metric_values(values: list[float], aggregation: str) -> float | None:
+    """Aggregate one metric series using the selected reduction."""
+    numeric_values = [value for value in values if value == value]
+    if not numeric_values:
+        return None
+    if aggregation == "best":
+        return max(numeric_values)
+    if aggregation == "worst":
+        return min(numeric_values)
+    return sum(numeric_values) / len(numeric_values)
+
+
+def analyze_final_test_run(
+    run_dir: str | Path,
+    *,
+    output_dir: str | Path | None = None,
+    metric: str = "win_rate",
+    aggregation: str = "mean",
+    weights: dict[str, float] | None = None,
+) -> dict[str, object]:
+    """Analyze one raw final-test results directory and render a heatmap plot."""
+    resolved_run_dir = Path(run_dir).resolve()
+    results_path = _resolve_final_test_results_path(resolved_run_dir)
+    if results_path is None:
+        raise FileNotFoundError(f"No final_test results.json found under {resolved_run_dir}.")
+    payload = json.loads(results_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Unexpected final test payload in {results_path}.")
+
+    resolved_output_dir = ensure_directory(Path(output_dir).resolve()) if output_dir is not None else ensure_directory(
+        results_path.parent / "analysis"
+    )
+    summary = _final_test_analysis_summary(payload, metric=metric, aggregation=aggregation, weights=weights)
+    pair_rows = _final_test_pair_rows(payload, metric=metric, weights=weights)
+    plot_path = _plot_final_test_heatmap(
+        pair_rows,
+        metric=metric,
+        aggregation=aggregation,
+        output_dir=resolved_output_dir,
+    )
+    summary_payload = {
+        **summary,
+        "results_path": str(results_path),
+        "analysis_dir": str(resolved_output_dir),
+        "metric": metric,
+        "aggregation": aggregation,
+        "pair_rows": pair_rows,
+        "heatmap_path": str(plot_path) if plot_path is not None else "",
+        "text_lines": _final_test_text_lines(summary, pair_rows, metric=metric, aggregation=aggregation),
+    }
+    summary_path = resolved_output_dir / "analysis_summary.json"
+    summary_path.write_text(json.dumps(summary_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {
+        "results_path": str(results_path),
+        "analysis_summary_json": str(summary_path),
+        "metric_heatmap": str(plot_path) if plot_path is not None else "",
+        "pair_rows_json": str(_write_pair_rows_json(resolved_output_dir, pair_rows)),
+        "metric": metric,
+        "aggregation": aggregation,
+    }
+
+
+def _resolve_final_test_results_path(run_dir: Path) -> Path | None:
+    """Find the newest final-test results JSON file for one run."""
+    direct = run_dir / "results.json"
+    if direct.exists():
+        return direct
+    final_test_dir = run_dir / "final_test"
+    if not final_test_dir.exists():
+        return None
+    candidates = [
+        path
+        for path in final_test_dir.glob("*/results.json")
+        if path.is_file()
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: (path.parent.stat().st_mtime, path.parent.name))
+
+
+def _final_test_analysis_summary(
+    payload: dict[str, object],
+    *,
+    metric: str,
+    aggregation: str,
+    weights: dict[str, float] | None,
+) -> dict[str, object]:
+    """Build summary statistics for one final-test results payload."""
+    records = _final_test_records(payload.get("results"))
+    metrics = [_final_test_record_metrics(record, weights=weights) for record in records]
+    wins = sum(int(bool(record.get("win"))) for record in records)
+    losses = len(records) - wins
+    maps = sorted({str(record.get("map")) for record in records if record.get("map")})
+    opponents = sorted({str(record.get("opponent")) for record in records if record.get("opponent")})
+    return {
+        "has_final_test": bool(records),
+        "source_run_dir": payload.get("source_run_dir"),
+        "created_at": payload.get("created_at"),
+        "mode": payload.get("mode"),
+        "selection": payload.get("selection") or {},
+        "config": payload.get("config") or {},
+        "games": len(records),
+        "wins": wins,
+        "losses": losses,
+        "draws": 0,
+        "win_rate": (wins / len(records)) if records else None,
+        "maps": maps,
+        "opponents": opponents,
+        "mean_score": _safe_average([item["score"] for item in metrics]),
+        "worst_score": min((item["score"] for item in metrics), default=None),
+        "best_score": max((item["score"] for item in metrics), default=None),
+        "mean_ally_resources": _safe_average([item["ally_resources"] for item in metrics]),
+        "mean_enemy_resources": _safe_average([item["enemy_resources"] for item in metrics]),
+        "mean_total_ally_resources": _safe_average([item["total_ally_resources"] for item in metrics]),
+        "mean_total_enemy_resources": _safe_average([item["total_enemy_resources"] for item in metrics]),
+        "mean_resource_difference": _safe_average([item["resource_difference"] for item in metrics]),
+        "mean_weighted_resource_score": _safe_average([item["weighted_resource_score"] for item in metrics]),
+        "metric": metric,
+        "aggregation": aggregation,
+    }
+
+
+def _final_test_pair_rows(
+    payload: dict[str, object],
+    *,
+    metric: str,
+    weights: dict[str, float] | None,
+) -> list[dict[str, object]]:
+    """Aggregate final-test rows by map/opponent combination."""
+    records = _final_test_records(payload.get("results"))
+    pair_map: dict[tuple[str, str], list[dict[str, float]]] = {}
+    for record in records:
+        map_name = str(record.get("map") or record.get("map_name") or record.get("map_location") or "")
+        opponent = str(record.get("opponent") or "")
+        if not map_name or not opponent:
+            continue
+        pair_map.setdefault((map_name, opponent), []).append(_final_test_record_metrics(record, weights=weights))
+
+    rows: list[dict[str, object]] = []
+    for (map_name, opponent), metrics in sorted(pair_map.items()):
+        row = {
+            "map": map_name,
+            "opponent": opponent,
+            "count": len(metrics),
+        }
+        for key in (
+            "win_rate",
+            "score",
+            "ally_resources",
+            "enemy_resources",
+            "total_ally_resources",
+            "total_enemy_resources",
+            "resource_difference",
+            "weighted_resource_score",
+        ):
+            values = [float(item[key]) for item in metrics]
+            row[f"mean_{key}"] = _safe_average(values)
+            row[f"best_{key}"] = max(values) if values else None
+            row[f"worst_{key}"] = min(values) if values else None
+        row["selected_metric"] = metric
+        row["selected_metric_mean"] = _aggregate_metric_values(
+            [float(item.get(metric, 0.0)) for item in metrics if metric in item],
+            "mean",
+        )
+        row["selected_metric_best"] = _aggregate_metric_values(
+            [float(item.get(metric, 0.0)) for item in metrics if metric in item],
+            "best",
+        )
+        row["selected_metric_worst"] = _aggregate_metric_values(
+            [float(item.get(metric, 0.0)) for item in metrics if metric in item],
+            "worst",
+        )
+        rows.append(row)
+    return rows
+
+
+def _plot_final_test_heatmap(
+    pair_rows: list[dict[str, object]],
+    *,
+    metric: str,
+    aggregation: str,
+    output_dir: Path,
+) -> Path | None:
+    """Render one map/opponent heatmap for the selected final-test metric."""
+    plt = _require_matplotlib()
+    if not pair_rows:
+        return None
+    maps = sorted({str(row.get("map")) for row in pair_rows if row.get("map")})
+    opponents = sorted({str(row.get("opponent")) for row in pair_rows if row.get("opponent")})
+    if not maps or not opponents:
+        return None
+
+    value_key = f"{aggregation}_{metric}"
+    matrix: list[list[float]] = []
+    for map_name in maps:
+        row_values: list[float] = []
+        for opponent in opponents:
+            matched = next(
+                (row for row in pair_rows if str(row.get("map")) == map_name and str(row.get("opponent")) == opponent),
+                None,
+            )
+            row_values.append(_safe_float(matched.get(value_key)) if matched is not None else float("nan"))
+        matrix.append(row_values)
+
+    plt.figure(figsize=(max(8, len(opponents) * 1.2), max(6, len(maps) * 0.6)))
+    image = plt.imshow(matrix, cmap="coolwarm", aspect="auto")
+    plt.xticks(range(len(opponents)), [_clean_axis_label(name) for name in opponents], rotation=45, ha="right")
+    plt.yticks(range(len(maps)), maps)
+    plt.xlabel("Opponent")
+    plt.ylabel("Map")
+    plt.title(_compose_plot_title(f"Final Test {metric} ({aggregation})", None))
+    colorbar = plt.colorbar(image)
+    colorbar.set_label(metric.replace("_", " ").title())
+    for row_index, row_values in enumerate(matrix):
+        for col_index, value in enumerate(row_values):
+            if math.isnan(value):
+                continue
+            plt.text(col_index, row_index, f"{value:.2f}", ha="center", va="center", fontsize=8, color="black")
+    figure_path = output_dir / f"final_test_{metric}_{aggregation}.png"
+    plt.tight_layout()
+    plt.savefig(figure_path, dpi=200)
+    plt.close()
+    return figure_path
+
+
+def _final_test_text_lines(
+    summary: dict[str, object],
+    pair_rows: list[dict[str, object]],
+    *,
+    metric: str,
+    aggregation: str,
+) -> list[str]:
+    """Render a compact text summary for the final-test analysis panel."""
+    lines = [
+        f"Source run: {summary.get('source_run_dir')}",
+        f"Mode: {summary.get('mode')}",
+        f"Selection: {dict(summary.get('selection') or {}).get('type', 'unknown')}",
+        f"Games: {summary.get('games', 0)}",
+    ]
+    if summary.get("win_rate") is not None:
+        lines.append(f"Win rate: {float(summary['win_rate']) * 100:.1f}%")
+    lines.append(f"Metric: {metric}")
+    lines.append(f"Aggregation: {aggregation}")
+    for row in pair_rows[:50]:
+        lines.append(
+            "- "
+            f"{row['map']} | {row['opponent']} | "
+            f"mean={_format_metric_value(row.get(f'mean_{metric}'))} "
+            f"best={_format_metric_value(row.get(f'best_{metric}'))} "
+            f"worst={_format_metric_value(row.get(f'worst_{metric}'))}"
+        )
+    return lines
+
+
+def _write_pair_rows_json(output_dir: Path, pair_rows: list[dict[str, object]]) -> Path:
+    """Persist the aggregated pair rows for downstream inspection."""
+    path = output_dir / "pair_rows.json"
+    path.write_text(json.dumps(pair_rows, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def _format_metric_value(value: object) -> str:
+    """Format one metric value for text summaries."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "n/a"
+    if math.isnan(number):
+        return "n/a"
+    return f"{number:.4g}"
 
 
 def _add_optional_text(values: set[str], value: object) -> None:

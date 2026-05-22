@@ -8,10 +8,20 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .evolution_result_analysis import analyze_evolution_run
+from .evolution_result_analysis import analyze_evolution_run, analyze_final_test_run
 
 
-SUPPORTED_ANALYSIS_TYPES = {"evolution", "mo"}
+SUPPORTED_ANALYSIS_TYPES = {"evolution", "mo", "final_test"}
+FINAL_TEST_METRICS = {
+    "win_rate",
+    "score",
+    "ally_resources",
+    "enemy_resources",
+    "total_ally_resources",
+    "total_enemy_resources",
+    "resource_difference",
+    "weighted_resource_score",
+}
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -23,8 +33,27 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "--type",
         dest="analysis_type",
         default="evolution",
-        help="Analysis type to run. Supported values: evolution, mo.",
+        help="Analysis type to run. Supported values: evolution, mo, final_test.",
     )
+    parser.add_argument(
+        "--metric",
+        default="win_rate",
+        choices=sorted(FINAL_TEST_METRICS),
+        help="Final-test analysis metric.",
+    )
+    parser.add_argument(
+        "--aggregation",
+        default="mean",
+        choices=["mean", "best", "worst"],
+        help="Final-test aggregation strategy.",
+    )
+    parser.add_argument("--weight-resources", default="1.0", help="Weighted resource score resource weight.")
+    parser.add_argument("--weight-base", default="1.0", help="Weighted resource score base weight.")
+    parser.add_argument("--weight-barracks", default="1.0", help="Weighted resource score barracks weight.")
+    parser.add_argument("--weight-worker", default="1.0", help="Weighted resource score worker weight.")
+    parser.add_argument("--weight-light", default="1.0", help="Weighted resource score light weight.")
+    parser.add_argument("--weight-heavy", default="1.0", help="Weighted resource score heavy weight.")
+    parser.add_argument("--weight-ranged", default="1.0", help="Weighted resource score ranged weight.")
     return parser
 
 
@@ -63,14 +92,31 @@ def _build_failure_result(
     }
 
 
-def run_analysis(*, run_dir: Path, output_dir: Path | None, analysis_type: str) -> dict[str, Any]:
+def run_analysis(
+    *,
+    run_dir: Path,
+    output_dir: Path | None,
+    analysis_type: str,
+    metric: str = "win_rate",
+    aggregation: str = "mean",
+    weights: dict[str, float] | None = None,
+) -> dict[str, Any]:
     """Run one supported analysis type and return a JSON-serializable result."""
     normalized_type = str(analysis_type or "").strip().lower()
     if normalized_type not in SUPPORTED_ANALYSIS_TYPES:
         raise ValueError(f"Unsupported analysis type: {analysis_type!r}")
 
     resolved_output_dir = _resolve_output_dir(run_dir, output_dir)
-    analysis_result = analyze_evolution_run(run_dir=run_dir, output_dir=resolved_output_dir)
+    if normalized_type == "final_test":
+        analysis_result = analyze_final_test_run(
+            run_dir=run_dir,
+            output_dir=resolved_output_dir,
+            metric=str(metric or "win_rate"),
+            aggregation=str(aggregation or "mean"),
+            weights=weights,
+        )
+    else:
+        analysis_result = analyze_evolution_run(run_dir=run_dir, output_dir=resolved_output_dir)
     return _build_success_result(
         run_dir=run_dir,
         output_dir=resolved_output_dir,
@@ -86,9 +132,25 @@ def main() -> int:
     run_dir = Path(args.run_dir).resolve()
     output_dir = Path(args.output_dir).resolve() if args.output_dir is not None else None
     analysis_type = str(args.analysis_type or "").strip().lower()
+    weights = {
+        "resources": float(args.weight_resources),
+        "base": float(args.weight_base),
+        "barracks": float(args.weight_barracks),
+        "worker": float(args.weight_worker),
+        "light": float(args.weight_light),
+        "heavy": float(args.weight_heavy),
+        "ranged": float(args.weight_ranged),
+    }
 
     try:
-        result = run_analysis(run_dir=run_dir, output_dir=output_dir, analysis_type=analysis_type)
+        result = run_analysis(
+            run_dir=run_dir,
+            output_dir=output_dir,
+            analysis_type=analysis_type,
+            metric=str(args.metric),
+            aggregation=str(args.aggregation),
+            weights=weights,
+        )
     except Exception as exc:
         result = _build_failure_result(
             run_dir=run_dir,

@@ -263,6 +263,7 @@ class JavaMatchEvaluator:
         generation: int | None,
         individual_id: Any | None,
         llm_call_limit: int | None = None,
+        map_location: str | None = None,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         """Run one prompt-driven EAGLE Java match."""
         return self._with_llm_interval(
@@ -277,6 +278,7 @@ class JavaMatchEvaluator:
                 generation=generation,
                 individual_id=individual_id,
                 llm_call_limit=llm_call_limit,
+                map_location=map_location,
             ),
         )
 

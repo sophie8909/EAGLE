@@ -140,7 +140,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
         elif page == "run":
             await controls["run"]["refresh_log"]()
         elif page == "final_test":
-            await controls["final_test"]["refresh_log"]()
+            await controls["final_test"]["refresh_all"]()
         elif page == "analysis":
             analysis_refresh_runs = controls.get("analysis", {}).get("refresh_runs")
             if analysis_refresh_runs:
@@ -220,7 +220,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
             await controls["run"]["refresh_log"]()
         elif selected == final_test_tab:
             state.runtime.current_page = "final_test"
-            await controls["final_test"]["refresh_log"]()
+            await controls["final_test"]["refresh_all"]()
         elif selected == llm_calls_tab:
             state.runtime.current_page = "llm_calls"
             await controls["llm_calls"]["refresh_llm_calls"](True)
@@ -263,6 +263,7 @@ async def startup_refresh() -> None:
     if analysis_refresh_runs:
         await analysis_refresh_runs()
     await controls["final_test"]["refresh_runs"]()
+    await controls["final_test"]["refresh_all"]()
     await controls["run"]["refresh_log"]()
 
 

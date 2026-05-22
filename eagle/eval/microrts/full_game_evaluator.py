@@ -386,6 +386,7 @@ class FullGameEvaluator:
         allow_history_reuse: bool = False,
         llm_interval: int | None = None,
         llm_call_limit: int | None = None,
+        map_location: str | None = None,
         test: bool = False,
     ) -> dict[str, Any]:
         """Run one gameplay EAGLE match and return the raw single-match payload."""
@@ -416,6 +417,7 @@ class FullGameEvaluator:
                 generation=generation,
                 individual_id=getattr(individual, "id", None) if individual is not None else None,
                 llm_call_limit=llm_call_limit,
+                map_location=map_location,
             )
         stats["microrts_compile_time"] = float(simulation_meta.get("compile_time_sec", 0.0) or 0.0)
         summarize_total_eval_time(stats)
@@ -535,6 +537,7 @@ class FullGameEvaluator:
         *,
         llm_interval: int | None = None,
         llm_call_limit: int | None = None,
+        map_location: str | None = None,
         test: bool = False,
         generation: int | None = None,
         individual_id: Any | None = None,
@@ -544,6 +547,7 @@ class FullGameEvaluator:
             opponent,
             llm_interval=llm_interval,
             llm_call_limit=llm_call_limit,
+            map_location=map_location,
             test=test,
             generation=generation,
             individual_id=individual_id,

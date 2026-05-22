@@ -465,6 +465,7 @@ def run_java_agent_game(
     generation: int | None = None,
     individual_id: Any | None = None,
     llm_call_limit: int | None = None,
+    map_location: str | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one MicroRTS game with explicit Java agent classes."""
     project_root = (project_root or PROJECT_ROOT).resolve()
@@ -508,7 +509,7 @@ def run_java_agent_game(
         trace_path = game_output_dir / ("trace_" + "_".join(trace_stem_parts) + ".xml")
         round_state_dir = game_output_dir / "round_states"
         max_game_ticks = int(getattr(config, "tick_limit", 5000))
-        map_location = select_random_map_location(project_root, config)
+        resolved_map_location = map_location or select_random_map_location(project_root, config)
         resolved_llm_call_limit = None if llm_call_limit is None else int(llm_call_limit)
         print(
             "[DEBUG] gameplay launch limits "
@@ -534,7 +535,7 @@ def run_java_agent_game(
             generation=generation,
             individual_id=individual_id,
             verbose_logs=_verbose_microrts_logs_enabled(config),
-            map_location=map_location,
+            map_location=resolved_map_location,
         )
         latest_round_log = latest_round_state_log(round_state_dir)
         log_content = ""
@@ -603,7 +604,7 @@ def run_java_agent_game(
             "trace_xml_path": str(trace_path) if trace_path.exists() else None,
             "round_state_dir": str(round_state_dir),
             "latest_round_state_log": str(latest_round_log) if latest_round_log is not None else None,
-            "map_location": map_location,
+            "map_location": resolved_map_location,
             "gameplay_map_dir": _configured_map_dir(config),
             "tick_limit": max_game_ticks,
             "llm_call_limit": resolved_llm_call_limit,
@@ -643,6 +644,7 @@ def run_prompt_based_game(
     generation: int | None = None,
     individual_id: Any | None = None,
     llm_call_limit: int | None = None,
+    map_location: str | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one gameplay EAGLE-vs-opponent match driven by the prompt file."""
     return run_java_agent_game(
@@ -658,4 +660,5 @@ def run_prompt_based_game(
         generation=generation,
         individual_id=individual_id,
         llm_call_limit=llm_call_limit,
+        map_location=map_location,
     )

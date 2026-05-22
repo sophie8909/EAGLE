@@ -112,11 +112,24 @@ class FinalTestState:
     """Final-test launch state for an existing run folder."""
 
     selected_run_dir: Path | None = None
+    map_selection: str = "single"
+    opponent_selection: str = "single"
+    analysis_metric: str = "win_rate"
+    analysis_aggregation: str = "mean"
+    weight_resources: str = "1.0"
+    weight_base: str = "1.0"
+    weight_barracks: str = "1.0"
+    weight_worker: str = "1.0"
+    weight_light: str = "1.0"
+    weight_heavy: str = "1.0"
+    weight_ranged: str = "1.0"
     max_front: str = ""
     quick_run: bool = False
     precompile_python: bool = False
     status_text: str = "not running"
     log_text: str = ""
+    analysis_text: str = "No final test results found."
+    analysis_output_path: str = ""
 
 
 @dataclass

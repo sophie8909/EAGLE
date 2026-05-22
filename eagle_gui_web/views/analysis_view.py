@@ -524,6 +524,9 @@ def _read_final_test_analysis_text(run_dir: Path) -> str:
     """Read final-test artifacts without mixing them into evolution analysis."""
     with services.LoggedOperation("reading large files", kind="final_test_logs", run_dir=run_dir):
         parts: list[str] = []
+        latest_results = services.latest_final_test_results_path(run_dir)
+        if latest_results is not None and latest_results.exists():
+            parts.append(latest_results.read_text(encoding="utf-8", errors="replace"))
         for filename in ("final_test_results.json", "final_test_result.json"):
             path = run_dir / filename
             if path.exists():
