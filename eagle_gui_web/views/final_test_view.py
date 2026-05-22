@@ -43,9 +43,9 @@ METRIC_OPTIONS = {
     "weighted_resource_score": "Weighted resource score",
 }
 AGGREGATION_OPTIONS = {
-    "Mean": "mean",
-    "Best": "best",
-    "Worst": "worst",
+    "mean": "Mean",
+    "best": "Best",
+    "worst": "Worst",
 }
 REPEAT_COUNT = 10
 
