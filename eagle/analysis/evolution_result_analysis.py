@@ -916,7 +916,11 @@ def _plot_generation_scatter(
 
         for individual in individuals:
             x_value, y_value = _xy_fitness(individual, objective_names)
-            print(f"Gen {generation_number} - Individual {getattr(individual, 'id', '')}: Fitness = ({x_value}, {y_value}), Front 1 = {getattr(individual, 'id', '') in front_one_ids}")
+            _debug_print(
+                debug,
+                f"Gen {generation_number} - Individual {getattr(individual, 'id', '')}: "
+                f"Fitness = ({x_value}, {y_value}), Front 1 = {getattr(individual, 'id', '') in front_one_ids}",
+            )
             if math.isnan(x_value) or math.isnan(y_value):
                 continue
 
@@ -1106,6 +1110,7 @@ def analyze_evolution_run(
     run_dir: str | Path | None = None,
     *,
     latest: bool = False,
+    output_dir: str | Path | None = None,
     title: str | None = None,
     debug: bool = False,
     eval_mode: str = "match",
@@ -1115,24 +1120,26 @@ def analyze_evolution_run(
         raise ValueError(f"Unsupported eval_mode: {eval_mode!r}")
 
     resolved_run_dir = _resolve_run_dir(run_dir, latest)
-    output_dir = ensure_directory(resolved_run_dir / "analysis" / "evolution")
+    resolved_output_dir = ensure_directory(Path(output_dir).resolve()) if output_dir is not None else ensure_directory(
+        resolved_run_dir / "analysis" / "evolution"
+    )
 
     generation_figures = _plot_generation_scatter(
         resolved_run_dir,
-        ensure_directory(output_dir / "generation_fitness"),
+        ensure_directory(resolved_output_dir / "generation_fitness"),
         custom_title=title,
         debug=debug,
         eval_mode=eval_mode,
     )
     generation_gif_path = _build_generation_gif(
         generation_figures,
-        output_dir / "generation_fitness" / "generation_fitness_animation.gif",
+        resolved_output_dir / "generation_fitness" / "generation_fitness_animation.gif",
     )
 
     final_test_path = _resolve_final_test_path(resolved_run_dir)
     final_test_figures: dict[str, str] = {}
     if final_test_path is not None:
-        final_test_output_dir = ensure_directory(output_dir / "final_test")
+        final_test_output_dir = ensure_directory(resolved_output_dir / "final_test")
         for interval_mode in FINAL_TEST_MODES:
             figure_path = _plot_final_test_mode(
                 resolved_run_dir,
@@ -1154,7 +1161,7 @@ def analyze_evolution_run(
         "debug": debug,
         "eval_mode": eval_mode,
     }
-    summary_path = output_dir / "analysis_summary.json"
+    summary_path = resolved_output_dir / "analysis_summary.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     summary["summary_path"] = str(summary_path)
     return summary
