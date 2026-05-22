@@ -8,6 +8,8 @@ from typing import Any
 
 from nicegui import ui
 
+from eagle_gui_web import services
+
 
 MODE_OPTIONS = {
     "single": "Single",
@@ -29,11 +31,7 @@ AGGREGATION_OPTIONS = {
     "worst": "Worst",
 }
 OPPONENT_OPTIONS = {
-    "ai.abstraction.HeavyRush": "HeavyRush",
-    "ai.abstraction.LightRush": "LightRush",
-    "ai.RandomBiasedAI": "RandomBiasedAI",
-    "ai.RandomAI": "RandomAI",
-    "ai.PassiveAI": "PassiveAI",
+    key: key.rsplit(".", 1)[-1] for key in services.MICRORTS_OPPONENT_CHOICES
 }
 
 
@@ -45,7 +43,7 @@ def create_run_selector(
     **kwargs: Any,
 ) -> Any:
     """Create a run-folder selector."""
-    return _create_selector(label, {}, _string_value(value), on_change, **kwargs)
+    return _create_selector(label, _run_options(), _string_value(value), on_change, **kwargs)
 
 
 def create_map_selector(
@@ -56,7 +54,7 @@ def create_map_selector(
     **kwargs: Any,
 ) -> Any:
     """Create a MicroRTS map selector."""
-    return _create_selector(label, {"maps/8x8/basesWorkers8x8.xml": "8x8 / basesWorkers8x8.xml"}, value, on_change, **kwargs)
+    return _create_selector(label, _map_options(), value, on_change, **kwargs)
 
 
 def create_opponent_selector(
@@ -125,3 +123,26 @@ def _valid_value(options: dict[str, str], value: str | None) -> str | None:
 def _string_value(value: str | Path | None) -> str | None:
     """Normalize optional path values for keyed selectors."""
     return str(value) if value is not None else None
+
+
+def _run_options() -> dict[str, str]:
+    """Discover EAGLE run folders from logs/eagle."""
+    services.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    paths = sorted((path for path in services.LOG_DIR.iterdir() if path.is_dir()), reverse=True)
+    return {str(path): path.name for path in paths}
+
+
+def _map_options() -> dict[str, str]:
+    """Discover MicroRTS XML maps under third_party/microrts/maps."""
+    maps_root = services.ROOT / "third_party" / "microrts" / "maps"
+    if not maps_root.exists():
+        return {"maps/8x8/basesWorkers8x8.xml": "8x8 / basesWorkers8x8.xml"}
+    options: dict[str, str] = {}
+    for path in sorted(maps_root.rglob("*.xml")):
+        if not path.is_file():
+            continue
+        relative_path = path.relative_to(maps_root)
+        key = f"maps/{relative_path.as_posix()}"
+        label = " / ".join(relative_path.parts)
+        options[key] = label
+    return options or {"maps/8x8/basesWorkers8x8.xml": "8x8 / basesWorkers8x8.xml"}
