@@ -25,12 +25,12 @@ from eagle_gui_web.ui_actions import safe_click
 
 
 MAP_SELECTION_OPTIONS = {
-    "Single map": "single",
-    "All maps": "all",
+    "single": "Single",
+    "all": "All",
 }
 OPPONENT_SELECTION_OPTIONS = {
-    "Single opponent": "single",
-    "All opponents": "all",
+    "single": "Single",
+    "all": "All",
 }
 METRIC_OPTIONS = {
     "Win rate": "win_rate",
