@@ -9,6 +9,7 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.components.selectors import create_run_selector
 from eagle_gui_web.theme import (
     BADGE_CLASS,
     BUTTON_CLASS,
@@ -114,7 +115,10 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
                 value=state.run.precompile_python,
                 on_change=lambda event: setattr(state.run, "precompile_python", bool(event.value)),
             )
-        run_select = ui.select([], label="Run folder", on_change=on_run_changed).classes(f"{INPUT_CLASS} w-full")
+        run_select = create_run_selector(
+            value=state.run.experiment_current_run_dir,
+            on_change=on_run_changed,
+        ).classes(f"{INPUT_CLASS} w-full")
         log_textarea = ui.textarea(value=state.run.log_text).props("readonly").classes(
             f"{TEXTAREA_CLASS} {height_class(log_height)} w-full"
         )

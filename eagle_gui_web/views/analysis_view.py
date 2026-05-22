@@ -18,6 +18,7 @@ from eagle.analysis.evolution_result_analysis import (
     parse_time_analysis,
 )
 from eagle_gui_web import services
+from eagle_gui_web.components.selectors import create_run_selector
 from eagle_gui_web.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
@@ -289,9 +290,10 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Analysis").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
-            run_select = ui.select([], label="Run folder", on_change=on_run_changed).classes(
-                f"{INPUT_CLASS} w-full"
-            )
+            run_select = create_run_selector(
+                value=state.analysis.analysis_selected_run_dir,
+                on_change=on_run_changed,
+            ).classes(f"{INPUT_CLASS} w-full")
             ui.button("Refresh runs", on_click=safe_click(refresh_runs, label="Refresh analysis runs")).classes(
                 BUTTON_CLASS
             )
