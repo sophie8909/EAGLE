@@ -33,14 +33,14 @@ OPPONENT_SELECTION_OPTIONS = {
     "all": "All",
 }
 METRIC_OPTIONS = {
-    "Win rate": "win_rate",
-    "Score": "score",
-    "Ally resources": "ally_resources",
-    "Enemy resources": "enemy_resources",
-    "Total ally resources": "total_ally_resources",
-    "Total enemy resources": "total_enemy_resources",
-    "Resource difference": "resource_difference",
-    "Weighted resource score": "weighted_resource_score",
+    "win_rate": "Win rate",
+    "score": "Score",
+    "ally_resources": "Ally resources",
+    "enemy_resources": "Enemy resources",
+    "total_ally_resources": "Total ally resources",
+    "total_enemy_resources": "Total enemy resources",
+    "resource_difference": "Resource difference",
+    "weighted_resource_score": "Weighted resource score",
 }
 AGGREGATION_OPTIONS = {
     "Mean": "mean",
