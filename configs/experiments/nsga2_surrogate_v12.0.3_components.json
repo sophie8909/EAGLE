@@ -1,0 +1,163 @@
+{
+  "metadata": {
+    "identity_component_key": "strategy_identity",
+    "non_evolving_component_keys": [
+      "current_game_state_marker"
+    ],
+    "reflection_format_keys": [
+      "strategy_identity"
+    ],
+    "reflection_alignment_keys": [
+      "strategy_identity"
+    ]
+  },
+  "strategy_identity": [
+    [
+      "Strategy identity: Economy-first stabilizer.",
+      "Prioritize safe worker economy and reliable barracks construction before committing to attacks.",
+      "Avoid risky early combat unless the Ally Base is directly threatened."
+    ],
+    [
+      "Strategy identity: Balanced production-pressure agent.",
+      "Build barracks early, maintain harvesting, continuously produce combat units, and apply controlled pressure.",
+      "Use workers mainly for economy and construction; use army units for attacks."
+    ],
+    [
+      "Strategy identity: Aggressive timing attacker.",
+      "After reaching the minimum worker count and building barracks, prioritize fast combat production and early attacks.",
+      "Keep basic harvesting active while pressuring the Enemy Base."
+    ]
+  ],
+  "training_examples": [
+    {
+      "name": "bootstrap_worker",
+      "content": [
+        "INPUT:",
+        "Map size: 8x8",
+        "Turn: 10/5000",
+        "Max actions: 4",
+        "",
+        "Feature locations:",
+        "(0, 0) Neutral Resource Node {resources=20}",
+        "(7, 7) Neutral Resource Node {resources=20}",
+        "(2, 1) Ally Base Unit {resources=5, current_action=\"idling\", HP=10}",
+        "(5, 6) Enemy Base Unit {resources=5, current_action=\"idling\", HP=10}",
+        "(1, 1) Ally Worker Unit {current_action=\"idling\", HP=1}",
+        "",
+        "OUTPUT:",
+        "{",
+        "  \"thinking\": \"worker_count=1; worker_status=less_than_2; has_ally_barracks=False; builder=none; decision=train_worker; reason=Only one Ally Worker Unit exists, so Ally Base must train worker before barracks construction\",",
+        "  \"moves\": [",
+        "    {",
+        "      \"raw_move\": \"(2,1): base train(worker)\",",
+        "      \"unit_position\": [2,1],",
+        "      \"unit_type\": \"base\",",
+        "      \"action_type\": \"train\"",
+        "    },",
+        "    {",
+        "      \"raw_move\": \"(1,1): worker harvest((0,0),(2,1))\",",
+        "      \"unit_position\": [1,1],",
+        "      \"unit_type\": \"worker\",",
+        "      \"action_type\": \"harvest\"",
+        "    }",
+        "  ]",
+        "}"
+      ]
+    },
+    {
+      "name": "build_barracks_with_worker_2",
+      "content": [
+        "INPUT:",
+        "Map size: 8x8",
+        "Turn: 70/5000",
+        "Max actions: 4",
+        "",
+        "Feature locations:",
+        "(0, 0) Neutral Resource Node {resources=17}",
+        "(7, 7) Neutral Resource Node {resources=20}",
+        "(2, 1) Ally Base Unit {resources=6, current_action=\"idling\", HP=10}",
+        "(5, 6) Enemy Base Unit {resources=4, current_action=\"idling\", HP=10}",
+        "(1, 1) Ally Worker Unit {current_action=\"idling\", HP=1}",
+        "(2, 3) Ally Worker Unit {current_action=\"idling\", HP=1}",
+        "(2, 0) Ally Worker Unit {current_action=\"idling\", HP=1}",
+        "",
+        "OUTPUT:",
+        "{",
+        "  \"thinking\": \"worker_count=3; worker_status=enough_workers; has_ally_barracks=False; builder=(2,3); decision=build_barracks_with_worker_2; reason=There are enough workers and no Ally Barracks Unit exists, so worker_2 must build barracks while other workers harvest\",",
+        "  \"moves\": [",
+        "    {",
+        "      \"raw_move\": \"(2,3): worker build((3,1), barracks)\",",
+        "      \"unit_position\": [2,3],",
+        "      \"unit_type\": \"worker\",",
+        "      \"action_type\": \"build\"",
+        "    },",
+        "    {",
+        "      \"raw_move\": \"(1,1): worker harvest((0,0),(2,1))\",",
+        "      \"unit_position\": [1,1],",
+        "      \"unit_type\": \"worker\",",
+        "      \"action_type\": \"harvest\"",
+        "    },",
+        "    {",
+        "      \"raw_move\": \"(2,0): worker harvest((0,0),(2,1))\",",
+        "      \"unit_position\": [2,0],",
+        "      \"unit_type\": \"worker\",",
+        "      \"action_type\": \"harvest\"",
+        "    }",
+        "  ]",
+        "}"
+      ]
+    },
+    {
+      "name": "army_phase",
+      "content": [
+        "INPUT:",
+        "Map size: 8x8",
+        "Turn: 180/5000",
+        "Max actions: 4",
+        "",
+        "Feature locations:",
+        "(0, 0) Neutral Resource Node {resources=10}",
+        "(7, 7) Neutral Resource Node {resources=20}",
+        "(2, 1) Ally Base Unit {resources=4, current_action=\"idling\", HP=10}",
+        "(3, 1) Ally Barracks Unit {current_action=\"idling\", HP=5}",
+        "(5, 6) Enemy Base Unit {resources=4, current_action=\"idling\", HP=10}",
+        "(1, 1) Ally Worker Unit {current_action=\"idling\", HP=1}",
+        "(2, 3) Ally Worker Unit {current_action=\"idling\", HP=1}",
+        "",
+        "OUTPUT:",
+        "{",
+        "  \"thinking\": \"worker_count=2; worker_status=enough_workers; has_ally_barracks=True; builder=none; decision=train_army_or_attack; reason=Ally Barracks Unit exists, so produce combat units from Ally Barracks and keep workers harvesting\",",
+        "  \"moves\": [",
+        "    {",
+        "      \"raw_move\": \"(3,1): barracks train(light)\",",
+        "      \"unit_position\": [3,1],",
+        "      \"unit_type\": \"barracks\",",
+        "      \"action_type\": \"train\"",
+        "    },",
+        "    {",
+        "      \"raw_move\": \"(1,1): worker harvest((0,0),(2,1))\",",
+        "      \"unit_position\": [1,1],",
+        "      \"unit_type\": \"worker\",",
+        "      \"action_type\": \"harvest\"",
+        "    },",
+        "    {",
+        "      \"raw_move\": \"(2,3): worker harvest((0,0),(2,1))\",",
+        "      \"unit_position\": [2,3],",
+        "      \"unit_type\": \"worker\",",
+        "      \"action_type\": \"harvest\"",
+        "    }",
+        "  ]",
+        "}"
+      ]
+    }
+  ],
+  "current_game_state_marker": [
+    [
+      "Ignore all training examples above.",
+      "Only the following block is the real current game state.",
+      "",
+      "CURRENT GAME STATE:",
+      "INPUT:"
+    ]
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "algorithm": "nsga2",
+  "algorithm": "nsga2_surrogate",
   "evaluator": "gameplay",
   "population_size": 10,
   "num_generations": 50,
@@ -54,7 +54,7 @@
     "state_interpretation_step",
     "training_examples"
   ],
-  "component_pool_path": "configs/experiments/default_components.json",
+  "component_pool_path": "configs/experiments/nsga2_surrogate_round_components.json",
   "initial_population_seeds": [],
   "tick_limit": 5000,
   "llm_call_limit": 50,
@@ -66,8 +66,8 @@
   "objective_config": {
     "mode": "multi",
     "objectives": [
-      "resource_advantage",
-      "win_score"
+      "prompt_token_count",
+      "resource_advantage"
     ]
   },
   "training_example_sample_count": "random_0_4",

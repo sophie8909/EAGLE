@@ -5,17 +5,17 @@
   "num_generations": 50,
   "convergence_generations": 10,
   "reproduction_operator_probs": {
-    "crossover": 0.7000000000000001,
-    "mutation": 0.20000000000000004,
-    "reflection": 0.10000000000000002
+    "crossover": 0.7,
+    "mutation": 0.19999999999999998,
+    "reflection": 0.09999999999999999
   },
   "enable_reflection_operator": true,
   "reflection_max_components_to_rewrite": 1,
   "strategy_mutation": {
-    "pool_replacement": 0.4,
+    "pool_replacement": 0.2,
     "identity_preserving_rewrite": 0.35,
     "identity_shift_rewrite": 0.25,
-    "bitmask_flip": 0.0
+    "bitmask_flip": 0.2
   },
   "mutation_operator": "mix",
   "selection_method": "random",
@@ -54,10 +54,10 @@
     "state_interpretation_step",
     "training_examples"
   ],
-  "component_pool_path": "configs/experiments/default_components.json",
+  "component_pool_path": "configs/experiments/nsga2_surrogate_v12.0.1_components.json",
   "initial_population_seeds": [],
   "tick_limit": 5000,
-  "llm_call_limit": 50,
+  "llm_call_limit": 100,
   "gameplay_rate": 0.25,
   "gameplay_refresh_interval": 5,
   "surrogate_top_ratio": 0.3,
@@ -66,8 +66,8 @@
   "objective_config": {
     "mode": "multi",
     "objectives": [
-      "resource_advantage",
-      "win_score"
+      "prompt_token_count",
+      "resource_advantage"
     ]
   },
   "training_example_sample_count": "random_0_4",

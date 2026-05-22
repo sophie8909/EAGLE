@@ -1,5 +1,5 @@
 {
-  "algorithm": "nsga2",
+  "algorithm": "nsga2_surrogate",
   "evaluator": "gameplay",
   "population_size": 10,
   "num_generations": 50,
@@ -12,10 +12,10 @@
   "enable_reflection_operator": true,
   "reflection_max_components_to_rewrite": 1,
   "strategy_mutation": {
-    "pool_replacement": 0.4,
+    "pool_replacement": 0.2,
     "identity_preserving_rewrite": 0.35,
     "identity_shift_rewrite": 0.25,
-    "bitmask_flip": 0.0
+    "bitmask_flip": 0.2
   },
   "mutation_operator": "mix",
   "selection_method": "random",
@@ -54,10 +54,10 @@
     "state_interpretation_step",
     "training_examples"
   ],
-  "component_pool_path": "configs/experiments/default_components.json",
+  "component_pool_path": "configs/experiments/nsga2_surrogate_components.json",
   "initial_population_seeds": [],
   "tick_limit": 5000,
-  "llm_call_limit": 50,
+  "llm_call_limit": 100,
   "gameplay_rate": 0.25,
   "gameplay_refresh_interval": 5,
   "surrogate_top_ratio": 0.3,
@@ -66,8 +66,8 @@
   "objective_config": {
     "mode": "multi",
     "objectives": [
-      "resource_advantage",
-      "win_score"
+      "prompt_token_count",
+      "resource_advantage"
     ]
   },
   "training_example_sample_count": "random_0_4",
