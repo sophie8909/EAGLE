@@ -35,6 +35,7 @@ from eagle_gui_web.ui_actions import safe_click
 def build_analysis_view(state: Any) -> dict[str, Any]:
     """Build live GA/MO and timing analysis panels."""
     controls: dict[str, Any] = {}
+    mo_generate_button: Any | None = None
 
     async def refresh_analysis() -> None:
         try:
@@ -88,29 +89,51 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             _set_mo_hidden("No run selected.")
             return
 
-        mo_summary = await asyncio.to_thread(_build_mo_analysis_text, run_dir)
-        if mo_summary == "No multi-objective data found.":
-            _set_mo_hidden(mo_summary)
-            return
+        try:
+            if force_generate:
+                if mo_generate_button is not None:
+                    mo_generate_button.disable()
+                result = await asyncio.to_thread(
+                    services.run_analysis_subprocess,
+                    run_dir,
+                    run_dir / "analysis" / "evolution",
+                    "evolution",
+                )
+                if not result.get("ok"):
+                    _set_mo_error(str(result.get("error") or result.get("stderr") or "Analysis subprocess failed."))
+                    return
+                output_files = result.get("output_files") if isinstance(result.get("output_files"), dict) else {}
+                if not output_files.get("generation_animation_gif") and not output_files.get("generation_scatter_figures"):
+                    mo_summary = await asyncio.to_thread(_build_mo_analysis_text, run_dir)
+                    _set_mo_hidden(mo_summary)
+                    return
+                artifact_data = _artifact_data_from_output_files(output_files)
+            else:
+                mo_summary = await asyncio.to_thread(_build_mo_analysis_text, run_dir)
+                if mo_summary == "No multi-objective data found.":
+                    _set_mo_hidden(mo_summary)
+                    return
+                artifact_data = _discover_mo_artifacts(run_dir)
 
-        artifact_data = await asyncio.to_thread(
-            services.generate_mo_analysis_artifacts, run_dir
-        ) if force_generate else _discover_mo_artifacts(run_dir)
-
-        state.analysis.mo_visible = True
-        state.analysis.mo_summary = mo_summary
-        state.analysis.mo_animation_path = str(artifact_data.get("animation_path") or "")
-        state.analysis.mo_generation_choices = list(artifact_data.get("generation_choices") or [])
-        state.analysis.mo_static_plot_paths = dict(artifact_data.get("static_plot_paths") or {})
-        if state.analysis.mo_selected_generation not in state.analysis.mo_generation_choices:
-            state.analysis.mo_selected_generation = (
-                state.analysis.mo_generation_choices[-1] if state.analysis.mo_generation_choices else ""
-            )
-        mo_section.visible = True
-        mo_summary_text.value = state.analysis.mo_summary
-        mo_summary_text.update()
-        _refresh_mo_options()
-        _render_mo_artifacts()
+            state.analysis.mo_visible = True
+            state.analysis.mo_summary = await asyncio.to_thread(_build_mo_analysis_text, run_dir)
+            state.analysis.mo_animation_path = str(artifact_data.get("animation_path") or "")
+            state.analysis.mo_generation_choices = list(artifact_data.get("generation_choices") or [])
+            state.analysis.mo_static_plot_paths = dict(artifact_data.get("static_plot_paths") or {})
+            if state.analysis.mo_selected_generation not in state.analysis.mo_generation_choices:
+                state.analysis.mo_selected_generation = (
+                    state.analysis.mo_generation_choices[-1] if state.analysis.mo_generation_choices else ""
+                )
+            mo_section.visible = True
+            mo_summary_text.value = state.analysis.mo_summary
+            mo_summary_text.update()
+            _refresh_mo_options()
+            _render_mo_artifacts()
+        except (OSError, ValueError) as exc:
+            _set_mo_error(str(exc))
+        finally:
+            if mo_generate_button is not None:
+                mo_generate_button.enable()
 
     def _set_mo_hidden(message: str) -> None:
         state.analysis.mo_visible = False
@@ -120,6 +143,19 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         state.analysis.mo_selected_generation = ""
         state.analysis.mo_static_plot_paths = {}
         mo_section.visible = False
+        mo_summary_text.value = message
+        mo_summary_text.update()
+        _refresh_mo_options()
+        _render_mo_artifacts()
+
+    def _set_mo_error(message: str) -> None:
+        state.analysis.mo_visible = True
+        state.analysis.mo_summary = message
+        state.analysis.mo_animation_path = ""
+        state.analysis.mo_generation_choices = []
+        state.analysis.mo_selected_generation = ""
+        state.analysis.mo_static_plot_paths = {}
+        mo_section.visible = True
         mo_summary_text.value = message
         mo_summary_text.update()
         _refresh_mo_options()
@@ -182,6 +218,25 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             "static_plot_paths": static_plot_paths,
         }
 
+    def _artifact_data_from_output_files(output_files: dict[str, Any]) -> dict[str, Any]:
+        """Convert CLI output files into the MO section artifact model."""
+        animation_path = str(output_files.get("generation_animation_gif") or "")
+        static_plot_paths: dict[str, str] = {}
+        generation_choices: list[str] = []
+        for path_text in output_files.get("generation_scatter_figures") or []:
+            path = Path(str(path_text))
+            generation = _extract_mo_generation(path)
+            if generation is None:
+                continue
+            generation_text = str(generation)
+            generation_choices.append(generation_text)
+            static_plot_paths[generation_text] = str(path)
+        return {
+            "animation_path": animation_path,
+            "generation_choices": generation_choices,
+            "static_plot_paths": static_plot_paths,
+        }
+
     def on_mo_generation_changed(event: Any) -> None:
         state.analysis.mo_selected_generation = str(event.value or "")
         _render_mo_artifacts()
@@ -199,7 +254,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         with ui.column().classes("w-full gap-3") as mo_section:
             ui.label("MO Analysis").classes(SECTION_HEADER_CLASS)
             with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
-                ui.button(
+                mo_generate_button = ui.button(
                     "Generate MO Analysis",
                     on_click=safe_click(
                         lambda: refresh_mo_section(force_generate=True),
