@@ -16,7 +16,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from eagle.analysis.evolution_result_analysis import analyze_evolution_run
 from eagle.config import normalize_algorithm_name
 from eagle.envs.microrts.runner import save_prompt as save_microrts_prompt
 from eagle.envs.microrts.runner import set_config_property
@@ -36,6 +35,7 @@ MICRORTS_LOG_DIR = ROOT / "logs" / "microrts"
 DEFAULT_CONFIG = CONFIG_DIR / "default.json"
 GUI_WEB_PROCESS_STATE_PATH = LOG_DIR / "gui_web_process_state.json"
 LOG_TAIL_LIMIT = 18_000
+ANALYSIS_SUBPROCESS_TIMEOUT_SEC = 600
 
 APPLICATION_CHOICES = ("microrts",)
 ALGORITHM_CHOICES = ("ga", "nsga2", "ga_surrogate", "nsga2_surrogate")
@@ -898,6 +898,104 @@ def build_analysis(run_dir: Path | None) -> tuple[str, str]:
         return str(report.summary), str(report.body)
 
 
+def run_analysis_subprocess(
+    run_dir: Path | None,
+    output_dir: Path | None,
+    analysis_type: str,
+) -> dict[str, Any]:
+    """Run analysis plotting in a subprocess and return a stable result object."""
+    run_path = Path(run_dir).resolve() if run_dir is not None else None
+    output_path = Path(output_dir).resolve() if output_dir is not None else None
+    normalized_type = str(analysis_type or "").strip().lower()
+    if run_path is None:
+        return {
+            "ok": False,
+            "stdout": "",
+            "stderr": "",
+            "output_files": {},
+            "error": "No run selected.",
+        }
+
+    command = [
+        sys.executable,
+        "-m",
+        "eagle.analysis.run_analysis_cli",
+        "--run-dir",
+        str(run_path),
+        "--type",
+        normalized_type,
+    ]
+    if output_path is not None:
+        command.extend(["--output-dir", str(output_path)])
+
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=ANALYSIS_SUBPROCESS_TIMEOUT_SEC,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "ok": False,
+            "stdout": "",
+            "stderr": "",
+            "output_files": {},
+            "error": f"Analysis subprocess timed out after {ANALYSIS_SUBPROCESS_TIMEOUT_SEC} seconds.",
+        }
+    except OSError as exc:
+        return {
+            "ok": False,
+            "stdout": "",
+            "stderr": "",
+            "output_files": {},
+            "error": str(exc),
+        }
+
+    stdout = completed.stdout or ""
+    stderr = completed.stderr or ""
+    parsed: dict[str, Any] | None = None
+    stdout_text = stdout.strip()
+    if stdout_text:
+        try:
+            payload = json.loads(stdout_text)
+        except json.JSONDecodeError as exc:
+            parsed = None
+            parse_error = str(exc)
+        else:
+            parsed = payload if isinstance(payload, dict) else None
+            parse_error = ""
+    else:
+        parse_error = ""
+
+    if completed.returncode != 0 or parsed is None:
+        error_text = ""
+        if parsed is not None:
+            error_text = str(parsed.get("error") or "")
+        if not error_text:
+            error_text = stderr.strip() or parse_error or stdout_text or f"Analysis subprocess exited with code {completed.returncode}."
+        output_files = parsed.get("output_files") if isinstance(parsed, dict) and isinstance(parsed.get("output_files"), dict) else {}
+        return {
+            "ok": False,
+            "stdout": stdout,
+            "stderr": stderr,
+            "output_files": output_files,
+            "error": error_text,
+        }
+
+    output_files = parsed.get("output_files")
+    if not isinstance(output_files, dict):
+        output_files = {}
+    return {
+        "ok": bool(parsed.get("ok", True)),
+        "stdout": stdout,
+        "stderr": stderr,
+        "output_files": output_files,
+        "error": str(parsed.get("error") or ""),
+    }
+
+
 def build_timing(run_dir: Path | None) -> tuple[str, list[dict[str, Any]], str]:
     """Build the existing timing report for one run."""
     with LoggedOperation("parsing logs", kind="timing_analysis", run_dir=run_dir):
@@ -917,10 +1015,13 @@ def generate_mo_analysis_artifacts(run_dir: Path | None) -> dict[str, Any]:
     """Generate the existing MO Pareto plots and return their artifact paths."""
     if run_dir is None:
         return {"animation_path": "", "generation_choices": [], "static_plot_paths": {}}
-    analysis_result = analyze_evolution_run(Path(run_dir))
+    analysis_result = run_analysis_subprocess(Path(run_dir), Path(run_dir) / "analysis" / "evolution", "evolution")
+    output_files = analysis_result.get("output_files") if isinstance(analysis_result, dict) else {}
+    if not analysis_result.get("ok") or not isinstance(output_files, dict):
+        return {"animation_path": "", "generation_choices": [], "static_plot_paths": {}}
     generation_choices: set[str] = set()
     static_plot_paths: dict[str, str] = {}
-    for path_text in analysis_result.get("generation_scatter_figures", []) or []:
+    for path_text in output_files.get("generation_scatter_figures", []) or []:
         path = Path(str(path_text))
         generation = _extract_mo_generation(path)
         if generation is None:
@@ -929,7 +1030,7 @@ def generate_mo_analysis_artifacts(run_dir: Path | None) -> dict[str, Any]:
         generation_choices.add(generation_text)
         static_plot_paths[generation_text] = str(path)
     return {
-        "animation_path": str(analysis_result.get("generation_animation_gif") or ""),
+        "animation_path": str(output_files.get("generation_animation_gif") or ""),
         "generation_choices": _sort_trace_values(generation_choices),
         "static_plot_paths": static_plot_paths,
     }
