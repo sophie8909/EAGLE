@@ -9,6 +9,7 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.components.selects import create_key_select
 from eagle_gui_web.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
@@ -25,6 +26,11 @@ def _bind_input(label: str, value: str, setter: Any, classes: str = "w-56") -> A
     return ui.input(label, value=value, on_change=lambda event: setter(str(event.value or ""))).classes(
         f"{INPUT_CLASS} {classes}"
     )
+
+
+def _key_labels(options: tuple[str, ...]) -> dict[str, str]:
+    """Return same-label options for keyed select values."""
+    return {option: option for option in options}
 
 
 def build_config_view(state: Any) -> dict[str, Any]:
@@ -79,21 +85,21 @@ def build_config_view(state: Any) -> dict[str, Any]:
             controls["config.config_name"] = _bind_input(
                 "Config name", state.config.config_name, lambda value: setattr(state.config, "config_name", value)
             )
-            controls["config.algorithm"] = ui.select(
-                list(services.ALGORITHM_CHOICES),
-                label="Algorithm",
+            controls["config.algorithm"] = create_key_select(
+                "Algorithm",
+                _key_labels(services.ALGORITHM_CHOICES),
                 value=state.config.algorithm,
                 on_change=lambda event: _set_algorithm(state, str(event.value or "nsga2")),
             ).classes(f"{INPUT_CLASS} w-56")
-            controls["config.surrogate"] = ui.select(
-                list(services.SURROGATE_CHOICES),
-                label="Surrogate",
+            controls["config.surrogate"] = create_key_select(
+                "Surrogate",
+                _key_labels(services.SURROGATE_CHOICES),
                 value=state.config.surrogate,
                 on_change=lambda event: setattr(state.config, "surrogate", str(event.value or "round")),
             ).classes(f"{INPUT_CLASS} w-56")
-            controls["config.gameplay_map_dir"] = ui.select(
-                list(services.microrts_map_dir_choices()),
-                label="Eval map folder",
+            controls["config.gameplay_map_dir"] = create_key_select(
+                "Eval map folder",
+                _key_labels(services.microrts_map_dir_choices()),
                 value=state.config.gameplay_map_dir,
                 on_change=lambda event: setattr(state.config, "gameplay_map_dir", str(event.value or "8x8")),
             ).classes(f"{INPUT_CLASS} w-56")
