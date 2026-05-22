@@ -10,6 +10,7 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
+from eagle_gui_web.components.selects import create_key_select
 from eagle_gui_web.theme import (
     BADGE_CLASS,
     BUTTON_CLASS,
@@ -254,16 +255,16 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
         selected_label = ui.label("Selected folder: (none)")
 
         with ui.row().classes(f"{ROW_CLASS} gap-4"):
-            ui.select(
+            create_key_select(
+                "Map selection",
                 MAP_SELECTION_OPTIONS,
                 value=state.final_test.map_selection,
-                label="Map selection",
                 on_change=on_map_selection_changed,
             ).classes(f"{INPUT_CLASS} w-48")
-            ui.select(
+            create_key_select(
+                "Opponent selection",
                 OPPONENT_SELECTION_OPTIONS,
                 value=state.final_test.opponent_selection,
-                label="Opponent selection",
                 on_change=on_opponent_selection_changed,
             ).classes(f"{INPUT_CLASS} w-48")
             ui.label(f"Repeats: {REPEAT_COUNT}")
@@ -276,16 +277,16 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
 
         ui.label("Final Test Analysis").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} gap-4"):
-            ui.select(
+            create_key_select(
+                "Metric",
                 METRIC_OPTIONS,
                 value=state.final_test.analysis_metric,
-                label="Metric",
                 on_change=on_metric_changed,
             ).classes(f"{INPUT_CLASS} w-56")
-            ui.select(
+            create_key_select(
+                "Aggregation",
                 AGGREGATION_OPTIONS,
                 value=state.final_test.analysis_aggregation,
-                label="Aggregation",
                 on_change=on_aggregation_changed,
             ).classes(f"{INPUT_CLASS} w-40")
             analysis_button = ui.button("Refresh analysis", on_click=safe_click(refresh_analysis, label="Refresh analysis")).classes(
