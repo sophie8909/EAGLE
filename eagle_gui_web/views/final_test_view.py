@@ -10,7 +10,14 @@ from typing import Any
 from nicegui import ui
 
 from eagle_gui_web import services
-from eagle_gui_web.components.selects import create_key_select
+from eagle_gui_web.components.selectors import (
+    create_aggregation_selector,
+    create_map_selector,
+    create_metric_selector,
+    create_mode_selector,
+    create_opponent_selector,
+    create_run_selector,
+)
 from eagle_gui_web.theme import (
     BADGE_CLASS,
     BUTTON_CLASS,
@@ -25,29 +32,6 @@ from eagle_gui_web.theme import (
 from eagle_gui_web.ui_actions import safe_click
 
 
-MAP_SELECTION_OPTIONS = {
-    "single": "Single",
-    "all": "All",
-}
-OPPONENT_SELECTION_OPTIONS = {
-    "single": "Single",
-    "all": "All",
-}
-METRIC_OPTIONS = {
-    "win_rate": "Win rate",
-    "score": "Score",
-    "ally_resources": "Ally resources",
-    "enemy_resources": "Enemy resources",
-    "total_ally_resources": "Total ally resources",
-    "total_enemy_resources": "Total enemy resources",
-    "resource_difference": "Resource difference",
-    "weighted_resource_score": "Weighted resource score",
-}
-AGGREGATION_OPTIONS = {
-    "mean": "Mean",
-    "best": "Best",
-    "worst": "Worst",
-}
 REPEAT_COUNT = 10
 
 
@@ -251,22 +235,25 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
             )
             status_badge = ui.badge(state.final_test.status_text).classes(BADGE_CLASS)
 
-        run_select = ui.select([], label="Run folder", on_change=on_run_changed).classes(f"{INPUT_CLASS} w-full")
+        run_select = create_run_selector(
+            value=state.final_test.selected_run_dir,
+            on_change=on_run_changed,
+        ).classes(f"{INPUT_CLASS} w-full")
         selected_label = ui.label("Selected folder: (none)")
 
         with ui.row().classes(f"{ROW_CLASS} gap-4"):
-            create_key_select(
-                "Map selection",
-                MAP_SELECTION_OPTIONS,
+            create_mode_selector(
+                label="Map selection",
                 value=state.final_test.map_selection,
                 on_change=on_map_selection_changed,
             ).classes(f"{INPUT_CLASS} w-48")
-            create_key_select(
-                "Opponent selection",
-                OPPONENT_SELECTION_OPTIONS,
+            create_map_selector(label="Single map").props("disable").classes(f"{INPUT_CLASS} w-64")
+            create_mode_selector(
+                label="Opponent selection",
                 value=state.final_test.opponent_selection,
                 on_change=on_opponent_selection_changed,
             ).classes(f"{INPUT_CLASS} w-48")
+            create_opponent_selector(label="Single opponent").props("disable").classes(f"{INPUT_CLASS} w-56")
             ui.label(f"Repeats: {REPEAT_COUNT}")
 
         ui.label("Final Test Results").classes(SECTION_HEADER_CLASS)
@@ -277,15 +264,11 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
 
         ui.label("Final Test Analysis").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} gap-4"):
-            create_key_select(
-                "Metric",
-                METRIC_OPTIONS,
+            create_metric_selector(
                 value=state.final_test.analysis_metric,
                 on_change=on_metric_changed,
             ).classes(f"{INPUT_CLASS} w-56")
-            create_key_select(
-                "Aggregation",
-                AGGREGATION_OPTIONS,
+            create_aggregation_selector(
                 value=state.final_test.analysis_aggregation,
                 on_change=on_aggregation_changed,
             ).classes(f"{INPUT_CLASS} w-40")
@@ -335,7 +318,6 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
         )
         analysis_plot_container = ui.column().classes("w-full gap-3")
 
-    run_select.options = []
     _render_analysis_plot(None)
 
     controls.update(
