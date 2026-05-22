@@ -142,6 +142,9 @@ def build_layout() -> dict[str, dict[str, Any]]:
         elif page == "final_test":
             await controls["final_test"]["refresh_log"]()
         elif page == "analysis":
+            analysis_refresh_runs = controls.get("analysis", {}).get("refresh_runs")
+            if analysis_refresh_runs:
+                await analysis_refresh_runs()
             await controls["analysis"]["refresh_analysis"]()
         elif page == "LLM Calls":
             await controls["llm_calls"]["refresh_llm_calls"](True)
@@ -203,6 +206,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
             controls["final_test"] = build_final_test_view(state)
         with ui.tab_panel(analysis_tab):
             controls["analysis"] = build_analysis_view(state)
+            state.runtime.analysis_runs_refresh = controls["analysis"].get("refresh_runs")
         with ui.tab_panel(llm_calls_tab):
             controls["llm_calls"] = build_llm_calls_view(state)
         with ui.tab_panel(microrts_tab):
@@ -222,6 +226,9 @@ def build_layout() -> dict[str, dict[str, Any]]:
             await controls["llm_calls"]["refresh_llm_calls"](True)
         elif selected == analysis_tab:
             state.runtime.current_page = "analysis"
+            analysis_refresh_runs = controls.get("analysis", {}).get("refresh_runs")
+            if analysis_refresh_runs:
+                await analysis_refresh_runs()
             await controls["analysis"]["refresh_analysis"]()
         elif selected == microrts_tab:
             state.runtime.current_page = "microrts"
@@ -252,6 +259,9 @@ async def startup_refresh() -> None:
         if refresh:
             refresh()
     await controls["run"]["refresh_runs"]()
+    analysis_refresh_runs = controls.get("analysis", {}).get("refresh_runs")
+    if analysis_refresh_runs:
+        await analysis_refresh_runs()
     await controls["final_test"]["refresh_runs"]()
     await controls["run"]["refresh_log"]()
 

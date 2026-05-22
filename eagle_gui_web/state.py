@@ -102,7 +102,7 @@ class RunState:
     quick_run: bool = False
     skip_final_test: bool = False
     precompile_python: bool = False
-    current_run_dir: Path | None = None
+    experiment_current_run_dir: Path | None = None
     status_text: str = "not running"
     log_text: str = ""
 
@@ -123,6 +123,8 @@ class FinalTestState:
 class AnalysisState:
     """Live analysis payloads refreshed independently from process logs."""
 
+    analysis_selected_run_dir: Path | None = None
+    analysis_run_selected_manually: bool = False
     summary: str = "No run selected"
     body: str = ""
     timing_summary: str = "No run selected"
@@ -178,6 +180,7 @@ class RuntimeState:
     connected_client_count: int = 0
     current_page: str = "experiment"
     config_summary_refresh: Any | None = None
+    analysis_runs_refresh: Any | None = None
     last_heartbeat_monotonic: float | None = None
     last_heartbeat_timestamp: str = ""
     active_tasks: list[Any] = field(default_factory=list)

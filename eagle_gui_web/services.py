@@ -189,6 +189,19 @@ def run_choices() -> list[str]:
     return [str(path) for path in sorted(LOG_DIR.iterdir(), reverse=True) if path.is_dir()]
 
 
+def latest_experiment_run_dir() -> Path | None:
+    """Return the newest timestamped experiment run directory with a config file."""
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    candidates = [
+        path
+        for path in LOG_DIR.iterdir()
+        if path.is_dir() and re.fullmatch(r"\d{8}_\d{6}", path.name) and (path / "config.json").exists()
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: (path.stat().st_mtime, path.name))
+
+
 def load_config_payload(config_path: Path) -> dict[str, Any]:
     """Load a config merged with the default schema base."""
     return config_service.load_complete_config_payload(config_path, DEFAULT_CONFIG)
@@ -676,6 +689,7 @@ def launch_web_process(
 def start_experiment(state: Any) -> tuple[bool, str]:
     """Save config and start `python -m eagle.main --config <config>`."""
     with LoggedOperation("starting EA"):
+        previous_run_dir = latest_experiment_run_dir()
         config_path = save_generated_config(state)
         command = [sys.executable, "-m", "eagle.main", "--config", str(config_path)]
         if state.run.quick_run:
@@ -684,7 +698,25 @@ def start_experiment(state: Any) -> tuple[bool, str]:
             command.append("--skip-final-test")
         if state.run.precompile_python:
             command.append("--precompile-python")
-        return launch_web_process(state=state, command=command, config_path=config_path, log_prefix="gui_web_process")
+        success, message = launch_web_process(
+            state=state,
+            command=command,
+            config_path=config_path,
+            log_prefix="gui_web_process",
+        )
+        if success:
+            run_dir = None
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline:
+                run_dir = latest_experiment_run_dir()
+                if run_dir is not None and run_dir != previous_run_dir:
+                    break
+                time.sleep(0.1)
+            if run_dir is not None and run_dir != previous_run_dir:
+                state.run.experiment_current_run_dir = run_dir
+                state.analysis.analysis_selected_run_dir = run_dir
+                state.analysis.analysis_run_selected_manually = False
+        return success, message
 
 
 def start_final_test(state: Any) -> tuple[bool, str]:

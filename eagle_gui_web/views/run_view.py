@@ -38,6 +38,9 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         await asyncio.sleep(0.2)
         await refresh_status()
         await refresh_runs()
+        analysis_refresh = getattr(state.runtime, "analysis_runs_refresh", None)
+        if callable(analysis_refresh):
+            await analysis_refresh(state.run.experiment_current_run_dir)
         await refresh_log()
 
     async def stop() -> None:
@@ -47,15 +50,13 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
 
     async def refresh_runs() -> None:
         runs = await asyncio.to_thread(services.run_choices)
-        run_select.options = [""] + runs
+        selected_run = state.run.experiment_current_run_dir
+        run_select.options = [""] + ([str(selected_run)] if selected_run is not None and str(selected_run) not in runs else []) + runs
 
-        if state.run.current_run_dir is None:
+        if selected_run is None:
             run_select.value = ""
-        elif str(state.run.current_run_dir) in runs:
-            run_select.value = str(state.run.current_run_dir)
         else:
-            state.run.current_run_dir = None
-            run_select.value = ""
+            run_select.value = str(selected_run)
 
         run_select.update()
         refresh_start_button()
@@ -73,13 +74,13 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
 
     def refresh_start_button() -> None:
         """Update the start button label based on whether a run is selected."""
-        if state.run.current_run_dir is None:
+        if state.run.experiment_current_run_dir is None:
             start_button.set_text("Start experiment")
         else:
             start_button.set_text("Resume experiment")
 
     def on_run_changed(event: Any) -> None:
-        state.run.current_run_dir = Path(str(event.value)) if event.value else None
+        state.run.experiment_current_run_dir = Path(str(event.value)) if event.value else None
         refresh_start_button()
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Run Control").classes(SECTION_HEADER_CLASS)

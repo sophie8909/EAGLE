@@ -37,12 +37,51 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
     controls: dict[str, Any] = {}
     mo_generate_button: Any | None = None
 
+    async def refresh_runs(selected_run_dir: Path | None = None) -> None:
+        runs = await asyncio.to_thread(services.run_choices)
+        explicit_sync = selected_run_dir is not None
+        if selected_run_dir is not None:
+            state.analysis.analysis_selected_run_dir = selected_run_dir
+            state.analysis.analysis_run_selected_manually = False
+        if (
+            state.analysis.analysis_selected_run_dir is None
+            and not state.analysis.analysis_run_selected_manually
+            and runs
+        ):
+            state.analysis.analysis_selected_run_dir = Path(runs[0])
+        elif (
+            state.analysis.analysis_selected_run_dir is not None
+            and str(state.analysis.analysis_selected_run_dir) not in runs
+        ):
+            if explicit_sync:
+                pass
+            elif not state.analysis.analysis_run_selected_manually and runs:
+                state.analysis.analysis_selected_run_dir = Path(runs[0])
+            else:
+                state.analysis.analysis_selected_run_dir = None
+        run_select.options = [
+            "",
+            *(
+                [str(state.analysis.analysis_selected_run_dir)]
+                if state.analysis.analysis_selected_run_dir is not None
+                and str(state.analysis.analysis_selected_run_dir) not in runs
+                else []
+            ),
+            *runs,
+        ]
+        run_select.value = (
+            str(state.analysis.analysis_selected_run_dir) if state.analysis.analysis_selected_run_dir else ""
+        )
+        run_select.update()
+        selected_label.set_text(f"Selected folder: {state.analysis.analysis_selected_run_dir or '(none)'}")
+
     async def refresh_analysis() -> None:
         try:
-            summary, body = await asyncio.to_thread(services.build_analysis, state.run.current_run_dir)
-            mo_summary = await asyncio.to_thread(_build_mo_analysis_text, state.run.current_run_dir)
-            final_test_analysis = await asyncio.to_thread(_build_final_test_analysis_text, state.run.current_run_dir)
-            ga_convergence = await asyncio.to_thread(_build_ga_convergence_options, state.run.current_run_dir)
+            run_dir = state.analysis.analysis_selected_run_dir
+            summary, body = await asyncio.to_thread(services.build_analysis, run_dir)
+            mo_summary = await asyncio.to_thread(_build_mo_analysis_text, run_dir)
+            final_test_analysis = await asyncio.to_thread(_build_final_test_analysis_text, run_dir)
+            ga_convergence = await asyncio.to_thread(_build_ga_convergence_options, run_dir)
             await refresh_mo_section()
         except (OSError, ValueError) as exc:
             summary, body = "Analysis load error", str(exc)
@@ -63,8 +102,9 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
 
     async def refresh_timing() -> None:
         try:
-            summary, rows, body = await asyncio.to_thread(services.build_timing, state.run.current_run_dir)
-            time_analysis = await asyncio.to_thread(_build_time_analysis_text, state.run.current_run_dir)
+            run_dir = state.analysis.analysis_selected_run_dir
+            summary, rows, body = await asyncio.to_thread(services.build_timing, run_dir)
+            time_analysis = await asyncio.to_thread(_build_time_analysis_text, run_dir)
         except (OSError, ValueError) as exc:
             summary, rows, body = "Timing load error", [], str(exc)
             time_analysis = str(exc)
@@ -84,7 +124,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         await refresh_timing()
 
     async def refresh_mo_section(*, force_generate: bool = False) -> None:
-        run_dir = state.run.current_run_dir
+        run_dir = state.analysis.analysis_selected_run_dir
         if run_dir is None:
             _set_mo_hidden("No run selected.")
             return
@@ -241,8 +281,21 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         state.analysis.mo_selected_generation = str(event.value or "")
         _render_mo_artifacts()
 
+    def on_run_changed(event: Any) -> None:
+        state.analysis.analysis_selected_run_dir = Path(str(event.value)) if event.value else None
+        state.analysis.analysis_run_selected_manually = True
+        selected_label.set_text(f"Selected folder: {state.analysis.analysis_selected_run_dir or '(none)'}")
+
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Analysis").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
+            run_select = ui.select([], label="Run folder", on_change=on_run_changed).classes(
+                f"{INPUT_CLASS} w-full"
+            )
+            ui.button("Refresh runs", on_click=safe_click(refresh_runs, label="Refresh analysis runs")).classes(
+                BUTTON_CLASS
+            )
+        selected_label = ui.label("Selected folder: (none)")
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
             summary_label = ui.label(state.analysis.summary)
             ui.button("Refresh analysis", on_click=safe_click(refresh_all, label="Refresh analysis")).classes(BUTTON_CLASS)
@@ -301,6 +354,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
     _render_mo_artifacts()
 
     controls["refresh_analysis"] = refresh_all
+    controls["refresh_runs"] = refresh_runs
     controls["refresh_mo_section"] = refresh_mo_section
     return controls
 

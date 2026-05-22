@@ -29,12 +29,12 @@ def build_llm_calls_view(state: Any) -> dict[str, Any]:
     controls: dict[str, Any] = {}
 
     async def refresh_llm_calls(force: bool = True) -> None:
-        if state.run.current_run_dir is None:
+        if state.run.experiment_current_run_dir is None:
             state.prompts.trace_records = []
             _set_empty(NO_RUN_MESSAGE)
             return
 
-        run_dir = state.run.current_run_dir
+        run_dir = state.run.experiment_current_run_dir
         state.prompts.trace_records = await asyncio.to_thread(services.load_llm_trace_records, run_dir)
         trace_records = state.prompts.trace_records
         if not trace_records:
