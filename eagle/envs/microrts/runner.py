@@ -17,6 +17,17 @@ from ...utils.fitness_calculator import calculate_match_score
 from .compiler import compile_microrts, locate_microrts_root
 from .parser import parse_game_log
 
+BACKEND_ERROR_MARKER = "backend_error"
+
+
+class MicroRTSBackendError(RuntimeError):
+    """Raised when a MicroRTS match fails because the LLM backend failed."""
+
+    def __init__(self, message: str, *, log_path: str | None = None) -> None:
+        super().__init__(message)
+        self.log_path = log_path
+
+
 def _config_path(project_root: Path | None = None) -> Path:
     """Return the MicroRTS runtime properties file."""
     return locate_microrts_root(project_root) / "resources" / "config.properties"
@@ -394,6 +405,11 @@ def _verbose_microrts_logs_enabled(config: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _has_backend_error_marker(log_text: str) -> bool:
+    """Return whether a Java match log contains an explicit backend-error marker."""
+    return BACKEND_ERROR_MARKER in str(log_text or "").lower()
+
+
 def _force_snapshot_from_result(snapshot: dict[str, Any]) -> dict[str, int]:
     """Convert Java result unit types into the normalized Python force snapshot."""
     unit_types = snapshot.get("unit_types", {}) if isinstance(snapshot, dict) else {}
@@ -579,6 +595,12 @@ def run_java_agent_game(
             )
         target_agent = _target_agent_name(ai1_class)
         if exit_code != 0:
+            failure_log = Path(log_path_str).read_text(encoding="utf-8", errors="replace")
+            if _has_backend_error_marker(failure_log):
+                raise MicroRTSBackendError(
+                    f"LLM backend error during MicroRTS match. log_path={log_path_str}",
+                    log_path=log_path_str,
+                )
             raise RuntimeError(
                 "MicroRTS Java process failed.\n"
                 f"exit_code={exit_code}\n"
@@ -594,6 +616,11 @@ def run_java_agent_game(
         if result_json_path.exists():
             result_payload = json.loads(result_json_path.read_text(encoding="utf-8"))
             parsed_log = _parsed_log_from_result_json(result_payload, target_agent=target_agent)
+            if _has_backend_error_marker(Path(log_path_str).read_text(encoding="utf-8", errors="replace")):
+                raise MicroRTSBackendError(
+                    f"LLM backend error during MicroRTS match. log_path={log_path_str}",
+                    log_path=log_path_str,
+                )
             match_score = calculate_match_score(
                 "",
                 resource_advantage_weights=config.resource_advantage_weights,
@@ -602,6 +629,11 @@ def run_java_agent_game(
             result_error = None
         else:
             parsed_log = parse_game_log(log_content, target_agent=target_agent)
+            if _has_backend_error_marker(log_content):
+                raise MicroRTSBackendError(
+                    f"LLM backend error during MicroRTS match. log_path={log_path_str}",
+                    log_path=log_path_str,
+                )
             match_score = calculate_match_score(
                 log_content,
                 resource_advantage_weights=config.resource_advantage_weights,

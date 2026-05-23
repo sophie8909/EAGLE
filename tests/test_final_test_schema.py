@@ -2,7 +2,7 @@ import json
 from types import SimpleNamespace
 
 from eagle.analysis.evolution_result_analysis import parse_final_test_analysis
-from eagle.eval.microrts.final_test_batch import _build_raw_result_record
+from eagle.eval.microrts.final_test_batch import _build_failed_result_record, _build_raw_result_record
 from eagle.eval.microrts.generation_replay import build_result_record
 
 
@@ -113,3 +113,29 @@ def test_analysis_normalizes_legacy_records_from_raw_only():
     assert analysis["wins"] == 0
     assert analysis["losses"] == 1
     assert analysis["draws"] == 1
+
+
+def test_backend_error_repeat_is_failed_not_game_outcome():
+    record = _build_failed_result_record(
+        individual_id="ind-3",
+        map_folder="8x8",
+        map_path="8x8/basesWorkers8x8.xml",
+        opponent="ai.RandomBiasedAI",
+        repeat=0,
+        error="LLM backend error during MicroRTS match",
+        log_path="run.log",
+        interval_mode="interval_10",
+        llm_interval=10,
+        model="local",
+        base_url="http://127.0.0.1:8080/v1",
+    )
+    payload = {"source_run_dir": "run", "results": [record]}
+
+    analysis = parse_final_test_analysis(json.dumps(payload))
+
+    assert record["result"] == "Failed"
+    assert record["status"] == "failed"
+    assert analysis["wins"] == 0
+    assert analysis["losses"] == 0
+    assert analysis["draws"] == 0
+    assert analysis["failed_games"] == 1

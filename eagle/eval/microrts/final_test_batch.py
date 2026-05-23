@@ -17,6 +17,7 @@ from ...config import load_config_from_json
 from ...main import OPPONENT_LIST
 from ...project import PROJECT_ROOT, ensure_directory
 from ...representation.fitness import fitness_sort_key
+from ...envs.microrts.runner import MicroRTSBackendError
 from ...utils.component_pool import ComponentPool
 from ...utils.checkpoint import CheckpointManager, deserialize_individual
 from ...evolution.component.log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
@@ -121,19 +122,38 @@ def run_final_test_batch(
                 for repeat in range(repeats):
                     llm_interval = int(config.active_llm_interval())
                     interval_mode = f"interval_{llm_interval}"
-                    result = evaluator.run_prompt_based_agent(
-                        individual=individual,
-                        prompt=prompt,
-                        opponent=opponent,
-                        test=True,
-                        llm_call_limit=None,
-                        llm_interval=llm_interval,
-                        llm_model=backend_settings.model,
-                        llm_base_url=backend_settings.base_url,
-                        llm_strict_errors=True,
-                        interval_mode=interval_mode,
-                        map_location=map_record["runtime_map"],
-                    )
+                    try:
+                        result = evaluator.run_prompt_based_agent(
+                            individual=individual,
+                            prompt=prompt,
+                            opponent=opponent,
+                            test=True,
+                            llm_call_limit=None,
+                            llm_interval=llm_interval,
+                            llm_model=backend_settings.model,
+                            llm_base_url=backend_settings.base_url,
+                            llm_strict_errors=True,
+                            interval_mode=interval_mode,
+                            map_location=map_record["runtime_map"],
+                        )
+                    except MicroRTSBackendError as exc:
+                        payload["results"].append(
+                            _build_failed_result_record(
+                                individual_id=individual.id,
+                                map_folder=map_record["map_folder"],
+                                map_path=map_record["map"],
+                                opponent=opponent,
+                                repeat=repeat,
+                                error=str(exc),
+                                log_path=exc.log_path,
+                                interval_mode=interval_mode,
+                                llm_interval=llm_interval,
+                                model=backend_settings.model,
+                                base_url=backend_settings.base_url,
+                            )
+                        )
+                        _write_results(output_path, payload)
+                        continue
                     match_score = dict(result.get("match_score") or {})
                     simulation_meta = dict(result.get("simulation_meta") or {})
                     simulation_meta["interval_mode"] = interval_mode
@@ -315,6 +335,52 @@ def _build_raw_result_record(
             "llm_interval": simulation_meta.get("llm_interval"),
             "model": str(simulation_meta.get("llm_model") or ""),
             "base_url": str(simulation_meta.get("llm_base_url") or ""),
+        },
+    }
+
+
+def _build_failed_result_record(
+    *,
+    individual_id: str,
+    map_folder: str,
+    map_path: str,
+    opponent: str,
+    repeat: int,
+    error: str,
+    log_path: str | None,
+    interval_mode: str,
+    llm_interval: int,
+    model: str,
+    base_url: str,
+) -> dict[str, Any]:
+    """Build one failed Final Test repeat without turning it into game outcome."""
+    ally_empty = _normalize_snapshot({})
+    enemy_empty = _normalize_snapshot({})
+    return {
+        "individual_id": individual_id,
+        "map_folder": map_folder,
+        "map": map_path,
+        "opponent": opponent,
+        "repeat": int(repeat),
+        "result": "Failed",
+        "status": "failed",
+        "error": error,
+        "raw": {
+            "win_score": 0.0,
+            "score": 0.0,
+            "ally": ally_empty,
+            "enemy": enemy_empty,
+        },
+        "paths": {
+            "log": str(log_path or ""),
+            "trace_xml": "",
+            "trace_json": None,
+        },
+        "runtime": {
+            "interval_mode": interval_mode,
+            "llm_interval": int(llm_interval),
+            "model": model,
+            "base_url": base_url,
         },
     }
 

@@ -32,7 +32,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.StringWriter;
 import java.net.HttpURLConnection;
+import java.net.ConnectException;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -935,6 +937,7 @@ public class EAGLE extends AbstractionLayerAI {
             if (code != HttpURLConnection.HTTP_OK) {
                 System.err.println("[EAGLE] llama.cpp error (" + code + "): " + sb);
                 if (LLM_STRICT_ERRORS) {
+                    logBackendError("HTTP " + code, LLAMA_CPP_BASE_URL);
                     throw new IllegalStateException("llama.cpp error HTTP " + code);
                 }
                 String fallback = "{\"thinking\":\"llama_cpp_error\",\"moves\":[]}";
@@ -964,6 +967,7 @@ public class EAGLE extends AbstractionLayerAI {
 
             System.err.println("[EAGLE] unexpected llama.cpp payload: " + sb);
             if (LLM_STRICT_ERRORS) {
+                logBackendError("invalid_payload", LLAMA_CPP_BASE_URL);
                 throw new IllegalStateException("invalid llama.cpp payload");
             }
             String fallback = "{\"thinking\":\"invalid_llama_cpp_payload\",\"moves\":[]}";
@@ -972,12 +976,25 @@ public class EAGLE extends AbstractionLayerAI {
         } catch (Exception e) {
             System.err.println("[EAGLE] llama.cpp exception (" + e.getClass().getSimpleName() + "): " + e.getMessage());
             if (LLM_STRICT_ERRORS) {
+                logBackendError(e.getClass().getSimpleName() + ": " + e.getMessage(), LLAMA_CPP_BASE_URL);
                 throw new RuntimeException("LLM backend request failed", e);
             }
-            String fallback = "{\"thinking\":\"exception\",\"moves\":[]}";
+            String fallback = backendFallbackResponse(e);
             appendLlmDebugRecord(requestPrompt, body, rawResponseBody, "", fallback, e.getClass().getSimpleName() + ": " + e.getMessage());
             return fallback;
         }
+    }
+
+    private static void logBackendError(String reason, String baseUrl) {
+        System.err.println("[EAGLE_BACKEND_ERROR] backend_error base_url=" + baseUrl + " reason=" + reason);
+    }
+
+    private static String backendFallbackResponse(Exception e) {
+        if (e instanceof ConnectException || e instanceof UnknownHostException) {
+            logBackendError(e.getClass().getSimpleName() + ": " + e.getMessage(), LLAMA_CPP_BASE_URL);
+            return "{\"thinking\":\"backend_error\",\"backend_error\":true,\"moves\":[]}";
+        }
+        return "{\"thinking\":\"exception\",\"moves\":[]}";
     }
 
     private void appendLlmDebugRecord(
