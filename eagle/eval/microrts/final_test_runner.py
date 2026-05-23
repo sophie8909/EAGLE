@@ -248,8 +248,10 @@ def run_final_test_suite(
                     trace_xml_path=str(metadata.get("trace_xml_path")) if metadata.get("trace_xml_path") else None,
                     trace_json_path=str(metadata.get("trace_json_path")) if metadata.get("trace_json_path") else None,
                 )
-                result_record["interval_mode"] = str(interval_run["label"])
-                result_record["llm_interval"] = llm_interval
+                result_record["runtime"] = {
+                    "interval_mode": str(interval_run["label"]),
+                    "llm_interval": llm_interval,
+                }
 
                 results["results"].setdefault(individual.id, [])
                 results["results"][individual.id].append(result_record)

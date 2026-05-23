@@ -86,6 +86,8 @@ def run_final_test_batch(
                     )
                     match_score = dict(result.get("match_score") or {})
                     simulation_meta = dict(result.get("simulation_meta") or {})
+                    simulation_meta["interval_mode"] = f"interval_{config.active_llm_interval()}"
+                    simulation_meta["llm_interval"] = config.active_llm_interval()
                     raw_result = _load_result_json(simulation_meta.get("result_json_path"))
                     payload["results"].append(
                         _build_raw_result_record(
@@ -235,8 +237,8 @@ def _build_raw_result_record(
     simulation_meta: dict[str, Any],
 ) -> dict[str, Any]:
     """Convert one replay result into the requested raw JSON schema."""
-    win_score = float(match_score.get("win_score", 0.0))
     target_side = _result_target_side(raw_result, simulation_meta)
+    result_label, win_score = _result_label_and_win_score(raw_result, simulation_meta, target_side)
     ally_snapshot, enemy_snapshot = _result_snapshots(raw_result, target_side)
     return {
         "individual_id": individual_id,
@@ -244,11 +246,65 @@ def _build_raw_result_record(
         "map": map_path,
         "opponent": opponent,
         "repeat": int(repeat),
-        "win": bool(win_score >= 1.0),
-        "score": float(match_score.get("raw_resource_advantage_score", 0.0)),
-        "ally": ally_snapshot,
-        "enemy": enemy_snapshot,
+        "result": result_label,
+        "raw": {
+            "win_score": win_score,
+            "score": _raw_result_score(raw_result, target_side, match_score),
+            "ally": ally_snapshot,
+            "enemy": enemy_snapshot,
+        },
+        "paths": {
+            "log": str(simulation_meta.get("log_path")) if simulation_meta.get("log_path") else "",
+            "trace_xml": str(simulation_meta.get("trace_xml_path")) if simulation_meta.get("trace_xml_path") else "",
+            "trace_json": str(simulation_meta.get("trace_json_path")) if simulation_meta.get("trace_json_path") else None,
+        },
+        "runtime": {
+            "interval_mode": str(simulation_meta.get("interval_mode") or ""),
+            "llm_interval": simulation_meta.get("llm_interval"),
+        },
     }
+
+
+def _result_label_and_win_score(
+    raw_result: dict[str, Any] | None,
+    simulation_meta: dict[str, Any],
+    target_side: str,
+) -> tuple[str, float]:
+    """Return the ally outcome label and canonical win score."""
+    winner = None
+    if isinstance(raw_result, dict):
+        winner = raw_result.get("winner")
+    if winner is None:
+        summary = dict(simulation_meta.get("parsed_log") or {}).get("summary", {})
+        if isinstance(summary, dict):
+            winner = summary.get("winner")
+
+    if winner is None or str(winner) in {"", "-1", "None", "none", "null"}:
+        return "Draw", 0.0
+    if str(winner) == str(target_side):
+        return "Win", 1.0
+    return "Loss", -1.0
+
+
+def _raw_result_score(
+    raw_result: dict[str, Any] | None,
+    target_side: str,
+    match_score: dict[str, float],
+) -> float:
+    """Return an unweighted terminal score when the raw game payload provides one."""
+    scoreboard = raw_result.get("final_scoreboard") if isinstance(raw_result, dict) else None
+    if isinstance(scoreboard, dict):
+        try:
+            p0_eval = float(scoreboard.get("p0_eval", 0.0))
+            p1_eval = float(scoreboard.get("p1_eval", 0.0))
+        except (TypeError, ValueError):
+            pass
+        else:
+            return p1_eval - p0_eval if str(target_side) == "1" else p0_eval - p1_eval
+    try:
+        return float(match_score.get("raw_resource_advantage_score", 0.0))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _result_target_side(raw_result: dict[str, Any] | None, simulation_meta: dict[str, Any]) -> str:
@@ -296,7 +352,6 @@ def _normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, int]:
     heavy = int(_safe_int(unit_types, "Heavy"))
     ranged = int(_safe_int(unit_types, "Ranged"))
     resources = int(_safe_int(snapshot, "resource_total", fallback_keys=("player_resources", "resources")))
-    total_units = base + barracks + worker + light + heavy + ranged
     return {
         "resources": resources,
         "base_count": base,
@@ -305,7 +360,6 @@ def _normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, int]:
         "light_count": light,
         "heavy_count": heavy,
         "ranged_count": ranged,
-        "total_units": total_units,
     }
 
 

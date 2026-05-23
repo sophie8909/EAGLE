@@ -114,7 +114,7 @@ def build_result_record(
     resource_score = _match_resource_advantage_score(match_score)
     if win_score == 1.0:
         result = "Win"
-    elif win_score == 0.0:
+    elif win_score == -1.0:
         result = "Loss"
     else:
         result = "Draw"
@@ -123,13 +123,15 @@ def build_result_record(
         "individual_id": individual.id,
         "opponent": opponent,
         "result": result,
-        "match_score": dict(match_score),
-        "fitness": dict(match_score),
-        "win_score": win_score,
-        "resource_advantage_score": resource_score,
-        "log_path": log_path,
-        "trace_xml_path": trace_xml_path,
-        "trace_json_path": trace_json_path,
+        "raw": {
+            "win_score": win_score,
+            "score": resource_score,
+        },
+        "paths": {
+            "log": log_path,
+            "trace_xml": trace_xml_path,
+            "trace_json": trace_json_path,
+        },
     }
 
 
@@ -250,8 +252,10 @@ def run_generation_result_test(
                     trace_xml_path=str(metadata.get("trace_xml_path")) if metadata.get("trace_xml_path") else None,
                     trace_json_path=str(metadata.get("trace_json_path")) if metadata.get("trace_json_path") else None,
                 )
-                result_record["interval_mode"] = str(interval_run["label"])
-                result_record["llm_interval"] = llm_interval
+                result_record["runtime"] = {
+                    "interval_mode": str(interval_run["label"]),
+                    "llm_interval": llm_interval,
+                }
                 _append_result(results, individual.id, result_record)
 
                 destination = (
@@ -285,8 +289,10 @@ def run_generation_result_test(
                 trace_xml_path=str(metadata.get("trace_xml_path")) if metadata.get("trace_xml_path") else None,
                 trace_json_path=str(metadata.get("trace_json_path")) if metadata.get("trace_json_path") else None,
             )
-            result_record["interval_mode"] = "java_agent_test"
-            result_record["llm_interval"] = None
+            result_record["runtime"] = {
+                "interval_mode": "java_agent_test",
+                "llm_interval": None,
+            }
             _append_result(results, individual.id, result_record)
 
             destination = (

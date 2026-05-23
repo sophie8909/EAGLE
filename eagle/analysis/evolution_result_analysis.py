@@ -494,19 +494,77 @@ def _final_test_analysis_from_payload(
 
 def _final_test_records(results: object) -> list[dict[str, object]]:
     """Flatten final-test result rows from supported result payloads."""
+    rows: list[dict[str, object]] = []
     if isinstance(results, dict):
         if isinstance(results.get("results"), list):
-            return [item for item in list(results.get("results") or []) if isinstance(item, dict)]
-        rows: list[dict[str, object]] = []
-        for value in results.values():
-            if isinstance(value, list):
-                rows.extend(item for item in value if isinstance(item, dict))
-            elif isinstance(value, dict):
-                rows.append(value)
-        return rows
-    if isinstance(results, list):
-        return [item for item in results if isinstance(item, dict)]
-    return []
+            rows = [item for item in list(results.get("results") or []) if isinstance(item, dict)]
+        else:
+            for value in results.values():
+                if isinstance(value, list):
+                    rows.extend(item for item in value if isinstance(item, dict))
+                elif isinstance(value, dict):
+                    rows.append(value)
+    elif isinstance(results, list):
+        rows = [item for item in results if isinstance(item, dict)]
+    return [_normalize_final_test_record(row) for row in rows]
+
+
+def _normalize_final_test_record(record: dict[str, object]) -> dict[str, object]:
+    """Normalize new and legacy final-test rows to the raw-record schema."""
+    normalized = dict(record)
+    raw = dict(record.get("raw") or {}) if isinstance(record.get("raw"), dict) else {}
+    raw.setdefault("win_score", _legacy_final_test_win_score(record))
+    raw.setdefault("score", record.get("score", record.get("resource_advantage_score")))
+    raw.setdefault("ally", dict(record.get("ally") or {}) if isinstance(record.get("ally"), dict) else {})
+    raw.setdefault("enemy", dict(record.get("enemy") or {}) if isinstance(record.get("enemy"), dict) else {})
+    normalized["raw"] = raw
+
+    paths = dict(record.get("paths") or {}) if isinstance(record.get("paths"), dict) else {}
+    paths.setdefault("log", record.get("log_path", ""))
+    paths.setdefault("trace_xml", record.get("trace_xml_path"))
+    paths.setdefault("trace_json", record.get("trace_json_path"))
+    normalized["paths"] = paths
+
+    runtime = dict(record.get("runtime") or {}) if isinstance(record.get("runtime"), dict) else {}
+    runtime.setdefault("interval_mode", record.get("interval_mode"))
+    runtime.setdefault("llm_interval", record.get("llm_interval"))
+    normalized["runtime"] = runtime
+
+    if str(normalized.get("result") or "").strip().lower() not in {"win", "loss", "draw", "skipped", "failed"}:
+        normalized["result"] = _result_from_win_score(raw.get("win_score"))
+    return normalized
+
+
+def _legacy_final_test_win_score(record: dict[str, object]) -> float:
+    """Read a legacy final-test win score without using derived resources."""
+    result = str(record.get("result") or "").strip().lower()
+    if result == "win":
+        return 1.0
+    if result == "loss":
+        return -1.0
+    if result == "draw":
+        return 0.0
+    if "win_score" in record:
+        return _safe_float(record.get("win_score"))
+    for key in ("match_score", "fitness"):
+        value = record.get(key)
+        if isinstance(value, dict) and "win_score" in value:
+            return _safe_float(value.get("win_score"))
+        if isinstance(value, list) and value:
+            return _safe_float(value[0])
+    if "win" in record:
+        return 1.0 if bool(record.get("win")) else -1.0
+    return 0.0
+
+
+def _result_from_win_score(value: object) -> str:
+    """Map canonical win scores to result labels."""
+    win_score = _safe_float(value)
+    if win_score == 1.0:
+        return "Win"
+    if win_score == -1.0:
+        return "Loss"
+    return "Draw"
 
 
 def _final_test_analysis_from_lines(text: str) -> dict[str, object]:
@@ -532,8 +590,6 @@ def _final_test_analysis_from_lines(text: str) -> dict[str, object]:
 
 def _final_test_outcome(record: dict[str, object]) -> str:
     """Normalize one final-test row outcome."""
-    if "win" in record:
-        return "win" if bool(record.get("win")) else "loss"
     status = str(record.get("status") or record.get("result") or "").strip().lower()
     if status in {"win", "loss", "draw", "skipped", "failed"}:
         return status
@@ -541,39 +597,36 @@ def _final_test_outcome(record: dict[str, object]) -> str:
         return "skipped"
     if record.get("failed") is True or record.get("error"):
         return "failed"
-    score = record.get("win_score")
-    if score is None and isinstance(record.get("match_score"), dict):
-        score = record["match_score"].get("win_score")
-    try:
-        win_score = float(score)
-    except (TypeError, ValueError):
+    raw = record.get("raw")
+    score = raw.get("win_score") if isinstance(raw, dict) else record.get("win_score")
+    win_score = _safe_float(score)
+    if math.isnan(win_score):
         return "unknown"
     if win_score == 1.0:
         return "win"
-    if win_score == 0.0:
+    if win_score == -1.0:
         return "loss"
     return "draw"
 
 
 def _final_test_record_metrics(record: dict[str, object], weights: dict[str, float] | None = None) -> dict[str, float]:
     """Return derived raw metrics for one final-test replay record."""
-    ally = dict(record.get("ally") or {})
-    enemy = dict(record.get("enemy") or {})
-    # TODO: Verify whether this derived metric is suitable for final-test analysis.
+    raw = dict(record.get("raw") or {}) if isinstance(record.get("raw"), dict) else {}
+    ally = dict(raw.get("ally") or {})
+    enemy = dict(raw.get("enemy") or {})
     ally_total = _snapshot_total_resources(ally)
     enemy_total = _snapshot_total_resources(enemy)
     weights = dict(weights or {})
+    outcome = _final_test_outcome(record)
     return {
-        "win_rate": 1.0 if bool(record.get("win")) else 0.0,
-        "score": _safe_float(record.get("score")),
+        "win_rate": 1.0 if outcome == "win" else 0.0,
+        "score": _safe_float(raw.get("score")),
         "ally_resources": _safe_float(ally.get("resources")),
         "enemy_resources": _safe_float(enemy.get("resources")),
         "total_ally_resources": ally_total,
         "total_enemy_resources": enemy_total,
-        # TODO: Verify whether this derived metric is suitable for final-test analysis.
         "resource_difference": ally_total - enemy_total,
-        # TODO: Verify whether this derived metric is suitable for final-test analysis.
-        "weighted_resource_score": _weighted_resource_score(ally, weights),
+        "weighted_resource_score": _weighted_resource_score(ally, weights) - _weighted_resource_score(enemy, weights),
     }
 
 
@@ -766,8 +819,9 @@ def _final_test_analysis_summary(
     """Build summary statistics for one final-test results payload."""
     records = _final_test_records(payload.get("results"))
     metrics = [_final_test_record_metrics(record, weights=weights) for record in records]
-    wins = sum(int(bool(record.get("win"))) for record in records)
-    losses = len(records) - wins
+    wins = sum(int(_final_test_outcome(record) == "win") for record in records)
+    losses = sum(int(_final_test_outcome(record) == "loss") for record in records)
+    draws = sum(int(_final_test_outcome(record) == "draw") for record in records)
     maps = sorted({str(record.get("map")) for record in records if record.get("map")})
     opponents = sorted({str(record.get("opponent")) for record in records if record.get("opponent")})
     return {
@@ -780,7 +834,7 @@ def _final_test_analysis_summary(
         "games": len(records),
         "wins": wins,
         "losses": losses,
-        "draws": 0,
+        "draws": draws,
         "win_rate": (wins / len(records)) if records else None,
         "maps": maps,
         "opponents": opponents,
@@ -1493,7 +1547,12 @@ def _build_generation_gif(image_paths: list[Path], output_path: Path) -> Path | 
 
 def _collect_final_test_mode_rows(results_payload: dict, interval_mode: str) -> tuple[list[str], list[str], list[list[float]]]:
     """Collect one heatmap matrix for one final-test mode."""
-    results = dict(results_payload.get("results") or {})
+    records = _final_test_records(results_payload.get("results"))
+    results: dict[str, list[dict[str, object]]] = {}
+    for record in records:
+        individual_id = str(record.get("individual_id") or "")
+        if individual_id:
+            results.setdefault(individual_id, []).append(record)
     individual_ids = sorted(results.keys())
     opponent_names: list[str] = []
     matrix: list[list[float]] = []
@@ -1501,7 +1560,7 @@ def _collect_final_test_mode_rows(results_payload: dict, interval_mode: str) -> 
     for individual_id in individual_ids:
         rows = [
             row for row in list(results.get(individual_id) or [])
-            if str(row.get("interval_mode")) == interval_mode
+            if str(dict(row.get("runtime") or {}).get("interval_mode")) == interval_mode
         ]
         if not opponent_names:
             opponent_names = sorted({str(row.get("opponent")) for row in rows})
@@ -1509,8 +1568,9 @@ def _collect_final_test_mode_rows(results_payload: dict, interval_mode: str) -> 
         row_values: list[float] = []
         for opponent in opponent_names:
             matched_row = next((row for row in rows if str(row.get("opponent")) == opponent), None)
+            metrics = _final_test_record_metrics(matched_row) if matched_row is not None else {}
             row_values.append(
-                _safe_float(matched_row.get("resource_advantage_score")) if matched_row is not None else float("nan")
+                _safe_float(metrics.get("score")) if matched_row is not None else float("nan")
             )
         matrix.append(row_values)
 
