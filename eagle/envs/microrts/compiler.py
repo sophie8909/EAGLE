@@ -43,7 +43,7 @@ def compile_microrts(project_root: Path | None = None, *, force: bool = False) -
             return bin_dir
 
     started = time.perf_counter()
-    classpath = f"{lib_dir / '*'}{os.pathsep}{bin_dir}"
+    classpath = f"{src_dir}{os.pathsep}{lib_dir / '*'}"
     with tempfile.NamedTemporaryFile(
         mode="w",
         encoding="utf-8",

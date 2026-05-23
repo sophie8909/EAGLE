@@ -719,7 +719,7 @@ def run_prompt_based_game(
     return run_java_agent_game(
         project_root=project_root,
         config=config,
-        ai1_class="ai.abstraction.EAGLE",
+        ai1_class="ai.eagle.EAGLE",
         opponent=opponent,
         prompt=prompt,
         compile_first=True,

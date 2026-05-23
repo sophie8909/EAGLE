@@ -147,7 +147,7 @@ def run_surrogate_validation_smoke_test(
     }
 
     required_java_files = {
-        "eagle_java": microrts_root / "src" / "ai" / "abstraction" / "EAGLE.java",
+        "eagle_java": microrts_root / "src" / "ai" / "eagle" / "EAGLE.java",
         "eagle_policy_java": microrts_root / "src" / "ai" / "abstraction" / "eaglePolicy.java",
         "config_properties": microrts_root / "resources" / "config.properties",
     }
@@ -348,7 +348,7 @@ def _run_eagle_match(
     llm_interval: int,
 ) -> dict[str, Any]:
     """Run one 5000-cycle benchmark match with the gameplay EAGLE Java agent."""
-    ai1 = "ai.abstraction.EAGLE"
+    ai1 = "ai.eagle.EAGLE"
 
     cached = _maybe_reuse_cached_match(
         recorder,
