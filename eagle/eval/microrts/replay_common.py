@@ -32,23 +32,12 @@ def apply_runtime_overrides(
     resolved = clone_config(base_config)
     if "tick_limit" in payload:
         resolved.tick_limit = int(payload["tick_limit"])
-    if "llm_call_limit" in payload:
-        resolved.llm_call_limit = int(payload["llm_call_limit"])
     if "llm_interval" in payload:
         resolved.llm_interval = payload["llm_interval"]
     if "save_trace_on_test" in payload:
         resolved.save_trace_on_test = bool(payload["save_trace_on_test"])
     resolved.validate()
     return resolved
-
-
-def resolve_final_test_llm_call_limit(config_path: str | Path | None = None) -> int | None:
-    """Return the explicit final-test LLM limit, or None for unlimited."""
-    payload = load_override_payload(config_path)
-    value = payload.get("final_test_llm_call_limit")
-    if value is None or str(value).strip().lower() in {"", "none", "null", "unlimited"}:
-        return None
-    return int(value)
 
 
 def build_interval_runs(config_path: str | Path | None, fallback_llm_interval: int | list[int]) -> list[dict[str, int | str]]:

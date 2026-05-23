@@ -51,6 +51,11 @@ def build_final_test_view(state: Any) -> dict[str, Any]:
         finally:
             if run_button is not None:
                 run_button.enable()
+        if not success:
+            results_textarea.value = message
+            results_textarea.update()
+            await refresh_status()
+            return success, message
         await refresh_results()
         await refresh_analysis()
         await refresh_status()

@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 
 from ...config import load_config_from_json
 from ...main import OPPONENT_LIST
@@ -22,6 +27,42 @@ from .generation_replay import extract_individual_ids_up_to_front
 FINAL_TEST_REPEATS = 10
 
 
+class FinalTestBackendError(RuntimeError):
+    """Raised when Final Test cannot reach the configured LLM backend."""
+
+
+@dataclass(frozen=True)
+class FinalTestBackendSettings:
+    """Explicit LLM backend settings used for Final Test gameplay."""
+
+    model: str
+    base_url: str
+
+
+def resolve_final_test_backend_settings(config: Any) -> FinalTestBackendSettings:
+    """Resolve the selected Final Test LLM backend from env overrides and config."""
+    model = str(os.getenv("LLAMA_CPP_MODEL") or getattr(config, "llm_model", "local") or "local").strip()
+    base_url = _normalize_llm_base_url(
+        os.getenv("LLAMA_CPP_BASE_URL") or getattr(config, "llm_base_url", "http://127.0.0.1:8080/v1")
+    )
+    return FinalTestBackendSettings(model=model, base_url=base_url)
+
+
+def validate_final_test_backend(settings: FinalTestBackendSettings, *, timeout_sec: float = 3.0) -> None:
+    """Fail fast if the configured OpenAI-compatible LLM endpoint is unreachable."""
+    models_url = urljoin(settings.base_url.rstrip("/") + "/", "models")
+    request = Request(models_url, method="GET")
+    try:
+        with urlopen(request, timeout=timeout_sec) as response:
+            status = int(getattr(response, "status", 200))
+    except HTTPError as exc:
+        status = int(exc.code)
+    except (OSError, URLError) as exc:
+        raise FinalTestBackendError(f"LLM backend is not reachable: {settings.base_url}") from exc
+    if status < 200 or status >= 500:
+        raise FinalTestBackendError(f"LLM backend is not reachable: {settings.base_url}")
+
+
 def run_final_test_batch(
     run_dir: str | Path,
     *,
@@ -35,6 +76,8 @@ def run_final_test_batch(
         raise FileNotFoundError(f"Selected run is missing config.json: {resolved_run_dir / 'config.json'}")
 
     config = load_config_from_json(resolved_run_dir)
+    backend_settings = resolve_final_test_backend_settings(config)
+    validate_final_test_backend(backend_settings)
     final_test_mode, generation_log_path, candidate_individuals = _select_candidates(resolved_run_dir, config)
     selected_individuals = _select_final_test_individuals(final_test_mode, generation_log_path, candidate_individuals)
     if not selected_individuals:
@@ -76,18 +119,27 @@ def run_final_test_batch(
         for map_record in map_records:
             for opponent in opponents:
                 for repeat in range(repeats):
+                    llm_interval = int(config.active_llm_interval())
+                    interval_mode = f"interval_{llm_interval}"
                     result = evaluator.run_prompt_based_agent(
                         individual=individual,
                         prompt=prompt,
                         opponent=opponent,
                         test=True,
                         llm_call_limit=None,
+                        llm_interval=llm_interval,
+                        llm_model=backend_settings.model,
+                        llm_base_url=backend_settings.base_url,
+                        llm_strict_errors=True,
+                        interval_mode=interval_mode,
                         map_location=map_record["runtime_map"],
                     )
                     match_score = dict(result.get("match_score") or {})
                     simulation_meta = dict(result.get("simulation_meta") or {})
-                    simulation_meta["interval_mode"] = f"interval_{config.active_llm_interval()}"
-                    simulation_meta["llm_interval"] = config.active_llm_interval()
+                    simulation_meta["interval_mode"] = interval_mode
+                    simulation_meta["llm_interval"] = llm_interval
+                    simulation_meta["llm_model"] = backend_settings.model
+                    simulation_meta["llm_base_url"] = backend_settings.base_url
                     raw_result = _load_result_json(simulation_meta.get("result_json_path"))
                     payload["results"].append(
                         _build_raw_result_record(
@@ -261,6 +313,8 @@ def _build_raw_result_record(
         "runtime": {
             "interval_mode": str(simulation_meta.get("interval_mode") or ""),
             "llm_interval": simulation_meta.get("llm_interval"),
+            "model": str(simulation_meta.get("llm_model") or ""),
+            "base_url": str(simulation_meta.get("llm_base_url") or ""),
         },
     }
 
@@ -374,6 +428,16 @@ def _safe_int(mapping: dict[str, Any], key: str, *, fallback_keys: tuple[str, ..
         except (TypeError, ValueError, AttributeError):
             continue
     return 0
+
+
+def _normalize_llm_base_url(raw_url: Any) -> str:
+    """Normalize the OpenAI-compatible LLM API base URL."""
+    base_url = str(raw_url or "http://127.0.0.1:8080/v1").strip().rstrip("/")
+    if not base_url.startswith(("http://", "https://")):
+        base_url = "http://" + base_url
+    if not base_url.endswith("/v1"):
+        base_url += "/v1"
+    return base_url
 
 
 def _mode_from_config(config: Any) -> str:

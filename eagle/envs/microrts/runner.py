@@ -193,6 +193,10 @@ def launch_java_match(
     prompt_path: Path | None = None,
     llm_interval: int | None = None,
     llm_call_limit: int | None = None,
+    llm_model: str | None = None,
+    llm_base_url: str | None = None,
+    llm_strict_errors: bool = False,
+    interval_mode: str | None = None,
     max_game_ticks: int | None = None,
     trace_path: Path | None = None,
     round_state_dir: Path | None = None,
@@ -215,6 +219,14 @@ def launch_java_match(
         command.append(f"-Dmicrorts.llm_interval={int(llm_interval)}")
     if llm_call_limit is not None:
         command.append(f"-Dmicrorts.llm_call_limit={int(llm_call_limit)}")
+    if llm_model is not None:
+        command.append(f"-Dllama_cpp.model={llm_model}")
+    if llm_base_url is not None:
+        command.append(f"-Dllama_cpp.base_url={llm_base_url}")
+    if llm_strict_errors:
+        command.append("-Deagle.llm_strict=true")
+    if interval_mode is not None:
+        command.append(f"-Dmicrorts.interval_mode={interval_mode}")
     if max_game_ticks is not None:
         command.append(f"-Dmicrorts.tick_limit={int(max_game_ticks)}")
     if llm_debug_dir is not None:
@@ -247,6 +259,8 @@ def launch_java_match(
         "[DEBUG] microrts launch "
         f"cwd={microrts_root} max_ticks={max_game_ticks or tick_limit} log={log_path} "
         f"llm_call_limit={llm_call_limit if llm_call_limit is not None else 'unlimited'} "
+        f"llm_model={llm_model or '(env/default)'} "
+        f"llm_base_url={llm_base_url or '(env/default)'} "
         f"map={map_location} ai1={ai1_class} ai2={ai2_class}",
         flush=True,
     )
@@ -258,6 +272,14 @@ def launch_java_match(
     env["EAGLE_GENERATION"] = "" if generation is None else str(generation)
     env["EAGLE_INDIVIDUAL_ID"] = "" if individual_id is None else str(individual_id)
     env["EAGLE_TRACE_MODE"] = "gameplay"
+    if llm_model is not None:
+        env["LLAMA_CPP_MODEL"] = str(llm_model)
+    if llm_base_url is not None:
+        env["LLAMA_CPP_BASE_URL"] = str(llm_base_url)
+    if llm_strict_errors:
+        env["EAGLE_LLM_STRICT"] = "true"
+    if interval_mode is not None:
+        env["MICRORTS_INTERVAL_MODE"] = str(interval_mode)
     with log_path.open("w", encoding="utf-8") as stream:
         process = subprocess.Popen(
             command,
@@ -465,6 +487,10 @@ def run_java_agent_game(
     generation: int | None = None,
     individual_id: Any | None = None,
     llm_call_limit: int | None = None,
+    llm_model: str | None = None,
+    llm_base_url: str | None = None,
+    llm_strict_errors: bool = False,
+    interval_mode: str | None = None,
     map_location: str | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one MicroRTS game with explicit Java agent classes."""
@@ -527,6 +553,10 @@ def run_java_agent_game(
             prompt_path=prompt_path,
             llm_interval=config.active_llm_interval(),
             llm_call_limit=resolved_llm_call_limit,
+            llm_model=llm_model,
+            llm_base_url=llm_base_url,
+            llm_strict_errors=llm_strict_errors,
+            interval_mode=interval_mode,
             max_game_ticks=max_game_ticks,
             trace_path=trace_path,
             round_state_dir=round_state_dir,
@@ -608,6 +638,9 @@ def run_java_agent_game(
             "gameplay_map_dir": _configured_map_dir(config),
             "tick_limit": max_game_ticks,
             "llm_call_limit": resolved_llm_call_limit,
+            "llm_model": llm_model,
+            "llm_base_url": llm_base_url,
+            "interval_mode": interval_mode,
             "llm_calls": parsed_log.get("summary", {}).get(
                 "llm_call_count",
                 parsed_log.get("summary", {}).get("segment_count", 0),
@@ -644,6 +677,10 @@ def run_prompt_based_game(
     generation: int | None = None,
     individual_id: Any | None = None,
     llm_call_limit: int | None = None,
+    llm_model: str | None = None,
+    llm_base_url: str | None = None,
+    llm_strict_errors: bool = False,
+    interval_mode: str | None = None,
     map_location: str | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one gameplay EAGLE-vs-opponent match driven by the prompt file."""
@@ -660,5 +697,9 @@ def run_prompt_based_game(
         generation=generation,
         individual_id=individual_id,
         llm_call_limit=llm_call_limit,
+        llm_model=llm_model,
+        llm_base_url=llm_base_url,
+        llm_strict_errors=llm_strict_errors,
+        interval_mode=interval_mode,
         map_location=map_location,
     )

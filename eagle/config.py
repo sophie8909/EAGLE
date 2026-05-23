@@ -109,6 +109,8 @@ class EAConfig:
 
     tick_limit: int = field(default_factory=lambda: int(_default_config_value("tick_limit")))
     llm_call_limit: int = field(default_factory=lambda: int(_default_config_value("llm_call_limit")))
+    llm_model: str = field(default_factory=lambda: str(_default_config_value("llm_model")))
+    llm_base_url: str = field(default_factory=lambda: str(_default_config_value("llm_base_url")))
     gameplay_rate: float = field(default_factory=lambda: float(_default_config_value("gameplay_rate")))
     gameplay_refresh_interval: int = field(default_factory=lambda: int(_default_config_value("gameplay_refresh_interval")))
     surrogate_top_ratio: float = field(default_factory=lambda: float(_default_config_value("surrogate_top_ratio")))
@@ -277,6 +279,10 @@ class EAConfig:
             raise ValueError("gameplay_map_dir must be a non-empty maps/ subfolder name.")
         self.tick_limit = max(1, int(self.tick_limit))
         self.llm_call_limit = max(1, int(self.llm_call_limit))
+        self.llm_model = str(self.llm_model or "").strip()
+        if not self.llm_model:
+            raise ValueError("llm_model must be a non-empty model name.")
+        self.llm_base_url = self._normalize_llm_base_url(self.llm_base_url)
         self.min_token_length = max(1, int(self.min_token_length))
         self.llm_interval = self._normalized_llm_interval_input(self.llm_interval)
 
@@ -375,6 +381,16 @@ class EAConfig:
         if active_interval is not None:
             return int(active_interval)
         return self.llm_interval_for_generation(None)
+
+    @staticmethod
+    def _normalize_llm_base_url(raw_url: Any) -> str:
+        """Normalize the OpenAI-compatible LLM API base URL."""
+        base_url = str(raw_url or "http://127.0.0.1:8080/v1").strip().rstrip("/")
+        if not base_url.startswith(("http://", "https://")):
+            base_url = "http://" + base_url
+        if not base_url.endswith("/v1"):
+            base_url += "/v1"
+        return base_url
 
     def strategy_mutation_mode_weights(self) -> dict[str, float]:
         """Return normalized sampling weights for strategy-mutation dispatch."""

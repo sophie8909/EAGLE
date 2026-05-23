@@ -386,6 +386,10 @@ class FullGameEvaluator:
         allow_history_reuse: bool = False,
         llm_interval: int | None = None,
         llm_call_limit: int | None = None,
+        llm_model: str | None = None,
+        llm_base_url: str | None = None,
+        llm_strict_errors: bool = False,
+        interval_mode: str | None = None,
         map_location: str | None = None,
         test: bool = False,
     ) -> dict[str, Any]:
@@ -417,6 +421,10 @@ class FullGameEvaluator:
                 generation=generation,
                 individual_id=getattr(individual, "id", None) if individual is not None else None,
                 llm_call_limit=llm_call_limit,
+                llm_model=llm_model,
+                llm_base_url=llm_base_url,
+                llm_strict_errors=llm_strict_errors,
+                interval_mode=interval_mode,
                 map_location=map_location,
             )
         stats["microrts_compile_time"] = float(simulation_meta.get("compile_time_sec", 0.0) or 0.0)
@@ -537,6 +545,10 @@ class FullGameEvaluator:
         *,
         llm_interval: int | None = None,
         llm_call_limit: int | None = None,
+        llm_model: str | None = None,
+        llm_base_url: str | None = None,
+        llm_strict_errors: bool = False,
+        interval_mode: str | None = None,
         map_location: str | None = None,
         test: bool = False,
         generation: int | None = None,
@@ -551,6 +563,10 @@ class FullGameEvaluator:
             test=test,
             generation=generation,
             individual_id=individual_id,
+            llm_model=llm_model,
+            llm_base_url=llm_base_url,
+            llm_strict_errors=llm_strict_errors,
+            interval_mode=interval_mode,
         )
 
     def _run_java_match(

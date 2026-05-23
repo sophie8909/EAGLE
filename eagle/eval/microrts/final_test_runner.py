@@ -12,11 +12,11 @@ from ...utils.component_pool import ComponentPool
 from ...utils.checkpoint import CheckpointManager, deserialize_individual
 from ...evolution.component.log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
 from .full_game_evaluator import FullGameEvaluator
+from .final_test_batch import resolve_final_test_backend_settings, validate_final_test_backend
 from .generation_replay import build_result_record, extract_individual_ids_up_to_front
 from .replay_common import (
     apply_runtime_overrides,
     build_interval_runs,
-    resolve_final_test_llm_call_limit,
     write_results_snapshot,
 )
 
@@ -104,12 +104,6 @@ def run_final_test_suite(
     experiment_log_dir = Path(current_log_dir)
     base_config = config or EAConfig()
     runtime_config = _resolve_final_test_config(base_config, final_test_config_path)
-    final_test_llm_call_limit = resolve_final_test_llm_call_limit(final_test_config_path)
-    evaluator = FullGameEvaluator(
-        ComponentPool.from_json(str(experiment_log_dir / "component_pool.json")),
-        runtime_config,
-        runtime_logs_dir=experiment_log_dir / "microrts",
-    )
     final_test_max_front = _resolve_final_test_max_front(base_config)
     if final_test_max_front == 0:
         print("[Final Test] skipped because final_test_max_front=0", flush=True)
@@ -122,12 +116,20 @@ def run_final_test_suite(
                 Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
             ),
             "tick_limit": int(runtime_config.tick_limit),
-            "llm_call_limit": final_test_llm_call_limit,
+            "llm_call_limit": None,
             "interval_runs": [],
             "results": {},
             "skipped": True,
             "skip_reason": "final_test_max_front=0",
         }
+
+    backend_settings = resolve_final_test_backend_settings(runtime_config)
+    validate_final_test_backend(backend_settings)
+    evaluator = FullGameEvaluator(
+        ComponentPool.from_json(str(experiment_log_dir / "component_pool.json")),
+        runtime_config,
+        runtime_logs_dir=experiment_log_dir / "microrts",
+    )
 
     try:
         generation_log_path = _resolve_final_generation_log_path(experiment_log_dir, last_gen)
@@ -192,7 +194,7 @@ def run_final_test_suite(
             Path(final_test_config_path) if final_test_config_path is not None else DEFAULT_FINAL_TEST_CONFIG_PATH
         ),
         "tick_limit": int(runtime_config.tick_limit),
-        "llm_call_limit": final_test_llm_call_limit,
+        "llm_call_limit": None,
         "interval_runs": interval_runs,
         "results": {},
     }
@@ -235,7 +237,11 @@ def run_final_test_suite(
                     opponent=opponent,
                     generation=generation_number,
                     llm_interval=llm_interval,
-                    llm_call_limit=final_test_llm_call_limit,
+                    llm_call_limit=None,
+                    llm_model=backend_settings.model,
+                    llm_base_url=backend_settings.base_url,
+                    llm_strict_errors=True,
+                    interval_mode=str(interval_run["label"]),
                     test=True,
                 )
                 match_score = dict(result["match_score"])
@@ -251,6 +257,8 @@ def run_final_test_suite(
                 result_record["runtime"] = {
                     "interval_mode": str(interval_run["label"]),
                     "llm_interval": llm_interval,
+                    "model": backend_settings.model,
+                    "base_url": backend_settings.base_url,
                 }
 
                 results["results"].setdefault(individual.id, [])

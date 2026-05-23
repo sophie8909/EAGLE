@@ -14,7 +14,6 @@ from .full_game_evaluator import FullGameEvaluator
 from .replay_common import (
     build_interval_runs,
     load_runtime_config,
-    resolve_final_test_llm_call_limit,
     write_results_snapshot,
 )
 
@@ -208,7 +207,7 @@ def run_generation_result_test(
     )
 
     interval_runs = build_interval_runs(config_path, runtime_config.llm_interval)
-    final_test_llm_call_limit = resolve_final_test_llm_call_limit(config_path)
+    final_test_llm_call_limit = None
     resolved_opponents = list(opponents or OPPONENT_LIST)
     results = {
         "generation": generation,

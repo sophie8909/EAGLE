@@ -109,6 +109,8 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 ("num_generations", "Generations"),
                 ("tick_limit", "Tick limit"),
                 ("llm_call_limit", "LLM call limit"),
+                ("llm_model", "LLM model"),
+                ("llm_base_url", "LLM base URL"),
                 ("gameplay_rate", "Gameplay rate"),
                 ("gameplay_refresh_interval", "Gameplay refresh"),
                 ("surrogate_top_ratio", "Surrogate top ratio"),

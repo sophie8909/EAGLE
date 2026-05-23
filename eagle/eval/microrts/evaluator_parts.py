@@ -263,6 +263,10 @@ class JavaMatchEvaluator:
         generation: int | None,
         individual_id: Any | None,
         llm_call_limit: int | None = None,
+        llm_model: str | None = None,
+        llm_base_url: str | None = None,
+        llm_strict_errors: bool = False,
+        interval_mode: str | None = None,
         map_location: str | None = None,
     ) -> tuple[dict[str, float], dict[str, Any]]:
         """Run one prompt-driven EAGLE Java match."""
@@ -278,6 +282,10 @@ class JavaMatchEvaluator:
                 generation=generation,
                 individual_id=individual_id,
                 llm_call_limit=llm_call_limit,
+                llm_model=llm_model,
+                llm_base_url=llm_base_url,
+                llm_strict_errors=llm_strict_errors,
+                interval_mode=interval_mode,
                 map_location=map_location,
             ),
         )

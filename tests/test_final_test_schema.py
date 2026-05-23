@@ -30,6 +30,8 @@ def test_batch_result_record_uses_clean_raw_schema():
             "trace_json_path": None,
             "interval_mode": "interval_10",
             "llm_interval": 10,
+            "llm_model": "local",
+            "llm_base_url": "http://127.0.0.1:8080/v1",
         },
     )
 
@@ -52,7 +54,12 @@ def test_batch_result_record_uses_clean_raw_schema():
     assert record["raw"]["score"] == 5.0
     assert "total_units" not in record["raw"]["ally"]
     assert record["paths"] == {"log": "run.log", "trace_xml": "trace.xml", "trace_json": None}
-    assert record["runtime"] == {"interval_mode": "interval_10", "llm_interval": 10}
+    assert record["runtime"] == {
+        "interval_mode": "interval_10",
+        "llm_interval": 10,
+        "model": "local",
+        "base_url": "http://127.0.0.1:8080/v1",
+    }
 
 
 def test_generation_replay_record_does_not_duplicate_scores():

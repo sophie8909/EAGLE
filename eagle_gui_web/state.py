@@ -26,6 +26,8 @@ class ConfigState:
     num_generations: str = "50"
     tick_limit: str = "5000"
     llm_call_limit: str = "50"
+    llm_model: str = "local"
+    llm_base_url: str = "http://127.0.0.1:8080/v1"
     gameplay_map_dir: str = "8x8"
     gameplay_rate: str = "0.25"
     gameplay_refresh_interval: str = "5"
