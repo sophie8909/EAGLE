@@ -70,17 +70,16 @@ public class EAGLE extends AbstractionLayerAI {
     private static final int LLM_INTERVAL = readIntSetting("microrts.llm_interval", "LLM_INTERVAL", 1);
     private static final int LLM_CALL_LIMIT = readIntSetting("microrts.llm_call_limit", "LLM_CALL_LIMIT", 50);
     private static final int TICK_LIMIT = readIntSetting("microrts.tick_limit", "TICK_LIMIT", 5000);
-    private static final String LLAMA_CPP_BASE_URL = normalizeLlamaCppBaseUrl(
+    private static final String LLAMA_CPP_ENDPOINT = buildLlamaCppEndpoint(
             System.getProperty(
                     "llama_cpp.base_url",
-                    System.getenv().getOrDefault("LLAMA_CPP_BASE_URL", "http://127.0.0.1:8080/v1")
+                    System.getenv().getOrDefault("EAGLE_LLM_BASE_URL", "http://localhost:8080")
             )
     );
-    private static final int LLAMA_CPP_MAX_TOKENS = readIntSetting("llama_cpp.max_tokens", "LLAMA_CPP_MAX_TOKENS", 2048);
+    private static final int LLAMA_CPP_MAX_TOKENS = readIntSetting("llama_cpp.max_tokens", "LLAMA_CPP_MAX_TOKENS", 512);
     private static final String LLM_LIMIT_EMPTY_RESPONSE =
             "{\"thinking\":\"LLM call limit reached; no action issued.\",\"moves\":[]}";
     private static final boolean LLM_STRICT_ERRORS = readBooleanSetting("eagle.llm_strict", "EAGLE_LLM_STRICT", false);
-    private static final boolean LLAMA_CPP_STREAM = false;
     private static final boolean DEBUG_MODE = readBooleanSetting("eagle.debug", "EAGLE_DEBUG", false);
     private static final String LLM_DEBUG_DIR = System.getProperty(
             "eagle.llm_debug_dir",
@@ -90,7 +89,7 @@ public class EAGLE extends AbstractionLayerAI {
 
     static String MODEL = System.getProperty(
             "llama_cpp.model",
-            System.getenv().getOrDefault("LLAMA_CPP_MODEL", "local")
+            System.getenv().getOrDefault("EAGLE_LLM_MODEL", "llama3.1:8b")
     );
     private static String PROMPT = null;
 
@@ -178,18 +177,18 @@ public class EAGLE extends AbstractionLayerAI {
                 || normalized.equals("on");
     }
 
-    private static String normalizeLlamaCppBaseUrl(String rawHost) {
-        String host = rawHost == null || rawHost.isBlank() ? "http://127.0.0.1:8080/v1" : rawHost.trim();
-        if (!host.startsWith("http://") && !host.startsWith("https://")) {
-            host = "http://" + host;
+    private static String buildLlamaCppEndpoint(String rawBaseUrl) {
+        String baseUrl = rawBaseUrl == null || rawBaseUrl.isBlank() ? "http://localhost:8080" : rawBaseUrl.trim();
+        if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+            baseUrl = "http://" + baseUrl;
         }
-        while (host.endsWith("/")) {
-            host = host.substring(0, host.length() - 1);
+        while (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
-        if (!host.endsWith("/v1")) {
-            host = host + "/v1";
+        if (baseUrl.endsWith("/v1")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 3);
         }
-        return host;
+        return baseUrl + "/v1/chat/completions";
     }
 
     private static void debugBlock(String title, String body) {
@@ -898,8 +897,7 @@ public class EAGLE extends AbstractionLayerAI {
         String requestPrompt = "/no_think " + finalPrompt;
         JsonObject body = new JsonObject();
         body.addProperty("model", MODEL);
-        body.addProperty("stream", LLAMA_CPP_STREAM);
-        body.addProperty("temperature", 0.2);
+        body.addProperty("temperature", 0.0);
         body.addProperty("max_tokens", LLAMA_CPP_MAX_TOKENS);
 
         JsonArray messages = new JsonArray();
@@ -910,7 +908,7 @@ public class EAGLE extends AbstractionLayerAI {
         body.add("messages", messages);
         String rawResponseBody = "";
         try {
-            URL url = new URL(LLAMA_CPP_BASE_URL + "/chat/completions");
+            URL url = new URL(LLAMA_CPP_ENDPOINT);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
@@ -937,7 +935,7 @@ public class EAGLE extends AbstractionLayerAI {
             if (code != HttpURLConnection.HTTP_OK) {
                 System.err.println("[EAGLE] llama.cpp error (" + code + "): " + sb);
                 if (LLM_STRICT_ERRORS) {
-                    logBackendError("HTTP " + code, LLAMA_CPP_BASE_URL);
+                    logBackendError("HTTP " + code);
                     throw new IllegalStateException("llama.cpp error HTTP " + code);
                 }
                 String fallback = "{\"thinking\":\"llama_cpp_error\",\"moves\":[]}";
@@ -958,16 +956,10 @@ public class EAGLE extends AbstractionLayerAI {
                     return modelText;
                 }
             }
-            if (top.has("content") && !top.get("content").isJsonNull()) {
-                String modelText = top.get("content").getAsString();
-                debugBlock("response", modelText);
-                appendLlmDebugRecord(requestPrompt, body, rawResponseBody, modelText, "", null);
-                return modelText;
-            }
 
             System.err.println("[EAGLE] unexpected llama.cpp payload: " + sb);
             if (LLM_STRICT_ERRORS) {
-                logBackendError("invalid_payload", LLAMA_CPP_BASE_URL);
+                logBackendError("invalid_payload");
                 throw new IllegalStateException("invalid llama.cpp payload");
             }
             String fallback = "{\"thinking\":\"invalid_llama_cpp_payload\",\"moves\":[]}";
@@ -976,7 +968,7 @@ public class EAGLE extends AbstractionLayerAI {
         } catch (Exception e) {
             System.err.println("[EAGLE] llama.cpp exception (" + e.getClass().getSimpleName() + "): " + e.getMessage());
             if (LLM_STRICT_ERRORS) {
-                logBackendError(e.getClass().getSimpleName() + ": " + e.getMessage(), LLAMA_CPP_BASE_URL);
+                logBackendError(e.getClass().getSimpleName() + ": " + e.getMessage());
                 throw new RuntimeException("LLM backend request failed", e);
             }
             String fallback = backendFallbackResponse(e);
@@ -985,14 +977,14 @@ public class EAGLE extends AbstractionLayerAI {
         }
     }
 
-    private static void logBackendError(String reason, String baseUrl) {
-        System.err.println("[EAGLE_BACKEND_ERROR] backend_error base_url=" + baseUrl + " reason=" + reason);
+    private static void logBackendError(String message) {
+        System.err.println("BACKEND_ERROR: " + message);
     }
 
     private static String backendFallbackResponse(Exception e) {
         if (e instanceof ConnectException || e instanceof UnknownHostException) {
-            logBackendError(e.getClass().getSimpleName() + ": " + e.getMessage(), LLAMA_CPP_BASE_URL);
-            return "{\"thinking\":\"backend_error\",\"backend_error\":true,\"moves\":[]}";
+            logBackendError(e.getClass().getSimpleName() + ": " + e.getMessage());
+            return "{\"thinking\":\"exception\",\"moves\":[]}";
         }
         return "{\"thinking\":\"exception\",\"moves\":[]}";
     }
