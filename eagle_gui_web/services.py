@@ -224,6 +224,53 @@ def load_examples_pool(state: Any) -> tuple[Path, list[dict[str, Any]]]:
     return path, rows
 
 
+def load_example_records(state: Any) -> tuple[Path, list[dict[str, Any]]]:
+    """Load editable example records from the runtime examples JSONL pool."""
+    path = examples_pool_path(state)
+    if not path.exists():
+        return path, []
+    records: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as stream:
+        for index, line in enumerate(stream):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(record, dict):
+                continue
+            content = record.get("content", [])
+            records.append(
+                {
+                    "id": str(index),
+                    "name": str(record.get("name", f"example_{index}")),
+                    "content": [str(item) for item in content] if isinstance(content, list) else [str(content)],
+                }
+            )
+    return path, records
+
+
+def save_example_records(state: Any, records: list[dict[str, Any]]) -> Path:
+    """Write editable example records back to the runtime examples JSONL pool."""
+    path = examples_pool_path(state)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as stream:
+        for index, record in enumerate(records):
+            if not isinstance(record, dict):
+                continue
+            payload = {
+                "name": str(record.get("name") or f"example_{index}"),
+                "content": [
+                    str(line)
+                    for line in list(record.get("content") or [])
+                ],
+            }
+            stream.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    return path
+
+
 def _example_record_moves(record: Any) -> list[dict[str, Any]]:
     """Extract schema move objects from one examples-pool record."""
     if not isinstance(record, dict):
