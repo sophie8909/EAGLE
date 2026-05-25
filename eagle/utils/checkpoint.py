@@ -20,6 +20,7 @@ def serialize_individual(individual: Individual) -> dict[str, Any]:
         "rendered_prompt": getattr(individual, "rendered_prompt", ""),
         "evaluation_mode": getattr(individual, "evaluation_mode", None),
         "metadata": dict(getattr(individual, "metadata", {}) or {}),
+        "training_examples": list(getattr(individual, "training_examples", []) or []),
     }
 
     operator_profile = getattr(individual, "operator_profile", None)
@@ -69,6 +70,9 @@ def deserialize_individual(payload: dict[str, Any]) -> Individual:
     metadata = payload.get("metadata")
     if isinstance(metadata, dict):
         individual.metadata = dict(metadata)
+    training_examples = payload.get("training_examples")
+    if isinstance(training_examples, list):
+        individual.training_examples = [dict(example) for example in training_examples if isinstance(example, dict)]
 
     operator_profile = payload.get("operator_profile")
     if isinstance(operator_profile, dict):

@@ -201,6 +201,16 @@ class ComponentPool:
             merged = merged[-max(1, int(max_examples)):]
         self.training_examples = merged
 
+    def sample_training_examples(self, max_examples: int | None = None) -> list[dict[str, Any]]:
+        """Sample schema-managed examples for one individual."""
+        if not self.training_examples:
+            return []
+        limit = self.MAX_TRAINING_EXAMPLES_PER_RENDER if max_examples is None else max(0, int(max_examples))
+        limit = min(limit, len(self.training_examples))
+        if limit <= 0:
+            return []
+        return deepcopy(random.sample(self.training_examples, limit))
+
     def has_category(self, category: str) -> bool:
         """Return whether a component category exists and contains candidates."""
         if category == "game_rule":

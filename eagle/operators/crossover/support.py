@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 import time
+from copy import deepcopy
 
 from eagle.evolution.component.individual import Individual
 from eagle.llm import LLM
@@ -41,6 +42,71 @@ def average_parent_fitness(child: Individual, parent1: Individual, parent2: Indi
             for left, right in zip(parent1_fitness, parent2_fitness)
         ]
     return child
+
+
+def max_training_examples(config, component_pool) -> int:
+    """Return the maximum examples carried by one child."""
+    configured = getattr(
+        config,
+        "max_examples",
+        getattr(
+            config,
+            "training_example_max_examples",
+            getattr(component_pool, "MAX_TRAINING_EXAMPLES_PER_RENDER", 4),
+        ),
+    )
+    return max(0, int(configured))
+
+
+def example_key(example: dict) -> str:
+    """Return the normalized action-level example identity."""
+    moves = example.get("moves")
+    move = moves[0] if isinstance(moves, list) and moves else {}
+    if not isinstance(move, dict):
+        move = {}
+    return "|".join(
+        str(move.get(field, "")).strip().lower()
+        for field in ("raw_move", "action_type", "unit_type")
+    ) or "\n".join(str(line).strip().lower() for line in example.get("content", []))
+
+
+def parent_training_examples(parent: Individual, component_pool, max_examples: int) -> list[dict]:
+    """Return examples carried by a parent, falling back to the runtime pool."""
+    examples = list(getattr(parent, "training_examples", []) or [])
+    if not examples:
+        examples = component_pool.sample_training_examples(max_examples)
+    return [deepcopy(example) for example in examples[:max_examples]]
+
+
+def uniform_crossover_training_examples(component_pool, parent1: Individual, parent2: Individual, config) -> list[dict]:
+    """Sample child examples independently from parent A and parent B examples."""
+    max_examples = max_training_examples(config, component_pool)
+    if max_examples <= 0:
+        return []
+    left_examples = parent_training_examples(parent1, component_pool, max_examples)
+    right_examples = parent_training_examples(parent2, component_pool, max_examples)
+    child_examples: list[dict] = []
+    seen: set[str] = set()
+    max_len = max(len(left_examples), len(right_examples))
+
+    for index in range(max_len):
+        choices = []
+        if index < len(left_examples):
+            choices.append(left_examples[index])
+        if index < len(right_examples):
+            choices.append(right_examples[index])
+        if not choices:
+            continue
+        selected = deepcopy(random.choice(choices))
+        key = example_key(selected)
+        if key in seen:
+            continue
+        child_examples.append(selected)
+        seen.add(key)
+        if len(child_examples) >= max_examples:
+            break
+
+    return child_examples
 
 
 def repair_after_crossover(individual: Individual, component_pool) -> Individual:

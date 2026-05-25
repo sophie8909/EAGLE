@@ -56,6 +56,7 @@ class Individual:
         self.last_gameplay_evaluation: dict[str, Any] = {}
         self.mutation_metadata: dict[str, Any] = {}
         self.reflection_metadata: dict[str, Any] = {}
+        self.training_examples: list[dict[str, Any]] = []
         self.ea_llm_call_time = 0.0
 
     @property
@@ -139,6 +140,7 @@ class Individual:
                 # Even non-evolving search targets still carry an enabled bit.
                 self.set_component_index(category, 0)
 
+        self.training_examples = component_pool.sample_training_examples()
         self._sync_component_indices()
 
     def initialize_from_seed(
@@ -176,6 +178,12 @@ class Individual:
             component_pool.get_component(category, component_index)
             self.set_component_index(category, component_index)
 
+        if isinstance(seed_payload.get("training_examples"), list):
+            self.training_examples = component_pool._normalize_training_examples(
+                seed_payload["training_examples"]
+            )
+        else:
+            self.training_examples = component_pool.sample_training_examples()
         self._sync_component_indices()
 
     def get_component_index(self, category: str) -> int:
@@ -242,6 +250,9 @@ class Individual:
                 setattr(clone, attr, value)
 
         clone.ea_llm_call_time = getattr(self, "ea_llm_call_time", 0.0)
+        clone.training_examples = [
+            dict(example) for example in getattr(self, "training_examples", []) or []
+        ]
 
         for attr in ("pareto_rank", "crowding_distance"):
             if hasattr(self, attr):
