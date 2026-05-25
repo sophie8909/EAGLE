@@ -185,6 +185,94 @@ def component_json_choices() -> list[str]:
     return sorted(relative_or_absolute(path) for path in paths)
 
 
+def examples_pool_path(state: Any) -> Path:
+    """Return the runtime examples pool path for the active component file."""
+    component_path = getattr(getattr(state, "components", None), "loaded_path", None)
+    if component_path:
+        return Path(component_path).with_name("examples_pool.jsonl")
+    configured = str(getattr(getattr(state, "config", None), "component_pool_path", "") or "").strip()
+    if configured:
+        path = resolve_repo_path(configured)
+        return path.with_name("examples_pool.jsonl")
+    return ROOT / "eagle" / "prompts" / "examples_pool.jsonl"
+
+
+def load_examples_pool(state: Any) -> tuple[Path, list[dict[str, Any]]]:
+    """Load display rows from the runtime examples JSONL pool."""
+    path = examples_pool_path(state)
+    if not path.exists():
+        return path, []
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as stream:
+        for line_number, line in enumerate(stream, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            for move in _example_record_moves(record):
+                rows.append(
+                    {
+                        "source": line_number,
+                        "raw_move": str(move.get("raw_move", "")),
+                        "unit_position": _format_unit_position(move.get("unit_position")),
+                        "unit_type": str(move.get("unit_type", "")),
+                        "action_type": str(move.get("action_type", "")),
+                    }
+                )
+    return path, rows
+
+
+def _example_record_moves(record: Any) -> list[dict[str, Any]]:
+    """Extract schema move objects from one examples-pool record."""
+    if not isinstance(record, dict):
+        return []
+    moves = record.get("moves")
+    if not isinstance(moves, list):
+        moves = _moves_from_example_content(record.get("content"))
+    return [move for move in moves if _is_displayable_move(move)]
+
+
+def _moves_from_example_content(content: Any) -> list[dict[str, Any]]:
+    """Parse legacy example content lines and return moves when possible."""
+    if not isinstance(content, list):
+        return []
+    lines = [str(line) for line in content]
+    try:
+        output_index = next(index for index, line in enumerate(lines) if line.strip().upper() == "OUTPUT:")
+    except StopIteration:
+        output_index = -1
+    text = "\n".join(lines[output_index + 1 :]).strip()
+    if not text:
+        return []
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return []
+    moves = payload.get("moves") if isinstance(payload, dict) else None
+    return moves if isinstance(moves, list) else []
+
+
+def _is_displayable_move(move: Any) -> bool:
+    """Return whether a move has the required example display fields."""
+    return (
+        isinstance(move, dict)
+        and isinstance(move.get("raw_move"), str)
+        and isinstance(move.get("unit_position"), list)
+        and isinstance(move.get("unit_type"), str)
+        and isinstance(move.get("action_type"), str)
+    )
+
+
+def _format_unit_position(value: Any) -> str:
+    """Format a unit position for compact table display."""
+    if isinstance(value, list) and len(value) == 2:
+        return f"[{value[0]}, {value[1]}]"
+    return ""
+
+
 def run_choices() -> list[str]:
     """Return EAGLE run directories newest first."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)

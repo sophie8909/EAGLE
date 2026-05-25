@@ -33,6 +33,7 @@ from eagle_gui_web.ui_actions import safe_click
 from eagle_gui_web.views.analysis_view import build_analysis_view
 from eagle_gui_web.views.components_view import build_components_view
 from eagle_gui_web.views.config_view import build_config_summary_view
+from eagle_gui_web.views.examples_view import build_examples_view
 from eagle_gui_web.views.final_test_view import build_final_test_view
 from eagle_gui_web.views.microrts_view import build_microrts_view
 from eagle_gui_web.views.objectives_view import build_objectives_view
@@ -132,10 +133,12 @@ def build_layout() -> dict[str, dict[str, Any]]:
         page = state.runtime.current_page
         LOGGER.info("manual refresh start page=%s", page)
         if page == "experiment":
-            for group in ("components", "operators", "objectives", "config_summary"):
+            for group in ("components", "examples", "operators", "objectives", "config_summary"):
                 refresh = controls.get(group, {}).get("refresh")
                 if refresh:
-                    refresh()
+                    result = refresh()
+                    if asyncio.iscoroutine(result):
+                        await result
             await controls["run"]["refresh_log"]()
         elif page == "run":
             await controls["run"]["refresh_log"]()
@@ -188,12 +191,15 @@ def build_layout() -> dict[str, dict[str, Any]]:
                 with ui.column().classes("w-[60%] gap-3"):
                     with ui.tabs().classes(f"{CARD_CLASS} w-full") as experiment_tabs:
                         components_tab = ui.tab("Components").classes(TAB_CLASS)
+                        examples_tab = ui.tab("Examples").classes(TAB_CLASS)
                         operators_tab = ui.tab("Algorithm").classes(TAB_CLASS)
                         objectives_tab = ui.tab("Objectives").classes(TAB_CLASS)
                     with ui.tab_panels(experiment_tabs, value=components_tab).classes(f"{PAGE_CLASS} w-full"):
                         with ui.tab_panel(components_tab):
                             controls["components"] = build_components_view(state)
                             state.runtime.components_refresh = controls["components"].get("refresh")
+                        with ui.tab_panel(examples_tab):
+                            controls["examples"] = build_examples_view(state)
                         with ui.tab_panel(operators_tab):
                             controls["operators"] = build_operators_view(state)
                         with ui.tab_panel(objectives_tab):
