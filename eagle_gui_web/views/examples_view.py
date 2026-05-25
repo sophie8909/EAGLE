@@ -37,7 +37,7 @@ def build_examples_view(state: Any) -> dict[str, Any]:
                 {"name": "action_type", "label": "action_type", "field": "action_type", "align": "left"},
             ],
             rows=[],
-            row_key="raw_move",
+            row_key="id",
         ).classes(f"{TABLE_CLASS} w-full")
 
     controls["refresh"] = refresh

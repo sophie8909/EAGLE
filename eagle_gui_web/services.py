@@ -189,13 +189,9 @@ def component_json_choices() -> list[str]:
 
 def examples_pool_path(state: Any) -> Path:
     """Return the runtime examples pool path for the active component file."""
-    component_path = getattr(getattr(state, "components", None), "loaded_path", None)
-    if component_path:
-        return Path(component_path).with_name("examples_pool.jsonl")
-    configured = str(getattr(getattr(state, "config", None), "component_pool_path", "") or "").strip()
+    configured = str(getattr(getattr(state, "config", None), "examples_pool_path", "") or "").strip()
     if configured:
-        path = resolve_repo_path(configured)
-        return path.with_name("examples_pool.jsonl")
+        return resolve_repo_path(configured)
     return ROOT / "eagle" / "prompts" / "examples_pool.jsonl"
 
 
@@ -214,9 +210,10 @@ def load_examples_pool(state: Any) -> tuple[Path, list[dict[str, Any]]]:
                 record = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            for move in _example_record_moves(record):
+            for move_index, move in enumerate(_example_record_moves(record), start=1):
                 rows.append(
                     {
+                        "id": f"{line_number}:{move_index}",
                         "source": line_number,
                         "raw_move": str(move.get("raw_move", "")),
                         "unit_position": _format_unit_position(move.get("unit_position")),
