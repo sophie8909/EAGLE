@@ -959,6 +959,61 @@ def parse_log_file(file_path: str | Path, target_agent: str = "EAGLE") -> dict[s
     return parse_log(text, target_agent=target_agent)
 
 
+def extract_action_examples(parsed_log: dict[str, Any]) -> list[dict[str, Any]]:
+    """Convert parsed move results into prompt-example move payloads."""
+    examples: list[dict[str, Any]] = []
+    for move_result in list(parsed_log.get("all_move_results") or []):
+        if not isinstance(move_result, dict):
+            continue
+        move = move_result.get("llm_move_raw")
+        if not isinstance(move, dict):
+            move = move_result
+        raw_move = move.get("raw_move")
+        unit_position = move.get("unit_position")
+        unit_type = move.get("unit_type")
+        action_type = move.get("action_type")
+        if (
+            isinstance(raw_move, str)
+            and isinstance(unit_position, list)
+            and len(unit_position) == 2
+            and all(isinstance(value, int) for value in unit_position)
+            and isinstance(unit_type, str)
+            and isinstance(action_type, str)
+        ):
+            examples.append(
+                {
+                    "raw_move": raw_move,
+                    "unit_position": [int(unit_position[0]), int(unit_position[1])],
+                    "unit_type": unit_type,
+                    "action_type": action_type,
+                }
+            )
+    return examples
+
+
+def extract_opponent_action_examples(log_text: str, target_agent: str = "EAGLE") -> list[dict[str, Any]]:
+    """Extract opponent LLM-style actions from a MicroRTS log when present."""
+    settings = parse_game_settings(log_text)
+    target_variants = _class_name_variants(target_agent)
+    opponent_name = ""
+    if target_variants & _class_name_variants(settings.get("AI1", "")):
+        opponent_name = settings.get("AI2", "")
+    elif target_variants & _class_name_variants(settings.get("AI2", "")):
+        opponent_name = settings.get("AI1", "")
+    if not opponent_name:
+        opponent_name = settings.get("AI2", "")
+    if not opponent_name:
+        return []
+    parsed = parse_log(log_text, target_agent=opponent_name.split(".")[-1])
+    return extract_action_examples(parsed)
+
+
+def extract_opponent_action_examples_from_log(file_path: str | Path, target_agent: str = "EAGLE") -> list[dict[str, Any]]:
+    """Read a MicroRTS log and extract opponent action examples from it."""
+    text = Path(file_path).read_text(encoding="utf-8", errors="replace")
+    return extract_opponent_action_examples(text, target_agent=target_agent)
+
+
 # =========================================================
 # Output helpers
 # =========================================================

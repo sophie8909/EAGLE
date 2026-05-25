@@ -13,6 +13,7 @@ from typing import Any, ClassVar, List
 from eagle.config import EAConfig, clone_config
 from eagle.objectives.aggregation import aggregate_fitness
 from eagle.operators.registry import get_operator
+from eagle.prompt.example_memory import ExampleMemory
 from eagle.project import EAGLE_LOGS_DIR
 from eagle.utils.checkpoint import CheckpointManager, deserialize_individual, serialize_individual
 from eagle.utils.component_pool import ComponentPool
@@ -314,6 +315,14 @@ class EA:
         self.match_score_recorder: MatchScoreRecorder | None = None
         self.timing_recorder: RunTimingRecorder | None = None
         self.current_generation = 0
+        self.example_memory = ExampleMemory(
+            max_examples=getattr(
+                self.config,
+                "example_memory_max_examples",
+                self.component_pool.MAX_TRAINING_EXAMPLES_PER_RENDER * 8,
+            ),
+            initial_examples=getattr(self.component_pool, "training_examples", []),
+        )
         self.evaluation_batches = EvaluationBatchRunner(self)
         self.checkpoints = CheckpointFlow(self)
         self.mutation_operator = get_operator(
@@ -405,6 +414,7 @@ class EA:
         )
 
         print("[Initial Population] complete", flush=True)
+        self._refresh_example_memory(self.population, generation=-1)
         self.print_population_snapshot("initial population")
         self._log_initial_population_snapshot()
 
@@ -647,6 +657,68 @@ class EA:
         """Return True when the shared loop should stop early."""
         return False
 
+    def _refresh_example_memory(self, individuals: List[Individual], *, generation: int | None) -> None:
+        """Refresh code-managed examples from recent round/game evaluation artifacts."""
+        if not self._should_refresh_example_memory(generation):
+            return
+        added = 0
+        for individual in individuals:
+            added += self._add_examples_from_individual(individual)
+        if added <= 0:
+            return
+        self.component_pool.set_training_examples(self.example_memory.examples)
+        print(
+            "[Example Memory] refreshed "
+            f"generation={generation} added={added} pool={len(self.example_memory.examples)}",
+            flush=True,
+        )
+
+    def _should_refresh_example_memory(self, generation: int | None) -> bool:
+        """Return whether the configured generation interval allows a refresh."""
+        interval = int(
+            getattr(
+                self.config,
+                "example_memory_refresh_interval",
+                getattr(self.config, "gameplay_refresh_interval", 1),
+            )
+            or 1
+        )
+        if generation is None or generation < 0:
+            return True
+        return (int(generation) + 1) % max(1, interval) == 0
+
+    def _add_examples_from_individual(self, individual: Individual) -> int:
+        """Add memory examples from the latest known evaluation payload."""
+        added = 0
+        for log_path in self._individual_game_log_paths(individual):
+            added += self.example_memory.add_from_game_log(log_path)
+        return added
+
+    @staticmethod
+    def _individual_game_log_paths(individual: Individual) -> list[str]:
+        """Return MicroRTS log paths from the individual's latest game payloads."""
+        paths: list[str] = []
+        payloads = [
+            getattr(individual, "last_gameplay_evaluation", None),
+            getattr(individual, "last_surrogate_evaluation", None),
+        ]
+        for payload in payloads:
+            if not isinstance(payload, dict):
+                continue
+            eval_result = payload.get("eval_result") if isinstance(payload.get("eval_result"), dict) else payload
+            scores = eval_result.get("scores") if isinstance(eval_result, dict) else None
+            if not isinstance(scores, list):
+                scores = [eval_result] if isinstance(eval_result, dict) else []
+            for score in scores:
+                if not isinstance(score, dict):
+                    continue
+                simulation_meta = score.get("simulation_meta")
+                if isinstance(simulation_meta, dict) and simulation_meta.get("log_path"):
+                    paths.append(str(simulation_meta["log_path"]))
+                if score.get("log_path"):
+                    paths.append(str(score["log_path"]))
+        return paths
+
     def _checkpoint_extra_state(self) -> dict[str, Any]:
         """Return subclass-specific JSON-safe state for resume."""
         return {}
@@ -810,6 +882,7 @@ class EA:
 
             with timing_recorder.phase("evaluate_offspring", generation=generation):
                 self._evaluate_offspring(evaluator, offspring, generation)
+                self._refresh_example_memory(offspring, generation=generation)
             with timing_recorder.phase("before_survivor_selection", generation=generation):
                 generation_context = self._before_survivor_selection(generation, offspring)
 

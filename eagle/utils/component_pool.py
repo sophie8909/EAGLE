@@ -183,6 +183,24 @@ class ComponentPool:
                 payload[key] = deepcopy(self.flat_components[key])
         return payload
 
+    def set_training_examples(self, examples: list[dict[str, Any]]) -> None:
+        """Replace runtime-managed training examples."""
+        self.training_examples = self._normalize_training_examples(examples)
+
+    def extend_training_examples(self, examples: list[dict[str, Any]], *, max_examples: int | None = None) -> None:
+        """Append deduplicated runtime-managed training examples."""
+        merged = list(self.training_examples)
+        seen = {self._training_example_key(example) for example in merged}
+        for example in self._normalize_training_examples(examples):
+            key = self._training_example_key(example)
+            if key in seen:
+                continue
+            merged.append(example)
+            seen.add(key)
+        if max_examples is not None:
+            merged = merged[-max(1, int(max_examples)):]
+        self.training_examples = merged
+
     def has_category(self, category: str) -> bool:
         """Return whether a component category exists and contains candidates."""
         if category == "game_rule":
@@ -400,6 +418,18 @@ class ComponentPool:
                 rendered_lines.append("")
             rendered_lines.extend(lines)
         return rendered_lines
+
+    @staticmethod
+    def _training_example_key(example: dict[str, Any]) -> str:
+        moves = example.get("moves")
+        if isinstance(moves, list) and moves:
+            move = moves[0]
+            if isinstance(move, dict):
+                return "|".join(
+                    str(move.get(field, "")).strip().lower()
+                    for field in ("raw_move", "action_type", "unit_type")
+                )
+        return "\n".join(str(line).strip().lower() for line in example.get("content", []))
 
     @staticmethod
     def _training_example_sample_count(selection: Any, max_count: int) -> int:

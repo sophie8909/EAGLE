@@ -7,7 +7,10 @@ from typing import Any
 
 from ...utils.log_parse import (
     collect_recent_dynamic_prompts,
+    extract_action_examples,
     parse_dynamic_prompt_state,
+    extract_opponent_action_examples,
+    extract_opponent_action_examples_from_log,
     parse_log,
     parse_log_file,
     sample_recent_dynamic_prompt,
@@ -22,6 +25,9 @@ def parse_game_log(log_text: str, target_agent: str = "EAGLE") -> dict[str, Any]
 
 __all__ = [
     "collect_recent_dynamic_prompts",
+    "extract_action_examples",
+    "extract_opponent_action_examples",
+    "extract_opponent_action_examples_from_log",
     "parse_dynamic_prompt_state",
     "parse_game_log",
     "parse_log_file",
