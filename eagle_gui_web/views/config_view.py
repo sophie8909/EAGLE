@@ -54,6 +54,9 @@ def build_config_view(state: Any) -> dict[str, Any]:
         except (OSError, ValueError) as exc:
             ui.notify(str(exc), type="negative")
             return
+        controls["config.base_config_path"].options = services.config_choices()
+        controls["config.base_config_path"].value = str(path)
+        controls["config.base_config_path"].update()
         generated_label.set_text(f"Generated config: {path}")
 
     def refresh_form() -> None:

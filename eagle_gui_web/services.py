@@ -159,9 +159,11 @@ def find_available_port(start: int = 8080, attempts: int = 50) -> int:
 
 def config_choices() -> list[str]:
     """Return available evolution config paths."""
-    if not CONFIG_DIR.exists():
-        return [str(DEFAULT_CONFIG)]
-    paths = sorted(path for path in CONFIG_DIR.rglob("*.json") if path.is_file())
+    paths: list[Path] = []
+    for root in (CONFIG_DIR, EXPERIMENT_DIR):
+        if root.exists():
+            paths.extend(path for path in root.rglob("*.json") if path.is_file())
+    paths = sorted(set(paths))
     if DEFAULT_CONFIG in paths:
         paths.remove(DEFAULT_CONFIG)
         paths.insert(0, DEFAULT_CONFIG)
@@ -540,6 +542,7 @@ def save_generated_config(state: Any) -> Path:
     payload = build_config_payload(state, component_path_override=component_path_override)
     config_service.write_json_file(path, payload)
     state.config.generated_config_path = path
+    state.config.base_config_path = str(path)
     return path
 
 

@@ -84,6 +84,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
         except (OSError, ValueError) as exc:
             ui.notify(str(exc), type="negative")
             return
+        refresh()
         generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
         component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
         refresh_config_summary(state)
