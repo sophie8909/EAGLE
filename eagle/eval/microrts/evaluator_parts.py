@@ -45,6 +45,7 @@ class PromptRenderer:
         prompt_lines = self.component_pool.render_prompt_lines(
             individual.component_indices,
             include_identity_component=self.config.include_strategy_identity_in_prompt,
+            selected_training_examples=getattr(individual, "training_examples", None),
         )
         return "\n".join(prompt_lines)
 
