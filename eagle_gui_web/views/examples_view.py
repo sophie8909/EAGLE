@@ -95,18 +95,46 @@ def build_examples_view(state: Any) -> dict[str, Any]:
         records.append(
             {
                 "name": f"example_{selected_index}",
-                "content": ["INPUT:", "", "OUTPUT:", "{}"],
+                "content": [
+                    "INPUT:",
+                    "Map size: 8x8",
+                    "Turn: 0/5000",
+                    "Max actions: 4",
+                    "",
+                    "Feature locations:",
+                    "(2, 1) Ally Base Unit {resources=5, current_action=\"idling\", HP=10}",
+                    "(1, 1) Ally Worker Unit {current_action=\"idling\", HP=1}",
+                    "(5, 6) Enemy Base Unit {resources=5, current_action=\"idling\", HP=10}",
+                    "",
+                    "OUTPUT:",
+                    "{",
+                    "  \"thinking\": \"Describe the state and why this move is valid.\",",
+                    "  \"moves\": [",
+                    "    {",
+                    "      \"raw_move\": \"(1,1): worker harvest((0,0),(2,1))\",",
+                    "      \"unit_position\": [1,1],",
+                    "      \"unit_type\": \"worker\",",
+                    "      \"action_type\": \"harvest\"",
+                    "    }",
+                    "  ]",
+                    "}",
+                ],
             }
         )
         refresh_widgets()
 
-    def delete_example() -> None:
+    async def delete_example() -> None:
         nonlocal selected_index
         if not records:
             return
         records.pop(clamp_selected_index())
         selected_index = max(0, selected_index - 1)
-        refresh_widgets()
+        try:
+            await asyncio.to_thread(services.save_example_records, state, records)
+        except OSError as exc:
+            ui.notify(str(exc), type="negative")
+            return
+        await refresh()
 
     def select_example(event: Any) -> None:
         nonlocal selected_index
