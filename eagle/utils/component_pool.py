@@ -36,12 +36,11 @@ class ComponentPool:
 
         self.flat_components: OrderedDict[str, list[list[str]]] = OrderedDict()
         self.prompt_component_keys: list[str] = []
-        self.training_examples: list[dict[str, Any]] = []
+        self.initial_training_examples: list[dict[str, Any]] = []
         for key, value in raw_components.items():
             key = str(key)
             if key == self.TRAINING_EXAMPLES_KEY:
-                self.training_examples = self._normalize_training_examples(value)
-                self.prompt_component_keys.append(key)
+                self.initial_training_examples = self._normalize_training_examples(value)
                 continue
             self.flat_components[key] = self._normalize_candidates(value)
             self.prompt_component_keys.append(key)
@@ -159,10 +158,7 @@ class ComponentPool:
         """Return the canonical flattened component payload."""
         payload: dict[str, Any] = {}
         for key in self.prompt_component_keys:
-            if key == self.TRAINING_EXAMPLES_KEY:
-                payload[key] = deepcopy(self.training_examples)
-            else:
-                payload[key] = self.flat_components[key]
+            payload[key] = self.flat_components[key]
         return payload
 
     def to_component_dict(self) -> dict[str, Any]:
@@ -171,45 +167,41 @@ class ComponentPool:
         payload["metadata"] = OrderedDict(
             [
                 ("identity_component_key", self.identity_component_key),
-                ("non_evolving_component_keys", sorted(self.non_evolving_component_keys)),
+                (
+                    "non_evolving_component_keys",
+                    sorted(
+                        key for key in self.non_evolving_component_keys
+                        if key not in self.CODE_MANAGED_COMPONENT_KEYS
+                    ),
+                ),
                 ("reflection_format_keys", list(self.reflection_format_keys)),
                 ("reflection_alignment_keys", list(self.reflection_alignment_keys)),
             ]
         )
         for key in self.prompt_component_keys:
-            if key == self.TRAINING_EXAMPLES_KEY:
-                payload[key] = deepcopy(self.training_examples)
-            else:
-                payload[key] = deepcopy(self.flat_components[key])
+            payload[key] = deepcopy(self.flat_components[key])
         return payload
 
     def set_training_examples(self, examples: list[dict[str, Any]]) -> None:
         """Replace runtime-managed training examples."""
-        self.training_examples = self._normalize_training_examples(examples)
+        example_memory = getattr(self, "example_memory", None)
+        if example_memory is not None:
+            example_memory.add_examples(examples)
 
     def extend_training_examples(self, examples: list[dict[str, Any]], *, max_examples: int | None = None) -> None:
         """Append deduplicated runtime-managed training examples."""
-        merged = list(self.training_examples)
-        seen = {self._training_example_key(example) for example in merged}
-        for example in self._normalize_training_examples(examples):
-            key = self._training_example_key(example)
-            if key in seen:
-                continue
-            merged.append(example)
-            seen.add(key)
-        if max_examples is not None:
-            merged = merged[-max(1, int(max_examples)):]
-        self.training_examples = merged
+        del max_examples
+        example_memory = getattr(self, "example_memory", None)
+        if example_memory is not None:
+            example_memory.add_examples(examples)
 
     def sample_training_examples(self, max_examples: int | None = None) -> list[dict[str, Any]]:
         """Sample schema-managed examples for one individual."""
-        if not self.training_examples:
+        example_memory = getattr(self, "example_memory", None)
+        if example_memory is None:
             return []
         limit = self.MAX_TRAINING_EXAMPLES_PER_RENDER if max_examples is None else max(0, int(max_examples))
-        limit = min(limit, len(self.training_examples))
-        if limit <= 0:
-            return []
-        return deepcopy(random.sample(self.training_examples, limit))
+        return deepcopy(example_memory.sample(limit))
 
     def has_category(self, category: str) -> bool:
         """Return whether a component category exists and contains candidates."""
@@ -346,16 +338,6 @@ class ComponentPool:
         selected_indices = dict(selected_indices or {})
         rendered_lines: list[str] = []
         for key in self.prompt_component_keys:
-            if key == self.TRAINING_EXAMPLES_KEY:
-                lines = self._render_training_examples(
-                    selected_indices.get(key),
-                    selected_examples=selected_training_examples,
-                )
-                if lines:
-                    if rendered_lines:
-                        rendered_lines.append("")
-                    rendered_lines.extend(lines)
-                continue
             if not self._selected_enabled(selected_indices.get(key, 0)):
                 continue
             if key == self.identity_component_key and not include_identity_component:
@@ -372,6 +354,13 @@ class ComponentPool:
             if rendered_lines:
                 rendered_lines.append("")
             rendered_lines.extend(lines)
+            if key == "field_requirements":
+                example_lines = self._render_training_examples(
+                    selected_examples=selected_training_examples,
+                )
+                if example_lines:
+                    rendered_lines.append("")
+                    rendered_lines.extend(example_lines)
         return rendered_lines
 
     @staticmethod
@@ -427,11 +416,13 @@ class ComponentPool:
         selected_examples: list[dict[str, Any]] | None = None,
     ) -> list[str]:
         """Sample and concatenate training examples for one prompt render."""
-        source_examples = (
-            self._normalize_training_examples(selected_examples)
-            if selected_examples is not None
-            else self.training_examples
-        )
+        if selected_examples is not None:
+            source_examples = self._normalize_training_examples(selected_examples)
+        else:
+            example_memory = getattr(self, "example_memory", None)
+            source_examples = self._normalize_training_examples(
+                getattr(example_memory, "examples", []) or []
+            )
         if not source_examples:
             return []
         max_count = min(self.MAX_TRAINING_EXAMPLES_PER_RENDER, len(source_examples))

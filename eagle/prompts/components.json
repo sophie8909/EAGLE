@@ -1,7 +1,6 @@
 {
   "metadata": {
     "identity_component_key": "strategy_identity",
-
     "non_evolving_component_keys": [
       "static_system_rules",
       "game_api",
@@ -11,12 +10,10 @@
       "reasoning_template",
       "current_game_state_marker"
     ],
-
     "reflection_format_keys": [
       "output_format",
       "reasoning_template"
     ],
-
     "reflection_alignment_keys": [
       "strategy_identity",
       "early_game_plan",
@@ -25,30 +22,25 @@
       "state_parsing_rules",
       "build_rules"
     ],
-
     "rewrite_domain_guidance": "Mention specific MicroRTS concepts when useful: workers, bases, barracks, resources, light/heavy/ranged units, enemy base, enemy workers, combat units, idle units."
   },
-
   "strategy_identity": [
     [
       "Strategy identity: Economy-first stabilizer.",
       "Prioritize safe worker economy and reliable barracks construction before committing to attacks.",
       "Avoid risky early combat unless the Ally Base is directly threatened."
     ],
-
     [
       "Strategy identity: Balanced production-pressure agent.",
       "Build barracks early, maintain harvesting, continuously produce combat units, and apply controlled pressure.",
       "Use workers mainly for economy and construction; use army units for attacks."
     ],
-
     [
       "Strategy identity: Aggressive timing attacker.",
       "After reaching the minimum worker count and building barracks, prioritize fast combat production and early attacks.",
       "Keep basic harvesting active while pressuring the Enemy Base."
     ]
   ],
-
   "static_system_rules": [
     [
       "You are an AI playing a deterministic real-time strategy game.",
@@ -70,7 +62,6 @@
       "11. Do not trust current_action=\"idling\" as proof that a unit is free."
     ]
   ],
-
   "game_api": [
     [
       "Game objects:",
@@ -97,7 +88,6 @@
       "(x,y): unit_type action(arguments)"
     ]
   ],
-
   "output_format": [
     [
       "Output valid JSON only in this format:",
@@ -127,7 +117,6 @@
       "- (4,4): light attack((5,6))"
     ]
   ],
-
   "state_parsing_rules": [
     [
       "Parse only the CURRENT GAME STATE block.",
@@ -174,7 +163,6 @@
       "- Continue issuing barracks build commands from worker_2 until Ally Barracks Unit exists."
     ]
   ],
-
   "build_rules": [
     [
       "Barracks build target selection:",
@@ -202,7 +190,6 @@
       "(worker_2_x,worker_2_y): worker build((target_x,target_y), barracks)"
     ]
   ],
-
   "early_game_plan": [
     [
       "EARLY GAME:",
@@ -214,7 +201,6 @@
       "- Do not attack early unless Enemy units directly threaten Ally Base.",
       "- Enemy Barracks Unit does not count as Ally Barracks Unit."
     ],
-
     [
       "EARLY GAME:",
       "- Prioritize fast economy setup.",
@@ -223,7 +209,6 @@
       "- Keep all non-builder workers harvesting.",
       "- Avoid unnecessary worker combat."
     ],
-
     [
       "EARLY GAME:",
       "- Reach barracks timing as quickly as possible.",
@@ -232,7 +217,6 @@
       "- Otherwise prioritize economy and barracks completion."
     ]
   ],
-
   "mid_game_plan": [
     [
       "MID GAME:",
@@ -243,7 +227,6 @@
       "- Move combat units toward Enemy Base.",
       "- Attack nearby threatening Enemy units when they block the path or threaten Ally Base."
     ],
-
     [
       "MID GAME:",
       "- Continuously train light units for pressure.",
@@ -251,7 +234,6 @@
       "- Keep worker economy stable while attacking.",
       "- Do not stop army production if resources allow."
     ],
-
     [
       "MID GAME:",
       "- Prefer durable combat units and safer attacks.",
@@ -259,7 +241,6 @@
       "- Keep harvesting stable while gradually expanding military pressure."
     ]
   ],
-
   "late_game_plan": [
     [
       "LATE GAME:",
@@ -269,14 +250,12 @@
       "- Workers keep harvesting unless emergency defense is needed.",
       "- Finish remaining Enemy units and buildings."
     ],
-
     [
       "LATE GAME:",
       "- Fully commit combat units toward Enemy Base.",
       "- Ignore distant low-priority targets.",
       "- Focus on ending the game quickly through direct pressure."
     ],
-
     [
       "LATE GAME:",
       "- Maintain production while slowly eliminating remaining Enemy structures.",
@@ -284,140 +263,12 @@
       "- Keep at least part of the army near Ally Base if enemy threats still exist."
     ]
   ],
-
   "reasoning_template": [
     [
       "Your thinking field must include:",
       "worker_count=<number>; worker_status=<less_than_2/enough_workers>; has_ally_barracks=<True/False>; builder=<worker_2_position or none>; decision=<train_worker/build_barracks_with_worker_2/train_army_or_attack>; reason=..."
     ]
   ],
-
-  "training_examples": [
-    {
-      "name": "bootstrap_worker",
-      "content": [
-        "INPUT:",
-        "Map size: 8x8",
-        "Turn: 10/5000",
-        "Max actions: 4",
-        "",
-        "Feature locations:",
-        "(0, 0) Neutral Resource Node {resources=20}",
-        "(7, 7) Neutral Resource Node {resources=20}",
-        "(2, 1) Ally Base Unit {resources=5, current_action=\"idling\", HP=10}",
-        "(5, 6) Enemy Base Unit {resources=5, current_action=\"idling\", HP=10}",
-        "(1, 1) Ally Worker Unit {current_action=\"idling\", HP=1}",
-        "",
-        "OUTPUT:",
-        "{",
-        "  \"thinking\": \"worker_count=1; worker_status=less_than_2; has_ally_barracks=False; builder=none; decision=train_worker; reason=Only one Ally Worker Unit exists, so Ally Base must train worker before barracks construction\",",
-        "  \"moves\": [",
-        "    {",
-        "      \"raw_move\": \"(2,1): base train(worker)\",",
-        "      \"unit_position\": [2,1],",
-        "      \"unit_type\": \"base\",",
-        "      \"action_type\": \"train\"",
-        "    },",
-        "    {",
-        "      \"raw_move\": \"(1,1): worker harvest((0,0),(2,1))\",",
-        "      \"unit_position\": [1,1],",
-        "      \"unit_type\": \"worker\",",
-        "      \"action_type\": \"harvest\"",
-        "    }",
-        "  ]",
-        "}"
-      ]
-    },
-
-    {
-      "name": "build_barracks_with_worker_2",
-      "content": [
-        "INPUT:",
-        "Map size: 8x8",
-        "Turn: 70/5000",
-        "Max actions: 4",
-        "",
-        "Feature locations:",
-        "(0, 0) Neutral Resource Node {resources=17}",
-        "(7, 7) Neutral Resource Node {resources=20}",
-        "(2, 1) Ally Base Unit {resources=6, current_action=\"idling\", HP=10}",
-        "(5, 6) Enemy Base Unit {resources=4, current_action=\"idling\", HP=10}",
-        "(1, 1) Ally Worker Unit {current_action=\"idling\", HP=1}",
-        "(2, 3) Ally Worker Unit {current_action=\"idling\", HP=1}",
-        "(2, 0) Ally Worker Unit {current_action=\"idling\", HP=1}",
-        "",
-        "OUTPUT:",
-        "{",
-        "  \"thinking\": \"worker_count=3; worker_status=enough_workers; has_ally_barracks=False; builder=(2,3); decision=build_barracks_with_worker_2; reason=There are enough workers and no Ally Barracks Unit exists, so worker_2 must build barracks while other workers harvest\",",
-        "  \"moves\": [",
-        "    {",
-        "      \"raw_move\": \"(2,3): worker build((3,1), barracks)\",",
-        "      \"unit_position\": [2,3],",
-        "      \"unit_type\": \"worker\",",
-        "      \"action_type\": \"build\"",
-        "    },",
-        "    {",
-        "      \"raw_move\": \"(1,1): worker harvest((0,0),(2,1))\",",
-        "      \"unit_position\": [1,1],",
-        "      \"unit_type\": \"worker\",",
-        "      \"action_type\": \"harvest\"",
-        "    },",
-        "    {",
-        "      \"raw_move\": \"(2,0): worker harvest((0,0),(2,1))\",",
-        "      \"unit_position\": [2,0],",
-        "      \"unit_type\": \"worker\",",
-        "      \"action_type\": \"harvest\"",
-        "    }",
-        "  ]",
-        "}"
-      ]
-    },
-
-    {
-      "name": "army_phase",
-      "content": [
-        "INPUT:",
-        "Map size: 8x8",
-        "Turn: 180/5000",
-        "Max actions: 4",
-        "",
-        "Feature locations:",
-        "(0, 0) Neutral Resource Node {resources=10}",
-        "(7, 7) Neutral Resource Node {resources=20}",
-        "(2, 1) Ally Base Unit {resources=4, current_action=\"idling\", HP=10}",
-        "(3, 1) Ally Barracks Unit {current_action=\"idling\", HP=5}",
-        "(5, 6) Enemy Base Unit {resources=4, current_action=\"idling\", HP=10}",
-        "(1, 1) Ally Worker Unit {current_action=\"idling\", HP=1}",
-        "(2, 3) Ally Worker Unit {current_action=\"idling\", HP=1}",
-        "",
-        "OUTPUT:",
-        "{",
-        "  \"thinking\": \"worker_count=2; worker_status=enough_workers; has_ally_barracks=True; builder=none; decision=train_army_or_attack; reason=Ally Barracks Unit exists, so produce combat units from Ally Barracks and keep workers harvesting\",",
-        "  \"moves\": [",
-        "    {",
-        "      \"raw_move\": \"(3,1): barracks train(light)\",",
-        "      \"unit_position\": [3,1],",
-        "      \"unit_type\": \"barracks\",",
-        "      \"action_type\": \"train\"",
-        "    },",
-        "    {",
-        "      \"raw_move\": \"(1,1): worker harvest((0,0),(2,1))\",",
-        "      \"unit_position\": [1,1],",
-        "      \"unit_type\": \"worker\",",
-        "      \"action_type\": \"harvest\"",
-        "    },",
-        "    {",
-        "      \"raw_move\": \"(2,3): worker harvest((0,0),(2,1))\",",
-        "      \"unit_position\": [2,3],",
-        "      \"unit_type\": \"worker\",",
-        "      \"action_type\": \"harvest\"",
-        "    }",
-        "  ]",
-        "}"
-      ]
-    }
-  ],
-
   "current_game_state_marker": [
     [
       "Ignore all training examples above.",

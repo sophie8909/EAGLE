@@ -15,7 +15,7 @@ from eagle.objectives.aggregation import aggregate_fitness
 from eagle.operators.mutation import support as mutation_support
 from eagle.operators.registry import get_operator
 from eagle.prompt.example_memory import ExampleMemory
-from eagle.project import EAGLE_LOGS_DIR
+from eagle.project import EAGLE_LOGS_DIR, PROJECT_ROOT
 from eagle.utils.checkpoint import CheckpointManager, deserialize_individual, serialize_individual
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.match_score_recorder import MatchScoreRecorder
@@ -312,19 +312,21 @@ class EA:
             getattr(self.config, "non_evolving_prompt_components", None)
         )
         self.opponent_list = opponent_list
-        self.population = self.initialize_population()
-        self.current_log_dir: Path | None = None
-        self.match_score_recorder: MatchScoreRecorder | None = None
-        self.timing_recorder: RunTimingRecorder | None = None
-        self.current_generation = 0
         self.example_memory = ExampleMemory(
             max_examples=getattr(
                 self.config,
                 "example_memory_max_examples",
                 self.component_pool.MAX_TRAINING_EXAMPLES_PER_RENDER * 8,
             ),
-            initial_examples=getattr(self.component_pool, "training_examples", []),
+            initial_examples=getattr(self.component_pool, "initial_training_examples", []),
+            pool_path=self._examples_pool_path(),
         )
+        self.component_pool.example_memory = self.example_memory
+        self.population = self.initialize_population()
+        self.current_log_dir: Path | None = None
+        self.match_score_recorder: MatchScoreRecorder | None = None
+        self.timing_recorder: RunTimingRecorder | None = None
+        self.current_generation = 0
         self.evaluation_batches = EvaluationBatchRunner(self)
         self.checkpoints = CheckpointFlow(self)
         self.mutation_operator = get_operator(
@@ -346,6 +348,19 @@ class EA:
             "env_selection",
             self._operator_name("env_selection", self.default_env_selection_operator_name),
         )
+
+    def _examples_pool_path(self) -> Path:
+        """Return the JSONL file used for runtime prompt examples."""
+        configured = getattr(self.config, "examples_pool_path", "")
+        if configured:
+            path = Path(str(configured))
+            return path if path.is_absolute() else PROJECT_ROOT / path
+        component_path = Path(str(getattr(self.config, "component_pool_path", "")))
+        if component_path:
+            if not component_path.is_absolute():
+                component_path = PROJECT_ROOT / component_path
+            return component_path.with_name("examples_pool.jsonl")
+        return EAGLE_LOGS_DIR / "examples_pool.jsonl"
 
     def _operator_name(self, operator_type: str, default_name: str) -> str:
         """Return a configured operator name or the algorithm default."""
@@ -668,7 +683,6 @@ class EA:
             added += self._add_examples_from_individual(individual)
         if added <= 0:
             return
-        self.component_pool.set_training_examples(self.example_memory.examples)
         print(
             "[Example Memory] refreshed "
             f"generation={generation} added={added} pool={len(self.example_memory.examples)}",

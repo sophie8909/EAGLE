@@ -35,6 +35,7 @@ resources/config.properties
 resources/config.properties
 /.venv
 *.jsonl
+!eagle/prompts/examples_pool.jsonl
 /logs/
 
 third_party/microrts/resources/config.properties

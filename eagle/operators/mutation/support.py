@@ -348,7 +348,8 @@ def build_metadata(
 
 def mutate_training_examples_from_pool(individual: Individual, component_pool, config) -> Individual:
     """Insert or replace examples from the code-managed runtime pool."""
-    pool_examples = list(getattr(component_pool, "training_examples", []) or [])
+    example_memory = getattr(component_pool, "example_memory", None)
+    pool_examples = list(getattr(example_memory, "examples", []) or [])
     if not pool_examples:
         return individual
 

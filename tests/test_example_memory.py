@@ -27,12 +27,13 @@ class ExampleMemoryTests(unittest.TestCase):
         pool = ComponentPool(
             {
                 "role": [["ROLE"]],
-                "training_examples": [],
+                "field_requirements": [["FIELDS"]],
                 "json_schema": [["SCHEMA"]],
             }
         )
         individual = Individual()
         individual.set_component_index("role", 0)
+        individual.set_component_index("field_requirements", 0)
         individual.set_component_index("json_schema", 0)
         individual.training_examples = ExampleMemory(max_examples=4).examples
         memory = ExampleMemory(max_examples=4)
@@ -56,11 +57,27 @@ class ExampleMemoryTests(unittest.TestCase):
         )
 
         self.assertIn("ROLE", prompt)
+        self.assertIn("FIELDS", prompt)
         self.assertIn('"raw_move": "(2,1): base train(worker)"', prompt)
         self.assertIn('"unit_position": [', prompt)
         self.assertIn('"unit_type": "base"', prompt)
         self.assertIn('"action_type": "train"', prompt)
         self.assertIn("SCHEMA", prompt)
+
+    def test_component_dict_does_not_emit_examples(self) -> None:
+        pool = ComponentPool(
+            {
+                "metadata": {"non_evolving_component_keys": ["training_examples", "json_schema"]},
+                "field_requirements": [["FIELDS"]],
+                "training_examples": [{"name": "old", "content": ["OUTPUT:", "{}"]}],
+                "json_schema": [["SCHEMA"]],
+            }
+        )
+
+        payload = pool.to_component_dict()
+
+        self.assertNotIn("training_examples", payload)
+        self.assertNotIn("training_examples", payload["metadata"]["non_evolving_component_keys"])
 
 
 if __name__ == "__main__":

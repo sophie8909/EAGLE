@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Iterable
@@ -15,10 +16,17 @@ class ExampleMemory:
 
     REQUIRED_MOVE_FIELDS = ("raw_move", "unit_position", "unit_type", "action_type")
 
-    def __init__(self, max_examples: int = 32, initial_examples: Iterable[dict[str, Any]] | None = None):
+    def __init__(
+        self,
+        max_examples: int = 32,
+        initial_examples: Iterable[dict[str, Any]] | None = None,
+        pool_path: str | Path | None = None,
+    ):
         """Create a bounded memory pool and optionally seed it with examples."""
         self.max_examples = max(1, int(max_examples))
+        self.pool_path = Path(pool_path) if pool_path is not None else None
         self._examples_by_key: OrderedDict[tuple[str, str, str], dict[str, Any]] = OrderedDict()
+        self.load()
         if initial_examples:
             self.add_examples(initial_examples)
 
@@ -42,6 +50,8 @@ class ExampleMemory:
             added += 1
             while len(self._examples_by_key) > self.max_examples:
                 self._examples_by_key.popitem(last=False)
+        if added:
+            self.save()
         return added
 
     def add_from_game_log(self, log_path: str | Path | None) -> int:
@@ -52,6 +62,41 @@ class ExampleMemory:
         if not path.exists():
             return 0
         return self.add_examples(extract_opponent_action_examples_from_log(path))
+
+    def sample(self, max_examples: int) -> list[dict[str, Any]]:
+        """Sample examples from the runtime JSONL-backed pool."""
+        examples = self.examples
+        limit = min(max(0, int(max_examples)), len(examples))
+        if limit <= 0:
+            return []
+        return random.sample(examples, limit)
+
+    def load(self) -> None:
+        """Load examples from the JSONL pool file when it exists."""
+        if self.pool_path is None or not self.pool_path.exists():
+            return
+        loaded: list[dict[str, Any]] = []
+        with self.pool_path.open("r", encoding="utf-8") as stream:
+            for line in stream:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(record, dict):
+                    loaded.append(record)
+        self.add_examples(loaded)
+
+    def save(self) -> None:
+        """Persist the bounded pool to JSONL outside component.json."""
+        if self.pool_path is None:
+            return
+        self.pool_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.pool_path.open("w", encoding="utf-8") as stream:
+            for example in self.examples:
+                stream.write(json.dumps(example, ensure_ascii=False) + "\n")
 
     @classmethod
     def normalize_example(cls, example: dict[str, Any]) -> dict[str, Any] | None:
