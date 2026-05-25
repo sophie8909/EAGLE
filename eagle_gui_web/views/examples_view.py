@@ -26,27 +26,30 @@ def build_examples_view(state: Any) -> dict[str, Any]:
     """Build the editable runtime examples view."""
     controls: dict[str, Any] = {}
     records: list[dict[str, Any]] = []
-    selected_index = 0
+    selected_id: str | None = None
 
-    def option_labels() -> list[str]:
-        return [
-            f"{index + 1}. {record.get('name') or f'example_{index}'}"
+    def option_map() -> dict[str, str]:
+        return {
+            str(record.get("id", index)): f"{index + 1}. {record.get('name') or f'example_{index}'}"
             for index, record in enumerate(records)
-        ]
+        }
 
     def clamp_selected_index() -> int:
-        nonlocal selected_index
+        nonlocal selected_id
         if not records:
-            selected_index = 0
-            return selected_index
-        selected_index = max(0, min(selected_index, len(records) - 1))
-        return selected_index
+            selected_id = None
+            return 0
+        ids = [str(record.get("id", index)) for index, record in enumerate(records)]
+        if selected_id not in ids:
+            selected_id = ids[0]
+        return ids.index(str(selected_id))
 
     def apply_editor_to_record() -> None:
         if not records:
             return
-        record = records[clamp_selected_index()]
-        record["name"] = str(name_input.value or "").strip() or f"example_{selected_index}"
+        index = clamp_selected_index()
+        record = records[index]
+        record["name"] = str(name_input.value or "").strip() or f"example_{index}"
         record["content"] = str(content_editor.value or "").splitlines()
 
     def load_record_into_editor() -> None:
@@ -63,16 +66,18 @@ def build_examples_view(state: Any) -> dict[str, Any]:
         content_editor.update()
 
     def refresh_widgets() -> None:
-        example_select.options = option_labels()
-        example_select.value = option_labels()[selected_index] if records else None
+        example_select.options = option_map()
+        example_select.value = selected_id
         example_select.update()
         empty_label.set_visibility(not records)
         load_record_into_editor()
 
     async def refresh() -> None:
-        nonlocal records
+        nonlocal records, selected_id
+        previous_selected_id = selected_id
         path, loaded_records = await asyncio.to_thread(services.load_example_records, state)
         records = loaded_records
+        selected_id = previous_selected_id
         clamp_selected_index()
         path_label.set_text(services.relative_or_absolute(path))
         refresh_widgets()
@@ -89,12 +94,14 @@ def build_examples_view(state: Any) -> dict[str, Any]:
         ui.notify(f"Saved {path}", type="positive")
 
     def add_example() -> None:
-        nonlocal selected_index
+        nonlocal selected_id
         apply_editor_to_record()
-        selected_index = len(records)
+        new_id = f"new_{len(records)}"
+        selected_id = new_id
         records.append(
             {
-                "name": f"example_{selected_index}",
+                "id": new_id,
+                "name": f"example_{len(records)}",
                 "content": [
                     "INPUT:",
                     "Map size: 8x8",
@@ -124,11 +131,16 @@ def build_examples_view(state: Any) -> dict[str, Any]:
         refresh_widgets()
 
     async def delete_example() -> None:
-        nonlocal selected_index
+        nonlocal selected_id
         if not records:
             return
-        records.pop(clamp_selected_index())
-        selected_index = max(0, selected_index - 1)
+        deleted_index = clamp_selected_index()
+        records.pop(deleted_index)
+        if records:
+            next_index = min(deleted_index, len(records) - 1)
+            selected_id = str(records[next_index].get("id", next_index))
+        else:
+            selected_id = None
         try:
             await asyncio.to_thread(services.save_example_records, state, records)
         except OSError as exc:
@@ -137,13 +149,9 @@ def build_examples_view(state: Any) -> dict[str, Any]:
         await refresh()
 
     def select_example(event: Any) -> None:
-        nonlocal selected_index
+        nonlocal selected_id
         apply_editor_to_record()
-        value = str(event.value or "")
-        try:
-            selected_index = int(value.split(".", 1)[0]) - 1
-        except ValueError:
-            selected_index = 0
+        selected_id = str(event.value) if event.value is not None else None
         refresh_widgets()
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
