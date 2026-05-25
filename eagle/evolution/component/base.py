@@ -12,6 +12,7 @@ from typing import Any, ClassVar, List
 
 from eagle.config import EAConfig, clone_config
 from eagle.objectives.aggregation import aggregate_fitness
+from eagle.operators.mutation import support as mutation_support
 from eagle.operators.registry import get_operator
 from eagle.prompt.example_memory import ExampleMemory
 from eagle.project import EAGLE_LOGS_DIR
@@ -1100,8 +1101,13 @@ class EA:
     
     def mutate(self, individual: Individual) -> Individual:
         """Apply one of the configured mutation strategies to a copied child."""
-        return self.mutation_operator(
+        mutated = self.mutation_operator(
             individual,
+            self.component_pool,
+            self.config,
+        )
+        return mutation_support.mutate_training_examples_from_pool(
+            mutated,
             self.component_pool,
             self.config,
         )

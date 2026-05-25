@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 import time
+from copy import deepcopy
 from typing import Any
 
 from eagle.evolution.component.individual import Individual
@@ -343,3 +344,84 @@ def build_metadata(
         "repair_triggered": repair_triggered,
         "rewrite_prompt_summary": rewrite_prompt_summary,
     }
+
+
+def mutate_training_examples_from_pool(individual: Individual, component_pool, config) -> Individual:
+    """Insert or replace examples from the code-managed runtime pool."""
+    pool_examples = list(getattr(component_pool, "training_examples", []) or [])
+    if not pool_examples:
+        return individual
+
+    max_examples = max_training_examples(config, component_pool)
+    if max_examples <= 0:
+        return individual
+
+    mutated = individual.copy()
+    current_examples = [
+        deepcopy(example)
+        for example in list(getattr(mutated, "training_examples", []) or [])
+        if isinstance(example, dict)
+    ][:max_examples]
+    seen = {training_example_key(example) for example in current_examples}
+    available = [
+        deepcopy(example)
+        for example in pool_examples
+        if training_example_key(example) not in seen
+    ]
+    if not available:
+        return mutated
+
+    selected = random.choice(available)
+    if not current_examples or len(current_examples) < max_examples and random.random() < 0.5:
+        current_examples.append(selected)
+    else:
+        current_examples[random.randrange(len(current_examples))] = selected
+
+    deduped: list[dict] = []
+    deduped_keys: set[str] = set()
+    for example in current_examples:
+        key = training_example_key(example)
+        if key in deduped_keys:
+            continue
+        deduped.append(example)
+        deduped_keys.add(key)
+        if len(deduped) >= max_examples:
+            break
+    mutated.training_examples = deduped
+    metadata = dict(getattr(mutated, "mutation_metadata", {}) or {})
+    metadata["example_mutation"] = {
+        "mode": "pool_insert_or_replace",
+        "pool_size": len(pool_examples),
+        "example_count": len(mutated.training_examples),
+    }
+    mutated.mutation_metadata = metadata
+    return mutated
+
+
+def max_training_examples(config, component_pool) -> int:
+    """Return the maximum examples carried by one individual."""
+    configured = getattr(
+        config,
+        "max_examples",
+        getattr(
+            config,
+            "training_example_max_examples",
+            getattr(component_pool, "MAX_TRAINING_EXAMPLES_PER_RENDER", 4),
+        ),
+    )
+    return max(0, int(configured))
+
+
+def training_example_key(example: dict) -> str:
+    """Return a normalized duplicate key for one training example."""
+    moves = example.get("moves")
+    move = moves[0] if isinstance(moves, list) and moves else {}
+    if not isinstance(move, dict):
+        move = {}
+    key = "|".join(
+        str(move.get(field, "")).strip().lower()
+        for field in ("raw_move", "action_type", "unit_type")
+    )
+    if key.strip("|"):
+        return key
+    return "\n".join(str(line).strip().lower() for line in example.get("content", []))
