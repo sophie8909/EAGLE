@@ -96,7 +96,10 @@ def finish_strategy_mutation(
 
 def allowed_pool_targets(component_pool) -> list[str]:
     """Return strategy buckets that are eligible for discrete pool replacement."""
-    return list(component_pool.evolving_component_keys)
+    return [
+        key for key in component_pool.evolving_component_keys
+        if key not in getattr(component_pool, "CODE_MANAGED_COMPONENT_KEYS", set())
+    ]
 
 
 def identity_key(component_pool) -> str | None:
@@ -115,6 +118,7 @@ def dependent_targets(component_pool) -> list[str]:
             target
             for target in configured
             if target in component_pool.evolving_component_keys
+            and target not in getattr(component_pool, "CODE_MANAGED_COMPONENT_KEYS", set())
         ]
 
     configured_identity = identity_key(component_pool)
@@ -122,6 +126,7 @@ def dependent_targets(component_pool) -> list[str]:
         target
         for target in component_pool.evolving_component_keys
         if target != configured_identity
+        and target not in getattr(component_pool, "CODE_MANAGED_COMPONENT_KEYS", set())
     ]
 
 
@@ -133,6 +138,8 @@ def ensure_complete_strategy(strategy: dict[str, int], component_pool) -> dict[s
     }
 
     for component_key in component_pool.evolving_component_keys:
+        if component_key in getattr(component_pool, "CODE_MANAGED_COMPONENT_KEYS", set()):
+            continue
         if component_key not in completed:
             completed[component_key] = component_pool.get_random_component_index(
                 component_key

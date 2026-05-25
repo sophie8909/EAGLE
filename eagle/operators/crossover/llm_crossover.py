@@ -22,6 +22,8 @@ class LLMCrossover(BaseCrossover):
         merged_components: list[str] = []
 
         for component_key in component_pool.component_keys:
+            if component_key in getattr(component_pool, "CODE_MANAGED_COMPONENT_KEYS", set()):
+                continue
             if component_key in component_pool.non_evolving_component_keys:
                 child.set_component_index(component_key, 0)
                 child.set_component_enabled(component_key, 1)

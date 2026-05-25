@@ -15,6 +15,7 @@ class ComponentPool:
 
     DEFAULT_NON_EVOLVING_COMPONENT_KEYS = {"json_schema"}
     TRAINING_EXAMPLES_KEY = "training_examples"
+    CODE_MANAGED_COMPONENT_KEYS = {TRAINING_EXAMPLES_KEY}
     MAX_TRAINING_EXAMPLES_PER_RENDER = 4
 
     def __init__(self, components: Dict[str, Any]):
@@ -101,7 +102,13 @@ class ComponentPool:
 
     def _valid_key_set(self, keys: Any, *, fallback: set[str]) -> set[str]:
         raw_keys = fallback if keys is None else set(str(key) for key in (keys or []))
-        return {key for key in raw_keys if key in self.component_keys or key == "json_schema"}
+        return {
+            key
+            for key in raw_keys
+            if key in self.component_keys
+            or key == "json_schema"
+            or key in self.CODE_MANAGED_COMPONENT_KEYS
+        }
 
     def _resolve_identity_component_key(self, metadata: dict[str, Any]) -> str | None:
         explicit_identity = metadata.get("identity_component_key")
