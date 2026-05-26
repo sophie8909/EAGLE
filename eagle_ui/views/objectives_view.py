@@ -1,4 +1,4 @@
-"""Objective selection view."""
+﻿"""Objective selection view."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from typing import Any
 
 from nicegui import ui
 
-from eagle_gui_web import services
-from eagle_gui_web.theme import CARD_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS
-from eagle_gui_web.views.config_view import refresh_config_summary
+from eagle_ui import services
+from eagle_ui.theme import CARD_CLASS, INPUT_CLASS, ROW_CLASS, SECTION_HEADER_CLASS
+from eagle_ui.views.config_view import refresh_config_summary
 
 
 OBJECTIVE_MODE_OPTIONS = ("single", "multi")

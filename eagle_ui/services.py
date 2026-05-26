@@ -1,4 +1,4 @@
-"""Service helpers for the NiceGUI EAGLE workflow."""
+﻿"""Service helpers for the NiceGUI EAGLE workflow."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from eagle.operators.registry import list_operator_names
 from eagle.prompt.example_memory import ExampleMemory
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.token_count import count_prompt_tokens
-from eagle_gui.services import analysis_service, config_service, process_service
+from eagle_ui.service_helpers import analysis_service, config_service, process_service
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,7 +37,7 @@ EXPERIMENT_DIR = ROOT / "configs" / "experiments"
 LOG_DIR = ROOT / "logs" / "eagle"
 MICRORTS_LOG_DIR = ROOT / "logs" / "microrts"
 DEFAULT_CONFIG = CONFIG_DIR / "default.json"
-GUI_WEB_PROCESS_STATE_PATH = LOG_DIR / "gui_web_process_state.json"
+GUI_PROCESS_STATE_PATH = LOG_DIR / "eagle_ui_process_state.json"
 LOG_TAIL_LIMIT = 18_000
 ANALYSIS_SUBPROCESS_TIMEOUT_SEC = 600
 
@@ -83,13 +83,13 @@ def configure_runtime_logging() -> None:
     root_logger.setLevel(logging.INFO)
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
 
-    if not any(getattr(handler, "_eagle_gui_runtime_stream", False) for handler in root_logger.handlers):
+    if not any(getattr(handler, "_eagle_ui_runtime_stream", False) for handler in root_logger.handlers):
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(formatter)
-        stream_handler._eagle_gui_runtime_stream = True
+        stream_handler._eagle_ui_runtime_stream = True
         root_logger.addHandler(stream_handler)
 
-    if any(getattr(handler, "_eagle_gui_runtime_file", False) for handler in root_logger.handlers):
+    if any(getattr(handler, "_eagle_ui_runtime_file", False) for handler in root_logger.handlers):
         return
 
     try:
@@ -99,7 +99,7 @@ def configure_runtime_logging() -> None:
         LOGGER.warning("GUI runtime file logging unavailable path=%s error=%s", RUNTIME_LOG_PATH, exc)
         return
     file_handler.setFormatter(formatter)
-    file_handler._eagle_gui_runtime_file = True
+    file_handler._eagle_ui_runtime_file = True
     root_logger.addHandler(file_handler)
 
 
@@ -771,7 +771,7 @@ def build_strategy_mutation_weights(state: Any) -> dict[str, float]:
 def load_process_state() -> dict[str, Any]:
     """Load persisted web process state."""
     try:
-        return process_service.load_process_state(GUI_WEB_PROCESS_STATE_PATH)
+        return process_service.load_process_state(GUI_PROCESS_STATE_PATH)
     except (OSError, json.JSONDecodeError, ValueError):
         return {}
 
@@ -792,7 +792,7 @@ def process_status_text(state: Any | None = None) -> str:
     tracked_returncode = _tracked_process_returncode(state, pid)
     if tracked_returncode is not None:
         status = "complete" if tracked_returncode == 0 else "failed"
-        process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status=status, returncode=tracked_returncode)
+        process_service.mark_process_state(GUI_PROCESS_STATE_PATH, status=status, returncode=tracked_returncode)
         if state is not None:
             state.runtime.is_running = False
             state.run.status_text = status
@@ -804,7 +804,7 @@ def process_status_text(state: Any | None = None) -> str:
     if stored_status in {"complete", "failed"}:
         return stored_status
     if pid is not None and stored.get("status") == "running":
-        process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="exited")
+        process_service.mark_process_state(GUI_PROCESS_STATE_PATH, status="exited")
         if state is not None:
             state.runtime.is_running = False
             state.run.status_text = "exited"
@@ -877,7 +877,7 @@ def launch_web_process(
         if state is not None:
             state.runtime.is_running = True
         process_service.write_process_state(
-            GUI_WEB_PROCESS_STATE_PATH,
+            GUI_PROCESS_STATE_PATH,
             pid=int(process.pid),
             command=command,
             cwd=ROOT,
@@ -903,7 +903,7 @@ def start_experiment(state: Any) -> tuple[bool, str]:
             state=state,
             command=command,
             config_path=config_path,
-            log_prefix="gui_web_process",
+            log_prefix="eagle_ui_process",
         )
         if success:
             run_dir = None
@@ -982,7 +982,7 @@ def stop_experiment(state: Any | None = None) -> str:
         if pid is None or not process_service.process_is_running(pid):
             messages.append("No running experiment process.")
         else:
-            process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopping")
+            process_service.mark_process_state(GUI_PROCESS_STATE_PATH, status="stopping")
             terminate_pid_tree(pid)
             messages.append(f"Stopping PID {pid}")
         if state is not None:
@@ -1000,7 +1000,7 @@ def shutdown_runtime(state: Any) -> str:
     _deactivate_timers(state)
     pid = monitored_pid()
     if pid is not None and process_service.process_is_running(pid):
-        process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopping")
+        process_service.mark_process_state(GUI_PROCESS_STATE_PATH, status="stopping")
         terminate_pid_tree(pid)
     stop_microrts_gui(wait=True)
     _terminate_active_processes(state)
@@ -1082,7 +1082,7 @@ def _wait_for_pid_exit(pid: int, timeout_seconds: float) -> None:
 
 
 def _cancel_tasks(state: Any) -> None:
-    """Cancel asyncio tasks registered by the web GUI."""
+    """Cancel asyncio tasks registered by the NiceGUI dashboard."""
     for task in list(getattr(state, "active_tasks", [])):
         if not task.done():
             task.cancel()
@@ -1090,7 +1090,7 @@ def _cancel_tasks(state: Any) -> None:
 
 
 def _deactivate_timers(state: Any) -> None:
-    """Deactivate NiceGUI timers registered by the web GUI."""
+    """Deactivate timers registered by the NiceGUI dashboard."""
     for timer in list(getattr(state, "active_timers", [])):
         deactivate = getattr(timer, "deactivate", None)
         if callable(deactivate):
@@ -1118,7 +1118,7 @@ def _terminate_active_processes(state: Any) -> None:
 
 def _reset_runtime_state(state: Any, *, clear_logs: bool) -> None:
     """Reset runtime-only state after shutdown."""
-    process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="stopped")
+    process_service.mark_process_state(GUI_PROCESS_STATE_PATH, status="stopped")
     state.runtime.is_running = False
     state.run.status_text = "not running"
     state.final_test.status_text = "not running"
@@ -1766,7 +1766,7 @@ def launch_microrts_gui(state: Any) -> str:
         set_config_property(ROOT, "update_interval", str(update_interval))
         set_config_property(ROOT, "llm_interval", str(llm_interval))
         LOG_DIR.mkdir(parents=True, exist_ok=True)
-        _microrts_log_path = LOG_DIR / f"microrts_gui_web_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        _microrts_log_path = LOG_DIR / f"microrts_eagle_ui_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         classpath = f"{microrts_root / 'lib' / '*'}{os.pathsep}{microrts_root / 'bin'}"
         command = [
             "java",
@@ -1908,7 +1908,7 @@ def safe_config_filename(raw_name: str) -> str:
     """Return a safe JSON config filename."""
     safe = "".join(char if char.isalnum() or char in {"-", "_", "."} else "_" for char in raw_name.strip())
     if not safe:
-        safe = timestamped_stem("gui_web_evolution")
+        safe = timestamped_stem("eagle_ui_evolution")
     return safe if safe.endswith(".json") else f"{safe}.json"
 
 

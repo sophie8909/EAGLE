@@ -1,4 +1,4 @@
-"""NiceGUI entrypoint for the EAGLE desktop workflow."""
+﻿"""NiceGUI entrypoint for the EAGLE desktop workflow."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ from nicegui import app as nicegui_app
 from nicegui import Client
 from nicegui import ui
 
-from eagle_gui_web import services
-from eagle_gui_web.state import AppState
-from eagle_gui_web.theme import (
+from eagle_ui import services
+from eagle_ui.state import AppState
+from eagle_ui.theme import (
     BRAND_CLASS,
     BRAND_IMAGE_CLASS,
     CARD_CLASS,
@@ -29,17 +29,17 @@ from eagle_gui_web.theme import (
     button_class,
     title_class,
 )
-from eagle_gui_web.ui_actions import safe_click
-from eagle_gui_web.views.analysis_view import build_analysis_view
-from eagle_gui_web.views.components_view import build_components_view
-from eagle_gui_web.views.config_view import build_config_summary_view
-from eagle_gui_web.views.examples_view import build_examples_view
-from eagle_gui_web.views.final_test_view import build_final_test_view
-from eagle_gui_web.views.microrts_view import build_microrts_view
-from eagle_gui_web.views.objectives_view import build_objectives_view
-from eagle_gui_web.views.operators_view import build_operators_view
-from eagle_gui_web.views.llm_calls_view import build_llm_calls_view
-from eagle_gui_web.views.run_view import build_run_view
+from eagle_ui.ui_actions import safe_click
+from eagle_ui.views.analysis_view import build_analysis_view
+from eagle_ui.views.components_view import build_components_view
+from eagle_ui.views.config_view import build_config_summary_view
+from eagle_ui.views.examples_view import build_examples_view
+from eagle_ui.views.final_test_view import build_final_test_view
+from eagle_ui.views.microrts_view import build_microrts_view
+from eagle_ui.views.objectives_view import build_objectives_view
+from eagle_ui.views.operators_view import build_operators_view
+from eagle_ui.views.llm_calls_view import build_llm_calls_view
+from eagle_ui.views.run_view import build_run_view
 
 
 services.configure_runtime_logging()

@@ -1,4 +1,4 @@
-"""Operator selection view."""
+﻿"""Operator selection view."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from typing import Any
 
 from nicegui import ui
 
-from eagle_gui_web import services
-from eagle_gui_web.theme import (
+from eagle_ui import services
+from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
     GRID_CLASS,
@@ -18,8 +18,8 @@ from eagle_gui_web.theme import (
     SECTION_HEADER_CLASS,
     button_class,
 )
-from eagle_gui_web.ui_actions import safe_click
-from eagle_gui_web.views.config_view import refresh_config_summary
+from eagle_ui.ui_actions import safe_click
+from eagle_ui.views.config_view import refresh_config_summary
 
 def _field_card(title: str) -> Any:
     """Create a compact settings card."""

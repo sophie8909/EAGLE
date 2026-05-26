@@ -1,4 +1,4 @@
-"""Config file services used by the Tkinter GUI."""
+"""Config file services used by the EAGLE NiceGUI dashboard."""
 
 from __future__ import annotations
 

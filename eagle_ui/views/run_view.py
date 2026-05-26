@@ -1,4 +1,4 @@
-"""Experiment run control view."""
+﻿"""Experiment run control view."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from typing import Any
 
 from nicegui import ui
 
-from eagle_gui_web import services
-from eagle_gui_web.components.selectors import create_run_selector
-from eagle_gui_web.theme import (
+from eagle_ui import services
+from eagle_ui.components.selectors import create_run_selector
+from eagle_ui.theme import (
     BADGE_CLASS,
     BUTTON_CLASS,
     CARD_CLASS,
@@ -22,7 +22,7 @@ from eagle_gui_web.theme import (
     height_class,
     status_badge_class,
 )
-from eagle_gui_web.ui_actions import safe_click
+from eagle_ui.ui_actions import safe_click
 
 
 def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:

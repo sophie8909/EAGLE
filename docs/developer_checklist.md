@@ -31,7 +31,7 @@ python -m eagle.main --config configs/evolution/quick_test.json --quick-run --sk
 
 ## After changing GUI
 
-- Launch `python -m eagle_gui_web.app`.
+- Launch `python -m eagle_ui.app`.
 - Check config load/save, run control, final-test controls, LLM Calls, and Analysis for the touched area.
 - Keep GUI code as a wrapper around services/analyzers instead of duplicating experiment logic.
 
@@ -41,7 +41,7 @@ python -m eagle.main --config configs/evolution/quick_test.json --quick-run --sk
 - Run syntax checks:
 
 ```bash
-python -m compileall eagle eagle_gui_web
+python -m compileall eagle eagle_ui
 ```
 
 - Review `git diff --stat` for accidental config, log, or result churn.

@@ -1,4 +1,4 @@
-"""Reusable selector builders for NiceGUI pages."""
+﻿"""Reusable selector builders for NiceGUI pages."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 
 from nicegui import ui
 
-from eagle_gui_web import services
+from eagle_ui import services
 
 
 MODE_OPTIONS = {

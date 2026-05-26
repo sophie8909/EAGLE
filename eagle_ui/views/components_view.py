@@ -1,4 +1,4 @@
-"""Component JSON editor and prompt preview view."""
+﻿"""Component JSON editor and prompt preview view."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from typing import Any
 
 from nicegui import ui
 
-from eagle_gui_web import services
-from eagle_gui_web.theme import (
+from eagle_ui import services
+from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
     INPUT_CLASS,
@@ -20,8 +20,8 @@ from eagle_gui_web.theme import (
     button_class,
     height_class,
 )
-from eagle_gui_web.ui_actions import safe_click
-from eagle_gui_web.views.config_view import refresh_config_summary
+from eagle_ui.ui_actions import safe_click
+from eagle_ui.views.config_view import refresh_config_summary
 
 
 def build_components_view(state: Any) -> dict[str, Any]:
@@ -212,7 +212,7 @@ def build_components_view(state: Any) -> dict[str, Any]:
                 button_class(success=True)
             )
         with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
-            save_as_input = ui.input("Save as", value="configs/experiments/gui_web_components.json").classes(
+            save_as_input = ui.input("Save as", value="configs/experiments/eagle_ui_components.json").classes(
                 f"{INPUT_CLASS} min-w-[460px]"
             )
             ui.button("Save as", on_click=safe_click(save_components_as, label="Save components as")).classes(BUTTON_CLASS)

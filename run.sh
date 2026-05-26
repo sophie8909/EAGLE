@@ -57,4 +57,4 @@ fi
 
 echo "[3/3] Launching NiceGUI dashboard..."
 
-python -m eagle_gui_web.app
+python -m eagle_ui.app

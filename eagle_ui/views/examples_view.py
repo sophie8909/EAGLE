@@ -1,4 +1,4 @@
-"""Runtime examples editor view."""
+﻿"""Runtime examples editor view."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from typing import Any
 
 from nicegui import ui
 
-from eagle_gui_web import services
-from eagle_gui_web.theme import (
+from eagle_ui import services
+from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
     INPUT_CLASS,
@@ -19,7 +19,7 @@ from eagle_gui_web.theme import (
     button_class,
     height_class,
 )
-from eagle_gui_web.ui_actions import safe_click
+from eagle_ui.ui_actions import safe_click
 
 
 def build_examples_view(state: Any) -> dict[str, Any]:

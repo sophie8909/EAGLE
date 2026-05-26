@@ -1,4 +1,4 @@
-"""Live analysis view."""
+﻿"""Live analysis view."""
 
 from __future__ import annotations
 
@@ -17,9 +17,9 @@ from eagle.analysis.evolution_result_analysis import (
     parse_mo_analysis,
     parse_time_analysis,
 )
-from eagle_gui_web import services
-from eagle_gui_web.components.selectors import create_run_selector
-from eagle_gui_web.theme import (
+from eagle_ui import services
+from eagle_ui.components.selectors import create_run_selector
+from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
     COLORS,
@@ -30,7 +30,7 @@ from eagle_gui_web.theme import (
     TEXTAREA_CLASS,
     height_class,
 )
-from eagle_gui_web.ui_actions import safe_click
+from eagle_ui.ui_actions import safe_click
 
 
 def build_analysis_view(state: Any) -> dict[str, Any]:

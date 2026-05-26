@@ -1,4 +1,4 @@
-"""Config editor view for the NiceGUI EAGLE workflow."""
+﻿"""Config editor view for the NiceGUI EAGLE workflow."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from typing import Any
 
 from nicegui import ui
 
-from eagle_gui_web import services
-from eagle_gui_web.components.selects import create_key_select
-from eagle_gui_web.theme import (
+from eagle_ui import services
+from eagle_ui.components.selects import create_key_select
+from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
     GRID_CLASS,
@@ -19,7 +19,7 @@ from eagle_gui_web.theme import (
     SECTION_HEADER_CLASS,
     button_class,
 )
-from eagle_gui_web.ui_actions import safe_click
+from eagle_ui.ui_actions import safe_click
 
 
 def _bind_input(label: str, value: str, setter: Any, classes: str = "w-56") -> Any:

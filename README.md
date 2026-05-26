@@ -12,7 +12,7 @@ Main entry points:
 
 ```bash
 ./run.sh
-python -m eagle_gui_web.app
+python -m eagle_ui.app
 python -m eagle.main --config configs/evolution/default.json
 python -m scripts.run_evolution --config configs/evolution/default.json
 ```
@@ -51,7 +51,7 @@ eagle/
   llm/                            llama.cpp OpenAI-compatible backend
   analysis/                       result loaders, plots, CLI analysis
   utils/                          trace, logging, checkpoint, scoring utilities
-eagle_gui_web/                    NiceGUI dashboard
+eagle_ui/                        NiceGUI dashboard
 configs/
   evolution/                      active evolution presets
   evaluation/                     final-test and surrogate-validation presets
@@ -115,7 +115,7 @@ Launch the NiceGUI dashboard:
 or:
 
 ```bash
-python -m eagle_gui_web.app
+python -m eagle_ui.app
 ```
 
 The GUI provides experiment configuration, component editing, run control, final-test launching, LLM trace inspection, and analysis display. It uses existing Python services and analyzers; experiment logic should stay in `eagle/`.
@@ -271,7 +271,7 @@ Generated artifacts are written under the selected run directory, usually in `an
 Check syntax:
 
 ```bash
-python -m compileall eagle eagle_gui_web
+python -m compileall eagle eagle_ui
 ```
 
 List run folders:
@@ -302,7 +302,7 @@ python -m scripts.export_final_prompt --help
 ## 16. Development notes
 
 - Keep MicroRTS-specific code explicit; do not add generic environment adapters before a second environment exists.
-- Keep GUI code thin. Use `eagle_gui_web/services.py` to call existing config, run, trace, and analysis logic.
+- Keep GUI code thin. Use `eagle_ui/services.py` to call existing config, run, trace, and analysis logic.
 - Do not change `results.json` or final-test schemas during analysis-only work.
 - Keep LLM trace logging best-effort: trace failures should not change evaluation behavior.
 - Use Conventional Commits for commits.

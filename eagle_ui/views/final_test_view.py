@@ -1,4 +1,4 @@
-"""Final-test batch replay view for existing EAGLE runs."""
+﻿"""Final-test batch replay view for existing EAGLE runs."""
 
 from __future__ import annotations
 
@@ -9,15 +9,15 @@ from typing import Any
 
 from nicegui import ui
 
-from eagle_gui_web import services
-from eagle_gui_web.components.selectors import (
+from eagle_ui import services
+from eagle_ui.components.selectors import (
     create_aggregation_selector,
     create_map_selector,
     create_metric_selector,
     create_opponent_selector,
     create_run_selector,
 )
-from eagle_gui_web.theme import (
+from eagle_ui.theme import (
     BADGE_CLASS,
     BUTTON_CLASS,
     CARD_CLASS,
@@ -28,7 +28,7 @@ from eagle_gui_web.theme import (
     button_class,
     height_class,
 )
-from eagle_gui_web.ui_actions import safe_click
+from eagle_ui.ui_actions import safe_click
 
 
 REPEAT_COUNT = 10

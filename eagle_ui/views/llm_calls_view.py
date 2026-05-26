@@ -1,4 +1,4 @@
-"""Runtime LLM trace inspection view."""
+﻿"""Runtime LLM trace inspection view."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from typing import Any
 
 from nicegui import ui
 
-from eagle_gui_web import services
-from eagle_gui_web.theme import (
+from eagle_ui import services
+from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
     INPUT_CLASS,
@@ -17,7 +17,7 @@ from eagle_gui_web.theme import (
     TEXTAREA_CLASS,
     height_class,
 )
-from eagle_gui_web.ui_actions import safe_click
+from eagle_ui.ui_actions import safe_click
 NO_RUN_MESSAGE = "No run folder selected."
 NO_TRACE_MESSAGE = "No LLM trace files found. Expected <run_dir>/llm_calls/generation_*.jsonl."
 NO_CALL_MESSAGE = "No LLM call selected."

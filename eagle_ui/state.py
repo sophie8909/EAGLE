@@ -16,7 +16,7 @@ class ConfigState:
     """Config form state mirrored to the generated JSON schema."""
 
     base_config_path: str = field(default_factory=lambda: str(services.DEFAULT_CONFIG))
-    config_name: str = field(default_factory=lambda: services.timestamped_stem("gui_web_evolution"))
+    config_name: str = field(default_factory=lambda: services.timestamped_stem("eagle_ui_evolution"))
     generated_config_path: Path | None = None
     application: str = "microrts"
     algorithm: str = "nsga2"

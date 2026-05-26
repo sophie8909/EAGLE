@@ -17,4 +17,4 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["eagle*", "eagle_gui*", "eagle_gui_web*", "scripts*"]
+include = ["eagle*", "eagle_ui*", "scripts*"]
