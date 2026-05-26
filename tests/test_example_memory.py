@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from eagle.evolution.component.base import EA
 from eagle.evolution.component.individual import Individual
@@ -216,6 +217,80 @@ class ExampleMemoryTests(unittest.TestCase):
 
         self.assertEqual(len(mutated), 1)
         self.assertEqual(mutated[0]["moves"][0]["raw_move"], "(3,1): base train(worker)")
+
+    def test_example_mutation_can_generate_fresh_example_from_previous_round(self) -> None:
+        algorithm = object.__new__(EA)
+        algorithm.config = SimpleNamespace(max_examples=2)
+        algorithm.example_memory = ExampleMemory(max_examples=4)
+        parent = Individual()
+        parent.last_round_evaluation = {
+            "samples": [
+                {
+                    "format_valid": True,
+                    "parsed_response": {
+                        "moves": [
+                            {
+                                "raw_move": "(4,1): base train(worker)",
+                                "unit_position": [4, 1],
+                                "unit_type": "base",
+                                "action_type": "train",
+                            }
+                        ]
+                    },
+                },
+                {
+                    "format_valid": True,
+                    "parsed_response": {
+                        "moves": [
+                            {
+                                "raw_move": "(5,1): worker build(barracks)",
+                                "unit_position": [5, 1],
+                                "unit_type": "worker",
+                                "action_type": "build",
+                            }
+                        ]
+                    },
+                },
+            ]
+        }
+        current_examples = [
+            {
+                "name": "old",
+                "moves": [
+                    {
+                        "raw_move": "(1,1): worker move(1,2)",
+                        "unit_position": [1, 1],
+                        "unit_type": "worker",
+                        "action_type": "move",
+                    }
+                ],
+                "content": ["OLD"],
+            },
+            {
+                "name": "old_2",
+                "moves": [
+                    {
+                        "raw_move": "(2,1): worker move(2,2)",
+                        "unit_position": [2, 1],
+                        "unit_type": "worker",
+                        "action_type": "move",
+                    }
+                ],
+                "content": ["OLD 2"],
+            }
+        ]
+
+        with patch("eagle.evolution.component.base.random.random", return_value=0.0):
+            mutated = algorithm._mutate_training_examples_from_memory(
+                current_examples,
+                source_individual=parent,
+            )
+
+        self.assertEqual(
+            [example["moves"][0]["raw_move"] for example in mutated],
+            ["(4,1): base train(worker)", "(5,1): worker build(barracks)"],
+        )
+        self.assertEqual(len(algorithm.example_memory.examples), 2)
 
     def test_component_dict_does_not_emit_examples(self) -> None:
         pool = ComponentPool(

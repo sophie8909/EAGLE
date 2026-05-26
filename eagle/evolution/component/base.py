@@ -1170,7 +1170,8 @@ class EA:
             child.training_examples = self._uniform_crossover_training_examples(parent1, source_parent2)
         elif example_operator == "mutation":
             child.training_examples = self._mutate_training_examples_from_memory(
-                list(getattr(child, "training_examples", []) or getattr(parent1, "training_examples", []) or [])
+                list(getattr(child, "training_examples", []) or getattr(parent1, "training_examples", []) or []),
+                source_individual=parent1,
             )
         else:
             raise ValueError(f"Unsupported example reproduction operator: {example_operator}")
@@ -1215,25 +1216,51 @@ class EA:
                 break
         return child_examples
 
-    def _mutate_training_examples_from_memory(self, current_examples: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Replace one current example with a new example from the runtime memory pool."""
+    def _mutate_training_examples_from_memory(
+        self,
+        current_examples: list[dict[str, Any]],
+        *,
+        source_individual: Individual | None = None,
+    ) -> list[dict[str, Any]]:
+        """Mutate examples from fresh previous-round data or the existing pool."""
         max_examples = max(0, int(getattr(self.config, "max_examples", 3)))
         if max_examples <= 0:
             return []
         examples = [deepcopy(example) for example in current_examples if isinstance(example, dict)][:max_examples]
-        pool_examples = [
-            deepcopy(example)
-            for example in list(getattr(self.example_memory, "examples", []) or [])
-            if isinstance(example, dict)
-        ]
-        if not pool_examples:
+        mutation_source = "fresh_previous_round" if source_individual is not None and random.random() < 0.5 else "pool"
+        if mutation_source == "fresh_previous_round":
+            before_keys = {
+                mutation_support.training_example_key(example)
+                for example in list(getattr(self.example_memory, "examples", []) or [])
+                if isinstance(example, dict)
+            }
+            fresh_examples = self.example_memory.examples_from_round_evaluation(
+                getattr(source_individual, "last_round_evaluation", None)
+            )
+            candidate_pool = [
+                deepcopy(example)
+                for example in fresh_examples
+                if isinstance(example, dict)
+                and mutation_support.training_example_key(example) not in before_keys
+            ]
+            if candidate_pool:
+                self.example_memory.add_examples(candidate_pool)
+                return candidate_pool[:max_examples]
             return examples
+        else:
+            candidate_pool = [
+                deepcopy(example)
+                for example in list(getattr(self.example_memory, "examples", []) or [])
+                if isinstance(example, dict)
+            ]
         if not examples:
+            return examples
+        if not candidate_pool:
             return examples
         seen = {mutation_support.training_example_key(example) for example in examples}
         candidates = [
             example
-            for example in pool_examples
+            for example in candidate_pool
             if mutation_support.training_example_key(example) not in seen
         ]
         if not candidates:

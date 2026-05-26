@@ -72,11 +72,15 @@ class ExampleMemory:
 
     def add_from_round_evaluation(self, evaluation: dict[str, Any] | None) -> int:
         """Add examples from round-surrogate evaluation samples."""
+        return self.add_examples(self.examples_from_round_evaluation(evaluation))
+
+    def examples_from_round_evaluation(self, evaluation: dict[str, Any] | None) -> list[dict[str, Any]]:
+        """Build examples from round-surrogate evaluation samples without storing them."""
         if not isinstance(evaluation, dict):
-            return 0
+            return []
         samples = evaluation.get("samples")
         if not isinstance(samples, list):
-            return 0
+            return []
         examples: list[dict[str, Any]] = []
         for sample in samples:
             if not isinstance(sample, dict):
@@ -111,7 +115,7 @@ class ExampleMemory:
                     "moves": normalized_moves,
                 }
             )
-        return self.add_examples(examples)
+        return examples
 
     def sample(self, max_examples: int) -> list[dict[str, Any]]:
         """Sample examples from the runtime JSONL-backed pool."""
