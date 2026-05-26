@@ -1,0 +1,29 @@
+# EAGLE Architecture Notes
+
+These notes describe the current repository shape for researchers and developers working on the LLM + evolutionary algorithm workflow around MicroRTS.
+
+## Current repository map
+
+- `eagle/main.py` is the CLI entry point for running or resuming evolutionary search. It resolves config input, quick-run overrides, opponents, component pools, algorithm construction, and optional final-test execution.
+- `eagle/config.py` defines `EAConfig`, the flat runtime configuration object used by the current experiment pipeline. Defaults are loaded from `configs/evolution/default.json`; validation keeps the active algorithm, objective, surrogate, and MicroRTS runtime settings coherent.
+- `eagle/evolution/component/` contains the component-level EA implementation: individuals, GA/NSGA-II loops, parent selection, environment selection, checkpoint/log parsing helpers, and shared algorithm base behavior.
+- `eagle/operators/` contains mutation, crossover, reflection, parent-selection, and environment-selection operators used by the component evolution layer.
+- `eagle/eval/microrts/` contains MicroRTS-specific evaluation paths, including round surrogate evaluation, full-game evaluation, final-test execution/reporting, generation replay, prompt history, and surrogate validation.
+- `eagle/llm/` contains the Python llama.cpp backend wrapper. It sends OpenAI-compatible `/chat/completions` requests and records per-generation LLM trace records when run context is available.
+- Trace/logging is not a standalone package in this checkout. The current trace layer is spread across `eagle/utils/llm_call_logger.py`, `eagle/utils/llm_debug.py`, `eagle/eval/microrts/round_evaluator.py`, `eagle/llm/llama_cpp.py`, `third_party/microrts/src/ai/eagle/EAGLE.java`, and the `eagle_gui_web` LLM Calls view.
+- `eagle_gui_web/` is the NiceGUI web interface for configuration, run control, trace inspection, and analysis display. It wraps existing services and analyzers rather than owning experiment logic.
+- `third_party/microrts/src/ai/eagle/EAGLE.java` is the active Java gameplay agent used by MicroRTS runs. It loads the prompt, calls a llama.cpp-compatible chat endpoint, translates JSON responses into actions, and writes Java-side LLM trace records when trace metadata is supplied.
+- `configs/` stores active experiment, evolution, and evaluation presets. `configs/experiments/` contains GUI-generated and reference experiment configs.
+- `scripts/` contains command-line wrappers for running evolution, surrogate validation, prompt evaluation/final test, batch runs, analysis, final-prompt export, and MicroRTS log organization.
+- `run.sh`, `run_llama_cpp.sh`, `tmux_services.sh`, and `network_watchdog.sh` are setup/runtime convenience scripts.
+- `README.md` is the top-level project guide and should describe current commands and supported workflows only.
+
+## Main runtime flow
+
+1. A config is loaded from the CLI, GUI, or default preset.
+2. `eagle.main` builds an experiment config and component pool.
+3. `eagle.experiment.runner` constructs the selected GA/NSGA-II algorithm.
+4. Evolution operators generate or modify component prompt individuals, optionally using the Python LLM backend.
+5. MicroRTS evaluators score individuals through round surrogate evaluation, Java-backed gameplay, or final-test replay.
+6. LLM calls are recorded under the active run directory when logging context is available.
+7. GUI and analysis modules read run artifacts from disk for inspection and plotting.
