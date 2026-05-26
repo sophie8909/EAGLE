@@ -52,7 +52,8 @@ def button_class(*, danger: bool = False, success: bool = False) -> str:
 
 def status_badge_class(status: str) -> str:
     """Return status badge classes for running and idle states."""
-    return f"{BADGE_CLASS} {SUCCESS_CLASS if status.startswith('running') else MUTED_CLASS}"
+    active = status.startswith("running") or status == "complete"
+    return f"{BADGE_CLASS} {SUCCESS_CLASS if active else MUTED_CLASS}"
 
 
 def height_class(px: int) -> str:

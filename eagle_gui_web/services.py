@@ -791,20 +791,24 @@ def process_status_text(state: Any | None = None) -> str:
     pid = monitored_pid()
     tracked_returncode = _tracked_process_returncode(state, pid)
     if tracked_returncode is not None:
-        process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="exited", returncode=tracked_returncode)
+        status = "complete" if tracked_returncode == 0 else "failed"
+        process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status=status, returncode=tracked_returncode)
         if state is not None:
             state.runtime.is_running = False
-            state.run.status_text = "not running"
-        return "not running"
+            state.run.status_text = status
+        return status
     if process_service.process_is_running(pid):
         return f"running pid {pid}"
     stored = load_process_state()
+    stored_status = str(stored.get("status") or "")
+    if stored_status in {"complete", "failed"}:
+        return stored_status
     if pid is not None and stored.get("status") == "running":
         process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="exited")
         if state is not None:
             state.runtime.is_running = False
-            state.run.status_text = "not running"
-        return "not running"
+            state.run.status_text = "exited"
+        return "exited"
     return "not running"
 
 
