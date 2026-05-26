@@ -472,6 +472,15 @@ class EA:
         probabilities = [float(weights[operator]) for operator in operators]
         return random.choices(operators, weights=probabilities, k=1)[0]
 
+    def _sample_example_mutation_source(self, *, has_source_individual: bool) -> str:
+        """Sample whether example mutation uses fresh previous-round data or the pool."""
+        weights = dict(getattr(self.config, "example_mutation_source_probs", {"fresh": 0.5, "pool": 0.5}))
+        if not has_source_individual:
+            return "pool"
+        sources = list(weights.keys())
+        probabilities = [float(weights[source]) for source in sources]
+        return random.choices(sources, weights=probabilities, k=1)[0]
+
     def _mutation_parent_snapshot(self, parent: Individual) -> Any:
         """Return algorithm-specific parent fitness data used for feedback."""
         return None
@@ -1227,8 +1236,8 @@ class EA:
         if max_examples <= 0:
             return []
         examples = [deepcopy(example) for example in current_examples if isinstance(example, dict)][:max_examples]
-        mutation_source = "fresh_previous_round" if source_individual is not None and random.random() < 0.5 else "pool"
-        if mutation_source == "fresh_previous_round":
+        mutation_source = self._sample_example_mutation_source(has_source_individual=source_individual is not None)
+        if mutation_source == "fresh":
             before_keys = {
                 mutation_support.training_example_key(example)
                 for example in list(getattr(self.example_memory, "examples", []) or [])

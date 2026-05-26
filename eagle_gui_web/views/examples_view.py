@@ -78,6 +78,9 @@ def build_examples_view(state: Any) -> dict[str, Any]:
     def set_example_weight(key: str, value: Any) -> None:
         state.operators.example_reproduction_weights[key] = str(value or "0").strip()
 
+    def set_example_mutation_source_weight(key: str, value: Any) -> None:
+        state.operators.example_mutation_source_weights[key] = str(value or "0").strip()
+
     async def refresh() -> None:
         nonlocal records, selected_id
         previous_selected_id = selected_id
@@ -191,6 +194,14 @@ def build_examples_view(state: Any) -> dict[str, Any]:
                     label,
                     value=state.operators.example_reproduction_weights.get(key, "0.5"),
                     on_change=lambda event, item=key: set_example_weight(item, event.value),
+                ).props("type=number min=0 step=0.05").classes(f"{INPUT_CLASS} w-32")
+        with ui.row().classes(f"{ROW_CLASS} items-center gap-4"):
+            ui.label("mutation source").classes(MUTED_CLASS)
+            for key, label in (("fresh", "fresh"), ("pool", "pool")):
+                ui.input(
+                    label,
+                    value=state.operators.example_mutation_source_weights.get(key, "0.5"),
+                    on_change=lambda event, item=key: set_example_mutation_source_weight(item, event.value),
                 ).props("type=number min=0 step=0.05").classes(f"{INPUT_CLASS} w-32")
         path_label = ui.label("").classes(MUTED_CLASS)
         empty_label = ui.label("No runtime examples found.").classes(MUTED_CLASS)

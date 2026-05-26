@@ -464,6 +464,8 @@ def apply_operator_config(state: Any, payload: dict[str, Any]) -> None:
         operators.reproduction_weights[str(key)] = str(value)
     for key, value in dict(payload.get("example_reproduction_operator_probs") or {}).items():
         operators.example_reproduction_weights[str(key)] = str(value)
+    for key, value in dict(payload.get("example_mutation_source_probs") or {}).items():
+        operators.example_mutation_source_weights[str(key)] = str(value)
     for key, value in dict(payload.get("strategy_mutation") or {}).items():
         operators.mutation_weights[str(key)] = str(value)
     sync_algorithm_operator_defaults(state)
@@ -660,6 +662,10 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
             "example_reproduction_operator_probs": normalized_float_map(
                 state.operators.example_reproduction_weights,
                 "example_reproduction_operator_probs",
+            ),
+            "example_mutation_source_probs": normalized_float_map(
+                state.operators.example_mutation_source_weights,
+                "example_mutation_source_probs",
             ),
             "strategy_mutation": build_strategy_mutation_weights(state),
         }

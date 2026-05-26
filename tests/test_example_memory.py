@@ -280,7 +280,7 @@ class ExampleMemoryTests(unittest.TestCase):
             }
         ]
 
-        with patch("eagle.evolution.component.base.random.random", return_value=0.0):
+        with patch("eagle.evolution.component.base.random.choices", return_value=["fresh"]):
             mutated = algorithm._mutate_training_examples_from_memory(
                 current_examples,
                 source_individual=parent,

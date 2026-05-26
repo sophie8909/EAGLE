@@ -82,6 +82,9 @@ class EAConfig:
     example_reproduction_operator_probs: dict[str, float] = field(
         default_factory=lambda: dict(_default_config_value("example_reproduction_operator_probs"))
     )
+    example_mutation_source_probs: dict[str, float] = field(
+        default_factory=lambda: dict(_default_config_value("example_mutation_source_probs"))
+    )
     mutation_operator: str = "mix"
     selection_method: str = field(default_factory=lambda: str(_default_config_value("selection_method")))
     parent_selection_operator: str = ""
@@ -291,6 +294,11 @@ class EAConfig:
             key: value / example_total
             for key, value in example_probabilities.items()
         }
+        self.example_mutation_source_probs = self._normalized_exact_probability_map(
+            self.example_mutation_source_probs,
+            expected_keys={"fresh", "pool"},
+            field_name="example_mutation_source_probs",
+        )
 
         self.surrogate_round_samples_per_match = max(1, int(self.surrogate_round_samples_per_match))
         self.round_eval_model = str(self.round_eval_model or "").strip()
@@ -323,6 +331,7 @@ class EAConfig:
             "num_generations": self.num_generations,
             "reproduction_operator_probs": dict(self.reproduction_operator_probs),
             "example_reproduction_operator_probs": dict(self.example_reproduction_operator_probs),
+            "example_mutation_source_probs": dict(self.example_mutation_source_probs),
             "enable_reflection_operator": self.enable_reflection_operator,
             "reflection_max_components_to_rewrite": self.reflection_max_components_to_rewrite,
             "strategy_mutation": dict(self.strategy_mutation),
@@ -457,6 +466,28 @@ class EAConfig:
         """Convert operator probabilities into a plain float dictionary."""
         probabilities = dict(raw_probabilities or {})
         return {str(key): float(value) for key, value in probabilities.items()}
+
+    @classmethod
+    def _normalized_exact_probability_map(
+        cls,
+        raw_probabilities: dict[str, float] | None,
+        *,
+        expected_keys: set[str],
+        field_name: str,
+    ) -> dict[str, float]:
+        """Validate and normalize a named probability map."""
+        probabilities = cls._normalized_probability_input(raw_probabilities)
+        actual_keys = set(probabilities.keys())
+        if actual_keys != expected_keys:
+            raise ValueError(
+                f"{field_name} must define exactly {sorted(expected_keys)}, got {sorted(actual_keys)}."
+            )
+        if any(value < 0 for value in probabilities.values()):
+            raise ValueError(f"{field_name} values must be >= 0.")
+        total = sum(probabilities.values())
+        if total <= 0:
+            raise ValueError(f"{field_name} must have a positive total weight.")
+        return {key: value / total for key, value in probabilities.items()}
 
     @staticmethod
     def _normalized_strategy_mutation_input(raw_strategy_mutation: dict[str, float] | None) -> dict[str, float]:
