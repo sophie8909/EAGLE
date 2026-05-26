@@ -27,3 +27,18 @@ These notes describe the current repository shape for researchers and developers
 5. MicroRTS evaluators score individuals through round surrogate evaluation, Java-backed gameplay, or final-test replay.
 6. LLM calls are recorded under the active run directory when logging context is available.
 7. GUI and analysis modules read run artifacts from disk for inspection and plotting.
+
+## Current responsibility boundaries
+
+- Evolution core: owns population state, generation loops, checkpoint/resume data, component individuals, parent/environment selection, and mutation/crossover/reflection operator orchestration.
+- MicroRTS evaluation: owns round surrogate scoring, Java gameplay execution, final-test replay, MicroRTS log parsing, prompt history, scoring records, and validation outputs.
+- LLM backend: owns the prompt-in/response-out boundary for Python-side llama.cpp calls. It should not decide EA policy or MicroRTS scoring semantics.
+- Trace layer: owns JSONL records for LLM calls and experiment evidence. It records what happened at backend/runtime boundaries without changing evaluation behavior.
+- GUI: owns configuration editing, run control, trace inspection, and analysis display. It should call existing services/analyzers instead of duplicating experiment logic.
+
+## Do not generalize yet
+
+- MicroRTS is currently the only third-party environment supported by this repository.
+- Keep MicroRTS-specific assumptions explicit in `eagle/eval/microrts/`, `eagle/envs/microrts/`, `eagle/domains/microrts/`, and the vendored `third_party/microrts/` tree.
+- Do not create generic third-party adapters until there is a real second environment with tested requirements.
+- Prefer readable MicroRTS-first boundaries over abstract interfaces that only wrap one implementation.
