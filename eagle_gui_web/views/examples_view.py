@@ -72,6 +72,9 @@ def build_examples_view(state: Any) -> dict[str, Any]:
         empty_label.set_visibility(not records)
         load_record_into_editor()
 
+    def set_example_bound(field_name: str, value: Any) -> None:
+        setattr(state.config, field_name, str(value or "0").strip())
+
     async def refresh() -> None:
         nonlocal records, selected_id
         previous_selected_id = selected_id
@@ -160,6 +163,24 @@ def build_examples_view(state: Any) -> dict[str, Any]:
             with ui.row().classes(f"{ROW_CLASS} gap-2"):
                 ui.button("Refresh", on_click=safe_click(refresh, label="Refresh examples")).classes(BUTTON_CLASS)
                 ui.button("Save", on_click=safe_click(save, label="Save examples")).classes(button_class(success=True))
+        with ui.row().classes(f"{ROW_CLASS} items-center gap-4"):
+            ui.checkbox(
+                "few-shot prompt",
+                value=state.config.use_few_shot_examples,
+                on_change=lambda event: setattr(state.config, "use_few_shot_examples", bool(event.value)),
+            )
+            ui.label("example sample range").classes(MUTED_CLASS)
+            ui.input(
+                "min_examples",
+                value=state.config.min_examples,
+                on_change=lambda event: set_example_bound("min_examples", event.value),
+            ).props("type=number min=0").classes(f"{INPUT_CLASS} w-32")
+            ui.label("-").classes(MUTED_CLASS)
+            ui.input(
+                "max_examples",
+                value=state.config.max_examples,
+                on_change=lambda event: set_example_bound("max_examples", event.value),
+            ).props("type=number min=0").classes(f"{INPUT_CLASS} w-32")
         path_label = ui.label("").classes(MUTED_CLASS)
         empty_label = ui.label("No runtime examples found.").classes(MUTED_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):

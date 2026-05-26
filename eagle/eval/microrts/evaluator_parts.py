@@ -46,6 +46,9 @@ class PromptRenderer:
             individual.component_indices,
             include_identity_component=self.config.include_strategy_identity_in_prompt,
             selected_training_examples=getattr(individual, "training_examples", None),
+            use_few_shot_examples=getattr(self.config, "use_few_shot_examples", True),
+            min_examples=getattr(self.config, "min_examples", 0),
+            max_examples=getattr(self.config, "max_examples", 3),
         )
         return "\n".join(prompt_lines)
 

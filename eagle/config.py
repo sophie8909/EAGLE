@@ -123,6 +123,9 @@ class EAConfig:
     training_example_fixed_count: bool = field(
         default_factory=lambda: bool(_default_config_value("training_example_fixed_count"))
     )
+    use_few_shot_examples: bool = field(default_factory=lambda: bool(_default_config_value("use_few_shot_examples")))
+    min_examples: int = field(default_factory=lambda: int(_default_config_value("min_examples")))
+    max_examples: int = field(default_factory=lambda: int(_default_config_value("max_examples")))
     gameplay_opponents: list[str] = field(default_factory=lambda: list(_default_config_value("gameplay_opponents")))
     gameplay_map_dir: str = field(default_factory=lambda: str(_default_config_value("gameplay_map_dir")))
     llm_interval: list[int] = field(default_factory=lambda: list(_default_config_value("llm_interval")))
@@ -285,6 +288,11 @@ class EAConfig:
         self.llm_base_url = self._normalize_llm_base_url(self.llm_base_url)
         self.min_token_length = max(1, int(self.min_token_length))
         self.llm_interval = self._normalized_llm_interval_input(self.llm_interval)
+        self.use_few_shot_examples = bool(self.use_few_shot_examples)
+        self.min_examples = max(0, int(self.min_examples))
+        self.max_examples = int(self.max_examples)
+        if self.max_examples < self.min_examples:
+            raise ValueError("max_examples must be >= min_examples.")
 
     def evolution_settings(self) -> dict[str, object]:
         """Return the subset of fields that control population search behavior."""
@@ -313,6 +321,9 @@ class EAConfig:
             "component_pool_path": self.component_pool_path,
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
             "objective_config": deepcopy(self.objective_config),
+            "use_few_shot_examples": self.use_few_shot_examples,
+            "min_examples": self.min_examples,
+            "max_examples": self.max_examples,
             "gameplay_opponents": list(self.gameplay_opponents),
             "gameplay_map_dir": self.gameplay_map_dir,
             "gameplay_refresh_interval": self.gameplay_refresh_interval,

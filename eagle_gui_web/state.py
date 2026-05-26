@@ -42,6 +42,9 @@ class ConfigState:
     non_evolving_prompt_components: set[str] = field(
         default_factory=lambda: set(ComponentPool.DEFAULT_NON_EVOLVING_COMPONENT_KEYS)
     )
+    use_few_shot_examples: bool = True
+    min_examples: str = "0"
+    max_examples: str = "3"
     training_example_fixed_count: bool = False
     training_example_sample_min: str = "0"
     training_example_sample_max: str = "4"

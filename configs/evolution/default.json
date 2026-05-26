@@ -74,6 +74,9 @@
   },
   "training_example_sample_count": "random_0_4",
   "training_example_fixed_count": false,
+  "use_few_shot_examples": true,
+  "min_examples": 0,
+  "max_examples": 3,
   "gameplay_opponents": [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush"

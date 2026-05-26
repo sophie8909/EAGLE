@@ -131,6 +131,40 @@ class ExampleMemoryTests(unittest.TestCase):
         self.assertIn('"action_type": "train"', prompt)
         self.assertIn("SCHEMA", prompt)
 
+    def test_few_shot_controls_disable_or_sample_examples(self) -> None:
+        pool = ComponentPool(
+            {
+                "field_requirements": [["FIELDS"]],
+                "json_schema": [["SCHEMA"]],
+            }
+        )
+        examples = [
+            {"name": "one", "content": ["OUTPUT:", "{\"moves\": []}"]},
+            {"name": "two", "content": ["OUTPUT:", "{\"thinking\": \"two\", \"moves\": []}"]},
+        ]
+
+        disabled_prompt = "\n".join(
+            pool.render_prompt_lines(
+                {"field_requirements": 0, "json_schema": 0},
+                selected_training_examples=examples,
+                use_few_shot_examples=False,
+                min_examples=1,
+                max_examples=1,
+            )
+        )
+        sampled_prompt = "\n".join(
+            pool.render_prompt_lines(
+                {"field_requirements": 0, "json_schema": 0},
+                selected_training_examples=examples,
+                use_few_shot_examples=True,
+                min_examples=1,
+                max_examples=1,
+            )
+        )
+
+        self.assertNotIn("OUTPUT:", disabled_prompt)
+        self.assertEqual(sampled_prompt.count("OUTPUT:"), 1)
+
     def test_component_dict_does_not_emit_examples(self) -> None:
         pool = ComponentPool(
             {

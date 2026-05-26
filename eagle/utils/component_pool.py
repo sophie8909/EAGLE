@@ -333,6 +333,9 @@ class ComponentPool:
         *,
         include_identity_component: bool = True,
         selected_training_examples: list[dict[str, Any]] | None = None,
+        use_few_shot_examples: bool = True,
+        min_examples: int = 0,
+        max_examples: int | None = None,
     ) -> List[str]:
         """Render the full prompt from flattened component indices."""
         selected_indices = dict(selected_indices or {})
@@ -354,9 +357,12 @@ class ComponentPool:
             if rendered_lines:
                 rendered_lines.append("")
             rendered_lines.extend(lines)
-            if key == "field_requirements":
+            if key == "field_requirements" and use_few_shot_examples:
                 example_lines = self._render_training_examples(
+                    selected_indices.get(self.TRAINING_EXAMPLES_KEY),
                     selected_examples=selected_training_examples,
+                    min_examples=min_examples,
+                    max_examples=max_examples,
                 )
                 if example_lines:
                     rendered_lines.append("")
@@ -414,6 +420,8 @@ class ComponentPool:
         selection: Any = None,
         *,
         selected_examples: list[dict[str, Any]] | None = None,
+        min_examples: int = 0,
+        max_examples: int | None = None,
     ) -> list[str]:
         """Sample and concatenate training examples for one prompt render."""
         if selected_examples is not None:
@@ -425,14 +433,23 @@ class ComponentPool:
             )
         if not source_examples:
             return []
-        max_count = min(self.MAX_TRAINING_EXAMPLES_PER_RENDER, len(source_examples))
-        if selected_examples is None:
+        max_count = min(
+            len(source_examples),
+            max(0, int(max_examples)) if max_examples is not None else self.MAX_TRAINING_EXAMPLES_PER_RENDER,
+        )
+        lower = min(max_count, max(0, int(min_examples)))
+        if selected_examples is not None and max_examples is None:
+            rendered_examples = source_examples[:max_count]
+        elif max_examples is None:
             sample_count = self._training_example_sample_count(selection, max_count)
             if sample_count <= 0:
                 return []
             rendered_examples = random.sample(source_examples, sample_count)
         else:
-            rendered_examples = source_examples[:max_count]
+            sample_count = random.randint(lower, max_count) if max_count >= lower else 0
+            if sample_count <= 0:
+                return []
+            rendered_examples = random.sample(source_examples, sample_count)
         rendered_lines: list[str] = []
         for example in rendered_examples:
             lines = self._normalize_component_lines(example.get("content", []))

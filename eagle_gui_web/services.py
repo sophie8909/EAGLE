@@ -386,6 +386,11 @@ def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path)
     cfg.opponents_text = ", ".join(parse_target_list(payload.get("gameplay_opponents", []))) or cfg.opponents_text
     cfg.component_pool_path = str(payload.get("component_pool_path", cfg.component_pool_path))
     cfg.include_strategy_identity_in_prompt = bool(payload.get("include_strategy_identity_in_prompt", True))
+    cfg.use_few_shot_examples = bool(payload.get("use_few_shot_examples", True))
+    cfg.min_examples = str(parse_nonnegative_int(payload.get("min_examples", 0), "min_examples"))
+    cfg.max_examples = str(parse_nonnegative_int(payload.get("max_examples", 3), "max_examples"))
+    if int(cfg.max_examples) < int(cfg.min_examples):
+        raise ValueError("max_examples must be >= min_examples.")
     cfg.non_evolving_prompt_components = set(
         str(key)
         for key in payload.get(
@@ -553,11 +558,13 @@ def render_component_prompt(state: Any) -> str:
     pool = ComponentPool(state.components.payload)
     pool.configure_non_evolving_keys(list(state.config.non_evolving_prompt_components))
     selected = {key: state.components.prompt_selection.get(key, 0) for key in pool.component_keys}
-    selected[ComponentPool.TRAINING_EXAMPLES_KEY] = {"sample_count": training_example_selection_value(state)}
     prompt = "\n".join(
         pool.render_prompt_lines(
             selected,
             include_identity_component=state.config.include_strategy_identity_in_prompt,
+            use_few_shot_examples=state.config.use_few_shot_examples,
+            min_examples=parse_nonnegative_int(state.config.min_examples, "min_examples"),
+            max_examples=parse_example_max(state),
         )
     )
     token_count, exact = count_prompt_tokens(prompt)
@@ -625,6 +632,9 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
             "archive_parent_ratio": parse_float(cfg.archive_parent_ratio, "archive_parent_ratio"),
             "min_token_length": parse_int(cfg.min_token_length, "min_token_length"),
             "objective_config": build_objective_config(state),
+            "use_few_shot_examples": bool(cfg.use_few_shot_examples),
+            "min_examples": parse_nonnegative_int(cfg.min_examples, "min_examples"),
+            "max_examples": parse_example_max(state),
             "training_example_sample_count": training_example_selection_value(state),
             "training_example_fixed_count": bool(cfg.training_example_fixed_count),
             "final_test_max_front": parse_optional_nonnegative_int(cfg.final_test_max_front, "final_test_max_front"),
@@ -1868,6 +1878,16 @@ def training_example_selection_value(state: Any) -> str | int:
     if lower > upper:
         lower, upper = upper, lower
     return f"random_{lower}_{upper}"
+
+
+def parse_example_max(state: Any) -> int:
+    """Parse and validate the few-shot example sample range upper bound."""
+    cfg = state.config
+    lower = parse_nonnegative_int(cfg.min_examples, "min_examples")
+    upper = parse_nonnegative_int(cfg.max_examples, "max_examples")
+    if upper < lower:
+        raise ValueError("max_examples must be >= min_examples.")
+    return upper
 
 
 def parse_target_list(value: Any) -> list[str]:
