@@ -9,6 +9,10 @@
     "mutation": 0.2,
     "reflection": 0.1
   },
+  "example_reproduction_operator_probs": {
+    "crossover": 0.5,
+    "mutation": 0.5
+  },
   "enable_reflection_operator": true,
   "reflection_max_components_to_rewrite": 1,
   "strategy_mutation": {

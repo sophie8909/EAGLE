@@ -461,6 +461,17 @@ class EA:
         probabilities = [weights[operator] for operator in operators]
         return random.choices(operators, weights=probabilities, k=1)[0]
 
+    def _sample_example_reproduction_operator(self) -> str:
+        """Sample the independent examples reproduction operator."""
+        weights = getattr(
+            self.config,
+            "example_reproduction_operator_probs",
+            {"crossover": 0.5, "mutation": 0.5},
+        )
+        operators = list(weights.keys())
+        probabilities = [float(weights[operator]) for operator in operators]
+        return random.choices(operators, weights=probabilities, k=1)[0]
+
     def _mutation_parent_snapshot(self, parent: Individual) -> Any:
         """Return algorithm-specific parent fitness data used for feedback."""
         return None
@@ -499,6 +510,7 @@ class EA:
                     individual_id=f"{parent1.id},{parent2.id}",
                 ):
                     child = self.crossover(parent1, parent2)
+                self._apply_example_reproduction(child, parent1, parent2)
             elif operator == "mutation":
                 parent = self.select_parent()
                 print(
@@ -512,6 +524,7 @@ class EA:
                     individual_id=str(parent.id),
                 ):
                     child = self.mutate(parent)
+                self._apply_example_reproduction(child, parent, None)
                 setattr(child, "_mutation_parent_snapshot", self._mutation_parent_snapshot(parent))
                 print(
                     f"[Generation {generation + 1}] created child from mutation: "
@@ -526,6 +539,7 @@ class EA:
                     individual_id=str(parent.id),
                 ):
                     child = self.reflect(parent)
+                self._apply_example_reproduction(child, parent, None)
             else:
                 raise ValueError(f"Unsupported reproduction operator: {operator}")
 
@@ -1137,16 +1151,96 @@ class EA:
     
     def mutate(self, individual: Individual) -> Individual:
         """Apply one of the configured mutation strategies to a copied child."""
-        mutated = self.mutation_operator(
+        return self.mutation_operator(
             individual,
             self.component_pool,
             self.config,
         )
-        return mutation_support.mutate_training_examples_from_pool(
-            mutated,
-            self.component_pool,
-            self.config,
-        )
+
+    def _apply_example_reproduction(
+        self,
+        child: Individual,
+        parent1: Individual,
+        parent2: Individual | None,
+    ) -> None:
+        """Apply examples crossover or mutation independently from components."""
+        example_operator = self._sample_example_reproduction_operator()
+        if example_operator == "crossover":
+            source_parent2 = parent2 if parent2 is not None else parent1
+            child.training_examples = self._uniform_crossover_training_examples(parent1, source_parent2)
+        elif example_operator == "mutation":
+            child.training_examples = self._mutate_training_examples_from_memory(
+                list(getattr(child, "training_examples", []) or getattr(parent1, "training_examples", []) or [])
+            )
+        else:
+            raise ValueError(f"Unsupported example reproduction operator: {example_operator}")
+        child.example_reproduction_metadata = {
+            "operator": example_operator,
+            "example_count": len(getattr(child, "training_examples", []) or []),
+        }
+
+    def _uniform_crossover_training_examples(self, parent1: Individual, parent2: Individual) -> list[dict[str, Any]]:
+        """Uniform crossover parent examples, padding the shorter parent with empty slots."""
+        max_examples = max(0, int(getattr(self.config, "max_examples", 3)))
+        if max_examples <= 0:
+            return []
+        left = [
+            deepcopy(example)
+            for example in list(getattr(parent1, "training_examples", []) or [])[:max_examples]
+            if isinstance(example, dict)
+        ]
+        right = [
+            deepcopy(example)
+            for example in list(getattr(parent2, "training_examples", []) or [])[:max_examples]
+            if isinstance(example, dict)
+        ]
+        empty_example: dict[str, Any] = {"_empty_example": True, "content": []}
+        child_examples: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for index in range(max(len(left), len(right))):
+            selected = random.choice(
+                [
+                    left[index] if index < len(left) else empty_example,
+                    right[index] if index < len(right) else empty_example,
+                ]
+            )
+            if selected.get("_empty_example"):
+                continue
+            key = mutation_support.training_example_key(selected)
+            if key in seen:
+                continue
+            child_examples.append(deepcopy(selected))
+            seen.add(key)
+            if len(child_examples) >= max_examples:
+                break
+        return child_examples
+
+    def _mutate_training_examples_from_memory(self, current_examples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Replace one current example with a new example from the runtime memory pool."""
+        max_examples = max(0, int(getattr(self.config, "max_examples", 3)))
+        if max_examples <= 0:
+            return []
+        examples = [deepcopy(example) for example in current_examples if isinstance(example, dict)][:max_examples]
+        pool_examples = [
+            deepcopy(example)
+            for example in list(getattr(self.example_memory, "examples", []) or [])
+            if isinstance(example, dict)
+        ]
+        if not pool_examples:
+            return examples
+        if not examples:
+            return examples
+        seen = {mutation_support.training_example_key(example) for example in examples}
+        candidates = [
+            example
+            for example in pool_examples
+            if mutation_support.training_example_key(example) not in seen
+        ]
+        if not candidates:
+            return examples
+        selected = random.choice(candidates)
+        examples[random.randrange(len(examples))] = selected
+        return examples[:max_examples]
 
     def select_next_generation(
         self,

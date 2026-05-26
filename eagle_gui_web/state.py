@@ -90,6 +90,9 @@ class OperatorState:
     reproduction_weights: dict[str, str] = field(
         default_factory=lambda: {"crossover": "0.7", "mutation": "0.2", "reflection": "0.1"}
     )
+    example_reproduction_weights: dict[str, str] = field(
+        default_factory=lambda: {"crossover": "0.5", "mutation": "0.5"}
+    )
     mutation_weights: dict[str, str] = field(
         default_factory=lambda: {
             "pool_replacement": "0.4",

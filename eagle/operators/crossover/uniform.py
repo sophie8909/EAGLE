@@ -56,12 +56,6 @@ class UniformCrossover(BaseCrossover):
             )
 
         offspring._sync_component_indices()
-        offspring.training_examples = support.uniform_crossover_training_examples(
-            component_pool,
-            parent1,
-            parent2,
-            config,
-        )
         if getattr(config, "crossover_repair_enabled", False):
             offspring = Individual.from_existing(
                 support.repair_after_crossover(

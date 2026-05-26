@@ -1,7 +1,9 @@
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from tempfile import TemporaryDirectory
 
+from eagle.evolution.component.base import EA
 from eagle.evolution.component.individual import Individual
 from eagle.prompt.example_memory import ExampleMemory
 from eagle.utils.component_pool import ComponentPool
@@ -164,6 +166,56 @@ class ExampleMemoryTests(unittest.TestCase):
 
         self.assertNotIn("OUTPUT:", disabled_prompt)
         self.assertEqual(sampled_prompt.count("OUTPUT:"), 1)
+
+    def test_example_crossover_pads_shorter_parent_with_empty_slots(self) -> None:
+        algorithm = object.__new__(EA)
+        algorithm.config = SimpleNamespace(max_examples=3)
+        left = Individual()
+        right = Individual()
+        left.training_examples = [
+            {"name": "left_1", "content": ["LEFT 1"]},
+            {"name": "left_2", "content": ["LEFT 2"]},
+        ]
+        right.training_examples = [{"name": "right_1", "content": ["RIGHT 1"]}]
+
+        child_examples = algorithm._uniform_crossover_training_examples(left, right)
+
+        self.assertLessEqual(len(child_examples), 2)
+        self.assertTrue(all(not example.get("_empty_example") for example in child_examples))
+
+    def test_example_mutation_replaces_current_example_from_memory(self) -> None:
+        algorithm = object.__new__(EA)
+        algorithm.config = SimpleNamespace(max_examples=2)
+        algorithm.example_memory = ExampleMemory(max_examples=4)
+        algorithm.example_memory.add_examples(
+            [
+                {
+                    "raw_move": "(3,1): base train(worker)",
+                    "unit_position": [3, 1],
+                    "unit_type": "base",
+                    "action_type": "train",
+                }
+            ]
+        )
+        current_examples = [
+            {
+                "name": "old",
+                "moves": [
+                    {
+                        "raw_move": "(1,1): worker move(1,2)",
+                        "unit_position": [1, 1],
+                        "unit_type": "worker",
+                        "action_type": "move",
+                    }
+                ],
+                "content": ["OLD"],
+            }
+        ]
+
+        mutated = algorithm._mutate_training_examples_from_memory(current_examples)
+
+        self.assertEqual(len(mutated), 1)
+        self.assertEqual(mutated[0]["moves"][0]["raw_move"], "(3,1): base train(worker)")
 
     def test_component_dict_does_not_emit_examples(self) -> None:
         pool = ComponentPool(

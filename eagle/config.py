@@ -79,6 +79,9 @@ class EAConfig:
     strategy_mutation: dict[str, float] = field(
         default_factory=lambda: dict(_default_config_value("strategy_mutation"))
     )
+    example_reproduction_operator_probs: dict[str, float] = field(
+        default_factory=lambda: dict(_default_config_value("example_reproduction_operator_probs"))
+    )
     mutation_operator: str = "mix"
     selection_method: str = field(default_factory=lambda: str(_default_config_value("selection_method")))
     parent_selection_operator: str = ""
@@ -271,6 +274,23 @@ class EAConfig:
             raise ValueError("strategy_mutation must leave at least one mode enabled.")
 
         self.strategy_mutation = strategy_mutation
+        example_probabilities = self._normalized_probability_input(self.example_reproduction_operator_probs)
+        expected_example_keys = {"crossover", "mutation"}
+        actual_example_keys = set(example_probabilities.keys())
+        if actual_example_keys != expected_example_keys:
+            raise ValueError(
+                "example_reproduction_operator_probs must define exactly "
+                f"{sorted(expected_example_keys)}, got {sorted(actual_example_keys)}."
+            )
+        example_total = sum(example_probabilities.values())
+        if example_total <= 0:
+            raise ValueError("example_reproduction_operator_probs must have a positive total weight.")
+        if any(value < 0 for value in example_probabilities.values()):
+            raise ValueError("example_reproduction_operator_probs values must be >= 0.")
+        self.example_reproduction_operator_probs = {
+            key: value / example_total
+            for key, value in example_probabilities.items()
+        }
 
         self.surrogate_round_samples_per_match = max(1, int(self.surrogate_round_samples_per_match))
         self.round_eval_model = str(self.round_eval_model or "").strip()
@@ -302,6 +322,7 @@ class EAConfig:
             "population_size": self.population_size,
             "num_generations": self.num_generations,
             "reproduction_operator_probs": dict(self.reproduction_operator_probs),
+            "example_reproduction_operator_probs": dict(self.example_reproduction_operator_probs),
             "enable_reflection_operator": self.enable_reflection_operator,
             "reflection_max_components_to_rewrite": self.reflection_max_components_to_rewrite,
             "strategy_mutation": dict(self.strategy_mutation),

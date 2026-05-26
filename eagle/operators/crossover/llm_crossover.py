@@ -58,12 +58,6 @@ class LLMCrossover(BaseCrossover):
             child.set_component_enabled(component_key, enabled)
 
         child._sync_component_indices()
-        child.training_examples = support.uniform_crossover_training_examples(
-            component_pool,
-            parent1,
-            parent2,
-            config,
-        )
         child.ea_llm_call_time = total_llm_time
         child.crossover_metadata = {
             "crossover_mode": "llm_crossover",
