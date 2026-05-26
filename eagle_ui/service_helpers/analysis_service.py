@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from eagle.utils.log_parse import parse_log_file
+from eagle.analysis.objective_metadata import load_run_objective_specs, objective_names
 
 
 @dataclass
@@ -53,7 +54,7 @@ def build_live_analysis_report(run_dir: Path) -> AnalysisReport:
     if mode == "GA":
         lines.extend(_ga_analysis_lines(population, checkpoint_rows))
     else:
-        lines.extend(_mo_analysis_lines(population, checkpoint_rows))
+        lines.extend(_mo_analysis_lines(run_dir, population, checkpoint_rows))
 
     summary = f"{mode} | generation={latest_generation if latest_generation is not None else 'unknown'} | phase={phase}"
     return AnalysisReport(summary=summary, body="\n".join(lines), rows=checkpoint_rows)
@@ -393,6 +394,14 @@ def _fitness_values(fitness: Any) -> list[float]:
     return []
 
 
+def _objective_names_for_run(run_dir: Path, dimension: int) -> list[str]:
+    """Return configured objective keys for one run, padded to match fitness data."""
+    names = objective_names(load_run_objective_specs(run_dir, dimension=dimension))
+    while len(names) < dimension:
+        names.append(f"objective_{len(names)}")
+    return names
+
+
 def _is_number(value: Any) -> bool:
     """Return whether value can be interpreted as a finite float."""
     try:
@@ -402,8 +411,8 @@ def _is_number(value: Any) -> bool:
     return True
 
 
-def _scalar_score(individual: dict[str, Any]) -> float | None:
-    """Return the GA scalar score; the first objective is the canonical scalar."""
+def _scalar_fitness(individual: dict[str, Any]) -> float | None:
+    """Return the GA scalar fitness value."""
     values = _fitness_values(individual.get("fitness"))
     return values[0] if values else None
 
@@ -432,21 +441,21 @@ def _operator_usage_lines(population: list[dict[str, Any]], checkpoint_rows: lis
 def _ga_analysis_lines(population: list[dict[str, Any]], checkpoint_rows: list[dict[str, Any]]) -> list[str]:
     """Build GA first-objective analysis lines."""
     lines = ["GA analysis:"]
-    scored = [(_scalar_score(item), item) for item in population]
-    scored = [(score, item) for score, item in scored if score is not None]
-    if scored:
-        best_score, best = max(scored, key=lambda pair: pair[0])
-        lines.append(f"  current best first objective: {best_score:.4f} id={best.get('id')}")
+    valued = [(_scalar_fitness(item), item) for item in population]
+    valued = [(value, item) for value, item in valued if value is not None]
+    if valued:
+        best_value, best = max(valued, key=lambda pair: pair[0])
+        lines.append(f"  current best fitness: {best_value:.4f} id={best.get('id')}")
     generation_best: dict[Any, float] = {}
     for row in checkpoint_rows:
         individual = row.get("individual")
         if not isinstance(individual, dict):
             continue
-        score = _scalar_score(individual)
-        if score is None:
+        value = _scalar_fitness(individual)
+        if value is None:
             continue
         generation = row.get("generation")
-        generation_best[generation] = max(score, generation_best.get(generation, score))
+        generation_best[generation] = max(value, generation_best.get(generation, value))
     if generation_best:
         lines.append("  best by generation:")
         for generation in sorted(generation_best, key=lambda value: (value is None, value)):
@@ -456,7 +465,11 @@ def _ga_analysis_lines(population: list[dict[str, Any]], checkpoint_rows: list[d
     return lines
 
 
-def _mo_analysis_lines(population: list[dict[str, Any]], checkpoint_rows: list[dict[str, Any]]) -> list[str]:
+def _mo_analysis_lines(
+    run_dir: Path,
+    population: list[dict[str, Any]],
+    checkpoint_rows: list[dict[str, Any]],
+) -> list[str]:
     """Build MO Pareto-front analysis lines."""
     active_population = population or [
         row["individual"] for row in checkpoint_rows if isinstance(row.get("individual"), dict)
@@ -467,13 +480,17 @@ def _mo_analysis_lines(population: list[dict[str, Any]], checkpoint_rows: list[d
     if not vectors:
         lines.append("  no two-objective fitness data found yet")
         return lines
+    objective_names_for_run = _objective_names_for_run(run_dir, len(vectors[0][0]))
     front = _nondominated_front(vectors)
     lines.append(f"  objective count: {len(vectors[0][0])}")
     lines.append(f"  non-dominated front size: {len(front)}")
     lines.append("  front sample:")
     for values, item in front[:20]:
-        vector_text = ", ".join(f"{value:.4f}" for value in values)
-        lines.append(f"    id={item.get('id')} fitness=[{vector_text}]")
+        vector_text = ", ".join(
+            f"{objective_names_for_run[index]}={value:.4f}"
+            for index, value in enumerate(values)
+        )
+        lines.append(f"    id={item.get('id')} {vector_text}")
     return lines
 
 

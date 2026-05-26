@@ -54,6 +54,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--weight-heavy", default="1.0", help="Weighted resource score heavy weight.")
     parser.add_argument("--weight-ranged", default="1.0", help="Weighted resource score ranged weight.")
     parser.add_argument("--individual", default="all", help="Final-test individual id filter, or all.")
+    parser.add_argument("--x-objective", default=None, help="MO scatter X-axis objective key.")
+    parser.add_argument("--y-objective", default=None, help="MO scatter Y-axis objective key.")
     return parser
 
 
@@ -101,6 +103,8 @@ def run_analysis(
     aggregation: str = "mean",
     individual: str = "all",
     weights: dict[str, float] | None = None,
+    x_objective: str | None = None,
+    y_objective: str | None = None,
 ) -> dict[str, Any]:
     """Run one supported analysis type and return a JSON-serializable result."""
     normalized_type = str(analysis_type or "").strip().lower()
@@ -118,7 +122,12 @@ def run_analysis(
             weights=weights,
         )
     else:
-        analysis_result = analyze_evolution_run(run_dir=run_dir, output_dir=resolved_output_dir)
+        analysis_result = analyze_evolution_run(
+            run_dir=run_dir,
+            output_dir=resolved_output_dir,
+            x_objective=x_objective,
+            y_objective=y_objective,
+        )
     return _build_success_result(
         run_dir=run_dir,
         output_dir=resolved_output_dir,
@@ -153,6 +162,8 @@ def main() -> int:
             aggregation=str(args.aggregation),
             individual=str(args.individual),
             weights=weights,
+            x_objective=args.x_objective,
+            y_objective=args.y_objective,
         )
     except Exception as exc:
         result = _build_failure_result(

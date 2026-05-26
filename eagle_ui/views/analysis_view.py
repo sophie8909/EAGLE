@@ -17,6 +17,7 @@ from eagle.analysis.evolution_result_analysis import (
     parse_mo_analysis,
     parse_time_analysis,
 )
+from eagle.analysis.objective_metadata import load_run_objective_specs
 from eagle_ui import services
 from eagle_ui.components.selectors import create_run_selector
 from eagle_ui.theme import (
@@ -81,17 +82,22 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             run_dir = state.analysis.analysis_selected_run_dir
             summary, body = await asyncio.to_thread(services.build_analysis, run_dir)
             mo_summary = await asyncio.to_thread(_build_mo_analysis_text, run_dir)
+            mo_objectives = await asyncio.to_thread(_load_mo_objective_options, run_dir)
             final_test_analysis = await asyncio.to_thread(_build_final_test_analysis_text, run_dir)
             ga_convergence = await asyncio.to_thread(_build_ga_convergence_options, run_dir)
+            state.analysis.mo_objective_options = mo_objectives
             await refresh_mo_section()
         except (OSError, ValueError) as exc:
             summary, body = "Analysis load error", str(exc)
             mo_summary = str(exc)
+            mo_objectives = {}
             final_test_analysis = str(exc)
             ga_convergence = None
+            state.analysis.mo_objective_options = mo_objectives
             _set_mo_hidden(str(exc))
         state.analysis.summary = summary
         state.analysis.body = body
+        state.analysis.mo_objective_options = mo_objectives
         _render_ga_convergence(ga_chart_container, ga_convergence)
         mo_summary_text.value = mo_summary
         mo_summary_text.update()
@@ -139,6 +145,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
                     run_dir,
                     run_dir / "analysis" / "evolution",
                     "evolution",
+                    extra_args=_mo_axis_args(),
                 )
                 if not result.get("ok"):
                     _set_mo_error(str(result.get("error") or result.get("stderr") or "Analysis subprocess failed."))
@@ -161,6 +168,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             state.analysis.mo_animation_path = str(artifact_data.get("animation_path") or "")
             state.analysis.mo_generation_choices = list(artifact_data.get("generation_choices") or [])
             state.analysis.mo_static_plot_paths = dict(artifact_data.get("static_plot_paths") or {})
+            _ensure_mo_axis_selection()
             if state.analysis.mo_selected_generation not in state.analysis.mo_generation_choices:
                 state.analysis.mo_selected_generation = (
                     state.analysis.mo_generation_choices[-1] if state.analysis.mo_generation_choices else ""
@@ -203,6 +211,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         _render_mo_artifacts()
 
     def _refresh_mo_options() -> None:
+        _ensure_mo_axis_selection()
         generation_select.options = list(state.analysis.mo_generation_choices)
         if state.analysis.mo_selected_generation not in state.analysis.mo_generation_choices:
             state.analysis.mo_selected_generation = (
@@ -210,6 +219,31 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             )
         generation_select.value = state.analysis.mo_selected_generation or None
         generation_select.update()
+        x_axis_select.options = dict(state.analysis.mo_objective_options)
+        x_axis_select.value = state.analysis.mo_selected_x_objective or None
+        x_axis_select.update()
+        y_axis_select.options = dict(state.analysis.mo_objective_options)
+        y_axis_select.value = state.analysis.mo_selected_y_objective or None
+        y_axis_select.update()
+
+    def _ensure_mo_axis_selection() -> None:
+        keys = list(state.analysis.mo_objective_options)
+        if not keys:
+            state.analysis.mo_selected_x_objective = ""
+            state.analysis.mo_selected_y_objective = ""
+            return
+        if state.analysis.mo_selected_x_objective not in state.analysis.mo_objective_options:
+            state.analysis.mo_selected_x_objective = keys[0]
+        if state.analysis.mo_selected_y_objective not in state.analysis.mo_objective_options:
+            state.analysis.mo_selected_y_objective = keys[1] if len(keys) > 1 else keys[0]
+
+    def _mo_axis_args() -> list[str]:
+        args: list[str] = []
+        if state.analysis.mo_selected_x_objective:
+            args.extend(["--x-objective", state.analysis.mo_selected_x_objective])
+        if state.analysis.mo_selected_y_objective:
+            args.extend(["--y-objective", state.analysis.mo_selected_y_objective])
+        return args
 
     def _render_mo_artifacts() -> None:
         animation_container.clear()
@@ -282,6 +316,12 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         state.analysis.mo_selected_generation = str(event.value or "")
         _render_mo_artifacts()
 
+    def on_mo_x_axis_changed(event: Any) -> None:
+        state.analysis.mo_selected_x_objective = str(event.value or "")
+
+    def on_mo_y_axis_changed(event: Any) -> None:
+        state.analysis.mo_selected_y_objective = str(event.value or "")
+
     def on_run_changed(event: Any) -> None:
         state.analysis.analysis_selected_run_dir = Path(str(event.value)) if event.value else None
         state.analysis.analysis_run_selected_manually = True
@@ -317,6 +357,12 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
                     ),
                 ).classes(BUTTON_CLASS)
                 generation_select = ui.select([], label="Generation", on_change=on_mo_generation_changed).classes(
+                    f"{INPUT_CLASS} w-64"
+                )
+                x_axis_select = ui.select({}, label="X axis", on_change=on_mo_x_axis_changed).classes(
+                    f"{INPUT_CLASS} w-64"
+                )
+                y_axis_select = ui.select({}, label="Y axis", on_change=on_mo_y_axis_changed).classes(
                     f"{INPUT_CLASS} w-64"
                 )
             mo_summary_text = ui.textarea(value=state.analysis.mo_summary).props("readonly").classes(
@@ -369,14 +415,23 @@ def _build_mo_analysis_text(run_dir: Path | None) -> str:
         log_text = _read_mo_analysis_text(run_dir)
         if not build_analysis_context(log_text).get("is_multi_objective"):
             return "No multi-objective data found."
-        analysis = parse_mo_analysis(log_text)
+        objective_specs = load_run_objective_specs(run_dir, dimension=_fitness_dimension_from_text(log_text))
+        analysis = parse_mo_analysis(log_text, objective_specs=objective_specs)
         if not analysis:
             return "No multi-objective data found."
         lines = [
             f"Pareto front count: {analysis.get('pareto_front_count', 0)}",
         ]
         if analysis.get("objective_names"):
-            lines.append("Objectives: " + ", ".join(str(name) for name in analysis["objective_names"]))
+            labels = {
+                str(spec.get("name")): str(spec.get("axis_label"))
+                for spec in list(analysis.get("objective_specs", []))
+                if isinstance(spec, dict)
+            }
+            lines.append(
+                "Objectives: "
+                + ", ".join(labels.get(str(name), str(name)) for name in analysis["objective_names"])
+            )
         front_rows = list(analysis.get("final_pareto_front_individuals", []))
         if front_rows:
             lines.append("Final Pareto front individuals:")
@@ -404,6 +459,24 @@ def _read_mo_analysis_text(run_dir: Path) -> str:
         for path in sorted(run_dir.glob("generation_*_mo.txt"), key=_generation_sort_key):
             parts.append(path.read_text(encoding="utf-8", errors="replace"))
         return "\n".join(parts)
+
+
+def _load_mo_objective_options(run_dir: Path | None) -> dict[str, str]:
+    """Return configured MO objective select options for the selected run."""
+    if run_dir is None:
+        return {}
+    log_text = _read_mo_analysis_text(run_dir)
+    specs = load_run_objective_specs(run_dir, dimension=_fitness_dimension_from_text(log_text))
+    return {spec.name: spec.axis_label for spec in specs}
+
+
+def _fitness_dimension_from_text(text: str) -> int:
+    """Return the widest fitness vector seen in MO logs."""
+    dimension = 0
+    for match in re.finditer(r"fitness\s*(?:=|:)\s*[\[(]([^\])]+)[\])]", text, flags=re.IGNORECASE):
+        parts = [part.strip() for part in match.group(1).split(",") if part.strip()]
+        dimension = max(dimension, len(parts))
+    return dimension
 
 
 def _render_ga_convergence(container: Any, options: dict[str, Any] | None) -> None:

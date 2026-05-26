@@ -9,10 +9,10 @@ import math
 import re
 from pathlib import Path
 
-from ..config import load_config_from_json
 from ..project import EAGLE_LOGS_DIR, ensure_directory
 from ..utils.checkpoint import deserialize_individual
 from ..evolution.component.log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
+from .objective_metadata import load_run_objective_specs, objective_axis_labels, objective_names
 from ..representation.fitness import fitness_values, normalize_fitness_dict
 
 
@@ -129,7 +129,7 @@ def parse_ga_convergence(log_text) -> dict:
     return result if generations else {}
 
 
-def parse_mo_analysis(log_text) -> dict:
+def parse_mo_analysis(log_text, objective_specs: list | None = None) -> dict:
     """Parse Pareto and objective-level summaries from multi-objective logs."""
     text = str(log_text or "")
     if not build_analysis_context(text).get("is_multi_objective"):
@@ -138,16 +138,28 @@ def parse_mo_analysis(log_text) -> dict:
     if not blocks:
         blocks = [(0, text)]
     final_generation, final_block = blocks[-1]
-    objective_names = _mo_objective_names(text)
-    final_records = _mo_records_from_block(final_block, objective_names)
+    configured_objective_names = objective_names(list(objective_specs or []))
+    parsed_objective_names = _mo_objective_names(text)
+    objective_names_list = configured_objective_names or parsed_objective_names
+    final_records = _mo_records_from_block(final_block, objective_names_list)
     front_one = [record for record in final_records if record.get("front") == 1]
-    objective_best = _mo_objective_best(final_records, objective_names)
-    trends = _mo_objective_trends(blocks, objective_names)
+    objective_best = _mo_objective_best(final_records, objective_names_list)
+    trends = _mo_objective_trends(blocks, objective_names_list)
     result: dict[str, object] = {
         "final_generation": final_generation,
         "pareto_front_count": _mo_front_count(final_block),
         "final_pareto_front_individuals": front_one,
-        "objective_names": objective_names,
+        "objective_names": objective_names_list,
+        "objective_specs": [
+            {
+                "index": spec.index,
+                "name": spec.name,
+                "display_name": spec.display_name,
+                "direction": spec.direction,
+                "axis_label": spec.axis_label,
+            }
+            for spec in list(objective_specs or [])
+        ],
         "objective_best": objective_best,
     }
     if trends:
@@ -277,7 +289,9 @@ def _mo_records_from_block(block: str, objective_names: list[str]) -> list[dict[
         if not objective_names and names:
             objective_names.extend(names)
         if not objective_names:
-            objective_names.extend(f"objective_{index + 1}" for index in range(len(values)))
+            objective_names.extend(f"objective_{index}" for index in range(len(values)))
+        while len(objective_names) < len(values):
+            objective_names.append(f"objective_{len(objective_names)}")
         individual_id = _individual_id_from_line(line) or f"individual_{fallback_index}"
         fallback_index += 1
         records.append(
@@ -300,7 +314,7 @@ def _mo_objective_names(text: str) -> list[str]:
         if names:
             return names
         dimension = max(dimension, len(values))
-    return [f"objective_{index + 1}" for index in range(dimension)] if dimension else []
+    return [f"objective_{index}" for index in range(dimension)] if dimension else []
 
 
 def _mo_objective_best(records: list[dict[str, object]], objective_names: list[str]) -> list[dict[str, object]]:
@@ -1220,19 +1234,6 @@ def _clean_axis_label(label: str) -> str:
     return label.split(".")[-1]
 
 
-def _evolution_objective_labels(run_dir: Path, eval_mode: str = "match") -> tuple[str, str]:
-    """Build axis labels from the run config's ordered gameplay opponents."""
-    if eval_mode == "round":
-        return ("Legal Action Ratio", "Strategy Alignment Score (0-100)")
-
-    config = load_config_from_json(run_dir)
-    opponents = list(getattr(config, "gameplay_opponents", []) or [])
-    labels = [_clean_axis_label(opponent) for opponent in opponents[:2]]
-    while len(labels) < 2:
-        labels.append(f"Objective {len(labels) + 1}")
-    return (f"{labels[0]} Combined Score", f"{labels[1]} Combined Score")
-
-
 def _compose_plot_title(default_title: str, custom_title: str | None) -> str:
     """Compose a plot title with an optional custom prefix."""
     if not custom_title:
@@ -1257,7 +1258,7 @@ def _dominates(left_fitness: list[float], right_fitness: list[float]) -> bool:
     return better_in_any
 
 
-def _objective_names(individuals: list) -> list[str]:
+def _population_objective_names(individuals: list) -> list[str]:
     """Return objective names present in a population without assuming count."""
     names: list[str] = []
     for individual in individuals:
@@ -1267,25 +1268,27 @@ def _objective_names(individuals: list) -> list[str]:
     return names or ["objective_0", "objective_1"]
 
 
-def _xy_fitness(individual, objective_names: list[str]) -> tuple[float, float]:
-    """Return the first two objective values for scatter plotting."""
+def _xy_fitness(individual, objective_names: list[str], x_objective: str, y_objective: str) -> tuple[float, float]:
+    """Return selected objective values for scatter plotting."""
     values = fitness_values(getattr(individual, "fitness", {}), objective_names)
-    x_value = _safe_float(values[0]) if len(values) > 0 else float("nan")
-    y_value = _safe_float(values[1]) if len(values) > 1 else float("nan")
+    x_index = objective_names.index(x_objective) if x_objective in objective_names else 0
+    y_index = objective_names.index(y_objective) if y_objective in objective_names else 1
+    x_value = _safe_float(values[x_index]) if len(values) > x_index else float("nan")
+    y_value = _safe_float(values[y_index]) if len(values) > y_index else float("nan")
     return x_value, y_value
 
 
 def _front_one_ids_from_population(individuals: list) -> set[str]:
     """Compute Front-1 ids directly from one population snapshot."""
     front_one: list = []
-    objective_names = _objective_names(individuals)
+    objective_names_list = _population_objective_names(individuals)
     for candidate in individuals:
-        candidate_fitness = fitness_values(getattr(candidate, "fitness", {}), objective_names)
+        candidate_fitness = fitness_values(getattr(candidate, "fitness", {}), objective_names_list)
         dominated = False
         for other in individuals:
             if other is candidate:
                 continue
-            other_fitness = fitness_values(getattr(other, "fitness", {}), objective_names)
+            other_fitness = fitness_values(getattr(other, "fitness", {}), objective_names_list)
             if _dominates(other_fitness, candidate_fitness):
                 dominated = True
                 break
@@ -1371,20 +1374,35 @@ def _plot_generation_scatter(
     custom_title: str | None = None,
     debug: bool = False,
     eval_mode: str = "match",
+    x_objective: str | None = None,
+    y_objective: str | None = None,
 ) -> list[Path]:
     """Render one combined plot plus one per-generation plot."""
     plt = _require_matplotlib()
     generation_entries = _load_generation_entries(run_dir, debug=debug)
-    evolution_objective_labels = _evolution_objective_labels(run_dir, eval_mode=eval_mode)
     if not generation_entries:
         return []
 
     all_x_values: list[float] = []
     all_y_values: list[float] = []
-    objective_names = _objective_names([individual for _, individuals, _ in generation_entries for individual in individuals])
+    all_individuals = [individual for _, individuals, _ in generation_entries for individual in individuals]
+    data_objective_names = _population_objective_names(all_individuals)
+    specs = load_run_objective_specs(run_dir, dimension=len(data_objective_names))
+    configured_names = objective_names(specs)
+    objective_names_list = configured_names or data_objective_names
+    for name in data_objective_names:
+        if name not in objective_names_list:
+            objective_names_list.append(name)
+    if len(objective_names_list) < 2:
+        return []
+    selected_x = x_objective if x_objective in objective_names_list else objective_names_list[0]
+    selected_y = y_objective if y_objective in objective_names_list else objective_names_list[1]
+    axis_labels = objective_axis_labels(specs)
+    x_label = axis_labels.get(selected_x, selected_x)
+    y_label = axis_labels.get(selected_y, selected_y)
     for _, individuals, _ in generation_entries:
         for individual in individuals:
-            x_value, y_value = _xy_fitness(individual, objective_names)
+            x_value, y_value = _xy_fitness(individual, objective_names_list, selected_x, selected_y)
             if math.isnan(x_value) or math.isnan(y_value):
                 continue
             all_x_values.append(x_value)
@@ -1418,7 +1436,7 @@ def _plot_generation_scatter(
         front_one_pairs = []
 
         for individual in individuals:
-            x_value, y_value = _xy_fitness(individual, objective_names)
+            x_value, y_value = _xy_fitness(individual, objective_names_list, selected_x, selected_y)
             _debug_print(
                 debug,
                 f"Gen {generation_number} - Individual {getattr(individual, 'id', '')}: "
@@ -1484,8 +1502,8 @@ def _plot_generation_scatter(
                 label="Front 1",
             )
 
-        plt.xlabel(evolution_objective_labels[0])
-        plt.ylabel(evolution_objective_labels[1])
+        plt.xlabel(x_label)
+        plt.ylabel(y_label)
         plt.title(_compose_plot_title(f"Generation {generation_number} Fitness Distribution", custom_title))
         plt.xlim(*x_limits)
         plt.ylim(*y_limits)
@@ -1500,8 +1518,8 @@ def _plot_generation_scatter(
         figure_paths.append(per_generation_path)
 
     # ===== combined plot =====
-    plt.xlabel(evolution_objective_labels[0])
-    plt.ylabel(evolution_objective_labels[1])
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
     plt.title(_compose_plot_title("Generation Fitness Distribution", custom_title))
     plt.xlim(*x_limits)
     plt.ylim(*y_limits)
@@ -1623,6 +1641,8 @@ def analyze_evolution_run(
     title: str | None = None,
     debug: bool = False,
     eval_mode: str = "match",
+    x_objective: str | None = None,
+    y_objective: str | None = None,
 ) -> dict[str, object]:
     """Generate evolution scatter plots and final-test resource heatmaps."""
     if eval_mode not in {"match", "round"}:
@@ -1639,6 +1659,8 @@ def analyze_evolution_run(
         custom_title=title,
         debug=debug,
         eval_mode=eval_mode,
+        x_objective=x_objective,
+        y_objective=y_objective,
     )
     generation_gif_path = _build_generation_gif(
         generation_figures,
@@ -1669,6 +1691,18 @@ def analyze_evolution_run(
         "title": title,
         "debug": debug,
         "eval_mode": eval_mode,
+        "x_objective": x_objective,
+        "y_objective": y_objective,
+        "objective_specs": [
+            {
+                "index": spec.index,
+                "name": spec.name,
+                "display_name": spec.display_name,
+                "direction": spec.direction,
+                "axis_label": spec.axis_label,
+            }
+            for spec in load_run_objective_specs(resolved_run_dir)
+        ],
     }
     summary_path = resolved_output_dir / "analysis_summary.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1689,6 +1723,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default="match",
         help="Use 'round' for MicroRTS round legality/alignment objectives.",
     )
+    parser.add_argument("--x-objective", default=None, help="Objective key for the scatter plot X axis.")
+    parser.add_argument("--y-objective", default=None, help="Objective key for the scatter plot Y axis.")
     return parser
 
 
@@ -1702,6 +1738,8 @@ def main() -> None:
         title=args.title,
         debug=args.debug,
         eval_mode=args.eval_mode,
+        x_objective=args.x_objective,
+        y_objective=args.y_objective,
     )
     _debug_print(args.debug, json.dumps(summary, ensure_ascii=False, indent=2))
 

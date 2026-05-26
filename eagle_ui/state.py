@@ -161,6 +161,9 @@ class AnalysisState:
     mo_generation_choices: list[str] = field(default_factory=list)
     mo_selected_generation: str = ""
     mo_static_plot_paths: dict[str, str] = field(default_factory=dict)
+    mo_objective_options: dict[str, str] = field(default_factory=dict)
+    mo_selected_x_objective: str = ""
+    mo_selected_y_objective: str = ""
 
 
 @dataclass
