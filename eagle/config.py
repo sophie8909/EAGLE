@@ -163,7 +163,7 @@ class EAConfig:
 
 
     def __post_init__(self) -> None:
-        """Normalize aliases and validate the config surface eagerly."""
+        """Normalize current selectors and validate the config surface eagerly."""
         self._normalize_crossover()
         self.validate()
 

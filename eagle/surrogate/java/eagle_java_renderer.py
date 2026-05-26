@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 from ...project import PROJECT_ROOT
 from ..compiler.eagle_policy_spec import compile_prompt_to_eagle_policy_spec
