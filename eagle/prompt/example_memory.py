@@ -14,16 +14,17 @@ from eagle.envs.microrts.parser import extract_opponent_action_examples_from_log
 class ExampleMemory:
     """Bounded deduplicated memory of schema-valid action examples."""
 
+    DEFAULT_MAX_EXAMPLES = 20
     REQUIRED_MOVE_FIELDS = ("raw_move", "unit_position", "unit_type", "action_type")
 
     def __init__(
         self,
-        max_examples: int = 32,
+        max_examples: int = DEFAULT_MAX_EXAMPLES,
         initial_examples: Iterable[dict[str, Any]] | None = None,
         pool_path: str | Path | None = None,
     ):
         """Create a bounded memory pool and optionally seed it with examples."""
-        self.max_examples = max(1, int(max_examples))
+        self.max_examples = min(self.DEFAULT_MAX_EXAMPLES, max(1, int(max_examples)))
         self.pool_path = Path(pool_path) if pool_path is not None else None
         self._examples_by_key: OrderedDict[tuple[str, str, str], dict[str, Any]] = OrderedDict()
         self.load()
@@ -47,12 +48,18 @@ class ExampleMemory:
                 self._examples_by_key.move_to_end(key)
                 continue
             self._examples_by_key[key] = normalized
-            added += 1
-            while len(self._examples_by_key) > self.max_examples:
-                self._examples_by_key.popitem(last=False)
+            self._discard_random_excess()
+            if key in self._examples_by_key:
+                added += 1
         if added:
             self.save()
         return added
+
+    def _discard_random_excess(self) -> None:
+        """Randomly discard examples until the pool is within its configured limit."""
+        while len(self._examples_by_key) > self.max_examples:
+            discard_key = random.choice(list(self._examples_by_key.keys()))
+            del self._examples_by_key[discard_key]
 
     def add_from_game_log(self, log_path: str | Path | None) -> int:
         """Read one MicroRTS log and add opponent action examples from it."""
@@ -62,6 +69,49 @@ class ExampleMemory:
         if not path.exists():
             return 0
         return self.add_examples(extract_opponent_action_examples_from_log(path))
+
+    def add_from_round_evaluation(self, evaluation: dict[str, Any] | None) -> int:
+        """Add examples from round-surrogate evaluation samples."""
+        if not isinstance(evaluation, dict):
+            return 0
+        samples = evaluation.get("samples")
+        if not isinstance(samples, list):
+            return 0
+        examples: list[dict[str, Any]] = []
+        for sample in samples:
+            if not isinstance(sample, dict):
+                continue
+            if sample.get("format_valid") is False:
+                continue
+            parsed_response = sample.get("parsed_response")
+            if not isinstance(parsed_response, dict):
+                continue
+            moves = parsed_response.get("moves")
+            if not isinstance(moves, list):
+                continue
+            normalized_moves = [
+                move for move in (self.normalize_move(move) for move in moves) if move is not None
+            ]
+            if not normalized_moves:
+                continue
+            dynamic_prompt = str(sample.get("dynamic_prompt") or "").strip()
+            thinking = str(parsed_response.get("thinking") or "round_evaluation_example")
+            payload = {
+                "thinking": thinking,
+                "moves": normalized_moves,
+            }
+            content: list[str] = []
+            if dynamic_prompt:
+                content.extend(["INPUT:", *dynamic_prompt.splitlines(), ""])
+            content.extend(["OUTPUT:", *json.dumps(payload, ensure_ascii=False, indent=2).splitlines()])
+            examples.append(
+                {
+                    "name": self._move_name(normalized_moves[0]),
+                    "content": content,
+                    "moves": normalized_moves,
+                }
+            )
+        return self.add_examples(examples)
 
     def sample(self, max_examples: int) -> list[dict[str, Any]]:
         """Sample examples from the runtime JSONL-backed pool."""

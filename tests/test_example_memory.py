@@ -23,6 +23,51 @@ class ExampleMemoryTests(unittest.TestCase):
         self.assertEqual(memory.examples[0]["moves"][0]["unit_type"], "worker")
         self.assertEqual(memory.examples[0]["moves"][0]["action_type"], "harvest")
 
+    def test_keeps_pool_within_twenty_by_default(self) -> None:
+        memory = ExampleMemory(max_examples=25)
+
+        memory.add_examples(
+            {
+                "raw_move": f"({index},0): worker move({index},1)",
+                "unit_position": [index, 0],
+                "unit_type": "worker",
+                "action_type": "move",
+            }
+            for index in range(25)
+        )
+
+        self.assertLessEqual(len(memory.examples), 20)
+
+    def test_adds_examples_from_round_evaluation_samples(self) -> None:
+        memory = ExampleMemory(max_examples=4)
+
+        added = memory.add_from_round_evaluation(
+            {
+                "samples": [
+                    {
+                        "format_valid": True,
+                        "dynamic_prompt": "Map size: 8x8",
+                        "parsed_response": {
+                            "thinking": "build worker",
+                            "moves": [
+                                {
+                                    "raw_move": "(2,1): base train(worker)",
+                                    "unit_position": [2, 1],
+                                    "unit_type": "base",
+                                    "action_type": "train",
+                                }
+                            ],
+                        },
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(added, 1)
+        self.assertEqual(memory.examples[0]["moves"][0]["action_type"], "train")
+        self.assertIn("INPUT:", memory.examples[0]["content"])
+        self.assertIn("OUTPUT:", memory.examples[0]["content"])
+
     def test_renders_individual_examples_at_training_example_position(self) -> None:
         pool = ComponentPool(
             {

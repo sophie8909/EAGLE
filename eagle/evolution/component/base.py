@@ -316,7 +316,7 @@ class EA:
             max_examples=getattr(
                 self.config,
                 "example_memory_max_examples",
-                self.component_pool.MAX_TRAINING_EXAMPLES_PER_RENDER * 8,
+                ExampleMemory.DEFAULT_MAX_EXAMPLES,
             ),
             initial_examples=getattr(self.component_pool, "initial_training_examples", []),
             pool_path=self._examples_pool_path(),
@@ -704,8 +704,10 @@ class EA:
         return (int(generation) + 1) % max(1, interval) == 0
 
     def _add_examples_from_individual(self, individual: Individual) -> int:
-        """Add memory examples from the latest known evaluation payload."""
-        added = 0
+        """Add examples from round samples first, then game logs with JSON moves."""
+        added = self.example_memory.add_from_round_evaluation(
+            getattr(individual, "last_round_evaluation", None)
+        )
         for log_path in self._individual_game_log_paths(individual):
             added += self.example_memory.add_from_game_log(log_path)
         return added

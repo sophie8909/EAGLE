@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import re
 import signal
 import socket
@@ -23,6 +24,7 @@ from eagle.analysis.evolution_result_analysis import parse_final_test_analysis
 from eagle.eval.microrts.final_test_batch import run_final_test_batch
 from eagle.objectives.registry import get_objectives, list_objective_names, normalize_objective_key
 from eagle.operators.registry import list_operator_names
+from eagle.prompt.example_memory import ExampleMemory
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.token_count import count_prompt_tokens
 from eagle_gui.services import analysis_service, config_service, process_service
@@ -256,10 +258,11 @@ def save_example_records(state: Any, records: list[dict[str, Any]]) -> Path:
     """Write editable example records back to the runtime examples JSONL pool."""
     path = examples_pool_path(state)
     path.parent.mkdir(parents=True, exist_ok=True)
+    valid_records = [record for record in records if isinstance(record, dict)]
+    if len(valid_records) > ExampleMemory.DEFAULT_MAX_EXAMPLES:
+        valid_records = random.sample(valid_records, ExampleMemory.DEFAULT_MAX_EXAMPLES)
     with path.open("w", encoding="utf-8") as stream:
-        for index, record in enumerate(records):
-            if not isinstance(record, dict):
-                continue
+        for index, record in enumerate(valid_records):
             payload = {
                 "name": str(record.get("name") or f"example_{index}"),
                 "content": [
