@@ -26,6 +26,7 @@ def build_examples_view(state: Any) -> dict[str, Any]:
     """Build the editable runtime examples view."""
     controls: dict[str, Any] = {}
     records: list[dict[str, Any]] = []
+    validation_logs: list[dict[str, Any]] = []
     selected_id: str | None = None
 
     def option_map() -> dict[str, str]:
@@ -70,6 +71,10 @@ def build_examples_view(state: Any) -> dict[str, Any]:
         example_select.value = selected_id
         example_select.update()
         empty_label.set_visibility(not records)
+        invalid_logs_checkbox.set_visibility(bool(validation_logs))
+        invalid_logs_editor.set_visibility(bool(validation_logs) and bool(invalid_logs_checkbox.value))
+        invalid_logs_editor.value = _render_validation_logs(validation_logs)
+        invalid_logs_editor.update()
         load_record_into_editor()
 
     def set_example_bound(field_name: str, value: Any) -> None:
@@ -81,10 +86,33 @@ def build_examples_view(state: Any) -> dict[str, Any]:
     def set_example_mutation_source_weight(key: str, value: Any) -> None:
         state.operators.example_mutation_source_weights[key] = str(value or "0").strip()
 
+    def toggle_invalid_logs(event: Any) -> None:
+        invalid_logs_editor.set_visibility(bool(validation_logs) and bool(event.value))
+
+    def _render_validation_logs(rows: list[dict[str, Any]]) -> str:
+        lines: list[str] = []
+        for row in rows[-50:]:
+            errors = row.get("errors")
+            error_text = "; ".join(str(error) for error in errors) if isinstance(errors, list) else str(errors or "")
+            lines.append(
+                " ".join(
+                    part
+                    for part in (
+                        f"generation={row.get('generation', '')}",
+                        f"round_id={row.get('round_id', '')}",
+                        f"legality_level={row.get('legality_level', '')}",
+                        error_text,
+                    )
+                    if part
+                )
+            )
+        return "\n".join(lines)
+
     async def refresh() -> None:
-        nonlocal records, selected_id
+        nonlocal records, selected_id, validation_logs
         previous_selected_id = selected_id
         path, loaded_records = await asyncio.to_thread(services.load_example_records, state)
+        _, validation_logs = await asyncio.to_thread(services.load_examples_validation_logs, state)
         records = loaded_records
         selected_id = previous_selected_id
         clamp_selected_index()
@@ -135,6 +163,9 @@ def build_examples_view(state: Any) -> dict[str, Any]:
                     "  ]",
                     "}",
                 ],
+                "source": "manual",
+                "validator_passed": True,
+                "legality_level": "manual",
             }
         )
         refresh_widgets()
@@ -205,6 +236,14 @@ def build_examples_view(state: Any) -> dict[str, Any]:
                 ).props("type=number min=0 step=0.05").classes(f"{INPUT_CLASS} w-32")
         path_label = ui.label("").classes(MUTED_CLASS)
         empty_label = ui.label("No runtime examples found.").classes(MUTED_CLASS)
+        invalid_logs_checkbox = ui.checkbox(
+            "Show invalid/skipped logs",
+            value=False,
+            on_change=toggle_invalid_logs,
+        )
+        invalid_logs_editor = ui.textarea("Invalid/skipped logs").props("readonly").classes(f"{TEXTAREA_CLASS} {height_class(180)} w-full")
+        invalid_logs_checkbox.set_visibility(False)
+        invalid_logs_editor.set_visibility(False)
         with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
             example_select = ui.select([], label="Example", on_change=select_example).classes(f"{INPUT_CLASS} grow")
             ui.button("Add", on_click=safe_click(add_example, label="Add example")).classes(BUTTON_CLASS)

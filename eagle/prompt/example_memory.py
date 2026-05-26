@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import random
 from collections import OrderedDict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -72,33 +73,56 @@ class ExampleMemory:
 
     def add_from_round_evaluation(self, evaluation: dict[str, Any] | None) -> int:
         """Add examples from round-surrogate evaluation samples."""
-        return self.add_examples(self.examples_from_round_evaluation(evaluation))
+        examples, validation_logs = self._examples_and_validation_logs_from_round_evaluation(evaluation)
+        self._append_validation_logs(validation_logs)
+        return self.add_examples(examples)
 
     def examples_from_round_evaluation(self, evaluation: dict[str, Any] | None) -> list[dict[str, Any]]:
         """Build examples from round-surrogate evaluation samples without storing them."""
+        examples, _ = self._examples_and_validation_logs_from_round_evaluation(evaluation)
+        return examples
+
+    def _examples_and_validation_logs_from_round_evaluation(
+        self,
+        evaluation: dict[str, Any] | None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Build validated round examples and skipped-response log records."""
         if not isinstance(evaluation, dict):
-            return []
+            return [], []
         samples = evaluation.get("samples")
         if not isinstance(samples, list):
-            return []
+            return [], []
         examples: list[dict[str, Any]] = []
+        validation_logs: list[dict[str, Any]] = []
+        generation = evaluation.get("generation")
+        from eagle.eval.microrts.response_validator import validate_llm_response
+
         for sample in samples:
             if not isinstance(sample, dict):
                 continue
-            if sample.get("format_valid") is False:
+            dynamic_prompt = str(sample.get("dynamic_prompt") or "").strip()
+            response_text = self._round_sample_response_text(sample)
+            validation = validate_llm_response(response_text, dynamic_prompt)
+            sample_generation = sample.get("generation", generation)
+            round_id = sample.get("round_id", sample.get("sample", sample.get("turn")))
+            if validation.errors:
+                validation_logs.append(
+                    {
+                        "source": "round",
+                        "generation": sample_generation,
+                        "round_id": round_id,
+                        "turn": sample.get("turn"),
+                        "validator_passed": validation.is_valid,
+                        "legality_level": validation.legality_level,
+                        "errors": list(validation.errors),
+                    }
+                )
+            if not validation.valid_moves:
                 continue
-            parsed_response = sample.get("parsed_response")
-            if not isinstance(parsed_response, dict):
-                continue
-            moves = parsed_response.get("moves")
-            if not isinstance(moves, list):
-                continue
-            normalized_moves = [
-                move for move in (self.normalize_move(move) for move in moves) if move is not None
-            ]
+            normalized_moves = [move for move in (self.normalize_move(move) for move in validation.valid_moves) if move is not None]
             if not normalized_moves:
                 continue
-            dynamic_prompt = str(sample.get("dynamic_prompt") or "").strip()
+            parsed_response = validation.parsed_response if isinstance(validation.parsed_response, dict) else {}
             thinking = str(parsed_response.get("thinking") or "round_evaluation_example")
             payload = {
                 "thinking": thinking,
@@ -113,9 +137,39 @@ class ExampleMemory:
                     "name": self._move_name(normalized_moves[0]),
                     "content": content,
                     "moves": normalized_moves,
+                    "source": "round",
+                    "generation": sample_generation,
+                    "round_id": round_id,
+                    "turn": sample.get("turn"),
+                    "validator_passed": True,
+                    "legality_level": validation.legality_level,
                 }
             )
-        return examples
+        return examples, validation_logs
+
+    @staticmethod
+    def _round_sample_response_text(sample: dict[str, Any]) -> str:
+        raw_response = sample.get("raw_response")
+        if isinstance(raw_response, str) and raw_response.strip():
+            return raw_response
+        parsed_response = sample.get("parsed_response")
+        if isinstance(parsed_response, dict):
+            return json.dumps(parsed_response, ensure_ascii=False)
+        return ""
+
+    def _append_validation_logs(self, records: list[dict[str, Any]]) -> None:
+        """Append skipped/invalid response records next to the examples pool."""
+        if not records or self.pool_path is None:
+            return
+        log_path = self.pool_path.with_name("examples_validation.jsonl")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as stream:
+            for record in records:
+                payload = {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    **record,
+                }
+                stream.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
     def sample(self, max_examples: int) -> list[dict[str, Any]]:
         """Sample examples from the runtime JSONL-backed pool."""
@@ -187,11 +241,15 @@ class ExampleMemory:
         content = example.get("content")
         if not isinstance(content, list):
             content = cls.render_content(normalized_moves)
-        return {
+        normalized = {
             "name": name,
             "content": [str(line) for line in content],
             "moves": normalized_moves,
         }
+        for key in ("source", "generation", "round_id", "turn", "validator_passed", "legality_level"):
+            if key in example:
+                normalized[key] = example.get(key)
+        return normalized
 
     @classmethod
     def normalize_move(cls, move: Any) -> dict[str, Any] | None:

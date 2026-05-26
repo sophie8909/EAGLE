@@ -215,6 +215,8 @@ def load_examples_pool(state: Any) -> tuple[Path, list[dict[str, Any]]]:
                 record = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if record.get("validator_passed") is not True:
+                continue
             for move_index, move in enumerate(_example_record_moves(record), start=1):
                 rows.append(
                     {
@@ -226,6 +228,32 @@ def load_examples_pool(state: Any) -> tuple[Path, list[dict[str, Any]]]:
                         "action_type": str(move.get("action_type", "")),
                     }
                 )
+    return path, rows
+
+
+def examples_validation_log_path(state: Any) -> Path:
+    """Return the validation log path paired with the active examples pool."""
+    return examples_pool_path(state).with_name("examples_validation.jsonl")
+
+
+def load_examples_validation_logs(state: Any) -> tuple[Path, list[dict[str, Any]]]:
+    """Load invalid/skipped example-validation records when the log exists."""
+    path = examples_validation_log_path(state)
+    if not path.exists():
+        return path, []
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as stream:
+        for index, line in enumerate(stream, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(record, dict):
+                record.setdefault("id", str(index))
+                rows.append(record)
     return path, rows
 
 
@@ -246,14 +274,18 @@ def load_example_records(state: Any) -> tuple[Path, list[dict[str, Any]]]:
                 continue
             if not isinstance(record, dict):
                 continue
+            if record.get("validator_passed") is not True:
+                continue
             content = record.get("content", [])
-            records.append(
-                {
-                    "id": str(index),
-                    "name": str(record.get("name", f"example_{index}")),
-                    "content": [str(item) for item in content] if isinstance(content, list) else [str(content)],
-                }
-            )
+            loaded = {
+                "id": str(index),
+                "name": str(record.get("name", f"example_{index}")),
+                "content": [str(item) for item in content] if isinstance(content, list) else [str(content)],
+            }
+            for key in ("moves", "source", "generation", "round_id", "turn", "validator_passed", "legality_level"):
+                if key in record:
+                    loaded[key] = record.get(key)
+            records.append(loaded)
     return path, records
 
 
@@ -273,6 +305,9 @@ def save_example_records(state: Any, records: list[dict[str, Any]]) -> Path:
                     for line in list(record.get("content") or [])
                 ],
             }
+            for key in ("moves", "source", "generation", "round_id", "turn", "validator_passed", "legality_level"):
+                if key in record:
+                    payload[key] = record.get(key)
             stream.write(json.dumps(payload, ensure_ascii=False) + "\n")
     return path
 

@@ -386,6 +386,8 @@ class Evaluator:
 
         sample_record = {
             "sample": sample_index,
+            "round_id": sample_index,
+            "generation": generation,
             "dynamic_prompt": dynamic_prompt,
             "full_prompt": full_prompt,
             "raw_response": raw_response,

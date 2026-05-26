@@ -51,7 +51,7 @@ class ExampleMemoryTests(unittest.TestCase):
                 "samples": [
                     {
                         "format_valid": True,
-                        "dynamic_prompt": "Map size: 8x8",
+                        "dynamic_prompt": "Map size: 8x8\nFeature locations:\n(2, 1) Ally Base Unit {resources=5, current_action=\"idling\", HP=10}",
                         "parsed_response": {
                             "thinking": "build worker",
                             "moves": [
@@ -70,8 +70,44 @@ class ExampleMemoryTests(unittest.TestCase):
 
         self.assertEqual(added, 1)
         self.assertEqual(memory.examples[0]["moves"][0]["action_type"], "train")
+        self.assertEqual(memory.examples[0]["source"], "round")
+        self.assertTrue(memory.examples[0]["validator_passed"])
         self.assertIn("INPUT:", memory.examples[0]["content"])
         self.assertIn("OUTPUT:", memory.examples[0]["content"])
+
+    def test_logs_invalid_round_examples_without_pooling_them(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            pool_path = Path(tmp_dir) / "examples_pool.jsonl"
+            memory = ExampleMemory(max_examples=4, pool_path=pool_path)
+
+            added = memory.add_from_round_evaluation(
+                {
+                    "generation": 3,
+                    "samples": [
+                        {
+                            "sample": 2,
+                            "dynamic_prompt": "Map size: 8x8\nFeature locations:\n(1, 1) Ally Worker Unit {current_action=\"idling\", HP=1}",
+                            "parsed_response": {
+                                "thinking": "bad action label",
+                                "moves": [
+                                    {
+                                        "raw_move": "(1,1): worker move(1,2)",
+                                        "unit_position": [1, 1],
+                                        "unit_type": "worker",
+                                        "action_type": "attack",
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            )
+
+            self.assertEqual(added, 0)
+            self.assertEqual(memory.examples, [])
+            log_path = pool_path.with_name("examples_validation.jsonl")
+            self.assertTrue(log_path.exists())
+            self.assertIn("action_type does not match raw_move action", log_path.read_text(encoding="utf-8"))
 
     def test_can_switch_to_runtime_pool_file(self) -> None:
         memory = ExampleMemory(max_examples=4)
@@ -227,6 +263,7 @@ class ExampleMemoryTests(unittest.TestCase):
             "samples": [
                 {
                     "format_valid": True,
+                    "dynamic_prompt": "Map size: 8x8\nFeature locations:\n(4, 1) Ally Base Unit {resources=5, current_action=\"idling\", HP=10}",
                     "parsed_response": {
                         "moves": [
                             {
@@ -240,6 +277,7 @@ class ExampleMemoryTests(unittest.TestCase):
                 },
                 {
                     "format_valid": True,
+                    "dynamic_prompt": "Map size: 8x8\nFeature locations:\n(5, 1) Ally Worker Unit {current_action=\"idling\", HP=1}",
                     "parsed_response": {
                         "moves": [
                             {
