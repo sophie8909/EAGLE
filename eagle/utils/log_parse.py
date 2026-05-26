@@ -965,6 +965,8 @@ def extract_action_examples(parsed_log: dict[str, Any]) -> list[dict[str, Any]]:
     for move_result in list(parsed_log.get("all_move_results") or []):
         if not isinstance(move_result, dict):
             continue
+        if move_result.get("status") != "applied_success":
+            continue
         move = move_result.get("llm_move_raw")
         if not isinstance(move, dict):
             move = move_result

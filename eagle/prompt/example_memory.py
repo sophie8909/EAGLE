@@ -56,6 +56,68 @@ class ExampleMemory:
             self.save()
         return added
 
+    def add_generation_examples(self, examples: Iterable[dict[str, Any]], *, rng: Any = random) -> int:
+        """Add one generation's valid examples using bounded replacement rules."""
+        candidates = self._new_normalized_candidates(examples)
+        if not candidates:
+            return 0
+
+        capacity = self.max_examples - len(self._examples_by_key)
+        if capacity > 0:
+            selected = self._prioritized_sample(candidates, capacity, rng=rng)
+            replace_existing = False
+        else:
+            selected = self._prioritized_sample(candidates, 10, rng=rng)
+            replace_existing = True
+
+        added = 0
+        inserted_keys: set[tuple[str, str, str]] = set()
+        for example in selected:
+            key = self.example_key(example)
+            if key in self._examples_by_key:
+                continue
+            if replace_existing and self._examples_by_key:
+                discard_candidates = [candidate_key for candidate_key in self._examples_by_key.keys() if candidate_key not in inserted_keys]
+                discard_key = rng.choice(discard_candidates or list(self._examples_by_key.keys()))
+                del self._examples_by_key[discard_key]
+            self._examples_by_key[key] = example
+            inserted_keys.add(key)
+            added += 1
+
+        if added:
+            self.save()
+        return added
+
+    def _new_normalized_candidates(self, examples: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Normalize and deduplicate candidates not already in the pool."""
+        candidates_by_key: OrderedDict[tuple[str, str, str], dict[str, Any]] = OrderedDict()
+        existing = set(self._examples_by_key.keys())
+        for example in examples:
+            normalized = self.normalize_example(example)
+            if normalized is None or normalized.get("validator_passed") is not True:
+                continue
+            key = self.example_key(normalized)
+            if key in existing or key in candidates_by_key:
+                continue
+            candidates_by_key[key] = normalized
+        return list(candidates_by_key.values())
+
+    @staticmethod
+    def _prioritized_sample(examples: list[dict[str, Any]], limit: int, *, rng: Any = random) -> list[dict[str, Any]]:
+        """Sample candidates with real-eval examples taking priority."""
+        limit = min(max(0, int(limit)), len(examples))
+        if limit <= 0:
+            return []
+        real_eval = [example for example in examples if example.get("source") == "real_eval"]
+        other = [example for example in examples if example.get("source") != "real_eval"]
+        if len(real_eval) >= limit:
+            return rng.sample(real_eval, limit)
+        selected = list(real_eval)
+        remaining = limit - len(selected)
+        if remaining > 0:
+            selected.extend(rng.sample(other, min(remaining, len(other))))
+        return selected
+
     def _discard_random_excess(self) -> None:
         """Randomly discard examples until the pool is within its configured limit."""
         while len(self._examples_by_key) > self.max_examples:
@@ -64,22 +126,45 @@ class ExampleMemory:
 
     def add_from_game_log(self, log_path: str | Path | None) -> int:
         """Read one MicroRTS log and add opponent action examples from it."""
+        return self.add_examples(self.examples_from_game_log(log_path))
+
+    def examples_from_game_log(self, log_path: str | Path | None) -> list[dict[str, Any]]:
+        """Read one MicroRTS log and return validated real-eval action examples."""
         if not log_path:
-            return 0
+            return []
         path = Path(log_path)
         if not path.exists():
-            return 0
-        return self.add_examples(extract_opponent_action_examples_from_log(path))
+            return []
+        examples: list[dict[str, Any]] = []
+        for move in extract_opponent_action_examples_from_log(path):
+            normalized = self.normalize_move(move)
+            if normalized is None:
+                continue
+            examples.append(
+                {
+                    "name": self._move_name(normalized),
+                    "content": self.render_content([normalized]),
+                    "moves": [normalized],
+                    "source": "real_eval",
+                    "validator_passed": True,
+                    "legality_level": "execution_log",
+                }
+            )
+        return examples
 
     def add_from_round_evaluation(self, evaluation: dict[str, Any] | None) -> int:
         """Add examples from round-surrogate evaluation samples."""
-        examples, validation_logs = self._examples_and_validation_logs_from_round_evaluation(evaluation)
-        self._append_validation_logs(validation_logs)
-        return self.add_examples(examples)
+        return self.add_examples(self.collect_from_round_evaluation(evaluation))
 
     def examples_from_round_evaluation(self, evaluation: dict[str, Any] | None) -> list[dict[str, Any]]:
         """Build examples from round-surrogate evaluation samples without storing them."""
         examples, _ = self._examples_and_validation_logs_from_round_evaluation(evaluation)
+        return examples
+
+    def collect_from_round_evaluation(self, evaluation: dict[str, Any] | None) -> list[dict[str, Any]]:
+        """Build round examples and append validation logs for skipped responses."""
+        examples, validation_logs = self._examples_and_validation_logs_from_round_evaluation(evaluation)
+        self._append_validation_logs(validation_logs)
         return examples
 
     def _examples_and_validation_logs_from_round_evaluation(
@@ -285,13 +370,15 @@ class ExampleMemory:
         move = moves[0] if isinstance(moves, list) and moves else example
         normalized = cls.normalize_move(move) or {
             "raw_move": "",
-            "unit_type": "",
+            "unit_position": [],
             "action_type": "",
         }
+        unit_position = normalized.get("unit_position")
+        position_key = ",".join(str(value) for value in unit_position) if isinstance(unit_position, list) else ""
         return (
             normalized["raw_move"].strip().lower(),
+            position_key,
             normalized["action_type"].strip().lower(),
-            normalized["unit_type"].strip().lower(),
         )
 
     @staticmethod

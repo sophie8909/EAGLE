@@ -419,9 +419,14 @@ def training_example_key(example: dict) -> str:
     move = moves[0] if isinstance(moves, list) and moves else {}
     if not isinstance(move, dict):
         move = {}
+    unit_position = move.get("unit_position")
+    position_key = ",".join(str(value) for value in unit_position) if isinstance(unit_position, list) else ""
     key = "|".join(
-        str(move.get(field, "")).strip().lower()
-        for field in ("raw_move", "action_type", "unit_type")
+        (
+            str(move.get("raw_move", "")).strip().lower(),
+            position_key,
+            str(move.get("action_type", "")).strip().lower(),
+        )
     )
     if key.strip("|"):
         return key

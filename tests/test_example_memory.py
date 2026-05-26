@@ -2,7 +2,6 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
 
 from eagle.evolution.component.base import EA
 from eagle.evolution.component.individual import Individual
@@ -251,10 +250,10 @@ class ExampleMemoryTests(unittest.TestCase):
 
         mutated = algorithm._mutate_training_examples_from_memory(current_examples)
 
-        self.assertEqual(len(mutated), 1)
-        self.assertEqual(mutated[0]["moves"][0]["raw_move"], "(3,1): base train(worker)")
+        self.assertEqual(len(mutated), 2)
+        self.assertEqual(mutated[1]["moves"][0]["raw_move"], "(3,1): base train(worker)")
 
-    def test_example_mutation_can_generate_fresh_example_from_previous_round(self) -> None:
+    def test_example_mutation_ignores_fresh_round_examples_when_pool_is_empty(self) -> None:
         algorithm = object.__new__(EA)
         algorithm.config = SimpleNamespace(max_examples=2)
         algorithm.example_memory = ExampleMemory(max_examples=4)
@@ -318,17 +317,64 @@ class ExampleMemoryTests(unittest.TestCase):
             }
         ]
 
-        with patch("eagle.evolution.component.base.random.choices", return_value=["fresh"]):
-            mutated = algorithm._mutate_training_examples_from_memory(
-                current_examples,
-                source_individual=parent,
-            )
-
-        self.assertEqual(
-            [example["moves"][0]["raw_move"] for example in mutated],
-            ["(4,1): base train(worker)", "(5,1): worker build(barracks)"],
+        mutated = algorithm._mutate_training_examples_from_memory(
+            current_examples,
+            source_individual=parent,
         )
-        self.assertEqual(len(algorithm.example_memory.examples), 2)
+
+        self.assertEqual(mutated, current_examples)
+        self.assertEqual(algorithm.example_memory.examples, [])
+
+    def test_generation_add_prefers_real_eval_and_limits_full_pool_replacements(self) -> None:
+        memory = ExampleMemory(max_examples=20)
+        memory.add_examples(
+            {
+                "raw_move": f"({index},0): worker move({index},1)",
+                "unit_position": [index, 0],
+                "unit_type": "worker",
+                "action_type": "move",
+                "validator_passed": True,
+            }
+            for index in range(20)
+        )
+        candidates = [
+            {
+                "raw_move": f"({index},1): worker harvest(({index},2),(0,0))",
+                "unit_position": [index, 1],
+                "unit_type": "worker",
+                "action_type": "harvest",
+                "source": "real_eval" if index < 12 else "round",
+                "validator_passed": True,
+            }
+            for index in range(15)
+        ]
+
+        added = memory.add_generation_examples(candidates)
+
+        self.assertEqual(added, 10)
+        self.assertEqual(len(memory.examples), 20)
+        self.assertEqual(
+            sum(1 for example in memory.examples if example.get("source") == "real_eval"),
+            10,
+        )
+
+    def test_generation_add_fills_non_full_pool_without_replacement(self) -> None:
+        memory = ExampleMemory(max_examples=4)
+        candidates = [
+            {
+                "raw_move": f"({index},1): worker move({index},2)",
+                "unit_position": [index, 1],
+                "unit_type": "worker",
+                "action_type": "move",
+                "validator_passed": True,
+            }
+            for index in range(6)
+        ]
+
+        added = memory.add_generation_examples(candidates)
+
+        self.assertEqual(added, 4)
+        self.assertEqual(len(memory.examples), 4)
 
     def test_component_dict_does_not_emit_examples(self) -> None:
         pool = ComponentPool(

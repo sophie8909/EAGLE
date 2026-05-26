@@ -448,7 +448,6 @@ class EA:
         )
 
         print("[Initial Population] complete", flush=True)
-        self._refresh_example_memory(self.population, generation=-1)
         self.print_population_snapshot("initial population")
         self._log_initial_population_snapshot()
 
@@ -718,9 +717,10 @@ class EA:
         """Refresh code-managed examples from recent round/game evaluation artifacts."""
         if not self._should_refresh_example_memory(generation):
             return
-        added = 0
+        candidates: list[dict[str, Any]] = []
         for individual in individuals:
-            added += self._add_examples_from_individual(individual)
+            candidates.extend(self._collect_examples_from_individual(individual, generation=generation))
+        added = self.example_memory.add_generation_examples(candidates, rng=random)
         if added <= 0:
             return
         print(
@@ -743,14 +743,16 @@ class EA:
             return True
         return (int(generation) + 1) % max(1, interval) == 0
 
-    def _add_examples_from_individual(self, individual: Individual) -> int:
-        """Add examples from round samples first, then game logs with JSON moves."""
-        added = self.example_memory.add_from_round_evaluation(
+    def _collect_examples_from_individual(self, individual: Individual, *, generation: int | None) -> list[dict[str, Any]]:
+        """Collect valid round and real-eval examples without mutating the pool."""
+        examples = self.example_memory.collect_from_round_evaluation(
             getattr(individual, "last_round_evaluation", None)
         )
         for log_path in self._individual_game_log_paths(individual):
-            added += self.example_memory.add_from_game_log(log_path)
-        return added
+            for example in self.example_memory.examples_from_game_log(log_path):
+                example.setdefault("generation", generation)
+                examples.append(example)
+        return examples
 
     @staticmethod
     def _individual_game_log_paths(individual: Individual) -> list[str]:
@@ -931,6 +933,8 @@ class EA:
                 flush=True,
             )
 
+            with timing_recorder.phase("refresh_example_memory", generation=generation):
+                self._refresh_example_memory(self.population, generation=generation - 1)
             with timing_recorder.phase("generate_offspring", generation=generation):
                 offspring = self._generate_offspring(generation)
             print(
@@ -940,7 +944,6 @@ class EA:
 
             with timing_recorder.phase("evaluate_offspring", generation=generation):
                 self._evaluate_offspring(evaluator, offspring, generation)
-                self._refresh_example_memory(offspring, generation=generation)
             with timing_recorder.phase("before_survivor_selection", generation=generation):
                 generation_context = self._before_survivor_selection(generation, offspring)
 
@@ -1231,39 +1234,17 @@ class EA:
         *,
         source_individual: Individual | None = None,
     ) -> list[dict[str, Any]]:
-        """Mutate examples from fresh previous-round data or the existing pool."""
+        """Mutate examples by inserting or replacing entries from the current pool."""
+        del source_individual
         max_examples = max(0, int(getattr(self.config, "max_examples", 3)))
         if max_examples <= 0:
             return []
         examples = [deepcopy(example) for example in current_examples if isinstance(example, dict)][:max_examples]
-        mutation_source = self._sample_example_mutation_source(has_source_individual=source_individual is not None)
-        if mutation_source == "fresh":
-            before_keys = {
-                mutation_support.training_example_key(example)
-                for example in list(getattr(self.example_memory, "examples", []) or [])
-                if isinstance(example, dict)
-            }
-            fresh_examples = self.example_memory.examples_from_round_evaluation(
-                getattr(source_individual, "last_round_evaluation", None)
-            )
-            candidate_pool = [
-                deepcopy(example)
-                for example in fresh_examples
-                if isinstance(example, dict)
-                and mutation_support.training_example_key(example) not in before_keys
-            ]
-            if candidate_pool:
-                self.example_memory.add_examples(candidate_pool)
-                return candidate_pool[:max_examples]
-            return examples
-        else:
-            candidate_pool = [
-                deepcopy(example)
-                for example in list(getattr(self.example_memory, "examples", []) or [])
-                if isinstance(example, dict)
-            ]
-        if not examples:
-            return examples
+        candidate_pool = [
+            deepcopy(example)
+            for example in list(getattr(self.example_memory, "examples", []) or [])
+            if isinstance(example, dict)
+        ]
         if not candidate_pool:
             return examples
         seen = {mutation_support.training_example_key(example) for example in examples}
@@ -1275,7 +1256,10 @@ class EA:
         if not candidates:
             return examples
         selected = random.choice(candidates)
-        examples[random.randrange(len(examples))] = selected
+        if len(examples) < max_examples:
+            examples.append(selected)
+        elif examples:
+            examples[random.randrange(len(examples))] = selected
         return examples[:max_examples]
 
     def select_next_generation(
