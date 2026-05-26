@@ -67,12 +67,14 @@ class MicroRTSNSGA2Surrogate(NSGA2):
     reflection_operator = RoundReflection
 
     def _evaluate_initial_population(self, evaluator):
+        """Score the initial population with surrogate metrics only."""
         self._evaluate_surrogate_batch(self.population, generation=-1, label="Initial Population")
         print("[Initial Population] complete", flush=True)
         self.print_population_snapshot("initial population")
         self._log_initial_population_snapshot()
 
     def _evaluate_offspring(self, evaluator, offspring, generation: int) -> None:
+        """Score offspring through surrogate evaluation and update mutation feedback."""
         self._evaluate_surrogate_batch(
             offspring,
             generation=generation,
@@ -113,6 +115,7 @@ class MicroRTSNSGA2Surrogate(NSGA2):
             self._apply_prompt_cache_followers(group, individual, eval_result)
 
     def _evaluate_surrogate_individual(self, evaluator, individual, *, generation: int | None):
+        """Run one surrogate evaluation and store aggregate-ready NSGA-II fitness."""
         eval_result = evaluator.surrogate(
             individual,
             generation=generation,
@@ -151,6 +154,7 @@ class MicroRTSGASurrogate(GA):
         self.gameplay_elite_archive = []
 
     def _fitness0(self, individual) -> float:
+        """Rank GA surrogate candidates by gameplay scores when refreshed."""
         if hasattr(individual, "gameplay_score"):
             return float(getattr(individual, "gameplay_score"))
         if hasattr(individual, "surrogate_score"):
@@ -158,11 +162,13 @@ class MicroRTSGASurrogate(GA):
         return super()._fitness0(individual)
 
     def select_parent(self):
+        """Sample parents from gameplay elites at the configured archive rate."""
         if self.gameplay_elite_archive and random.random() < float(self.config.archive_parent_ratio):
             return random.choice(self.gameplay_elite_archive)
         return super().select_parent()
 
     def _evaluate_initial_population(self, evaluator):
+        """Seed surrogate scores, then force one gameplay refresh for the archive."""
         self._evaluate_surrogate_batch(self.population, generation=-1, label="Initial Population")
         self._refresh_gameplay_archive(evaluator, self.population, generation=-1, force=True)
         print("[Initial Population] complete", flush=True)
@@ -170,6 +176,7 @@ class MicroRTSGASurrogate(GA):
         self._log_initial_population_snapshot()
 
     def _evaluate_offspring(self, evaluator, offspring, generation: int) -> None:
+        """Score offspring with the surrogate and periodically refresh gameplay elites."""
         self._evaluate_surrogate_batch(
             offspring,
             generation=generation,
@@ -212,10 +219,12 @@ class MicroRTSGASurrogate(GA):
             self._apply_prompt_cache_followers(group, individual, eval_result)
 
     def _is_gameplay_refresh_generation(self, generation: int) -> bool:
+        """Return whether this generation should spend budget on real gameplay."""
         interval = max(1, int(self.config.gameplay_refresh_interval))
         return (int(generation) + 1) % interval == 0
 
     def _evaluate_surrogate_individual(self, evaluator, individual, *, generation: int | None):
+        """Run one surrogate evaluation and keep the scalar score for GA ranking."""
         eval_result = evaluator.surrogate(
             individual,
             generation=generation,
@@ -242,6 +251,7 @@ class MicroRTSGASurrogate(GA):
         return eval_result
 
     def _refresh_gameplay_archive(self, evaluator, candidates, *, generation: int | None, force: bool = False) -> None:
+        """Evaluate top surrogate candidates with gameplay and refresh the elite archive."""
         selected = self._top_surrogate_candidates(list(candidates), force=force)
         if not selected:
             return
@@ -261,6 +271,7 @@ class MicroRTSGASurrogate(GA):
             self._update_gameplay_archive(individual)
 
     def _top_surrogate_candidates(self, candidates, *, force: bool = False):
+        """Return the surrogate-ranked subset that should receive gameplay evaluation."""
         if not candidates:
             return []
         ratio = 1.0 if force else float(self.config.surrogate_top_ratio)
@@ -272,6 +283,7 @@ class MicroRTSGASurrogate(GA):
         )[:count]
 
     def _update_gameplay_archive(self, individual) -> None:
+        """Keep one best-by-gameplay archive used for later parent sampling."""
         if not hasattr(individual, "gameplay_score"):
             return
         by_id = {existing.id: existing for existing in self.gameplay_elite_archive}

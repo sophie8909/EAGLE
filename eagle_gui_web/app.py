@@ -108,6 +108,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
     controls: dict[str, dict[str, Any]] = {}
 
     async def stop_experiment() -> None:
+        """Stop active experiment processes while keeping the GUI alive."""
         if state.is_stopping:
             ui.notify("Stop already in progress", type="warning")
             return
@@ -120,6 +121,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
                 await refresh()
 
     async def shutdown_gui() -> None:
+        """Stop runtime helpers and exit the NiceGUI app."""
         if state.is_shutting_down:
             ui.notify("GUI shutdown already in progress", type="warning")
             return
@@ -130,6 +132,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
         services.shutdown_app(state, nicegui_app)
 
     async def refresh_current_page() -> None:
+        """Refresh only the currently visible page to keep UI actions responsive."""
         page = state.runtime.current_page
         LOGGER.info("manual refresh start page=%s", page)
         if page == "experiment":
@@ -219,6 +222,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
             controls["microrts"] = build_microrts_view(state)
 
     async def on_tab_change(event: Any) -> None:
+        """Refresh tab-specific data when the user changes the top-level page."""
         selected = event.args
 
         if selected == experiment_tab:

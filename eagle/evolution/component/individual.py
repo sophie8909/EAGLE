@@ -75,6 +75,7 @@ class Individual:
 
     @classmethod
     def _normalize_component_indices(cls, payload: dict[str, Any] | None) -> dict[str, dict[str, int]]:
+        """Normalize checkpoint/config component selections into the current entry shape."""
         normalized: dict[str, dict[str, int]] = {}
         if not isinstance(payload, dict):
             return normalized
@@ -84,6 +85,7 @@ class Individual:
 
     @staticmethod
     def _normalize_component_entry(value: Any, *, default_enabled: int = 1) -> dict[str, int]:
+        """Return the canonical `{index, enabled}` selector used by operators."""
         if isinstance(value, dict):
             raw_index = value.get("index", 0)
             raw_enabled = value.get("enabled", value.get("bit", default_enabled))

@@ -458,6 +458,7 @@ class Evaluator:
 
     @staticmethod
     def _history_sample_count(cached_record: dict[str, Any] | None) -> int:
+        """Return the number of samples represented by a cached history row."""
         if cached_record is None:
             return 0
         metadata = dict(cached_record.get("metadata") or {})
@@ -521,6 +522,7 @@ class Evaluator:
         return total
 
     def _construct_prompt(self, individual: Individual) -> str:
+        """Render the static strategy prompt for one component individual."""
         prompt_lines = self.component_pool.render_prompt_lines(
             individual.component_indices,
             include_identity_component=getattr(self.config, "include_strategy_identity_in_prompt", True),
@@ -532,6 +534,7 @@ class Evaluator:
         return "\n".join(prompt_lines)
 
     def _build_round_prompt(self, base_prompt: str, dynamic_prompt: str) -> str:
+        """Combine static strategy text with one generated MicroRTS state."""
         return f"""
                 {base_prompt.strip()}
                 {dynamic_prompt.strip()}
@@ -544,6 +547,7 @@ class Evaluator:
         generation: int | None,
         individual_id: str,
     ) -> tuple[str, dict[str, Any]]:
+        """Call the LLM backend and return both response text and trace metadata."""
         debug_record: dict[str, Any] = {}
         response = self._llama_cpp_generate(
             prompt=prompt,
@@ -565,6 +569,7 @@ class Evaluator:
         generation: int | None,
         individual_id: str,
     ) -> float:
+        """Use a second LLM call as a strict judge for strategy alignment."""
         judge_prompt = f"""
             You are a strict evaluator for a MicroRTS LLM agent response.
 
@@ -627,6 +632,7 @@ class Evaluator:
         parsed_response: dict[str, Any] | None,
         dynamic_prompt: str,
     ) -> tuple[float, dict[str, Any]]:
+        """Score action legality against the parsed state and shaped action rewards."""
         if not isinstance(parsed_response, dict):
             return 0.0, {
                 "parseable": False,
@@ -726,10 +732,12 @@ class Evaluator:
         return max(1.0, float(total))
 
     def _theoretical_alignment_max(self) -> float:
+        """Return the fixed max used to normalize LLM-judged alignment scores."""
         return float(self.THEORETICAL_ALIGNMENT_MAX)
 
     @staticmethod
     def _normalize_to_signed_unit_interval(raw_score: float, theoretical_max: float) -> float:
+        """Normalize a raw score by its theoretical cap and clamp to [-1, 1]."""
         safe_max = max(1e-9, float(theoretical_max))
         normalized = float(raw_score) / safe_max
         return max(-1.0, min(1.0, normalized))
