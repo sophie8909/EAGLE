@@ -1063,6 +1063,7 @@ public class EAGLE extends AbstractionLayerAI {
                 .resolve("llm_calls")
                 .resolve("generation_" + safeGenerationName(generationValue) + ".jsonl");
         try {
+            // Mirror Python trace records so gameplay calls appear in the same per-generation JSONL stream.
             String input = prompt == null ? "" : prompt;
             String finalResponse = fallbackResponse != null && !fallbackResponse.isBlank()
                     ? fallbackResponse

@@ -312,6 +312,7 @@ class Evaluator:
             self.runtime_logs_dir,
             **llm_debug_record,
         )
+        # The per-generation JSONL file is the cross-runtime trace contract used by the GUI.
         record_llm_call(
             self.runtime_logs_dir,
             generation=generation if generation is not None else "",

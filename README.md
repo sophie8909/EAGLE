@@ -57,6 +57,24 @@ Notes:
 - Java-backed MicroRTS validation still requires `java` and `javac` on `PATH`.
 - LLM-backed mutation, reflection, and evaluation paths require a llama.cpp server with the OpenAI-compatible API reachable from the environment that starts the desktop GUI.
 
+## LLM Trace Flow
+
+EAGLE writes LLM call evidence as JSONL records under:
+
+```text
+<run_dir>/llm_calls/generation_<generation>.jsonl
+```
+
+Trace modes identify the caller boundary:
+
+- `mutation`
+- `crossover`
+- `reflection`
+- `round_surrogate`
+- `gameplay`
+
+Each record should preserve the backend boundary: `timestamp`, `generation`, `individual_id`, `call_index`, `mode`, `caller` or `source` when available, `turn`, `model`, `input`, `raw_response_body`, `parsed_response`, `final_response`, `fallback_response`, `error`, and `metadata`. Existing records may also include `opponent`, `prompt_chars`, `input_tail`, and `request_payload`.
+
 
 ## Repository Structure
 

@@ -36,6 +36,42 @@ These notes describe the current repository shape for researchers and developers
 - Trace layer: owns JSONL records for LLM calls and experiment evidence. It records what happened at backend/runtime boundaries without changing evaluation behavior.
 - GUI: owns configuration editing, run control, trace inspection, and analysis display. It should call existing services/analyzers instead of duplicating experiment logic.
 
+## LLM trace flow
+
+The intended trace path is one JSON object per LLM call, appended to:
+
+```text
+<run_dir>/llm_calls/generation_<generation>.jsonl
+```
+
+The call modes should identify the runtime boundary that produced the record:
+
+- `mutation`: Python evolution operator asks the LLM to rewrite component text.
+- `crossover`: Python evolution operator asks the LLM to repair or combine component text.
+- `reflection`: Python reflection operator asks the LLM to revise a component using evaluation evidence.
+- `round_surrogate`: Python round evaluator asks the LLM for a one-state MicroRTS action response, and may make a second judge call for alignment.
+- `gameplay`: Java `ai.eagle.EAGLE` agent asks the LLM for actions during a MicroRTS match.
+
+Required JSONL fields:
+
+- `timestamp`
+- `generation`
+- `individual_id`
+- `call_index`
+- `mode`
+- `caller` or `source` when available
+- `turn`
+- `model`
+- `input`
+- `raw_response_body`
+- `parsed_response`
+- `final_response`
+- `fallback_response`
+- `error`
+- `metadata`
+
+Current records also include practical fields such as `opponent`, `prompt_chars`, `input_tail`, and `request_payload`. Readers should tolerate additional fields because Python and Java traces are written at different runtime boundaries.
+
 ## Do not generalize yet
 
 - MicroRTS is currently the only third-party environment supported by this repository.
