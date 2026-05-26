@@ -319,8 +319,8 @@ class EA:
                 ExampleMemory.DEFAULT_MAX_EXAMPLES,
             ),
             initial_examples=getattr(self.component_pool, "initial_training_examples", []),
-            pool_path=self._examples_pool_path(),
         )
+        self.example_memory.load_from_path(self._examples_pool_path())
         self.component_pool.example_memory = self.example_memory
         self.population = self.initialize_population()
         self.current_log_dir: Path | None = None
@@ -350,7 +350,7 @@ class EA:
         )
 
     def _examples_pool_path(self) -> Path:
-        """Return the JSONL file used for runtime prompt examples."""
+        """Return the configured JSONL file used to seed prompt examples."""
         configured = getattr(self.config, "examples_pool_path", "")
         if configured:
             path = Path(str(configured))
@@ -361,6 +361,20 @@ class EA:
                 component_path = PROJECT_ROOT / component_path
             return component_path.with_name("examples_pool.jsonl")
         return EAGLE_LOGS_DIR / "examples_pool.jsonl"
+
+    @staticmethod
+    def _runtime_examples_pool_path(log_dir: str | Path) -> Path:
+        """Return the per-run JSONL file used for evolved runtime examples."""
+        return Path(log_dir) / "examples_pool.jsonl"
+
+    def _attach_runtime_example_pool(self, log_dir: str | Path) -> None:
+        """Save runtime examples under the active run log directory."""
+        pool_path = self._runtime_examples_pool_path(log_dir)
+        if pool_path.exists():
+            self.example_memory.set_pool_path(pool_path, save=False)
+            self.example_memory.load_from_path(pool_path, replace=True)
+            return
+        self.example_memory.set_pool_path(pool_path, save=True)
 
     def _operator_name(self, operator_type: str, default_name: str) -> str:
         """Return a configured operator name or the algorithm default."""
@@ -976,6 +990,7 @@ class EA:
         self.current_log_dir = log_dir
         self.match_score_recorder = MatchScoreRecorder(self.current_log_dir, self.config)
         self.timing_recorder = RunTimingRecorder(self.current_log_dir)
+        self._attach_runtime_example_pool(self.current_log_dir)
         return str(log_dir)
 
     def attach_log_dir(self, log_dir: str | Path) -> str:
@@ -984,6 +999,7 @@ class EA:
         self.current_log_dir.mkdir(parents=True, exist_ok=True)
         self.match_score_recorder = MatchScoreRecorder(self.current_log_dir, self.config)
         self.timing_recorder = RunTimingRecorder(self.current_log_dir)
+        self._attach_runtime_example_pool(self.current_log_dir)
         return str(self.current_log_dir)
 
     def get_profile_log_path(self) -> Path:

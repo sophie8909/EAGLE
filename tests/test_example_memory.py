@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from eagle.evolution.component.individual import Individual
 from eagle.prompt.example_memory import ExampleMemory
@@ -67,6 +69,26 @@ class ExampleMemoryTests(unittest.TestCase):
         self.assertEqual(memory.examples[0]["moves"][0]["action_type"], "train")
         self.assertIn("INPUT:", memory.examples[0]["content"])
         self.assertIn("OUTPUT:", memory.examples[0]["content"])
+
+    def test_can_switch_to_runtime_pool_file(self) -> None:
+        memory = ExampleMemory(max_examples=4)
+        memory.add_examples(
+            [
+                {
+                    "raw_move": "(2,1): base train(worker)",
+                    "unit_position": [2, 1],
+                    "unit_type": "base",
+                    "action_type": "train",
+                }
+            ]
+        )
+
+        with TemporaryDirectory() as tmp_dir:
+            pool_path = Path(tmp_dir) / "examples_pool.jsonl"
+            memory.set_pool_path(pool_path)
+
+            self.assertTrue(pool_path.exists())
+            self.assertIn("base train(worker)", pool_path.read_text(encoding="utf-8"))
 
     def test_renders_individual_examples_at_training_example_position(self) -> None:
         pool = ComponentPool(

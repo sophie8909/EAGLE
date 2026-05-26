@@ -191,6 +191,9 @@ def component_json_choices() -> list[str]:
 
 def examples_pool_path(state: Any) -> Path:
     """Return the runtime examples pool path for the active component file."""
+    run_dir = getattr(getattr(state, "run", None), "experiment_current_run_dir", None)
+    if run_dir is not None:
+        return Path(run_dir) / "examples_pool.jsonl"
     configured = str(getattr(getattr(state, "config", None), "examples_pool_path", "") or "").strip()
     if configured:
         return resolve_repo_path(configured)

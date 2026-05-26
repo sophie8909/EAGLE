@@ -123,10 +123,19 @@ class ExampleMemory:
 
     def load(self) -> None:
         """Load examples from the JSONL pool file when it exists."""
-        if self.pool_path is None or not self.pool_path.exists():
-            return
+        self.load_from_path(self.pool_path)
+
+    def load_from_path(self, pool_path: str | Path | None, *, replace: bool = False) -> int:
+        """Load examples from an explicit JSONL pool path."""
+        if replace:
+            self._examples_by_key.clear()
+        if pool_path is None:
+            return 0
+        path = Path(pool_path)
+        if not path.exists():
+            return 0
         loaded: list[dict[str, Any]] = []
-        with self.pool_path.open("r", encoding="utf-8") as stream:
+        with path.open("r", encoding="utf-8") as stream:
             for line in stream:
                 line = line.strip()
                 if not line:
@@ -137,7 +146,13 @@ class ExampleMemory:
                     continue
                 if isinstance(record, dict):
                     loaded.append(record)
-        self.add_examples(loaded)
+        return self.add_examples(loaded)
+
+    def set_pool_path(self, pool_path: str | Path, *, save: bool = True) -> None:
+        """Point future writes at a runtime pool file."""
+        self.pool_path = Path(pool_path)
+        if save:
+            self.save()
 
     def save(self) -> None:
         """Persist the bounded pool to JSONL outside component.json."""
