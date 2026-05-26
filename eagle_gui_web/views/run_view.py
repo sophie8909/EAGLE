@@ -63,7 +63,7 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         refresh_start_button()
 
     async def refresh_status() -> None:
-        state.run.status_text = await asyncio.to_thread(services.process_status_text)
+        state.run.status_text = await asyncio.to_thread(services.process_status_text, state)
         status_badge.set_text(state.run.status_text)
         status_badge.classes(replace=status_badge_class(state.run.status_text))
 

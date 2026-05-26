@@ -786,16 +786,44 @@ def process_running() -> bool:
     return process_service.process_is_running(monitored_pid())
 
 
-def process_status_text() -> str:
+def process_status_text(state: Any | None = None) -> str:
     """Return compact process status text."""
     pid = monitored_pid()
+    tracked_returncode = _tracked_process_returncode(state, pid)
+    if tracked_returncode is not None:
+        process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="exited", returncode=tracked_returncode)
+        if state is not None:
+            state.runtime.is_running = False
+            state.run.status_text = "not running"
+        return "not running"
     if process_service.process_is_running(pid):
         return f"running pid {pid}"
     stored = load_process_state()
     if pid is not None and stored.get("status") == "running":
         process_service.mark_process_state(GUI_WEB_PROCESS_STATE_PATH, status="exited")
-        return f"exited pid {pid}"
+        if state is not None:
+            state.runtime.is_running = False
+            state.run.status_text = "not running"
+        return "not running"
     return "not running"
+
+
+def _tracked_process_returncode(state: Any | None, pid: int | None) -> int | None:
+    """Return the known return code for a GUI-owned process, reaping it if needed."""
+    if state is None or pid is None:
+        return None
+    for process in list(getattr(state, "active_processes", []) or []):
+        if int(getattr(process, "pid", -1)) != int(pid):
+            continue
+        returncode = process.poll()
+        if returncode is None:
+            return None
+        try:
+            state.active_processes.remove(process)
+        except ValueError:
+            pass
+        return int(returncode)
+    return None
 
 
 def process_log_path() -> Path | None:
