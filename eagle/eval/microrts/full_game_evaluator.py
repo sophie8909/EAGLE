@@ -132,8 +132,14 @@ class FullGameEvaluator:
                     "match_score": match_score,
                     "raw_resource_advantage_score": raw_score,
                     "winner": simulation_meta.get("winner"),
+                    "result": simulation_meta.get("result"),
+                    "status": simulation_meta.get("status"),
                     "timeout": simulation_meta.get("timeout"),
                     "log_path": simulation_meta.get("log_path"),
+                    "failed": simulation_meta.get("failed", False),
+                    "failure_type": simulation_meta.get("failure_type"),
+                    "error": simulation_meta.get("error"),
+                    "exit_code": simulation_meta.get("exit_code"),
                     "trace_xml_path": simulation_meta.get("trace_xml_path"),
                     "round_state_dir": simulation_meta.get("round_state_dir"),
                     "latest_round_state_log": simulation_meta.get("latest_round_state_log"),
@@ -239,11 +245,14 @@ class FullGameEvaluator:
                 for opponent, result in opponent_results:
                     match_score = dict(result["match_score"])
                     raw_score = self._raw_resource_advantage_score(match_score)
+                    simulation_meta = dict(result.get("simulation_meta") or {})
                     per_opponent_scores.append(
                         {
                             "opponent": opponent,
                             "match_score": match_score,
                             "raw_resource_advantage_score": raw_score,
+                            "failed": bool(simulation_meta.get("failed")),
+                            "simulation_meta": simulation_meta,
                         }
                     )
 
@@ -643,12 +652,18 @@ class FullGameEvaluator:
                 "evaluation_mode": evaluation_mode,
                 "evaluation_time": stats.get("total_eval_time", 0.0),
                 "log_path": simulation_meta.get("log_path"),
+                "failed": simulation_meta.get("failed", False),
+                "failure_type": simulation_meta.get("failure_type"),
+                "error": simulation_meta.get("error"),
+                "exit_code": simulation_meta.get("exit_code"),
                 "trace_xml_path": simulation_meta.get("trace_xml_path"),
                 "round_state_dir": simulation_meta.get("round_state_dir"),
                 "latest_round_state_log": simulation_meta.get("latest_round_state_log"),
                 "map_location": simulation_meta.get("map_location"),
                 "gameplay_map_dir": simulation_meta.get("gameplay_map_dir"),
                 "winner": simulation_meta.get("winner"),
+                "result": simulation_meta.get("result"),
+                "status": simulation_meta.get("status"),
                 "timeout": simulation_meta.get("timeout"),
                 "timeout_type": simulation_meta.get("timeout_type"),
                 "llm_calls": simulation_meta.get("llm_calls"),
@@ -676,7 +691,13 @@ class FullGameEvaluator:
         summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else {}
         individual.last_gameplay_evaluation = {
             "winner": simulation_meta.get("winner"),
+            "result": simulation_meta.get("result"),
+            "status": simulation_meta.get("status"),
             "timeout": timeout,
+            "failed": simulation_meta.get("failed", False),
+            "failure_type": simulation_meta.get("failure_type"),
+            "error": simulation_meta.get("error"),
+            "exit_code": simulation_meta.get("exit_code"),
             "log_path": simulation_meta.get("log_path"),
             "trace_xml_path": simulation_meta.get("trace_xml_path"),
             "round_state_dir": simulation_meta.get("round_state_dir"),
@@ -719,7 +740,13 @@ class FullGameEvaluator:
                 "prompt": prompt,
                 "prompt_length": len(prompt),
                 "winner": simulation_meta.get("winner"),
+                "result": simulation_meta.get("result"),
+                "status": simulation_meta.get("status"),
                 "timeout": simulation_meta.get("timeout", False),
+                "failed": simulation_meta.get("failed", False),
+                "failure_type": simulation_meta.get("failure_type"),
+                "error": simulation_meta.get("error"),
+                "exit_code": simulation_meta.get("exit_code"),
                 "llm_calls": llm_calls,
                 "tick_limit": simulation_meta.get("tick_limit"),
                 "llm_call_limit": simulation_meta.get("llm_call_limit"),
