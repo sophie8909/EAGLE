@@ -18,6 +18,7 @@ from eagle.prompt.example_memory import ExampleMemory
 from eagle.project import EAGLE_LOGS_DIR, PROJECT_ROOT
 from eagle.utils.checkpoint import CheckpointManager, deserialize_individual, serialize_individual
 from eagle.utils.component_pool import ComponentPool
+from eagle.utils.experiment_logs import resolve_experiment_log_dir
 from eagle.utils.match_score_recorder import MatchScoreRecorder
 from eagle.utils.profiler import RunTimingRecorder
 
@@ -1012,20 +1013,15 @@ class EA:
         if self.current_log_dir is not None:
             return str(self.current_log_dir)
 
-        import datetime
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_dir = EAGLE_LOGS_DIR / timestamp
-        log_dir.mkdir(parents=True, exist_ok=True)
-        self.current_log_dir = log_dir
-        self.match_score_recorder = MatchScoreRecorder(self.current_log_dir, self.config)
-        self.timing_recorder = RunTimingRecorder(self.current_log_dir)
-        self._attach_runtime_example_pool(self.current_log_dir)
-        return str(log_dir)
+        return self._initialize_log_dir(resolve_experiment_log_dir())
 
     def attach_log_dir(self, log_dir: str | Path) -> str:
         """Bind this EA instance to an existing log directory."""
+        return self._initialize_log_dir(resolve_experiment_log_dir(log_dir))
+
+    def _initialize_log_dir(self, log_dir: str | Path) -> str:
+        """Bind runtime recorders and per-run stores to one log directory."""
         self.current_log_dir = Path(log_dir)
-        self.current_log_dir.mkdir(parents=True, exist_ok=True)
         self.match_score_recorder = MatchScoreRecorder(self.current_log_dir, self.config)
         self.timing_recorder = RunTimingRecorder(self.current_log_dir)
         self._attach_runtime_example_pool(self.current_log_dir)
