@@ -1395,11 +1395,9 @@ def _plot_generation_scatter(
             objective_names_list.append(name)
     if len(objective_names_list) < 2:
         return []
-    selected_x = x_objective if x_objective in objective_names_list else objective_names_list[0]
-    selected_y = y_objective if y_objective in objective_names_list else objective_names_list[1]
     axis_labels = objective_axis_labels(specs)
-    x_label = axis_labels.get(selected_x, selected_x)
-    y_label = axis_labels.get(selected_y, selected_y)
+    selected_x, x_label = _resolve_plot_axis(x_objective, objective_names_list, axis_labels, fallback_index=0)
+    selected_y, y_label = _resolve_plot_axis(y_objective, objective_names_list, axis_labels, fallback_index=1)
     for _, individuals, _ in generation_entries:
         for individual in individuals:
             x_value, y_value = _xy_fitness(individual, objective_names_list, selected_x, selected_y)
@@ -1534,6 +1532,31 @@ def _plot_generation_scatter(
 
     figure_paths.insert(0, figure_path)
     return figure_paths
+
+
+def _resolve_plot_axis(
+    selected_objective: str | None,
+    objective_names_list: list[str],
+    axis_labels: dict[str, str],
+    *,
+    fallback_index: int,
+) -> tuple[str, str]:
+    """Return the objective key and display label for one selected plot axis."""
+    if not objective_names_list:
+        return "", ""
+
+    fallback_name = objective_names_list[min(fallback_index, len(objective_names_list) - 1)]
+    selected_text = str(selected_objective or "").strip()
+    if selected_text in objective_names_list:
+        name = selected_text
+    else:
+        label_matches = [
+            name
+            for name in objective_names_list
+            if selected_text and selected_text in {axis_labels.get(name, ""), name}
+        ]
+        name = label_matches[0] if label_matches else fallback_name
+    return name, axis_labels.get(name, name)
 
 
 def _build_generation_gif(image_paths: list[Path], output_path: Path) -> Path | None:
