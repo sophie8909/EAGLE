@@ -140,10 +140,11 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             if force_generate:
                 if mo_generate_button is not None:
                     mo_generate_button.disable()
+                _ensure_mo_axis_selection()
                 result = await asyncio.to_thread(
                     services.run_analysis_subprocess,
                     run_dir,
-                    run_dir / "analysis" / "evolution",
+                    _mo_output_dir(run_dir),
                     "evolution",
                     extra_args=_mo_axis_args(),
                 )
@@ -245,6 +246,17 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             args.extend(["--y-objective", state.analysis.mo_selected_y_objective])
         return args
 
+    def _mo_output_dir(run_dir: Path) -> Path:
+        if not state.analysis.mo_selected_x_objective or not state.analysis.mo_selected_y_objective:
+            return run_dir / "analysis" / "evolution"
+        return (
+            run_dir
+            / "analysis"
+            / "evolution"
+            / "objective_axes"
+            / _axis_pair_slug(state.analysis.mo_selected_x_objective, state.analysis.mo_selected_y_objective)
+        )
+
     def _render_mo_artifacts() -> None:
         animation_container.clear()
         static_plot_container.clear()
@@ -253,7 +265,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         if animation_path and Path(animation_path).exists():
             with animation_container:
                 ui.label("Pareto animation").classes(SECTION_HEADER_CLASS)
-                ui.image(animation_path).classes("w-full max-w-5xl")
+                ui.image(animation_path).props(_artifact_image_props(animation_path)).classes("w-full max-w-5xl")
         elif state.analysis.mo_visible:
             with animation_container:
                 ui.label("Pareto animation").classes(SECTION_HEADER_CLASS)
@@ -265,14 +277,16 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
                 ui.label(f"Generation {state.analysis.mo_selected_generation} Pareto front").classes(
                     SECTION_HEADER_CLASS
                 )
-                ui.image(static_plot_path).classes("w-full max-w-5xl")
+                ui.image(static_plot_path).props(_artifact_image_props(static_plot_path)).classes("w-full max-w-5xl")
         elif state.analysis.mo_visible:
             with static_plot_container:
                 ui.label("Static Pareto front").classes(SECTION_HEADER_CLASS)
                 ui.label("No static Pareto front generated for the selected generation.")
 
     def _discover_mo_artifacts(run_dir: Path) -> dict[str, Any]:
-        analysis_dir = run_dir / "analysis" / "evolution"
+        analysis_dir = _mo_output_dir(run_dir)
+        if not (analysis_dir / "generation_fitness").exists():
+            analysis_dir = run_dir / "analysis" / "evolution"
         generation_dir = analysis_dir / "generation_fitness"
         animation_path = generation_dir / "generation_fitness_animation.gif"
         static_plot_paths: dict[str, str] = {}
@@ -318,9 +332,16 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
 
     def on_mo_x_axis_changed(event: Any) -> None:
         state.analysis.mo_selected_x_objective = str(event.value or "")
+        _clear_mo_artifact_display()
 
     def on_mo_y_axis_changed(event: Any) -> None:
         state.analysis.mo_selected_y_objective = str(event.value or "")
+        _clear_mo_artifact_display()
+
+    def _clear_mo_artifact_display() -> None:
+        state.analysis.mo_animation_path = ""
+        state.analysis.mo_static_plot_paths = {}
+        _render_mo_artifacts()
 
     def on_run_changed(event: Any) -> None:
         state.analysis.analysis_selected_run_dir = Path(str(event.value)) if event.value else None
@@ -459,6 +480,27 @@ def _read_mo_analysis_text(run_dir: Path) -> str:
         for path in sorted(run_dir.glob("generation_*_mo.txt"), key=_generation_sort_key):
             parts.append(path.read_text(encoding="utf-8", errors="replace"))
         return "\n".join(parts)
+
+
+def _artifact_image_props(path_text: str) -> str:
+    """Return image props that force remounting after an artifact is overwritten."""
+    path = Path(path_text)
+    try:
+        cache_key = f"{path.name}-{path.stat().st_mtime_ns}"
+    except OSError:
+        cache_key = path.name
+    return f'key="{cache_key}"'
+
+
+def _axis_pair_slug(x_objective: str, y_objective: str) -> str:
+    """Return a filesystem-safe slug for one selected objective pair."""
+    return f"{_axis_slug(x_objective)}__{_axis_slug(y_objective)}"
+
+
+def _axis_slug(value: str) -> str:
+    """Return a compact filesystem-safe objective slug."""
+    slug = re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(value or "").strip()).strip("_")
+    return slug or "objective"
 
 
 def _load_mo_objective_options(run_dir: Path | None) -> dict[str, str]:
