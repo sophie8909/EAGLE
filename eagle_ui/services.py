@@ -925,9 +925,24 @@ def launch_web_process(
 def start_experiment(state: Any) -> tuple[bool, str]:
     """Save config and start `python -m eagle.main --config <config>`."""
     with LoggedOperation("starting EA"):
+        resume_run_dir = state.run.experiment_current_run_dir
         previous_run_dir = latest_experiment_run_dir()
-        config_path = save_generated_config(state)
-        command = [sys.executable, "-m", "eagle.main", "--config", str(config_path)]
+        if resume_run_dir is None:
+            config_path = save_generated_config(state)
+            command = [sys.executable, "-m", "eagle.main", "--config", str(config_path)]
+        else:
+            config_path = Path(resume_run_dir) / "config.json"
+            if not config_path.exists():
+                raise ValueError(f"Selected run is missing config.json: {config_path}")
+            command = [
+                sys.executable,
+                "-m",
+                "eagle.main",
+                "--resume-log-dir",
+                str(resume_run_dir),
+                "--config",
+                str(config_path),
+            ]
         if state.run.quick_run:
             command.append("--quick-run")
         if state.run.skip_final_test is True:
@@ -941,6 +956,11 @@ def start_experiment(state: Any) -> tuple[bool, str]:
             log_prefix="eagle_ui_process",
         )
         if success:
+            if resume_run_dir is not None:
+                state.run.experiment_current_run_dir = Path(resume_run_dir)
+                state.analysis.analysis_selected_run_dir = Path(resume_run_dir)
+                state.analysis.analysis_run_selected_manually = False
+                return success, message
             run_dir = None
             deadline = time.monotonic() + 2.0
             while time.monotonic() < deadline:

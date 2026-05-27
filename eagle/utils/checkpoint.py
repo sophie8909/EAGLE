@@ -132,9 +132,26 @@ class CheckpointManager:
                 last_record = json.loads(line)
         return last_record
 
+    def load_original_log_dir(self) -> Path | None:
+        """Return the checkpointed original experiment directory when present."""
+        state = self.load_state()
+        if not isinstance(state, dict):
+            return None
+        run_metadata = state.get("run_metadata")
+        metadata_log_dir = run_metadata.get("log_dir") if isinstance(run_metadata, dict) else None
+        raw_log_dir = metadata_log_dir or state.get("log_dir")
+        if not raw_log_dir:
+            return None
+        return Path(str(raw_log_dir))
+
     def save_state(self, state: dict[str, Any]) -> None:
         """Rewrite the latest run state and append the same snapshot as an event."""
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        state = dict(state)
+        state.setdefault("log_dir", str(self.log_dir.resolve()))
+        run_metadata = dict(state.get("run_metadata") or {})
+        run_metadata.setdefault("log_dir", str(self.log_dir.resolve()))
+        state["run_metadata"] = run_metadata
         with self.state_path.open("w", encoding="utf-8") as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
         write_jsonl(state, self.event_log_path)

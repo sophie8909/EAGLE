@@ -800,10 +800,15 @@ class EA:
         run_state: Any,
     ) -> dict[str, Any]:
         """Build a restartable checkpoint payload for the current algorithm state."""
+        log_dir = str(self.current_log_dir.resolve()) if self.current_log_dir is not None else ""
         return {
             "phase": phase,
             "algorithm": getattr(self.config, "algorithm", type(self).__name__),
             "generation": generation,
+            "log_dir": log_dir,
+            "run_metadata": {
+                "log_dir": log_dir,
+            },
             "population": [serialize_individual(individual) for individual in self.population],
             "run_state": run_state,
             "extra_state": self._checkpoint_extra_state(),

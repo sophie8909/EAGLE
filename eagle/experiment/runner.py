@@ -9,6 +9,7 @@ from ..config import resolve_component_pool_path
 from ..core.registry import ALGORITHMS, normalize_registry_name
 from ..project import PROMPTS_DIR
 from ..utils.component_pool import ComponentPool
+from ..utils.experiment_logs import resolve_resume_log_dir, resolve_resume_log_dir_from_config
 from .config import ExperimentConfig, load_experiment_config
 
 
@@ -55,8 +56,10 @@ def run_experiment(
         component_pool=component_pool,
         opponent_list=opponent_list,
     )
+    if resume_log_dir is None:
+        resume_log_dir = resolve_resume_log_dir_from_config(config_path)
     if resume_log_dir:
-        algorithm.attach_log_dir(resume_log_dir)
+        algorithm.attach_log_dir(resolve_resume_log_dir(resume_log_dir))
     log_dir = algorithm.create_log_folder()
     algorithm.save_config(log_dir)
     result = algorithm.run()

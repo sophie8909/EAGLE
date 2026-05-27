@@ -8,6 +8,7 @@ from .config import EAConfig, load_config_from_json, resolve_component_pool_path
 from .experiment.config import load_experiment_config
 from .experiment.runner import build_algorithm
 from .project import DEFAULT_EVOLUTION_CONFIG_PATH, EAGLE_LOGS_DIR, PROMPTS_DIR
+from .utils.experiment_logs import resolve_resume_log_dir, resolve_resume_log_dir_from_config
 from .utils.component_pool import ComponentPool
 
 OPPONENT_LIST = [
@@ -32,6 +33,17 @@ def _find_latest_log_dir() -> str | None:
     if not candidates:
         return None
     return str(sorted(candidates)[-1])
+
+
+def _resolve_requested_resume_log_dir(args) -> str | None:
+    """Resolve explicit, latest, or checkpoint-config resume requests."""
+    resume_log_dir = args.resume_log_dir
+    if args.resume_latest and resume_log_dir is None:
+        resume_log_dir = _find_latest_log_dir()
+    if resume_log_dir:
+        return str(resolve_resume_log_dir(resume_log_dir))
+    config_resume_log_dir = resolve_resume_log_dir_from_config(args.config)
+    return str(config_resume_log_dir) if config_resume_log_dir is not None else None
 
 
 def _resolve_component_pool_path() -> str:
@@ -197,9 +209,7 @@ def main() -> None:
             flush=True,
         )
 
-    resume_log_dir = args.resume_log_dir
-    if args.resume_latest and resume_log_dir is None:
-        resume_log_dir = _find_latest_log_dir()
+    resume_log_dir = _resolve_requested_resume_log_dir(args)
 
     config = _build_runtime_config(args, resume_log_dir)
     opponent_list = _resolve_opponent_list(args, config)
