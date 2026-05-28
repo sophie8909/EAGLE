@@ -13,6 +13,7 @@ from typing import Any, ClassVar, List
 from eagle.config import EAConfig, clone_config
 from eagle.core.result import EvaluationResult, ensure_evaluation_result
 from eagle.objectives.aggregation import aggregate_fitness
+from eagle.objectives.aggressiveness.runtime import maybe_add_aggressiveness_metrics
 from eagle.operators.mutation import support as mutation_support
 from eagle.operators.registry import get_operator
 from eagle.prompt.example_memory import ExampleMemory
@@ -666,6 +667,13 @@ class EA:
             profile_output_path=self.get_profile_log_path(),
             match_score_recorder=self.match_score_recorder,
         ))
+        maybe_add_aggressiveness_metrics(
+            eval_result,
+            individual=individual,
+            config=self.config,
+            run_dir=self.current_log_dir,
+            generation=generation,
+        )
         fitness = aggregate_fitness(eval_result, self.config)
         if isinstance(fitness, dict):
             eval_result.fitness = dict(fitness)

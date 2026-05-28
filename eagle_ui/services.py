@@ -737,7 +737,13 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
 
 def objective_choices(state: Any) -> tuple[str, ...]:
     """Return objective registry names for the current application/eval mode."""
-    return list_objective_names(state.config.application, "full_game")
+    names = list(list_objective_names(state.config.application, "full_game"))
+    if (
+        state.config.algorithm not in MO_ALGORITHMS
+        or not state.config.aggressiveness_objective_enabled
+    ):
+        names = [name for name in names if name != "strategic_aggressiveness"]
+    return tuple(names)
 
 
 def objective_rows(state: Any) -> list[dict[str, str]]:

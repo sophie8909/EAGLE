@@ -10,6 +10,7 @@ from eagle.config import clone_config
 from eagle.core.result import ensure_evaluation_result
 from eagle.core.registry import ALGORITHMS, EVALUATORS
 from eagle.objectives.aggregation import aggregate_fitness
+from eagle.objectives.aggressiveness.runtime import maybe_add_aggressiveness_metrics
 from eagle.evolution.component.ga import GA
 from eagle.evolution.component.nsga2 import NSGA2
 from eagle.reflection.microrts.round_reflection import RoundReflection
@@ -128,6 +129,13 @@ class MicroRTSNSGA2Surrogate(NSGA2):
             self.config,
             rendered_prompt=self._render_prompt_cache_key(individual),
         )
+        maybe_add_aggressiveness_metrics(
+            eval_result,
+            individual=individual,
+            config=self.config,
+            run_dir=self.current_log_dir,
+            generation=generation,
+        )
         print(
             "[DEBUG] surrogate eval_result metrics before aggregation "
             f"individual={getattr(individual, 'id', None)} "
@@ -240,6 +248,13 @@ class MicroRTSGASurrogate(GA):
             individual,
             self.config,
             rendered_prompt=self._render_prompt_cache_key(individual),
+        )
+        maybe_add_aggressiveness_metrics(
+            eval_result,
+            individual=individual,
+            config=self.config,
+            run_dir=self.current_log_dir,
+            generation=generation,
         )
         print(
             "[DEBUG] surrogate eval_result metrics before aggregation "

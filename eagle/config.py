@@ -245,6 +245,11 @@ class EAConfig:
             1.0,
             max(0.0, float(self.aggressiveness_judge_temperature)),
         )
+        if self.aggressiveness_objective_enabled and not single_objective_algorithm:
+            objectives = list(self.objective_config.get("objectives", []))
+            if "strategic_aggressiveness" not in objectives:
+                objectives.append("strategic_aggressiveness")
+            self.objective_config = {"mode": "multi", "objectives": objectives}
 
         if self.reflection_max_components_to_rewrite < 1:
             raise ValueError("reflection_max_components_to_rewrite must be >= 1.")
