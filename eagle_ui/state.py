@@ -34,6 +34,12 @@ class ConfigState:
     surrogate_top_ratio: str = "0.3"
     archive_parent_ratio: str = "0.25"
     min_token_length: str = "1"
+    aggressiveness_objective_enabled: bool = False
+    aggressiveness_mode: str = "hybrid"
+    aggressiveness_llm_weight: str = "0.3"
+    aggressiveness_component_weight: str = "0.7"
+    aggressiveness_judge_model: str = "local"
+    aggressiveness_judge_temperature: str = "0.0"
     one_eval_rounds: str = "8"
     final_test_max_front: str = "1"
     opponents_text: str = "ai.abstraction.LightRush, ai.abstraction.HeavyRush"

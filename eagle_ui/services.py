@@ -45,7 +45,9 @@ APPLICATION_CHOICES = ("microrts",)
 ALGORITHM_CHOICES = ("ga", "nsga2", "ga_surrogate", "nsga2_surrogate")
 EVALUATOR_CHOICES = ("gameplay",)
 SURROGATE_CHOICES = ("round", "policy_agent", "java_agent")
+AGGRESSIVENESS_MODE_CHOICES = ("component_only", "llm_only", "hybrid")
 GA_ALGORITHMS = {"ga", "ga_surrogate"}
+MO_ALGORITHMS = {"nsga2", "nsga2_surrogate"}
 SURROGATE_ALGORITHMS = {"ga_surrogate", "nsga2_surrogate"}
 PARENT_SELECTION_BY_ALGORITHM = {
     "ga": "ga_fitness_tournament",
@@ -414,10 +416,16 @@ def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path)
         "surrogate_top_ratio",
         "archive_parent_ratio",
         "min_token_length",
+        "aggressiveness_mode",
+        "aggressiveness_llm_weight",
+        "aggressiveness_component_weight",
+        "aggressiveness_judge_model",
+        "aggressiveness_judge_temperature",
         "one_eval_rounds",
         "final_test_max_front",
     ):
         setattr(cfg, field_name, str(payload.get(field_name, getattr(cfg, field_name))))
+    cfg.aggressiveness_objective_enabled = bool(payload.get("aggressiveness_objective_enabled", False))
     cfg.opponents_text = ", ".join(parse_target_list(payload.get("gameplay_opponents", []))) or cfg.opponents_text
     cfg.component_pool_path = str(payload.get("component_pool_path", cfg.component_pool_path))
     cfg.include_strategy_identity_in_prompt = bool(payload.get("include_strategy_identity_in_prompt", True))
@@ -670,6 +678,23 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
             "surrogate_top_ratio": parse_float(cfg.surrogate_top_ratio, "surrogate_top_ratio"),
             "archive_parent_ratio": parse_float(cfg.archive_parent_ratio, "archive_parent_ratio"),
             "min_token_length": parse_int(cfg.min_token_length, "min_token_length"),
+            "aggressiveness_objective_enabled": bool(cfg.aggressiveness_objective_enabled),
+            "aggressiveness_mode": cfg.aggressiveness_mode
+            if cfg.aggressiveness_mode in AGGRESSIVENESS_MODE_CHOICES
+            else "hybrid",
+            "aggressiveness_llm_weight": parse_float(
+                cfg.aggressiveness_llm_weight,
+                "aggressiveness_llm_weight",
+            ),
+            "aggressiveness_component_weight": parse_float(
+                cfg.aggressiveness_component_weight,
+                "aggressiveness_component_weight",
+            ),
+            "aggressiveness_judge_model": cfg.aggressiveness_judge_model.strip() or cfg.llm_model.strip(),
+            "aggressiveness_judge_temperature": parse_float(
+                cfg.aggressiveness_judge_temperature,
+                "aggressiveness_judge_temperature",
+            ),
             "objective_config": build_objective_config(state),
             "use_few_shot_examples": bool(cfg.use_few_shot_examples),
             "min_examples": parse_nonnegative_int(cfg.min_examples, "min_examples"),

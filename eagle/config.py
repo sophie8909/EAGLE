@@ -123,6 +123,22 @@ class EAConfig:
     archive_parent_ratio: float = field(default_factory=lambda: float(_default_config_value("archive_parent_ratio")))
     min_token_length: int = field(default_factory=lambda: int(_default_config_value("min_token_length")))
     objective_config: dict[str, Any] = field(default_factory=lambda: dict(_default_config_value("objective_config")))
+    aggressiveness_objective_enabled: bool = field(
+        default_factory=lambda: bool(_default_config_value("aggressiveness_objective_enabled"))
+    )
+    aggressiveness_mode: str = field(default_factory=lambda: str(_default_config_value("aggressiveness_mode")))
+    aggressiveness_llm_weight: float = field(
+        default_factory=lambda: float(_default_config_value("aggressiveness_llm_weight"))
+    )
+    aggressiveness_component_weight: float = field(
+        default_factory=lambda: float(_default_config_value("aggressiveness_component_weight"))
+    )
+    aggressiveness_judge_model: str = field(
+        default_factory=lambda: str(_default_config_value("aggressiveness_judge_model"))
+    )
+    aggressiveness_judge_temperature: float = field(
+        default_factory=lambda: float(_default_config_value("aggressiveness_judge_temperature"))
+    )
     training_example_sample_count: str | int = field(
         default_factory=lambda: _default_config_value("training_example_sample_count")
     )
@@ -216,6 +232,19 @@ class EAConfig:
             raise ValueError("Single-objective algorithms require objective_config.mode single or weighted_mix.")
         if not single_objective_algorithm and objective_mode != "multi":
             raise ValueError("Multi-objective algorithms require objective_config.mode multi.")
+        self.aggressiveness_objective_enabled = bool(self.aggressiveness_objective_enabled)
+        self.aggressiveness_mode = str(self.aggressiveness_mode or "hybrid").strip().lower()
+        if self.aggressiveness_mode not in {"component_only", "llm_only", "hybrid"}:
+            raise ValueError("aggressiveness_mode must be component_only, llm_only, or hybrid.")
+        self.aggressiveness_component_weight = min(1.0, max(0.0, float(self.aggressiveness_component_weight)))
+        self.aggressiveness_llm_weight = min(1.0, max(0.0, float(self.aggressiveness_llm_weight)))
+        self.aggressiveness_judge_model = str(self.aggressiveness_judge_model or self.llm_model or "local").strip()
+        if not self.aggressiveness_judge_model:
+            raise ValueError("aggressiveness_judge_model must be a non-empty model name.")
+        self.aggressiveness_judge_temperature = min(
+            1.0,
+            max(0.0, float(self.aggressiveness_judge_temperature)),
+        )
 
         if self.reflection_max_components_to_rewrite < 1:
             raise ValueError("reflection_max_components_to_rewrite must be >= 1.")
@@ -351,6 +380,12 @@ class EAConfig:
             "component_pool_path": self.component_pool_path,
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
             "objective_config": deepcopy(self.objective_config),
+            "aggressiveness_objective_enabled": self.aggressiveness_objective_enabled,
+            "aggressiveness_mode": self.aggressiveness_mode,
+            "aggressiveness_llm_weight": self.aggressiveness_llm_weight,
+            "aggressiveness_component_weight": self.aggressiveness_component_weight,
+            "aggressiveness_judge_model": self.aggressiveness_judge_model,
+            "aggressiveness_judge_temperature": self.aggressiveness_judge_temperature,
             "use_few_shot_examples": self.use_few_shot_examples,
             "min_examples": self.min_examples,
             "max_examples": self.max_examples,
@@ -368,6 +403,12 @@ class EAConfig:
             "win_bonus": self.win_bonus,
             "resource_advantage_weights": dict(self.resource_advantage_weights),
             "min_token_length": self.min_token_length,
+            "aggressiveness_objective_enabled": self.aggressiveness_objective_enabled,
+            "aggressiveness_mode": self.aggressiveness_mode,
+            "aggressiveness_llm_weight": self.aggressiveness_llm_weight,
+            "aggressiveness_component_weight": self.aggressiveness_component_weight,
+            "aggressiveness_judge_model": self.aggressiveness_judge_model,
+            "aggressiveness_judge_temperature": self.aggressiveness_judge_temperature,
         }
 
     def surrogate_settings(self) -> dict[str, object]:

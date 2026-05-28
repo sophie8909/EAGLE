@@ -80,6 +80,12 @@
       "win_score"
     ]
   },
+  "aggressiveness_objective_enabled": false,
+  "aggressiveness_mode": "hybrid",
+  "aggressiveness_llm_weight": 0.3,
+  "aggressiveness_component_weight": 0.7,
+  "aggressiveness_judge_model": "local",
+  "aggressiveness_judge_temperature": 0.0,
   "training_example_sample_count": "random_0_4",
   "training_example_fixed_count": false,
   "use_few_shot_examples": true,

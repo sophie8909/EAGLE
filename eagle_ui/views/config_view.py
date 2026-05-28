@@ -66,6 +66,7 @@ def build_config_view(state: Any) -> dict[str, Any]:
             control.update()
         component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
         generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
+        aggressiveness_panel.visible = state.config.algorithm in services.MO_ALGORITHMS
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Config").classes(SECTION_HEADER_CLASS)
@@ -127,7 +128,42 @@ def build_config_view(state: Any) -> dict[str, Any]:
                     label,
                     getattr(state.config, name),
                     lambda value, field=name: setattr(state.config, field, value),
+            )
+
+        with ui.column().classes("w-full gap-3") as aggressiveness_panel:
+            ui.label("Strategic Aggressiveness").classes(SECTION_HEADER_CLASS)
+            with ui.row().classes(f"{ROW_CLASS} items-center gap-6"):
+                ui.checkbox(
+                    "Enable aggressiveness objective",
+                    value=state.config.aggressiveness_objective_enabled,
+                    on_change=lambda event: setattr(
+                        state.config,
+                        "aggressiveness_objective_enabled",
+                        bool(event.value),
+                    ),
                 )
+            with ui.grid(columns=4).classes(f"{GRID_CLASS} w-full gap-3"):
+                controls["config.aggressiveness_mode"] = create_key_select(
+                    "Aggressiveness mode",
+                    _key_labels(services.AGGRESSIVENESS_MODE_CHOICES),
+                    value=state.config.aggressiveness_mode,
+                    on_change=lambda event: setattr(
+                        state.config,
+                        "aggressiveness_mode",
+                        str(event.value or "hybrid"),
+                    ),
+                ).classes(f"{INPUT_CLASS} w-56")
+                for name, label in (
+                    ("aggressiveness_component_weight", "Component weight"),
+                    ("aggressiveness_llm_weight", "LLM weight"),
+                    ("aggressiveness_judge_model", "Judge model"),
+                    ("aggressiveness_judge_temperature", "Judge temperature"),
+                ):
+                    controls[f"config.{name}"] = _bind_input(
+                        label,
+                        getattr(state.config, name),
+                        lambda value, field=name: setattr(state.config, field, value),
+                    )
 
         with ui.row().classes(f"{ROW_CLASS} items-center gap-6"):
             ui.checkbox(
@@ -183,6 +219,7 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows["single_objective"].set_text(state.objectives.single_objective)
         rows["selected_objectives"].set_text(", ".join(sorted(state.objectives.selected)) or "(none)")
         rows["objective_weights"].set_text(_format_objective_weights(state))
+        rows["aggressiveness"].set_text(_format_aggressiveness_settings(state))
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Config Summary").classes(SECTION_HEADER_CLASS)
@@ -214,6 +251,7 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
                 "single_objective": _summary_row("Single objective"),
                 "selected_objectives": _summary_row("Selected objectives"),
                 "objective_weights": _summary_row("Weights"),
+                "aggressiveness": _summary_row("Aggressiveness"),
             }
         )
 
@@ -248,6 +286,18 @@ def _format_mutation_weights(state: Any) -> str:
     if not state.operators.mutation_weights:
         return "(none)"
     return "\n".join(f"{key}  {value}" for key, value in sorted(state.operators.mutation_weights.items()))
+
+
+def _format_aggressiveness_settings(state: Any) -> str:
+    """Return the strategic-aggressiveness objective settings."""
+    if state.config.algorithm not in services.MO_ALGORITHMS:
+        return "(single-objective algorithm)"
+    return (
+        f"enabled={state.config.aggressiveness_objective_enabled}, "
+        f"mode={state.config.aggressiveness_mode}, "
+        f"component={state.config.aggressiveness_component_weight}, "
+        f"llm={state.config.aggressiveness_llm_weight}"
+    )
 
 
 def _set_algorithm(state: Any, value: str) -> None:
