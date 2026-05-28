@@ -7,6 +7,7 @@ from .registry import (
     get_objectives,
     list_objective_names,
     register_objective,
+    selected_objective_names,
     validate_objective_config,
 )
 from .aggregation import aggregate_fitness
@@ -20,5 +21,6 @@ __all__ = [
     "get_objectives",
     "list_objective_names",
     "register_objective",
+    "selected_objective_names",
     "validate_objective_config",
 ]

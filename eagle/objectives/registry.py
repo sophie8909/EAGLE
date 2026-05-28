@@ -215,6 +215,17 @@ def validate_objective_config(config: Any, eval_result: dict | None = None) -> d
     return {"mode": "multi", "objectives": objectives}
 
 
+def selected_objective_names(config: Any, eval_result: dict | None = None) -> tuple[str, ...]:
+    """Return objective names selected by config for algorithms and reports."""
+    objective_config = validate_objective_config(config, eval_result)
+    mode = objective_config["mode"]
+    if mode == "single":
+        return (objective_config["objective"],)
+    if mode == "weighted_mix":
+        return tuple(objective_config["weights"].keys())
+    return tuple(objective_config["objectives"])
+
+
 def _validate_supported_objectives(objectives: Any, available: set[str], eval_mode: str) -> None:
     """Raise if any selected objective is unavailable for the active eval mode."""
     selected = list(objectives)
