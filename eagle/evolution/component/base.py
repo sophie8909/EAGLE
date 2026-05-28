@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, ClassVar, List
 
 from eagle.config import EAConfig, clone_config
+from eagle.core.result import EvaluationResult, ensure_evaluation_result
 from eagle.objectives.aggregation import aggregate_fitness
 from eagle.operators.mutation import support as mutation_support
 from eagle.operators.registry import get_operator
@@ -132,7 +133,7 @@ class EvaluationBatchRunner:
         self,
         group: list[Individual],
         leader: Individual,
-        eval_result: dict[str, Any] | None,
+        eval_result: dict[str, Any] | EvaluationResult | None,
     ) -> None:
         """Copy the leader's completed evaluation to all same-prompt followers.
 
@@ -161,7 +162,7 @@ class EvaluationBatchRunner:
         *,
         target: Individual,
         source: Individual,
-        eval_result: dict[str, Any] | None,
+        eval_result: dict[str, Any] | EvaluationResult | None,
     ) -> None:
         """Copy evaluation state from a same-prompt source individual.
 
@@ -645,7 +646,7 @@ class EA:
         *,
         generation: int | None,
         stage: str,
-    ) -> dict[str, Any]:
+    ) -> EvaluationResult:
         """Evaluate one individual using a fresh evaluator instance."""
         evaluator = self.build_evaluator(config_override=clone_config(self.config))
         if self.timing_recorder is None:
@@ -657,15 +658,19 @@ class EA:
         ):
             return self._evaluate_individual(evaluator, individual, generation=generation)
 
-    def _evaluate_individual(self, evaluator: Any, individual: Individual, *, generation: int | None) -> dict[str, Any]:
+    def _evaluate_individual(self, evaluator: Any, individual: Individual, *, generation: int | None) -> EvaluationResult:
         """Run the evaluator and aggregate raw metrics into individual fitness."""
-        eval_result = evaluator.evaluate(
+        eval_result = ensure_evaluation_result(evaluator.evaluate(
             individual,
             generation=generation,
             profile_output_path=self.get_profile_log_path(),
             match_score_recorder=self.match_score_recorder,
-        )
+        ))
         fitness = aggregate_fitness(eval_result, self.config)
+        if isinstance(fitness, dict):
+            eval_result.fitness = dict(fitness)
+        else:
+            eval_result.fitness = {"score": float(fitness)}
         individual.fitness = fitness
         individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
         individual.evaluation_mode = str(eval_result.get("evaluation_mode") or eval_result.get("eval_mode") or "")

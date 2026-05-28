@@ -210,7 +210,8 @@ class RoundSurrogateEvaluator:
             runtime_logs_dir=self.runtime_logs_dir,
         )
         round_eval_result = round_evaluator.evaluate(individual, generation=generation)
-        round_score = GameplayAggregator.round_surrogate_score(round_eval_result)
+        round_metrics = dict(round_eval_result)
+        round_score = GameplayAggregator.round_surrogate_score(round_metrics)
         return {
             "prompt": prompt,
             "prompt_token_count": count_prompt_tokens(prompt)[0],
@@ -221,7 +222,7 @@ class RoundSurrogateEvaluator:
             "simulation_meta": {
                 "winner": None,
                 "timeout": False,
-                "round_eval_result": round_eval_result,
+                "round_eval_result": round_metrics,
                 "opponent": opponent,
             },
             "stats": {},

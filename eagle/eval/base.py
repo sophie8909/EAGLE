@@ -5,10 +5,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from eagle.core.result import EvaluationResult
+
 
 class BaseEvaluator(ABC):
-    """Common evaluator contract returning dict-based fitness values."""
+    """Common evaluator contract returning a normalized evaluation result."""
 
     @abstractmethod
-    def evaluate(self, individual: Any, **kwargs: Any) -> dict[str, Any]:
-        """Evaluate one individual and update its fitness dictionary."""
+    def evaluate(self, individual: Any, context: Any = None, **kwargs: Any) -> EvaluationResult:
+        """Evaluate one individual and return raw metrics plus optional artifacts."""

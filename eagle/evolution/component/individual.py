@@ -11,7 +11,7 @@ from typing import Any
 from eagle.utils.component_pool import ComponentPool
 
 
-DEFAULT_FITNESS = [0.0, 0.0]
+DEFAULT_FITNESS: dict[str, float] = {}
 
 
 @dataclass(frozen=True)
@@ -48,7 +48,8 @@ class Individual:
         self.stable_components = [self.game_rule]
         self.evolving_components: list[int] = []
 
-        self.fitness = DEFAULT_FITNESS.copy()
+        self.fitness: dict[str, float] | float | list[float] = DEFAULT_FITNESS.copy()
+        self.metadata: dict[str, Any] = {}
         self.evaluation_mode: str | None = None
 
         self.last_round_evaluation: dict[str, Any] = {}

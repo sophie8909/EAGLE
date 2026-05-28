@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from eagle.core.result import ensure_evaluation_result
 from eagle.objectives.registry import (
     _normalize_name,
     get_objective,
@@ -15,7 +16,8 @@ from eagle.objectives.registry import (
 def aggregate_fitness(eval_result: dict[str, Any], config: Any) -> float | dict[str, float]:
     """Convert raw eval_result metrics into scalar or objective-dict fitness."""
     application = _normalize_name(getattr(config, "application", "microrts") or "microrts")
-    objective_result = dict(eval_result)
+    normalized_result = ensure_evaluation_result(eval_result)
+    objective_result = normalized_result.metrics
     objective_result.setdefault("min_token_length", getattr(config, "min_token_length", 1))
     objective_config = validate_objective_config(config, objective_result)
     mode = objective_config["mode"]

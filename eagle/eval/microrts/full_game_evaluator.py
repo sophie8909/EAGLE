@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from ...config import EAConfig
+from ...core.result import EvaluationResult
+from ...eval.base import BaseEvaluator
 from ...objectives.registry import objective_eval_mode
 from ...utils.token_count import count_prompt_tokens
 from ...reflection.microrts.game_log_reflection_context import Reflection, read_max_turn_hint
@@ -27,7 +29,7 @@ DEFAULT_GAMEPLAY_OPPONENTS = [
 ]
 
 
-class FullGameEvaluator:
+class FullGameEvaluator(BaseEvaluator):
     """Evaluate one MicroRTS individual through gameplay or policy-backed matches."""
 
     def __init__(
@@ -63,7 +65,7 @@ class FullGameEvaluator:
         match_score_recorder: MatchScoreRecorder | None = None,
         opponents: list[str] | None = None,
         allow_history_reuse: bool = False,
-    ) -> dict[str, Any]:
+    ) -> EvaluationResult:
         """Run gameplay evaluation across opponents and aggregate EA fitness."""
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         prompt = self._construct_prompt(individual)
@@ -185,7 +187,7 @@ class FullGameEvaluator:
             flush=True,
         )
         eval_result["prompt"] = prompt
-        return eval_result
+        return EvaluationResult(metrics=eval_result)
 
     def surrogate(
         self,
@@ -193,7 +195,7 @@ class FullGameEvaluator:
         *,
         generation: int | None = None,
         opponents: list[str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> EvaluationResult:
         """Run surrogate evaluation across opponents and aggregate EA fitness."""
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         prompt = self._construct_prompt(individual)
@@ -274,7 +276,7 @@ class FullGameEvaluator:
             "eval_result": eval_result,
         }
         eval_result["prompt"] = prompt
-        return eval_result
+        return EvaluationResult(metrics=eval_result)
 
     def run_round_surrogate(
         self,

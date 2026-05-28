@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from eagle.config import EAConfig
+from eagle.core.result import EvaluationResult
 from eagle.evolution.component.individual import Individual
+from eagle.eval.base import BaseEvaluator
 from eagle.llm import LLM
 from eagle.project import MICRORTS_LOGS_DIR
 from eagle.utils.component_pool import ComponentPool
@@ -23,7 +25,7 @@ from eagle.utils.token_count import count_prompt_tokens
 from .prompt_history import PromptHistory
 from .state_generator import StateGenerator
 
-class Evaluator:
+class Evaluator(BaseEvaluator):
     """Evaluate prompts by asking an LLM for one generated game-state response."""
 
     MISSING_MOVES_FITNESS_SCORE = -2.0
@@ -61,7 +63,7 @@ class Evaluator:
         generation: int | None = None,
         profile_output_path: str | Path | None = None,
         **_: Any,
-    ) -> dict[str, Any]:
+    ) -> EvaluationResult:
         """Generate states, ask for actions, and return raw objective metrics."""
         base_prompt = self._construct_prompt(individual)
         print(
@@ -115,7 +117,7 @@ class Evaluator:
                 f"individual={individual.id} mode=history_cache",
                 flush=True,
             )
-            return eval_result
+            return EvaluationResult(metrics=eval_result)
 
         legality_score_sum = 0.0
         alignment_score_sum = 0.0
@@ -235,7 +237,7 @@ class Evaluator:
             f"individual={individual.id} mode={eval_result.get('evaluation_mode')}",
             flush=True,
         )
-        return eval_result
+        return EvaluationResult(metrics=eval_result)
 
     def _evaluate_round_samples(
         self,

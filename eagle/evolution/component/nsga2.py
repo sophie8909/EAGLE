@@ -77,8 +77,8 @@ class NSGA2(EA):
         return sorted(
             population,
             key=lambda ind: (
-                ind.fitness[0] if ind.fitness and len(ind.fitness) > 0 else float("-inf"),
-                ind.fitness[1] if ind.fitness and len(ind.fitness) > 1 else float("-inf"),
+                _normalize_two_objective_fitness(ind.fitness)[0],
+                _normalize_two_objective_fitness(ind.fitness)[1],
             ),
             reverse=True,
         )

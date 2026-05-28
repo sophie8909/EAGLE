@@ -7,6 +7,7 @@ import random
 from typing import Any
 
 from eagle.config import clone_config
+from eagle.core.result import ensure_evaluation_result
 from eagle.core.registry import ALGORITHMS, EVALUATORS
 from eagle.objectives.aggregation import aggregate_fitness
 from eagle.evolution.component.ga import GA
@@ -116,11 +117,11 @@ class MicroRTSNSGA2Surrogate(NSGA2):
 
     def _evaluate_surrogate_individual(self, evaluator, individual, *, generation: int | None):
         """Run one surrogate evaluation and store aggregate-ready NSGA-II fitness."""
-        eval_result = evaluator.surrogate(
+        eval_result = ensure_evaluation_result(evaluator.surrogate(
             individual,
             generation=generation,
             opponents=self.opponent_list or None,
-        )
+        ))
         add_prompt_metrics(
             eval_result,
             individual,
@@ -134,6 +135,10 @@ class MicroRTSNSGA2Surrogate(NSGA2):
             flush=True,
         )
         fitness = aggregate_fitness(eval_result, self.config)
+        if isinstance(fitness, dict):
+            eval_result.fitness = dict(fitness)
+        else:
+            eval_result.fitness = {"score": float(fitness)}
         individual.fitness = fitness
         individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
         individual.evaluation_mode = "surrogate"
@@ -225,11 +230,11 @@ class MicroRTSGASurrogate(GA):
 
     def _evaluate_surrogate_individual(self, evaluator, individual, *, generation: int | None):
         """Run one surrogate evaluation and keep the scalar score for GA ranking."""
-        eval_result = evaluator.surrogate(
+        eval_result = ensure_evaluation_result(evaluator.surrogate(
             individual,
             generation=generation,
             opponents=self.opponent_list or None,
-        )
+        ))
         add_prompt_metrics(
             eval_result,
             individual,
@@ -243,6 +248,10 @@ class MicroRTSGASurrogate(GA):
             flush=True,
         )
         fitness = aggregate_fitness(eval_result, self.config)
+        if isinstance(fitness, dict):
+            eval_result.fitness = dict(fitness)
+        else:
+            eval_result.fitness = {"score": float(fitness)}
         individual.fitness = fitness
         individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
         individual.evaluation_mode = "surrogate"

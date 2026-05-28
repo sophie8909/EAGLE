@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
+
+from eagle.core.result import ensure_evaluation_result
 
 
 class Objective(ABC):
@@ -24,9 +27,9 @@ class Objective(ABC):
     def compute(self, eval_result: dict) -> float:
         """Compute the raw objective value from one evaluator result."""
 
-    def optimization_value(self, eval_result: dict) -> float:
+    def optimization_value(self, eval_result: dict[str, Any]) -> float:
         """Return the value stored in fitness for maximization algorithms."""
-        value = float(self.compute(eval_result))
+        value = float(self.compute(ensure_evaluation_result(eval_result).metrics))
         return value if self.direction == "max" else -value
 
 
