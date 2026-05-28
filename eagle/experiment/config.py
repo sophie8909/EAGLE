@@ -9,6 +9,8 @@ from typing import Any
 
 from ..config import EAConfig, load_config_payload, normalize_algorithm_name
 
+_EA_FIELD_NAMES = set(EAConfig.__dataclass_fields__)
+
 
 @dataclass
 class ExperimentConfig:
@@ -19,6 +21,19 @@ class ExperimentConfig:
     ea: EAConfig = field(default_factory=EAConfig)
     evaluator_params: dict[str, Any] = field(default_factory=dict)
     opponents: list[str] = field(default_factory=list)
+
+    def to_payload(self) -> dict[str, Any]:
+        """Return the canonical serialized experiment-config shape."""
+        return {
+            "algorithm": self.algorithm,
+            "evaluator": self.evaluator,
+            "evaluator_params": dict(self.evaluator_params),
+            "opponents": list(self.opponents),
+            "ea": {
+                key: getattr(self.ea, key)
+                for key in self.ea.__dataclass_fields__
+            },
+        }
 
 
 def load_experiment_config(path: str | Path | None) -> ExperimentConfig:
@@ -35,7 +50,7 @@ def load_experiment_config(path: str | Path | None) -> ExperimentConfig:
 def experiment_config_from_payload(payload: dict[str, Any] | None) -> ExperimentConfig:
     """Build an experiment config from a plain mapping."""
     data = dict(payload or {})
-    ea_payload = dict(data.get("ea") or {})
+    ea_payload = _ea_payload_from_experiment_payload(data)
     if "algorithm" in data and "algorithm" not in ea_payload:
         ea_payload["algorithm"] = normalize_algorithm_name(
             data["algorithm"],
@@ -75,16 +90,7 @@ def experiment_config_from_payload(payload: dict[str, Any] | None) -> Experiment
 def save_experiment_config(config: ExperimentConfig, path: str | Path) -> Path:
     """Save one experiment config as YAML when PyYAML is available, otherwise JSON."""
     output_path = Path(path)
-    payload = {
-        "algorithm": config.algorithm,
-        "evaluator": config.evaluator,
-        "evaluator_params": dict(config.evaluator_params),
-        "opponents": list(config.opponents),
-        "ea": {
-            key: getattr(config.ea, key)
-            for key in config.ea.__dataclass_fields__
-        },
-    }
+    payload = config.to_payload()
     try:
         import yaml
 
@@ -99,6 +105,17 @@ def _read_mapping(path: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".json":
         return json.loads(text)
+
+
+def _ea_payload_from_experiment_payload(data: dict[str, Any]) -> dict[str, Any]:
+    """Extract EA settings from canonical or flat legacy config JSON."""
+    if isinstance(data.get("ea"), dict):
+        return dict(data["ea"])
+    return {
+        key: value
+        for key, value in data.items()
+        if key in _EA_FIELD_NAMES
+    }
     try:
         import yaml
 

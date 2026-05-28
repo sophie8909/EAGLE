@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .config import EAConfig, load_config_from_json, resolve_component_pool_path
-from .experiment.config import load_experiment_config
+from .experiment.config import ExperimentConfig, load_experiment_config
 from .experiment.runner import build_algorithm
 from .project import DEFAULT_EVOLUTION_CONFIG_PATH, EAGLE_LOGS_DIR, PROMPTS_DIR
 from .utils.experiment_logs import resolve_resume_log_dir, resolve_resume_log_dir_from_config
@@ -66,9 +66,7 @@ def _resolve_base_config(args, resume_log_dir: str | None) -> EAConfig:
     if resume_log_dir:
         return load_config_from_json(resume_log_dir)
     if args.config:
-        if str(args.config).lower().endswith((".yaml", ".yml")):
-            return load_experiment_config(args.config).ea
-        return load_config_from_json(args.config, validate=False)
+        return load_experiment_config(args.config).ea
     if DEFAULT_EVOLUTION_CONFIG_PATH.exists():
         return load_config_from_json(DEFAULT_EVOLUTION_CONFIG_PATH, validate=False)
     return EAConfig()
@@ -217,21 +215,19 @@ def main() -> None:
     component_pool = ComponentPool.from_json(
         _resolve_component_pool_path_from_config(config, args, resume_log_dir)
     )
-    experiment_config = load_experiment_config(args.config) if args.config and str(args.config).lower().endswith((".yaml", ".yml")) else None
-    if experiment_config is None:
-        from .experiment.config import ExperimentConfig
-
+    if args.config:
+        experiment_config = load_experiment_config(args.config)
+        experiment_config.ea = config
+        experiment_config.opponents = opponent_list
+        experiment_config.algorithm = config.algorithm
+        experiment_config.evaluator = config.evaluator
+    else:
         experiment_config = ExperimentConfig(
             algorithm=config.algorithm,
             evaluator=config.evaluator,
             ea=config,
             opponents=opponent_list,
         )
-    else:
-        experiment_config.ea = config
-        experiment_config.opponents = opponent_list
-        experiment_config.algorithm = config.algorithm
-        experiment_config.evaluator = config.evaluator
     if args.evaluator:
         experiment_config.evaluator = args.evaluator
         config.evaluator = args.evaluator
