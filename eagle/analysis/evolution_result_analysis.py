@@ -164,7 +164,37 @@ def parse_mo_analysis(log_text, objective_specs: list | None = None) -> dict:
     }
     if trends:
         result["objective_trends"] = trends
+    if "strategic_aggressiveness" in objective_names_list:
+        result["aggressiveness_stats"] = _mo_aggressiveness_stats(blocks, objective_names_list)
     return result
+
+
+def _mo_aggressiveness_stats(blocks: list[tuple[int, str]], objective_names_list: list[str]) -> list[dict[str, float]]:
+    """Return strategic aggressiveness stats parsed from MO generation logs."""
+    stats: list[dict[str, float]] = []
+    for generation, block in blocks:
+        records = _mo_records_from_block(block, objective_names_list)
+        values = [
+            float(record["fitness"]["strategic_aggressiveness"])
+            for record in records
+            if isinstance(record.get("fitness"), dict)
+            and "strategic_aggressiveness" in record["fitness"]
+        ]
+        if not values:
+            continue
+        mean = sum(values) / len(values)
+        variance = sum((value - mean) ** 2 for value in values) / len(values)
+        stats.append(
+            {
+                "generation": generation,
+                "mean": mean,
+                "std": math.sqrt(variance),
+                "min": min(values),
+                "max": max(values),
+                "count": len(values),
+            }
+        )
+    return stats
 
 
 def _contains_key(value: object, marker: str) -> bool:
@@ -1586,6 +1616,161 @@ def _build_generation_gif(image_paths: list[Path], output_path: Path) -> Path | 
     return output_path
 
 
+def _aggressiveness_values(
+    generation_entries: list[tuple[int, list, set[str]]],
+) -> list[tuple[int, object, float, dict[str, float]]]:
+    """Return strategic aggressiveness values by generation and individual."""
+    rows: list[tuple[int, object, float, dict[str, float]]] = []
+    for generation, individuals, _ in generation_entries:
+        for individual in individuals:
+            fitness = normalize_fitness_dict(getattr(individual, "fitness", {}))
+            if "strategic_aggressiveness" not in fitness:
+                continue
+            rows.append((generation, individual, float(fitness["strategic_aggressiveness"]), fitness))
+    return rows
+
+
+def _aggressiveness_generation_stats(rows: list[tuple[int, object, float, dict[str, float]]]) -> list[dict[str, float]]:
+    """Return mean/std strategic aggressiveness per generation."""
+    stats: list[dict[str, float]] = []
+    generations = sorted({generation for generation, _, _, _ in rows})
+    for generation in generations:
+        values = [value for row_generation, _, value, _ in rows if row_generation == generation]
+        if not values:
+            continue
+        mean = sum(values) / len(values)
+        variance = sum((value - mean) ** 2 for value in values) / len(values)
+        stats.append(
+            {
+                "generation": generation,
+                "mean": mean,
+                "std": math.sqrt(variance),
+                "min": min(values),
+                "max": max(values),
+                "count": len(values),
+            }
+        )
+    return stats
+
+
+def _plot_aggressiveness_analysis(
+    run_dir: Path,
+    output_dir: Path,
+    custom_title: str | None = None,
+    debug: bool = False,
+) -> dict[str, object]:
+    """Render aggressiveness distribution, gameplay scatter, and colored Pareto plots."""
+    plt = _require_matplotlib()
+    generation_entries = _load_generation_entries(run_dir, debug=debug)
+    rows = _aggressiveness_values(generation_entries)
+    if not rows:
+        return {}
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stats = _aggressiveness_generation_stats(rows)
+    stats_path = output_dir / "aggressiveness_stats.json"
+    stats_path.write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    distribution_path = output_dir / "aggressiveness_distribution.png"
+    plt.figure(figsize=(9, 5))
+    generations = [row["generation"] for row in stats]
+    means = [row["mean"] for row in stats]
+    stds = [row["std"] for row in stats]
+    plt.errorbar(generations, means, yerr=stds, marker="o", capsize=4)
+    plt.ylim(-0.05, 1.05)
+    plt.xlabel("Generation")
+    plt.ylabel("Strategic aggressiveness")
+    plt.title(_compose_plot_title("Aggressiveness Distribution", custom_title))
+    plt.grid(alpha=0.25)
+    plt.tight_layout()
+    plt.savefig(distribution_path, dpi=200)
+    plt.close()
+
+    gameplay_objective = _aggressiveness_gameplay_objective(rows)
+    scatter_path = output_dir / "aggressiveness_vs_gameplay.png"
+    if gameplay_objective:
+        x_values = [row[2] for row in rows if gameplay_objective in row[3]]
+        y_values = [row[3][gameplay_objective] for row in rows if gameplay_objective in row[3]]
+        if x_values and y_values:
+            plt.figure(figsize=(7, 6))
+            plt.scatter(x_values, y_values, alpha=0.8)
+            plt.xlim(-0.05, 1.05)
+            plt.xlabel("Strategic aggressiveness")
+            plt.ylabel(gameplay_objective)
+            plt.title(_compose_plot_title("Aggressiveness vs Gameplay", custom_title))
+            plt.grid(alpha=0.25)
+            plt.tight_layout()
+            plt.savefig(scatter_path, dpi=200)
+            plt.close()
+
+    colored_path = output_dir / "pareto_colored_by_aggressiveness.png"
+    latest_generation = max(generation for generation, _, _, _ in rows)
+    latest_entries = [
+        entry for entry in generation_entries if entry[0] == latest_generation
+    ]
+    if latest_entries and gameplay_objective:
+        _, individuals, front_one_ids = latest_entries[-1]
+        x_name = gameplay_objective
+        y_name = _second_plot_objective(individuals, x_name)
+        if y_name:
+            points = []
+            for individual in individuals:
+                fitness = normalize_fitness_dict(getattr(individual, "fitness", {}))
+                if x_name in fitness and y_name in fitness and "strategic_aggressiveness" in fitness:
+                    points.append((fitness[x_name], fitness[y_name], fitness["strategic_aggressiveness"], individual))
+            if points:
+                plt.figure(figsize=(8, 6))
+                scatter = plt.scatter(
+                    [point[0] for point in points],
+                    [point[1] for point in points],
+                    c=[point[2] for point in points],
+                    cmap="plasma",
+                    vmin=0.0,
+                    vmax=1.0,
+                    edgecolors=[
+                        "black" if getattr(point[3], "id", "") in front_one_ids else "none"
+                        for point in points
+                    ],
+                    linewidths=1.0,
+                    alpha=0.9,
+                )
+                plt.colorbar(scatter, label="Strategic aggressiveness")
+                plt.xlabel(x_name)
+                plt.ylabel(y_name)
+                plt.title(_compose_plot_title("Pareto Colored by Aggressiveness", custom_title))
+                plt.grid(alpha=0.25)
+                plt.tight_layout()
+                plt.savefig(colored_path, dpi=200)
+                plt.close()
+
+    return {
+        "aggressiveness_distribution": str(distribution_path),
+        "aggressiveness_vs_gameplay": str(scatter_path) if scatter_path.exists() else "",
+        "pareto_colored_by_aggressiveness": str(colored_path) if colored_path.exists() else "",
+        "aggressiveness_stats_json": str(stats_path),
+        "aggressiveness_stats": stats,
+    }
+
+
+def _aggressiveness_gameplay_objective(rows: list[tuple[int, object, float, dict[str, float]]]) -> str:
+    """Choose a gameplay objective for aggressiveness scatter plots."""
+    preferred = ("resource_advantage", "win_score")
+    available = {key for _, _, _, fitness in rows for key in fitness if key != "strategic_aggressiveness"}
+    for key in preferred:
+        if key in available:
+            return key
+    return sorted(available)[0] if available else ""
+
+
+def _second_plot_objective(individuals: list, first_objective: str) -> str:
+    """Return a second objective for colored Pareto plotting."""
+    names = _population_objective_names(individuals)
+    for name in names:
+        if name not in {first_objective, "strategic_aggressiveness"}:
+            return name
+    return "strategic_aggressiveness" if "strategic_aggressiveness" in names else ""
+
+
 def _collect_final_test_mode_rows(results_payload: dict, interval_mode: str) -> tuple[list[str], list[str], list[list[float]]]:
     """Collect one heatmap matrix for one final-test mode."""
     records = _final_test_records(results_payload.get("results"))
@@ -1689,6 +1874,12 @@ def analyze_evolution_run(
         generation_figures,
         resolved_output_dir / "generation_fitness" / "generation_fitness_animation.gif",
     )
+    aggressiveness_outputs = _plot_aggressiveness_analysis(
+        resolved_run_dir,
+        ensure_directory(resolved_output_dir / "aggressiveness"),
+        custom_title=title,
+        debug=debug,
+    )
 
     final_test_path = _resolve_final_test_path(resolved_run_dir)
     final_test_figures: dict[str, str] = {}
@@ -1709,6 +1900,7 @@ def analyze_evolution_run(
         "run_dir": str(resolved_run_dir),
         "generation_scatter_figures": [str(path) for path in generation_figures],
         "generation_animation_gif": str(generation_gif_path) if generation_gif_path is not None else None,
+        "aggressiveness": aggressiveness_outputs,
         "final_test_result_path": str(final_test_path) if final_test_path is not None else None,
         "final_test_figures": final_test_figures,
         "title": title,
