@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import requests
+
 from eagle.logging import trace
 from eagle.objectives.aggressiveness.cache import judge_aggressiveness_cached
 from eagle.objectives.aggressiveness.component_priors import compute_component_aggressiveness
@@ -40,7 +42,7 @@ def maybe_add_aggressiveness_metrics(
             )
             judgment = dict(cached.get("parsed_json") or {})
             llm_score = _llm_score(judgment)
-        except (OSError, ValueError, TypeError) as exc:
+        except (OSError, ValueError, TypeError, requests.RequestException) as exc:
             mode = "component_only"
             eval_result["aggressiveness_judge_error"] = repr(exc)
             trace.record(
@@ -71,6 +73,17 @@ def maybe_add_aggressiveness_metrics(
             "aggressiveness_judgment": judgment,
             "strategic_aggressiveness": final_score,
         }
+    )
+    trace.record(
+        "aggressiveness_judgment",
+        {
+            "generation": "unknown" if generation is None else generation,
+            "parsed_json": judgment,
+            "final_score": final_score,
+            "cache_hit": None,
+            "fallback_component_only": mode == "component_only" and not judgment,
+        },
+        {"log_dir": run_dir, "generation": "unknown" if generation is None else generation},
     )
 
 
