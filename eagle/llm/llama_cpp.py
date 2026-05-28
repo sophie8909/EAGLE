@@ -247,6 +247,23 @@ class LLM:
         return LLM._extract_first_json_object(raw_output)
 
     @staticmethod
+    def llama_cpp_generate_text(
+        prompt: str,
+        model: str = "local",
+        temperature: float = 0.0,
+        debug_log_dir: str | Path | None = None,
+        debug_context: dict[str, Any] | None = None,
+    ) -> str:
+        """Generate raw text through llama.cpp for strict parsers."""
+        return LLM._generate_text(
+            prompt=prompt,
+            model=model,
+            temperature=temperature,
+            debug_log_dir=debug_log_dir,
+            debug_context=debug_context,
+        )
+
+    @staticmethod
     def llama_cpp_generate_surrogate_strategy_spec(
         strategy_prompt: str,
         model: str = "local",
