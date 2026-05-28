@@ -17,6 +17,8 @@ from eagle.surrogate.java.eagle_java_renderer import render_eagle_java_from_prom
 from eagle.surrogate.compiler.eagle_policy_spec import compile_prompt_to_eagle_policy_spec
 from eagle.surrogate.eval.eagle_policy_renderer import render_eagle_policy_agent
 from eagle.envs.microrts.compiler import compile_microrts
+from eagle.core.result import EvaluationResult
+from eagle.eval.base import BaseEvaluator, EvaluationContext
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.token_count import count_prompt_tokens
 
@@ -163,7 +165,7 @@ class GameplayAggregator:
         return 0.0
 
 
-class RoundSurrogateEvaluator:
+class RoundSurrogateEvaluator(BaseEvaluator):
     """Run the local round evaluator and adapt it to match-score shape."""
 
     def __init__(
@@ -185,12 +187,13 @@ class RoundSurrogateEvaluator:
 
     def evaluate(
         self,
-        *,
         individual: Any,
-        prompt: str,
-        opponent: str | None,
-        generation: int | None,
-    ) -> dict[str, Any]:
+        context: EvaluationContext | None = None,
+        *,
+        prompt: str | None = None,
+        opponent: str | None = None,
+        generation: int | None = None,
+    ) -> EvaluationResult:
         """Evaluate one candidate without launching Java gameplay.
 
         Args:
@@ -204,6 +207,11 @@ class RoundSurrogateEvaluator:
         """
         from .round_evaluator import Evaluator as RoundEvaluator
 
+        if context is not None:
+            generation = context.generation if generation is None else generation
+            if context.opponents and opponent is None:
+                opponent = context.opponents[0]
+        rendered_prompt = prompt if prompt is not None else getattr(individual, "rendered_prompt", "")
         round_evaluator = RoundEvaluator(
             self.component_pool,
             self.config,
@@ -212,9 +220,9 @@ class RoundSurrogateEvaluator:
         round_eval_result = round_evaluator.evaluate(individual, generation=generation)
         round_metrics = dict(round_eval_result)
         round_score = GameplayAggregator.round_surrogate_score(round_metrics)
-        return {
-            "prompt": prompt,
-            "prompt_token_count": count_prompt_tokens(prompt)[0],
+        return EvaluationResult(metrics={
+            "prompt": rendered_prompt,
+            "prompt_token_count": count_prompt_tokens(rendered_prompt)[0],
             "match_score": {
                 "win_score": 0.0,
                 "raw_resource_advantage_score": round_score,
@@ -227,7 +235,7 @@ class RoundSurrogateEvaluator:
             },
             "stats": {},
             "evaluation_mode": "round",
-        }
+        })
 
 
 class JavaMatchEvaluator:

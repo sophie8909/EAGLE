@@ -11,7 +11,7 @@ from typing import Any
 from eagle.config import EAConfig
 from eagle.core.result import EvaluationResult
 from eagle.evolution.component.individual import Individual
-from eagle.eval.base import BaseEvaluator
+from eagle.eval.base import BaseEvaluator, EvaluationContext
 from eagle.llm import LLM
 from eagle.project import MICRORTS_LOGS_DIR
 from eagle.utils.component_pool import ComponentPool
@@ -59,12 +59,18 @@ class Evaluator(BaseEvaluator):
     def evaluate(
         self,
         individual: Individual,
+        context: EvaluationContext | None = None,
         *,
         generation: int | None = None,
         profile_output_path: str | Path | None = None,
         **_: Any,
     ) -> EvaluationResult:
         """Generate states, ask for actions, and return raw objective metrics."""
+        if context is not None:
+            generation = context.generation if generation is None else generation
+            profile_output_path = (
+                context.profile_output_path if profile_output_path is None else profile_output_path
+            )
         base_prompt = self._construct_prompt(individual)
         print(
             "[DEBUG] round evaluate start "

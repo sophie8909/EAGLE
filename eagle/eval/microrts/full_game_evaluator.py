@@ -8,7 +8,7 @@ from typing import Any
 
 from ...config import EAConfig
 from ...core.result import EvaluationResult
-from ...eval.base import BaseEvaluator
+from ...eval.base import BaseEvaluator, EvaluationContext
 from ...objectives.registry import objective_eval_mode
 from ...utils.token_count import count_prompt_tokens
 from ...reflection.microrts.game_log_reflection_context import Reflection, read_max_turn_hint
@@ -59,6 +59,7 @@ class FullGameEvaluator(BaseEvaluator):
     def evaluate(
         self,
         individual: Individual,
+        context: EvaluationContext | None = None,
         *,
         generation: int | None = None,
         profile_output_path: str | Path | None = None,
@@ -67,6 +68,15 @@ class FullGameEvaluator(BaseEvaluator):
         allow_history_reuse: bool = False,
     ) -> EvaluationResult:
         """Run gameplay evaluation across opponents and aggregate EA fitness."""
+        if context is not None:
+            generation = context.generation if generation is None else generation
+            profile_output_path = (
+                context.profile_output_path if profile_output_path is None else profile_output_path
+            )
+            match_score_recorder = (
+                context.match_score_recorder if match_score_recorder is None else match_score_recorder
+            )
+            opponents = context.opponents if opponents is None else opponents
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         prompt = self._construct_prompt(individual)
         resolved_opponents = list(opponents) if opponents is not None else self._configured_gameplay_opponents()
@@ -192,11 +202,15 @@ class FullGameEvaluator(BaseEvaluator):
     def surrogate(
         self,
         individual: Individual,
+        context: EvaluationContext | None = None,
         *,
         generation: int | None = None,
         opponents: list[str] | None = None,
     ) -> EvaluationResult:
         """Run surrogate evaluation across opponents and aggregate EA fitness."""
+        if context is not None:
+            generation = context.generation if generation is None else generation
+            opponents = context.opponents if opponents is None else opponents
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         prompt = self._construct_prompt(individual)
         resolved_opponents = list(opponents) if opponents is not None else self._configured_gameplay_opponents()
