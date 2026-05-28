@@ -32,6 +32,9 @@ def _event_path(log_dir: Path, event_type: str, payload: dict[str, Any], context
     if event_type == "llm_call":
         generation = context.get("generation", payload.get("generation", "unknown"))
         return log_dir / "llm_calls" / f"generation_{_safe_generation_name(generation)}.jsonl"
+    if event_type == "aggressiveness_judgment":
+        generation = context.get("generation", payload.get("generation", "unknown"))
+        return log_dir / "llm_calls" / "aggressiveness" / f"gen_{_safe_generation_name(generation)}.jsonl"
     if event_type == "checkpoint":
         return log_dir / "checkpoints.jsonl"
     return log_dir / "trace" / f"{_safe_generation_name(event_type)}.jsonl"
