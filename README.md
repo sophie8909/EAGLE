@@ -1,308 +1,135 @@
 # EAGLE
 
-EAGLE is a research framework for evolving LLM-controlled MicroRTS strategies with evolutionary algorithms. The current codebase is MicroRTS-first: Python owns configuration, evolution, evaluation orchestration, analysis, and the NiceGUI dashboard; the vendored MicroRTS tree owns Java gameplay execution.
+EAGLE is a reusable research framework for evolving LLM-controlled MicroRTS agents. Python owns experiment configuration, evolutionary search, evaluator orchestration, objective aggregation, trace writing, and analysis. The vendored MicroRTS tree owns Java gameplay execution.
 
-The target reader is a researcher/developer who is comfortable with Python, Java, LLM backends, and EA experiment artifacts.
+## Quick Start
 
-## 1. Project overview
-
-The active workflow evolves prompt components, evaluates candidate strategies in MicroRTS, records LLM calls and match evidence, and provides GUI/CLI tools for inspection and analysis.
-
-Main entry points:
-
-```bash
-./run.sh
-python -m eagle_ui.app
-python -m eagle.main --config configs/evolution/default.json
-python -m scripts.run_evolution --config configs/evolution/default.json
-```
-
-Run commands from the repository root so relative config, prompt, log, and MicroRTS paths resolve correctly.
-
-## 2. Research goal
-
-EAGLE studies how evolutionary search can improve LLM gameplay agents by changing structured prompt components and evaluating those prompts against MicroRTS scenarios. The framework is built to support experiment iteration, trace inspection, and reproducible analysis rather than polished end-user packaging.
-
-## 3. Architecture overview
-
-The main runtime flow is:
-
-1. Load `EAConfig` from JSON/YAML config or GUI state.
-2. Build an experiment config and component pool.
-3. Construct GA, NSGA-II, or surrogate variants through the registry.
-4. Generate offspring through crossover, mutation, and optional reflection.
-5. Evaluate individuals with MicroRTS round surrogate, gameplay, or final-test paths.
-6. Write checkpoints, generation logs, profile rows, match records, and LLM JSONL traces.
-7. Use the GUI or analysis CLI to inspect saved artifacts.
-
-Current responsibility boundaries are summarized in `docs/architecture_notes.md`.
-
-## 4. Repository structure
-
-```text
-eagle/
-  main.py                         CLI entry point for evolution runs
-  config.py                       EAConfig and config validation
-  evolution/component/            GA/NSGA-II core, individuals, checkpoints
-  operators/                      mutation, crossover, selection operators
-  eval/microrts/                  MicroRTS round, gameplay, final-test evaluators
-  envs/microrts/                  Java process/runtime helpers
-  domains/microrts/               MicroRTS prompt/parser/adapter helpers
-  llm/                            llama.cpp OpenAI-compatible backend
-  analysis/                       result loaders, plots, CLI analysis
-  utils/                          trace, logging, checkpoint, scoring utilities
-eagle_ui/                        NiceGUI dashboard
-configs/
-  evolution/                      active evolution presets
-  evaluation/                     final-test and surrogate-validation presets
-  experiments/                    GUI/reference experiment configs
-scripts/                          CLI wrappers
-third_party/microrts/             vendored MicroRTS runtime
-docs/                             architecture and developer notes
-logs/                             local run outputs
-results/                          analysis/benchmark outputs
-```
-
-## 5. Requirements
-
-- Python `>=3.10,<3.13`
-- Java/JDK with `java` and `javac` on `PATH`
-- Python packages from `requirements.txt`
-- Optional Conda environment from `environment.yml`
-- llama.cpp server with an OpenAI-compatible `/chat/completions` endpoint for LLM-backed paths
-
-The Python package dependencies are also declared in `pyproject.toml`.
-
-## 6. Setup
-
-Recommended Conda setup:
-
-```bash
-conda env create -f environment.yml
-conda activate eagle
-```
-
-Pip setup:
-
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-`run.sh` can create/check the Conda environment and install packages:
+Run from the repository root:
 
 ```bash
 ./run.sh --setup
+./run.sh
 ```
 
-Start llama.cpp separately when using mutation, crossover repair, reflection, round surrogate LLM scoring, or Java gameplay LLM calls:
-
-```bash
-export LLAMA_CPP_MODEL_PATH=/path/to/model.gguf
-./run_llama_cpp.sh
-```
-
-Python defaults use `LLAMA_CPP_BASE_URL=http://127.0.0.1:8080/v1` and `LLAMA_CPP_MODEL=local`. The Java gameplay agent reads `EAGLE_LLM_BASE_URL` and `EAGLE_LLM_MODEL`.
-
-## 7. Running GUI
-
-Launch the NiceGUI dashboard:
-
-```bash
-./run.sh --gui
-```
-
-or:
+The GUI entry point is:
 
 ```bash
 python -m eagle_ui.app
 ```
 
-The GUI provides experiment configuration, component editing, run control, final-test launching, LLM trace inspection, and analysis display. It uses existing Python services and analyzers; experiment logic should stay in `eagle/`.
-
-## 8. Running experiments from CLI
-
-Run a normal evolution preset:
+The CLI entry point is:
 
 ```bash
 python -m eagle.main --config configs/evolution/default.json
 ```
 
-Run a quick smoke experiment:
+Start a llama.cpp OpenAI-compatible server before using LLM-backed mutation, crossover repair, reflection, round-surrogate scoring, or Java gameplay LLM calls.
 
-```bash
-python -m eagle.main --config configs/evolution/quick_test.json --quick-run --skip-final-test
-```
+## Run An Experiment
 
-Run through the script wrapper:
-
-```bash
-python -m scripts.run_evolution --config configs/evolution/default.json
-```
-
-Resume the latest run:
-
-```bash
-python -m eagle.main --resume-latest
-```
-
-Run surrogate validation:
-
-```bash
-python -m scripts.run_surrogate_validation --config configs/evaluation/surrogate_validation.json
-```
-
-Run prompt/final-test replay:
-
-```bash
-python -m scripts.run_prompt_eval --help
-```
-
-## 9. Config files
-
-Important config locations:
-
-- `configs/evolution/default.json`: default evolution preset.
-- `configs/evolution/quick_test.json`: small smoke-test preset.
-- `configs/evaluation/final_test.json`: final-test replay defaults.
-- `configs/evaluation/surrogate_validation.json`: surrogate-validation defaults.
-- `configs/experiments/`: GUI-generated and named experiment configs.
-
-`EAConfig` in `eagle/config.py` is the active runtime config surface. It validates current algorithm names only: `ga`, `nsga2`, `ga_surrogate`, and `nsga2_surrogate`.
-
-## 10. Component JSON / prompt representation
-
-Prompt components live primarily under:
-
-```text
-eagle/prompts/components.json
-configs/experiments/*_components.json
-```
-
-Individuals store component selections as:
+Experiment configuration is loaded through `eagle.experiment.config.ExperimentConfig`. JSON files may use the current flat `EAConfig` shape or the canonical envelope:
 
 ```json
 {
-  "component_indices": {
-    "component_key": {
-      "index": 0,
-      "enabled": 1
-    }
+  "algorithm": "nsga2",
+  "evaluator": "gameplay",
+  "opponents": ["ai.abstraction.LightRush"],
+  "evaluator_params": {},
+  "ea": {
+    "population_size": 8,
+    "num_generations": 10
   }
 }
 ```
 
-`ComponentPool` renders selected components into the static strategy prompt. Few-shot examples are managed through the examples pool JSONL when enabled.
+The runtime resolves the config, builds a component pool, constructs the selected algorithm through the registry, evaluates individuals, aggregates objectives outside evaluators, and writes run artifacts under `logs/eagle/<run_id>/`.
 
-## 11. Evaluation modes
+## Extension Points
 
-Round surrogate:
+### Add An Evaluator
 
-- Implemented in `eagle/eval/microrts/round_evaluator.py`.
-- Generates MicroRTS state prompts, asks the Python LLM backend for actions, validates JSON/actions, and scores legality, resource advantage, and strategy alignment.
+Implement `eagle.eval.base.BaseEvaluator.evaluate(individual, context) -> EvaluationResult`.
 
-Gameplay:
+Return raw measurements in `EvaluationResult.metrics` and file paths in `EvaluationResult.artifacts`. Do not aggregate objectives inside the evaluator.
 
-- Implemented through `eagle/eval/microrts/full_game_evaluator.py` and `eagle/envs/microrts/runner.py`.
-- Runs Java MicroRTS games with selected opponents and records match/profile artifacts.
+Register the evaluator with `eagle.core.registry.EVALUATORS` or the domain package registry wiring.
 
-Final test:
+### Add An Objective
 
-- Implemented in `eagle/eval/microrts/final_test_runner.py`, `final_test_batch.py`, and `final_test_report.py`.
-- Replays selected prompts/individuals against configured maps and opponents, then writes final-test `results.json` artifacts for analysis.
+Create an `Objective` subclass under `eagle/objectives/<domain>/`.
 
-## 12. LLM backend
+Set `key`, `application`, `eval_modes`, `direction`, and `required_metrics`. Implement `compute(eval_result)` by reading evaluator metrics. Objective selection is controlled by `objective_config` and resolved through `eagle.objectives.registry`.
 
-Python LLM calls use `eagle/llm/llama_cpp.py` and an OpenAI-compatible llama.cpp endpoint:
+Single-objective algorithms use one selected objective or a weighted mix. Multi-objective algorithms receive selected objective names from config.
 
-```text
-<base_url>/chat/completions
+### Add An Operator
+
+Create an operator under `eagle/operators/<type>/` and inherit the matching base class from `eagle.operators.base`.
+
+Operators should support the common facade:
+
+```python
+operator.apply(parents, OperatorContext(component_pool=pool, config=config, algorithm=ea))
 ```
 
-The Java gameplay agent is:
+Keep operator-specific settings local to the operator/config. Operators should return modified individuals and should not write logs directly.
 
-```text
-third_party/microrts/src/ai/eagle/EAGLE.java
-```
+### Add An Algorithm
 
-It loads the runtime prompt, calls the llama.cpp-compatible chat endpoint, parses action JSON, and converts accepted moves into MicroRTS actions.
+Implement the lifecycle in `eagle.core.algorithm.BaseAlgorithm` or extend the component EA classes under `eagle/evolution/component/`.
 
-## 13. Trace and logs
+Algorithms own parent selection, variation, evaluation scheduling, objective aggregation, survivor selection, and checkpoint timing. Evaluators return `EvaluationResult`; algorithms decide how selected objectives become `individual.fitness`.
 
-The intended LLM trace path is:
+Register algorithms through `eagle.core.registry.ALGORITHMS`.
 
-```text
-<run_dir>/llm_calls/generation_<generation>.jsonl
-```
+## Log Layout
 
-Trace modes:
-
-- `mutation`
-- `crossover`
-- `reflection`
-- `round_surrogate`
-- `gameplay`
-
-Trace records should include `timestamp`, `generation`, `individual_id`, `call_index`, `mode`, `caller` or `source` when available, `turn`, `model`, `input`, `raw_response_body`, `parsed_response`, `final_response`, `fallback_response`, `error`, and `metadata`. Current writers may also include `opponent`, `prompt_chars`, `input_tail`, and `request_payload`.
-
-Common run artifacts are under:
+Run artifacts stay under:
 
 ```text
 logs/eagle/<run_id>/
-logs/microrts/
+  config.json
+  run_state.json
+  checkpoints.jsonl
+  timing_events.jsonl
+  profile.jsonl
+  match_score_records.jsonl
+  llm_calls/
+    generation_<n>.jsonl
 ```
 
-The GUI LLM Calls page reads generation JSONL traces first, then falls back to older debug/prompt records when needed.
+Use `eagle.logging.trace.record(event_type, payload, context)` for new trace events and `eagle.logging.checkpoints` for checkpoint writes. Preserve this layout for resume compatibility.
 
-## 14. Analysis page / MO analysis
+## Reproduce Paper Experiments
 
-The GUI Analysis page wraps the existing analysis pipeline. CLI analysis entry point:
+Use committed configs under `configs/evolution/` and keep the component pool path fixed. Record the exact config, git commit, opponents, maps, llama.cpp model, and MicroRTS runtime settings with the run artifacts.
+
+Typical command:
 
 ```bash
-python -m eagle.analysis.run_analysis_cli --run-dir logs/eagle/<run_id> --type evolution
-python -m eagle.analysis.run_analysis_cli --run-dir logs/eagle/<run_id> --type mo
-python -m eagle.analysis.run_analysis_cli --run-dir logs/eagle/<run_id> --type final_test
+python -m eagle.main --config configs/evolution/default.json
 ```
 
-Generated artifacts are written under the selected run directory, usually in `analysis/evolution/`.
-
-## 15. Common debugging commands
-
-Check syntax:
+Analyze a completed run with:
 
 ```bash
-python -m compileall eagle eagle_ui
+python -m eagle.analysis.run_analysis_cli --run-dir logs/eagle/<run_id>
 ```
 
-List run folders:
+Final-test workflows use the existing MicroRTS evaluation scripts and write analysis artifacts beside the selected run.
 
-```bash
-ls logs/eagle
+## Repository Map
+
+```text
+eagle/core/                  framework interfaces and registries
+eagle/experiment/            ExperimentConfig loading/saving
+eagle/evolution/component/   GA/NSGA-II runtime and Individual implementation
+eagle/eval/microrts/         round, surrogate, gameplay, final-test evaluators
+eagle/objectives/            objective plugins and registry
+eagle/operators/             mutation, crossover, selection operator plugins
+eagle/logging/               trace and checkpoint writers
+eagle/analysis/              result loading, plotting, and analysis CLI
+eagle/envs/microrts/         Java process helpers
+eagle_ui/                    NiceGUI dashboard over the same config/runtime paths
+third_party/microrts/        vendored Java runtime
 ```
-
-Inspect LLM traces:
-
-```bash
-ls logs/eagle/<run_id>/llm_calls
-head -n 1 logs/eagle/<run_id>/llm_calls/generation_0.jsonl
-```
-
-Run a fast evolution smoke test:
-
-```bash
-python -m eagle.main --config configs/evolution/quick_test.json --quick-run --skip-final-test
-```
-
-Export a final prompt:
-
-```bash
-python -m scripts.export_final_prompt --help
-```
-
-## 16. Development notes
-
-- Keep MicroRTS-specific code explicit; do not add generic environment adapters before a second environment exists.
-- Keep GUI code thin. Use `eagle_ui/services.py` to call existing config, run, trace, and analysis logic.
-- Do not change `results.json` or final-test schemas during analysis-only work.
-- Keep LLM trace logging best-effort: trace failures should not change evaluation behavior.
-- Use Conventional Commits for commits.
