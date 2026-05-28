@@ -10,6 +10,7 @@ from eagle.operators.base import (
     BaseMutation,
     BaseOperator,
     BaseParentSelection,
+    BaseReflection,
     BaseReplacement,
 )
 
@@ -18,6 +19,7 @@ _PACKAGE_ROOT = Path(__file__).resolve().parent
 _DISCOVERY_PACKAGES = {
     "mutation": ("mutation", BaseMutation),
     "crossover": ("crossover", BaseCrossover),
+    "reflection": ("reflection", BaseReflection),
     "parent_selection": ("parent_selection", BaseParentSelection),
     "env_selection": ("env_selection", BaseReplacement),
 }
@@ -79,6 +81,7 @@ OPERATOR_REGISTRY: dict[str, dict[str, type]] = _build_registry()
 _EXPECTED_BASES = {
     "mutation": BaseMutation,
     "crossover": BaseCrossover,
+    "reflection": BaseReflection,
     "parent_selection": BaseParentSelection,
     "env_selection": BaseReplacement,
 }
