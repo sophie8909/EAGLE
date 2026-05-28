@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
 from pathlib import Path
+
+from eagle.logging import trace
 
 
 INPUT_TAIL_CHARS = 3000
@@ -50,7 +50,6 @@ def record_llm_call(
                 call_index_value = sum(1 for line in existing_lines if line.strip()) + 1
         resolved_call_index = _resolve_call_index(call_index_value)
         record = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
             "generation": generation_value,
             "individual_id": "" if individual_id is None else str(individual_id),
             "call_index": resolved_call_index,
@@ -68,11 +67,8 @@ def record_llm_call(
             "fallback_response": "" if fallback_response is None else str(fallback_response),
             "error": None if error is None else str(error),
         }
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False, default=str))
-            handle.write("\n")
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        trace.record("llm_call", record, {"log_dir": log_dir, "generation": generation_value})
+    except (OSError, TypeError, ValueError):
         return
 
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from eagle.evolution.component.individual import Individual
-from .profiler import write_jsonl
+from eagle.logging.checkpoints import save_checkpoint_state
 
 
 def serialize_individual(individual: Individual) -> dict[str, Any]:
@@ -152,6 +152,4 @@ class CheckpointManager:
         run_metadata = dict(state.get("run_metadata") or {})
         run_metadata.setdefault("log_dir", str(self.log_dir.resolve()))
         state["run_metadata"] = run_metadata
-        with self.state_path.open("w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
-        write_jsonl(state, self.event_log_path)
+        save_checkpoint_state(self.log_dir, state)
