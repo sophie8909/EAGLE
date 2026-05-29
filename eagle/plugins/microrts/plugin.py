@@ -7,7 +7,7 @@ from typing import Any
 
 from eagle.core.plugin import BaseTaskPlugin, ObjectiveValues, ParsedOutput
 from eagle.core.result import EvaluationResult, ensure_evaluation_result
-from eagle.eval.microrts.full_game_evaluator import FullGameEvaluator
+from eagle.plugins.microrts.evaluation.full_game_evaluator import FullGameEvaluator
 from eagle.objectives.aggregation import aggregate_fitness
 from eagle.plugins.microrts.prompt import MicroRTSPromptRenderer
 
@@ -74,6 +74,6 @@ class MicroRTSPlugin(BaseTaskPlugin):
 
     def register_defaults(self) -> None:
         """Import MicroRTS registrations for algorithms, evaluators, and objectives."""
-        from eagle.eval.microrts import algorithms as _algorithms  # noqa: F401
+        from eagle.plugins.microrts.evaluation import algorithms as _algorithms  # noqa: F401
         from eagle.objectives import registry as _registry  # noqa: F401
         from eagle.plugins.microrts import objectives as _objectives  # noqa: F401
