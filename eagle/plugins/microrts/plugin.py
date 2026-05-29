@@ -8,6 +8,7 @@ from typing import Any
 from eagle.core.plugin import BaseTaskPlugin, ObjectiveValues, ParsedOutput
 from eagle.core.result import EvaluationResult, ensure_evaluation_result
 from eagle.plugins.microrts.evaluation.full_game_evaluator import FullGameEvaluator
+from eagle.plugins.microrts.evaluation.round_evaluator import Evaluator as RoundEvaluator
 from eagle.objectives.aggregation import aggregate_fitness
 from eagle.plugins.microrts.prompt import MicroRTSPromptRenderer
 
@@ -63,14 +64,39 @@ class MicroRTSPlugin(BaseTaskPlugin):
         """Evaluate one candidate through the existing MicroRTS evaluator."""
         if self.component_pool is None or self.config is None:
             raise ValueError("MicroRTSPlugin.evaluate requires component_pool and config.")
-        evaluator = FullGameEvaluator(
-            self.component_pool,
-            self.config,
-            runtime_logs_dir=self.runtime_logs_dir,
-        )
+        evaluator = self.create_evaluator(self.config)
         if isinstance(context, dict):
             return ensure_evaluation_result(evaluator.evaluate(individual, **context))
         return ensure_evaluation_result(evaluator.evaluate(individual, context=context))
+
+    def create_evaluator(
+        self,
+        config: Any | None = None,
+        *,
+        component_pool: Any | None = None,
+        runtime_logs_dir: Any = None,
+    ) -> Any:
+        """Create the MicroRTS evaluator selected by config."""
+        active_config = config or self.config
+        active_pool = component_pool or self.component_pool
+        if active_pool is None or active_config is None:
+            raise ValueError("MicroRTSPlugin.create_evaluator requires component_pool and config.")
+        active_logs_dir = self.runtime_logs_dir if runtime_logs_dir is None else runtime_logs_dir
+        mode = str(getattr(active_config, "evaluator", "") or "").strip().lower()
+        algorithm = str(getattr(active_config, "algorithm", "") or "").strip().lower()
+        if mode == "round":
+            return RoundEvaluator(active_pool, active_config, runtime_logs_dir=active_logs_dir)
+        if mode in {"", "gameplay", "surrogate", "final_test"}:
+            return FullGameEvaluator(active_pool, active_config, runtime_logs_dir=active_logs_dir)
+        if algorithm.endswith("_surrogate"):
+            return FullGameEvaluator(active_pool, active_config, runtime_logs_dir=active_logs_dir)
+        raise ValueError(f"Unsupported MicroRTS evaluator mode: {mode!r}.")
+
+    def run_final_test(self, log_dir: str, generation: int | None, config: Any | None = None) -> Any:
+        """Run MicroRTS final-test replay for one experiment log directory."""
+        from eagle.plugins.microrts.evaluation.final_test_runner import run_final_test_suite
+
+        return run_final_test_suite(log_dir, generation, config or self.config)
 
     def register_defaults(self) -> None:
         """Import MicroRTS registrations for algorithms, evaluators, and objectives."""
