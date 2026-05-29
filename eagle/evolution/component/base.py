@@ -310,14 +310,19 @@ class EA:
     default_parent_selection_operator_name: ClassVar[str | None] = None
     default_env_selection_operator_name: ClassVar[str] = "pool_replacement"
 
-    def __init__(self, config: EAConfig, component_pool: ComponentPool, opponent_list: List[str]):
+    def __init__(
+        self,
+        config: EAConfig,
+        component_pool: ComponentPool,
+        evaluation_context: dict[str, Any] | None = None,
+    ):
         """Initialize shared EA state and create the initial random population."""
         self.config = config
         self.component_pool = component_pool
         self.component_pool.configure_non_evolving_keys(
             getattr(self.config, "non_evolving_prompt_components", None)
         )
-        self.opponent_list = opponent_list
+        self.evaluation_context = dict(evaluation_context or {})
         self.example_memory = ExampleMemory(
             max_examples=getattr(
                 self.config,
@@ -1302,17 +1307,26 @@ class EA:
             getattr(self, "evaluator_name", None) or getattr(self.config, "evaluator", "")
         ).strip()
         active_config = config_override or self.config
+        runtime_logs_dir = self.current_log_dir if self.current_log_dir is not None else None
+        task_plugin = getattr(self, "task_plugin", None)
+        if task_plugin is not None:
+            from eagle.eval.factory import create_evaluator
+
+            return create_evaluator(
+                active_config,
+                task_plugin,
+                component_pool=self.component_pool,
+                runtime_logs_dir=runtime_logs_dir,
+            )
         if evaluator_name:
             from eagle.core.registry import EVALUATORS
 
             evaluator_cls = EVALUATORS.get(evaluator_name)
-            runtime_logs_dir = self.current_log_dir if self.current_log_dir is not None else None
             return evaluator_cls(self.component_pool, active_config, runtime_logs_dir=runtime_logs_dir)
         if self.evaluator_factory is None:
             raise ValueError(
                 "No evaluator_factory configured for this component evolution algorithm."
             )
-        runtime_logs_dir = self.current_log_dir if self.current_log_dir is not None else None
         return self.evaluator_factory(self.component_pool, active_config, runtime_logs_dir=runtime_logs_dir)
 
     def run_final_test(self):

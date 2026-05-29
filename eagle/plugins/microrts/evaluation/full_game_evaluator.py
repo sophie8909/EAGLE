@@ -76,7 +76,8 @@ class FullGameEvaluator(BaseEvaluator):
             match_score_recorder = (
                 context.match_score_recorder if match_score_recorder is None else match_score_recorder
             )
-            opponents = context.opponents if opponents is None else opponents
+            context_opponents = context.metadata.get("opponents")
+            opponents = context_opponents if opponents is None else opponents
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         prompt = self._construct_prompt(individual)
         resolved_opponents = list(opponents) if opponents is not None else self._configured_gameplay_opponents()
@@ -210,7 +211,8 @@ class FullGameEvaluator(BaseEvaluator):
         """Run surrogate evaluation across opponents and aggregate EA fitness."""
         if context is not None:
             generation = context.generation if generation is None else generation
-            opponents = context.opponents if opponents is None else opponents
+            context_opponents = context.metadata.get("opponents")
+            opponents = context_opponents if opponents is None else opponents
         active_llm_interval = self.config.set_active_llm_interval_for_generation(generation)
         prompt = self._construct_prompt(individual)
         resolved_opponents = list(opponents) if opponents is not None else self._configured_gameplay_opponents()

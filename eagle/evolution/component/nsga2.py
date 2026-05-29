@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from eagle.config import EAConfig
 from eagle.utils.component_pool import ComponentPool
@@ -58,10 +58,10 @@ class NSGA2(EA):
         self,
         config: EAConfig,
         component_pool: ComponentPool,
-        opponent_list: List[str],
+        evaluation_context: dict[str, Any] | None = None,
     ):
         """Initialize NSGA-II using the shared EA base implementation."""
-        super().__init__(config, component_pool, opponent_list)
+        super().__init__(config, component_pool, evaluation_context)
 
     def _assign_rank_and_crowding(self, population: List[Individual]) -> List[List[Individual]]:
         """Compute Pareto fronts and annotate individuals with rank/crowding."""

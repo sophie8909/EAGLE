@@ -48,6 +48,9 @@ class TaskPlugin(Protocol):
     def evaluate(self, individual: Any, context: Any | None = None) -> EvaluationResult:
         """Evaluate one candidate for this task."""
 
+    def create_evaluator(self, config: Any | None = None, **kwargs: Any) -> Any:
+        """Create the task-specific evaluator selected by config."""
+
 
 class BaseTaskPlugin:
     """Base class with explicit errors for optional plugin methods."""
@@ -72,4 +75,8 @@ class BaseTaskPlugin:
 
     def evaluate(self, individual: Any, context: Any | None = None) -> EvaluationResult:
         """Evaluate one candidate for this task."""
+        raise NotImplementedError
+
+    def create_evaluator(self, config: Any | None = None, **kwargs: Any) -> Any:
+        """Create the task-specific evaluator selected by config."""
         raise NotImplementedError

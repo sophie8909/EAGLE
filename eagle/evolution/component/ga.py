@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from typing import List
+from typing import Any, List
 
 from eagle.config import EAConfig
 from eagle.utils.component_pool import ComponentPool
@@ -48,9 +48,9 @@ class GA(EA):
         self,
         config: EAConfig,
         component_pool: ComponentPool,
-        opponent_list: List[str],
+        evaluation_context: dict[str, Any] | None = None,
     ):
-        super().__init__(config, component_pool, opponent_list)
+        super().__init__(config, component_pool, evaluation_context)
 
     def _fitness0(self, individual: Individual) -> float:
         return _normalize_single_objective_fitness(individual.fitness)[0]

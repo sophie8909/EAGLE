@@ -26,7 +26,6 @@ class EvaluationContext:
     generation: int | None = None
     profile_output_path: str | None = None
     match_score_recorder: Any = None
-    opponents: list[str] | None = None
     artifacts: dict[str, str] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 

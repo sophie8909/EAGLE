@@ -121,7 +121,7 @@ class MicroRTSNSGA2Surrogate(NSGA2):
         eval_result = ensure_evaluation_result(evaluator.surrogate(
             individual,
             generation=generation,
-            opponents=self.opponent_list or None,
+            opponents=self.evaluation_context.get("opponents") or None,
         ))
         add_prompt_metrics(
             eval_result,
@@ -162,8 +162,8 @@ class MicroRTSGASurrogate(GA):
     evaluator_factory = FullGameEvaluator
     reflection_operator = RoundReflection
 
-    def __init__(self, config, component_pool, opponent_list):
-        super().__init__(config, component_pool, opponent_list)
+    def __init__(self, config, component_pool, evaluation_context=None):
+        super().__init__(config, component_pool, evaluation_context)
         self.gameplay_elite_archive = []
 
     def _fitness0(self, individual) -> float:
@@ -241,7 +241,7 @@ class MicroRTSGASurrogate(GA):
         eval_result = ensure_evaluation_result(evaluator.surrogate(
             individual,
             generation=generation,
-            opponents=self.opponent_list or None,
+            opponents=self.evaluation_context.get("opponents") or None,
         ))
         add_prompt_metrics(
             eval_result,

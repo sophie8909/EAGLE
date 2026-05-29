@@ -21,14 +21,19 @@ def build_algorithm(
     opponent_list: list[str] | None = None,
 ) -> Any:
     """Instantiate the configured algorithm through the algorithm registry."""
-    _ensure_default_registrations()
+    plugin = load_plugin(experiment.ea.application)
+    _ensure_default_registrations(plugin)
     algorithm_name = normalize_registry_name(experiment.algorithm)
     algorithm_cls = ALGORITHMS.get(algorithm_name)
     pool = component_pool or ComponentPool.from_json(resolve_component_pool_path(experiment.ea))
     opponents = list(opponent_list if opponent_list is not None else experiment.opponents)
     if not opponents:
         opponents = list(experiment.ea.gameplay_opponents)
-    algorithm = algorithm_cls(experiment.ea, pool, opponent_list=opponents)
+    algorithm = algorithm_cls(experiment.ea, pool, evaluation_context={"opponents": opponents})
+    algorithm.task_plugin = plugin
+    final_test_runner = getattr(plugin, "run_final_test", None)
+    if callable(final_test_runner):
+        algorithm.final_test_runner = final_test_runner
     algorithm.evaluator_name = experiment.evaluator
     algorithm.evaluator_params = dict(experiment.evaluator_params)
     print(
@@ -77,11 +82,12 @@ def run_experiment(
     return result
 
 
-def _ensure_default_registrations() -> None:
+def _ensure_default_registrations(plugin: Any | None = None) -> None:
     """Import default component modules so decorators populate registries."""
     from .. import operators  # noqa: F401
     from ..evolution.component import algorithms as component_algorithms  # noqa: F401
-    plugin = load_plugin("microrts")
+    if plugin is None:
+        plugin = load_plugin("microrts")
     register = getattr(plugin, "register_defaults", None)
     if callable(register):
         register()

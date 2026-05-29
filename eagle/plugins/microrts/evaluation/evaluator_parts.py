@@ -209,8 +209,9 @@ class RoundSurrogateEvaluator(BaseEvaluator):
 
         if context is not None:
             generation = context.generation if generation is None else generation
-            if context.opponents and opponent is None:
-                opponent = context.opponents[0]
+            context_opponents = list(context.metadata.get("opponents") or [])
+            if context_opponents and opponent is None:
+                opponent = context_opponents[0]
         rendered_prompt = prompt if prompt is not None else getattr(individual, "rendered_prompt", "")
         round_evaluator = RoundEvaluator(
             self.component_pool,
