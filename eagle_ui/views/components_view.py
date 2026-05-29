@@ -27,6 +27,8 @@ from eagle_ui.views.config_view import refresh_config_summary
 def build_components_view(state: Any) -> dict[str, Any]:
     """Build the component editor view."""
     controls: dict[str, Any] = {}
+    example_component_keys = {"example", "examples"}
+    example_editor_class = "border border-[#b08d57] rounded-[8px] p-1"
 
     def component_path_options() -> list[str]:
         options = {"", *services.component_json_choices()}
@@ -85,6 +87,7 @@ def build_components_view(state: Any) -> dict[str, Any]:
         state.components.selected_candidate = 0
         refresh_candidate_options()
         load_editor_text()
+        refresh_example_highlight()
 
     def on_candidate_changed(event: Any) -> None:
         try:
@@ -187,6 +190,7 @@ def build_components_view(state: Any) -> dict[str, Any]:
         load_editor_text()
         refresh_selection_table()
         status_label.set_text(state.components.status)
+        refresh_example_highlight()
 
     def refresh_candidate_options() -> None:
         count = services.component_candidate_count(state, state.components.selected_category)
@@ -203,6 +207,13 @@ def build_components_view(state: Any) -> dict[str, Any]:
         )
         editor.value = state.components.editor_text
         editor.update()
+
+    def refresh_example_highlight() -> None:
+        key = str(state.components.selected_category or "").strip().lower()
+        if key in example_component_keys:
+            editor.classes(add=example_editor_class)
+        else:
+            editor.classes(remove=example_editor_class)
 
     def refresh_selection_table() -> None:
         rows = []
