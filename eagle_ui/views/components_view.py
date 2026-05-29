@@ -1,4 +1,4 @@
-﻿"""Component JSON editor and prompt preview view."""
+"""Component JSON editor and prompt preview view."""
 
 from __future__ import annotations
 
@@ -199,24 +199,29 @@ def build_components_view(state: Any) -> dict[str, Any]:
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Components").classes(SECTION_HEADER_CLASS)
-        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
+        control_button_classes = "h-[56px] min-w-[88px] px-4"
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full flex-nowrap"):
             initial_options = component_path_options()
             initial_value = state.config.component_pool_path or ""
             if initial_value not in initial_options:
                 initial_options.insert(0, initial_value)
             path_input = create_component_path_select(initial_options, initial_value).classes(
-                f"{INPUT_CLASS} min-w-[460px]"
+                f"{INPUT_CLASS} grow min-w-[320px]"
             )
-            ui.button("Load", on_click=safe_click(load_components, label="Load components")).classes(BUTTON_CLASS)
+            ui.button("Load", on_click=safe_click(load_components, label="Load components")).classes(
+                f"{BUTTON_CLASS} {control_button_classes}"
+            )
             ui.button("Save", on_click=safe_click(save_components, label="Save components")).classes(
-                button_class(success=True)
+                f"{button_class(success=True)} {control_button_classes}"
             )
-        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full flex-nowrap"):
             save_as_input = ui.input("Save as", value="configs/experiments/eagle_ui_components.json").classes(
-                f"{INPUT_CLASS} min-w-[460px]"
+                f"{INPUT_CLASS} grow min-w-[320px]"
             )
-            ui.button("Save as", on_click=safe_click(save_components_as, label="Save components as")).classes(BUTTON_CLASS)
-            status_label = ui.label(state.components.status)
+            ui.button("Save as", on_click=safe_click(save_components_as, label="Save components as")).classes(
+                f"{BUTTON_CLASS} {control_button_classes} min-w-[104px]"
+            )
+            status_label = ui.label(state.components.status).classes("min-w-[180px] pb-4 whitespace-nowrap")
 
         with ui.row().classes(f"{ROW_CLASS} w-full gap-4"):
             with ui.column().classes("w-1/2 gap-3"):
