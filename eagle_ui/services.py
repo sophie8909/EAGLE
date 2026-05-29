@@ -1,4 +1,4 @@
-﻿"""Service helpers for the NiceGUI EAGLE workflow."""
+"""Service helpers for the NiceGUI EAGLE workflow."""
 
 from __future__ import annotations
 
@@ -519,13 +519,34 @@ def load_component_json(path: Path) -> dict[str, Any]:
     return config_service.read_json_mapping_strict(path)
 
 
+def load_components(path: Path) -> dict[str, Any]:
+    """Load a component JSON payload without changing its schema."""
+    return config_service.read_json_mapping_strict(path)
+
+
+def save_components(path: Path, data: dict[str, Any]) -> None:
+    """Atomically save a component JSON payload without normalizing it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
+def list_component_keys(data: dict[str, Any]) -> list[str]:
+    """Return editable top-level component keys in file order."""
+    if not isinstance(data, dict):
+        return []
+    return [str(key) for key in data if str(key) != "metadata"]
+
+
 def apply_component_payload(state: Any, payload: dict[str, Any], path: Path) -> None:
     """Copy a component payload into state and initialize selection fields."""
     state.components.payload = payload
     state.components.loaded_path = path
     pool = ComponentPool(payload)
+    keys = list_component_keys(payload)
     state.components.prompt_selection = {key: 0 for key in pool.component_keys}
-    state.components.selected_category = pool.prompt_component_keys[0] if pool.prompt_component_keys else ""
+    state.components.selected_category = keys[0] if keys else ""
     state.components.selected_candidate = 0
     state.components.editor_text = component_candidate_text(state, state.components.selected_category, 0)
     state.components.status = f"Loaded {path}"
@@ -536,7 +557,7 @@ def component_keys(state: Any) -> list[str]:
     """Return editable component keys in display order."""
     if not state.components.payload:
         return []
-    return list(ComponentPool(state.components.payload).prompt_component_keys)
+    return list_component_keys(state.components.payload)
 
 
 def component_candidate_count(state: Any, key: str) -> int:
@@ -626,9 +647,7 @@ def save_component_json(state: Any, destination: Path | None = None) -> Path:
     path = destination or state.components.loaded_path
     if path is None:
         raise ValueError("No component JSON path selected.")
-    payload = ComponentPool(state.components.payload).to_component_dict()
-    config_service.write_json_file(path, payload)
-    state.components.payload = payload
+    save_components(path, state.components.payload)
     state.components.loaded_path = path
     state.config.component_pool_path = relative_or_absolute(path)
     return path
