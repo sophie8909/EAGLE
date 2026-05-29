@@ -39,7 +39,7 @@ def build_components_view(state: Any) -> dict[str, Any]:
     async def load_components() -> None:
         try:
             path = services.resolve_repo_path(path_input.value)
-            payload = await asyncio.to_thread(services.load_component_json, path)
+            payload = await asyncio.to_thread(services.load_components, path)
             services.apply_component_payload(state, payload, path)
             ui.notify(f"Loaded {path}", type="positive")
         except (OSError, json.JSONDecodeError, ValueError) as exc:
@@ -124,6 +124,48 @@ def build_components_view(state: Any) -> dict[str, Any]:
     def copy_prompt() -> None:
         ui.clipboard.write(state.components.rendered_prompt)
         ui.notify("Copied current prompt")
+
+    def add_component_item() -> None:
+        key = state.components.selected_category
+        if not key or key not in services.component_keys(state):
+            ui.notify("Load a component JSON and select a component first.", type="warning")
+            return
+        value = state.components.payload.get(key)
+        if key == "training_examples" and isinstance(value, list):
+            value.append({"name": f"example_{len(value)}", "content": [""]})
+        elif isinstance(value, list) and value and all(isinstance(item, str) for item in value):
+            state.components.payload[key] = [list(value), [""]]
+        elif isinstance(value, list):
+            value.append([""])
+        else:
+            state.components.payload[key] = [[""]]
+        state.components.selected_candidate = services.component_candidate_count(state, key) - 1
+        refresh_candidate_options()
+        load_editor_text()
+        refresh_selection_table()
+
+    def delete_component_item() -> None:
+        key = state.components.selected_category
+        if not key or key not in services.component_keys(state):
+            ui.notify("Load a component JSON and select a component first.", type="warning")
+            return
+        value = state.components.payload.get(key)
+        index = int(state.components.selected_candidate)
+        if not isinstance(value, list) or index < 0:
+            ui.notify("Selected component does not contain editable items.", type="warning")
+            return
+        if value and all(isinstance(item, str) for item in value):
+            state.components.payload[key] = []
+        elif index < len(value):
+            del value[index]
+        else:
+            ui.notify("Selected item no longer exists.", type="warning")
+            return
+        count = services.component_candidate_count(state, key)
+        state.components.selected_candidate = min(index, max(0, count - 1))
+        refresh_candidate_options()
+        load_editor_text()
+        refresh_selection_table()
 
     def refresh_all() -> None:
         options = component_path_options()
@@ -238,6 +280,8 @@ def build_components_view(state: Any) -> dict[str, Any]:
                     on_change=lambda event: setattr(state.components, "editor_text", str(event.value or "")),
                 ).classes(f"{TEXTAREA_CLASS} {height_class(360)} w-full")
                 with ui.row().classes(f"{ROW_CLASS} gap-2"):
+                    ui.button("Add item", on_click=add_component_item).classes(BUTTON_CLASS)
+                    ui.button("Delete item", on_click=delete_component_item).classes(BUTTON_CLASS)
                     ui.button("Use in prompt", on_click=safe_click(use_in_prompt, label="Use in prompt")).classes(BUTTON_CLASS)
                     ui.button("Toggle static", on_click=safe_click(toggle_static, label="Toggle static")).classes(BUTTON_CLASS)
                     ui.button("Reset selection", on_click=safe_click(reset_selection, label="Reset selection")).classes(BUTTON_CLASS)
