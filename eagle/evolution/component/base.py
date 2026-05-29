@@ -12,6 +12,7 @@ from typing import Any, ClassVar, List
 
 from eagle.config import EAConfig, clone_config
 from eagle.core.result import EvaluationResult, ensure_evaluation_result
+from eagle.eval.base import EvaluationContext
 from eagle.objectives.aggregation import aggregate_fitness
 from eagle.objectives.aggressiveness.runtime import maybe_add_aggressiveness_metrics
 from eagle.operators.mutation import support as mutation_support
@@ -666,12 +667,13 @@ class EA:
 
     def _evaluate_individual(self, evaluator: Any, individual: Individual, *, generation: int | None) -> EvaluationResult:
         """Run the evaluator and aggregate raw metrics into individual fitness."""
-        eval_result = ensure_evaluation_result(evaluator.evaluate(
-            individual,
+        context = EvaluationContext(
             generation=generation,
-            profile_output_path=self.get_profile_log_path(),
+            profile_output_path=str(self.get_profile_log_path()),
             match_score_recorder=self.match_score_recorder,
-        ))
+            metadata=dict(self.evaluation_context),
+        )
+        eval_result = ensure_evaluation_result(evaluator.evaluate(individual, context=context))
         maybe_add_aggressiveness_metrics(
             eval_result,
             individual=individual,
