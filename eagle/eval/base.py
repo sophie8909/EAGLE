@@ -1,4 +1,4 @@
-"""Evaluator interface for prompt-search domains."""
+"""Generic evaluator contracts for prompt-search tasks."""
 
 from __future__ import annotations
 
@@ -7,6 +7,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from eagle.core.result import EvaluationResult
+
+
+@dataclass
+class EvaluationRequest:
+    """Task-neutral request for evaluating one candidate."""
+
+    individual: Any | None = None
+    prompt: str = ""
+    context: Any = None
+    runtime: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -21,9 +31,17 @@ class EvaluationContext:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-class BaseEvaluator(ABC):
+class Evaluator(ABC):
     """Common evaluator contract returning a normalized evaluation result."""
 
     @abstractmethod
-    def evaluate(self, individual: Any, context: Any = None, **kwargs: Any) -> EvaluationResult:
-        """Evaluate one individual and return raw metrics plus optional artifacts."""
+    def evaluate(
+        self,
+        individual: Any | None = None,
+        context: EvaluationContext | None = None,
+        **runtime: Any,
+    ) -> EvaluationResult:
+        """Evaluate one individual or prompt with task runtime context."""
+
+
+BaseEvaluator = Evaluator
