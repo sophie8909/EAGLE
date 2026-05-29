@@ -18,7 +18,6 @@ from eagle_ui.theme import (
     TABLE_CLASS,
     TEXTAREA_CLASS,
     button_class,
-    height_class,
 )
 from eagle_ui.ui_actions import safe_click
 from eagle_ui.views.config_view import refresh_config_summary
@@ -250,59 +249,60 @@ def build_components_view(state: Any) -> dict[str, Any]:
                 on_change=update_component_path,
             ).props("use-input clearable new-value-mode=add-unique")
 
-    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
-        ui.label("Components").classes(SECTION_HEADER_CLASS)
+    with ui.column().classes("w-full gap-3"):
         control_button_classes = "h-[56px] min-w-[88px] px-4"
-        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full flex-nowrap"):
-            initial_options = component_path_options()
-            initial_value = state.config.component_pool_path or ""
-            if initial_value not in initial_options:
-                initial_options.insert(0, initial_value)
-            path_input = create_component_path_select(initial_options, initial_value).classes(
-                f"{INPUT_CLASS} grow min-w-[320px]"
-            )
-            ui.button("Load", on_click=safe_click(load_components, label="Load components")).classes(
-                f"{BUTTON_CLASS} {control_button_classes}"
-            )
-            ui.button("Save", on_click=safe_click(save_components, label="Save components")).classes(
-                f"{button_class(success=True)} {control_button_classes}"
-            )
-        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full flex-nowrap"):
-            save_as_input = ui.input("Save as", value="configs/experiments/eagle_ui_components.json").classes(
-                f"{INPUT_CLASS} grow min-w-[320px]"
-            )
-            ui.button("Save as", on_click=safe_click(save_components_as, label="Save components as")).classes(
-                f"{BUTTON_CLASS} {control_button_classes} min-w-[104px]"
-            )
-            status_label = ui.label(state.components.status).classes("min-w-[180px] pb-4 whitespace-nowrap")
+        with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+            ui.label("Components").classes(SECTION_HEADER_CLASS)
+            with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full flex-nowrap"):
+                initial_options = component_path_options()
+                initial_value = state.config.component_pool_path or ""
+                if initial_value not in initial_options:
+                    initial_options.insert(0, initial_value)
+                path_input = create_component_path_select(initial_options, initial_value).classes(
+                    f"{INPUT_CLASS} grow min-w-[320px]"
+                )
+                ui.button("Load", on_click=safe_click(load_components, label="Load components")).classes(
+                    f"{BUTTON_CLASS} {control_button_classes}"
+                )
+                ui.button("Save", on_click=safe_click(save_components, label="Save components")).classes(
+                    f"{button_class(success=True)} {control_button_classes}"
+                )
+            with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full flex-nowrap"):
+                save_as_input = ui.input("Save as", value="configs/experiments/eagle_ui_components.json").classes(
+                    f"{INPUT_CLASS} grow min-w-[320px]"
+                )
+                ui.button("Save as", on_click=safe_click(save_components_as, label="Save components as")).classes(
+                    f"{BUTTON_CLASS} {control_button_classes} min-w-[104px]"
+                )
+                status_label = ui.label(state.components.status).classes("min-w-[180px] pb-4 whitespace-nowrap")
+            with ui.row().classes(f"{ROW_CLASS} gap-3 w-full flex-nowrap"):
+                category_select = ui.select([], label="Component", on_change=on_category_changed).classes(
+                    f"{INPUT_CLASS} grow min-w-[320px]"
+                )
+                candidate_select = ui.select([], label="Candidate", on_change=on_candidate_changed).classes(
+                    f"{INPUT_CLASS} w-56"
+                )
+            editor = ui.textarea(
+                "Candidate text",
+                value=state.components.editor_text,
+                on_change=lambda event: setattr(state.components, "editor_text", str(event.value or "")),
+            ).classes(f"{TEXTAREA_CLASS} min-h-[300px] w-full")
+            with ui.row().classes(f"{ROW_CLASS} gap-2 w-full flex-wrap"):
+                ui.button("Add item", on_click=safe_click(add_component_item, label="Add component item")).classes(BUTTON_CLASS)
+                ui.button(
+                    "Delete item",
+                    on_click=safe_click(delete_component_item, label="Delete component item"),
+                ).classes(BUTTON_CLASS)
+                ui.button("Use in prompt", on_click=safe_click(use_in_prompt, label="Use in prompt")).classes(BUTTON_CLASS)
+                ui.button("Toggle static", on_click=safe_click(toggle_static, label="Toggle static")).classes(BUTTON_CLASS)
+                ui.button("Reset selection", on_click=safe_click(reset_selection, label="Reset selection")).classes(BUTTON_CLASS)
+                ui.button("Render selected prompt", on_click=safe_click(render_prompt, label="Render prompt")).classes(
+                    button_class(success=True)
+                )
 
-        with ui.row().classes(f"{ROW_CLASS} w-full gap-4"):
-            with ui.column().classes("w-1/2 gap-3"):
-                with ui.row().classes(f"{ROW_CLASS} gap-3 w-full"):
-                    category_select = ui.select([], label="Component", on_change=on_category_changed).classes(
-                        f"{INPUT_CLASS} grow"
-                    )
-                    candidate_select = ui.select([], label="Candidate", on_change=on_candidate_changed).classes(
-                        f"{INPUT_CLASS} w-32"
-                    )
-                editor = ui.textarea(
-                    "Candidate text",
-                    value=state.components.editor_text,
-                    on_change=lambda event: setattr(state.components, "editor_text", str(event.value or "")),
-                ).classes(f"{TEXTAREA_CLASS} {height_class(360)} w-full")
-                with ui.row().classes(f"{ROW_CLASS} gap-2"):
-                    ui.button("Add item", on_click=safe_click(add_component_item, label="Add component item")).classes(BUTTON_CLASS)
-                    ui.button(
-                        "Delete item",
-                        on_click=safe_click(delete_component_item, label="Delete component item"),
-                    ).classes(BUTTON_CLASS)
-                    ui.button("Use in prompt", on_click=safe_click(use_in_prompt, label="Use in prompt")).classes(BUTTON_CLASS)
-                    ui.button("Toggle static", on_click=safe_click(toggle_static, label="Toggle static")).classes(BUTTON_CLASS)
-                    ui.button("Reset selection", on_click=safe_click(reset_selection, label="Reset selection")).classes(BUTTON_CLASS)
-                    ui.button("Render selected prompt", on_click=safe_click(render_prompt, label="Render prompt")).classes(
-                        button_class(success=True)
-                    )
-
+        with ui.row().classes(f"{ROW_CLASS} w-full gap-4 items-stretch"):
+            with ui.column().classes(f"{CARD_CLASS} w-1/2 grow gap-2 min-h-[560px]"):
+                ui.label("Component Table").classes(SECTION_HEADER_CLASS)
                 selection_table = ui.table(
                     columns=[
                         {"name": "component", "label": "Component", "field": "component", "align": "left"},
@@ -312,14 +312,14 @@ def build_components_view(state: Any) -> dict[str, Any]:
                     ],
                     rows=[],
                     row_key="component",
-                ).classes(f"{TABLE_CLASS} w-full")
+                ).classes(f"{TABLE_CLASS} w-full grow min-h-[500px] overflow-auto")
 
-            with ui.column().classes("w-1/2 gap-2"):
+            with ui.column().classes(f"{CARD_CLASS} w-1/2 grow gap-2 min-h-[560px]"):
                 with ui.row().classes("items-center justify-between w-full"):
                     token_label = ui.label(state.components.prompt_token_summary)
                     ui.button("Copy prompt", on_click=safe_click(copy_prompt, label="Copy prompt")).classes(BUTTON_CLASS)
                 prompt_output = ui.textarea(value=state.components.rendered_prompt).props("readonly").classes(
-                    f"{TEXTAREA_CLASS} {height_class(620)} w-full"
+                    f"{TEXTAREA_CLASS} w-full grow min-h-[500px]"
                 )
 
     controls["refresh"] = refresh_all
