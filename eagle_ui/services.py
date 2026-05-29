@@ -598,9 +598,11 @@ def update_component_candidate(state: Any) -> None:
     lines = [line.rstrip() for line in state.components.editor_text.splitlines() if line.strip()]
     if not key or key not in component_keys(state):
         raise ValueError("Load a component JSON and select a component first.")
+    value = state.components.payload.get(key)
+    if isinstance(value, list) and not value and not lines:
+        return
     if not lines:
         raise ValueError("Component content must contain at least one non-empty line.")
-    value = state.components.payload.get(key)
     if key == ComponentPool.TRAINING_EXAMPLES_KEY and isinstance(value, list):
         item = value[index]
         if isinstance(item, dict):

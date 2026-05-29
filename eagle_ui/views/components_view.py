@@ -291,8 +291,11 @@ def build_components_view(state: Any) -> dict[str, Any]:
                     on_change=lambda event: setattr(state.components, "editor_text", str(event.value or "")),
                 ).classes(f"{TEXTAREA_CLASS} {height_class(360)} w-full")
                 with ui.row().classes(f"{ROW_CLASS} gap-2"):
-                    ui.button("Add item", on_click=add_component_item).classes(BUTTON_CLASS)
-                    ui.button("Delete item", on_click=delete_component_item).classes(BUTTON_CLASS)
+                    ui.button("Add item", on_click=safe_click(add_component_item, label="Add component item")).classes(BUTTON_CLASS)
+                    ui.button(
+                        "Delete item",
+                        on_click=safe_click(delete_component_item, label="Delete component item"),
+                    ).classes(BUTTON_CLASS)
                     ui.button("Use in prompt", on_click=safe_click(use_in_prompt, label="Use in prompt")).classes(BUTTON_CLASS)
                     ui.button("Toggle static", on_click=safe_click(toggle_static, label="Toggle static")).classes(BUTTON_CLASS)
                     ui.button("Reset selection", on_click=safe_click(reset_selection, label="Reset selection")).classes(BUTTON_CLASS)
