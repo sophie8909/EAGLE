@@ -275,18 +275,6 @@ def build_components_view(state: Any) -> dict[str, Any]:
                     f"{BUTTON_CLASS} {control_button_classes} min-w-[104px]"
                 )
                 status_label = ui.label(state.components.status).classes("min-w-[180px] pb-4 whitespace-nowrap")
-            with ui.row().classes(f"{ROW_CLASS} gap-3 w-full flex-nowrap"):
-                category_select = ui.select([], label="Component", on_change=on_category_changed).classes(
-                    f"{INPUT_CLASS} grow min-w-[320px]"
-                )
-                candidate_select = ui.select([], label="Candidate", on_change=on_candidate_changed).classes(
-                    f"{INPUT_CLASS} w-56"
-                )
-            editor = ui.textarea(
-                "Candidate text",
-                value=state.components.editor_text,
-                on_change=lambda event: setattr(state.components, "editor_text", str(event.value or "")),
-            ).classes(f"{TEXTAREA_CLASS} min-h-[300px] w-full")
             with ui.row().classes(f"{ROW_CLASS} gap-2 w-full flex-wrap"):
                 ui.button("Add item", on_click=safe_click(add_component_item, label="Add component item")).classes(BUTTON_CLASS)
                 ui.button(
@@ -299,6 +287,18 @@ def build_components_view(state: Any) -> dict[str, Any]:
                 ui.button("Render selected prompt", on_click=safe_click(render_prompt, label="Render prompt")).classes(
                     button_class(success=True)
                 )
+            with ui.row().classes(f"{ROW_CLASS} gap-3 w-full flex-nowrap"):
+                category_select = ui.select([], label="Component", on_change=on_category_changed).classes(
+                    f"{INPUT_CLASS} grow min-w-[320px]"
+                )
+                candidate_select = ui.select([], label="Candidate", on_change=on_candidate_changed).classes(
+                    f"{INPUT_CLASS} w-56"
+                )
+            editor = ui.textarea(
+                "Candidate text",
+                value=state.components.editor_text,
+                on_change=lambda event: setattr(state.components, "editor_text", str(event.value or "")),
+            ).classes(f"{TEXTAREA_CLASS} min-h-[300px] w-full")
 
         with ui.row().classes(f"{ROW_CLASS} w-full gap-4 items-stretch flex-nowrap"):
             with ui.column().classes(f"{CARD_CLASS} flex-1 basis-0 min-w-0 gap-2 min-h-[550px]"):
