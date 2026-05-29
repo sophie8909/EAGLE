@@ -300,8 +300,8 @@ def build_components_view(state: Any) -> dict[str, Any]:
                     button_class(success=True)
                 )
 
-        with ui.row().classes(f"{ROW_CLASS} w-full gap-4 items-stretch"):
-            with ui.column().classes(f"{CARD_CLASS} w-1/2 grow gap-2 min-h-[560px]"):
+        with ui.row().classes(f"{ROW_CLASS} w-full gap-4 items-stretch flex-nowrap"):
+            with ui.column().classes(f"{CARD_CLASS} flex-1 basis-0 min-w-0 gap-2 min-h-[550px]"):
                 ui.label("Component Table").classes(SECTION_HEADER_CLASS)
                 selection_table = ui.table(
                     columns=[
@@ -312,14 +312,14 @@ def build_components_view(state: Any) -> dict[str, Any]:
                     ],
                     rows=[],
                     row_key="component",
-                ).classes(f"{TABLE_CLASS} w-full grow min-h-[500px] overflow-auto")
+                ).classes(f"{TABLE_CLASS} w-full h-[500px] overflow-auto")
 
-            with ui.column().classes(f"{CARD_CLASS} w-1/2 grow gap-2 min-h-[560px]"):
+            with ui.column().classes(f"{CARD_CLASS} flex-1 basis-0 min-w-0 gap-2 min-h-[550px]"):
                 with ui.row().classes("items-center justify-between w-full"):
                     token_label = ui.label(state.components.prompt_token_summary)
                     ui.button("Copy prompt", on_click=safe_click(copy_prompt, label="Copy prompt")).classes(BUTTON_CLASS)
                 prompt_output = ui.textarea(value=state.components.rendered_prompt).props("readonly").classes(
-                    f"{TEXTAREA_CLASS} w-full grow min-h-[500px]"
+                    f"{TEXTAREA_CLASS} w-full h-[500px]"
                 )
 
     controls["refresh"] = refresh_all
