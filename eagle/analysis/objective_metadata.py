@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from eagle.objectives.registry import get_objective
+from eagle.core.plugin_loader import load_plugin
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,10 @@ def load_run_objective_specs(run_dir: str | Path, dimension: int = 0) -> list[Ob
         minimum = 2
 
     application = str(payload.get("application") or "microrts")
+    if application == "microrts":
+        register = getattr(load_plugin("microrts"), "register_defaults", None)
+        if callable(register):
+            register()
     specs: list[ObjectiveSpec] = []
     for index in range(minimum):
         name = configured_names[index] if index < len(configured_names) else f"objective_{index}"

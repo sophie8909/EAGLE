@@ -71,3 +71,9 @@ class MicroRTSPlugin(BaseTaskPlugin):
         if isinstance(context, dict):
             return ensure_evaluation_result(evaluator.evaluate(individual, **context))
         return ensure_evaluation_result(evaluator.evaluate(individual, context=context))
+
+    def register_defaults(self) -> None:
+        """Import MicroRTS registrations for algorithms, evaluators, and objectives."""
+        from eagle.eval.microrts import algorithms as _algorithms  # noqa: F401
+        from eagle.objectives import registry as _registry  # noqa: F401
+        from eagle.plugins.microrts import objectives as _objectives  # noqa: F401

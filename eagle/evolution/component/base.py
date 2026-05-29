@@ -1320,6 +1320,6 @@ class EA:
         if self.config.final_test_max_front is not None and int(self.config.final_test_max_front) < 1:
             print("[Final Test] skipped because final_test_max_front=0", flush=True)
             return
-        from eagle.eval.microrts.final_test_runner import run_final_test_suite
+        from eagle.plugins.microrts.final_test_runner import run_final_test_suite
 
         run_final_test_suite(self.current_log_dir, self.current_generation, self.config)

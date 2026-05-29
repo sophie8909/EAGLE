@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import resolve_component_pool_path
+from ..core.plugin_loader import load_plugin
 from ..core.registry import ALGORITHMS, normalize_registry_name
 from ..project import PROMPTS_DIR
 from ..utils.component_pool import ComponentPool
@@ -80,7 +81,10 @@ def _ensure_default_registrations() -> None:
     """Import default component modules so decorators populate registries."""
     from .. import operators  # noqa: F401
     from ..evolution.component import algorithms as component_algorithms  # noqa: F401
-    from ..eval.microrts import algorithms as microrts_algorithms  # noqa: F401
+    plugin = load_plugin("microrts")
+    register = getattr(plugin, "register_defaults", None)
+    if callable(register):
+        register()
 
 
 def default_component_pool() -> ComponentPool:
