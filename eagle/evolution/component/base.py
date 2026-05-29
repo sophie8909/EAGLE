@@ -1316,10 +1316,12 @@ class EA:
         return self.evaluator_factory(self.component_pool, active_config, runtime_logs_dir=runtime_logs_dir)
 
     def run_final_test(self):
-        """Replay the last saved generation against the configured final-test opponents."""
+        """Run a task-provided final evaluation hook, when configured."""
         if self.config.final_test_max_front is not None and int(self.config.final_test_max_front) < 1:
             print("[Final Test] skipped because final_test_max_front=0", flush=True)
             return
-        from eagle.plugins.microrts.final_test_runner import run_final_test_suite
-
-        run_final_test_suite(self.current_log_dir, self.current_generation, self.config)
+        final_test_runner = getattr(self, "final_test_runner", None)
+        if not callable(final_test_runner):
+            print("[Final Test] skipped because no final_test_runner is configured.", flush=True)
+            return
+        final_test_runner(self.current_log_dir, self.current_generation, self.config)
