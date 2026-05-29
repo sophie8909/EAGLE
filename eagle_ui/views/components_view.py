@@ -300,27 +300,27 @@ def build_components_view(state: Any) -> dict[str, Any]:
                 on_change=lambda event: setattr(state.components, "editor_text", str(event.value or "")),
             ).classes(f"{TEXTAREA_CLASS} min-h-[300px] w-full")
 
-        with ui.row().classes(f"{ROW_CLASS} w-full gap-4 items-stretch flex-nowrap"):
-            with ui.column().classes(f"{CARD_CLASS} flex-1 basis-0 min-w-0 gap-2 min-h-[550px]"):
-                ui.label("Component Table").classes(SECTION_HEADER_CLASS)
-                selection_table = ui.table(
-                    columns=[
-                        {"name": "component", "label": "Component", "field": "component", "align": "left"},
-                        {"name": "static", "label": "Static", "field": "static"},
-                        {"name": "selected", "label": "Selected", "field": "selected"},
-                        {"name": "candidates", "label": "Candidates", "field": "candidates"},
-                    ],
-                    rows=[],
-                    row_key="component",
-                ).classes(f"{TABLE_CLASS} w-full h-[500px] overflow-auto")
+            with ui.row().classes(f"{ROW_CLASS} w-full gap-4 items-stretch flex-nowrap"):
+                with ui.column().classes("flex-1 basis-0 min-w-0 gap-2 min-h-[550px]"):
+                    ui.label("Component Table").classes(SECTION_HEADER_CLASS)
+                    selection_table = ui.table(
+                        columns=[
+                            {"name": "component", "label": "Component", "field": "component", "align": "left"},
+                            {"name": "static", "label": "Static", "field": "static"},
+                            {"name": "selected", "label": "Selected", "field": "selected"},
+                            {"name": "candidates", "label": "Candidates", "field": "candidates"},
+                        ],
+                        rows=[],
+                        row_key="component",
+                    ).classes(f"{TABLE_CLASS} w-full h-[500px] overflow-auto")
 
-            with ui.column().classes(f"{CARD_CLASS} flex-1 basis-0 min-w-0 gap-2 min-h-[550px]"):
-                with ui.row().classes("items-center justify-between w-full"):
-                    token_label = ui.label(state.components.prompt_token_summary)
-                    ui.button("Copy prompt", on_click=safe_click(copy_prompt, label="Copy prompt")).classes(BUTTON_CLASS)
-                prompt_output = ui.textarea(value=state.components.rendered_prompt).props("readonly").classes(
-                    f"{TEXTAREA_CLASS} w-full h-[500px]"
-                )
+                with ui.column().classes("flex-1 basis-0 min-w-0 gap-2 min-h-[550px]"):
+                    with ui.row().classes("items-center justify-between w-full"):
+                        token_label = ui.label(state.components.prompt_token_summary)
+                        ui.button("Copy prompt", on_click=safe_click(copy_prompt, label="Copy prompt")).classes(BUTTON_CLASS)
+                    prompt_output = ui.textarea(value=state.components.rendered_prompt).props("readonly").classes(
+                        f"{TEXTAREA_CLASS} w-full h-[500px]"
+                    )
 
     controls["refresh"] = refresh_all
     return controls
