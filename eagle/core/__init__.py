@@ -3,6 +3,7 @@
 from .algorithm import BaseAlgorithm
 from .individual import Individual
 from .plugin import BaseTaskPlugin, ObjectiveValues, ParsedOutput, TaskPlugin
+from .plugin_loader import load_plugin
 from .registry import (
     ALGORITHMS,
     CROSSOVER_OPERATORS,
@@ -32,4 +33,5 @@ __all__ = [
     "Registry",
     "TaskPlugin",
     "ensure_evaluation_result",
+    "load_plugin",
 ]
