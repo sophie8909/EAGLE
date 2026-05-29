@@ -251,7 +251,7 @@ def build_components_view(state: Any) -> dict[str, Any]:
 
     with ui.column().classes("w-full gap-3"):
         control_button_classes = "h-[56px] min-w-[88px] px-4"
-        with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        with ui.column().classes(f"{CARD_CLASS} w-full gap-3 min-h-[calc(100vh-180px)] flex flex-col"):
             ui.label("Components").classes(SECTION_HEADER_CLASS)
             with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full flex-nowrap"):
                 initial_options = component_path_options()
@@ -298,10 +298,10 @@ def build_components_view(state: Any) -> dict[str, Any]:
                 "Candidate text",
                 value=state.components.editor_text,
                 on_change=lambda event: setattr(state.components, "editor_text", str(event.value or "")),
-            ).classes(f"{TEXTAREA_CLASS} min-h-[300px] w-full")
+            ).classes(f"{TEXTAREA_CLASS} min-h-[260px] grow w-full")
 
-            with ui.row().classes(f"{ROW_CLASS} w-full gap-4 items-stretch flex-nowrap"):
-                with ui.column().classes("flex-1 basis-0 min-w-0 gap-2 min-h-[550px]"):
+            with ui.row().classes(f"{ROW_CLASS} w-full gap-4 items-stretch flex-nowrap min-h-[520px]"):
+                with ui.column().classes("flex-1 basis-0 min-w-0 gap-2 min-h-[520px] h-full"):
                     ui.label("Component Table").classes(SECTION_HEADER_CLASS)
                     selection_table = ui.table(
                         columns=[
@@ -312,14 +312,14 @@ def build_components_view(state: Any) -> dict[str, Any]:
                         ],
                         rows=[],
                         row_key="component",
-                    ).classes(f"{TABLE_CLASS} w-full h-[500px] overflow-auto")
+                    ).classes(f"{TABLE_CLASS} w-full h-full overflow-y-auto")
 
-                with ui.column().classes("flex-1 basis-0 min-w-0 gap-2 min-h-[550px]"):
+                with ui.column().classes("flex-1 basis-0 min-w-0 gap-2 min-h-[520px] h-full"):
                     with ui.row().classes("items-center justify-between w-full"):
                         token_label = ui.label(state.components.prompt_token_summary)
                         ui.button("Copy prompt", on_click=safe_click(copy_prompt, label="Copy prompt")).classes(BUTTON_CLASS)
                     prompt_output = ui.textarea(value=state.components.rendered_prompt).props("readonly").classes(
-                        f"{TEXTAREA_CLASS} w-full h-[500px]"
+                        f"{TEXTAREA_CLASS} w-full h-full grow"
                     )
 
     controls["refresh"] = refresh_all
