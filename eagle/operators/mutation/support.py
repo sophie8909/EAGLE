@@ -27,10 +27,12 @@ _mutation_component_weights: dict[str, float] = {}
 
 
 def sample_mutation_mode(config) -> str:
-    """Sample one mutation mode from adaptive roulette weights."""
+    """Sample one mutation mode using fixed uniform or adaptive roulette selection."""
     modes = active_mutation_modes(config)
     if not modes:
         raise ValueError("No configured strategy mutation modes available.")
+    if mutation_selection_mode(config) == "fixed":
+        return random.choice(modes)
 
     for mode in modes:
         _mutation_component_weights.setdefault(mode, INITIAL_MUTATION_WEIGHT)
@@ -47,7 +49,6 @@ def update_mutation_component_feedback(
     """Update roulette statistics for one mutation component based on outcome."""
     if not mutation_mode:
         return
-
     old_weight = float(_mutation_component_weights.get(mutation_mode, INITIAL_MUTATION_WEIGHT))
     reward = float(offspring_fitness) - float(parent_fitness)
 
@@ -72,12 +73,13 @@ def update_mutation_component_feedback(
 
 def active_mutation_modes(config) -> list[str]:
     """Return mutation modes that are enabled by the existing config."""
-    configured_weights = config.strategy_mutation_mode_weights()
-    return [
-        mode
-        for mode, weight in configured_weights.items()
-        if mode in MIXABLE_MUTATION_OPERATORS and float(weight) > 0.0
-    ]
+    return list(MIXABLE_MUTATION_OPERATORS)
+
+
+def mutation_selection_mode(config) -> str:
+    """Return the configured mutation selection mode."""
+    mode = str(getattr(config, "mutation_selection_mode", "fixed") if config is not None else "fixed")
+    return "aos" if mode.strip().lower() == "aos" else "fixed"
 
 
 def current_mutation_weights(config) -> dict[str, float]:

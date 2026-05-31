@@ -25,6 +25,7 @@
     "identity_shift_rewrite": 0.25,
     "bitmask_flip": 0.0
   },
+  "mutation_selection_mode": "fixed",
   "mutation_operator": "mix",
   "selection_method": "random",
   "tournament_size": 3,

@@ -46,6 +46,10 @@ ALGORITHM_CHOICES = ("ga", "nsga2", "ga_surrogate", "nsga2_surrogate")
 EVALUATOR_CHOICES = ("gameplay",)
 SURROGATE_CHOICES = ("round", "policy_agent", "java_agent")
 AGGRESSIVENESS_MODE_CHOICES = ("component_only", "llm_only", "hybrid")
+MUTATION_SELECTION_MODE_CHOICES = {
+    "fixed": "Fixed",
+    "aos": "AOS (Adaptive Operator Selection)",
+}
 GA_ALGORITHMS = {"ga", "ga_surrogate"}
 MO_ALGORITHMS = {"nsga2", "nsga2_surrogate"}
 SURROGATE_ALGORITHMS = {"ga_surrogate", "nsga2_surrogate"}
@@ -498,6 +502,9 @@ def apply_operator_config(state: Any, payload: dict[str, Any]) -> None:
     )
     operators.crossover_operator = str(payload.get("crossover_operator", operators.crossover_operator))
     operators.mutation_operator = str(payload.get("mutation_operator", operators.mutation_operator))
+    operators.mutation_selection_mode = normalize_mutation_selection_mode(
+        payload.get("mutation_selection_mode", operators.mutation_selection_mode)
+    )
     operators.env_selection_operator = str(
         payload.get("env_selection_operator", payload.get("environment_selection_method", operators.env_selection_operator))
     )
@@ -729,6 +736,9 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
             "crossover": state.operators.crossover_operator,
             "crossover_operator": state.operators.crossover_operator,
             "mutation_operator": state.operators.mutation_operator,
+            "mutation_selection_mode": normalize_mutation_selection_mode(
+                state.operators.mutation_selection_mode
+            ),
             "environment_selection_method": state.operators.env_selection_operator,
             "env_selection_operator": state.operators.env_selection_operator,
             "crossover_repair_enabled": state.operators.crossover_repair_enabled
@@ -854,6 +864,11 @@ def build_strategy_mutation_weights(state: Any) -> dict[str, float]:
         "strategy_mutation",
     )
 
+
+def normalize_mutation_selection_mode(value: Any) -> str:
+    """Return the current mutation-selection mode key."""
+    normalized = str(value or "fixed").strip().lower()
+    return normalized if normalized in MUTATION_SELECTION_MODE_CHOICES else "fixed"
 
 def load_process_state() -> dict[str, Any]:
     """Load persisted web process state."""

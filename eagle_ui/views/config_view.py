@@ -212,6 +212,12 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows["environmental_selection"].set_text(state.operators.env_selection_operator)
         rows["crossover"].set_text(state.operators.crossover_operator)
         rows["mutation"].set_text(state.operators.mutation_operator)
+        rows["mutation_selection_mode"].set_text(
+            services.MUTATION_SELECTION_MODE_CHOICES.get(
+                state.operators.mutation_selection_mode,
+                state.operators.mutation_selection_mode,
+            )
+        )
         rows["mutation_mix_weights"].set_text(_format_mutation_weights(state))
         rows["crossover_repair"].set_text(str(state.operators.crossover_repair_enabled))
         rows["reflection"].set_text(str(state.operators.enable_reflection_operator))
@@ -239,6 +245,7 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
                 "environmental_selection": _summary_row("Environmental selection"),
                 "crossover": _summary_row("Crossover"),
                 "mutation": _summary_row("Mutation"),
+                "mutation_selection_mode": _summary_row("Operator selection mode"),
                 "mutation_mix_weights": _summary_row("Mutation mix weights"),
                 "crossover_repair": _summary_row("Crossover repair"),
                 "reflection": _summary_row("Reflection"),

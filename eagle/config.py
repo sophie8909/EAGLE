@@ -79,6 +79,7 @@ class EAConfig:
     strategy_mutation: dict[str, float] = field(
         default_factory=lambda: dict(_default_config_value("strategy_mutation"))
     )
+    mutation_selection_mode: str = field(default_factory=lambda: str(_default_config_value("mutation_selection_mode")))
     example_reproduction_operator_probs: dict[str, float] = field(
         default_factory=lambda: dict(_default_config_value("example_reproduction_operator_probs"))
     )
@@ -311,6 +312,9 @@ class EAConfig:
             raise ValueError("strategy_mutation must leave at least one mode enabled.")
 
         self.strategy_mutation = strategy_mutation
+        self.mutation_selection_mode = str(self.mutation_selection_mode or "fixed").strip().lower()
+        if self.mutation_selection_mode not in {"fixed", "aos"}:
+            raise ValueError("mutation_selection_mode must be 'fixed' or 'aos'.")
         example_probabilities = self._normalized_probability_input(self.example_reproduction_operator_probs)
         expected_example_keys = {"crossover", "mutation"}
         actual_example_keys = set(example_probabilities.keys())
@@ -369,6 +373,7 @@ class EAConfig:
             "enable_reflection_operator": self.enable_reflection_operator,
             "reflection_max_components_to_rewrite": self.reflection_max_components_to_rewrite,
             "strategy_mutation": dict(self.strategy_mutation),
+            "mutation_selection_mode": self.mutation_selection_mode,
             "mutation_operator": self.mutation_operator,
             "selection_method": self.selection_method,
             "parent_selection_operator": self.parent_selection_operator,

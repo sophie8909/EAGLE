@@ -4,8 +4,9 @@ from types import SimpleNamespace
 from eagle.operators.mutation import support
 
 
-def _config():
+def _config(mode="aos"):
     return SimpleNamespace(
+        mutation_selection_mode=mode,
         strategy_mutation_mode_weights=lambda: {
             "bitmask_flip": 0.25,
             "identity_preserving_rewrite": 0.25,
@@ -66,6 +67,32 @@ class MutationAOSTests(unittest.TestCase):
         self.assertEqual(selected, "pool_replacement")
         self.assertEqual(observed["weights"], [3.0, 5.0, 7.0, 11.0])
         self.assertEqual(observed["k"], 1)
+
+    def test_fixed_mode_samples_uniformly_without_weights(self) -> None:
+        observed = {}
+        original_choice = support.random.choice
+
+        def fake_choice(modes):
+            observed["modes"] = list(modes)
+            return "identity_shift_rewrite"
+
+        support.random.choice = fake_choice
+        try:
+            selected = support.sample_mutation_mode(_config("fixed"))
+        finally:
+            support.random.choice = original_choice
+
+        self.assertEqual(selected, "identity_shift_rewrite")
+        self.assertEqual(
+            observed["modes"],
+            [
+                "bitmask_flip",
+                "identity_preserving_rewrite",
+                "identity_shift_rewrite",
+                "pool_replacement",
+            ],
+        )
+        self.assertEqual(support._mutation_component_weights, {})
 
     def test_decays_selected_operator_and_clamps_to_one(self) -> None:
         support._mutation_component_weights["pool_replacement"] = 1.05

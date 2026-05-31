@@ -510,6 +510,8 @@ class EA:
 
     def _update_mutation_component_feedback(self, child: Individual) -> None:
         """Feed mutation-mode success/failure back to adaptive mutation operators."""
+        if mutation_support.mutation_selection_mode(self.config) != "aos":
+            return
         if getattr(child, "_reproduction_operator", None) != "mutation":
             return
 
@@ -1168,9 +1170,12 @@ class EA:
 
     def _log_mutation_weights(self, log_dir: str, generation: int) -> None:
         """Append one per-generation mutation AOS weight snapshot."""
+        if mutation_support.mutation_selection_mode(self.config) != "aos":
+            return
         weights = mutation_support.current_mutation_weights(self.config)
         if not weights:
             return
+        print("[AOS]\n" + "\n".join(f"{key}={value}" for key, value in weights.items()), flush=True)
         log_path = Path(log_dir) / "mutation_weights.jsonl"
         with log_path.open("a", encoding="utf-8") as f:
             f.write(

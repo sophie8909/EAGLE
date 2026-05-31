@@ -1,8 +1,9 @@
-﻿"""Live analysis view."""
+"""Live analysis view."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import re
 from pathlib import Path
@@ -85,6 +86,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             mo_objectives = await asyncio.to_thread(_load_mo_objective_options, run_dir)
             final_test_analysis = await asyncio.to_thread(_build_final_test_analysis_text, run_dir)
             ga_convergence = await asyncio.to_thread(_build_ga_convergence_options, run_dir)
+            mutation_weights = await asyncio.to_thread(_build_mutation_weight_options, run_dir)
             state.analysis.mo_objective_options = mo_objectives
             await refresh_mo_section()
         except (OSError, ValueError) as exc:
@@ -93,12 +95,14 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             mo_objectives = {}
             final_test_analysis = str(exc)
             ga_convergence = None
+            mutation_weights = None
             state.analysis.mo_objective_options = mo_objectives
             _set_mo_hidden(str(exc))
         state.analysis.summary = summary
         state.analysis.body = body
         state.analysis.mo_objective_options = mo_objectives
         _render_ga_convergence(ga_chart_container, ga_convergence)
+        _render_mutation_weight_history(mutation_weight_container, mutation_weights)
         mo_summary_text.value = mo_summary
         mo_summary_text.update()
         final_test_text.value = final_test_analysis
@@ -366,6 +370,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
             f"{TEXTAREA_CLASS} {height_class(300)} w-full"
         )
         ga_chart_container = ui.column().classes("w-full gap-3")
+        mutation_weight_container = ui.column().classes("w-full gap-3")
 
         with ui.column().classes("w-full gap-3") as mo_section:
             ui.label("MO Analysis").classes(SECTION_HEADER_CLASS)
@@ -590,6 +595,113 @@ def _build_ga_convergence_options(run_dir: Path | None) -> dict[str, Any] | None
         }
 
 
+def _render_mutation_weight_history(container: Any, options: dict[str, Any] | None) -> None:
+    """Render mutation AOS weight history only when the selected run used AOS."""
+    container.clear()
+    if not options:
+        return
+    with container:
+        ui.label("Mutation Operator Weights").classes(SECTION_HEADER_CLASS)
+        ui.echart(options).classes("w-full h-80")
+
+
+def _build_mutation_weight_options(run_dir: Path | None) -> dict[str, Any] | None:
+    """Build ECharts options for mutation AOS weight history."""
+    with services.LoggedOperation("parsing logs", kind="mutation_weight_history", run_dir=run_dir):
+        if run_dir is None:
+            return None
+        config_path = run_dir / "config.json"
+        if not config_path.exists():
+            return None
+        try:
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+        if str(config.get("mutation_selection_mode", "fixed")).strip().lower() != "aos":
+            return None
+        rows = _load_mutation_weight_history(run_dir / "mutation_weights.jsonl")
+        if not rows:
+            return None
+
+        generations = [row["generation"] for row in rows]
+        operators = sorted({operator for row in rows for operator in row["mutation_weights"]})
+        if not operators:
+            return None
+        palette = [
+            COLORS["sky_blue"],
+            COLORS["bronze"],
+            COLORS["success"],
+            COLORS["error"],
+            COLORS["text"],
+        ]
+        series = []
+        for index, operator in enumerate(operators):
+            series.append(
+                {
+                    "name": operator,
+                    "type": "line",
+                    "smooth": True,
+                    "data": [row["mutation_weights"].get(operator) for row in rows],
+                    "lineStyle": {"width": 2, "color": palette[index % len(palette)]},
+                    "itemStyle": {"color": palette[index % len(palette)]},
+                }
+            )
+        return {
+            "backgroundColor": "transparent",
+            "color": palette,
+            "tooltip": {"trigger": "axis"},
+            "legend": {"textStyle": {"color": COLORS["text"]}},
+            "grid": {"left": 48, "right": 24, "top": 56, "bottom": 44},
+            "xAxis": {
+                "type": "category",
+                "name": "generation",
+                "data": generations,
+                "axisLine": {"lineStyle": {"color": COLORS["border"]}},
+                "axisLabel": {"color": COLORS["muted"]},
+                "nameTextStyle": {"color": COLORS["muted"]},
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "weight",
+                "axisLine": {"lineStyle": {"color": COLORS["border"]}},
+                "axisLabel": {"color": COLORS["muted"]},
+                "splitLine": {"lineStyle": {"color": COLORS["border"]}},
+                "nameTextStyle": {"color": COLORS["muted"]},
+            },
+            "series": series,
+        }
+
+
+def _load_mutation_weight_history(path: Path) -> list[dict[str, Any]]:
+    """Load mutation AOS weights from a JSONL run artifact."""
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        weights = payload.get("mutation_weights") if isinstance(payload, dict) else None
+        if not isinstance(weights, dict):
+            continue
+        try:
+            generation = int(payload.get("generation"))
+        except (TypeError, ValueError):
+            continue
+        rows.append(
+            {
+                "generation": generation,
+                "mutation_weights": {
+                    str(key): float(value)
+                    for key, value in weights.items()
+                    if _is_number(value)
+                },
+            }
+        )
+    return rows
 def _read_ga_convergence_text(run_dir: Path) -> str:
     """Read GA generation logs without loading MO generation files."""
     with services.LoggedOperation("reading large files", kind="ga_generation_logs", run_dir=run_dir):
@@ -709,6 +821,13 @@ def _format_float(value: object) -> str:
     return f"{number:.4g}"
 
 
+def _is_number(value: object) -> bool:
+    """Return whether a value can be rendered as a chart number."""
+    try:
+        float(value)
+    except (TypeError, ValueError):
+        return False
+    return True
 def _format_seconds(value: object) -> str:
     """Format seconds for the compact time-analysis panel."""
     return f"{float(value):.3f} sec"

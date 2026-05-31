@@ -130,7 +130,10 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             control.update()
         for name, control in selects.items():
             value = getattr(state.operators, name, "")
-            if hasattr(control, "options"):
+            if name == "mutation_selection_mode":
+                control.options = dict(services.MUTATION_SELECTION_MODE_CHOICES)
+                control.value = value if value in services.MUTATION_SELECTION_MODE_CHOICES else "fixed"
+            elif hasattr(control, "options"):
                 _set_select_options(control, getattr(control, "options", []), value)
             else:
                 control.value = value
@@ -139,9 +142,13 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             control.value = state.operators.reproduction_weights.get(key, "0.0")
             control.update()
         mutation_mix_enabled = state.operators.mutation_operator == "mix"
+        mutation_weight_section.visible = (
+            mutation_mix_enabled
+            and state.operators.mutation_selection_mode == "aos"
+        )
         for key, control in mutation_weight_inputs.items():
             control.value = state.operators.mutation_weights.get(key, "0.0")
-            if mutation_mix_enabled:
+            if mutation_weight_section.visible:
                 control.enable()
             else:
                 control.disable()
@@ -150,6 +157,8 @@ def build_operators_view(state: Any) -> dict[str, Any]:
 
     def update_select(name: str, value: str) -> None:
         setattr(state.operators, name, value)
+        if name == "mutation_selection_mode":
+            state.operators.mutation_selection_mode = services.normalize_mutation_selection_mode(value)
         refresh()
         refresh_config_summary(state)
 
@@ -352,6 +361,15 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                                     str(event.value or ""),
                                 ),
                             ).classes(f"{INPUT_CLASS} w-full"),
+                            "mutation_selection_mode": ui.select(
+                                dict(services.MUTATION_SELECTION_MODE_CHOICES),
+                                label="Operator Selection Mode",
+                                value=state.operators.mutation_selection_mode,
+                                on_change=lambda event: update_select(
+                                    "mutation_selection_mode",
+                                    str(event.value or "fixed"),
+                                ),
+                            ).classes(f"{INPUT_CLASS} w-full"),
                         }
                     )
 
@@ -392,24 +410,25 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                     ),
                 ).classes(f"{INPUT_CLASS} w-full")
 
-        ui.label("Mutation mix weights").classes(
-            "text-xs uppercase tracking-widest text-[#b08d57]"
-        )
+        with ui.column().classes("w-full gap-3") as mutation_weight_section:
+            ui.label("Mutation mix weights").classes(
+                "text-xs uppercase tracking-widest text-[#b08d57]"
+            )
 
-        with ui.grid(columns=4).classes("w-full gap-3"):
-            mutation_weight_inputs = {}
-            for key in services.operator_choices("mutation"):
-                if key == "mix":
-                    continue
-                state.operators.mutation_weights.setdefault(key, "0.0")
-                mutation_weight_inputs[key] = ui.input(
-                    key,
-                    value=state.operators.mutation_weights[key],
-                    on_change=lambda event, item=key: update_mutation_weight(
-                        item,
-                        str(event.value or "0"),
-                    ),
-                ).classes(f"{INPUT_CLASS} w-full")
+            with ui.grid(columns=4).classes("w-full gap-3"):
+                mutation_weight_inputs = {}
+                for key in services.operator_choices("mutation"):
+                    if key == "mix":
+                        continue
+                    state.operators.mutation_weights.setdefault(key, "0.0")
+                    mutation_weight_inputs[key] = ui.input(
+                        key,
+                        value=state.operators.mutation_weights[key],
+                        on_change=lambda event, item=key: update_mutation_weight(
+                            item,
+                            str(event.value or "0"),
+                        ),
+                    ).classes(f"{INPUT_CLASS} w-full")
 
     controls["refresh"] = refresh
     refresh()

@@ -90,6 +90,7 @@ class OperatorState:
     parent_selection_operator: str = "nsga2_tournament"
     crossover_operator: str = "uniform"
     mutation_operator: str = "mix"
+    mutation_selection_mode: str = "fixed"
     env_selection_operator: str = "nsga2_environmental"
     crossover_repair_enabled: bool = True
     enable_reflection_operator: bool = True
