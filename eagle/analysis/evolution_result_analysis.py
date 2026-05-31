@@ -12,7 +12,7 @@ from pathlib import Path
 from ..project import EAGLE_LOGS_DIR, ensure_directory
 from ..utils.checkpoint import deserialize_individual
 from ..evolution.component.log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
-from ..utils.microrts_result_fitness import microrts_result_fitness
+from ..utils.microrts_result_fitness import microrts_raw_metrics, microrts_result_fitness
 from .objective_metadata import load_run_objective_specs, objective_axis_labels, objective_names
 from ..representation.fitness import fitness_values, normalize_fitness_dict
 
@@ -483,6 +483,14 @@ def _final_test_analysis_from_payload(
     opponents: set[str] = set()
     metric_values: dict[str, list[float]] = {
         "win_rate": [],
+        "fitness_win_score": [],
+        "fitness_resource_advantage": [],
+        "raw_p0_units": [],
+        "raw_p1_units": [],
+        "raw_p0_eval": [],
+        "raw_p1_eval": [],
+        "raw_resource_total": [],
+        "raw_material_total": [],
         "score": [],
         "ally_resources": [],
         "enemy_resources": [],
@@ -569,18 +577,27 @@ def _normalize_final_test_record(record: dict[str, object]) -> dict[str, object]
         "enemy": raw.get("enemy", record.get("enemy")),
         "target_side": record.get("target_side"),
     }
+    raw_result = record.get("raw_result") if isinstance(record.get("raw_result"), dict) else result_payload
     match_score = record.get("match_score", record.get("fitness"))
     if match_score is None:
         match_score = {
             "win_score": raw.get("win_score"),
             "raw_resource_advantage_score": raw.get("score", record.get("score", record.get("resource_advantage_score"))),
         }
-    fitness = microrts_result_fitness(result_payload, match_score=match_score)
+    fitness = microrts_result_fitness(raw_result, match_score=match_score)
     raw.setdefault("win_score", fitness["win_score"])
     raw.setdefault("score", fitness["score"])
     raw.setdefault("ally", fitness["ally"])
     raw.setdefault("enemy", fitness["enemy"])
     normalized["raw"] = raw
+    normalized.setdefault(
+        "fitness",
+        {
+            "win_score": fitness["win_score"],
+            "resource_advantage": fitness["raw_resource_advantage_score"],
+        },
+    )
+    normalized["raw_microrts"] = microrts_raw_metrics(raw_result)
 
     paths = dict(record.get("paths") or {}) if isinstance(record.get("paths"), dict) else {}
     paths.setdefault("log", record.get("log_path", ""))
@@ -643,6 +660,8 @@ def _final_test_outcome(record: dict[str, object]) -> str:
 def _final_test_record_metrics(record: dict[str, object], weights: dict[str, float] | None = None) -> dict[str, float]:
     """Return derived raw metrics for one final-test replay record."""
     raw = dict(record.get("raw") or {}) if isinstance(record.get("raw"), dict) else {}
+    fitness = dict(record.get("fitness") or {}) if isinstance(record.get("fitness"), dict) else {}
+    raw_microrts = dict(record.get("raw_microrts") or {}) if isinstance(record.get("raw_microrts"), dict) else {}
     ally = dict(raw.get("ally") or {})
     enemy = dict(raw.get("enemy") or {})
     ally_total = _snapshot_total_resources(ally)
@@ -651,6 +670,14 @@ def _final_test_record_metrics(record: dict[str, object], weights: dict[str, flo
     outcome = _final_test_outcome(record)
     return {
         "win_rate": 1.0 if outcome == "win" else 0.0,
+        "fitness_win_score": _safe_float(fitness.get("win_score", raw.get("win_score"))),
+        "fitness_resource_advantage": _safe_float(fitness.get("resource_advantage", fitness.get("raw_resource_advantage_score", raw.get("score")))),
+        "raw_p0_units": _safe_float(raw_microrts.get("p0_units")),
+        "raw_p1_units": _safe_float(raw_microrts.get("p1_units")),
+        "raw_p0_eval": _safe_float(raw_microrts.get("p0_eval")),
+        "raw_p1_eval": _safe_float(raw_microrts.get("p1_eval")),
+        "raw_resource_total": _safe_float(raw_microrts.get("resource_total")),
+        "raw_material_total": _safe_float(raw_microrts.get("material_total")),
         "score": _safe_float(raw.get("score")),
         "ally_resources": _safe_float(ally.get("resources")),
         "enemy_resources": _safe_float(enemy.get("resources")),

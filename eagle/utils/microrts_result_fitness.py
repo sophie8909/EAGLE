@@ -41,6 +41,33 @@ def microrts_result_fitness(
     }
 
 
+def microrts_raw_metrics(
+    result_json: dict[str, Any] | None = None,
+    *,
+    simulation_meta: dict[str, Any] | None = None,
+) -> dict[str, float]:
+    """Return raw p0/p1 MicroRTS scoreboard and material metrics."""
+    result = result_json if isinstance(result_json, dict) else {}
+    meta = simulation_meta if isinstance(simulation_meta, dict) else {}
+    target_side = _target_side(result, meta)
+    p0, p1 = _raw_players(result, target_side)
+    scoreboard = result.get("final_scoreboard") if isinstance(result.get("final_scoreboard"), dict) else {}
+    p0_units = _unit_count(p0)
+    p1_units = _unit_count(p1)
+    p0_resources = _safe_float(_first_present(p0, "resource_total", "player_resources", "resources", "resource"))
+    p1_resources = _safe_float(_first_present(p1, "resource_total", "player_resources", "resources", "resource"))
+    return {
+        "p0_units": p0_units,
+        "p1_units": p1_units,
+        "p0_eval": _safe_float(_first_present(scoreboard, "p0_eval", "p0", "0")),
+        "p1_eval": _safe_float(_first_present(scoreboard, "p1_eval", "p1", "1")),
+        "p0_resource_total": p0_resources,
+        "p1_resource_total": p1_resources,
+        "resource_total": p0_resources - p1_resources,
+        "material_total": p0_units - p1_units,
+    }
+
+
 def normalize_player_snapshot(snapshot: Any) -> dict[str, int]:
     """Normalize one raw player snapshot to final-test raw fields."""
     if not isinstance(snapshot, dict):
@@ -122,6 +149,32 @@ def _snapshots(result: dict[str, Any], target_side: str) -> tuple[dict[str, int]
     return normalize_player_snapshot(result.get("ally")), normalize_player_snapshot(result.get("enemy"))
 
 
+def _raw_players(result: dict[str, Any], target_side: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    players = result.get("players")
+    if isinstance(players, dict):
+        return dict(players.get("p0") or {}), dict(players.get("p1") or {})
+    ally = result.get("ally") if isinstance(result.get("ally"), dict) else {}
+    enemy = result.get("enemy") if isinstance(result.get("enemy"), dict) else {}
+    if target_side == "1":
+        return dict(enemy), dict(ally)
+    return dict(ally), dict(enemy)
+
+
+def _unit_count(snapshot: dict[str, Any]) -> float:
+    unit_types = snapshot.get("unit_types") if isinstance(snapshot.get("unit_types"), dict) else snapshot
+    return sum(
+        _safe_float(_first_present(unit_types, java_name, field_name))
+        for java_name, field_name in (
+            ("Base", "base_count"),
+            ("Barracks", "barracks_count"),
+            ("Worker", "worker_count"),
+            ("Light", "light_count"),
+            ("Heavy", "heavy_count"),
+            ("Ranged", "ranged_count"),
+        )
+    )
+
+
 def _match_score_dict(match_score: Any) -> dict[str, Any]:
     if isinstance(match_score, dict):
         return match_score
@@ -146,6 +199,13 @@ def _first_float(mapping: dict[str, Any], *keys: str) -> float | None:
         if key in mapping:
             return _safe_float(mapping.get(key))
     return None
+
+
+def _first_present(mapping: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if isinstance(mapping, dict) and key in mapping and mapping.get(key) is not None:
+            return mapping.get(key)
+    return 0.0
 
 
 def _safe_float(value: Any) -> float:

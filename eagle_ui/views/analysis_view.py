@@ -740,6 +740,24 @@ def _build_final_test_analysis_text(run_dir: Path | None) -> str:
             lines.append("Maps: " + ", ".join(str(item) for item in analysis["maps"]))
         if analysis.get("opponents"):
             lines.append("Opponents: " + ", ".join(str(item) for item in analysis["opponents"]))
+        lines.append("Fitness/objectives used by EA:")
+        for key, label in (
+            ("mean_fitness_win_score", "Mean win_score"),
+            ("mean_fitness_resource_advantage", "Mean resource_advantage"),
+        ):
+            if analysis.get(key) is not None:
+                lines.append(f"{label}: {_format_float(analysis[key])}")
+        lines.append("Raw MicroRTS metrics:")
+        for key, label in (
+            ("mean_raw_p0_units", "Mean p0_units"),
+            ("mean_raw_p1_units", "Mean p1_units"),
+            ("mean_raw_p0_eval", "Mean p0_eval"),
+            ("mean_raw_p1_eval", "Mean p1_eval"),
+            ("mean_raw_resource_total", "Mean resource_total delta"),
+            ("mean_raw_material_total", "Mean material_total delta"),
+        ):
+            if analysis.get(key) is not None:
+                lines.append(f"{label}: {_format_float(analysis[key])}")
         if "skipped_games" in analysis:
             lines.append(f"Skipped games: {analysis['skipped_games']}")
         if "failed_games" in analysis:

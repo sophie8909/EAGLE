@@ -115,6 +115,38 @@ def test_analysis_normalizes_legacy_records_from_raw_only():
     assert analysis["draws"] == 1
 
 
+def test_analysis_separates_fitness_from_raw_microrts_metrics():
+    payload = {
+        "source_run_dir": "run",
+        "results": [
+            {
+                "individual_id": "new",
+                "map": "8x8/basesWorkers8x8.xml",
+                "opponent": "ai.RandomBiasedAI",
+                "raw_result": {
+                    "winner": 0,
+                    "players": {
+                        "p0": {"resource_total": 3, "unit_types": {"Base": 1, "Worker": 2}},
+                        "p1": {"resource_total": 1, "unit_types": {"Barracks": 1, "Light": 1}},
+                    },
+                    "final_scoreboard": {"p0_eval": 7.0, "p1_eval": 2.0},
+                },
+            }
+        ],
+    }
+
+    analysis = parse_final_test_analysis(json.dumps(payload))
+
+    assert analysis["mean_fitness_win_score"] == 1.0
+    assert analysis["mean_fitness_resource_advantage"] == 5.0
+    assert analysis["mean_raw_p0_units"] == 3.0
+    assert analysis["mean_raw_p1_units"] == 2.0
+    assert analysis["mean_raw_p0_eval"] == 7.0
+    assert analysis["mean_raw_p1_eval"] == 2.0
+    assert analysis["mean_raw_resource_total"] == 2.0
+    assert analysis["mean_raw_material_total"] == 1.0
+
+
 def test_backend_error_repeat_is_failed_not_game_outcome():
     record = _build_failed_result_record(
         individual_id="ind-3",

@@ -1428,12 +1428,21 @@ def build_final_test_results_text(run_dir: Path | None) -> str:
         lines.append(f"Games: {analysis['games']}")
     if analysis.get("win_rate") is not None:
         lines.append(f"Win rate: {float(analysis['win_rate']) * 100:.1f}%")
+    lines.append("Fitness/objectives used by EA:")
     for key, label in (
-        ("mean_score", "Mean score"),
-        ("worst_score", "Worst score"),
-        ("best_score", "Best score"),
-        ("mean_resource_difference", "Mean resource difference"),
-        ("mean_weighted_resource_score", "Mean weighted resource score"),
+        ("mean_fitness_win_score", "Mean win_score"),
+        ("mean_fitness_resource_advantage", "Mean resource_advantage"),
+    ):
+        if analysis.get(key) is not None:
+            lines.append(f"{label}: {float(analysis[key]):.4g}")
+    lines.append("Raw MicroRTS metrics:")
+    for key, label in (
+        ("mean_raw_p0_units", "Mean p0_units"),
+        ("mean_raw_p1_units", "Mean p1_units"),
+        ("mean_raw_p0_eval", "Mean p0_eval"),
+        ("mean_raw_p1_eval", "Mean p1_eval"),
+        ("mean_raw_resource_total", "Mean resource_total delta"),
+        ("mean_raw_material_total", "Mean material_total delta"),
     ):
         if analysis.get(key) is not None:
             lines.append(f"{label}: {float(analysis[key]):.4g}")
