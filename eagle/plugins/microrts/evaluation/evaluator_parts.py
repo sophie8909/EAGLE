@@ -21,6 +21,7 @@ from eagle.core.result import EvaluationResult
 from eagle.eval.base import BaseEvaluator, EvaluationContext
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.token_count import count_prompt_tokens
+from eagle.utils.microrts_result_fitness import microrts_result_fitness
 
 LOGGER = logging.getLogger(__name__)
 MICRORTS_JAVA_FAILURE_TYPE = "microrts_java_process_failed"
@@ -95,7 +96,7 @@ class GameplayAggregator:
         enemy_total = 0.0
         timeout = False
         for score in scores:
-            match_score = dict(score.get("match_score") or {})
+            match_score = GameplayAggregator.normalize_match_score(score.get("match_score"))
             resource_total += float(match_score.get("raw_resource_advantage_score", 0.0))
             win_total += float(match_score.get("win_score", 0.0))
             timeout = timeout or bool(score.get("timeout", False))
@@ -125,21 +126,10 @@ class GameplayAggregator:
     @staticmethod
     def normalize_match_score(match_score: Any) -> dict[str, float]:
         """Normalize match-score payloads into named scalar scores."""
-        if isinstance(match_score, dict):
-            return {
-                "win_score": float(match_score.get("win_score", 0.0)),
-                "raw_resource_advantage_score": float(match_score.get("raw_resource_advantage_score", 0.0)),
-            }
-        if isinstance(match_score, (list, tuple)):
-            win_score = float(match_score[0]) if len(match_score) > 0 else 0.0
-            raw_resource_score = float(match_score[1]) if len(match_score) > 1 else 0.0
-            return {
-                "win_score": win_score,
-                "raw_resource_advantage_score": raw_resource_score,
-            }
+        fitness = microrts_result_fitness(match_score=match_score)
         return {
-            "win_score": 0.0,
-            "raw_resource_advantage_score": 0.0,
+            "win_score": float(fitness["win_score"]),
+            "raw_resource_advantage_score": float(fitness["raw_resource_advantage_score"]),
         }
 
     @staticmethod

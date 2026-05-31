@@ -15,6 +15,7 @@ from eagle.reflection.microrts.game_log_reflection_context import Reflection, re
 from eagle.project import PROJECT_ROOT
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.match_score_recorder import MatchScoreRecorder
+from eagle.utils.microrts_result_fitness import microrts_result_fitness
 from eagle.evolution.component.individual import Individual
 from eagle.utils.profiler import build_base_record, summarize_total_eval_time, timer, write_jsonl
 from .evaluator_parts import (
@@ -803,81 +804,19 @@ class FullGameEvaluator(BaseEvaluator):
     @staticmethod
     def _aggregate_raw_eval_result(eval_result: dict[str, Any]) -> dict[str, Any]:
         """Add top-level raw metrics averaged across opponent match results."""
-        scores = list(eval_result.get("scores") or [])
-        if not scores:
-            eval_result.update(
-                {
-                    "resource_diff": 0.0,
-                    "ally_units": 0.0,
-                    "enemy_units": 0.0,
-                    "winner": 0.0,
-                    "game_ticks": 0.0,
-                    "timeout": False,
-                }
-            )
-            return eval_result
-
-        resource_total = 0.0
-        win_total = 0.0
-        tick_total = 0.0
-        ally_total = 0.0
-        enemy_total = 0.0
-        timeout = False
-        for score in scores:
-            match_score = dict(score.get("match_score") or {})
-            resource_total += float(match_score.get("raw_resource_advantage_score", 0.0))
-            win_total += float(match_score.get("win_score", 0.0))
-            timeout = timeout or bool(score.get("timeout", False))
-            summary = dict(score.get("parsed_summary") or {})
-            resource_history = list(summary.get("resource_history") or [])
-            if resource_history:
-                tick_total += float(resource_history[-1].get("time", 0.0))
-            feature_history = list(summary.get("feature_history") or [])
-            if feature_history:
-                final_features = dict(feature_history[-1])
-                ally_total += sum(float(value) for value in dict(final_features.get("ally") or {}).values())
-                enemy_total += sum(float(value) for value in dict(final_features.get("enemy") or {}).values())
-
-        count = float(len(scores))
-        eval_result.update(
-            {
-                "resource_diff": resource_total / count,
-                "ally_units": ally_total / count,
-                "enemy_units": enemy_total / count,
-                "winner": win_total / count,
-                "game_ticks": tick_total / count,
-                "timeout": timeout,
-            }
-        )
-        return eval_result
+        return GameplayAggregator.aggregate_raw_eval_result(eval_result)
 
     @staticmethod
     def _normalize_match_score(match_score: Any) -> dict[str, float]:
-        if isinstance(match_score, dict):
-            return {
-                "win_score": float(match_score.get("win_score", 0.0)),
-                "raw_resource_advantage_score": float(match_score.get("raw_resource_advantage_score", 0.0)),
-            }
-        if isinstance(match_score, (list, tuple)):
-            win_score = float(match_score[0]) if len(match_score) > 0 else 0.0
-            raw_resource_score = float(match_score[1]) if len(match_score) > 1 else 0.0
-            return {
-                "win_score": win_score,
-                "raw_resource_advantage_score": raw_resource_score,
-            }
+        fitness = microrts_result_fitness(match_score=match_score)
         return {
-            "win_score": 0.0,
-            "raw_resource_advantage_score": 0.0,
+            "win_score": float(fitness["win_score"]),
+            "raw_resource_advantage_score": float(fitness["raw_resource_advantage_score"]),
         }
 
     @staticmethod
     def _raw_resource_advantage_score(match_score: dict[str, Any] | None) -> float:
-        if not isinstance(match_score, dict):
-            return 0.0
-        try:
-            return float(match_score.get("raw_resource_advantage_score", 0.0))
-        except (TypeError, ValueError):
-            return 0.0
+        return float(microrts_result_fitness(match_score=match_score)["raw_resource_advantage_score"])
 
     @staticmethod
     def _round_surrogate_score(round_eval_result: dict[str, Any] | None) -> float:

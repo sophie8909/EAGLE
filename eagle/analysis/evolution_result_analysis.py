@@ -12,6 +12,7 @@ from pathlib import Path
 from ..project import EAGLE_LOGS_DIR, ensure_directory
 from ..utils.checkpoint import deserialize_individual
 from ..evolution.component.log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
+from ..utils.microrts_result_fitness import microrts_result_fitness
 from .objective_metadata import load_run_objective_specs, objective_axis_labels, objective_names
 from ..representation.fitness import fitness_values, normalize_fitness_dict
 
@@ -557,10 +558,28 @@ def _normalize_final_test_record(record: dict[str, object]) -> dict[str, object]
     """Normalize new and legacy final-test rows to the raw-record schema."""
     normalized = dict(record)
     raw = dict(record.get("raw") or {}) if isinstance(record.get("raw"), dict) else {}
-    raw.setdefault("win_score", _legacy_final_test_win_score(record))
-    raw.setdefault("score", record.get("score", record.get("resource_advantage_score")))
-    raw.setdefault("ally", dict(record.get("ally") or {}) if isinstance(record.get("ally"), dict) else {})
-    raw.setdefault("enemy", dict(record.get("enemy") or {}) if isinstance(record.get("enemy"), dict) else {})
+    result_payload = {
+        "result": record.get("result"),
+        "win": record.get("win"),
+        "winner": record.get("winner"),
+        "win_score": raw.get("win_score", record.get("win_score")),
+        "final_scoreboard": record.get("final_scoreboard"),
+        "players": record.get("players"),
+        "ally": raw.get("ally", record.get("ally")),
+        "enemy": raw.get("enemy", record.get("enemy")),
+        "target_side": record.get("target_side"),
+    }
+    match_score = record.get("match_score", record.get("fitness"))
+    if match_score is None:
+        match_score = {
+            "win_score": raw.get("win_score"),
+            "raw_resource_advantage_score": raw.get("score", record.get("score", record.get("resource_advantage_score"))),
+        }
+    fitness = microrts_result_fitness(result_payload, match_score=match_score)
+    raw.setdefault("win_score", fitness["win_score"])
+    raw.setdefault("score", fitness["score"])
+    raw.setdefault("ally", fitness["ally"])
+    raw.setdefault("enemy", fitness["enemy"])
     normalized["raw"] = raw
 
     paths = dict(record.get("paths") or {}) if isinstance(record.get("paths"), dict) else {}
@@ -575,40 +594,8 @@ def _normalize_final_test_record(record: dict[str, object]) -> dict[str, object]
     normalized["runtime"] = runtime
 
     if str(normalized.get("result") or "").strip().lower() not in {"win", "loss", "draw", "skipped", "failed"}:
-        normalized["result"] = _result_from_win_score(raw.get("win_score"))
+        normalized["result"] = fitness["result"]
     return normalized
-
-
-def _legacy_final_test_win_score(record: dict[str, object]) -> float:
-    """Read a legacy final-test win score without using derived resources."""
-    result = str(record.get("result") or "").strip().lower()
-    if result == "win":
-        return 1.0
-    if result == "loss":
-        return -1.0
-    if result == "draw":
-        return 0.0
-    if "win_score" in record:
-        return _safe_float(record.get("win_score"))
-    for key in ("match_score", "fitness"):
-        value = record.get(key)
-        if isinstance(value, dict) and "win_score" in value:
-            return _safe_float(value.get("win_score"))
-        if isinstance(value, list) and value:
-            return _safe_float(value[0])
-    if "win" in record:
-        return 1.0 if bool(record.get("win")) else -1.0
-    return 0.0
-
-
-def _result_from_win_score(value: object) -> str:
-    """Map canonical win scores to result labels."""
-    win_score = _safe_float(value)
-    if win_score == 1.0:
-        return "Win"
-    if win_score == -1.0:
-        return "Loss"
-    return "Draw"
 
 
 def _final_test_analysis_from_lines(text: str) -> dict[str, object]:

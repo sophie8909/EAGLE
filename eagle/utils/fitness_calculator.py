@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from eagle.utils.microrts_result_fitness import microrts_result_fitness
+
 from .log_parse import parse_log
 
 
@@ -150,8 +152,17 @@ def calculate_match_score(
 ) -> dict[str, float]:
     """Assemble one raw per-match score dict with stable named fields."""
     winner_info = parsed_log or parse_winner_info(log_content)["parsed_log"]
-    winning_score = win_loss_evaluation(log_content, parsed_log=winner_info)
-    resource_score = raw_resource_advantage_score(winner_info, resource_advantage_weights)
+    result_json = winner_info.get("result_json") if isinstance(winner_info, dict) else None
+    if isinstance(result_json, dict):
+        fitness = microrts_result_fitness(
+            result_json,
+            simulation_meta={"parsed_log": winner_info},
+        )
+        winning_score = float(fitness["win_score"])
+        resource_score = float(fitness["raw_resource_advantage_score"])
+    else:
+        winning_score = win_loss_evaluation(log_content, parsed_log=winner_info)
+        resource_score = raw_resource_advantage_score(winner_info, resource_advantage_weights)
     return {
         "win_score": winning_score,
         "raw_resource_advantage_score": resource_score,

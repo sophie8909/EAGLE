@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from eagle.utils.microrts_result_fitness import microrts_result_fitness
+
 
 def _normalize_result(record: dict[str, Any]) -> str:
     """Map one replay record onto Win/Loss/Draw."""
@@ -17,26 +19,8 @@ def _normalize_result(record: dict[str, Any]) -> str:
 
     raw = record.get("raw")
     match_score = raw if isinstance(raw, dict) else record.get("match_score", record.get("fitness"))
-    if isinstance(match_score, dict):
-        try:
-            win_score = float(match_score.get("win_score", 0.0))
-        except (TypeError, ValueError):
-            return "Unknown"
-        if win_score == 1.0:
-            return "Win"
-        if win_score == -1.0:
-            return "Loss"
-        return "Draw"
-    if isinstance(match_score, list) and match_score:
-        try:
-            win_score = float(match_score[0])
-        except (TypeError, ValueError):
-            return "Unknown"
-        if win_score == 1.0:
-            return "Win"
-        if win_score == -1.0:
-            return "Loss"
-        return "Draw"
+    if isinstance(match_score, (dict, list, tuple)):
+        return str(microrts_result_fitness(match_score=match_score)["result"])
 
     return "Unknown"
 

@@ -23,6 +23,7 @@ from eagle.utils.checkpoint import CheckpointManager, deserialize_individual
 from eagle.evolution.component.log_parse import parse_individuals_from_ea_log, parse_population_snapshot_from_ea_log
 from .full_game_evaluator import FullGameEvaluator
 from .generation_replay import extract_individual_ids_up_to_front
+from eagle.utils.microrts_result_fitness import microrts_result_fitness, normalize_player_snapshot
 
 
 FINAL_TEST_REPEATS = 10
@@ -309,21 +310,23 @@ def _build_raw_result_record(
     simulation_meta: dict[str, Any],
 ) -> dict[str, Any]:
     """Convert one replay result into the requested raw JSON schema."""
-    target_side = _result_target_side(raw_result, simulation_meta)
-    result_label, win_score = _result_label_and_win_score(raw_result, simulation_meta, target_side)
-    ally_snapshot, enemy_snapshot = _result_snapshots(raw_result, target_side)
+    fitness = microrts_result_fitness(
+        raw_result,
+        match_score=match_score,
+        simulation_meta=simulation_meta,
+    )
     return {
         "individual_id": individual_id,
         "map_folder": map_folder,
         "map": map_path,
         "opponent": opponent,
         "repeat": int(repeat),
-        "result": result_label,
+        "result": fitness["result"],
         "raw": {
-            "win_score": win_score,
-            "score": _raw_result_score(raw_result, target_side, match_score),
-            "ally": ally_snapshot,
-            "enemy": enemy_snapshot,
+            "win_score": fitness["win_score"],
+            "score": fitness["score"],
+            "ally": fitness["ally"],
+            "enemy": fitness["enemy"],
         },
         "paths": {
             "log": str(simulation_meta.get("log_path")) if simulation_meta.get("log_path") else "",
@@ -354,8 +357,8 @@ def _build_failed_result_record(
     base_url: str,
 ) -> dict[str, Any]:
     """Build one failed Final Test repeat without turning it into game outcome."""
-    ally_empty = _normalize_snapshot({})
-    enemy_empty = _normalize_snapshot({})
+    ally_empty = normalize_player_snapshot({})
+    enemy_empty = normalize_player_snapshot({})
     return {
         "individual_id": individual_id,
         "map_folder": map_folder,
@@ -383,117 +386,6 @@ def _build_failed_result_record(
             "base_url": base_url,
         },
     }
-
-
-def _result_label_and_win_score(
-    raw_result: dict[str, Any] | None,
-    simulation_meta: dict[str, Any],
-    target_side: str,
-) -> tuple[str, float]:
-    """Return the ally outcome label and canonical win score."""
-    winner = None
-    if isinstance(raw_result, dict):
-        winner = raw_result.get("winner")
-    if winner is None:
-        summary = dict(simulation_meta.get("parsed_log") or {}).get("summary", {})
-        if isinstance(summary, dict):
-            winner = summary.get("winner")
-
-    if winner is None or str(winner) in {"", "-1", "None", "none", "null"}:
-        return "Draw", 0.0
-    if str(winner) == str(target_side):
-        return "Win", 1.0
-    return "Loss", -1.0
-
-
-def _raw_result_score(
-    raw_result: dict[str, Any] | None,
-    target_side: str,
-    match_score: dict[str, float],
-) -> float:
-    """Return an unweighted terminal score when the raw game payload provides one."""
-    scoreboard = raw_result.get("final_scoreboard") if isinstance(raw_result, dict) else None
-    if isinstance(scoreboard, dict):
-        try:
-            p0_eval = float(scoreboard.get("p0_eval", 0.0))
-            p1_eval = float(scoreboard.get("p1_eval", 0.0))
-        except (TypeError, ValueError):
-            pass
-        else:
-            return p1_eval - p0_eval if str(target_side) == "1" else p0_eval - p1_eval
-    try:
-        return float(match_score.get("raw_resource_advantage_score", 0.0))
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _result_target_side(raw_result: dict[str, Any] | None, simulation_meta: dict[str, Any]) -> str:
-    """Return the target side used by the game result JSON."""
-    if isinstance(raw_result, dict):
-        target_side = raw_result.get("target_side")
-        if target_side is not None:
-            return str(target_side)
-        summary = raw_result.get("summary")
-        if isinstance(summary, dict) and summary.get("target_side") is not None:
-            return str(summary.get("target_side"))
-    summary = dict(simulation_meta.get("parsed_log") or {}).get("summary", {})
-    if isinstance(summary, dict) and summary.get("target_side") is not None:
-        return str(summary.get("target_side"))
-    return "0"
-
-
-def _result_snapshots(
-    raw_result: dict[str, Any] | None,
-    target_side: str,
-) -> tuple[dict[str, int], dict[str, int]]:
-    """Return ally and enemy snapshots from the raw MicroRTS result payload."""
-    if isinstance(raw_result, dict):
-        players = raw_result.get("players")
-        if isinstance(players, dict):
-            p0 = dict(players.get("p0") or {})
-            p1 = dict(players.get("p1") or {})
-            if target_side == "1":
-                return _normalize_snapshot(p1), _normalize_snapshot(p0)
-            return _normalize_snapshot(p0), _normalize_snapshot(p1)
-        ally = dict(raw_result.get("ally") or {})
-        enemy = dict(raw_result.get("enemy") or {})
-        return _normalize_snapshot(ally), _normalize_snapshot(enemy)
-    empty = _normalize_snapshot({})
-    return empty, empty
-
-
-def _normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, int]:
-    """Normalize one raw player snapshot into the requested counter fields."""
-    unit_types = snapshot.get("unit_types", {}) if isinstance(snapshot, dict) else {}
-    base = int(_safe_int(unit_types, "Base"))
-    barracks = int(_safe_int(unit_types, "Barracks"))
-    worker = int(_safe_int(unit_types, "Worker"))
-    light = int(_safe_int(unit_types, "Light"))
-    heavy = int(_safe_int(unit_types, "Heavy"))
-    ranged = int(_safe_int(unit_types, "Ranged"))
-    resources = int(_safe_int(snapshot, "resource_total", fallback_keys=("player_resources", "resources")))
-    return {
-        "resources": resources,
-        "base_count": base,
-        "barracks_count": barracks,
-        "worker_count": worker,
-        "light_count": light,
-        "heavy_count": heavy,
-        "ranged_count": ranged,
-    }
-
-
-def _safe_int(mapping: dict[str, Any], key: str, *, fallback_keys: tuple[str, ...] = ()) -> int:
-    """Read one integer-like field from a nested result payload."""
-    candidates = (key, *fallback_keys)
-    for candidate in candidates:
-        try:
-            value = mapping.get(candidate)
-            if value is not None:
-                return int(value)
-        except (TypeError, ValueError, AttributeError):
-            continue
-    return 0
 
 
 def _normalize_llm_base_url(raw_url: Any) -> str:

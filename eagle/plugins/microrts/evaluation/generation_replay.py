@@ -16,6 +16,7 @@ from .replay_common import (
     load_runtime_config,
     write_results_snapshot,
 )
+from eagle.utils.microrts_result_fitness import microrts_result_fitness
 
 # CLI examples:
 # `py -m eagle.plugins.microrts.evaluation.generation_replay --log-dir logs/eagle/20260409_123456 --generation 20`
@@ -109,22 +110,15 @@ def build_result_record(
     trace_json_path: str | None = None,
 ) -> dict:
     """Convert one replay result into the JSON-friendly output schema."""
-    win_score = _match_win_score(match_score)
-    resource_score = _match_resource_advantage_score(match_score)
-    if win_score == 1.0:
-        result = "Win"
-    elif win_score == -1.0:
-        result = "Loss"
-    else:
-        result = "Draw"
+    fitness = microrts_result_fitness(match_score=match_score)
 
     return {
         "individual_id": individual.id,
         "opponent": opponent,
-        "result": result,
+        "result": fitness["result"],
         "raw": {
-            "win_score": win_score,
-            "score": resource_score,
+            "win_score": fitness["win_score"],
+            "score": fitness["score"],
         },
         "paths": {
             "log": log_path,
@@ -132,24 +126,6 @@ def build_result_record(
             "trace_json": trace_json_path,
         },
     }
-
-
-def _match_win_score(match_score: dict | None) -> float:
-    if not isinstance(match_score, dict):
-        return 0.0
-    try:
-        return float(match_score.get("win_score", 0.0))
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _match_resource_advantage_score(match_score: dict | None) -> float:
-    if not isinstance(match_score, dict):
-        return 0.0
-    try:
-        return float(match_score.get("raw_resource_advantage_score", 0.0))
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _append_result(results: dict, individual_id: str, result_record: dict) -> None:
