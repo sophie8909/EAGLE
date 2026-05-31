@@ -18,54 +18,74 @@ MIXABLE_MUTATION_OPERATORS: tuple[str, ...] = (
     "pool_replacement",
 )
 
+INITIAL_MUTATION_WEIGHT = 10.0
+MUTATION_WEIGHT_LR = 1.0
+MUTATION_WEIGHT_DECAY = 0.9
+MIN_MUTATION_WEIGHT = 1.0
+
 _mutation_component_weights: dict[str, float] = {}
-_mutation_component_fail_counts: dict[str, int] = {}
 
 
 def sample_mutation_mode(config) -> str:
     """Sample one mutation mode from adaptive roulette weights."""
-    configured_weights = config.strategy_mutation_mode_weights()
-    modes = [
-        mode
-        for mode, weight in configured_weights.items()
-        if mode in MIXABLE_MUTATION_OPERATORS and float(weight) > 0.0
-    ]
+    modes = active_mutation_modes(config)
     if not modes:
         raise ValueError("No configured strategy mutation modes available.")
 
     for mode in modes:
-        _mutation_component_weights.setdefault(mode, 1.0)
-        _mutation_component_fail_counts.setdefault(mode, 0)
+        _mutation_component_weights.setdefault(mode, INITIAL_MUTATION_WEIGHT)
 
-    mode_weights = [
-        configured_weights[mode] * _mutation_component_weights[mode]
-        for mode in modes
-    ]
+    mode_weights = [_mutation_component_weights[mode] for mode in modes]
     return random.choices(modes, weights=mode_weights, k=1)[0]
 
 
-def update_mutation_component_feedback(mutation_mode: str | None, improved: bool) -> None:
+def update_mutation_component_feedback(
+    mutation_mode: str | None,
+    parent_fitness: float,
+    offspring_fitness: float,
+) -> None:
     """Update roulette statistics for one mutation component based on outcome."""
     if not mutation_mode:
         return
 
-    weight = float(_mutation_component_weights.get(mutation_mode, 1.0))
-    fail_count = int(_mutation_component_fail_counts.get(mutation_mode, 0))
+    old_weight = float(_mutation_component_weights.get(mutation_mode, INITIAL_MUTATION_WEIGHT))
+    reward = float(offspring_fitness) - float(parent_fitness)
 
-    if improved:
-        weight *= 1.25
-        fail_count = 0
+    if reward > 0.0:
+        new_weight = old_weight + MUTATION_WEIGHT_LR
     else:
-        weight *= 0.85
-        fail_count += 1
+        new_weight = old_weight * MUTATION_WEIGHT_DECAY
 
-    if fail_count >= 3:
-        weight = 1.0
-        fail_count = 0
+    new_weight = max(MIN_MUTATION_WEIGHT, new_weight)
+    _mutation_component_weights[mutation_mode] = new_weight
+    print(
+        "[AOS]\n"
+        f"operator={mutation_mode}\n"
+        f"parent={parent_fitness}\n"
+        f"offspring={offspring_fitness}\n"
+        f"reward={reward}\n"
+        f"old_weight={old_weight}\n"
+        f"new_weight={new_weight}",
+        flush=True,
+    )
 
-    weight = min(10.0, max(1.0, weight))
-    _mutation_component_weights[mutation_mode] = weight
-    _mutation_component_fail_counts[mutation_mode] = fail_count
+
+def active_mutation_modes(config) -> list[str]:
+    """Return mutation modes that are enabled by the existing config."""
+    configured_weights = config.strategy_mutation_mode_weights()
+    return [
+        mode
+        for mode, weight in configured_weights.items()
+        if mode in MIXABLE_MUTATION_OPERATORS and float(weight) > 0.0
+    ]
+
+
+def current_mutation_weights(config) -> dict[str, float]:
+    """Return current AOS weights for configured mutation modes."""
+    modes = active_mutation_modes(config)
+    for mode in modes:
+        _mutation_component_weights.setdefault(mode, INITIAL_MUTATION_WEIGHT)
+    return {mode: float(_mutation_component_weights[mode]) for mode in modes}
 
 
 def current_strategy(individual: Individual, component_pool) -> dict[str, int]:

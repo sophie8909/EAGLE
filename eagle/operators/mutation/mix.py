@@ -26,6 +26,15 @@ class MixMutation(BaseMutation):
             mutation_operator(individual, component_pool, config)
         )
 
-    def update_feedback(self, mutation_mode: str | None, improved: bool) -> None:
+    def update_feedback(
+        self,
+        mutation_mode: str | None,
+        parent_fitness: float,
+        offspring_fitness: float,
+    ) -> None:
         """Forward adaptive mutation feedback to the weighted mutation state."""
-        support.update_mutation_component_feedback(mutation_mode, improved)
+        support.update_mutation_component_feedback(
+            mutation_mode,
+            parent_fitness,
+            offspring_fitness,
+        )

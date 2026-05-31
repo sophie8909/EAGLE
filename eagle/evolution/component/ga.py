@@ -65,13 +65,13 @@ class GA(EA):
             return ind2
         return random.choice([ind1, ind2])
 
+    def _mutation_feedback_fitness(self, individual: Individual) -> float:
+        """Use the GA score objective for mutation AOS feedback."""
+        return self._fitness0(individual)
+
     def _mutation_parent_snapshot(self, parent: Individual) -> float:
         """Capture the parent score used by GA mutation feedback."""
-        return self._fitness0(parent)
-
-    def _mutation_improved(self, child: Individual, parent_snapshot) -> bool:
-        """Return whether a mutation child improved on fitness[0]."""
-        return self._fitness0(child) > float(parent_snapshot)
+        return self._mutation_feedback_fitness(parent)
 
     def _log_generation(
         self,
@@ -83,5 +83,6 @@ class GA(EA):
         """Write the GA generation snapshot."""
         best_individual = max(self.population, key=self._fitness0)
         self.log_single_objective_generation(log_dir, generation, best_individual)
+        self._log_mutation_weights(log_dir, generation)
         self.save_component_pool(log_dir)
         self.current_generation = generation

@@ -4,6 +4,7 @@ Base class for evolutionary algorithms.
 
 from __future__ import annotations
 
+import json
 import random
 from copy import deepcopy
 from dataclasses import dataclass
@@ -491,11 +492,21 @@ class EA:
 
     def _mutation_parent_snapshot(self, parent: Individual) -> Any:
         """Return algorithm-specific parent fitness data used for feedback."""
-        return None
+        return self._mutation_feedback_fitness(parent)
 
-    def _mutation_improved(self, child: Individual, parent_snapshot: Any) -> bool:
-        """Return whether a mutation child improved over its parent."""
-        return False
+    def _mutation_feedback_fitness(self, individual: Individual) -> float | None:
+        """Return the scalar fitness value used by mutation AOS feedback."""
+        fitness = getattr(individual, "fitness", None)
+        if fitness is None:
+            return None
+        if isinstance(fitness, (int, float)):
+            return float(fitness)
+        values = fitness.values() if isinstance(fitness, dict) else fitness
+        try:
+            numeric_values = [float(value) for value in values]
+        except (TypeError, ValueError):
+            return None
+        return sum(numeric_values) if numeric_values else None
 
     def _update_mutation_component_feedback(self, child: Individual) -> None:
         """Feed mutation-mode success/failure back to adaptive mutation operators."""
@@ -507,10 +518,13 @@ class EA:
         parent_snapshot = getattr(child, "_mutation_parent_snapshot", None)
         if parent_snapshot is None:
             return
+        offspring_fitness = self._mutation_feedback_fitness(child)
+        if offspring_fitness is None:
+            return
 
         update_feedback = getattr(self.mutation_operator, "update_feedback", None)
         if update_feedback is not None:
-            update_feedback(mutation_mode, self._mutation_improved(child, parent_snapshot))
+            update_feedback(mutation_mode, float(parent_snapshot), float(offspring_fitness))
 
     def _generate_offspring(self, generation: int) -> List[Individual]:
         """Create one full offspring population without evaluating it yet."""
@@ -721,6 +735,7 @@ class EA:
         """Persist one generation snapshot."""
         best_individual = max(self.population, key=lambda ind: ind.fitness or [])
         self.log_single_objective_generation(log_dir, generation, best_individual)
+        self._log_mutation_weights(log_dir, generation)
         self.save_component_pool(log_dir)
         self.current_generation = generation
 
@@ -1146,11 +1161,28 @@ class EA:
             
     def save_component_pool(self, log_dir: str):
         """Store the evolving component pool so later analysis can reproduce runs."""
-        import json
         components_file = f"{log_dir}/component_pool.json"
         payload = self.component_pool.to_component_dict()
         with open(components_file, "w") as f:
             json.dump(payload, f, indent=4)
+
+    def _log_mutation_weights(self, log_dir: str, generation: int) -> None:
+        """Append one per-generation mutation AOS weight snapshot."""
+        weights = mutation_support.current_mutation_weights(self.config)
+        if not weights:
+            return
+        log_path = Path(log_dir) / "mutation_weights.jsonl"
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "generation": generation + 1,
+                        "mutation_weights": weights,
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
 
 
     def select_parents(self) -> List[Individual]:

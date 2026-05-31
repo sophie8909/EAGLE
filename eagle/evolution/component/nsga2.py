@@ -332,19 +332,13 @@ class NSGA2(EA):
         signature.sort()
         return signature
 
-    def _mutation_parent_snapshot(self, parent: Individual) -> list[float]:
-        """Capture the parent vector used by NSGA-II mutation feedback."""
-        return _normalize_two_objective_fitness(parent.fitness)
+    def _mutation_parent_snapshot(self, parent: Individual) -> float:
+        """Capture the parent objective value used by NSGA-II mutation feedback."""
+        return self._mutation_feedback_fitness(parent)
 
-    def _mutation_improved(self, child: Individual, parent_snapshot) -> bool:
-        """Return whether a mutation child Pareto-improved over its parent."""
-        parent_fitness = list(parent_snapshot)
-        child_fitness = _normalize_two_objective_fitness(child.fitness)
-        return (
-            child_fitness[0] >= parent_fitness[0]
-            and child_fitness[1] >= parent_fitness[1]
-            and (child_fitness[0] > parent_fitness[0] or child_fitness[1] > parent_fitness[1])
-        )
+    def _mutation_feedback_fitness(self, individual: Individual) -> float:
+        """Use the sum of current NSGA-II objectives for mutation AOS feedback."""
+        return sum(_normalize_two_objective_fitness(individual.fitness))
 
     def _new_run_state(self) -> List[List[Tuple]]:
         """Keep first-front signatures for convergence detection."""
@@ -385,6 +379,7 @@ class NSGA2(EA):
     ) -> None:
         """Write Pareto-front snapshots and the component pool."""
         self.log_multi_objective_generation(log_dir, generation, generation_context)
+        self._log_mutation_weights(log_dir, generation)
         self.save_component_pool(log_dir)
         self.current_generation = generation
 
