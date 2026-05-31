@@ -147,11 +147,12 @@ class MicroRTSNSGA2Surrogate(NSGA2):
             eval_result.fitness = dict(fitness)
         else:
             eval_result.fitness = {"score": float(fitness)}
+        eval_result["fitness"] = dict(fitness) if isinstance(fitness, dict) else float(fitness)
         individual.fitness = fitness
         individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
         individual.evaluation_mode = "surrogate"
         individual.surrogate_score = fitness
-        individual.last_surrogate_evaluation = {"eval_result": dict(eval_result)}
+        individual.last_surrogate_evaluation = {"fitness": eval_result["fitness"], "eval_result": dict(eval_result)}
         return eval_result
 
 
@@ -267,11 +268,12 @@ class MicroRTSGASurrogate(GA):
             eval_result.fitness = dict(fitness)
         else:
             eval_result.fitness = {"score": float(fitness)}
+        eval_result["fitness"] = dict(fitness) if isinstance(fitness, dict) else float(fitness)
         individual.fitness = fitness
         individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
         individual.evaluation_mode = "surrogate"
         individual.surrogate_score = super()._fitness0(individual)
-        individual.last_surrogate_evaluation = {"eval_result": dict(eval_result)}
+        individual.last_surrogate_evaluation = {"fitness": eval_result["fitness"], "eval_result": dict(eval_result)}
         return eval_result
 
     def _refresh_gameplay_archive(self, evaluator, candidates, *, generation: int | None, force: bool = False) -> None:

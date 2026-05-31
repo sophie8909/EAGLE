@@ -118,6 +118,11 @@ class FullGameEvaluator(BaseEvaluator):
             simulation_meta = dict(result.get("simulation_meta") or {})
             evaluation_mode = str(result.get("evaluation_mode") or "gameplay")
             evaluation_modes.append(evaluation_mode)
+            result_fitness = microrts_result_fitness(
+                simulation_meta.get("raw_result"),
+                match_score=match_score,
+                simulation_meta=simulation_meta,
+            )
 
             self._record_match_score(
                 individual=individual,
@@ -139,11 +144,16 @@ class FullGameEvaluator(BaseEvaluator):
                 )
 
             parsed_log = simulation_meta.get("parsed_log")
-            raw_score = self._raw_resource_advantage_score(match_score)
+            raw_score = float(result_fitness["raw_resource_advantage_score"])
             per_opponent_results.append(
                 {
                     "opponent": opponent,
                     "match_score": match_score,
+                    "raw_result": simulation_meta.get("raw_result"),
+                    "normalized_match_score": {
+                        "win_score": float(result_fitness["win_score"]),
+                        "raw_resource_advantage_score": raw_score,
+                    },
                     "raw_resource_advantage_score": raw_score,
                     "winner": simulation_meta.get("winner"),
                     "result": simulation_meta.get("result"),
@@ -175,6 +185,7 @@ class FullGameEvaluator(BaseEvaluator):
             "surrogate": surrogate,
             "opponents": resolved_opponents,
             "scores": per_opponent_results,
+            "raw_result": [score["raw_result"] for score in per_opponent_results if score.get("raw_result") is not None],
             "prompt_token_count": count_prompt_tokens(prompt)[0],
         })
         individual.rendered_prompt = prompt
@@ -263,12 +274,22 @@ class FullGameEvaluator(BaseEvaluator):
                 )
                 for opponent, result in opponent_results:
                     match_score = dict(result["match_score"])
-                    raw_score = self._raw_resource_advantage_score(match_score)
                     simulation_meta = dict(result.get("simulation_meta") or {})
+                    result_fitness = microrts_result_fitness(
+                        simulation_meta.get("raw_result"),
+                        match_score=match_score,
+                        simulation_meta=simulation_meta,
+                    )
+                    raw_score = float(result_fitness["raw_resource_advantage_score"])
                     per_opponent_scores.append(
                         {
                             "opponent": opponent,
                             "match_score": match_score,
+                            "raw_result": simulation_meta.get("raw_result"),
+                            "normalized_match_score": {
+                                "win_score": float(result_fitness["win_score"]),
+                                "raw_resource_advantage_score": raw_score,
+                            },
                             "raw_resource_advantage_score": raw_score,
                             "failed": bool(simulation_meta.get("failed")),
                             "simulation_meta": simulation_meta,
@@ -281,6 +302,7 @@ class FullGameEvaluator(BaseEvaluator):
             "surrogate": surrogate,
             "opponents": resolved_opponents,
             "scores": per_opponent_scores,
+            "raw_result": [score["raw_result"] for score in per_opponent_scores if score.get("raw_result") is not None],
             "prompt_token_count": count_prompt_tokens(prompt)[0],
         })
         individual.rendered_prompt = prompt
@@ -708,10 +730,17 @@ class FullGameEvaluator(BaseEvaluator):
         parsed_log = simulation_meta.get("parsed_log")
         timeout = bool(simulation_meta.get("timeout", False))
         summary = parsed_log.get("summary", {}) if isinstance(parsed_log, dict) else {}
+        result_fitness = microrts_result_fitness(
+            simulation_meta.get("raw_result"),
+            match_score=match_score,
+            simulation_meta=simulation_meta,
+        )
         individual.last_gameplay_evaluation = {
             "winner": simulation_meta.get("winner"),
             "result": simulation_meta.get("result"),
             "status": simulation_meta.get("status"),
+            "raw_result": simulation_meta.get("raw_result"),
+            "normalized_match_score": dict(result_fitness),
             "timeout": timeout,
             "failed": simulation_meta.get("failed", False),
             "failure_type": simulation_meta.get("failure_type"),
@@ -730,7 +759,7 @@ class FullGameEvaluator(BaseEvaluator):
                 timeout=timeout,
                 max_turn_hint=read_max_turn_hint(self.repo_root),
             ),
-            "raw_resource_advantage_score": self._raw_resource_advantage_score(match_score),
+            "raw_resource_advantage_score": float(result_fitness["raw_resource_advantage_score"]),
         }
 
     def _write_gameplay_match_profile(

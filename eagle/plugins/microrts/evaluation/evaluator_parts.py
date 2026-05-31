@@ -96,7 +96,9 @@ class GameplayAggregator:
         enemy_total = 0.0
         timeout = False
         for score in scores:
-            match_score = GameplayAggregator.normalize_match_score(score.get("match_score"))
+            match_score = GameplayAggregator.normalize_match_score(
+                score.get("normalized_match_score", score.get("match_score"))
+            )
             resource_total += float(match_score.get("raw_resource_advantage_score", 0.0))
             win_total += float(match_score.get("win_score", 0.0))
             timeout = timeout or bool(score.get("timeout", False))

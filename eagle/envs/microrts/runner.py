@@ -628,6 +628,7 @@ def run_java_agent_game(
             )
             result_error = None
         else:
+            result_payload = None
             parsed_log = parse_game_log(log_content, target_agent=target_agent)
             if _has_backend_error_marker(log_content):
                 raise MicroRTSBackendError(
@@ -654,6 +655,7 @@ def run_java_agent_game(
             timeout_type = "wall_clock"
         metadata = {
             "parsed_log": parsed_log,
+            "raw_result": result_payload,
             "winner": parsed_log.get("summary", {}).get("winner"),
             "timeout": bool(tick_timeout or wall_clock_timeout),
             "timeout_type": timeout_type,

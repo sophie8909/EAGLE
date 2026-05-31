@@ -702,21 +702,25 @@ class EA:
             eval_result.fitness = dict(fitness)
         else:
             eval_result.fitness = {"score": float(fitness)}
+        selection_fitness = deepcopy(fitness)
+        eval_result["fitness"] = selection_fitness
         individual.fitness = fitness
         individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
         individual.evaluation_mode = str(eval_result.get("evaluation_mode") or eval_result.get("eval_mode") or "")
         if eval_result.get("eval_mode") == "round":
             existing = getattr(individual, "last_round_evaluation", None)
             if isinstance(existing, dict) and existing:
-                existing.setdefault("eval_result", dict(eval_result))
+                existing["fitness"] = selection_fitness
+                existing["eval_result"] = dict(eval_result)
             else:
-                individual.last_round_evaluation = {"eval_result": dict(eval_result)}
+                individual.last_round_evaluation = {"fitness": selection_fitness, "eval_result": dict(eval_result)}
         elif eval_result.get("eval_mode") in {"full_game", "java_surrogate"}:
             existing = getattr(individual, "last_gameplay_evaluation", None)
             if isinstance(existing, dict) and existing:
-                existing.setdefault("eval_result", dict(eval_result))
+                existing["fitness"] = selection_fitness
+                existing["eval_result"] = dict(eval_result)
             else:
-                individual.last_gameplay_evaluation = {"eval_result": dict(eval_result)}
+                individual.last_gameplay_evaluation = {"fitness": selection_fitness, "eval_result": dict(eval_result)}
         return eval_result
 
     def _new_run_state(self) -> Any:
