@@ -28,6 +28,8 @@ DEFAULT_GAMEPLAY_OPPONENTS = [
     "ai.abstraction.LightRush",
     "ai.abstraction.HeavyRush",
 ]
+SURROGATE_SAMPLE_COUNT = 10
+SURROGATE_LLM_CALL_LIMIT = 10
 
 
 class FullGameEvaluator(BaseEvaluator):
@@ -243,6 +245,8 @@ class FullGameEvaluator(BaseEvaluator):
                 prompt=prompt,
                 opponent=None,
                 generation=generation,
+                sample_count=SURROGATE_SAMPLE_COUNT,
+                resource_only=True,
             )
             match_score = dict(result["match_score"])
             raw_score = self._raw_resource_advantage_score(match_score)
@@ -324,6 +328,8 @@ class FullGameEvaluator(BaseEvaluator):
         prompt: str | None = None,
         opponent: str | None = None,
         generation: int | None = None,
+        sample_count: int | None = None,
+        resource_only: bool = False,
     ) -> dict[str, Any]:
         """Evaluate one candidate with the local round evaluator without launching Java."""
         rendered_prompt = prompt if prompt is not None else self._construct_prompt(individual)
@@ -332,6 +338,8 @@ class FullGameEvaluator(BaseEvaluator):
             prompt=rendered_prompt,
             opponent=opponent,
             generation=generation,
+            sample_count=sample_count,
+            resource_only=resource_only,
         )
 
     def _run_surrogate_agent_opponent(
@@ -354,7 +362,7 @@ class FullGameEvaluator(BaseEvaluator):
                 evaluation_mode="java_agent",
                 compile_first=False,
                 generation=generation,
-                llm_call_limit=int(getattr(self.config, "llm_call_limit", 50)),
+                llm_call_limit=SURROGATE_LLM_CALL_LIMIT,
             )
         if surrogate == "policy_agent":
             return self.run_java_based_agent(
@@ -366,7 +374,7 @@ class FullGameEvaluator(BaseEvaluator):
                 evaluation_mode="policy_agent",
                 compile_first=False,
                 generation=generation,
-                llm_call_limit=int(getattr(self.config, "llm_call_limit", 50)),
+                llm_call_limit=SURROGATE_LLM_CALL_LIMIT,
             )
         raise ValueError(
             f"Unsupported surrogate={surrogate!r}. "

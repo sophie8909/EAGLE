@@ -63,6 +63,8 @@ class Evaluator(BaseEvaluator):
         *,
         generation: int | None = None,
         profile_output_path: str | Path | None = None,
+        sample_count: int | None = None,
+        resource_only: bool = False,
         **_: Any,
     ) -> EvaluationResult:
         """Generate states, ask for actions, and return raw objective metrics."""
@@ -85,7 +87,7 @@ class Evaluator(BaseEvaluator):
         cached_eval_result = dict(cached_metadata.get("eval_result") or {}) if cached_record else {}
         cached_sample_count = self._history_sample_count(cached_record)
 
-        if cached_fitness is not None:
+        if cached_fitness is not None and not resource_only:
             print(
                 f"Found cached fitness for prompt (hash={self.history._hash_prompt(base_prompt)}), "
                 "using cached fitness.",
@@ -137,7 +139,7 @@ class Evaluator(BaseEvaluator):
         resource_diff_sum = 0.0
         round_samples: list[dict[str, Any]] = []
         stats: dict[str, float] = {}
-        n = self.config.one_eval_rounds
+        n = max(1, int(sample_count if sample_count is not None else self.config.one_eval_rounds))
         dynamic_prompts = [self.state_generator.generate_text() for _ in range(n)]
         print(
             "[DEBUG] round samples "
@@ -150,6 +152,7 @@ class Evaluator(BaseEvaluator):
                 dynamic_prompts=dynamic_prompts,
                 generation=generation,
                 individual_id=str(individual.id),
+                resource_only=resource_only,
             )
         for result in sample_results:
             sample = dict(result["sample_record"])
@@ -192,6 +195,7 @@ class Evaluator(BaseEvaluator):
             "raw_legality_score": legality_raw_sum / n,
             "raw_strategy_alignment_score": alignment_raw_sum / n,
             "timing": dict(stats),
+            "resource_only": bool(resource_only),
         }
         eval_result = dict(latest_eval_result)
         eval_result.setdefault("round_score", float(eval_result.get("resource_diff", 0.0)))
@@ -252,6 +256,7 @@ class Evaluator(BaseEvaluator):
         dynamic_prompts: list[str],
         generation: int | None,
         individual_id: str,
+        resource_only: bool = False,
     ) -> list[dict[str, Any]]:
         """Evaluate generated round samples sequentially."""
         return [
@@ -262,6 +267,7 @@ class Evaluator(BaseEvaluator):
                 sample_count=len(dynamic_prompts),
                 generation=generation,
                 individual_id=individual_id,
+                resource_only=resource_only,
             )
             for index, dynamic_prompt in enumerate(dynamic_prompts, start=1)
         ]
@@ -275,6 +281,7 @@ class Evaluator(BaseEvaluator):
         sample_count: int,
         generation: int | None,
         individual_id: str,
+        resource_only: bool = False,
     ) -> dict[str, Any]:
         """Evaluate one generated state sample and return aggregate-ready fields."""
         stats: dict[str, float] = {}
@@ -360,14 +367,17 @@ class Evaluator(BaseEvaluator):
         if format_valid:
             with timer("round_legality_score_time", stats):
                 legality_raw, legality_details = self._score_legality(parsed_response, dynamic_prompt)
-            with timer("round_llm_alignment_time", stats):
-                alignment_raw = self._score_strategy_alignment(
-                    base_prompt=base_prompt,
-                    dynamic_prompt=dynamic_prompt,
-                    raw_response=raw_response,
-                    generation=generation,
-                    individual_id=individual_id,
-                )
+            if resource_only:
+                alignment_raw = 0.0
+            else:
+                with timer("round_llm_alignment_time", stats):
+                    alignment_raw = self._score_strategy_alignment(
+                        base_prompt=base_prompt,
+                        dynamic_prompt=dynamic_prompt,
+                        raw_response=raw_response,
+                        generation=generation,
+                        individual_id=individual_id,
+                    )
         else:
             legality_raw = -100.0
             alignment_raw = -100.0
@@ -418,7 +428,7 @@ class Evaluator(BaseEvaluator):
         return {
             "sample_record": sample_record,
             "legality_max": legality_max,
-            "resource_diff": self._round_resource_diff(state),
+            "resource_diff": self._round_resource_total_diff(state) if resource_only else self._round_resource_diff(state),
             "stats": stats,
         }
 
@@ -519,6 +529,13 @@ class Evaluator(BaseEvaluator):
         return (
             self._weighted_unit_total(dict(state.get("ally_units") or {}), weights)
             - self._weighted_unit_total(dict(state.get("enemy_units") or {}), weights)
+        )
+
+    @staticmethod
+    def _round_resource_total_diff(state: dict[str, Any]) -> float:
+        """Return ally-minus-enemy stored resources for one round state."""
+        return _stored_resource_total(dict(state.get("ally_units") or {})) - _stored_resource_total(
+            dict(state.get("enemy_units") or {})
         )
 
     @staticmethod
@@ -1125,6 +1142,15 @@ def _trace_value_text(value: Any) -> str:
     if isinstance(value, str):
         return value
     return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _stored_resource_total(units: dict[Any, dict[str, Any]]) -> float:
+    """Return stored resources carried by base units in one parsed state."""
+    total = 0.0
+    for unit_info in units.values():
+        if str(unit_info.get("type", "")).strip().lower() == "base":
+            total += float(unit_info.get("resources", 0.0))
+    return total
 
 
 def _append_round_surrogate_debug_jsonl(

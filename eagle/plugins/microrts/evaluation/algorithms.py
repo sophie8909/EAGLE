@@ -9,7 +9,6 @@ from typing import Any
 from eagle.config import clone_config
 from eagle.core.result import ensure_evaluation_result
 from eagle.core.registry import ALGORITHMS, EVALUATORS
-from eagle.objectives.aggregation import aggregate_fitness
 from eagle.objectives.aggressiveness.runtime import maybe_add_aggressiveness_metrics
 from eagle.evolution.component.ga import GA
 from eagle.evolution.component.nsga2 import NSGA2
@@ -142,12 +141,9 @@ class MicroRTSNSGA2Surrogate(NSGA2):
             f"prompt_token_count={eval_result.get('prompt_token_count')}",
             flush=True,
         )
-        fitness = aggregate_fitness(eval_result, self.config)
-        if isinstance(fitness, dict):
-            eval_result.fitness = dict(fitness)
-        else:
-            eval_result.fitness = {"score": float(fitness)}
-        eval_result["fitness"] = dict(fitness) if isinstance(fitness, dict) else float(fitness)
+        fitness = float(eval_result.get("resource_diff", 0.0))
+        eval_result.fitness = {"resource_advantage": fitness}
+        eval_result["fitness"] = fitness
         individual.fitness = fitness
         individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
         individual.evaluation_mode = "surrogate"
@@ -263,12 +259,9 @@ class MicroRTSGASurrogate(GA):
             f"prompt_token_count={eval_result.get('prompt_token_count')}",
             flush=True,
         )
-        fitness = aggregate_fitness(eval_result, self.config)
-        if isinstance(fitness, dict):
-            eval_result.fitness = dict(fitness)
-        else:
-            eval_result.fitness = {"score": float(fitness)}
-        eval_result["fitness"] = dict(fitness) if isinstance(fitness, dict) else float(fitness)
+        fitness = float(eval_result.get("resource_diff", 0.0))
+        eval_result.fitness = {"resource_advantage": fitness}
+        eval_result["fitness"] = fitness
         individual.fitness = fitness
         individual.rendered_prompt = eval_result.get("prompt", getattr(individual, "rendered_prompt", ""))
         individual.evaluation_mode = "surrogate"
