@@ -42,7 +42,12 @@ def _options_with_value(options: Any, value: Any) -> list[Any]:
 
 def _set_select_options(control: Any, options: Any, value: Any) -> None:
     """Update select options before assigning its value."""
-    safe_options = _options_with_value(options, value)
+    if isinstance(options, dict):
+        safe_options = dict(options)
+        if value not in (None, "") and value not in safe_options:
+            safe_options[value] = str(value)
+    else:
+        safe_options = _options_with_value(options, value)
     control.options = safe_options
     control.value = value if value in safe_options else ""
     
@@ -118,9 +123,12 @@ def build_operators_view(state: Any) -> dict[str, Any]:
         component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
         _set_select_options(algorithm_select, services.ALGORITHM_CHOICES, state.config.algorithm)
         algorithm_select.update()
-        _set_select_options(evaluator_select, services.EVALUATOR_CHOICES, state.config.evaluator)
+        _set_select_options(evaluator_select, services.EVALUATION_MODE_CHOICES, state.config.eval_mode)
         evaluator_select.update()
-        surrogate_section.visible = services.is_surrogate_algorithm(state.config.algorithm)
+        surrogate_section.visible = (
+            services.is_surrogate_algorithm(state.config.algorithm)
+            and state.config.eval_mode != "early_end"
+        )
         for name, control in config_controls.items():
             value = getattr(state.config, name, "")
             if hasattr(control, "options"):
@@ -169,7 +177,12 @@ def build_operators_view(state: Any) -> dict[str, Any]:
         refresh_config_summary(state)
 
     def update_evaluator(value: str) -> None:
-        state.config.evaluator = value
+        state.config.eval_mode = services.normalize_eval_mode(value)
+        state.config.evaluator = "gameplay"
+        if state.config.eval_mode == "early_end":
+            state.config.llm_call_limit = "10"
+            state.config.fitness_metric = "resource_diff_mean"
+        refresh()
         refresh_config_summary(state)
 
     def update_config(name: str, value: str) -> None:
@@ -216,9 +229,9 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             ).classes(f"{INPUT_CLASS} w-full")
 
             evaluator_select = ui.select(
-                _options_with_value(services.EVALUATOR_CHOICES, state.config.evaluator),
+                services.EVALUATION_MODE_CHOICES,
                 label="Eval mode",
-                value=state.config.evaluator,
+                value=state.config.eval_mode,
                 on_change=lambda event: update_evaluator(str(event.value or "gameplay")),
             ).classes(f"{INPUT_CLASS} w-full")
 

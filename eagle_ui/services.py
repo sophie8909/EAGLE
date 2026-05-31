@@ -44,6 +44,10 @@ ANALYSIS_SUBPROCESS_TIMEOUT_SEC = 600
 APPLICATION_CHOICES = ("microrts",)
 ALGORITHM_CHOICES = ("ga", "nsga2", "ga_surrogate", "nsga2_surrogate")
 EVALUATOR_CHOICES = ("gameplay",)
+EVALUATION_MODE_CHOICES = {
+    "gameplay": "Real Eval",
+    "early_end": "Early End",
+}
 SURROGATE_CHOICES = ("round", "policy_agent", "java_agent")
 AGGRESSIVENESS_MODE_CHOICES = ("component_only", "llm_only", "hybrid")
 MUTATION_SELECTION_MODE_CHOICES = {
@@ -81,6 +85,12 @@ LOGGER = logging.getLogger(__name__)
 def is_surrogate_algorithm(algorithm: str) -> bool:
     """Return whether an algorithm name uses a surrogate flow."""
     return "surrogate" in str(algorithm or "").lower()
+
+
+def normalize_eval_mode(value: Any) -> str:
+    """Normalize GUI evaluation mode values."""
+    normalized = str(value or "gameplay").strip().lower().replace("-", "_").replace(" ", "_")
+    return normalized if normalized in EVALUATION_MODE_CHOICES else "gameplay"
 
 
 def configure_runtime_logging() -> None:
@@ -404,6 +414,7 @@ def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path)
         cfg.algorithm = "nsga2"
     cfg.application = str(payload.get("application", cfg.application))
     cfg.evaluator = "gameplay"
+    cfg.eval_mode = normalize_eval_mode(payload.get("eval_mode", cfg.eval_mode))
     cfg.surrogate = str(payload.get("surrogate", cfg.surrogate)).strip().lower().replace("-", "_").replace(" ", "_")
     if cfg.surrogate not in SURROGATE_CHOICES:
         cfg.surrogate = SURROGATE_CHOICES[0]
@@ -412,6 +423,7 @@ def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path)
         "num_generations",
         "tick_limit",
         "llm_call_limit",
+        "fitness_metric",
         "llm_model",
         "llm_base_url",
         "gameplay_map_dir",
@@ -429,6 +441,9 @@ def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path)
         "final_test_max_front",
     ):
         setattr(cfg, field_name, str(payload.get(field_name, getattr(cfg, field_name))))
+    if cfg.eval_mode == "early_end":
+        cfg.llm_call_limit = "10"
+        cfg.fitness_metric = "resource_diff_mean"
     cfg.aggressiveness_objective_enabled = bool(payload.get("aggressiveness_objective_enabled", False))
     cfg.opponents_text = ", ".join(parse_target_list(payload.get("gameplay_opponents", []))) or cfg.opponents_text
     cfg.component_pool_path = str(payload.get("component_pool_path", cfg.component_pool_path))
@@ -683,6 +698,17 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
     cfg = state.config
     sync_algorithm_operator_defaults(state)
     payload = load_config_payload(Path(cfg.base_config_path))
+    eval_mode = normalize_eval_mode(cfg.eval_mode)
+    llm_call_limit = 10 if eval_mode == "early_end" else parse_int(cfg.llm_call_limit, "llm_call_limit")
+    fitness_metric = "resource_diff_mean" if eval_mode == "early_end" else str(cfg.fitness_metric or "default")
+    if eval_mode == "early_end":
+        objective_config = (
+            {"mode": "single", "objective": "resource_diff_mean"}
+            if cfg.algorithm in GA_ALGORITHMS
+            else {"mode": "multi", "objectives": ["resource_diff_mean"]}
+        )
+    else:
+        objective_config = build_objective_config(state)
     component_path = component_path_override or cfg.component_pool_path
     if not component_path:
         raise ValueError("Runtime component path is required.")
@@ -692,12 +718,14 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
         {
             "application": cfg.application,
             "evaluator": cfg.evaluator,
+            "eval_mode": eval_mode,
             "algorithm": cfg.algorithm,
             "surrogate": cfg.surrogate,
             "population_size": parse_int(cfg.population_size, "population_size"),
             "num_generations": parse_int(cfg.num_generations, "num_generations"),
             "tick_limit": parse_int(cfg.tick_limit, "tick_limit"),
-            "llm_call_limit": parse_int(cfg.llm_call_limit, "llm_call_limit"),
+            "llm_call_limit": llm_call_limit,
+            "fitness_metric": fitness_metric,
             "llm_model": cfg.llm_model.strip(),
             "llm_base_url": cfg.llm_base_url.strip(),
             "gameplay_map_dir": cfg.gameplay_map_dir.strip(),
@@ -723,7 +751,7 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
                 cfg.aggressiveness_judge_temperature,
                 "aggressiveness_judge_temperature",
             ),
-            "objective_config": build_objective_config(state),
+            "objective_config": objective_config,
             "use_few_shot_examples": bool(cfg.use_few_shot_examples),
             "min_examples": parse_nonnegative_int(cfg.min_examples, "min_examples"),
             "max_examples": parse_example_max(state),
@@ -768,7 +796,8 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
 
 def objective_choices(state: Any) -> tuple[str, ...]:
     """Return objective registry names for the current application/eval mode."""
-    names = list(list_objective_names(state.config.application, "full_game"))
+    eval_mode = "early_end" if normalize_eval_mode(state.config.eval_mode) == "early_end" else "full_game"
+    names = list(list_objective_names(state.config.application, eval_mode))
     if (
         state.config.algorithm not in MO_ALGORITHMS
         or not state.config.aggressiveness_objective_enabled

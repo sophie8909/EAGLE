@@ -23,6 +23,21 @@ class ResourceAdvantageObjective(Objective):
         return float(eval_result["resource_diff"])
 
 
+class ResourceDiffMeanObjective(Objective):
+    """Optimize mean resource difference for Early End evaluation."""
+
+    key = "resource_diff_mean"
+    label = "Resource diff mean"
+    direction = "max"
+    application = "microrts"
+    eval_modes = {"early_end"}
+    required_metrics = {"resource_diff"}
+
+    def compute(self, eval_result: dict[str, Any]) -> float:
+        """Return the evaluator-provided mean resource difference."""
+        return float(eval_result["resource_diff"])
+
+
 class WinScoreObjective(Objective):
     """Optimize match result."""
 

@@ -64,6 +64,7 @@ class EAConfig:
     application: str = "microrts"
     algorithm: str = field(default_factory=lambda: str(_default_config_value("algorithm")))
     evaluator: str = field(default_factory=lambda: str(_default_config_value("evaluator")))
+    eval_mode: str = field(default_factory=lambda: str(_default_config_value("eval_mode")))
     population_size: int = field(default_factory=lambda: int(_default_config_value("population_size")))
     num_generations: int = field(default_factory=lambda: int(_default_config_value("num_generations")))
     convergence_generations: int = field(default_factory=lambda: int(_default_config_value("convergence_generations")))
@@ -116,6 +117,7 @@ class EAConfig:
 
     tick_limit: int = field(default_factory=lambda: int(_default_config_value("tick_limit")))
     llm_call_limit: int = field(default_factory=lambda: int(_default_config_value("llm_call_limit")))
+    fitness_metric: str = field(default_factory=lambda: str(_default_config_value("fitness_metric")))
     llm_model: str = field(default_factory=lambda: str(_default_config_value("llm_model")))
     llm_base_url: str = field(default_factory=lambda: str(_default_config_value("llm_base_url")))
     gameplay_rate: float = field(default_factory=lambda: float(_default_config_value("gameplay_rate")))
@@ -201,6 +203,9 @@ class EAConfig:
         self.evaluator = str(self.evaluator or "gameplay").strip().lower()
         if self.evaluator != "gameplay":
             raise ValueError("evaluator must be 'gameplay'.")
+        self.eval_mode = str(self.eval_mode or "gameplay").strip().lower()
+        if self.eval_mode not in {"gameplay", "early_end"}:
+            raise ValueError("eval_mode must be 'gameplay' or 'early_end'.")
         normalized_surrogate = str(self.surrogate).strip().lower().replace("-", "_").replace(" ", "_")
         if normalized_surrogate not in {"round", "policy_agent", "java_agent"}:
             raise ValueError(
@@ -348,6 +353,7 @@ class EAConfig:
             raise ValueError("gameplay_map_dir must be a non-empty maps/ subfolder name.")
         self.tick_limit = max(1, int(self.tick_limit))
         self.llm_call_limit = max(1, int(self.llm_call_limit))
+        self.fitness_metric = str(self.fitness_metric or "default").strip()
         self.llm_model = str(self.llm_model or "").strip()
         if not self.llm_model:
             raise ValueError("llm_model must be a non-empty model name.")
@@ -365,6 +371,7 @@ class EAConfig:
         return {
             "algorithm": self.algorithm,
             "evaluator": self.evaluator,
+            "eval_mode": self.eval_mode,
             "population_size": self.population_size,
             "num_generations": self.num_generations,
             "reproduction_operator_probs": dict(self.reproduction_operator_probs),
@@ -390,6 +397,7 @@ class EAConfig:
             "component_pool_path": self.component_pool_path,
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
             "objective_config": deepcopy(self.objective_config),
+            "fitness_metric": self.fitness_metric,
             "aggressiveness_objective_enabled": self.aggressiveness_objective_enabled,
             "aggressiveness_mode": self.aggressiveness_mode,
             "aggressiveness_llm_weight": self.aggressiveness_llm_weight,

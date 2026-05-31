@@ -209,7 +209,9 @@ def validate_objective_config(config: Any, eval_result: dict | None = None) -> d
         return {"mode": "weighted_mix", "weights": normalized_weights}
 
     objectives = [normalize_objective_key(key) for key in objective_config.get("objectives", [])]
-    if len(objectives) < 2:
+    if len(objectives) < 1:
+        raise ValueError("multi objective_config requires at least one objective.")
+    if len(objectives) < 2 and eval_mode != "early_end":
         raise ValueError("multi objective_config requires at least two objectives.")
     _validate_supported_objectives(objectives, available, eval_mode)
     return {"mode": "multi", "objectives": objectives}

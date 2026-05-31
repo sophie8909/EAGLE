@@ -422,6 +422,12 @@ class FullGameEvaluator(BaseEvaluator):
         allow_history_reuse: bool,
     ) -> dict[str, Any]:
         """Dispatch one gameplay match according to the configured surrogate."""
+        eval_mode = str(getattr(self.config, "eval_mode", "gameplay") or "gameplay").strip().lower()
+        llm_call_limit = (
+            int(getattr(self.config, "llm_call_limit", 10))
+            if eval_mode == "early_end"
+            else REAL_EVAL_LLM_CALL_LIMIT
+        )
         return self.run_prompt_based_agent(
             individual=individual,
             prompt=prompt,
@@ -430,7 +436,7 @@ class FullGameEvaluator(BaseEvaluator):
             profile_output_path=profile_output_path,
             match_score_recorder=match_score_recorder,
             allow_history_reuse=allow_history_reuse,
-            llm_call_limit=REAL_EVAL_LLM_CALL_LIMIT,
+            llm_call_limit=llm_call_limit,
         )
 
     def run_prompt_based_agent(

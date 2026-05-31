@@ -67,6 +67,7 @@ def build_config_view(state: Any) -> dict[str, Any]:
         component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
         generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
         aggressiveness_panel.visible = state.config.algorithm in services.MO_ALGORITHMS
+        surrogate_control.visible = state.config.eval_mode != "early_end"
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Config").classes(SECTION_HEADER_CLASS)
@@ -95,12 +96,19 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 value=state.config.algorithm,
                 on_change=lambda event: _set_algorithm(state, str(event.value or "nsga2")),
             ).classes(f"{INPUT_CLASS} w-56")
-            controls["config.surrogate"] = create_key_select(
+            controls["config.eval_mode"] = create_key_select(
+                "Evaluation mode",
+                services.EVALUATION_MODE_CHOICES,
+                value=state.config.eval_mode,
+                on_change=lambda event: _set_eval_mode(state, str(event.value or "gameplay")),
+            ).classes(f"{INPUT_CLASS} w-56")
+            surrogate_control = create_key_select(
                 "Surrogate",
                 _key_labels(services.SURROGATE_CHOICES),
                 value=state.config.surrogate,
                 on_change=lambda event: setattr(state.config, "surrogate", str(event.value or "round")),
             ).classes(f"{INPUT_CLASS} w-56")
+            controls["config.surrogate"] = surrogate_control
             controls["config.gameplay_map_dir"] = create_key_select(
                 "Eval map folder",
                 _key_labels(services.microrts_map_dir_choices()),
@@ -204,8 +212,10 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows["config_path"].set_text(str(state.config.generated_config_path or state.config.base_config_path))
         rows["component_path"].set_text(state.config.component_pool_path or "(none)")
         rows["algorithm"].set_text(state.config.algorithm)
-        rows["evaluator"].set_text(state.config.evaluator)
-        rows["surrogate"].set_text(state.config.surrogate)
+        rows["evaluator"].set_text(_format_eval_mode(state))
+        rows["llm_calls"].set_text("10" if state.config.eval_mode == "early_end" else state.config.llm_call_limit)
+        rows["fitness"].set_text(_format_fitness_metric(state))
+        rows["surrogate"].set_text("(hidden)" if state.config.eval_mode == "early_end" else state.config.surrogate)
         rows["surrogate_top_ratio"].set_text(state.config.surrogate_top_ratio)
         rows["archive_parent_ratio"].set_text(state.config.archive_parent_ratio)
         rows["parent_selection"].set_text(state.operators.parent_selection_operator)
@@ -237,7 +247,9 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows.update(
             {
                 "algorithm": _summary_row("Algorithm"),
-                "evaluator": _summary_row("Eval mode"),
+                "evaluator": _summary_row("Evaluation"),
+                "llm_calls": _summary_row("LLM calls"),
+                "fitness": _summary_row("Fitness"),
                 "surrogate": _summary_row("Surrogate mode"),
                 "surrogate_top_ratio": _summary_row("Surrogate top ratio"),
                 "archive_parent_ratio": _summary_row("Archive parent ratio"),
@@ -305,6 +317,24 @@ def _format_aggressiveness_settings(state: Any) -> str:
         f"component={state.config.aggressiveness_component_weight}, "
         f"llm={state.config.aggressiveness_llm_weight}"
     )
+
+
+def _format_eval_mode(state: Any) -> str:
+    return services.EVALUATION_MODE_CHOICES.get(state.config.eval_mode, state.config.eval_mode)
+
+
+def _format_fitness_metric(state: Any) -> str:
+    if state.config.eval_mode == "early_end":
+        return "resource_diff_mean"
+    return state.config.fitness_metric
+
+
+def _set_eval_mode(state: Any, value: str) -> None:
+    state.config.eval_mode = services.normalize_eval_mode(value)
+    if state.config.eval_mode == "early_end":
+        state.config.llm_call_limit = "10"
+        state.config.fitness_metric = "resource_diff_mean"
+    refresh_config_summary(state)
 
 
 def _set_algorithm(state: Any, value: str) -> None:
