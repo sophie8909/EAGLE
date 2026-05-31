@@ -30,6 +30,7 @@ DEFAULT_GAMEPLAY_OPPONENTS = [
 ]
 SURROGATE_SAMPLE_COUNT = 10
 SURROGATE_LLM_CALL_LIMIT = 10
+REAL_EVAL_LLM_CALL_LIMIT = 100
 
 
 class FullGameEvaluator(BaseEvaluator):
@@ -429,7 +430,7 @@ class FullGameEvaluator(BaseEvaluator):
             profile_output_path=profile_output_path,
             match_score_recorder=match_score_recorder,
             allow_history_reuse=allow_history_reuse,
-            llm_call_limit=int(getattr(self.config, "llm_call_limit", 50)),
+            llm_call_limit=REAL_EVAL_LLM_CALL_LIMIT,
         )
 
     def run_prompt_based_agent(
