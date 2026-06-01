@@ -64,7 +64,7 @@ class EAConfig:
     application: str = "microrts"
     algorithm: str = field(default_factory=lambda: str(_default_config_value("algorithm")))
     evaluator: str = field(default_factory=lambda: str(_default_config_value("evaluator")))
-    eval_mode: str = field(default_factory=lambda: str(_default_config_value("eval_mode")))
+    eval_mode: str = "full_game"
     population_size: int = field(default_factory=lambda: int(_default_config_value("population_size")))
     num_generations: int = field(default_factory=lambda: int(_default_config_value("num_generations")))
     convergence_generations: int = field(default_factory=lambda: int(_default_config_value("convergence_generations")))
@@ -203,9 +203,11 @@ class EAConfig:
         self.evaluator = str(self.evaluator or "gameplay").strip().lower()
         if self.evaluator != "gameplay":
             raise ValueError("evaluator must be 'gameplay'.")
-        self.eval_mode = str(self.eval_mode or "gameplay").strip().lower()
-        if self.eval_mode not in {"gameplay", "early_end"}:
-            raise ValueError("eval_mode must be 'gameplay' or 'early_end'.")
+        self.eval_mode = str(self.eval_mode or "full_game").strip().lower()
+        if self.eval_mode == "gameplay":
+            self.eval_mode = "full_game"
+        if self.eval_mode not in {"full_game", "early_end", "java_surrogate", "round"}:
+            raise ValueError("eval_mode must be 'full_game', 'early_end', 'java_surrogate', or 'round'.")
         normalized_surrogate = str(self.surrogate).strip().lower().replace("-", "_").replace(" ", "_")
         if normalized_surrogate not in {"round", "policy_agent", "java_agent"}:
             raise ValueError(

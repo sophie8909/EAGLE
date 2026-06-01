@@ -22,7 +22,7 @@ from eagle.envs.microrts.runner import save_prompt as save_microrts_prompt
 from eagle.envs.microrts.runner import set_config_property
 from eagle.analysis.evolution_result_analysis import parse_final_test_analysis
 from eagle.eval.microrts.final_test_batch import run_final_test_batch
-from eagle.objectives.registry import get_objectives, list_objective_names, normalize_objective_key
+from eagle.objectives.registry import get_objectives, list_objective_names, normalize_objective_key, objective_eval_mode
 from eagle.operators.registry import list_operator_names
 from eagle.prompt.example_memory import ExampleMemory
 from eagle.utils.component_pool import ComponentPool
@@ -414,7 +414,7 @@ def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path)
         cfg.algorithm = "nsga2"
     cfg.application = str(payload.get("application", cfg.application))
     cfg.evaluator = "gameplay"
-    cfg.eval_mode = normalize_eval_mode(payload.get("eval_mode", cfg.eval_mode))
+    cfg.eval_mode = normalize_eval_mode(payload.get("eval_mode", "gameplay"))
     cfg.surrogate = str(payload.get("surrogate", cfg.surrogate)).strip().lower().replace("-", "_").replace(" ", "_")
     if cfg.surrogate not in SURROGATE_CHOICES:
         cfg.surrogate = SURROGATE_CHOICES[0]
@@ -718,7 +718,6 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
         {
             "application": cfg.application,
             "evaluator": cfg.evaluator,
-            "eval_mode": eval_mode,
             "algorithm": cfg.algorithm,
             "surrogate": cfg.surrogate,
             "population_size": parse_int(cfg.population_size, "population_size"),
@@ -789,6 +788,8 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
             "strategy_mutation": build_strategy_mutation_weights(state),
         }
     )
+    if eval_mode != "gameplay":
+        payload["eval_mode"] = eval_mode
     if not payload["gameplay_opponents"]:
         raise ValueError("At least one gameplay opponent is required.")
     return payload
@@ -796,7 +797,7 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
 
 def objective_choices(state: Any) -> tuple[str, ...]:
     """Return objective registry names for the current application/eval mode."""
-    eval_mode = "early_end" if normalize_eval_mode(state.config.eval_mode) == "early_end" else "full_game"
+    eval_mode = objective_eval_mode(state.config)
     names = list(list_objective_names(state.config.application, eval_mode))
     if (
         state.config.algorithm not in MO_ALGORITHMS

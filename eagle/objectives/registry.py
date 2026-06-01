@@ -126,11 +126,11 @@ def list_objective_names(application: str | None = None, eval_mode: str | None =
 def objective_eval_mode(config: Any, eval_result: dict | None = None) -> str:
     """Resolve the objective-facing eval mode from config and evaluator output."""
     if eval_result and eval_result.get("eval_mode"):
-        return _normalize_name(eval_result.get("eval_mode"))
+        return _objective_eval_mode_name(eval_result.get("eval_mode"))
 
     explicit_eval_mode = getattr(config, "eval_mode", None)
     if explicit_eval_mode:
-        return _normalize_name(explicit_eval_mode)
+        return _objective_eval_mode_name(explicit_eval_mode)
 
     evaluator = _normalize_name(getattr(config, "evaluator", "gameplay"))
     if evaluator != "gameplay":
@@ -151,6 +151,12 @@ def objective_eval_mode(config: Any, eval_result: dict | None = None) -> str:
     if surrogate in {"policy_agent", "java_agent", "java_surrogate"}:
         return "java_surrogate"
     return "full_game"
+
+
+def _objective_eval_mode_name(value: Any) -> str:
+    """Normalize eval mode names used for objective registry lookups."""
+    normalized = _normalize_name(value)
+    return "full_game" if normalized == "gameplay" else normalized
 
 
 def default_objective_config(config: Any) -> dict[str, Any]:
