@@ -42,6 +42,15 @@ def _fitness_metric_options() -> dict[str, str]:
     }
 
 
+def _surrogate_options() -> dict[str, str]:
+    return {
+        "early_end": "Early End",
+        "round": "Round",
+        "policy_agent": "Policy Agent",
+        "java_agent": "Java Agent",
+    }
+
+
 def build_config_view(state: Any) -> dict[str, Any]:
     """Build the config load/edit/save view."""
     controls: dict[str, Any] = {}
@@ -76,6 +85,10 @@ def build_config_view(state: Any) -> dict[str, Any]:
         component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
         generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
         aggressiveness_panel.visible = state.config.algorithm in services.MO_ALGORITHMS
+        surrogate_settings.visible = (
+            services.is_surrogate_algorithm(state.config.algorithm)
+            and state.config.eval_mode != "early_end"
+        )
         early_end_settings.visible = state.config.eval_mode == "early_end"
         real_eval_settings.visible = state.config.eval_mode == "gameplay"
 
@@ -164,6 +177,16 @@ def build_config_view(state: Any) -> dict[str, Any]:
                     getattr(state.config, name),
                     lambda value, field=name: setattr(state.config, field, value),
                 )
+
+        with ui.column().classes("w-full gap-3") as surrogate_settings:
+            ui.label("Surrogate").classes(SECTION_HEADER_CLASS)
+            with ui.grid(columns=4).classes(f"{GRID_CLASS} w-full gap-3"):
+                controls["config.surrogate"] = create_key_select(
+                    "Surrogate",
+                    _surrogate_options(),
+                    value=state.config.surrogate,
+                    on_change=lambda event: setattr(state.config, "surrogate", str(event.value or "early_end")),
+                ).classes(f"{INPUT_CLASS} w-56")
 
         with ui.column().classes("w-full gap-3") as aggressiveness_panel:
             ui.label("Strategic Aggressiveness").classes(SECTION_HEADER_CLASS)

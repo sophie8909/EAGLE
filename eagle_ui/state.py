@@ -25,7 +25,7 @@ class ConfigState:
     algorithm: str = "nsga2"
     evaluator: str = "gameplay"
     eval_mode: str = "gameplay"
-    surrogate: str = "round"
+    surrogate: str = "early_end"
     population_size: str = "10"
     num_generations: str = "50"
     tick_limit: str = "5000"

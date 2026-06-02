@@ -48,7 +48,7 @@ EVALUATION_MODE_CHOICES = {
     "gameplay": "Real Eval",
     "early_end": "Early End",
 }
-SURROGATE_CHOICES = ("round", "policy_agent", "java_agent")
+SURROGATE_CHOICES = ("early_end", "round", "policy_agent", "java_agent")
 AGGRESSIVENESS_MODE_CHOICES = ("component_only", "llm_only", "hybrid")
 MUTATION_SELECTION_MODE_CHOICES = {
     "fixed": "Fixed",

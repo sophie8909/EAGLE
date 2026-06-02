@@ -209,10 +209,10 @@ class EAConfig:
         if self.eval_mode not in {"full_game", "early_end", "java_surrogate", "round"}:
             raise ValueError("eval_mode must be 'full_game', 'early_end', 'java_surrogate', or 'round'.")
         normalized_surrogate = str(self.surrogate).strip().lower().replace("-", "_").replace(" ", "_")
-        if normalized_surrogate not in {"round", "policy_agent", "java_agent"}:
+        if normalized_surrogate not in {"early_end", "round", "policy_agent", "java_agent"}:
             raise ValueError(
                 f"Unsupported surrogate backend: {self.surrogate!r}. "
-                "Use 'round', 'policy_agent', or 'java_agent'."
+                "Use 'early_end', 'round', 'policy_agent', or 'java_agent'."
             )
         self.surrogate = normalized_surrogate
         algorithm_name = str(self.algorithm or "").strip().lower()

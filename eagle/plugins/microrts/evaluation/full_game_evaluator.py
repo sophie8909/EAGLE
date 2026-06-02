@@ -234,7 +234,43 @@ class FullGameEvaluator(BaseEvaluator):
 
         per_opponent_scores: list[dict[str, object]] = []
         surrogate = str(getattr(self.config, "surrogate", "round")).strip().lower()
-        if surrogate == "round":
+        if surrogate == "early_end":
+            opponent_results = self._evaluate_agent_opponents(
+                resolved_opponents,
+                lambda opponent: self._run_early_end_surrogate_opponent(
+                    individual=individual,
+                    prompt=prompt,
+                    opponent=opponent,
+                    generation=generation,
+                ),
+                label=surrogate,
+                individual_id=getattr(individual, "id", None),
+                generation=generation,
+            )
+            for opponent, result in opponent_results:
+                match_score = dict(result["match_score"])
+                simulation_meta = dict(result.get("simulation_meta") or {})
+                result_fitness = microrts_result_fitness(
+                    simulation_meta.get("raw_result"),
+                    match_score=match_score,
+                    simulation_meta=simulation_meta,
+                )
+                raw_score = float(result_fitness["raw_resource_advantage_score"])
+                per_opponent_scores.append(
+                    {
+                        "opponent": opponent,
+                        "match_score": match_score,
+                        "raw_result": simulation_meta.get("raw_result"),
+                        "normalized_match_score": {
+                            "win_score": float(result_fitness["win_score"]),
+                            "raw_resource_advantage_score": raw_score,
+                        },
+                        "raw_resource_advantage_score": raw_score,
+                        "failed": bool(simulation_meta.get("failed")),
+                        "simulation_meta": simulation_meta,
+                    }
+                )
+        elif surrogate == "round":
             print(
                 "[GA Surrogate] using round surrogate once "
                 f"individual={getattr(individual, 'id', None)} generation={generation} "
@@ -379,7 +415,27 @@ class FullGameEvaluator(BaseEvaluator):
             )
         raise ValueError(
             f"Unsupported surrogate={surrogate!r}. "
-            "Expected one of: round, policy_agent, java_agent."
+            "Expected one of: early_end, round, policy_agent, java_agent."
+        )
+
+    def _run_early_end_surrogate_opponent(
+        self,
+        *,
+        individual: Individual,
+        prompt: str,
+        opponent: str | None,
+        generation: int | None,
+    ) -> dict[str, Any]:
+        """Run one Early End prompt-based match for surrogate selection."""
+        return self.run_prompt_based_agent(
+            individual=individual,
+            prompt=prompt,
+            opponent=opponent,
+            generation=generation,
+            profile_output_path=None,
+            match_score_recorder=None,
+            allow_history_reuse=False,
+            llm_call_limit=SURROGATE_LLM_CALL_LIMIT,
         )
 
     def _evaluate_agent_opponents(

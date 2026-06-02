@@ -158,7 +158,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--surrogate",
-        choices=["round", "policy_agent", "java_agent"],
+        choices=["early_end", "round", "policy_agent", "java_agent"],
         default=None,
         help="Select the gameplay agent surrogate mode.",
     )

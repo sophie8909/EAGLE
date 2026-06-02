@@ -64,6 +64,18 @@ def _fitness_metric_options(value: str = "") -> dict[str, str]:
     return options
 
 
+def _surrogate_options(value: str = "") -> dict[str, str]:
+    options = {
+        "early_end": "Early End",
+        "round": "Round",
+        "policy_agent": "Policy Agent",
+        "java_agent": "Java Agent",
+    }
+    if value and value not in options:
+        options[value] = value
+    return options
+
+
 def build_operators_view(state: Any) -> dict[str, Any]:
     """Build the operator controls view."""
     controls: dict[str, Any] = {}
@@ -148,6 +160,8 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             value = getattr(state.config, name, "")
             if name == "fitness_metric":
                 _set_select_options(control, _fitness_metric_options(str(value)), value)
+            elif name == "surrogate":
+                _set_select_options(control, _surrogate_options(str(value)), value)
             elif hasattr(control, "options"):
                 _set_select_options(control, getattr(control, "options", []), value)
             else:
@@ -308,10 +322,16 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             )
 
         with ui.column().classes("w-full gap-3") as surrogate_section:
-            ui.label("Real Evaluation").classes(SECTION_HEADER_CLASS)
+            ui.label("Surrogate").classes(SECTION_HEADER_CLASS)
             with ui.grid(columns=3).classes(f"{GRID_CLASS} gap-3"):
                 config_controls.update(
                     {
+                        "surrogate": ui.select(
+                            _surrogate_options(state.config.surrogate),
+                            label="Surrogate",
+                            value=state.config.surrogate,
+                            on_change=lambda event: update_config("surrogate", str(event.value or "early_end")),
+                        ).classes(f"{INPUT_CLASS} w-64"),
                         "surrogate_top_ratio": ui.input(
                             "Early stop top ratio",
                             value=state.config.surrogate_top_ratio,
