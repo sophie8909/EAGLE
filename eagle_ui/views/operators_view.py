@@ -220,7 +220,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
     ):
         ui.label("Algorithm").classes(SECTION_HEADER_CLASS)
 
-        with ui.grid(columns=2).classes("w-full gap-3"):
+        with ui.grid(columns=1).classes("w-full gap-3"):
             algorithm_select = ui.select(
                 _options_with_value(services.ALGORITHM_CHOICES, state.config.algorithm),
                 label="Algorithm",
@@ -228,9 +228,12 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                 on_change=lambda event: update_algorithm(str(event.value or "nsga2")),
             ).classes(f"{INPUT_CLASS} w-full")
 
+        ui.label("Evaluation Mode").classes(SECTION_HEADER_CLASS)
+
+        with ui.grid(columns=1).classes("w-full gap-3"):
             evaluator_select = ui.select(
                 services.EVALUATION_MODE_CHOICES,
-                label="Eval mode",
+                label="Evaluation",
                 value=state.config.eval_mode,
                 on_change=lambda event: update_evaluator(str(event.value or "gameplay")),
             ).classes(f"{INPUT_CLASS} w-full")
@@ -275,18 +278,12 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             }
 
         with ui.column().classes("w-full gap-3") as surrogate_section:
-            ui.label("Surrogate").classes(SECTION_HEADER_CLASS)
+            ui.label("Real Evaluation").classes(SECTION_HEADER_CLASS)
             with ui.grid(columns=3).classes(f"{GRID_CLASS} gap-3"):
                 config_controls.update(
                     {
-                        "surrogate": ui.select(
-                            _options_with_value(services.SURROGATE_CHOICES, state.config.surrogate),
-                            label="Surrogate mode",
-                            value=state.config.surrogate,
-                            on_change=lambda event: update_config("surrogate", str(event.value or "round")),
-                        ).classes(f"{INPUT_CLASS} w-64"),
                         "surrogate_top_ratio": ui.input(
-                            "Surrogate top ratio",
+                            "Early stop top ratio",
                             value=state.config.surrogate_top_ratio,
                             on_change=lambda event: update_config("surrogate_top_ratio", str(event.value or "")),
                         ).classes(f"{INPUT_CLASS} w-44"),

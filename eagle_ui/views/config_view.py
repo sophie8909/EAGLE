@@ -67,7 +67,6 @@ def build_config_view(state: Any) -> dict[str, Any]:
         component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
         generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
         aggressiveness_panel.visible = state.config.algorithm in services.MO_ALGORITHMS
-        surrogate_control.visible = state.config.eval_mode != "early_end"
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Config").classes(SECTION_HEADER_CLASS)
@@ -96,19 +95,6 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 value=state.config.algorithm,
                 on_change=lambda event: _set_algorithm(state, str(event.value or "nsga2")),
             ).classes(f"{INPUT_CLASS} w-56")
-            controls["config.eval_mode"] = create_key_select(
-                "Evaluation mode",
-                services.EVALUATION_MODE_CHOICES,
-                value=state.config.eval_mode,
-                on_change=lambda event: _set_eval_mode(state, str(event.value or "gameplay")),
-            ).classes(f"{INPUT_CLASS} w-56")
-            surrogate_control = create_key_select(
-                "Surrogate",
-                _key_labels(services.SURROGATE_CHOICES),
-                value=state.config.surrogate,
-                on_change=lambda event: setattr(state.config, "surrogate", str(event.value or "round")),
-            ).classes(f"{INPUT_CLASS} w-56")
-            controls["config.surrogate"] = surrogate_control
             controls["config.gameplay_map_dir"] = create_key_select(
                 "Eval map folder",
                 _key_labels(services.microrts_map_dir_choices()),
@@ -125,7 +111,6 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 ("llm_base_url", "LLM base URL"),
                 ("gameplay_rate", "Gameplay rate"),
                 ("gameplay_refresh_interval", "Gameplay refresh"),
-                ("surrogate_top_ratio", "Surrogate top ratio"),
                 ("archive_parent_ratio", "Archive parent ratio"),
                 ("min_token_length", "Min token length"),
                 ("one_eval_rounds", "One eval rounds"),
@@ -137,6 +122,15 @@ def build_config_view(state: Any) -> dict[str, Any]:
                     getattr(state.config, name),
                     lambda value, field=name: setattr(state.config, field, value),
             )
+
+        ui.label("Evaluation Mode").classes(SECTION_HEADER_CLASS)
+        with ui.grid(columns=4).classes(f"{GRID_CLASS} w-full gap-3"):
+            controls["config.eval_mode"] = create_key_select(
+                "Evaluation",
+                services.EVALUATION_MODE_CHOICES,
+                value=state.config.eval_mode,
+                on_change=lambda event: _set_eval_mode(state, str(event.value or "gameplay")),
+            ).classes(f"{INPUT_CLASS} w-56")
 
         with ui.column().classes("w-full gap-3") as aggressiveness_panel:
             ui.label("Strategic Aggressiveness").classes(SECTION_HEADER_CLASS)
