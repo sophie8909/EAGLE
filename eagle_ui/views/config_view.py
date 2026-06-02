@@ -10,6 +10,7 @@ from nicegui import ui
 
 from eagle_ui import services
 from eagle_ui.components.selects import create_key_select
+from eagle_ui.state import EARLY_END_FITNESS_METRIC, EARLY_END_LLM_CALL_LIMIT
 from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
@@ -31,6 +32,14 @@ def _bind_input(label: str, value: str, setter: Any, classes: str = "w-56") -> A
 def _key_labels(options: tuple[str, ...]) -> dict[str, str]:
     """Return same-label options for keyed select values."""
     return {option: option for option in options}
+
+
+def _fitness_metric_options() -> dict[str, str]:
+    return {
+        "win_score": "win_score",
+        "resource_advantage": "resource_advantage",
+        "resource_diff_mean": "resource_diff_mean",
+    }
 
 
 def build_config_view(state: Any) -> dict[str, Any]:
@@ -67,6 +76,8 @@ def build_config_view(state: Any) -> dict[str, Any]:
         component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
         generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
         aggressiveness_panel.visible = state.config.algorithm in services.MO_ALGORITHMS
+        early_end_settings.visible = state.config.eval_mode == "early_end"
+        real_eval_settings.visible = state.config.eval_mode == "gameplay"
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Config").classes(SECTION_HEADER_CLASS)
@@ -95,22 +106,12 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 value=state.config.algorithm,
                 on_change=lambda event: _set_algorithm(state, str(event.value or "nsga2")),
             ).classes(f"{INPUT_CLASS} w-56")
-            controls["config.gameplay_map_dir"] = create_key_select(
-                "Eval map folder",
-                _key_labels(services.microrts_map_dir_choices()),
-                value=state.config.gameplay_map_dir,
-                on_change=lambda event: setattr(state.config, "gameplay_map_dir", str(event.value or "8x8")),
-            ).classes(f"{INPUT_CLASS} w-56")
-
             for name, label in (
                 ("population_size", "Population"),
                 ("num_generations", "Generations"),
                 ("tick_limit", "Tick limit"),
-                ("llm_call_limit", "LLM call limit"),
                 ("llm_model", "LLM model"),
                 ("llm_base_url", "LLM base URL"),
-                ("gameplay_rate", "Gameplay rate"),
-                ("gameplay_refresh_interval", "Gameplay refresh"),
                 ("archive_parent_ratio", "Archive parent ratio"),
                 ("min_token_length", "Min token length"),
                 ("one_eval_rounds", "One eval rounds"),
@@ -131,6 +132,38 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 value=state.config.eval_mode,
                 on_change=lambda event: _set_eval_mode(state, str(event.value or "gameplay")),
             ).classes(f"{INPUT_CLASS} w-56")
+
+        with ui.row().classes(f"{ROW_CLASS} items-center gap-3") as early_end_settings:
+            ui.badge(f"LLM Calls: {EARLY_END_LLM_CALL_LIMIT}").classes("uppercase")
+            ui.badge("Fitness: Resource Difference").classes("uppercase")
+
+        with ui.grid(columns=4).classes(f"{GRID_CLASS} w-full gap-3") as real_eval_settings:
+            controls["config.llm_call_limit"] = _bind_input(
+                "LLM call limit",
+                state.config.llm_call_limit,
+                lambda value: setattr(state.config, "llm_call_limit", value),
+            )
+            controls["config.fitness_metric"] = create_key_select(
+                "Fitness metric",
+                _fitness_metric_options(),
+                value=state.config.fitness_metric,
+                on_change=lambda event: setattr(state.config, "fitness_metric", str(event.value or "win_score")),
+            ).classes(f"{INPUT_CLASS} w-56")
+            controls["config.gameplay_map_dir"] = create_key_select(
+                "Eval map folder",
+                _key_labels(services.microrts_map_dir_choices()),
+                value=state.config.gameplay_map_dir,
+                on_change=lambda event: setattr(state.config, "gameplay_map_dir", str(event.value or "8x8")),
+            ).classes(f"{INPUT_CLASS} w-56")
+            for name, label in (
+                ("gameplay_rate", "Gameplay rate"),
+                ("gameplay_refresh_interval", "Gameplay refresh"),
+            ):
+                controls[f"config.{name}"] = _bind_input(
+                    label,
+                    getattr(state.config, name),
+                    lambda value, field=name: setattr(state.config, field, value),
+                )
 
         with ui.column().classes("w-full gap-3") as aggressiveness_panel:
             ui.label("Strategic Aggressiveness").classes(SECTION_HEADER_CLASS)
@@ -196,6 +229,7 @@ def build_config_view(state: Any) -> dict[str, Any]:
                     "w-44",
                 )
 
+    refresh_form()
     return {"refresh": refresh_form}
 
 
@@ -319,15 +353,12 @@ def _format_eval_mode(state: Any) -> str:
 
 def _format_fitness_metric(state: Any) -> str:
     if state.config.eval_mode == "early_end":
-        return "resource_diff_mean"
+        return EARLY_END_FITNESS_METRIC
     return state.config.fitness_metric
 
 
 def _set_eval_mode(state: Any, value: str) -> None:
     state.config.eval_mode = services.normalize_eval_mode(value)
-    if state.config.eval_mode == "early_end":
-        state.config.llm_call_limit = "10"
-        state.config.fitness_metric = "resource_diff_mean"
     refresh_config_summary(state)
 
 

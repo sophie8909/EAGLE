@@ -9,6 +9,7 @@ from typing import Any
 from nicegui import ui
 
 from eagle_ui import services
+from eagle_ui.state import EARLY_END_LLM_CALL_LIMIT
 from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
@@ -50,7 +51,19 @@ def _set_select_options(control: Any, options: Any, value: Any) -> None:
         safe_options = _options_with_value(options, value)
     control.options = safe_options
     control.value = value if value in safe_options else ""
-    
+
+
+def _fitness_metric_options(value: str = "") -> dict[str, str]:
+    options = {
+        "win_score": "win_score",
+        "resource_advantage": "resource_advantage",
+        "resource_diff_mean": "resource_diff_mean",
+    }
+    if value and value not in options:
+        options[value] = value
+    return options
+
+
 def build_operators_view(state: Any) -> dict[str, Any]:
     """Build the operator controls view."""
     controls: dict[str, Any] = {}
@@ -129,9 +142,13 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             services.is_surrogate_algorithm(state.config.algorithm)
             and state.config.eval_mode != "early_end"
         )
+        early_end_settings.visible = state.config.eval_mode == "early_end"
+        real_eval_settings.visible = state.config.eval_mode == "gameplay"
         for name, control in config_controls.items():
             value = getattr(state.config, name, "")
-            if hasattr(control, "options"):
+            if name == "fitness_metric":
+                _set_select_options(control, _fitness_metric_options(str(value)), value)
+            elif hasattr(control, "options"):
                 _set_select_options(control, getattr(control, "options", []), value)
             else:
                 control.value = value
@@ -179,9 +196,6 @@ def build_operators_view(state: Any) -> dict[str, Any]:
     def update_evaluator(value: str) -> None:
         state.config.eval_mode = services.normalize_eval_mode(value)
         state.config.evaluator = "gameplay"
-        if state.config.eval_mode == "early_end":
-            state.config.llm_call_limit = "10"
-            state.config.fitness_metric = "resource_diff_mean"
         refresh()
         refresh_config_summary(state)
 
@@ -238,36 +252,22 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                 on_change=lambda event: update_evaluator(str(event.value or "gameplay")),
             ).classes(f"{INPUT_CLASS} w-full")
 
-        ui.separator().classes("opacity-20")
+        with ui.row().classes(f"{ROW_CLASS} items-center gap-3") as early_end_settings:
+            ui.badge(f"LLM Calls: {EARLY_END_LLM_CALL_LIMIT}").classes("uppercase")
+            ui.badge("Fitness: Resource Difference").classes("uppercase")
 
-        ui.label("Experiment").classes(SECTION_HEADER_CLASS)
-
-        with ui.grid(columns=3).classes("w-full gap-3"):
+        with ui.grid(columns=3).classes("w-full gap-3") as real_eval_settings:
             config_controls = {
-                "config_name": ui.input(
-                    "Config name",
-                    value=state.config.config_name,
-                    on_change=lambda event: update_config("config_name", str(event.value or "")),
-                ).classes(f"{INPUT_CLASS} w-full"),
-                "population_size": ui.input(
-                    "Population size",
-                    value=state.config.population_size,
-                    on_change=lambda event: update_config("population_size", str(event.value or "")),
-                ).classes(f"{INPUT_CLASS} w-full"),
-                "num_generations": ui.input(
-                    "Generations",
-                    value=state.config.num_generations,
-                    on_change=lambda event: update_config("num_generations", str(event.value or "")),
-                ).classes(f"{INPUT_CLASS} w-full"),
-                "tick_limit": ui.input(
-                    "Tick limit",
-                    value=state.config.tick_limit,
-                    on_change=lambda event: update_config("tick_limit", str(event.value or "")),
-                ).classes(f"{INPUT_CLASS} w-full"),
                 "llm_call_limit": ui.input(
                     "LLM call limit",
                     value=state.config.llm_call_limit,
                     on_change=lambda event: update_config("llm_call_limit", str(event.value or "")),
+                ).classes(f"{INPUT_CLASS} w-full"),
+                "fitness_metric": ui.select(
+                    _fitness_metric_options(state.config.fitness_metric),
+                    label="Fitness metric",
+                    value=state.config.fitness_metric,
+                    on_change=lambda event: update_config("fitness_metric", str(event.value or "win_score")),
                 ).classes(f"{INPUT_CLASS} w-full"),
                 "gameplay_map_dir": ui.select(
                     _options_with_value(services.microrts_map_dir_choices(), state.config.gameplay_map_dir),
@@ -276,6 +276,36 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                     on_change=lambda event: update_config("gameplay_map_dir", str(event.value or "8x8")),
                 ).classes(f"{INPUT_CLASS} w-full"),
             }
+
+        ui.separator().classes("opacity-20")
+
+        ui.label("Experiment").classes(SECTION_HEADER_CLASS)
+
+        with ui.grid(columns=3).classes("w-full gap-3"):
+            config_controls.update(
+                {
+                    "config_name": ui.input(
+                        "Config name",
+                        value=state.config.config_name,
+                        on_change=lambda event: update_config("config_name", str(event.value or "")),
+                    ).classes(f"{INPUT_CLASS} w-full"),
+                    "population_size": ui.input(
+                        "Population size",
+                        value=state.config.population_size,
+                        on_change=lambda event: update_config("population_size", str(event.value or "")),
+                    ).classes(f"{INPUT_CLASS} w-full"),
+                    "num_generations": ui.input(
+                        "Generations",
+                        value=state.config.num_generations,
+                        on_change=lambda event: update_config("num_generations", str(event.value or "")),
+                    ).classes(f"{INPUT_CLASS} w-full"),
+                    "tick_limit": ui.input(
+                        "Tick limit",
+                        value=state.config.tick_limit,
+                        on_change=lambda event: update_config("tick_limit", str(event.value or "")),
+                    ).classes(f"{INPUT_CLASS} w-full"),
+                }
+            )
 
         with ui.column().classes("w-full gap-3") as surrogate_section:
             ui.label("Real Evaluation").classes(SECTION_HEADER_CLASS)

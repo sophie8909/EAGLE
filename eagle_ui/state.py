@@ -10,6 +10,9 @@ from eagle.utils.component_pool import ComponentPool
 
 from . import services
 
+EARLY_END_LLM_CALL_LIMIT = "10"
+EARLY_END_FITNESS_METRIC = "resource_diff_mean"
+
 
 @dataclass
 class ConfigState:
@@ -26,8 +29,8 @@ class ConfigState:
     population_size: str = "10"
     num_generations: str = "50"
     tick_limit: str = "5000"
-    llm_call_limit: str = "50"
-    fitness_metric: str = "default"
+    llm_call_limit: str = "100"
+    fitness_metric: str = "win_score"
     llm_model: str = "local"
     llm_base_url: str = "http://127.0.0.1:8080/v1"
     gameplay_map_dir: str = "8x8"
