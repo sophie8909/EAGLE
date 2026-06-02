@@ -10,6 +10,7 @@ from nicegui import ui
 
 from eagle_ui import services
 from eagle_ui.components.selectors import create_run_selector
+from eagle_ui.state import EARLY_END_FITNESS_METRIC, EARLY_END_LLM_CALL_LIMIT
 from eagle_ui.theme import (
     BADGE_CLASS,
     BUTTON_CLASS,
@@ -66,6 +67,7 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         state.run.status_text = await asyncio.to_thread(services.process_status_text, state)
         status_badge.set_text(state.run.status_text)
         status_badge.classes(replace=status_badge_class(state.run.status_text))
+        refresh_run_config_panel()
 
     async def refresh_log() -> None:
         await refresh_status()
@@ -83,6 +85,16 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
     def on_run_changed(event: Any) -> None:
         state.run.experiment_current_run_dir = Path(str(event.value)) if event.value else None
         refresh_start_button()
+
+    def refresh_run_config_panel() -> None:
+        eval_mode = services.normalize_eval_mode(state.config.eval_mode)
+        eval_mode_value.set_text(services.EVALUATION_MODE_CHOICES.get(eval_mode, eval_mode))
+        fitness_value.set_text(EARLY_END_FITNESS_METRIC if eval_mode == "early_end" else state.config.fitness_metric)
+        llm_call_limit_value.set_text(
+            EARLY_END_LLM_CALL_LIMIT if eval_mode == "early_end" else state.config.llm_call_limit
+        )
+        early_end_badge.visible = eval_mode == "early_end"
+
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Run Control").classes(SECTION_HEADER_CLASS)
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
@@ -119,9 +131,24 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
             value=state.run.experiment_current_run_dir,
             on_change=on_run_changed,
         ).classes(f"{INPUT_CLASS} w-full")
+        with ui.column().classes("w-full gap-2 rounded border border-[#2d4059] p-3"):
+            with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
+                ui.label("Running experiment").classes(SECTION_HEADER_CLASS)
+                early_end_badge = ui.badge("EARLY END").classes("uppercase")
+            with ui.grid(columns=3).classes("w-full gap-3"):
+                eval_mode_value = _status_field("Eval Mode")
+                fitness_value = _status_field("Fitness Metric")
+                llm_call_limit_value = _status_field("LLM Call Limit")
         log_textarea = ui.textarea(value=state.run.log_text).props("readonly").classes(
             f"{TEXTAREA_CLASS} {height_class(log_height)} w-full"
         )
 
+    refresh_run_config_panel()
     controls.update({"refresh_runs": refresh_runs, "refresh_status": refresh_status, "refresh_log": refresh_log})
     return controls
+
+
+def _status_field(label: str) -> Any:
+    with ui.column().classes("gap-1"):
+        ui.label(label).classes("text-xs uppercase tracking-widest text-[#b08d57]")
+        return ui.label().classes("font-mono")
