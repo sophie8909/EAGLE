@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ...config import DEFAULT_AGENT_CLASS, normalize_agent_class
 from ...project import MICRORTS_LOGS_DIR, PROJECT_ROOT, ensure_project_directories
 from ...utils.fitness_calculator import calculate_match_score
 from .compiler import compile_microrts, locate_microrts_root
@@ -718,10 +719,11 @@ def run_prompt_based_game(
     map_location: str | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Run one gameplay EAGLE-vs-opponent match driven by the prompt file."""
+    agent_class = normalize_agent_class(getattr(config, "agent_class", DEFAULT_AGENT_CLASS))
     return run_java_agent_game(
         project_root=project_root,
         config=config,
-        ai1_class="ai.eagle.EAGLE",
+        ai1_class=agent_class,
         opponent=opponent,
         prompt=prompt,
         compile_first=True,

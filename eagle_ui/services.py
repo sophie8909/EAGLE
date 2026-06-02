@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from eagle.config import normalize_algorithm_name
+from eagle.config import DEFAULT_AGENT_CLASS, normalize_algorithm_name
 from eagle.envs.microrts.runner import save_prompt as save_microrts_prompt
 from eagle.envs.microrts.runner import set_config_property
 from eagle.analysis.evolution_result_analysis import parse_final_test_analysis
@@ -47,6 +47,10 @@ EVALUATOR_CHOICES = ("gameplay",)
 EVALUATION_MODE_CHOICES = {
     "gameplay": "Real Eval",
     "early_end": "Early End",
+}
+AGENT_CLASS_CHOICES = {
+    "ai.eagle.EAGLE": "EAGLE",
+    "ai.eagle.EAGLERepair": "EAGLERepair",
 }
 SURROGATE_CHOICES = ("early_end", "round", "policy_agent", "java_agent")
 AGGRESSIVENESS_MODE_CHOICES = ("component_only", "llm_only", "hybrid")
@@ -91,6 +95,12 @@ def normalize_eval_mode(value: Any) -> str:
     """Normalize GUI evaluation mode values."""
     normalized = str(value or "gameplay").strip().lower().replace("-", "_").replace(" ", "_")
     return normalized if normalized in EVALUATION_MODE_CHOICES else "gameplay"
+
+
+def normalize_agent_class(value: Any) -> str:
+    """Normalize MicroRTS LLM Java agent choices."""
+    selected = str(value or "").strip()
+    return selected if selected in AGENT_CLASS_CHOICES else DEFAULT_AGENT_CLASS
 
 
 def configure_runtime_logging() -> None:
@@ -415,6 +425,7 @@ def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path)
     cfg.application = str(payload.get("application", cfg.application))
     cfg.evaluator = "gameplay"
     cfg.eval_mode = normalize_eval_mode(payload.get("eval_mode", "gameplay"))
+    cfg.agent_class = normalize_agent_class(payload.get("agent_class", cfg.agent_class))
     cfg.surrogate = str(payload.get("surrogate", cfg.surrogate)).strip().lower().replace("-", "_").replace(" ", "_")
     if cfg.surrogate not in SURROGATE_CHOICES:
         cfg.surrogate = SURROGATE_CHOICES[0]
@@ -725,6 +736,7 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
             "tick_limit": parse_int(cfg.tick_limit, "tick_limit"),
             "llm_call_limit": llm_call_limit,
             "fitness_metric": fitness_metric,
+            "agent_class": normalize_agent_class(cfg.agent_class),
             "llm_model": cfg.llm_model.strip(),
             "llm_base_url": cfg.llm_base_url.strip(),
             "gameplay_map_dir": cfg.gameplay_map_dir.strip(),
@@ -1922,7 +1934,8 @@ def launch_microrts_gui(state: Any) -> str:
         set_config_property(ROOT, "launch_mode", "STANDALONE")
         set_config_property(ROOT, "headless", "false")
         set_config_property(ROOT, "map_location", map_location)
-        set_config_property(ROOT, "AI1", "ai.eagle.EAGLE")
+        agent_class = normalize_agent_class(getattr(state.config, "agent_class", DEFAULT_AGENT_CLASS))
+        set_config_property(ROOT, "AI1", agent_class)
         set_config_property(ROOT, "AI2", opponent)
         set_config_property(ROOT, "update_interval", str(update_interval))
         set_config_property(ROOT, "llm_interval", str(llm_interval))

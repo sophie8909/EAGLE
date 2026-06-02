@@ -68,6 +68,7 @@
   "tick_limit": 5000,
   "llm_call_limit": 50,
   "fitness_metric": "default",
+  "agent_class": "ai.eagle.EAGLE",
   "llm_model": "local",
   "llm_base_url": "http://127.0.0.1:8080/v1",
   "gameplay_rate": 0.25,

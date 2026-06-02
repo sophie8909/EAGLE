@@ -145,6 +145,12 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 value=state.config.eval_mode,
                 on_change=lambda event: _set_eval_mode(state, str(event.value or "gameplay")),
             ).classes(f"{INPUT_CLASS} w-56")
+            controls["config.agent_class"] = create_key_select(
+                "LLM agent",
+                services.AGENT_CLASS_CHOICES,
+                value=state.config.agent_class,
+                on_change=lambda event: _set_agent_class(state, str(event.value or "")),
+            ).classes(f"{INPUT_CLASS} w-56")
 
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3") as early_end_settings:
             ui.badge(f"LLM Calls: {EARLY_END_LLM_CALL_LIMIT}").classes("uppercase")
@@ -264,6 +270,7 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows["component_path"].set_text(state.config.component_pool_path or "(none)")
         rows["algorithm"].set_text(state.config.algorithm)
         rows["evaluator"].set_text(_format_eval_mode(state))
+        rows["agent"].set_text(services.AGENT_CLASS_CHOICES.get(state.config.agent_class, state.config.agent_class))
         rows["llm_calls"].set_text(_format_llm_call_limit(state))
         rows["fitness"].set_text(_format_fitness_metric(state))
         rows["archive_parent_ratio"].set_text(state.config.archive_parent_ratio)
@@ -297,6 +304,7 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
             {
                 "algorithm": _summary_row("Algorithm"),
                 "evaluator": _summary_row("Evaluation"),
+                "agent": _summary_row("LLM agent"),
                 "llm_calls": _summary_row("LLM Calls"),
                 "fitness": _summary_row("Fitness"),
                 "archive_parent_ratio": _summary_row("Archive parent ratio"),
@@ -384,6 +392,11 @@ def _format_fitness_metric(state: Any) -> str:
 
 def _set_eval_mode(state: Any, value: str) -> None:
     state.config.eval_mode = services.normalize_eval_mode(value)
+    refresh_config_summary(state)
+
+
+def _set_agent_class(state: Any, value: str) -> None:
+    state.config.agent_class = services.normalize_agent_class(value)
     refresh_config_summary(state)
 
 

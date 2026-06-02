@@ -12,6 +12,12 @@ from typing import Any
 
 from .project import DEFAULT_EVOLUTION_CONFIG_PATH, PROJECT_ROOT
 
+AGENT_CLASS_CHOICES = {
+    "ai.eagle.EAGLE",
+    "ai.eagle.EAGLERepair",
+}
+DEFAULT_AGENT_CLASS = "ai.eagle.EAGLE"
+
 
 def normalize_algorithm_name(
     algorithm: Any,
@@ -35,6 +41,12 @@ def normalize_algorithm_name(
     del evaluator, surrogate, warn
     normalized = str(algorithm or "").strip().lower().replace("-", "_").replace(" ", "_")
     return normalized or "nsga2"
+
+
+def normalize_agent_class(agent_class: Any) -> str:
+    """Normalize the selectable MicroRTS LLM Java agent class."""
+    selected = str(agent_class or "").strip()
+    return selected if selected in AGENT_CLASS_CHOICES else DEFAULT_AGENT_CLASS
 
 
 @lru_cache(maxsize=1)
@@ -118,6 +130,7 @@ class EAConfig:
     tick_limit: int = field(default_factory=lambda: int(_default_config_value("tick_limit")))
     llm_call_limit: int = field(default_factory=lambda: int(_default_config_value("llm_call_limit")))
     fitness_metric: str = field(default_factory=lambda: str(_default_config_value("fitness_metric")))
+    agent_class: str = field(default_factory=lambda: str(_default_config_value("agent_class")))
     llm_model: str = field(default_factory=lambda: str(_default_config_value("llm_model")))
     llm_base_url: str = field(default_factory=lambda: str(_default_config_value("llm_base_url")))
     gameplay_rate: float = field(default_factory=lambda: float(_default_config_value("gameplay_rate")))
@@ -356,6 +369,7 @@ class EAConfig:
         self.tick_limit = max(1, int(self.tick_limit))
         self.llm_call_limit = max(1, int(self.llm_call_limit))
         self.fitness_metric = str(self.fitness_metric or "default").strip()
+        self.agent_class = normalize_agent_class(self.agent_class)
         self.llm_model = str(self.llm_model or "").strip()
         if not self.llm_model:
             raise ValueError("llm_model must be a non-empty model name.")
@@ -400,6 +414,7 @@ class EAConfig:
             "initial_population_seeds": deepcopy(self.initial_population_seeds),
             "objective_config": deepcopy(self.objective_config),
             "fitness_metric": self.fitness_metric,
+            "agent_class": self.agent_class,
             "aggressiveness_objective_enabled": self.aggressiveness_objective_enabled,
             "aggressiveness_mode": self.aggressiveness_mode,
             "aggressiveness_llm_weight": self.aggressiveness_llm_weight,

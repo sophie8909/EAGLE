@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from eagle.config import EAConfig, load_config_from_json
+from eagle.config import DEFAULT_AGENT_CLASS, EAConfig, load_config_from_json, normalize_agent_class
 from eagle.envs.microrts import locate_microrts_root
 from eagle.main import OPPONENT_LIST, _resolve_component_pool_path
 from eagle.project import DEFAULT_SURROGATE_VALIDATION_CONFIG_PATH, EAGLE_LOGS_DIR
@@ -348,7 +348,7 @@ def _run_eagle_match(
     llm_interval: int,
 ) -> dict[str, Any]:
     """Run one 5000-cycle benchmark match with the gameplay EAGLE Java agent."""
-    ai1 = "ai.eagle.EAGLE"
+    ai1 = normalize_agent_class(getattr(evaluator.config, "agent_class", DEFAULT_AGENT_CLASS))
 
     cached = _maybe_reuse_cached_match(
         recorder,

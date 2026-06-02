@@ -31,6 +31,7 @@ class ConfigState:
     tick_limit: str = "5000"
     llm_call_limit: str = "100"
     fitness_metric: str = "win_score"
+    agent_class: str = services.DEFAULT_AGENT_CLASS
     llm_model: str = "local"
     llm_base_url: str = "http://127.0.0.1:8080/v1"
     gameplay_map_dir: str = "8x8"

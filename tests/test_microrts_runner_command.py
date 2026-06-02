@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -48,6 +49,41 @@ class MicroRTSRunnerCommandTests(unittest.TestCase):
             self.assertIn("-Dmicrorts.llm_interval=5", command)
             self.assertFalse(any(str(arg).startswith("-Dmicrorts.llm_call_limit=") for arg in command))
             self.assertEqual(captured["cwd"], microrts_root)
+
+    def test_prompt_based_game_uses_configured_agent_class(self) -> None:
+        config = SimpleNamespace(agent_class="ai.eagle.EAGLERepair")
+        captured: dict[str, object] = {}
+
+        def fake_run_java_agent_game(**kwargs):
+            captured.update(kwargs)
+            return {}, {}
+
+        with patch.object(runner, "run_java_agent_game", side_effect=fake_run_java_agent_game):
+            runner.run_prompt_based_game(
+                project_root=Path("."),
+                config=config,
+                prompt="prompt",
+                opponent="ai.abstraction.HeavyRush",
+            )
+
+        self.assertEqual(captured["ai1_class"], "ai.eagle.EAGLERepair")
+
+    def test_prompt_based_game_defaults_missing_agent_class(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_run_java_agent_game(**kwargs):
+            captured.update(kwargs)
+            return {}, {}
+
+        with patch.object(runner, "run_java_agent_game", side_effect=fake_run_java_agent_game):
+            runner.run_prompt_based_game(
+                project_root=Path("."),
+                config=SimpleNamespace(),
+                prompt="prompt",
+                opponent="ai.abstraction.HeavyRush",
+            )
+
+        self.assertEqual(captured["ai1_class"], "ai.eagle.EAGLE")
 
 
 if __name__ == "__main__":
