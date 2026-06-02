@@ -241,10 +241,8 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows["component_path"].set_text(state.config.component_pool_path or "(none)")
         rows["algorithm"].set_text(state.config.algorithm)
         rows["evaluator"].set_text(_format_eval_mode(state))
-        rows["llm_calls"].set_text("10" if state.config.eval_mode == "early_end" else state.config.llm_call_limit)
+        rows["llm_calls"].set_text(_format_llm_call_limit(state))
         rows["fitness"].set_text(_format_fitness_metric(state))
-        rows["surrogate"].set_text("(hidden)" if state.config.eval_mode == "early_end" else state.config.surrogate)
-        rows["surrogate_top_ratio"].set_text(state.config.surrogate_top_ratio)
         rows["archive_parent_ratio"].set_text(state.config.archive_parent_ratio)
         rows["parent_selection"].set_text(state.operators.parent_selection_operator)
         rows["environmental_selection"].set_text(state.operators.env_selection_operator)
@@ -276,10 +274,8 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
             {
                 "algorithm": _summary_row("Algorithm"),
                 "evaluator": _summary_row("Evaluation"),
-                "llm_calls": _summary_row("LLM calls"),
+                "llm_calls": _summary_row("LLM Calls"),
                 "fitness": _summary_row("Fitness"),
-                "surrogate": _summary_row("Surrogate mode"),
-                "surrogate_top_ratio": _summary_row("Surrogate top ratio"),
                 "archive_parent_ratio": _summary_row("Archive parent ratio"),
                 "parent_selection": _summary_row("Parent selection"),
                 "environmental_selection": _summary_row("Environmental selection"),
@@ -349,6 +345,12 @@ def _format_aggressiveness_settings(state: Any) -> str:
 
 def _format_eval_mode(state: Any) -> str:
     return services.EVALUATION_MODE_CHOICES.get(state.config.eval_mode, state.config.eval_mode)
+
+
+def _format_llm_call_limit(state: Any) -> str:
+    if state.config.eval_mode == "early_end":
+        return EARLY_END_LLM_CALL_LIMIT
+    return state.config.llm_call_limit
 
 
 def _format_fitness_metric(state: Any) -> str:
