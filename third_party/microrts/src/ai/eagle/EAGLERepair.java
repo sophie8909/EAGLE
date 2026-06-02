@@ -108,6 +108,9 @@ public class EAGLERepair extends AbstractionLayerAI {
     private int totalMovesGenerated = 0;
     private int totalMovesAccepted = 0;
     private int totalMovesRejected = 0;
+    private int totalRepairMoves = 0;
+    private int totalRepairApplied = 0;
+    private final Map<String, RepairStats> repairStatsByActionType = new LinkedHashMap<>();
     private int llmCallCount = 0;
     private int currentPromptTurn = -1;
 
@@ -245,6 +248,7 @@ public class EAGLERepair extends AbstractionLayerAI {
         metrics.addProperty("moves_rejected", totalMovesRejected);
         metrics.addProperty("llm_calls", llmCallCount);
         metrics.addProperty("llm_call_limit", LLM_CALL_LIMIT);
+        metrics.add("repair_metrics", buildRepairMetricsJson());
         metrics.addProperty("end_time", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date()));
 
         try (FileWriter writer = new FileWriter("game_summary.json", true)) {
@@ -263,6 +267,7 @@ public class EAGLERepair extends AbstractionLayerAI {
         clearDecisionCache();
         llmCallCount = 0;
         endGameLogged = false;
+        resetRepairMetrics();
     }
 
     public void reset(UnitTypeTable aUtt) {
@@ -274,6 +279,7 @@ public class EAGLERepair extends AbstractionLayerAI {
         rangedType = utt.getUnitType("Ranged");
         baseType = utt.getUnitType("Base");
         barracksType = utt.getUnitType("Barracks");
+        resetRepairMetrics();
         clearDecisionCache();
     }
 
@@ -656,21 +662,24 @@ public class EAGLERepair extends AbstractionLayerAI {
                 int unitX = unitPosition.get(0).getAsInt();
                 int unitY = unitPosition.get(1).getAsInt();
                 Unit unit = pgs.getUnitAt(unitX, unitY);
+                String actionType = move.get("action_type").getAsString().toLowerCase();
+                String rawMove = move.get("raw_move").getAsString();
 
                 if (unit == null || unit.getPlayer() != player) {
+                    recordRepairAttempt(rawMove, rawMove, actionType, false, "invalid_unit_position");
                     rejected++;
                     continue;
                 }
 
-                String actionType = move.get("action_type").getAsString().toLowerCase();
-                String rawMove = move.get("raw_move").getAsString();
-                boolean applied = applySingleMove(actionType, rawMove, unit, pgs);
+                RepairResult repair = repairMove(actionType, rawMove, unit, pgs);
+                recordRepairAttempt(rawMove, repair.repairedMove, actionType, repair.repaired, repair.reason);
+                boolean applied = applySingleMove(actionType, repair.repairedMove, unit, pgs);
                 if (applied) {
                     accepted++;
                 } else {
                     rejected++;
                 }
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
                 rejected++;
                 System.out.println("[EAGLE] move rejected: " + e.getMessage());
             }
@@ -768,6 +777,288 @@ public class EAGLERepair extends AbstractionLayerAI {
         }
         attack(unit, enemyUnit);
         return true;
+    }
+
+    private RepairResult repairMove(String actionType, String rawMove, Unit unit, PhysicalGameState pgs) {
+        switch (actionType) {
+            case "move":
+                return repairMoveAction(rawMove, unit, pgs);
+            case "attack":
+                return repairAttackAction(rawMove, unit, pgs);
+            case "harvest":
+                return repairHarvestAction(rawMove, unit, pgs);
+            case "train":
+                return repairTrainAction(rawMove, unit);
+            case "build":
+                return repairBuildAction(rawMove, unit, pgs);
+            default:
+                return new RepairResult(rawMove, false, "unsupported_action_type");
+        }
+    }
+
+    private RepairResult repairMoveAction(String rawMove, Unit unit, PhysicalGameState pgs) {
+        if (unit.getType() == baseType || unit.getType() == barracksType) {
+            return new RepairResult(rawMove, false, "unit_cannot_move");
+        }
+        Matcher matcher = Pattern.compile("\\(\\s*\\d+,\\s*\\d+\\):.*?move\\(\\(\\s*(\\d+),\\s*(\\d+)\\s*\\)\\)").matcher(rawMove);
+        if (!matcher.find()) {
+            return new RepairResult(rawMove, false, "parse_failed");
+        }
+        int targetX = Integer.parseInt(matcher.group(1));
+        int targetY = Integer.parseInt(matcher.group(2));
+        int[] repairedTarget = nearestFreeTile(targetX, targetY, pgs);
+        if (repairedTarget == null) {
+            return new RepairResult(rawMove, false, "no_legal_move_tile");
+        }
+        String repairedMove = formatMove(unit, "move", repairedTarget[0], repairedTarget[1]);
+        boolean repaired = targetX != repairedTarget[0] || targetY != repairedTarget[1];
+        return new RepairResult(repairedMove, repaired, repaired ? "nearest_legal_tile" : "none");
+    }
+
+    private RepairResult repairAttackAction(String rawMove, Unit unit, PhysicalGameState pgs) {
+        if (!unit.getType().canAttack) {
+            return new RepairResult(rawMove, false, "unit_cannot_attack");
+        }
+        Matcher matcher = Pattern.compile("\\(\\s*\\d+,\\s*\\d+\\):.*?attack\\(\\s*\\(\\s*(\\d+),\\s*(\\d+)\\s*\\)\\s*\\)").matcher(rawMove);
+        if (!matcher.find()) {
+            return new RepairResult(rawMove, false, "parse_failed");
+        }
+        int targetX = Integer.parseInt(matcher.group(1));
+        int targetY = Integer.parseInt(matcher.group(2));
+        Unit enemy = nearestUnit(targetX, targetY, pgs, candidate -> candidate.getPlayer() >= 0 && candidate.getPlayer() != unit.getPlayer());
+        if (enemy == null) {
+            return new RepairResult(rawMove, false, "no_legal_enemy_unit");
+        }
+        String repairedMove = formatMove(unit, "attack", enemy.getX(), enemy.getY());
+        boolean repaired = targetX != enemy.getX() || targetY != enemy.getY();
+        return new RepairResult(repairedMove, repaired, repaired ? "nearest_legal_enemy_unit" : "none");
+    }
+
+    private RepairResult repairHarvestAction(String rawMove, Unit unit, PhysicalGameState pgs) {
+        if (unit.getType() != workerType) {
+            return new RepairResult(rawMove, false, "unit_cannot_harvest");
+        }
+        Matcher matcher = Pattern.compile("\\(\\s*\\d+,\\s*\\d+\\):.*?harvest\\(\\((\\d+),\\s*(\\d+)\\),\\s*\\((\\d+),\\s*(\\d+)\\)\\)").matcher(rawMove);
+        if (!matcher.find()) {
+            return new RepairResult(rawMove, false, "parse_failed");
+        }
+        int resourceX = Integer.parseInt(matcher.group(1));
+        int resourceY = Integer.parseInt(matcher.group(2));
+        int baseX = Integer.parseInt(matcher.group(3));
+        int baseY = Integer.parseInt(matcher.group(4));
+        Unit resource = nearestUnit(resourceX, resourceY, pgs, candidate -> candidate.getType() == resourceType);
+        Unit base = nearestUnit(baseX, baseY, pgs, candidate -> candidate.getPlayer() == unit.getPlayer() && candidate.getType() == baseType);
+        if (resource == null || base == null) {
+            return new RepairResult(rawMove, false, resource == null ? "no_legal_resource" : "no_legal_ally_base");
+        }
+        String repairedMove = formatHarvest(unit, resource.getX(), resource.getY(), base.getX(), base.getY());
+        boolean repaired = resourceX != resource.getX() || resourceY != resource.getY()
+                || baseX != base.getX() || baseY != base.getY();
+        return new RepairResult(repairedMove, repaired, repaired ? "nearest_legal_harvest_targets" : "none");
+    }
+
+    private RepairResult repairTrainAction(String rawMove, Unit unit) {
+        if (unit.getType() != baseType && unit.getType() != barracksType) {
+            return new RepairResult(rawMove, false, "unit_cannot_train");
+        }
+        Matcher matcher = Pattern.compile("\\(\\s*\\d+,\\s*\\d+\\):.*?train\\(\\s*['\\\"]?(\\w+)['\\\"]?\\s*\\)").matcher(rawMove);
+        if (!matcher.find()) {
+            return new RepairResult(rawMove, false, "parse_failed");
+        }
+        String rawType = matcher.group(1);
+        UnitType repairedType = repairUnitType(rawType, List.of("worker", "light", "heavy", "ranged"));
+        if (repairedType == null || !unit.getType().produces.contains(repairedType)) {
+            return new RepairResult(rawMove, false, "no_legal_train_type");
+        }
+        String repairedMove = formatTrain(unit, repairedType.name);
+        boolean repaired = !rawType.equals(repairedType.name);
+        return new RepairResult(repairedMove, repaired, repaired ? "normalized_unit_type" : "none");
+    }
+
+    private RepairResult repairBuildAction(String rawMove, Unit unit, PhysicalGameState pgs) {
+        if (unit.getType() != workerType) {
+            return new RepairResult(rawMove, false, "unit_cannot_build");
+        }
+        Matcher matcher = Pattern.compile("\\(\\s*\\d+,\\s*\\d+\\):.*?build\\(\\s*\\(\\s*(\\d+),\\s*(\\d+)\\s*\\),\\s*['\\\"]?(\\w+)['\\\"]?\\s*\\)").matcher(rawMove);
+        if (!matcher.find()) {
+            return new RepairResult(rawMove, false, "parse_failed");
+        }
+        int targetX = Integer.parseInt(matcher.group(1));
+        int targetY = Integer.parseInt(matcher.group(2));
+        String rawType = matcher.group(3);
+        UnitType repairedType = repairUnitType(rawType, List.of("base", "barracks"));
+        if (repairedType == null || !unit.getType().produces.contains(repairedType)) {
+            return new RepairResult(rawMove, false, "no_legal_build_type");
+        }
+        int[] repairedTarget = nearestFreeTile(targetX, targetY, pgs);
+        if (repairedTarget == null) {
+            return new RepairResult(rawMove, false, "no_legal_build_position");
+        }
+        String repairedMove = formatBuild(unit, repairedTarget[0], repairedTarget[1], repairedType.name);
+        boolean repaired = targetX != repairedTarget[0] || targetY != repairedTarget[1] || !rawType.equals(repairedType.name);
+        return new RepairResult(repairedMove, repaired, repaired ? "nearest_legal_build_position" : "none");
+    }
+
+    private int[] nearestFreeTile(int targetX, int targetY, PhysicalGameState pgs) {
+        int[] best = null;
+        int bestDistance = Integer.MAX_VALUE;
+        for (int y = 0; y < pgs.getHeight(); y++) {
+            for (int x = 0; x < pgs.getWidth(); x++) {
+                if (pgs.getTerrain(x, y) != PhysicalGameState.TERRAIN_NONE || pgs.getUnitAt(x, y) != null) {
+                    continue;
+                }
+                int distance = Math.abs(x - targetX) + Math.abs(y - targetY);
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    best = new int[]{x, y};
+                }
+            }
+        }
+        return best;
+    }
+
+    private Unit nearestUnit(int targetX, int targetY, PhysicalGameState pgs, UnitPredicate predicate) {
+        Unit best = null;
+        int bestDistance = Integer.MAX_VALUE;
+        for (Unit candidate : pgs.getUnits()) {
+            if (!predicate.matches(candidate)) {
+                continue;
+            }
+            int distance = Math.abs(candidate.getX() - targetX) + Math.abs(candidate.getY() - targetY);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    private UnitType repairUnitType(String rawType, List<String> allowedTypes) {
+        String normalized = rawType == null ? "" : rawType.trim().toLowerCase();
+        for (String allowed : allowedTypes) {
+            if (allowed.equals(normalized)) {
+                return stringToUnitType(allowed);
+            }
+        }
+        for (String allowed : allowedTypes) {
+            if (editDistanceAtMostOne(normalized, allowed)) {
+                return stringToUnitType(allowed);
+            }
+        }
+        return null;
+    }
+
+    private boolean editDistanceAtMostOne(String value, String target) {
+        if (Math.abs(value.length() - target.length()) > 1) {
+            return false;
+        }
+        int i = 0;
+        int j = 0;
+        int edits = 0;
+        while (i < value.length() && j < target.length()) {
+            if (value.charAt(i) == target.charAt(j)) {
+                i++;
+                j++;
+                continue;
+            }
+            edits++;
+            if (edits > 1) {
+                return false;
+            }
+            if (value.length() > target.length()) {
+                i++;
+            } else if (value.length() < target.length()) {
+                j++;
+            } else {
+                i++;
+                j++;
+            }
+        }
+        if (i < value.length() || j < target.length()) {
+            edits++;
+        }
+        return edits <= 1;
+    }
+
+    private String formatMove(Unit unit, String action, int x, int y) {
+        return String.format("(%d,%d): %s((%d,%d))", unit.getX(), unit.getY(), action, x, y);
+    }
+
+    private String formatHarvest(Unit unit, int resourceX, int resourceY, int baseX, int baseY) {
+        return String.format("(%d,%d): harvest((%d,%d),(%d,%d))",
+                unit.getX(), unit.getY(), resourceX, resourceY, baseX, baseY);
+    }
+
+    private String formatTrain(Unit unit, String unitType) {
+        return String.format("(%d,%d): train(%s)", unit.getX(), unit.getY(), unitType);
+    }
+
+    private String formatBuild(Unit unit, int x, int y, String unitType) {
+        return String.format("(%d,%d): build((%d,%d),%s)", unit.getX(), unit.getY(), x, y, unitType);
+    }
+
+    private void recordRepairAttempt(String rawMove, String repairedMove, String actionType, boolean repaired, String reason) {
+        RepairStats stats = repairStatsByActionType.get(actionType);
+        totalRepairMoves++;
+        if (stats != null) {
+            stats.total++;
+        }
+        if (repaired) {
+            totalRepairApplied++;
+            if (stats != null) {
+                stats.repaired++;
+            }
+        }
+
+        JsonObject record = new JsonObject();
+        record.addProperty("raw_llm_move", rawMove);
+        record.addProperty("repaired_move", repairedMove);
+        record.addProperty("action_type", actionType);
+        record.addProperty("repaired", repaired);
+        record.addProperty("repair_reason", reason);
+        try (FileWriter writer = new FileWriter("repair_moves.jsonl", true)) {
+            writer.write(LLM_DEBUG_GSON.toJson(record));
+            writer.write(System.lineSeparator());
+        } catch (IOException e) {
+            System.err.println("[EAGLE] repair record write failed: " + e.getMessage());
+        }
+    }
+
+    private void resetRepairMetrics() {
+        totalRepairMoves = 0;
+        totalRepairApplied = 0;
+        repairStatsByActionType.clear();
+        for (String actionType : List.of("move", "attack", "harvest", "train", "build")) {
+            repairStatsByActionType.put(actionType, new RepairStats());
+        }
+    }
+
+    private JsonObject buildRepairMetricsJson() {
+        JsonObject root = new JsonObject();
+        JsonObject total = new JsonObject();
+        total.addProperty("moves", totalRepairMoves);
+        total.addProperty("repaired", totalRepairApplied);
+        total.addProperty("repair_rate", repairRate(totalRepairApplied, totalRepairMoves));
+        root.add("total", total);
+
+        JsonObject byActionType = new JsonObject();
+        for (Map.Entry<String, RepairStats> entry : repairStatsByActionType.entrySet()) {
+            RepairStats stats = entry.getValue();
+            JsonObject actionStats = new JsonObject();
+            actionStats.addProperty("total", stats.total);
+            actionStats.addProperty("repaired", stats.repaired);
+            actionStats.addProperty("repair_rate", repairRate(stats.repaired, stats.total));
+            byActionType.add(entry.getKey(), actionStats);
+        }
+        root.add("by_action_type", byActionType);
+        return root;
+    }
+
+    private double repairRate(int repaired, int total) {
+        if (total == 0) {
+            return 0.0;
+        }
+        return (double) repaired / (double) total;
     }
 
     private void applyAutoDefense(int player, GameState gs) {
@@ -1280,6 +1571,27 @@ public class EAGLERepair extends AbstractionLayerAI {
             this.alliedRemoved = alliedRemoved;
             this.changedKeys = changedKeys;
         }
+    }
+
+    private static class RepairResult {
+        final String repairedMove;
+        final boolean repaired;
+        final String reason;
+
+        RepairResult(String repairedMove, boolean repaired, String reason) {
+            this.repairedMove = repairedMove;
+            this.repaired = repaired;
+            this.reason = reason;
+        }
+    }
+
+    private static class RepairStats {
+        int total = 0;
+        int repaired = 0;
+    }
+
+    private interface UnitPredicate {
+        boolean matches(Unit unit);
     }
 
     private static class UnitSnapshot {
