@@ -366,62 +366,76 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
             summary_label = ui.label(state.analysis.summary)
             ui.button("Refresh analysis", on_click=safe_click(refresh_all, label="Refresh analysis")).classes(BUTTON_CLASS)
-        body_text = ui.textarea(value=state.analysis.body).props("readonly").classes(
-            f"{TEXTAREA_CLASS} {height_class(300)} w-full"
-        )
-        ga_chart_container = ui.column().classes("w-full gap-3")
-        mutation_weight_container = ui.column().classes("w-full gap-3")
+        with ui.tabs().classes("w-full") as analysis_tabs:
+            early_end_analysis_tab = ui.tab("Early End Analysis")
+            real_eval_analysis_tab = ui.tab("Real Eval Analysis")
+            final_test_analysis_tab = ui.tab("Final Test Analysis")
 
-        with ui.column().classes("w-full gap-3") as mo_section:
-            ui.label("MO Analysis").classes(SECTION_HEADER_CLASS)
-            with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
-                mo_generate_button = ui.button(
-                    "Generate MO Analysis",
-                    on_click=safe_click(
-                        lambda: refresh_mo_section(force_generate=True),
-                        label="Generate MO Analysis",
-                    ),
-                ).classes(BUTTON_CLASS)
-                generation_select = ui.select([], label="Generation", on_change=on_mo_generation_changed).classes(
-                    f"{INPUT_CLASS} w-64"
-                )
-                x_axis_select = ui.select({}, label="X axis", on_change=on_mo_x_axis_changed).classes(
-                    f"{INPUT_CLASS} w-64"
-                )
-                y_axis_select = ui.select({}, label="Y axis", on_change=on_mo_y_axis_changed).classes(
-                    f"{INPUT_CLASS} w-64"
-                )
-            mo_summary_text = ui.textarea(value=state.analysis.mo_summary).props("readonly").classes(
-                f"{TEXTAREA_CLASS} {height_class(220)} w-full"
-            )
-            animation_container = ui.column().classes("w-full gap-3")
-            static_plot_container = ui.column().classes("w-full gap-3")
+        with ui.tab_panels(analysis_tabs, value=real_eval_analysis_tab).classes("w-full"):
+            with ui.tab_panel(early_end_analysis_tab).classes("w-full"):
+                ui.label("Early End Analysis").classes(SECTION_HEADER_CLASS)
+                ui.label("Early End analysis will be added here.")
 
-        ui.label("Final Test").classes(SECTION_HEADER_CLASS)
-        final_test_text = ui.textarea(value="No final test data found.").props("readonly").classes(
-            f"{TEXTAREA_CLASS} {height_class(170)} w-full"
-        )
+            with ui.tab_panel(real_eval_analysis_tab).classes("w-full"):
+                body_text = ui.textarea(value=state.analysis.body).props("readonly").classes(
+                    f"{TEXTAREA_CLASS} {height_class(300)} w-full"
+                )
+                ga_chart_container = ui.column().classes("w-full gap-3")
+                mutation_weight_container = ui.column().classes("w-full gap-3")
 
-        ui.label("Time Analysis").classes(SECTION_HEADER_CLASS)
-        time_analysis_text = ui.textarea(value="No timing data found.").props("readonly").classes(
-            f"{TEXTAREA_CLASS} {height_class(150)} w-full"
-        )
-        with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
-            timing_summary_label = ui.label(state.analysis.timing_summary)
-            ui.button("Refresh timing", on_click=safe_click(refresh_timing, label="Refresh timing")).classes(BUTTON_CLASS)
-        timing_table = ui.table(
-            columns=[
-                {"name": "phase", "label": "Phase", "field": "phase", "align": "left"},
-                {"name": "count", "label": "Count", "field": "count"},
-                {"name": "total_sec", "label": "Total sec", "field": "total_sec"},
-                {"name": "avg_sec", "label": "Avg sec", "field": "avg_sec"},
-                {"name": "max_sec", "label": "Max sec", "field": "max_sec"},
-            ],
-            rows=[],
-        ).classes(f"{TABLE_CLASS} w-full")
-        timing_text = ui.textarea(value=state.analysis.timing_body).props("readonly").classes(
-            f"{TEXTAREA_CLASS} {height_class(300)} w-full"
-        )
+                with ui.column().classes("w-full gap-3") as mo_section:
+                    ui.label("MO Analysis").classes(SECTION_HEADER_CLASS)
+                    with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
+                        mo_generate_button = ui.button(
+                            "Generate MO Analysis",
+                            on_click=safe_click(
+                                lambda: refresh_mo_section(force_generate=True),
+                                label="Generate MO Analysis",
+                            ),
+                        ).classes(BUTTON_CLASS)
+                        generation_select = ui.select([], label="Generation", on_change=on_mo_generation_changed).classes(
+                            f"{INPUT_CLASS} w-64"
+                        )
+                        x_axis_select = ui.select({}, label="X axis", on_change=on_mo_x_axis_changed).classes(
+                            f"{INPUT_CLASS} w-64"
+                        )
+                        y_axis_select = ui.select({}, label="Y axis", on_change=on_mo_y_axis_changed).classes(
+                            f"{INPUT_CLASS} w-64"
+                        )
+                    mo_summary_text = ui.textarea(value=state.analysis.mo_summary).props("readonly").classes(
+                        f"{TEXTAREA_CLASS} {height_class(220)} w-full"
+                    )
+                    animation_container = ui.column().classes("w-full gap-3")
+                    static_plot_container = ui.column().classes("w-full gap-3")
+
+                ui.label("Time Analysis").classes(SECTION_HEADER_CLASS)
+                time_analysis_text = ui.textarea(value="No timing data found.").props("readonly").classes(
+                    f"{TEXTAREA_CLASS} {height_class(150)} w-full"
+                )
+                with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
+                    timing_summary_label = ui.label(state.analysis.timing_summary)
+                    ui.button("Refresh timing", on_click=safe_click(refresh_timing, label="Refresh timing")).classes(
+                        BUTTON_CLASS
+                    )
+                timing_table = ui.table(
+                    columns=[
+                        {"name": "phase", "label": "Phase", "field": "phase", "align": "left"},
+                        {"name": "count", "label": "Count", "field": "count"},
+                        {"name": "total_sec", "label": "Total sec", "field": "total_sec"},
+                        {"name": "avg_sec", "label": "Avg sec", "field": "avg_sec"},
+                        {"name": "max_sec", "label": "Max sec", "field": "max_sec"},
+                    ],
+                    rows=[],
+                ).classes(f"{TABLE_CLASS} w-full")
+                timing_text = ui.textarea(value=state.analysis.timing_body).props("readonly").classes(
+                    f"{TEXTAREA_CLASS} {height_class(300)} w-full"
+                )
+
+            with ui.tab_panel(final_test_analysis_tab).classes("w-full"):
+                ui.label("Final Test Analysis").classes(SECTION_HEADER_CLASS)
+                final_test_text = ui.textarea(value="No final test data found.").props("readonly").classes(
+                    f"{TEXTAREA_CLASS} {height_class(170)} w-full"
+                )
 
     mo_section.visible = False
     _refresh_mo_options()
