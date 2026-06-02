@@ -26,9 +26,11 @@ from eagle_ui.theme import (
     CARD_CLASS,
     COLORS,
     INPUT_CLASS,
+    PAGE_CLASS,
     ROW_CLASS,
     SECTION_HEADER_CLASS,
     TABLE_CLASS,
+    TAB_CLASS,
     TEXTAREA_CLASS,
     height_class,
 )
@@ -366,17 +368,17 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
             summary_label = ui.label(state.analysis.summary)
             ui.button("Refresh analysis", on_click=safe_click(refresh_all, label="Refresh analysis")).classes(BUTTON_CLASS)
-        with ui.tabs().classes("w-full") as analysis_tabs:
-            early_end_analysis_tab = ui.tab("Early End Analysis")
-            real_eval_analysis_tab = ui.tab("Real Eval Analysis")
-            final_test_analysis_tab = ui.tab("Final Test Analysis")
+        with ui.tabs().classes(f"{CARD_CLASS} w-full") as analysis_tabs:
+            early_end_analysis_tab = ui.tab("Early End Analysis").classes(TAB_CLASS)
+            real_eval_analysis_tab = ui.tab("Real Eval Analysis").classes(TAB_CLASS)
+            final_test_analysis_tab = ui.tab("Final Test Analysis").classes(TAB_CLASS)
 
-        with ui.tab_panels(analysis_tabs, value=real_eval_analysis_tab).classes("w-full"):
-            with ui.tab_panel(early_end_analysis_tab).classes("w-full"):
+        with ui.tab_panels(analysis_tabs, value=real_eval_analysis_tab).classes(f"{PAGE_CLASS} w-full"):
+            with ui.tab_panel(early_end_analysis_tab).classes(f"{PAGE_CLASS} w-full"):
                 ui.label("Early End Analysis").classes(SECTION_HEADER_CLASS)
                 ui.label("Early End analysis will be added here.")
 
-            with ui.tab_panel(real_eval_analysis_tab).classes("w-full"):
+            with ui.tab_panel(real_eval_analysis_tab).classes(f"{PAGE_CLASS} w-full"):
                 body_text = ui.textarea(value=state.analysis.body).props("readonly").classes(
                     f"{TEXTAREA_CLASS} {height_class(300)} w-full"
                 )
@@ -431,7 +433,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
                     f"{TEXTAREA_CLASS} {height_class(300)} w-full"
                 )
 
-            with ui.tab_panel(final_test_analysis_tab).classes("w-full"):
+            with ui.tab_panel(final_test_analysis_tab).classes(f"{PAGE_CLASS} w-full"):
                 ui.label("Final Test Analysis").classes(SECTION_HEADER_CLASS)
                 final_test_text = ui.textarea(value="No final test data found.").props("readonly").classes(
                     f"{TEXTAREA_CLASS} {height_class(170)} w-full"
