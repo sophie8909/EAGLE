@@ -266,18 +266,31 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                 value=state.config.eval_mode,
                 on_change=lambda event: update_evaluator(str(event.value or "gameplay")),
             ).classes(f"{INPUT_CLASS} w-full")
+            config_controls = {
+                "agent_class": ui.select(
+                    services.AGENT_CLASS_CHOICES,
+                    label="LLM agent",
+                    value=state.config.agent_class,
+                    on_change=lambda event: update_config(
+                        "agent_class",
+                        services.normalize_agent_class(str(event.value or "")),
+                    ),
+                ).classes(f"{INPUT_CLASS} w-full"),
+            }
 
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3") as early_end_settings:
             ui.badge("Fitness: Resource Difference").classes("uppercase")
 
         with ui.grid(columns=3).classes("w-full gap-3"):
-            config_controls = {
-                "llm_call_limit": ui.input(
-                    "Eval LLM call limit",
-                    value=state.config.llm_call_limit,
-                    on_change=lambda event: update_config("llm_call_limit", str(event.value or "")),
-                ).classes(f"{INPUT_CLASS} w-full"),
-            }
+            config_controls.update(
+                {
+                    "llm_call_limit": ui.input(
+                        "Eval LLM call limit",
+                        value=state.config.llm_call_limit,
+                        on_change=lambda event: update_config("llm_call_limit", str(event.value or "")),
+                    ).classes(f"{INPUT_CLASS} w-full"),
+                }
+            )
 
         with ui.grid(columns=3).classes("w-full gap-3") as real_eval_settings:
             config_controls.update(
