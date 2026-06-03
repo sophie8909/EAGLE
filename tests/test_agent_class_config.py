@@ -18,6 +18,16 @@ class AgentClassConfigTests(unittest.TestCase):
 
         self.assertEqual(config.agent_class, "ai.eagle.EAGLERepair")
 
+    def test_missing_surrogate_llm_call_limit_defaults_to_ten(self) -> None:
+        config = load_config_payload({})
+
+        self.assertEqual(config.surrogate_llm_call_limit, 10)
+
+    def test_surrogate_llm_call_limit_is_preserved(self) -> None:
+        config = load_config_payload({"surrogate_llm_call_limit": 7})
+
+        self.assertEqual(config.surrogate_llm_call_limit, 7)
+
 
 if __name__ == "__main__":
     unittest.main()

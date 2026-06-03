@@ -273,7 +273,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
         with ui.grid(columns=3).classes("w-full gap-3"):
             config_controls = {
                 "llm_call_limit": ui.input(
-                    "LLM call limit",
+                    "Eval LLM call limit",
                     value=state.config.llm_call_limit,
                     on_change=lambda event: update_config("llm_call_limit", str(event.value or "")),
                 ).classes(f"{INPUT_CLASS} w-full"),
@@ -342,6 +342,14 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                             "Early stop top ratio",
                             value=state.config.surrogate_top_ratio,
                             on_change=lambda event: update_config("surrogate_top_ratio", str(event.value or "")),
+                        ).classes(f"{INPUT_CLASS} w-44"),
+                        "surrogate_llm_call_limit": ui.input(
+                            "Surrogate LLM call limit",
+                            value=state.config.surrogate_llm_call_limit,
+                            on_change=lambda event: update_config(
+                                "surrogate_llm_call_limit",
+                                str(event.value or ""),
+                            ),
                         ).classes(f"{INPUT_CLASS} w-44"),
                         "archive_parent_ratio": ui.input(
                             "Archive parent ratio",

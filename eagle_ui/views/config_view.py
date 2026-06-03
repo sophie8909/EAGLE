@@ -157,7 +157,7 @@ def build_config_view(state: Any) -> dict[str, Any]:
 
         with ui.grid(columns=4).classes(f"{GRID_CLASS} w-full gap-3"):
             controls["config.llm_call_limit"] = _bind_input(
-                "LLM call limit",
+                "Eval LLM call limit",
                 state.config.llm_call_limit,
                 lambda value: setattr(state.config, "llm_call_limit", value),
             )
@@ -194,6 +194,11 @@ def build_config_view(state: Any) -> dict[str, Any]:
                     value=state.config.surrogate,
                     on_change=lambda event: setattr(state.config, "surrogate", str(event.value or "early_end")),
                 ).classes(f"{INPUT_CLASS} w-56")
+                controls["config.surrogate_llm_call_limit"] = _bind_input(
+                    "Surrogate LLM call limit",
+                    state.config.surrogate_llm_call_limit,
+                    lambda value: setattr(state.config, "surrogate_llm_call_limit", value),
+                )
 
         with ui.column().classes("w-full gap-3") as aggressiveness_panel:
             ui.label("Strategic Aggressiveness").classes(SECTION_HEADER_CLASS)
@@ -272,7 +277,8 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows["algorithm"].set_text(state.config.algorithm)
         rows["evaluator"].set_text(_format_eval_mode(state))
         rows["agent"].set_text(services.AGENT_CLASS_CHOICES.get(state.config.agent_class, state.config.agent_class))
-        rows["llm_calls"].set_text(_format_llm_call_limit(state))
+        rows["eval_llm_calls"].set_text(_format_llm_call_limit(state))
+        rows["surrogate_llm_calls"].set_text(state.config.surrogate_llm_call_limit)
         rows["fitness"].set_text(_format_fitness_metric(state))
         rows["archive_parent_ratio"].set_text(state.config.archive_parent_ratio)
         rows["parent_selection"].set_text(state.operators.parent_selection_operator)
@@ -306,7 +312,8 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
                 "algorithm": _summary_row("Algorithm"),
                 "evaluator": _summary_row("Evaluation"),
                 "agent": _summary_row("LLM agent"),
-                "llm_calls": _summary_row("LLM Calls"),
+                "eval_llm_calls": _summary_row("Eval LLM Calls"),
+                "surrogate_llm_calls": _summary_row("Surrogate LLM Calls"),
                 "fitness": _summary_row("Fitness"),
                 "archive_parent_ratio": _summary_row("Archive parent ratio"),
                 "parent_selection": _summary_row("Parent selection"),

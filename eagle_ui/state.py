@@ -10,7 +10,6 @@ from eagle.utils.component_pool import ComponentPool
 
 from . import services
 
-EARLY_END_LLM_CALL_LIMIT = "10"
 EARLY_END_FITNESS_METRIC = "resource_diff_mean"
 
 
@@ -37,6 +36,7 @@ class ConfigState:
     gameplay_map_dir: str = "8x8"
     gameplay_rate: str = "0.25"
     gameplay_refresh_interval: str = "5"
+    surrogate_llm_call_limit: str = "10"
     surrogate_top_ratio: str = "0.3"
     archive_parent_ratio: str = "0.25"
     min_token_length: str = "1"

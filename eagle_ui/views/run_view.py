@@ -136,7 +136,7 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
             with ui.grid(columns=3).classes("w-full gap-3"):
                 eval_mode_value = _status_field("Eval Mode")
                 fitness_value = _status_field("Fitness Metric")
-                llm_call_limit_value = _status_field("LLM Call Limit")
+                llm_call_limit_value = _status_field("Eval LLM Call Limit")
         log_textarea = ui.textarea(value=state.run.log_text).props("readonly").classes(
             f"{TEXTAREA_CLASS} {height_class(log_height)} w-full"
         )

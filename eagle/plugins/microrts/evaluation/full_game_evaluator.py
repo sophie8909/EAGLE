@@ -60,6 +60,9 @@ class FullGameEvaluator(BaseEvaluator):
         )
         self.aggregator = GameplayAggregator()
 
+    def _surrogate_llm_call_limit(self) -> int:
+        return max(1, int(getattr(self.config, "surrogate_llm_call_limit", SURROGATE_LLM_CALL_LIMIT)))
+
     def evaluate(
         self,
         individual: Individual,
@@ -399,7 +402,7 @@ class FullGameEvaluator(BaseEvaluator):
                 evaluation_mode="java_agent",
                 compile_first=False,
                 generation=generation,
-                llm_call_limit=SURROGATE_LLM_CALL_LIMIT,
+                llm_call_limit=self._surrogate_llm_call_limit(),
             )
         if surrogate == "policy_agent":
             return self.run_java_based_agent(
@@ -411,7 +414,7 @@ class FullGameEvaluator(BaseEvaluator):
                 evaluation_mode="policy_agent",
                 compile_first=False,
                 generation=generation,
-                llm_call_limit=SURROGATE_LLM_CALL_LIMIT,
+                llm_call_limit=self._surrogate_llm_call_limit(),
             )
         raise ValueError(
             f"Unsupported surrogate={surrogate!r}. "
@@ -435,7 +438,7 @@ class FullGameEvaluator(BaseEvaluator):
             profile_output_path=None,
             match_score_recorder=None,
             allow_history_reuse=False,
-            llm_call_limit=SURROGATE_LLM_CALL_LIMIT,
+            llm_call_limit=self._surrogate_llm_call_limit(),
         )
 
     def _evaluate_agent_opponents(

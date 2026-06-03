@@ -135,6 +135,7 @@ class EAConfig:
     llm_base_url: str = field(default_factory=lambda: str(_default_config_value("llm_base_url")))
     gameplay_rate: float = field(default_factory=lambda: float(_default_config_value("gameplay_rate")))
     gameplay_refresh_interval: int = field(default_factory=lambda: int(_default_config_value("gameplay_refresh_interval")))
+    surrogate_llm_call_limit: int = field(default_factory=lambda: int(_default_config_value("surrogate_llm_call_limit")))
     surrogate_top_ratio: float = field(default_factory=lambda: float(_default_config_value("surrogate_top_ratio")))
     archive_parent_ratio: float = field(default_factory=lambda: float(_default_config_value("archive_parent_ratio")))
     min_token_length: int = field(default_factory=lambda: int(_default_config_value("min_token_length")))
@@ -374,6 +375,7 @@ class EAConfig:
         if not self.llm_model:
             raise ValueError("llm_model must be a non-empty model name.")
         self.llm_base_url = self._normalize_llm_base_url(self.llm_base_url)
+        self.surrogate_llm_call_limit = max(1, int(self.surrogate_llm_call_limit))
         self.min_token_length = max(1, int(self.min_token_length))
         self.llm_interval = self._normalized_llm_interval_input(self.llm_interval)
         self.use_few_shot_examples = bool(self.use_few_shot_examples)
@@ -427,6 +429,7 @@ class EAConfig:
             "gameplay_opponents": list(self.gameplay_opponents),
             "gameplay_map_dir": self.gameplay_map_dir,
             "gameplay_refresh_interval": self.gameplay_refresh_interval,
+            "surrogate_llm_call_limit": self.surrogate_llm_call_limit,
             "surrogate_top_ratio": self.surrogate_top_ratio,
             "archive_parent_ratio": self.archive_parent_ratio,
         }
@@ -451,6 +454,7 @@ class EAConfig:
         return {
             "surrogate": self.surrogate,
             "gameplay_refresh_interval": self.gameplay_refresh_interval,
+            "surrogate_llm_call_limit": self.surrogate_llm_call_limit,
             "surrogate_top_ratio": self.surrogate_top_ratio,
             "archive_parent_ratio": self.archive_parent_ratio,
             "surrogate_recent_match_window": self.surrogate_recent_match_window,

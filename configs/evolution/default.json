@@ -73,6 +73,7 @@
   "llm_base_url": "http://127.0.0.1:8080/v1",
   "gameplay_rate": 0.25,
   "gameplay_refresh_interval": 5,
+  "surrogate_llm_call_limit": 10,
   "surrogate_top_ratio": 0.3,
   "archive_parent_ratio": 0.25,
   "min_token_length": 1,
