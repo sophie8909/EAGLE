@@ -10,7 +10,7 @@ from nicegui import ui
 
 from eagle_ui import services
 from eagle_ui.components.selectors import create_run_selector
-from eagle_ui.state import EARLY_END_FITNESS_METRIC, EARLY_END_LLM_CALL_LIMIT
+from eagle_ui.state import EARLY_END_FITNESS_METRIC
 from eagle_ui.theme import (
     BADGE_CLASS,
     BUTTON_CLASS,
@@ -90,9 +90,7 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         eval_mode = services.normalize_eval_mode(state.config.eval_mode)
         eval_mode_value.set_text(services.EVALUATION_MODE_CHOICES.get(eval_mode, eval_mode))
         fitness_value.set_text(EARLY_END_FITNESS_METRIC if eval_mode == "early_end" else state.config.fitness_metric)
-        llm_call_limit_value.set_text(
-            EARLY_END_LLM_CALL_LIMIT if eval_mode == "early_end" else state.config.llm_call_limit
-        )
+        llm_call_limit_value.set_text(state.config.llm_call_limit)
         early_end_badge.visible = eval_mode == "early_end"
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):

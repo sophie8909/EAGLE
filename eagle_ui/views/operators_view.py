@@ -9,7 +9,6 @@ from typing import Any
 from nicegui import ui
 
 from eagle_ui import services
-from eagle_ui.state import EARLY_END_LLM_CALL_LIMIT
 from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
@@ -210,6 +209,8 @@ def build_operators_view(state: Any) -> dict[str, Any]:
     def update_evaluator(value: str) -> None:
         state.config.eval_mode = services.normalize_eval_mode(value)
         state.config.evaluator = "gameplay"
+        if state.config.eval_mode == "early_end":
+            state.config.llm_call_limit = "10"
         refresh()
         refresh_config_summary(state)
 
@@ -267,29 +268,34 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             ).classes(f"{INPUT_CLASS} w-full")
 
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3") as early_end_settings:
-            ui.badge(f"LLM Calls: {EARLY_END_LLM_CALL_LIMIT}").classes("uppercase")
             ui.badge("Fitness: Resource Difference").classes("uppercase")
 
-        with ui.grid(columns=3).classes("w-full gap-3") as real_eval_settings:
+        with ui.grid(columns=3).classes("w-full gap-3"):
             config_controls = {
                 "llm_call_limit": ui.input(
                     "LLM call limit",
                     value=state.config.llm_call_limit,
                     on_change=lambda event: update_config("llm_call_limit", str(event.value or "")),
                 ).classes(f"{INPUT_CLASS} w-full"),
-                "fitness_metric": ui.select(
-                    _fitness_metric_options(state.config.fitness_metric),
-                    label="Fitness metric",
-                    value=state.config.fitness_metric,
-                    on_change=lambda event: update_config("fitness_metric", str(event.value or "win_score")),
-                ).classes(f"{INPUT_CLASS} w-full"),
-                "gameplay_map_dir": ui.select(
-                    _options_with_value(services.microrts_map_dir_choices(), state.config.gameplay_map_dir),
-                    label="Eval map folder",
-                    value=state.config.gameplay_map_dir,
-                    on_change=lambda event: update_config("gameplay_map_dir", str(event.value or "8x8")),
-                ).classes(f"{INPUT_CLASS} w-full"),
             }
+
+        with ui.grid(columns=3).classes("w-full gap-3") as real_eval_settings:
+            config_controls.update(
+                {
+                    "fitness_metric": ui.select(
+                        _fitness_metric_options(state.config.fitness_metric),
+                        label="Fitness metric",
+                        value=state.config.fitness_metric,
+                        on_change=lambda event: update_config("fitness_metric", str(event.value or "win_score")),
+                    ).classes(f"{INPUT_CLASS} w-full"),
+                    "gameplay_map_dir": ui.select(
+                        _options_with_value(services.microrts_map_dir_choices(), state.config.gameplay_map_dir),
+                        label="Eval map folder",
+                        value=state.config.gameplay_map_dir,
+                        on_change=lambda event: update_config("gameplay_map_dir", str(event.value or "8x8")),
+                    ).classes(f"{INPUT_CLASS} w-full"),
+                }
+            )
 
         ui.separator().classes("opacity-20")
 

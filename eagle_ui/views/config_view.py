@@ -10,7 +10,7 @@ from nicegui import ui
 
 from eagle_ui import services
 from eagle_ui.components.selects import create_key_select
-from eagle_ui.state import EARLY_END_FITNESS_METRIC, EARLY_END_LLM_CALL_LIMIT
+from eagle_ui.state import EARLY_END_FITNESS_METRIC
 from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
@@ -153,15 +153,16 @@ def build_config_view(state: Any) -> dict[str, Any]:
             ).classes(f"{INPUT_CLASS} w-56")
 
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3") as early_end_settings:
-            ui.badge(f"LLM Calls: {EARLY_END_LLM_CALL_LIMIT}").classes("uppercase")
             ui.badge("Fitness: Resource Difference").classes("uppercase")
 
-        with ui.grid(columns=4).classes(f"{GRID_CLASS} w-full gap-3") as real_eval_settings:
+        with ui.grid(columns=4).classes(f"{GRID_CLASS} w-full gap-3"):
             controls["config.llm_call_limit"] = _bind_input(
                 "LLM call limit",
                 state.config.llm_call_limit,
                 lambda value: setattr(state.config, "llm_call_limit", value),
             )
+
+        with ui.grid(columns=4).classes(f"{GRID_CLASS} w-full gap-3") as real_eval_settings:
             controls["config.fitness_metric"] = create_key_select(
                 "Fitness metric",
                 _fitness_metric_options(),
@@ -379,8 +380,6 @@ def _format_eval_mode(state: Any) -> str:
 
 
 def _format_llm_call_limit(state: Any) -> str:
-    if state.config.eval_mode == "early_end":
-        return EARLY_END_LLM_CALL_LIMIT
     return state.config.llm_call_limit
 
 
@@ -392,6 +391,8 @@ def _format_fitness_metric(state: Any) -> str:
 
 def _set_eval_mode(state: Any, value: str) -> None:
     state.config.eval_mode = services.normalize_eval_mode(value)
+    if state.config.eval_mode == "early_end":
+        state.config.llm_call_limit = "10"
     refresh_config_summary(state)
 
 

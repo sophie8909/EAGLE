@@ -453,7 +453,6 @@ def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path)
     ):
         setattr(cfg, field_name, str(payload.get(field_name, getattr(cfg, field_name))))
     if cfg.eval_mode == "early_end":
-        cfg.llm_call_limit = "10"
         cfg.fitness_metric = "resource_diff_mean"
     cfg.aggressiveness_objective_enabled = bool(payload.get("aggressiveness_objective_enabled", False))
     cfg.opponents_text = ", ".join(parse_target_list(payload.get("gameplay_opponents", []))) or cfg.opponents_text
@@ -710,7 +709,7 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
     sync_algorithm_operator_defaults(state)
     payload = load_config_payload(Path(cfg.base_config_path))
     eval_mode = normalize_eval_mode(cfg.eval_mode)
-    llm_call_limit = 10 if eval_mode == "early_end" else parse_int(cfg.llm_call_limit, "llm_call_limit")
+    llm_call_limit = parse_int(cfg.llm_call_limit, "llm_call_limit")
     fitness_metric = "resource_diff_mean" if eval_mode == "early_end" else str(cfg.fitness_metric or "default")
     if eval_mode == "early_end":
         objective_config = (
@@ -1158,19 +1157,10 @@ def stop_experiment(state: Any | None = None) -> str:
 
 
 def shutdown_runtime(state: Any) -> str:
-    """Stop web-GUI-managed runtime work and leave the GUI process alive."""
-    state.is_stopping = True
+    """Stop GUI-only runtime helpers without terminating running experiments."""
     _cancel_tasks(state)
     _deactivate_timers(state)
-    pid = monitored_pid()
-    if pid is not None and process_service.process_is_running(pid):
-        process_service.mark_process_state(GUI_PROCESS_STATE_PATH, status="stopping")
-        terminate_pid_tree(pid)
-    stop_microrts_gui(wait=True)
-    _terminate_active_processes(state)
-    _reset_runtime_state(state, clear_logs=True)
-    state.is_stopping = False
-    return "Shutdown complete"
+    return "GUI runtime shutdown complete"
 
 
 def shutdown_app(state: Any, app_object: Any) -> str:
