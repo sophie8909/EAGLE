@@ -27,6 +27,13 @@ python -m eagle.main --config configs/evolution/default.json
 
 Start a llama.cpp OpenAI-compatible server before using LLM-backed mutation, crossover repair, reflection, round-surrogate scoring, or Java gameplay LLM calls.
 
+For the Llama 3.2 3B COT llama.cpp server:
+
+```bash
+./scripts/run_llama_3b.sh
+LLAMA_PORT=8080 ./scripts/run_llama_3b.sh
+```
+
 ## Run An Experiment
 
 Experiment configuration is loaded through `eagle.experiment.config.ExperimentConfig`. JSON files may use the current flat `EAConfig` shape or the canonical envelope:
