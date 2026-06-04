@@ -131,7 +131,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
         await asyncio.to_thread(services.shutdown_runtime, state)
         services.shutdown_app(state, nicegui_app)
 
-    async def refresh_current_page() -> None:
+    async def full_refresh_current_page() -> None:
         """Refresh only the currently visible page to keep UI actions responsive."""
         page = state.runtime.current_page
         LOGGER.info("manual refresh start page=%s", page)
@@ -142,9 +142,9 @@ def build_layout() -> dict[str, dict[str, Any]]:
                     result = refresh()
                     if asyncio.iscoroutine(result):
                         await result
-            await controls["run"]["refresh_log"]()
+            await controls["run"]["full_refresh"]()
         elif page == "run":
-            await controls["run"]["refresh_log"]()
+            await controls["run"]["full_refresh"]()
         elif page == "final_test":
             await controls["final_test"]["refresh_all"]()
         elif page == "analysis":
@@ -171,7 +171,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
                 ui.label("Eagle").classes(title_class("text-h5"))
                 ui.label("EA for Gameplay LLM-agEnt").classes(SUBTITLE_CLASS)
         with ui.row().classes("items-center gap-2"):
-            ui.button("Refresh", on_click=safe_click(refresh_current_page, label="Refresh current page")).classes(
+            ui.button("Full Refresh", on_click=safe_click(full_refresh_current_page, label="Full refresh")).classes(
                 button_class(success=True)
             )
             ui.button("Stop Experiment", on_click=safe_click(stop_experiment, label="Stop Experiment")).classes(
@@ -190,8 +190,8 @@ def build_layout() -> dict[str, dict[str, Any]]:
 
     with ui.tab_panels(tabs, value=experiment_tab).classes(f"{PAGE_CLASS} w-full"):
         with ui.tab_panel(experiment_tab):
-            with ui.row().classes("w-full gap-4 items-start no-wrap"):
-                with ui.column().classes("w-[60%] gap-3"):
+            with ui.row().classes("w-full gap-4 items-start flex-wrap xl:flex-nowrap"):
+                with ui.column().classes("w-full xl:flex-[3_1_0] min-w-[0] gap-3"):
                     with ui.tabs().classes(f"{CARD_CLASS} w-full") as experiment_tabs:
                         components_tab = ui.tab("Components").classes(TAB_CLASS)
                         examples_tab = ui.tab("Examples").classes(TAB_CLASS)
@@ -205,10 +205,11 @@ def build_layout() -> dict[str, dict[str, Any]]:
                             controls["examples"] = build_examples_view(state)
                         with ui.tab_panel(operators_tab):
                             controls["operators"] = build_operators_view(state)
+                            state.runtime.operators_refresh = controls["operators"].get("refresh")
                         with ui.tab_panel(objectives_tab):
                             controls["objectives"] = build_objectives_view(state)
                             state.runtime.objectives_refresh = controls["objectives"].get("refresh")
-                with ui.column().classes("w-[40%] gap-3"):
+                with ui.column().classes("w-full xl:flex-[2_1_420px] min-w-[360px] gap-3"):
                     controls["run"] = build_run_view(state, log_height=300)
                     controls["config_summary"] = build_config_summary_view(state)
         with ui.tab_panel(final_test_tab):

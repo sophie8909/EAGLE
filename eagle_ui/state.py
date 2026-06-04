@@ -222,6 +222,7 @@ class RuntimeState:
     connected_client_count: int = 0
     current_page: str = "experiment"
     config_summary_refresh: Any | None = None
+    operators_refresh: Any | None = None
     analysis_runs_refresh: Any | None = None
     last_heartbeat_monotonic: float | None = None
     last_heartbeat_timestamp: str = ""
