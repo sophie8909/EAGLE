@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from eagle.core.config import algorithm_objective_mode, plugin_names
+from eagle.core.config import algorithm_default_config, algorithm_objective_mode, is_surrogate_algorithm, plugin_names
 
 from .project import DEFAULT_EVOLUTION_CONFIG_PATH, PROJECT_ROOT
 
@@ -102,6 +102,7 @@ class EAConfig:
         default_factory=lambda: dict(_default_config_value("example_mutation_source_probs"))
     )
     mutation_operator: str = "mix"
+    reflection_operator: str = "round_reflection"
     selection_method: str = field(default_factory=lambda: str(_default_config_value("selection_method")))
     parent_selection_operator: str = ""
     tournament_size: int = field(default_factory=lambda: int(_default_config_value("tournament_size")))
@@ -225,16 +226,17 @@ class EAConfig:
         if self.eval_mode not in {"full_game", "early_end", "java_surrogate", "round"}:
             raise ValueError("eval_mode must be 'full_game', 'early_end', 'java_surrogate', or 'round'.")
         normalized_surrogate = str(self.surrogate).strip().lower().replace("-", "_").replace(" ", "_")
-        if normalized_surrogate not in {"early_end", "round", "policy_agent", "java_agent"}:
-            raise ValueError(
-                f"Unsupported surrogate backend: {self.surrogate!r}. "
-                "Use 'early_end', 'round', 'policy_agent', or 'java_agent'."
-            )
+        surrogate_names = set(plugin_names("surrogate", application=self.application))
+        if normalized_surrogate not in surrogate_names:
+            raise ValueError(f"surrogate must be one of: {', '.join(sorted(surrogate_names))}.")
         self.surrogate = normalized_surrogate
         algorithm_name = str(self.algorithm or "").strip().lower()
         algorithm_names = set(plugin_names("algorithm", application=self.application))
         if algorithm_name not in algorithm_names:
             raise ValueError(f"algorithm must be one of: {', '.join(sorted(algorithm_names))}.")
+        if self.surrogate == "none" and is_surrogate_algorithm(algorithm_name, application=self.application):
+            defaults = algorithm_default_config(algorithm_name, application=self.application)
+            self.surrogate = str(defaults.get("surrogate", "early_end"))
         objective_mode_support = algorithm_objective_mode(algorithm_name, application=self.application)
         single_objective_algorithm = objective_mode_support == "SO"
         multi_objective_algorithm = objective_mode_support == "MO"
@@ -245,6 +247,31 @@ class EAConfig:
         self.env_selection_operator = self._normalized_env_selection_operator(
             self.env_selection_operator,
             single_objective_algorithm,
+        )
+        self.parent_selection_operator = self._normalized_registered_operator(
+            self.parent_selection_operator,
+            "parent_selection",
+            "ga_fitness_tournament" if single_objective_algorithm else "nsga2_tournament",
+        )
+        self.env_selection_operator = self._normalized_registered_operator(
+            self.env_selection_operator,
+            "env_selection",
+            "ga_fitness_elitism" if single_objective_algorithm else "nsga2_environmental",
+        )
+        self.crossover_operator = self._normalized_registered_operator(
+            self.crossover_operator,
+            "crossover",
+            "uniform",
+        )
+        self.mutation_operator = self._normalized_registered_operator(
+            self.mutation_operator,
+            "mutation",
+            "mix",
+        )
+        self.reflection_operator = self._normalized_registered_operator(
+            self.reflection_operator,
+            "reflection",
+            "round_reflection",
         )
         from eagle.objectives.registry import validate_objective_config
 
@@ -413,6 +440,7 @@ class EAConfig:
             "strategy_mutation": dict(self.strategy_mutation),
             "mutation_selection_mode": self.mutation_selection_mode,
             "mutation_operator": self.mutation_operator,
+            "reflection_operator": self.reflection_operator,
             "selection_method": self.selection_method,
             "parent_selection_operator": self.parent_selection_operator,
             "tournament_size": self.tournament_size,
@@ -619,6 +647,19 @@ class EAConfig:
             return "ga_fitness_elitism"
         if not single_objective and operator in {"", "ga_fitness_elitism", "elitism"}:
             return "nsga2_environmental"
+        return operator
+
+    @staticmethod
+    def _normalized_registered_operator(raw_operator: str | None, operator_type: str, default: str) -> str:
+        """Return a selected operator after validating it against the operator registry."""
+        from eagle.operators.registry import list_operator_names
+
+        operator = str(raw_operator or default).strip().lower().replace("-", "_").replace(" ", "_")
+        choices = set(list_operator_names(operator_type))
+        if operator not in choices:
+            raise ValueError(
+                f"{operator_type}_operator must be one of: {', '.join(sorted(choices))}."
+            )
         return operator
 
 

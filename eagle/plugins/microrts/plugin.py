@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from eagle.core.config import is_surrogate_algorithm
 from eagle.core.plugin import BaseTaskPlugin, ObjectiveValues, ParsedOutput
 from eagle.core.result import EvaluationResult, ensure_evaluation_result
 from eagle.plugins.microrts.evaluation.full_game_evaluator import FullGameEvaluator
@@ -89,7 +90,7 @@ class MicroRTSPlugin(BaseTaskPlugin):
             return RoundEvaluator(active_pool, active_config, runtime_logs_dir=active_logs_dir)
         if mode in {"", "gameplay", "surrogate", "final_test"}:
             return FullGameEvaluator(active_pool, active_config, runtime_logs_dir=active_logs_dir)
-        if algorithm.endswith("_surrogate"):
+        if is_surrogate_algorithm(algorithm, application=getattr(active_config, "application", "microrts")):
             return FullGameEvaluator(active_pool, active_config, runtime_logs_dir=active_logs_dir)
         raise ValueError(f"Unsupported MicroRTS evaluator mode: {mode!r}.")
 

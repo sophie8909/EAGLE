@@ -307,6 +307,7 @@ class EA:
 
     evaluator_factory: ClassVar[Any | None] = None
     reflection_operator: ClassVar[Any | None] = None
+    default_reflection_operator_name: ClassVar[str] = "round_reflection"
     default_mutation_operator_name: ClassVar[str] = "mix"
     default_crossover_operator_name: ClassVar[str] = "uniform"
     default_parent_selection_operator_name: ClassVar[str | None] = None
@@ -349,6 +350,10 @@ class EA:
         self.crossover_operator = get_operator(
             "crossover",
             self._operator_name("crossover", self.default_crossover_operator_name),
+        )
+        self.reflection_operator = get_operator(
+            "reflection",
+            self._operator_name("reflection", self.default_reflection_operator_name),
         )
         self.parent_selection_operator = get_operator(
             "parent_selection",
@@ -1338,11 +1343,10 @@ class EA:
             raise ValueError(
                 "No reflection operator configured for this component evolution algorithm."
             )
-        return self.reflection_operator.reflect_individual(
-            individual,
-            self.component_pool,
-            self.config,
-        )
+        reflect = getattr(self.reflection_operator, "reflect_individual", None)
+        if callable(reflect):
+            return reflect(individual, self.component_pool, self.config)
+        return self.reflection_operator(individual, self.component_pool, self.config)
 
     def build_evaluator(self, config_override: EAConfig | None = None) -> Any:
         """Create the evaluator supplied by the application layer."""

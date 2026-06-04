@@ -54,9 +54,8 @@ AGENT_CLASS_CHOICES = {
     "ai.eagle.EAGLE": "EAGLE",
     "ai.eagle.EAGLERepair": "EAGLERepair",
 }
-SURROGATE_CHOICES = tuple(
-    name for name in framework_config.plugin_names("surrogate", application="microrts") if name != "none"
-)
+SURROGATE_CHOICES = framework_config.plugin_names("surrogate", application="microrts")
+SURROGATE_MODE_CHOICES = framework_config.plugin_choices("surrogate", application="microrts")
 AGGRESSIVENESS_MODE_CHOICES = ("component_only", "llm_only", "hybrid")
 MUTATION_SELECTION_MODE_CHOICES = {
     "fixed": "Fixed",
@@ -526,6 +525,7 @@ def apply_operator_config(state: Any, payload: dict[str, Any]) -> None:
     )
     operators.crossover_operator = str(payload.get("crossover_operator", operators.crossover_operator))
     operators.mutation_operator = str(payload.get("mutation_operator", operators.mutation_operator))
+    operators.reflection_operator = str(payload.get("reflection_operator", operators.reflection_operator))
     operators.mutation_selection_mode = normalize_mutation_selection_mode(
         payload.get("mutation_selection_mode", operators.mutation_selection_mode)
     )
@@ -774,6 +774,7 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
             "crossover": state.operators.crossover_operator,
             "crossover_operator": state.operators.crossover_operator,
             "mutation_operator": state.operators.mutation_operator,
+            "reflection_operator": state.operators.reflection_operator,
             "mutation_selection_mode": normalize_mutation_selection_mode(
                 state.operators.mutation_selection_mode
             ),
@@ -888,6 +889,11 @@ def sync_algorithm_operator_defaults(state: Any) -> None:
     )
     state.operators.crossover_operator = ensure_operator_choice(state.operators.crossover_operator, "crossover", "uniform")
     state.operators.mutation_operator = ensure_operator_choice(state.operators.mutation_operator, "mutation", "mix")
+    state.operators.reflection_operator = ensure_operator_choice(
+        state.operators.reflection_operator,
+        "reflection",
+        "round_reflection",
+    )
 
 
 def sync_algorithm_objective_mode(state: Any) -> None:
@@ -901,16 +907,37 @@ def sync_algorithm_objective_mode(state: Any) -> None:
     _coerce_objective_state(state, desired_mode)
 
 
+def sync_surrogate_mode(state: Any) -> None:
+    """Keep surrogate mode separate from the selected evaluation mode."""
+    if not is_surrogate_algorithm(state.config.algorithm):
+        state.config.surrogate = "none"
+        return
+    if state.config.surrogate in {"", "none"} or state.config.surrogate not in SURROGATE_CHOICES:
+        defaults = framework_config.algorithm_default_config(
+            state.config.algorithm,
+            application=state.config.application,
+        )
+        state.config.surrogate = str(defaults.get("surrogate", "early_end"))
+
+
 def sync_algorithm_defaults(state: Any) -> None:
     """Keep all algorithm-derived GUI state in sync."""
     sync_algorithm_operator_defaults(state)
     sync_algorithm_objective_mode(state)
+    sync_surrogate_mode(state)
 
 
 def algorithm_objective_mode(state: Any) -> str:
     """Return SO, MO, or both for the active algorithm."""
     algorithm = state.config.algorithm if state.config.algorithm in ALGORITHM_CHOICES else "nsga2"
     return framework_config.algorithm_objective_mode(algorithm, application=state.config.application)
+
+
+def surrogate_choices_for_state(state: Any) -> dict[str, str]:
+    """Return valid surrogate choices for the current algorithm."""
+    if is_surrogate_algorithm(state.config.algorithm):
+        return {key: value for key, value in SURROGATE_MODE_CHOICES.items() if key != "none"}
+    return {"none": SURROGATE_MODE_CHOICES.get("none", "None")}
 
 
 def _coerce_objective_state(state: Any, desired_mode: str) -> None:

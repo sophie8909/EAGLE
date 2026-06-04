@@ -93,6 +93,35 @@ class GuiObjectiveDisplayTests(unittest.TestCase):
 
         self.assertEqual(config.objective_config, {"mode": "single", "objective": "resource_advantage"})
 
+    def test_reflection_operator_comes_from_registry_payload(self) -> None:
+        state = AppState()
+        state.config.algorithm = "nsga2"
+        state.config.component_pool_path = "eagle/prompts/components.json"
+        state.operators.reflection_operator = "round_reflection"
+
+        payload = services.build_config_payload(state)
+
+        self.assertIn("round_reflection", services.operator_choices("reflection"))
+        self.assertEqual(payload["reflection_operator"], "round_reflection")
+
+    def test_surrogate_mode_is_none_for_non_surrogate_algorithm(self) -> None:
+        state = AppState()
+        state.config.algorithm = "ga"
+        state.config.surrogate = "early_end"
+
+        services.sync_algorithm_defaults(state)
+
+        self.assertEqual(state.config.surrogate, "none")
+
+    def test_surrogate_algorithm_uses_plugin_default_surrogate(self) -> None:
+        state = AppState()
+        state.config.algorithm = "ga_surrogate"
+        state.config.surrogate = "none"
+
+        services.sync_algorithm_defaults(state)
+
+        self.assertEqual(state.config.surrogate, "early_end")
+
 
 if __name__ == "__main__":
     unittest.main()

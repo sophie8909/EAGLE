@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .config import EAConfig, load_config_from_json, resolve_component_pool_path
+from .core.config import is_surrogate_algorithm
 from .experiment.config import ExperimentConfig, load_experiment_config
 from .experiment.runner import build_algorithm
 from .project import DEFAULT_EVOLUTION_CONFIG_PATH, EAGLE_LOGS_DIR, PROMPTS_DIR
@@ -20,7 +21,6 @@ OPPONENT_LIST = [
     # "ai.abstraction.WorkerRush",
 ]
 DEFAULT_EA_QUICK_RUN_OPPONENT = "ai.PassiveAI"
-SURROGATE_ALGORITHMS = {"ga_surrogate", "nsga2_surrogate"}
 
 
 def _find_latest_log_dir() -> str | None:
@@ -82,7 +82,7 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     if args.evaluator:
         config.evaluator = args.evaluator
 
-    if args.surrogate and str(config.algorithm).strip().lower() in SURROGATE_ALGORITHMS:
+    if args.surrogate and is_surrogate_algorithm(config.algorithm, application=config.application):
         config.surrogate = args.surrogate
 
     if args.tick_limit is not None:
@@ -99,7 +99,7 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     print(
         "[DEBUG] runtime_config "
         f"algorithm={config.algorithm} evaluator={config.evaluator} "
-        f"surrogate={config.surrogate if config.algorithm in SURROGATE_ALGORITHMS else '(ignored)'} "
+        f"surrogate={config.surrogate if is_surrogate_algorithm(config.algorithm, application=config.application) else '(ignored)'} "
         f"objective_config={config.objective_config} "
         f"population={config.population_size} generations={config.num_generations} "
         f"gameplay_refresh_interval={config.gameplay_refresh_interval} "
@@ -231,7 +231,7 @@ def main() -> None:
     if args.evaluator:
         experiment_config.evaluator = args.evaluator
         config.evaluator = args.evaluator
-    if args.surrogate and config.algorithm in SURROGATE_ALGORITHMS:
+    if args.surrogate and is_surrogate_algorithm(config.algorithm, application=config.application):
         experiment_config.evaluator = config.evaluator
 
     print(
