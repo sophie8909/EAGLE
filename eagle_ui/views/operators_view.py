@@ -140,7 +140,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             ).props("use-input clearable new-value-mode=add-unique")
 
     def refresh() -> None:
-        services.sync_algorithm_operator_defaults(state)
+        services.sync_algorithm_defaults(state)
         _set_select_options(base_config_select, config_path_options(), state.config.base_config_path or "")
         base_config_select.update()
         generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
@@ -202,9 +202,12 @@ def build_operators_view(state: Any) -> dict[str, Any]:
 
     def update_algorithm(value: str) -> None:
         state.config.algorithm = value
-        services.sync_algorithm_operator_defaults(state)
+        services.sync_algorithm_defaults(state)
         refresh()
         refresh_config_summary(state)
+        objectives_refresh = getattr(state.runtime, "objectives_refresh", None)
+        if callable(objectives_refresh):
+            objectives_refresh()
 
     def update_evaluator(value: str) -> None:
         state.config.eval_mode = services.normalize_eval_mode(value)

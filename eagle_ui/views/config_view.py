@@ -410,5 +410,8 @@ def _set_agent_class(state: Any, value: str) -> None:
 
 def _set_algorithm(state: Any, value: str) -> None:
     state.config.algorithm = value
-    services.sync_algorithm_operator_defaults(state)
+    services.sync_algorithm_defaults(state)
     refresh_config_summary(state)
+    refresh = getattr(state.runtime, "objectives_refresh", None)
+    if callable(refresh):
+        refresh()

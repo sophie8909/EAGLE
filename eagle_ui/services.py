@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from eagle.core import config as framework_config
 from eagle.config import DEFAULT_AGENT_CLASS, normalize_algorithm_name
 from eagle.envs.microrts.runner import save_prompt as save_microrts_prompt
 from eagle.envs.microrts.runner import set_config_property
@@ -42,36 +43,30 @@ LOG_TAIL_LIMIT = 18_000
 ANALYSIS_SUBPROCESS_TIMEOUT_SEC = 600
 
 APPLICATION_CHOICES = ("microrts",)
-ALGORITHM_CHOICES = ("ga", "nsga2", "ga_surrogate", "nsga2_surrogate")
+ALGORITHM_CHOICES = framework_config.plugin_names("algorithm", application="microrts")
 EVALUATOR_CHOICES = ("gameplay",)
-EVALUATION_MODE_CHOICES = {
-    "gameplay": "Real Eval",
-    "early_end": "Early End",
-}
+EVALUATION_MODE_CHOICES = framework_config.plugin_choices(
+    "evaluation_mode",
+    application="microrts",
+    include_runtime_only=False,
+)
 AGENT_CLASS_CHOICES = {
     "ai.eagle.EAGLE": "EAGLE",
     "ai.eagle.EAGLERepair": "EAGLERepair",
 }
-SURROGATE_CHOICES = ("early_end", "round", "policy_agent", "java_agent")
+SURROGATE_CHOICES = tuple(
+    name for name in framework_config.plugin_names("surrogate", application="microrts") if name != "none"
+)
 AGGRESSIVENESS_MODE_CHOICES = ("component_only", "llm_only", "hybrid")
 MUTATION_SELECTION_MODE_CHOICES = {
     "fixed": "Fixed",
     "aos": "AOS (Adaptive Operator Selection)",
 }
-GA_ALGORITHMS = {"ga", "ga_surrogate"}
-MO_ALGORITHMS = {"nsga2", "nsga2_surrogate"}
-SURROGATE_ALGORITHMS = {"ga_surrogate", "nsga2_surrogate"}
-PARENT_SELECTION_BY_ALGORITHM = {
-    "ga": "ga_fitness_tournament",
-    "ga_surrogate": "ga_fitness_tournament",
-    "nsga2": "nsga2_tournament",
-    "nsga2_surrogate": "nsga2_tournament",
-}
-ENV_SELECTION_BY_ALGORITHM = {
-    "ga": "ga_fitness_elitism",
-    "ga_surrogate": "ga_fitness_elitism",
-    "nsga2": "nsga2_environmental",
-    "nsga2_surrogate": "nsga2_environmental",
+ALGORITHM_SPECS = framework_config.plugin_specs("algorithm", application="microrts")
+GA_ALGORITHMS = {spec.id for spec in ALGORITHM_SPECS if spec.mode == "SO"}
+MO_ALGORITHMS = {spec.id for spec in ALGORITHM_SPECS if spec.mode == "MO"}
+SURROGATE_ALGORITHMS = {
+    spec.id for spec in ALGORITHM_SPECS if "surrogate" in spec.default_config
 }
 MICRORTS_OPPONENT_CHOICES = (
     "ai.abstraction.HeavyRush",
@@ -88,7 +83,10 @@ LOGGER = logging.getLogger(__name__)
 
 def is_surrogate_algorithm(algorithm: str) -> bool:
     """Return whether an algorithm name uses a surrogate flow."""
-    return "surrogate" in str(algorithm or "").lower()
+    try:
+        return framework_config.is_surrogate_algorithm(algorithm, application="microrts")
+    except KeyError:
+        return False
 
 
 def normalize_eval_mode(value: Any) -> str:
@@ -544,7 +542,7 @@ def apply_operator_config(state: Any, payload: dict[str, Any]) -> None:
         operators.example_mutation_source_weights[str(key)] = str(value)
     for key, value in dict(payload.get("strategy_mutation") or {}).items():
         operators.mutation_weights[str(key)] = str(value)
-    sync_algorithm_operator_defaults(state)
+    sync_algorithm_defaults(state)
 
 
 def load_component_json(path: Path) -> dict[str, Any]:
@@ -707,7 +705,7 @@ def save_generated_config(state: Any) -> Path:
 def build_config_payload(state: Any, component_path_override: str | None = None) -> dict[str, Any]:
     """Build one EAGLE config payload without changing its schema."""
     cfg = state.config
-    sync_algorithm_operator_defaults(state)
+    sync_algorithm_defaults(state)
     payload = load_config_payload(Path(cfg.base_config_path))
     eval_mode = normalize_eval_mode(cfg.eval_mode)
     llm_call_limit = parse_int(cfg.llm_call_limit, "llm_call_limit")
@@ -839,6 +837,7 @@ def objective_rows(state: Any) -> list[dict[str, str]]:
 
 def build_objective_config(state: Any) -> dict[str, Any]:
     """Build objective_config for GA and multi-objective algorithms."""
+    sync_algorithm_objective_mode(state)
     choices = set(objective_choices(state))
     objectives = state.objectives
     if objectives.mode == "single":
@@ -847,17 +846,6 @@ def build_objective_config(state: Any) -> dict[str, Any]:
             raise ValueError(f"Objective {objective!r} is not available.")
         return {"mode": "single", "objective": objective}
     selected = [key for key in objective_choices(state) if key in objectives.selected]
-    if state.config.algorithm in GA_ALGORITHMS:
-        weights = {
-            key: parse_float(value, f"weight for {key}")
-            for key, value in objectives.weights.items()
-            if key in choices and key in selected
-        }
-        weights = {key: value for key, value in weights.items() if value > 0}
-        if not weights:
-            raise ValueError("weighted_mix requires at least one positive weight.")
-        total = sum(weights.values())
-        return {"mode": "weighted_mix", "weights": {key: value / total for key, value in weights.items()}}
     if len(selected) < 2:
         raise ValueError("multi mode requires at least two objectives.")
     return {"mode": "multi", "objectives": selected}
@@ -887,18 +875,71 @@ def sync_algorithm_operator_defaults(state: Any) -> None:
     if algorithm not in ALGORITHM_CHOICES:
         state.config.algorithm = "nsga2"
         algorithm = "nsga2"
+    defaults = framework_config.algorithm_default_config(algorithm, application=state.config.application)
     state.operators.parent_selection_operator = ensure_operator_choice(
         state.operators.parent_selection_operator,
         "parent_selection",
-        PARENT_SELECTION_BY_ALGORITHM[algorithm],
+        str(defaults.get("parent_selection_operator", "nsga2_tournament")),
     )
     state.operators.env_selection_operator = ensure_operator_choice(
         state.operators.env_selection_operator,
         "env_selection",
-        ENV_SELECTION_BY_ALGORITHM[algorithm],
+        str(defaults.get("env_selection_operator", "nsga2_environmental")),
     )
     state.operators.crossover_operator = ensure_operator_choice(state.operators.crossover_operator, "crossover", "uniform")
     state.operators.mutation_operator = ensure_operator_choice(state.operators.mutation_operator, "mutation", "mix")
+
+
+def sync_algorithm_objective_mode(state: Any) -> None:
+    """Keep objective state compatible with the selected algorithm plugin."""
+    algorithm = state.config.algorithm if state.config.algorithm in ALGORITHM_CHOICES else "nsga2"
+    mode = framework_config.algorithm_objective_mode(algorithm, application=state.config.application)
+    if mode == "both":
+        desired_mode = state.objectives.mode if state.objectives.mode in {"single", "multi"} else "multi"
+    else:
+        desired_mode = "single" if mode == "SO" else "multi"
+    _coerce_objective_state(state, desired_mode)
+
+
+def sync_algorithm_defaults(state: Any) -> None:
+    """Keep all algorithm-derived GUI state in sync."""
+    sync_algorithm_operator_defaults(state)
+    sync_algorithm_objective_mode(state)
+
+
+def algorithm_objective_mode(state: Any) -> str:
+    """Return SO, MO, or both for the active algorithm."""
+    algorithm = state.config.algorithm if state.config.algorithm in ALGORITHM_CHOICES else "nsga2"
+    return framework_config.algorithm_objective_mode(algorithm, application=state.config.application)
+
+
+def _coerce_objective_state(state: Any, desired_mode: str) -> None:
+    """Preserve valid objective selections while enforcing one UI objective mode."""
+    objectives = state.objectives
+    choices = list(objective_choices(state))
+    objectives.mode = desired_mode
+    for key in choices:
+        objectives.weights.setdefault(key, "1.0")
+    valid_selected = [key for key in choices if key in objectives.selected]
+    if desired_mode == "single":
+        objective = objectives.single_objective
+        if objective not in choices:
+            objective = valid_selected[0] if valid_selected else (choices[0] if choices else "")
+        objectives.single_objective = objective
+        objectives.selected = {objective} if objective else set()
+        return
+
+    selected = list(valid_selected)
+    if objectives.single_objective in choices and objectives.single_objective not in selected:
+        selected.insert(0, objectives.single_objective)
+    for key in choices:
+        if key not in selected:
+            selected.append(key)
+        if len(selected) >= 2:
+            break
+    objectives.selected = set(selected)
+    if choices and objectives.single_objective not in choices:
+        objectives.single_objective = choices[0]
 
 
 def operator_choices(operator_type: str) -> tuple[str, ...]:

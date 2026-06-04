@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from eagle.config import load_config_payload
 from eagle_ui import services
 from eagle_ui.state import AppState
 
@@ -50,6 +51,47 @@ class GuiObjectiveDisplayTests(unittest.TestCase):
         self.assertEqual(state.objectives.single_objective, "resource_advantage")
         self.assertEqual(services.active_objective_display(state), "resource_advantage")
         self.assertEqual(state.config.fitness_metric, "win_score")
+
+    def test_algorithm_sync_forces_single_objective_mode(self) -> None:
+        state = AppState()
+        state.config.algorithm = "ga"
+        state.objectives.mode = "multi"
+        state.objectives.single_objective = "resource_advantage"
+        state.objectives.selected = {"resource_advantage", "win_score"}
+
+        services.sync_algorithm_defaults(state)
+
+        self.assertEqual(state.objectives.mode, "single")
+        self.assertEqual(state.objectives.selected, {"resource_advantage"})
+
+    def test_algorithm_sync_forces_multi_objective_mode(self) -> None:
+        state = AppState()
+        state.config.algorithm = "nsga2"
+        state.objectives.mode = "single"
+        state.objectives.single_objective = "resource_advantage"
+        state.objectives.selected = {"resource_advantage"}
+
+        services.sync_algorithm_defaults(state)
+
+        self.assertEqual(state.objectives.mode, "multi")
+        self.assertGreaterEqual(len(state.objectives.selected), 2)
+        self.assertIn("resource_advantage", state.objectives.selected)
+
+    def test_backend_preserves_objective_when_forcing_single_objective_mode(self) -> None:
+        config = load_config_payload(
+            {
+                "application": "microrts",
+                "algorithm": "ga",
+                "component_pool_path": "eagle/prompts/components.json",
+                "objective_config": {
+                    "mode": "multi",
+                    "objectives": ["resource_advantage", "win_score"],
+                },
+            },
+            validate=True,
+        )
+
+        self.assertEqual(config.objective_config, {"mode": "single", "objective": "resource_advantage"})
 
 
 if __name__ == "__main__":

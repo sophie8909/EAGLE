@@ -6,6 +6,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
+from eagle.core.config import algorithm_objective_mode, is_surrogate_algorithm
 from eagle.objectives.base import Objective
 
 
@@ -143,8 +144,9 @@ def objective_eval_mode(config: Any, eval_result: dict | None = None) -> str:
         if result_eval_mode in {"policy_agent", "java_agent", "java_surrogate"}:
             return "java_surrogate"
 
+    application = _normalize_name(getattr(config, "application", "microrts") or "microrts")
     algorithm = _normalize_name(getattr(config, "algorithm", "nsga2"))
-    if algorithm not in {"ga_surrogate", "nsga2_surrogate"}:
+    if not is_surrogate_algorithm(algorithm, application=application):
         return "full_game"
 
     surrogate = _normalize_name(getattr(config, "surrogate", "round"))
@@ -161,13 +163,14 @@ def _objective_eval_mode_name(value: Any) -> str:
 
 def default_objective_config(config: Any) -> dict[str, Any]:
     """Create a conservative objective config for the current algorithm/eval mode."""
+    application = _normalize_name(getattr(config, "application", "microrts") or "microrts")
     eval_mode = objective_eval_mode(config)
-    objectives = list_objective_names("microrts", eval_mode)
+    objectives = list_objective_names(application, eval_mode)
     if not objectives:
         return {"mode": "multi", "objectives": []}
     algorithm = _normalize_name(getattr(config, "algorithm", "nsga2"))
-    single_objective = algorithm in {"ga", "ga_surrogate"}
-    if single_objective:
+    objective_mode = algorithm_objective_mode(algorithm, application=application)
+    if objective_mode == "SO":
         return {"mode": "single", "objective": objectives[0]}
     return {"mode": "multi", "objectives": objectives[:2] if len(objectives) > 1 else objectives}
 

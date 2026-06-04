@@ -10,6 +10,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from eagle.core.config import algorithm_objective_mode, plugin_names
+
 from .project import DEFAULT_EVOLUTION_CONFIG_PATH, PROJECT_ROOT
 
 AGENT_CLASS_CHOICES = {
@@ -230,9 +232,12 @@ class EAConfig:
             )
         self.surrogate = normalized_surrogate
         algorithm_name = str(self.algorithm or "").strip().lower()
-        if algorithm_name not in {"ga", "nsga2", "ga_surrogate", "nsga2_surrogate"}:
-            raise ValueError("algorithm must be one of: ga, nsga2, ga_surrogate, nsga2_surrogate.")
-        single_objective_algorithm = algorithm_name in {"ga", "ga_surrogate"}
+        algorithm_names = set(plugin_names("algorithm", application=self.application))
+        if algorithm_name not in algorithm_names:
+            raise ValueError(f"algorithm must be one of: {', '.join(sorted(algorithm_names))}.")
+        objective_mode_support = algorithm_objective_mode(algorithm_name, application=self.application)
+        single_objective_algorithm = objective_mode_support == "SO"
+        multi_objective_algorithm = objective_mode_support == "MO"
         self.parent_selection_operator = self._normalized_parent_selection_operator(
             self.parent_selection_operator,
             single_objective_algorithm,
@@ -245,14 +250,22 @@ class EAConfig:
 
         self.objective_config = validate_objective_config(self)
         objective_mode = str(self.objective_config.get("mode", "")).strip().lower()
-        if single_objective_algorithm and objective_mode not in {"single", "weighted_mix"}:
-            from eagle.objectives.registry import default_objective_config
+        if single_objective_algorithm and objective_mode != "single":
+            selected_objectives = (
+                list(self.objective_config.get("objectives", []))
+                if objective_mode == "multi"
+                else list(dict(self.objective_config.get("weights", {})).keys())
+            )
+            if selected_objectives:
+                self.objective_config = {"mode": "single", "objective": selected_objectives[0]}
+            else:
+                from eagle.objectives.registry import default_objective_config
 
-            self.objective_config = default_objective_config(self)
+                self.objective_config = default_objective_config(self)
             objective_mode = str(self.objective_config.get("mode", "")).strip().lower()
-        if single_objective_algorithm and objective_mode not in {"single", "weighted_mix"}:
-            raise ValueError("Single-objective algorithms require objective_config.mode single or weighted_mix.")
-        if not single_objective_algorithm and objective_mode != "multi":
+        if single_objective_algorithm and objective_mode != "single":
+            raise ValueError("Single-objective algorithms require objective_config.mode single.")
+        if multi_objective_algorithm and objective_mode != "multi":
             raise ValueError("Multi-objective algorithms require objective_config.mode multi.")
         self.aggressiveness_objective_enabled = bool(self.aggressiveness_objective_enabled)
         self.aggressiveness_mode = str(self.aggressiveness_mode or "hybrid").strip().lower()
