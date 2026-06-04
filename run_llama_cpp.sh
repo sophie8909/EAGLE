@@ -9,6 +9,9 @@ MODEL_PATH="${LLAMA_CPP_MODEL_PATH:-}"
 CTX_SIZE="${LLAMA_CPP_CTX_SIZE:-8192}"
 GPU_LAYERS="${LLAMA_CPP_N_GPU_LAYERS:-999}"
 
+echo "SERVER_BIN=$SERVER_BIN"
+echo "MODEL_PATH=$MODEL_PATH"
+
 if ! command -v "$SERVER_BIN" >/dev/null 2>&1; then
   echo "ERROR: llama.cpp server binary not found: $SERVER_BIN"
   echo "Set LLAMA_CPP_SERVER_BIN to the llama-server executable."
@@ -27,6 +30,7 @@ fi
 
 echo "Starting llama.cpp server on http://$HOST:$PORT/v1"
 echo "Model path: $MODEL_PATH"
+echo "Command: $SERVER_BIN --host $HOST --port $PORT -m $MODEL_PATH -c $CTX_SIZE -ngl $GPU_LAYERS ${LLAMA_CPP_EXTRA_ARGS:-}"
 
 exec "$SERVER_BIN" \
   --host "$HOST" \
