@@ -79,8 +79,25 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         )
         run_select.update()
         selected_label.set_text(f"Selected folder: {state.analysis.analysis_selected_run_dir or '(none)'}")
+        await refresh_selected_run_config()
+
+    async def refresh_selected_run_config() -> None:
+        try:
+            summary = await asyncio.to_thread(
+                services.load_run_config_summary,
+                state.analysis.analysis_selected_run_dir,
+            )
+        except (OSError, ValueError) as exc:
+            config_status_label.set_text(f"Config load error: {exc}")
+            config_table.rows = []
+            config_table.update()
+            return
+        config_status_label.set_text(str(summary.get("status") or ""))
+        config_table.rows = list(summary.get("rows") or [])
+        config_table.update()
 
     async def refresh_analysis() -> None:
+        await refresh_selected_run_config()
         try:
             run_dir = state.analysis.analysis_selected_run_dir
             summary, body = await asyncio.to_thread(services.build_analysis, run_dir)
@@ -353,6 +370,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
         state.analysis.analysis_selected_run_dir = Path(str(event.value)) if event.value else None
         state.analysis.analysis_run_selected_manually = True
         selected_label.set_text(f"Selected folder: {state.analysis.analysis_selected_run_dir or '(none)'}")
+        asyncio.create_task(refresh_all())
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Analysis").classes(SECTION_HEADER_CLASS)
@@ -365,6 +383,15 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
                 BUTTON_CLASS
             )
         selected_label = ui.label("Selected folder: (none)")
+        ui.label("Selected Run Config").classes(SECTION_HEADER_CLASS)
+        config_status_label = ui.label("No run selected")
+        config_table = ui.table(
+            columns=[
+                {"name": "field", "label": "Field", "field": "field", "align": "left"},
+                {"name": "value", "label": "Value", "field": "value", "align": "left"},
+            ],
+            rows=[],
+        ).props("hide-pagination dense flat").classes(f"{TABLE_CLASS} w-full")
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
             summary_label = ui.label(state.analysis.summary)
             ui.button("Refresh analysis", on_click=safe_click(refresh_all, label="Refresh analysis")).classes(BUTTON_CLASS)
@@ -445,6 +472,7 @@ def build_analysis_view(state: Any) -> dict[str, Any]:
 
     controls["refresh_analysis"] = refresh_all
     controls["refresh_runs"] = refresh_runs
+    controls["refresh_run_config"] = refresh_selected_run_config
     controls["refresh_mo_section"] = refresh_mo_section
     return controls
 

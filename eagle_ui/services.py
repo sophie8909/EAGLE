@@ -1218,6 +1218,107 @@ def load_run_config_into_state(state: Any, run_dir: Path | None) -> Path:
     return config_path
 
 
+def load_run_config_summary(run_dir: Path | None) -> dict[str, Any]:
+    """Load display-only config fields for one selected run folder."""
+    if run_dir is None:
+        return {
+            "status": "No run selected",
+            "config_path": "",
+            "rows": _run_config_summary_rows({}, None),
+        }
+
+    run_path = Path(run_dir).expanduser().resolve()
+    config_path = run_path / "config.json"
+    if not config_path.exists():
+        return {
+            "status": "Config not found for this run",
+            "config_path": str(config_path),
+            "rows": _run_config_summary_rows({}, run_path),
+        }
+
+    payload = config_service.read_json_mapping_strict(config_path)
+    return {
+        "status": f"Config: {config_path}",
+        "config_path": str(config_path),
+        "rows": _run_config_summary_rows(_display_config_payload(payload), run_path),
+    }
+
+
+def _display_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return flat fields for display without merging defaults."""
+    if not isinstance(payload.get("ea"), dict):
+        return payload
+    flat = dict(payload["ea"])
+    for key in ("algorithm", "evaluator", "eval_mode", "surrogate", "objective_config"):
+        if key in payload and key not in flat:
+            flat[key] = payload[key]
+    if "opponents" in payload and "gameplay_opponents" not in flat:
+        flat["gameplay_opponents"] = payload["opponents"]
+    return flat
+
+
+def _run_config_summary_rows(payload: dict[str, Any], run_path: Path | None) -> list[dict[str, str]]:
+    objective_mode, objective_text = _run_objective_summary(payload)
+    return [
+        {"field": "algorithm", "value": _payload_value(payload, "algorithm")},
+        {"field": "objective mode", "value": objective_mode},
+        {"field": "objective / objectives", "value": objective_text},
+        {"field": "eval mode", "value": _payload_value(payload, "eval_mode", "evaluator")},
+        {"field": "surrogate mode", "value": _payload_value(payload, "surrogate", "surrogate_mode")},
+        {"field": "population size", "value": _payload_value(payload, "population_size")},
+        {"field": "generations", "value": _payload_value(payload, "num_generations")},
+        {"field": "map", "value": _payload_value(payload, "gameplay_map_dir", "map_dir", "map")},
+        {
+            "field": "opponent",
+            "value": _payload_value(
+                payload,
+                "gameplay_opponents",
+                "real_eval_opponents",
+                "opponents",
+                "opponent",
+            ),
+        },
+        {"field": "llm call limit", "value": _payload_value(payload, "llm_call_limit")},
+        {"field": "log path", "value": str(run_path) if run_path is not None else "N/A"},
+    ]
+
+
+def _run_objective_summary(payload: dict[str, Any]) -> tuple[str, str]:
+    objective_config = payload.get("objective_config")
+    if isinstance(objective_config, dict):
+        mode = str(objective_config.get("mode") or "N/A")
+        if mode == "single":
+            return mode, _format_summary_value(objective_config.get("objective"))
+        if mode in {"multi", "weighted_mix"}:
+            return mode, _format_summary_value(objective_config.get("objectives"))
+        return mode, _format_summary_value(
+            objective_config.get("objective") or objective_config.get("objectives")
+        )
+    if "objective" in payload:
+        return "single", _format_summary_value(payload.get("objective"))
+    if "objectives" in payload:
+        return "multi", _format_summary_value(payload.get("objectives"))
+    return "N/A", "N/A"
+
+
+def _payload_value(payload: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        if key in payload:
+            return _format_summary_value(payload.get(key))
+    return "N/A"
+
+
+def _format_summary_value(value: Any) -> str:
+    if value is None or value == "":
+        return "N/A"
+    if isinstance(value, (list, tuple, set)):
+        values = [str(item) for item in value if item not in (None, "")]
+        return ", ".join(values) if values else "(none)"
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
+
+
 def apply_final_test_max_front(config_path: Path, max_front: str) -> None:
     """Persist max-front override because `eagle.main` has no CLI flag for it."""
     text = str(max_front or "").strip()

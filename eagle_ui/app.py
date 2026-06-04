@@ -30,6 +30,7 @@ from eagle_ui.theme import (
     title_class,
 )
 from eagle_ui.ui_actions import safe_click
+from eagle_ui.views.analysis_view import build_analysis_view
 from eagle_ui.views.components_view import build_components_view
 from eagle_ui.views.config_view import build_config_summary_view
 from eagle_ui.views.examples_view import build_examples_view
@@ -141,6 +142,9 @@ def build_layout() -> dict[str, dict[str, Any]]:
             for group in ("operators", "objectives", "config_summary"):
                 await invoke_refresh(controls.get(group, {}).get("refresh"))
             await controls["run"]["full_refresh"]()
+        elif page == "analysis":
+            await invoke_refresh(controls.get("analysis", {}).get("refresh_runs"))
+            await invoke_refresh(controls.get("analysis", {}).get("refresh_analysis"))
         elif page in {"components", "examples"}:
             await invoke_refresh(controls.get(page, {}).get("refresh"))
         else:
@@ -168,6 +172,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
         experiment_tab = ui.tab("Experiment").classes(TAB_CLASS)
         components_tab = ui.tab("Components").classes(TAB_CLASS)
         examples_tab = ui.tab("Examples").classes(TAB_CLASS)
+        analysis_tab = ui.tab("Analysis").classes(TAB_CLASS)
 
     with ui.tab_panels(tabs, value=experiment_tab).classes(f"{PAGE_CLASS} w-full"):
         with ui.tab_panel(experiment_tab):
@@ -185,6 +190,9 @@ def build_layout() -> dict[str, dict[str, Any]]:
             state.runtime.components_refresh = controls["components"].get("refresh")
         with ui.tab_panel(examples_tab):
             controls["examples"] = build_examples_view(state)
+        with ui.tab_panel(analysis_tab):
+            controls["analysis"] = build_analysis_view(state)
+            state.runtime.analysis_runs_refresh = controls["analysis"].get("refresh_runs")
 
     async def on_tab_change(event: Any) -> None:
         """Refresh tab-specific data when the user changes the top-level page."""
@@ -199,6 +207,10 @@ def build_layout() -> dict[str, dict[str, Any]]:
         elif selected == examples_tab:
             state.runtime.current_page = "examples"
             await invoke_refresh(controls["examples"].get("refresh"))
+        elif selected == analysis_tab:
+            state.runtime.current_page = "analysis"
+            await invoke_refresh(controls["analysis"].get("refresh_runs"))
+            await invoke_refresh(controls["analysis"].get("refresh_analysis"))
 
     tabs.on("update:model-value", on_tab_change)
     return controls
@@ -224,6 +236,7 @@ async def startup_refresh() -> None:
     ):
         await invoke_refresh(controls.get(group, {}).get(name))
     await controls["run"]["refresh_runs"]()
+    await invoke_refresh(controls.get("analysis", {}).get("refresh_runs"))
     await controls["run"]["refresh_log"]()
 
 
