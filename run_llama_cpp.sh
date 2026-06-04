@@ -40,12 +40,12 @@ fi
 
 echo "Starting llama.cpp server on http://$HOST:$PORT/v1"
 echo "Model path: $MODEL_PATH"
-echo "Command: $SERVER_BIN --host $HOST --port $PORT -m $MODEL_PATH -c $CTX_SIZE -ngl $GPU_LAYERS ${LLAMA_CPP_EXTRA_ARGS:-}"
+echo "Command: $SERVER_BIN -m $MODEL_PATH --host $HOST --port $PORT -c $CTX_SIZE -ngl $GPU_LAYERS ${LLAMA_CPP_EXTRA_ARGS:-}"
 
 exec "$SERVER_BIN" \
+  -m "$MODEL_PATH" \
   --host "$HOST" \
   --port "$PORT" \
-  -m "$MODEL_PATH" \
   -c "$CTX_SIZE" \
   -ngl "$GPU_LAYERS" \
   ${LLAMA_CPP_EXTRA_ARGS:-}
