@@ -863,6 +863,24 @@ def build_objective_config(state: Any) -> dict[str, Any]:
     return {"mode": "multi", "objectives": selected}
 
 
+def active_objective_display(state: Any) -> str:
+    """Return compact objective display text from the shared active config state."""
+    eval_mode = normalize_eval_mode(getattr(state.config, "eval_mode", "gameplay"))
+    if eval_mode == "early_end":
+        return "resource_diff_mean"
+
+    objectives = state.objectives
+    mode = str(getattr(objectives, "mode", "multi") or "multi").strip().lower()
+    if mode == "single":
+        return str(getattr(objectives, "single_objective", "") or "(none)")
+
+    selected_keys = {str(key) for key in getattr(objectives, "selected", set()) if str(key)}
+    ordered = [key for key in objective_choices(state) if key in selected_keys]
+    if not ordered:
+        ordered = sorted(selected_keys)
+    return ", ".join(ordered) if ordered else "(none)"
+
+
 def sync_algorithm_operator_defaults(state: Any) -> None:
     """Keep operator selections compatible with the chosen algorithm family."""
     algorithm = state.config.algorithm
@@ -1041,9 +1059,7 @@ def start_experiment(state: Any) -> tuple[bool, str]:
             config_path = save_generated_config(state)
             command = [sys.executable, "-m", "eagle.main", "--config", str(config_path)]
         else:
-            config_path = Path(resume_run_dir) / "config.json"
-            if not config_path.exists():
-                raise ValueError(f"Selected run is missing config.json: {config_path}")
+            config_path = load_run_config_into_state(state, resume_run_dir)
             command = [
                 sys.executable,
                 "-m",
@@ -1123,6 +1139,15 @@ def validate_run_dir(run_dir: Path | None) -> Path:
     if not config_path.exists():
         raise ValueError(f"Selected run is missing config.json: {config_path}")
     return path
+
+
+def load_run_config_into_state(state: Any, run_dir: Path | None) -> Path:
+    """Load one run folder's saved config into the shared GUI state."""
+    run_path = validate_run_dir(run_dir)
+    config_path = run_path / "config.json"
+    payload = load_config_payload(config_path)
+    apply_config_payload(state, payload, config_path)
+    return config_path
 
 
 def apply_final_test_max_front(config_path: Path, max_front: str) -> None:
