@@ -12,14 +12,24 @@ GPU_LAYERS="${LLAMA_CPP_N_GPU_LAYERS:-999}"
 echo "SERVER_BIN=$SERVER_BIN"
 echo "MODEL_PATH=$MODEL_PATH"
 
-if ! command -v "$SERVER_BIN" >/dev/null 2>&1; then
-  echo "ERROR: llama.cpp server binary not found: $SERVER_BIN"
-  echo "Set LLAMA_CPP_SERVER_BIN to the llama-server executable."
+if [[ -z "$MODEL_PATH" ]]; then
+  echo "ERROR: MODEL_PATH is required. Set LLAMA_CPP_MODEL_PATH or MODEL_PATH."
   exit 1
 fi
 
-if [ -z "$MODEL_PATH" ]; then
-  echo "ERROR: LLAMA_CPP_MODEL_PATH is required."
+if [[ "$MODEL_PATH" == *llama-server ]]; then
+  echo "ERROR: MODEL_PATH incorrectly points to llama-server"
+  exit 1
+fi
+
+if [[ "$MODEL_PATH" != *.gguf ]]; then
+  echo "ERROR: MODEL_PATH must point to a GGUF file"
+  exit 1
+fi
+
+if ! command -v "$SERVER_BIN" >/dev/null 2>&1; then
+  echo "ERROR: llama.cpp server binary not found: $SERVER_BIN"
+  echo "Set LLAMA_CPP_SERVER_BIN to the llama-server executable."
   exit 1
 fi
 
