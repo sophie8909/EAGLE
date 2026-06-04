@@ -10,6 +10,8 @@ from .registry import (
     EVALUATORS,
     MUTATION_OPERATORS,
     PARENT_SELECTION,
+    PLUGIN_REGISTRY,
+    PluginSpec,
     REFLECTION_OPERATORS,
     Registry,
 )
@@ -27,6 +29,8 @@ __all__ = [
     "MUTATION_OPERATORS",
     "ObjectiveValues",
     "PARENT_SELECTION",
+    "PLUGIN_REGISTRY",
+    "PluginSpec",
     "ParsedOutput",
     "REFLECTION_OPERATORS",
     "Registry",
