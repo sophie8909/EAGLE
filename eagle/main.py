@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .config import EAConfig, load_config_from_json, resolve_component_pool_path
+from .config import EAConfig, load_config_from_json, resolve_component_pool_path, resolve_config
 from .core.config import is_surrogate_algorithm
 from .experiment.config import ExperimentConfig, load_experiment_config
 from .experiment.runner import build_algorithm
@@ -72,6 +72,17 @@ def _resolve_base_config(args, resume_log_dir: str | None) -> EAConfig:
     return EAConfig()
 
 
+def _resolve_config_base_dir(args, resume_log_dir: str | None) -> Path | None:
+    """Return the directory used to resolve relative paths in the active config."""
+    if resume_log_dir:
+        return Path(resume_log_dir)
+    if args.config:
+        return Path(args.config).resolve().parent
+    if DEFAULT_EVOLUTION_CONFIG_PATH.exists():
+        return DEFAULT_EVOLUTION_CONFIG_PATH.parent
+    return None
+
+
 def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
     """Build one runtime config with optional quick-run and CLI overrides."""
     config = _resolve_base_config(args, resume_log_dir)
@@ -96,6 +107,7 @@ def _build_runtime_config(args, resume_log_dir: str | None) -> EAConfig:
         config.final_test_max_front = 0
 
     config.validate()
+    config = resolve_config(config, base_dir=_resolve_config_base_dir(args, resume_log_dir))
     print(
         "[DEBUG] runtime_config "
         f"algorithm={config.algorithm} evaluator={config.evaluator} "
@@ -247,7 +259,9 @@ def main() -> None:
     )
     if resume_log_dir:
         algorithm.attach_log_dir(resume_log_dir)
-    algorithm.save_config(algorithm.create_log_folder())
+        algorithm.create_log_folder()
+    else:
+        algorithm.save_config(algorithm.create_log_folder())
     algorithm.run()
     if hasattr(algorithm, "run_final_test"):
         if should_run_final_test:

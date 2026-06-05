@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, List
 
-from eagle.config import EAConfig, clone_config
+from eagle.config import EAConfig, clone_config, save_resolved_config
 from eagle.core.result import EvaluationResult, ensure_evaluation_result
 from eagle.eval.base import EvaluationContext
 from eagle.objectives.aggregation import aggregate_fitness
@@ -406,19 +406,7 @@ class EA:
 
     def save_config(self, log_dir: str):
         """Persist the run configuration next to the generated logs."""
-        import json
-        config_file = f"{log_dir}/config.json"
-        valid_fields = set(self.config.__dataclass_fields__.keys())
-        with open(config_file, "w") as f:
-            json.dump(
-                {
-                    key: value
-                    for key, value in self.config.__dict__.items()
-                    if key in valid_fields
-                },
-                f,
-                indent=4,
-            )
+        save_resolved_config(self.config, log_dir)
 
     def initialize_population(self) -> List[Individual]:
         """Create the starting population by sampling strategy indices at random."""

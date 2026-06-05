@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..config import EAConfig, load_config_payload, normalize_algorithm_name
+from ..config import EAConfig, config_to_payload, load_config_payload, normalize_algorithm_name
 
 _EA_FIELD_NAMES = set(EAConfig.__dataclass_fields__)
 
@@ -29,10 +29,7 @@ class ExperimentConfig:
             "evaluator": self.evaluator,
             "evaluator_params": dict(self.evaluator_params),
             "opponents": list(self.opponents),
-            "ea": {
-                key: getattr(self.ea, key)
-                for key in self.ea.__dataclass_fields__
-            },
+            "ea": config_to_payload(self.ea),
         }
 
 
@@ -105,6 +102,15 @@ def _read_mapping(path: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".json":
         return json.loads(text)
+    try:
+        import yaml
+
+        loaded = yaml.safe_load(text) or {}
+        if not isinstance(loaded, dict):
+            raise ValueError(f"Experiment config must be a mapping: {path}")
+        return loaded
+    except ImportError:
+        return json.loads(text)
 
 
 def _ea_payload_from_experiment_payload(data: dict[str, Any]) -> dict[str, Any]:
@@ -116,12 +122,3 @@ def _ea_payload_from_experiment_payload(data: dict[str, Any]) -> dict[str, Any]:
         for key, value in data.items()
         if key in _EA_FIELD_NAMES
     }
-    try:
-        import yaml
-
-        loaded = yaml.safe_load(text) or {}
-        if not isinstance(loaded, dict):
-            raise ValueError(f"Experiment config must be a mapping: {path}")
-        return loaded
-    except ImportError:
-        return json.loads(text)

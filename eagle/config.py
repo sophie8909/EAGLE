@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 import math
-from dataclasses import MISSING, dataclass, field
+from dataclasses import MISSING, dataclass, field, fields
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -13,6 +13,9 @@ from typing import Any
 from eagle.core.config import algorithm_default_config, algorithm_objective_mode, is_surrogate_algorithm, plugin_names
 
 from .project import DEFAULT_EVOLUTION_CONFIG_PATH, PROJECT_ROOT
+
+LEGACY_CONFIG_FILENAME = "config.json"
+RESOLVED_CONFIG_FILENAME = "config.resolved.json"
 
 AGENT_CLASS_CHOICES = {
     "ai.eagle.EAGLE",
@@ -690,7 +693,7 @@ def load_config_payload(payload: dict[str, Any] | None, *, validate: bool = True
     Raises:
         ValueError: If the payload contains fields that are not part of `EAConfig`.
     """
-    payload = dict(payload or {})
+    payload = _ea_payload_from_config_mapping(payload)
     config = _config_with_defaults_unvalidated()
     valid_fields = set(config.__dataclass_fields__.keys())
     unknown_fields = sorted(key for key in payload if key not in valid_fields)
@@ -708,23 +711,100 @@ def load_config_payload(payload: dict[str, Any] | None, *, validate: bool = True
     return config
 
 
+def config_to_payload(config: EAConfig) -> dict[str, Any]:
+    """Serialize one `EAConfig` to the canonical flat config payload."""
+    return {
+        field_info.name: deepcopy(getattr(config, field_info.name))
+        for field_info in fields(EAConfig)
+    }
+
+
+def resolve_config_path(path_text: str | Path, *, base_dir: str | Path | None = None) -> Path:
+    """Resolve a config-owned path against its config directory or the repo root."""
+    raw_path = Path(path_text)
+    if raw_path.is_absolute():
+        return raw_path.resolve()
+    if base_dir is not None:
+        base_candidate = Path(base_dir).resolve() / raw_path
+        if base_candidate.exists():
+            return base_candidate.resolve()
+    return (PROJECT_ROOT / raw_path).resolve()
+
+
+def serialize_config_path(path: str | Path) -> str:
+    """Return a stable repo-relative path when possible, otherwise an absolute path."""
+    resolved = Path(path).resolve()
+    try:
+        return resolved.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
+def resolve_config(config: EAConfig, *, base_dir: str | Path | None = None) -> EAConfig:
+    """Return a validated config with config-owned paths normalized."""
+    resolved = clone_config(config)
+    resolved.component_pool_path = serialize_config_path(
+        resolve_component_pool_path(resolved, base_dir=base_dir)
+    )
+    for field_name in ("surrogate_log_dir", "prompt_history_path"):
+        raw_value = str(getattr(resolved, field_name, "") or "").strip()
+        if raw_value:
+            setattr(
+                resolved,
+                field_name,
+                serialize_config_path(resolve_config_path(raw_value, base_dir=base_dir)),
+            )
+    resolved.validate()
+    return resolved
+
+
 def load_config_from_json(path_or_dir: str | Path, *, validate: bool = True) -> EAConfig:
     """Load a saved config file or run directory into a validated `EAConfig`."""
-    candidate_path = Path(path_or_dir)
-    config_path = candidate_path / "config.json" if candidate_path.is_dir() else candidate_path
+    config_path = select_config_path(path_or_dir)
     if not config_path.exists():
         return EAConfig()
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     return load_config_payload(payload, validate=validate)
 
 
+def select_config_path(path_or_dir: str | Path, *, prefer_resolved: bool = True) -> Path:
+    """Return the config file to read, preferring resolved run configs."""
+    candidate_path = Path(path_or_dir)
+    if candidate_path.is_dir():
+        if prefer_resolved:
+            resolved_path = candidate_path / RESOLVED_CONFIG_FILENAME
+            if resolved_path.exists():
+                return resolved_path
+        return candidate_path / LEGACY_CONFIG_FILENAME
+    if prefer_resolved and candidate_path.name == LEGACY_CONFIG_FILENAME:
+        resolved_path = candidate_path.with_name(RESOLVED_CONFIG_FILENAME)
+        if resolved_path.exists():
+            return resolved_path
+    return candidate_path
+
+
+def save_resolved_config(
+    config: EAConfig,
+    run_dir: str | Path,
+    *,
+    base_dir: str | Path | None = None,
+    write_legacy: bool = True,
+) -> Path:
+    """Save the resolved run config and optionally refresh the legacy filename."""
+    run_path = Path(run_dir)
+    run_path.mkdir(parents=True, exist_ok=True)
+    resolved_config = resolve_config(config, base_dir=base_dir)
+    payload = config_to_payload(resolved_config)
+    resolved_path = run_path / RESOLVED_CONFIG_FILENAME
+    resolved_path.write_text(json.dumps(payload, indent=4), encoding="utf-8")
+    if write_legacy:
+        (run_path / LEGACY_CONFIG_FILENAME).write_text(json.dumps(payload, indent=4), encoding="utf-8")
+    return resolved_path
+
+
 def clone_config(config: EAConfig) -> EAConfig:
     """Return one validated copy of an existing config object."""
-    payload = {
-        field_name: deepcopy(getattr(config, field_name))
-        for field_name in config.__dataclass_fields__
-    }
-    return load_config_payload(payload)
+    return load_config_payload(config_to_payload(config))
 
 
 def resolve_component_pool_path(config: EAConfig, *, base_dir: str | Path | None = None) -> Path:
@@ -744,3 +824,22 @@ def load_config_from_optional_json(path_or_dir: str | Path | None) -> EAConfig:
     if path_or_dir is None:
         return EAConfig()
     return load_config_from_json(path_or_dir)
+
+
+def _ea_payload_from_config_mapping(payload: dict[str, Any] | None) -> dict[str, Any]:
+    """Convert the most recent old experiment envelope into the flat EA payload."""
+    data = dict(payload or {})
+    if "llm_intervals" in data and "llm_interval" not in data:
+        data["llm_interval"] = data.pop("llm_intervals")
+    ea_payload = data.get("ea")
+    if not isinstance(ea_payload, dict):
+        return data
+    flat = dict(ea_payload)
+    if "llm_intervals" in flat and "llm_interval" not in flat:
+        flat["llm_interval"] = flat.pop("llm_intervals")
+    for key in ("algorithm", "evaluator", "eval_mode", "surrogate", "application", "llm_interval"):
+        if key in data and key not in flat:
+            flat[key] = data[key]
+    if "opponents" in data and "gameplay_opponents" not in flat:
+        flat["gameplay_opponents"] = data["opponents"]
+    return flat

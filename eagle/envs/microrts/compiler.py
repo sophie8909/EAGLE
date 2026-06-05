@@ -8,13 +8,13 @@ import tempfile
 import time
 from pathlib import Path
 
-from ...project import PROJECT_ROOT
+from ...project import MICRORTS_ROOT, PROJECT_ROOT
 
 
 def locate_microrts_root(project_root: Path | None = None) -> Path:
     """Return the vendored MicroRTS root inside the EAGLE repository."""
     root = (project_root or PROJECT_ROOT).resolve()
-    candidate = root / "third_party" / "microrts"
+    candidate = MICRORTS_ROOT if root == PROJECT_ROOT.resolve() else root / "third_party" / "microrts"
     if candidate.exists():
         return candidate
     if (root / "src").exists() and (root / "resources").exists():
