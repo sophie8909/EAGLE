@@ -40,6 +40,7 @@ class AnalysisRunConfigSummaryTests(unittest.TestCase):
         self.assertEqual(rows["objective mode"], "single")
         self.assertEqual(rows["objective / objectives"], "resource_advantage")
         self.assertEqual(rows["eval mode"], "full_game")
+        self.assertEqual(rows["surrogate enabled"], "no")
         self.assertEqual(rows["surrogate mode"], "none")
         self.assertEqual(rows["population size"], "7")
         self.assertEqual(rows["generations"], "11")
@@ -87,6 +88,44 @@ class AnalysisRunConfigSummaryTests(unittest.TestCase):
         self.assertEqual(rows_b["algorithm"], "nsga2")
         self.assertEqual(rows_b["objective / objectives"], "win_score, resource_advantage")
 
+    def test_load_run_config_summary_marks_non_surrogate_algorithm_mode_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = Path(temp_dir)
+            (run_dir / "config.json").write_text(
+                json.dumps(
+                    {
+                        "algorithm": "ga",
+                        "surrogate": "early_end",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary = services.load_run_config_summary(run_dir)
+
+        rows = {row["field"]: row["value"] for row in summary["rows"]}
+        self.assertEqual(rows["surrogate enabled"], "no")
+        self.assertEqual(rows["surrogate mode"], "early_end (ignored)")
+
+    def test_load_run_config_summary_marks_surrogate_algorithm_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = Path(temp_dir)
+            (run_dir / "config.json").write_text(
+                json.dumps(
+                    {
+                        "algorithm": "ga_surrogate",
+                        "surrogate": "early_end",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary = services.load_run_config_summary(run_dir)
+
+        rows = {row["field"]: row["value"] for row in summary["rows"]}
+        self.assertEqual(rows["surrogate enabled"], "yes")
+        self.assertEqual(rows["surrogate mode"], "early_end")
+
     def test_load_run_config_summary_marks_missing_config(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             summary = services.load_run_config_summary(Path(temp_dir))
@@ -117,7 +156,8 @@ class AnalysisRunConfigSummaryTests(unittest.TestCase):
 
         rows = {row["field"]: row["value"] for row in summary["rows"]}
         self.assertEqual(rows["algorithm"], "nsga2")
-        self.assertEqual(rows["surrogate mode"], "light_rush_and_heavy_rush")
+        self.assertEqual(rows["surrogate enabled"], "no")
+        self.assertEqual(rows["surrogate mode"], "light_rush_and_heavy_rush (ignored)")
         self.assertEqual(rows["opponent"], "(none)")
         self.assertEqual(rows["objective mode"], "N/A")
         self.assertEqual(rows["eval mode"], "N/A")

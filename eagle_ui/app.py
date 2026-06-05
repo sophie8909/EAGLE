@@ -34,6 +34,8 @@ from eagle_ui.views.analysis_view import build_analysis_view
 from eagle_ui.views.components_view import build_components_view
 from eagle_ui.views.config_view import build_config_summary_view
 from eagle_ui.views.examples_view import build_examples_view
+from eagle_ui.views.final_test_view import build_final_test_view
+from eagle_ui.views.microrts_view import build_microrts_view
 from eagle_ui.views.objectives_view import build_objectives_view
 from eagle_ui.views.operators_view import build_operators_view
 from eagle_ui.views.run_view import build_run_view
@@ -112,6 +114,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
     ui.query(".nicegui-content").classes(PAGE_CLASS)
 
     controls: dict[str, dict[str, Any]] = {}
+    experiment_page = "experiment"
 
     async def stop_experiment() -> None:
         """Stop active experiment processes while keeping the GUI alive."""
@@ -147,6 +150,12 @@ def build_layout() -> dict[str, dict[str, Any]]:
             await invoke_refresh(controls.get("analysis", {}).get("refresh_analysis"))
         elif page in {"components", "examples"}:
             await invoke_refresh(controls.get(page, {}).get("refresh"))
+        elif page == "final_test":
+            await invoke_refresh(controls.get("final_test", {}).get("refresh_runs"))
+            await invoke_refresh(controls.get("final_test", {}).get("refresh_all"))
+        elif page == "microrts":
+            await invoke_refresh(controls.get("microrts", {}).get("refresh_runs"))
+            await invoke_refresh(controls.get("microrts", {}).get("refresh_status"))
         else:
             await invoke_refresh(controls.get(page, {}).get("refresh"))
         LOGGER.info("manual refresh end page=%s", page)
@@ -170,48 +179,83 @@ def build_layout() -> dict[str, dict[str, Any]]:
 
     with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
         experiment_tab = ui.tab("Experiment").classes(TAB_CLASS)
-        components_tab = ui.tab("Components").classes(TAB_CLASS)
-        examples_tab = ui.tab("Examples").classes(TAB_CLASS)
         analysis_tab = ui.tab("Analysis").classes(TAB_CLASS)
+        final_test_tab = ui.tab("Final Test").classes(TAB_CLASS)
+        microrts_tab = ui.tab("MicroRTS").classes(TAB_CLASS)
 
     with ui.tab_panels(tabs, value=experiment_tab).classes(f"{PAGE_CLASS} w-full"):
         with ui.tab_panel(experiment_tab):
-            with ui.row().classes("w-full gap-4 items-start flex-wrap xl:flex-nowrap"):
-                with ui.column().classes("w-full xl:flex-[3_1_0] min-w-[0] gap-3"):
-                    controls["operators"] = build_operators_view(state)
-                    state.runtime.operators_refresh = controls["operators"].get("refresh")
-                    controls["objectives"] = build_objectives_view(state)
-                    state.runtime.objectives_refresh = controls["objectives"].get("refresh")
-                with ui.column().classes("w-full xl:flex-[2_1_420px] min-w-[360px] gap-3"):
-                    controls["run"] = build_run_view(state, log_height=300)
-                    controls["config_summary"] = build_config_summary_view(state)
-        with ui.tab_panel(components_tab):
-            controls["components"] = build_components_view(state)
-            state.runtime.components_refresh = controls["components"].get("refresh")
-        with ui.tab_panel(examples_tab):
-            controls["examples"] = build_examples_view(state)
+            with ui.tabs().classes(f"{CARD_CLASS} w-full") as experiment_tabs:
+                algorithm_tab = ui.tab("Algorithm").classes(TAB_CLASS)
+                components_tab = ui.tab("Components").classes(TAB_CLASS)
+                examples_tab = ui.tab("Examples").classes(TAB_CLASS)
+            with ui.tab_panels(experiment_tabs, value=algorithm_tab).classes(f"{PAGE_CLASS} w-full"):
+                with ui.tab_panel(algorithm_tab):
+                    with ui.row().classes("w-full gap-4 items-start flex-wrap xl:flex-nowrap"):
+                        with ui.column().classes("w-full xl:flex-[3_1_0] min-w-[0] gap-3"):
+                            controls["operators"] = build_operators_view(state)
+                            state.runtime.operators_refresh = controls["operators"].get("refresh")
+                            controls["objectives"] = build_objectives_view(state)
+                            state.runtime.objectives_refresh = controls["objectives"].get("refresh")
+                        with ui.column().classes("w-full xl:flex-[2_1_420px] min-w-[360px] gap-3"):
+                            controls["run"] = build_run_view(state, log_height=300)
+                            controls["config_summary"] = build_config_summary_view(state)
+                with ui.tab_panel(components_tab):
+                    controls["components"] = build_components_view(state)
+                    state.runtime.components_refresh = controls["components"].get("refresh")
+                with ui.tab_panel(examples_tab):
+                    controls["examples"] = build_examples_view(state)
         with ui.tab_panel(analysis_tab):
             controls["analysis"] = build_analysis_view(state)
             state.runtime.analysis_runs_refresh = controls["analysis"].get("refresh_runs")
+        with ui.tab_panel(final_test_tab):
+            controls["final_test"] = build_final_test_view(state)
+        with ui.tab_panel(microrts_tab):
+            controls["microrts"] = build_microrts_view(state)
+
+    async def on_experiment_tab_change(event: Any) -> None:
+        """Refresh the selected Experiment subpage."""
+        nonlocal experiment_page
+        selected = event.args
+        if selected == algorithm_tab:
+            experiment_page = "experiment"
+            state.runtime.current_page = "experiment"
+            await controls["run"]["refresh_log"]()
+        elif selected == components_tab:
+            experiment_page = "components"
+            state.runtime.current_page = "components"
+            await invoke_refresh(controls["components"].get("refresh"))
+        elif selected == examples_tab:
+            experiment_page = "examples"
+            state.runtime.current_page = "examples"
+            await invoke_refresh(controls["examples"].get("refresh"))
 
     async def on_tab_change(event: Any) -> None:
         """Refresh tab-specific data when the user changes the top-level page."""
         selected = event.args
 
         if selected == experiment_tab:
-            state.runtime.current_page = "experiment"
-            await controls["run"]["refresh_log"]()
-        elif selected == components_tab:
-            state.runtime.current_page = "components"
-            await invoke_refresh(controls["components"].get("refresh"))
-        elif selected == examples_tab:
-            state.runtime.current_page = "examples"
-            await invoke_refresh(controls["examples"].get("refresh"))
+            state.runtime.current_page = experiment_page
+            if experiment_page == "experiment":
+                await controls["run"]["refresh_log"]()
+            elif experiment_page == "components":
+                await invoke_refresh(controls["components"].get("refresh"))
+            elif experiment_page == "examples":
+                await invoke_refresh(controls["examples"].get("refresh"))
         elif selected == analysis_tab:
             state.runtime.current_page = "analysis"
             await invoke_refresh(controls["analysis"].get("refresh_runs"))
             await invoke_refresh(controls["analysis"].get("refresh_analysis"))
+        elif selected == final_test_tab:
+            state.runtime.current_page = "final_test"
+            await invoke_refresh(controls["final_test"].get("refresh_runs"))
+            await invoke_refresh(controls["final_test"].get("refresh_results"))
+        elif selected == microrts_tab:
+            state.runtime.current_page = "microrts"
+            await invoke_refresh(controls["microrts"].get("refresh_runs"))
+            await invoke_refresh(controls["microrts"].get("refresh_status"))
 
+    experiment_tabs.on("update:model-value", on_experiment_tab_change)
     tabs.on("update:model-value", on_tab_change)
     return controls
 
@@ -236,6 +280,8 @@ async def startup_refresh() -> None:
     ):
         await invoke_refresh(controls.get(group, {}).get(name))
     await controls["run"]["refresh_runs"]()
+    await invoke_refresh(controls.get("final_test", {}).get("refresh_runs"))
+    await invoke_refresh(controls.get("microrts", {}).get("refresh_runs"))
     await invoke_refresh(controls.get("analysis", {}).get("refresh_runs"))
     await controls["run"]["refresh_log"]()
 

@@ -1259,12 +1259,14 @@ def _display_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _run_config_summary_rows(payload: dict[str, Any], run_path: Path | None) -> list[dict[str, str]]:
     objective_mode, objective_text = _run_objective_summary(payload)
+    surrogate_enabled, surrogate_mode = _run_surrogate_summary(payload)
     return [
         {"field": "algorithm", "value": _payload_value(payload, "algorithm")},
         {"field": "objective mode", "value": objective_mode},
         {"field": "objective / objectives", "value": objective_text},
         {"field": "eval mode", "value": _payload_value(payload, "eval_mode", "evaluator")},
-        {"field": "surrogate mode", "value": _payload_value(payload, "surrogate", "surrogate_mode")},
+        {"field": "surrogate enabled", "value": surrogate_enabled},
+        {"field": "surrogate mode", "value": surrogate_mode},
         {"field": "population size", "value": _payload_value(payload, "population_size")},
         {"field": "generations", "value": _payload_value(payload, "num_generations")},
         {"field": "map", "value": _payload_value(payload, "gameplay_map_dir", "map_dir", "map")},
@@ -1281,6 +1283,22 @@ def _run_config_summary_rows(payload: dict[str, Any], run_path: Path | None) -> 
         {"field": "llm call limit", "value": _payload_value(payload, "llm_call_limit")},
         {"field": "log path", "value": str(run_path) if run_path is not None else "N/A"},
     ]
+
+
+def _run_surrogate_summary(payload: dict[str, Any]) -> tuple[str, str]:
+    mode = _payload_value(payload, "surrogate", "surrogate_mode")
+    algorithm = str(payload.get("algorithm") or "").strip()
+    if not algorithm:
+        return "N/A", mode
+    if is_surrogate_algorithm(algorithm):
+        return "yes", mode
+    if _summary_value_is_enabled(mode):
+        mode = f"{mode} (ignored)"
+    return "no", mode
+
+
+def _summary_value_is_enabled(value: str) -> bool:
+    return value.strip().lower() not in {"", "0", "false", "no", "none", "off", "disabled", "n/a"}
 
 
 def _run_objective_summary(payload: dict[str, Any]) -> tuple[str, str]:
@@ -1706,6 +1724,53 @@ def load_prompt_records(run_dir: Path | None) -> dict[str, dict[str, Any]]:
     """Load prompt records through the existing desktop service."""
     with LoggedOperation("parsing logs", kind="prompt_records", run_dir=run_dir):
         return analysis_service.load_prompts(run_dir)
+
+
+def load_experiment_prompt_records(run_dir: Path | None) -> dict[str, dict[str, Any]]:
+    """Load prompt records for every available generation in one experiment run."""
+    with LoggedOperation("parsing logs", kind="experiment_prompt_records", run_dir=run_dir):
+        return analysis_service.load_all_prompts(run_dir)
+
+
+def prompt_generation_choices(records: dict[str, dict[str, Any]]) -> list[str]:
+    """Return generation choices for experiment prompt records."""
+    return _sort_trace_values(
+        {
+            str(record.get("generation", ""))
+            for record in records.values()
+            if str(record.get("generation", "")) != ""
+        }
+    )
+
+
+def prompt_individual_choices(records: dict[str, dict[str, Any]], generation: str) -> list[str]:
+    """Return individual choices for one prompt-record generation."""
+    return _sort_trace_values(
+        {
+            str(record.get("individual_id", ""))
+            for record in records.values()
+            if str(record.get("generation", "")) == str(generation)
+            and str(record.get("individual_id", "")) != ""
+        }
+    )
+
+
+def selected_prompt_record(
+    records: dict[str, dict[str, Any]],
+    generation: str,
+    individual_id: str,
+) -> dict[str, Any] | None:
+    """Return the first prompt record matching a generation and individual."""
+    matches = [
+        (record_id, record)
+        for record_id, record in records.items()
+        if str(record.get("generation", "")) == str(generation)
+        and str(record.get("individual_id", "")) == str(individual_id)
+    ]
+    if not matches:
+        return None
+    _, record = sorted(matches, key=lambda item: item[0])[0]
+    return dict(record)
 
 
 def generate_mo_analysis_artifacts(run_dir: Path | None) -> dict[str, Any]:

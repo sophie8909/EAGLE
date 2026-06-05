@@ -200,6 +200,11 @@ class PromptState:
 class MicroRTSState:
     """Visible Java MicroRTS launch and trace controls."""
 
+    selected_run_dir: Path | None = None
+    prompt_records: dict[str, dict[str, Any]] = field(default_factory=dict)
+    selected_generation: str = ""
+    selected_individual_id: str = ""
+    prompt_metadata: str = "No experiment prompt selected"
     status: str = "Java GUI not running"
     opponent: str = "ai.abstraction.HeavyRush"
     map_dir: str = "8x8"

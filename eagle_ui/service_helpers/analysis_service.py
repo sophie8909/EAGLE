@@ -117,8 +117,8 @@ def load_prompts(run_dir: Path | None) -> dict[str, dict[str, Any]]:
     """Load prompt-inspection records for the selected run."""
     if run_dir is None:
         return {}
-    profile_records = _latest_generation_profile_records(run_dir)
-    checkpoint_records = _latest_generation_checkpoint_prompt_records(run_dir)
+    profile_records = _profile_prompt_records(run_dir, latest_only=True)
+    checkpoint_records = _checkpoint_prompt_records(run_dir, latest_only=True)
     if profile_records and checkpoint_records:
         if _records_latest_generation(checkpoint_records) > _records_latest_generation(profile_records):
             return checkpoint_records
@@ -128,6 +128,21 @@ def load_prompts(run_dir: Path | None) -> dict[str, dict[str, Any]]:
     if checkpoint_records:
         return checkpoint_records
     return _generation_log_prompt_records(run_dir)
+
+
+def load_all_prompts(run_dir: Path | None) -> dict[str, dict[str, Any]]:
+    """Load prompt records across every available generation for selection workflows."""
+    if run_dir is None:
+        return {}
+    profile_records = _profile_prompt_records(run_dir, latest_only=False)
+    checkpoint_records = _checkpoint_prompt_records(run_dir, latest_only=False)
+    if profile_records and checkpoint_records:
+        return _merge_prompt_records(checkpoint_records, profile_records)
+    if profile_records:
+        return profile_records
+    if checkpoint_records:
+        return checkpoint_records
+    return _generation_log_prompt_records(run_dir, latest_only=False)
 
 
 def _load_json_file(path: Path) -> dict[str, Any]:
@@ -170,15 +185,17 @@ def _load_checkpoint_rows(run_dir: Path) -> list[dict[str, Any]]:
     return [{"generation": "state", "phase": "run_state", "individual": item} for item in _load_population(run_dir)]
 
 
-def _latest_generation_profile_records(run_dir: Path) -> dict[str, dict[str, Any]]:
-    """Return profile rows for the latest generation present in profiles.jsonl."""
+def _profile_prompt_records(run_dir: Path, *, latest_only: bool) -> dict[str, dict[str, Any]]:
+    """Return prompt rows from profiles.jsonl."""
     rows = [row for row in _load_jsonl_rows(run_dir / "profiles.jsonl") if row.get("record_type") == "evaluation"]
     if not rows:
         return {}
-    latest_generation = _latest_generation_value([row.get("generation") for row in rows])
-    latest_rows = [row for row in rows if row.get("generation") == latest_generation]
+    selected_rows = rows
+    if latest_only:
+        latest_generation = _latest_generation_value([row.get("generation") for row in rows])
+        selected_rows = [row for row in rows if row.get("generation") == latest_generation]
     records: dict[str, dict[str, Any]] = {}
-    for index, row in enumerate(latest_rows, start=1):
+    for index, row in enumerate(selected_rows, start=1):
         prompt = str(row.get("prompt") or "")
         if not prompt:
             continue
@@ -191,15 +208,17 @@ def _latest_generation_profile_records(run_dir: Path) -> dict[str, dict[str, Any
     return records
 
 
-def _latest_generation_checkpoint_prompt_records(run_dir: Path) -> dict[str, dict[str, Any]]:
-    """Return prompt rows from the latest checkpoint generation when profiles are absent."""
+def _checkpoint_prompt_records(run_dir: Path, *, latest_only: bool) -> dict[str, dict[str, Any]]:
+    """Return prompt rows from checkpoint artifacts when profiles are absent."""
     rows = _load_checkpoint_rows(run_dir)
     if not rows:
         return {}
-    latest_generation = _latest_generation_value([row.get("generation") for row in rows])
-    latest_rows = [row for row in rows if row.get("generation") == latest_generation]
+    selected_rows = rows
+    if latest_only:
+        latest_generation = _latest_generation_value([row.get("generation") for row in rows])
+        selected_rows = [row for row in rows if row.get("generation") == latest_generation]
     records: dict[str, dict[str, Any]] = {}
-    for index, row in enumerate(latest_rows, start=1):
+    for index, row in enumerate(selected_rows, start=1):
         item = dict(row.get("individual") or {})
         prompt = str(item.get("rendered_prompt") or "")
         if not prompt:
@@ -220,28 +239,50 @@ def _latest_generation_checkpoint_prompt_records(run_dir: Path) -> dict[str, dic
     return records
 
 
-def _generation_log_prompt_records(run_dir: Path) -> dict[str, dict[str, Any]]:
+def _generation_log_prompt_records(run_dir: Path, *, latest_only: bool = True) -> dict[str, dict[str, Any]]:
     """Fallback prompt extraction from human-readable generation logs."""
     records: dict[str, dict[str, Any]] = {}
     paths = sorted(run_dir.glob("generation*.txt"))
     if not paths:
         return records
-    latest_path = paths[-1]
-    text = latest_path.read_text(encoding="utf-8", errors="replace")
-    for index, block in enumerate(text.split("Prompt:\n")[1:], start=1):
-        prompt = block.split("\nIndividual(", 1)[0].split("\nPopulation", 1)[0].strip()
-        if not prompt:
-            continue
-        record = {
-            "generation": latest_path.stem,
-            "individual_id": f"prompt-{index}",
-            "evaluation_mode": "generation_log",
-            "opponent": "",
-            "prompt": prompt,
-            "llm_output": "No LLM output recorded in generation log.",
-        }
-        records[_prompt_record_id(record, index)] = record
+    selected_paths = [paths[-1]] if latest_only else paths
+    record_index = 0
+    for path in selected_paths:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for block in text.split("Prompt:\n")[1:]:
+            prompt = block.split("\nIndividual(", 1)[0].split("\nPopulation", 1)[0].strip()
+            if not prompt:
+                continue
+            record_index += 1
+            record = {
+                "generation": path.stem,
+                "individual_id": f"prompt-{record_index}",
+                "evaluation_mode": "generation_log",
+                "opponent": "",
+                "prompt": prompt,
+                "llm_output": "No LLM output recorded in generation log.",
+            }
+            records[_prompt_record_id(record, record_index)] = record
     return records
+
+
+def _merge_prompt_records(
+    base_records: dict[str, dict[str, Any]],
+    override_records: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Merge prompt sources by generation and individual, preferring override records."""
+    merged = dict(base_records)
+    for record_id, record in override_records.items():
+        generation = str(record.get("generation", ""))
+        individual_id = str(record.get("individual_id", ""))
+        for existing_id, existing in list(merged.items()):
+            if (
+                str(existing.get("generation", "")) == generation
+                and str(existing.get("individual_id", "")) == individual_id
+            ):
+                merged.pop(existing_id)
+        merged[record_id] = record
+    return merged
 
 
 def _llm_output_from_profile_record(record: dict[str, Any]) -> str:

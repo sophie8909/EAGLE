@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 from nicegui import ui
 
 from eagle_ui import services
+from eagle_ui.components.selectors import create_run_selector
 from eagle_ui.theme import (
     BUTTON_CLASS,
     CARD_CLASS,
@@ -25,6 +27,35 @@ def build_microrts_view(state: Any) -> dict[str, Any]:
     """Build the MicroRTS prompt, launch, and trace controls."""
     controls: dict[str, Any] = {}
 
+    async def refresh_runs() -> None:
+        runs = await asyncio.to_thread(services.run_choices)
+        run_select.options = runs
+        selected_value = str(state.microrts.selected_run_dir) if state.microrts.selected_run_dir is not None else ""
+        current_run = str(state.run.experiment_current_run_dir) if state.run.experiment_current_run_dir is not None else ""
+        if selected_value not in runs:
+            fallback = current_run if current_run in runs else (runs[0] if runs else "")
+            state.microrts.selected_run_dir = Path(fallback) if fallback else None
+        run_select.value = str(state.microrts.selected_run_dir) if state.microrts.selected_run_dir is not None else None
+        run_select.update()
+        selected_run_label.set_text(f"Selected folder: {state.microrts.selected_run_dir or '(none)'}")
+        await refresh_experiment_prompts()
+
+    async def refresh_experiment_prompts() -> None:
+        run_dir = state.microrts.selected_run_dir
+        if run_dir is None:
+            _set_prompt_empty("No experiment folder selected.")
+            return
+        try:
+            state.microrts.prompt_records = await asyncio.to_thread(services.load_experiment_prompt_records, run_dir)
+        except (OSError, ValueError) as exc:
+            _set_prompt_empty(str(exc))
+            return
+        if not state.microrts.prompt_records:
+            _set_prompt_empty("No prompt records found in this experiment.")
+            return
+        _refresh_prompt_options()
+        load_selected_experiment_prompt()
+
     async def save_prompt() -> None:
         try:
             path = await asyncio.to_thread(services.save_current_prompt_to_microrts, state.microrts.prompt_text)
@@ -41,6 +72,12 @@ def build_microrts_view(state: Any) -> dict[str, Any]:
         except (OSError, RuntimeError, ValueError) as exc:
             ui.notify(str(exc), type="negative")
         await refresh_status()
+
+    async def launch_selected_prompt() -> None:
+        if not load_selected_experiment_prompt():
+            ui.notify(state.microrts.prompt_metadata, type="negative")
+            return
+        await launch()
 
     async def stop() -> None:
         state.microrts.status = await asyncio.to_thread(services.stop_microrts_gui)
@@ -68,6 +105,82 @@ def build_microrts_view(state: Any) -> dict[str, Any]:
         prompt_text.value = prompt
         prompt_text.update()
 
+    def _set_prompt_empty(message: str) -> None:
+        state.microrts.prompt_records = {}
+        state.microrts.selected_generation = ""
+        state.microrts.selected_individual_id = ""
+        state.microrts.prompt_metadata = message
+        state.microrts.prompt_text = ""
+        generation_select.options = []
+        generation_select.value = None
+        individual_select.options = []
+        individual_select.value = None
+        for control in (generation_select, individual_select):
+            control.update()
+        prompt_metadata_label.set_text(message)
+        prompt_text.value = ""
+        prompt_text.update()
+
+    def _refresh_prompt_options() -> None:
+        _refresh_generation_options()
+        _refresh_individual_options()
+
+    def _refresh_generation_options() -> None:
+        choices = services.prompt_generation_choices(state.microrts.prompt_records)
+        generation_select.options = choices
+        if state.microrts.selected_generation not in choices:
+            state.microrts.selected_generation = choices[-1] if choices else ""
+        generation_select.value = state.microrts.selected_generation or None
+        generation_select.update()
+
+    def _refresh_individual_options() -> None:
+        choices = services.prompt_individual_choices(
+            state.microrts.prompt_records,
+            state.microrts.selected_generation,
+        )
+        individual_select.options = choices
+        if state.microrts.selected_individual_id not in choices:
+            state.microrts.selected_individual_id = choices[0] if choices else ""
+        individual_select.value = state.microrts.selected_individual_id or None
+        individual_select.update()
+
+    def load_selected_experiment_prompt() -> bool:
+        record = services.selected_prompt_record(
+            state.microrts.prompt_records,
+            state.microrts.selected_generation,
+            state.microrts.selected_individual_id,
+        )
+        if not record:
+            state.microrts.prompt_metadata = "No individual prompt selected."
+            prompt_metadata_label.set_text(state.microrts.prompt_metadata)
+            return False
+        prompt = str(record.get("prompt") or "")
+        if not prompt.strip():
+            state.microrts.prompt_metadata = "Selected individual has no prompt text."
+            prompt_metadata_label.set_text(state.microrts.prompt_metadata)
+            return False
+        state.microrts.prompt_text = prompt
+        state.microrts.prompt_metadata = services.prompt_record_metadata(record)
+        prompt_metadata_label.set_text(state.microrts.prompt_metadata)
+        prompt_text.value = prompt
+        prompt_text.update()
+        return True
+
+    def on_run_changed(event: Any) -> None:
+        state.microrts.selected_run_dir = Path(str(event.value)) if event.value else None
+        selected_run_label.set_text(f"Selected folder: {state.microrts.selected_run_dir or '(none)'}")
+        asyncio.create_task(refresh_experiment_prompts())
+
+    def on_generation_changed(event: Any) -> None:
+        state.microrts.selected_generation = str(event.value or "")
+        state.microrts.selected_individual_id = ""
+        _refresh_individual_options()
+        load_selected_experiment_prompt()
+
+    def on_individual_changed(event: Any) -> None:
+        state.microrts.selected_individual_id = str(event.value or "")
+        load_selected_experiment_prompt()
+
     def on_map_dir_changed(event: Any) -> None:
         state.microrts.map_dir = str(event.value or "8x8")
         files = list(services.microrts_map_file_choices(state.microrts.map_dir))
@@ -87,6 +200,32 @@ def build_microrts_view(state: Any) -> dict[str, Any]:
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("MicroRTS").classes(SECTION_HEADER_CLASS)
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
+            run_select = create_run_selector(
+                value=state.microrts.selected_run_dir,
+                on_change=on_run_changed,
+            ).classes(f"{INPUT_CLASS} grow")
+            ui.button("Refresh experiments", on_click=safe_click(refresh_runs, label="Refresh experiments")).classes(
+                BUTTON_CLASS
+            )
+        selected_run_label = ui.label(f"Selected folder: {state.microrts.selected_run_dir or '(none)'}")
+        with ui.row().classes(f"{ROW_CLASS} items-end gap-3 w-full"):
+            generation_select = ui.select([], label="Generation", on_change=on_generation_changed).classes(
+                f"{INPUT_CLASS} w-44"
+            )
+            individual_select = ui.select([], label="Individual", on_change=on_individual_changed).classes(
+                f"{INPUT_CLASS} w-64"
+            )
+            ui.button(
+                "Load selected prompt",
+                on_click=safe_click(load_selected_experiment_prompt, label="Load selected prompt"),
+            ).classes(BUTTON_CLASS)
+            ui.button(
+                "Launch selected prompt",
+                on_click=safe_click(launch_selected_prompt, label="Launch selected prompt"),
+            ).classes(button_class(success=True))
+        prompt_metadata_label = ui.label(state.microrts.prompt_metadata)
+
         with ui.row().classes(f"{ROW_CLASS} items-end gap-3"):
             ui.select(
                 list(services.MICRORTS_OPPONENT_CHOICES),
@@ -153,5 +292,7 @@ def build_microrts_view(state: Any) -> dict[str, Any]:
 
     controls["refresh_status"] = refresh_status
     controls["refresh_trace_choices"] = refresh_trace_choices
+    controls["refresh_runs"] = refresh_runs
+    controls["refresh_experiment_prompts"] = refresh_experiment_prompts
     refresh_trace_choices()
     return controls
