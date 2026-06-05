@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from eagle.core.config import is_surrogate_algorithm
 from eagle.core.plugin import BaseTaskPlugin, ObjectiveValues, ParsedOutput
 from eagle.core.result import EvaluationResult, ensure_evaluation_result
 from eagle.plugins.microrts.evaluation.full_game_evaluator import FullGameEvaluator
 from eagle.plugins.microrts.evaluation.round_evaluator import Evaluator as RoundEvaluator
 from eagle.objectives.aggregation import aggregate_fitness
 from eagle.plugins.microrts.prompt import MicroRTSPromptRenderer
+from eagle.plugins.microrts.specs import register_framework_specs
 
 
 class MicroRTSPlugin(BaseTaskPlugin):
@@ -88,7 +90,7 @@ class MicroRTSPlugin(BaseTaskPlugin):
             return RoundEvaluator(active_pool, active_config, runtime_logs_dir=active_logs_dir)
         if mode in {"", "gameplay", "surrogate", "final_test"}:
             return FullGameEvaluator(active_pool, active_config, runtime_logs_dir=active_logs_dir)
-        if algorithm.endswith("_surrogate"):
+        if is_surrogate_algorithm(algorithm, application=getattr(active_config, "application", "microrts")):
             return FullGameEvaluator(active_pool, active_config, runtime_logs_dir=active_logs_dir)
         raise ValueError(f"Unsupported MicroRTS evaluator mode: {mode!r}.")
 
@@ -100,6 +102,7 @@ class MicroRTSPlugin(BaseTaskPlugin):
 
     def register_defaults(self) -> None:
         """Import MicroRTS registrations for algorithms, evaluators, and objectives."""
+        register_framework_specs()
         from eagle.plugins.microrts.evaluation import algorithms as _algorithms  # noqa: F401
         from eagle.objectives import registry as _registry  # noqa: F401
         from eagle.plugins.microrts import objectives as _objectives  # noqa: F401

@@ -63,13 +63,8 @@ def _fitness_metric_options(value: str = "") -> dict[str, str]:
     return options
 
 
-def _surrogate_options(value: str = "") -> dict[str, str]:
-    options = {
-        "early_end": "Early End",
-        "round": "Round",
-        "policy_agent": "Policy Agent",
-        "java_agent": "Java Agent",
-    }
+def _surrogate_options(state: Any, value: str = "") -> dict[str, str]:
+    options = services.surrogate_choices_for_state(state)
     if value and value not in options:
         options[value] = value
     return options
@@ -140,7 +135,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             ).props("use-input clearable new-value-mode=add-unique")
 
     def refresh() -> None:
-        services.sync_algorithm_operator_defaults(state)
+        services.sync_algorithm_defaults(state)
         _set_select_options(base_config_select, config_path_options(), state.config.base_config_path or "")
         base_config_select.update()
         generated_label.set_text(f"Generated config: {state.config.generated_config_path or '(none)'}")
@@ -160,7 +155,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
             if name == "fitness_metric":
                 _set_select_options(control, _fitness_metric_options(str(value)), value)
             elif name == "surrogate":
-                _set_select_options(control, _surrogate_options(str(value)), value)
+                _set_select_options(control, _surrogate_options(state, str(value)), value)
             elif hasattr(control, "options"):
                 _set_select_options(control, getattr(control, "options", []), value)
             else:
@@ -202,9 +197,12 @@ def build_operators_view(state: Any) -> dict[str, Any]:
 
     def update_algorithm(value: str) -> None:
         state.config.algorithm = value
-        services.sync_algorithm_operator_defaults(state)
+        services.sync_algorithm_defaults(state)
         refresh()
         refresh_config_summary(state)
+        objectives_refresh = getattr(state.runtime, "objectives_refresh", None)
+        if callable(objectives_refresh):
+            objectives_refresh()
 
     def update_evaluator(value: str) -> None:
         state.config.eval_mode = services.normalize_eval_mode(value)
@@ -346,7 +344,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                 config_controls.update(
                     {
                         "surrogate": ui.select(
-                            _surrogate_options(state.config.surrogate),
+                            _surrogate_options(state, state.config.surrogate),
                             label="Surrogate",
                             value=state.config.surrogate,
                             on_change=lambda event: update_config("surrogate", str(event.value or "early_end")),
@@ -445,6 +443,18 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                                 value=state.operators.mutation_operator,
                                 on_change=lambda event: update_select(
                                     "mutation_operator",
+                                    str(event.value or ""),
+                                ),
+                            ).classes(f"{INPUT_CLASS} w-full"),
+                            "reflection_operator": ui.select(
+                                _options_with_value(
+                                    services.operator_choices("reflection"),
+                                    state.operators.reflection_operator,
+                                ),
+                                label="Reflection",
+                                value=state.operators.reflection_operator,
+                                on_change=lambda event: update_select(
+                                    "reflection_operator",
                                     str(event.value or ""),
                                 ),
                             ).classes(f"{INPUT_CLASS} w-full"),

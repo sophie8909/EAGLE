@@ -10,7 +10,6 @@ from nicegui import ui
 
 from eagle_ui import services
 from eagle_ui.components.selectors import create_run_selector
-from eagle_ui.state import EARLY_END_FITNESS_METRIC
 from eagle_ui.theme import (
     BADGE_CLASS,
     BUTTON_CLASS,
@@ -39,6 +38,7 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         ui.notify(message, type="positive" if success else "warning")
         await asyncio.sleep(0.2)
         await refresh_status()
+        refresh_config_dependents()
         await refresh_runs()
         analysis_refresh = getattr(state.runtime, "analysis_runs_refresh", None)
         if callable(analysis_refresh):
@@ -70,10 +70,33 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         refresh_run_config_panel()
 
     async def refresh_log() -> None:
-        await refresh_status()
         state.run.log_text = await asyncio.to_thread(services.read_log_tail)
         log_textarea.value = state.run.log_text
         log_textarea.update()
+
+    async def full_refresh() -> None:
+        selected_run = state.run.experiment_current_run_dir
+        try:
+            if selected_run is not None:
+                await asyncio.to_thread(services.load_run_config_into_state, state, selected_run)
+            elif state.config.base_config_path:
+                config_path = Path(state.config.base_config_path)
+                payload = await asyncio.to_thread(services.load_config_payload, config_path)
+                services.apply_config_payload(state, payload, config_path)
+        except (OSError, ValueError) as exc:
+            ui.notify(str(exc), type="negative")
+            return
+        refresh_config_dependents()
+        await refresh_runs()
+        await refresh_status()
+        await refresh_log()
+
+    def refresh_config_dependents() -> None:
+        refresh_run_config_panel()
+        for refresh_handle_name in ("operators_refresh", "objectives_refresh", "config_summary_refresh"):
+            refresh_handle = getattr(state.runtime, refresh_handle_name, None)
+            if callable(refresh_handle):
+                refresh_handle()
 
     def refresh_start_button() -> None:
         """Update the start button label based on whether a run is selected."""
@@ -82,20 +105,28 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
         else:
             start_button.set_text("Resume experiment")
 
-    def on_run_changed(event: Any) -> None:
-        state.run.experiment_current_run_dir = Path(str(event.value)) if event.value else None
+    async def on_run_changed(event: Any) -> None:
+        selected_run = Path(str(event.value)) if event.value else None
+        state.run.experiment_current_run_dir = selected_run
         refresh_start_button()
+        if selected_run is not None:
+            try:
+                await asyncio.to_thread(services.load_run_config_into_state, state, selected_run)
+            except (OSError, ValueError) as exc:
+                ui.notify(str(exc), type="negative")
+                return
+        refresh_config_dependents()
 
     def refresh_run_config_panel() -> None:
         eval_mode = services.normalize_eval_mode(state.config.eval_mode)
         eval_mode_value.set_text(services.EVALUATION_MODE_CHOICES.get(eval_mode, eval_mode))
-        fitness_value.set_text(EARLY_END_FITNESS_METRIC if eval_mode == "early_end" else state.config.fitness_metric)
+        objective_value.set_text(services.active_objective_display(state))
         llm_call_limit_value.set_text(state.config.llm_call_limit)
         early_end_badge.visible = eval_mode == "early_end"
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Run Control").classes(SECTION_HEADER_CLASS)
-        with ui.row().classes(f"{ROW_CLASS} items-center gap-3"):
+        with ui.row().classes(f"{ROW_CLASS} items-center gap-2 flex-wrap"):
             start_button = ui.button(
                 "Start experiment",
                 on_click=safe_click(start, label="Start experiment"),
@@ -108,6 +139,11 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
                 on_click=safe_click(refresh_runs, label="Refresh runs"),
             ).classes(BUTTON_CLASS)
             ui.button("Refresh log", on_click=safe_click(refresh_log, label="Refresh log")).classes(BUTTON_CLASS)
+            ui.button(
+                "Refresh status",
+                on_click=safe_click(refresh_status, label="Refresh status"),
+            ).classes(BUTTON_CLASS)
+            ui.button("Full refresh", on_click=safe_click(full_refresh, label="Full refresh")).classes(BUTTON_CLASS)
             status_badge = ui.badge(state.run.status_text).classes(BADGE_CLASS)
         with ui.row().classes(f"{ROW_CLASS} gap-6"):
             ui.checkbox(
@@ -135,14 +171,21 @@ def build_run_view(state: Any, *, log_height: int = 560) -> dict[str, Any]:
                 early_end_badge = ui.badge("EARLY END").classes("uppercase")
             with ui.grid(columns=3).classes("w-full gap-3"):
                 eval_mode_value = _status_field("Eval Mode")
-                fitness_value = _status_field("Fitness Metric")
+                objective_value = _status_field("Objective / Objectives")
                 llm_call_limit_value = _status_field("Eval LLM Call Limit")
         log_textarea = ui.textarea(value=state.run.log_text).props("readonly").classes(
             f"{TEXTAREA_CLASS} {height_class(log_height)} w-full"
         )
 
     refresh_run_config_panel()
-    controls.update({"refresh_runs": refresh_runs, "refresh_status": refresh_status, "refresh_log": refresh_log})
+    controls.update(
+        {
+            "refresh_runs": refresh_runs,
+            "refresh_status": refresh_status,
+            "refresh_log": refresh_log,
+            "full_refresh": full_refresh,
+        }
+    )
     return controls
 
 

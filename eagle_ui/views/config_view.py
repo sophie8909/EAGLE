@@ -42,13 +42,8 @@ def _fitness_metric_options() -> dict[str, str]:
     }
 
 
-def _surrogate_options() -> dict[str, str]:
-    return {
-        "early_end": "Early End",
-        "round": "Round",
-        "policy_agent": "Policy Agent",
-        "java_agent": "Java Agent",
-    }
+def _surrogate_options(state: Any) -> dict[str, str]:
+    return services.surrogate_choices_for_state(state)
 
 
 def build_config_view(state: Any) -> dict[str, Any]:
@@ -80,6 +75,8 @@ def build_config_view(state: Any) -> dict[str, Any]:
     def refresh_form() -> None:
         for key, control in controls.items():
             owner, name = key.split(".", 1)
+            if key == "config.surrogate":
+                control.options = _surrogate_options(state)
             control.value = getattr(getattr(state, owner), name)
             control.update()
         component_path_label.set_text(f"Component path: {state.config.component_pool_path or '(none)'}")
@@ -91,6 +88,10 @@ def build_config_view(state: Any) -> dict[str, Any]:
         )
         early_end_settings.visible = state.config.eval_mode == "early_end"
         real_eval_settings.visible = state.config.eval_mode == "gameplay"
+
+    def update_algorithm(value: str) -> None:
+        _set_algorithm(state, value)
+        refresh_form()
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Config").classes(SECTION_HEADER_CLASS)
@@ -117,7 +118,7 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 "Algorithm",
                 _key_labels(services.ALGORITHM_CHOICES),
                 value=state.config.algorithm,
-                on_change=lambda event: _set_algorithm(state, str(event.value or "nsga2")),
+                on_change=lambda event: update_algorithm(str(event.value or "nsga2")),
             ).classes(f"{INPUT_CLASS} w-56")
             for name, label in (
                 ("population_size", "Population"),
@@ -190,7 +191,7 @@ def build_config_view(state: Any) -> dict[str, Any]:
             with ui.grid(columns=4).classes(f"{GRID_CLASS} w-full gap-3"):
                 controls["config.surrogate"] = create_key_select(
                     "Surrogate",
-                    _surrogate_options(),
+                    _surrogate_options(state),
                     value=state.config.surrogate,
                     on_change=lambda event: setattr(state.config, "surrogate", str(event.value or "early_end")),
                 ).classes(f"{INPUT_CLASS} w-56")
@@ -285,6 +286,7 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows["environmental_selection"].set_text(state.operators.env_selection_operator)
         rows["crossover"].set_text(state.operators.crossover_operator)
         rows["mutation"].set_text(state.operators.mutation_operator)
+        rows["reflection_operator"].set_text(state.operators.reflection_operator)
         rows["mutation_selection_mode"].set_text(
             services.MUTATION_SELECTION_MODE_CHOICES.get(
                 state.operators.mutation_selection_mode,
@@ -320,6 +322,7 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
                 "environmental_selection": _summary_row("Environmental selection"),
                 "crossover": _summary_row("Crossover"),
                 "mutation": _summary_row("Mutation"),
+                "reflection_operator": _summary_row("Reflection"),
                 "mutation_selection_mode": _summary_row("Operator selection mode"),
                 "mutation_mix_weights": _summary_row("Mutation mix weights"),
                 "crossover_repair": _summary_row("Crossover repair"),
@@ -410,5 +413,8 @@ def _set_agent_class(state: Any, value: str) -> None:
 
 def _set_algorithm(state: Any, value: str) -> None:
     state.config.algorithm = value
-    services.sync_algorithm_operator_defaults(state)
+    services.sync_algorithm_defaults(state)
     refresh_config_summary(state)
+    refresh = getattr(state.runtime, "objectives_refresh", None)
+    if callable(refresh):
+        refresh()

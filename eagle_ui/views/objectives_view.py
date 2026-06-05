@@ -18,16 +18,19 @@ def build_objectives_view(state: Any) -> dict[str, Any]:
     """Build the objective registry and selection view."""
     controls: dict[str, Any] = {}
     objective_controls: dict[str, dict[str, Any]] = {}
+    services.sync_algorithm_objective_mode(state)
     initial_choices = list(services.objective_choices(state))
     _ensure_valid_objective_state(state, initial_choices)
 
     def refresh() -> None:
+        services.sync_algorithm_objective_mode(state)
         choices = list(services.objective_choices(state))
         _ensure_valid_objective_state(state, choices)
         rows = {row["key"]: row for row in services.objective_rows(state)}
 
         mode_select.options = list(OBJECTIVE_MODE_OPTIONS)
         mode_select.value = state.objectives.mode
+        mode_select.visible = services.algorithm_objective_mode(state) == "both"
         mode_select.update()
 
         single_panel.visible = state.objectives.mode == "single"
@@ -54,6 +57,9 @@ def build_objectives_view(state: Any) -> dict[str, Any]:
         refresh_config_summary(state)
 
     def update_mode(value: str) -> None:
+        if services.algorithm_objective_mode(state) != "both":
+            refresh()
+            return
         state.objectives.mode = value if value in OBJECTIVE_MODE_OPTIONS else "multi"
         choices = list(services.objective_choices(state))
         _ensure_valid_objective_state(state, choices)

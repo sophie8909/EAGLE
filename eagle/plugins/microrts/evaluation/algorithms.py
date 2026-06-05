@@ -12,7 +12,6 @@ from eagle.core.registry import ALGORITHMS, EVALUATORS
 from eagle.objectives.aggressiveness.runtime import maybe_add_aggressiveness_metrics
 from eagle.evolution.component.ga import GA
 from eagle.evolution.component.nsga2 import NSGA2
-from eagle.reflection.microrts.round_reflection import RoundReflection
 from eagle.utils.token_count import count_prompt_tokens
 
 from .full_game_evaluator import FullGameEvaluator
@@ -49,7 +48,6 @@ class MicroRTSGA(GA):
     """Single-objective component GA bound to full MicroRTS gameplay."""
 
     evaluator_factory = FullGameEvaluator
-    reflection_operator = RoundReflection
 
 
 @ALGORITHMS.register("nsga2")
@@ -57,7 +55,6 @@ class MicroRTSNSGA2(NSGA2):
     """NSGA-II component evolution bound to full MicroRTS gameplay."""
 
     evaluator_factory = FullGameEvaluator
-    reflection_operator = RoundReflection
 
 
 @ALGORITHMS.register("nsga2_surrogate")
@@ -65,7 +62,6 @@ class MicroRTSNSGA2Surrogate(NSGA2):
     """NSGA-II component evolution that evaluates candidates through surrogate scoring."""
 
     evaluator_factory = FullGameEvaluator
-    reflection_operator = RoundReflection
 
     def _evaluate_initial_population(self, evaluator):
         """Score the initial population with surrogate metrics only."""
@@ -157,7 +153,6 @@ class MicroRTSGASurrogate(GA):
     """GA that ranks mostly by surrogate scores and refreshes elites with gameplay."""
 
     evaluator_factory = FullGameEvaluator
-    reflection_operator = RoundReflection
 
     def __init__(self, config, component_pool, evaluation_context=None):
         super().__init__(config, component_pool, evaluation_context)

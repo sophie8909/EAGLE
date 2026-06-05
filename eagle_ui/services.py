@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from eagle.core import config as framework_config
 from eagle.config import DEFAULT_AGENT_CLASS, normalize_algorithm_name
 from eagle.envs.microrts.runner import save_prompt as save_microrts_prompt
 from eagle.envs.microrts.runner import set_config_property
@@ -42,36 +43,29 @@ LOG_TAIL_LIMIT = 18_000
 ANALYSIS_SUBPROCESS_TIMEOUT_SEC = 600
 
 APPLICATION_CHOICES = ("microrts",)
-ALGORITHM_CHOICES = ("ga", "nsga2", "ga_surrogate", "nsga2_surrogate")
+ALGORITHM_CHOICES = framework_config.plugin_names("algorithm", application="microrts")
 EVALUATOR_CHOICES = ("gameplay",)
-EVALUATION_MODE_CHOICES = {
-    "gameplay": "Real Eval",
-    "early_end": "Early End",
-}
+EVALUATION_MODE_CHOICES = framework_config.plugin_choices(
+    "evaluation_mode",
+    application="microrts",
+    include_runtime_only=False,
+)
 AGENT_CLASS_CHOICES = {
     "ai.eagle.EAGLE": "EAGLE",
     "ai.eagle.EAGLERepair": "EAGLERepair",
 }
-SURROGATE_CHOICES = ("early_end", "round", "policy_agent", "java_agent")
+SURROGATE_CHOICES = framework_config.plugin_names("surrogate", application="microrts")
+SURROGATE_MODE_CHOICES = framework_config.plugin_choices("surrogate", application="microrts")
 AGGRESSIVENESS_MODE_CHOICES = ("component_only", "llm_only", "hybrid")
 MUTATION_SELECTION_MODE_CHOICES = {
     "fixed": "Fixed",
     "aos": "AOS (Adaptive Operator Selection)",
 }
-GA_ALGORITHMS = {"ga", "ga_surrogate"}
-MO_ALGORITHMS = {"nsga2", "nsga2_surrogate"}
-SURROGATE_ALGORITHMS = {"ga_surrogate", "nsga2_surrogate"}
-PARENT_SELECTION_BY_ALGORITHM = {
-    "ga": "ga_fitness_tournament",
-    "ga_surrogate": "ga_fitness_tournament",
-    "nsga2": "nsga2_tournament",
-    "nsga2_surrogate": "nsga2_tournament",
-}
-ENV_SELECTION_BY_ALGORITHM = {
-    "ga": "ga_fitness_elitism",
-    "ga_surrogate": "ga_fitness_elitism",
-    "nsga2": "nsga2_environmental",
-    "nsga2_surrogate": "nsga2_environmental",
+ALGORITHM_SPECS = framework_config.plugin_specs("algorithm", application="microrts")
+GA_ALGORITHMS = {spec.id for spec in ALGORITHM_SPECS if spec.mode == "SO"}
+MO_ALGORITHMS = {spec.id for spec in ALGORITHM_SPECS if spec.mode == "MO"}
+SURROGATE_ALGORITHMS = {
+    spec.id for spec in ALGORITHM_SPECS if "surrogate" in spec.default_config
 }
 MICRORTS_OPPONENT_CHOICES = (
     "ai.abstraction.HeavyRush",
@@ -88,7 +82,10 @@ LOGGER = logging.getLogger(__name__)
 
 def is_surrogate_algorithm(algorithm: str) -> bool:
     """Return whether an algorithm name uses a surrogate flow."""
-    return "surrogate" in str(algorithm or "").lower()
+    try:
+        return framework_config.is_surrogate_algorithm(algorithm, application="microrts")
+    except KeyError:
+        return False
 
 
 def normalize_eval_mode(value: Any) -> str:
@@ -528,6 +525,7 @@ def apply_operator_config(state: Any, payload: dict[str, Any]) -> None:
     )
     operators.crossover_operator = str(payload.get("crossover_operator", operators.crossover_operator))
     operators.mutation_operator = str(payload.get("mutation_operator", operators.mutation_operator))
+    operators.reflection_operator = str(payload.get("reflection_operator", operators.reflection_operator))
     operators.mutation_selection_mode = normalize_mutation_selection_mode(
         payload.get("mutation_selection_mode", operators.mutation_selection_mode)
     )
@@ -544,7 +542,7 @@ def apply_operator_config(state: Any, payload: dict[str, Any]) -> None:
         operators.example_mutation_source_weights[str(key)] = str(value)
     for key, value in dict(payload.get("strategy_mutation") or {}).items():
         operators.mutation_weights[str(key)] = str(value)
-    sync_algorithm_operator_defaults(state)
+    sync_algorithm_defaults(state)
 
 
 def load_component_json(path: Path) -> dict[str, Any]:
@@ -707,7 +705,7 @@ def save_generated_config(state: Any) -> Path:
 def build_config_payload(state: Any, component_path_override: str | None = None) -> dict[str, Any]:
     """Build one EAGLE config payload without changing its schema."""
     cfg = state.config
-    sync_algorithm_operator_defaults(state)
+    sync_algorithm_defaults(state)
     payload = load_config_payload(Path(cfg.base_config_path))
     eval_mode = normalize_eval_mode(cfg.eval_mode)
     llm_call_limit = parse_int(cfg.llm_call_limit, "llm_call_limit")
@@ -776,6 +774,7 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
             "crossover": state.operators.crossover_operator,
             "crossover_operator": state.operators.crossover_operator,
             "mutation_operator": state.operators.mutation_operator,
+            "reflection_operator": state.operators.reflection_operator,
             "mutation_selection_mode": normalize_mutation_selection_mode(
                 state.operators.mutation_selection_mode
             ),
@@ -839,6 +838,7 @@ def objective_rows(state: Any) -> list[dict[str, str]]:
 
 def build_objective_config(state: Any) -> dict[str, Any]:
     """Build objective_config for GA and multi-objective algorithms."""
+    sync_algorithm_objective_mode(state)
     choices = set(objective_choices(state))
     objectives = state.objectives
     if objectives.mode == "single":
@@ -847,20 +847,27 @@ def build_objective_config(state: Any) -> dict[str, Any]:
             raise ValueError(f"Objective {objective!r} is not available.")
         return {"mode": "single", "objective": objective}
     selected = [key for key in objective_choices(state) if key in objectives.selected]
-    if state.config.algorithm in GA_ALGORITHMS:
-        weights = {
-            key: parse_float(value, f"weight for {key}")
-            for key, value in objectives.weights.items()
-            if key in choices and key in selected
-        }
-        weights = {key: value for key, value in weights.items() if value > 0}
-        if not weights:
-            raise ValueError("weighted_mix requires at least one positive weight.")
-        total = sum(weights.values())
-        return {"mode": "weighted_mix", "weights": {key: value / total for key, value in weights.items()}}
     if len(selected) < 2:
         raise ValueError("multi mode requires at least two objectives.")
     return {"mode": "multi", "objectives": selected}
+
+
+def active_objective_display(state: Any) -> str:
+    """Return compact objective display text from the shared active config state."""
+    eval_mode = normalize_eval_mode(getattr(state.config, "eval_mode", "gameplay"))
+    if eval_mode == "early_end":
+        return "resource_diff_mean"
+
+    objectives = state.objectives
+    mode = str(getattr(objectives, "mode", "multi") or "multi").strip().lower()
+    if mode == "single":
+        return str(getattr(objectives, "single_objective", "") or "(none)")
+
+    selected_keys = {str(key) for key in getattr(objectives, "selected", set()) if str(key)}
+    ordered = [key for key in objective_choices(state) if key in selected_keys]
+    if not ordered:
+        ordered = sorted(selected_keys)
+    return ", ".join(ordered) if ordered else "(none)"
 
 
 def sync_algorithm_operator_defaults(state: Any) -> None:
@@ -869,18 +876,97 @@ def sync_algorithm_operator_defaults(state: Any) -> None:
     if algorithm not in ALGORITHM_CHOICES:
         state.config.algorithm = "nsga2"
         algorithm = "nsga2"
+    defaults = framework_config.algorithm_default_config(algorithm, application=state.config.application)
     state.operators.parent_selection_operator = ensure_operator_choice(
         state.operators.parent_selection_operator,
         "parent_selection",
-        PARENT_SELECTION_BY_ALGORITHM[algorithm],
+        str(defaults.get("parent_selection_operator", "nsga2_tournament")),
     )
     state.operators.env_selection_operator = ensure_operator_choice(
         state.operators.env_selection_operator,
         "env_selection",
-        ENV_SELECTION_BY_ALGORITHM[algorithm],
+        str(defaults.get("env_selection_operator", "nsga2_environmental")),
     )
     state.operators.crossover_operator = ensure_operator_choice(state.operators.crossover_operator, "crossover", "uniform")
     state.operators.mutation_operator = ensure_operator_choice(state.operators.mutation_operator, "mutation", "mix")
+    state.operators.reflection_operator = ensure_operator_choice(
+        state.operators.reflection_operator,
+        "reflection",
+        "round_reflection",
+    )
+
+
+def sync_algorithm_objective_mode(state: Any) -> None:
+    """Keep objective state compatible with the selected algorithm plugin."""
+    algorithm = state.config.algorithm if state.config.algorithm in ALGORITHM_CHOICES else "nsga2"
+    mode = framework_config.algorithm_objective_mode(algorithm, application=state.config.application)
+    if mode == "both":
+        desired_mode = state.objectives.mode if state.objectives.mode in {"single", "multi"} else "multi"
+    else:
+        desired_mode = "single" if mode == "SO" else "multi"
+    _coerce_objective_state(state, desired_mode)
+
+
+def sync_surrogate_mode(state: Any) -> None:
+    """Keep surrogate mode separate from the selected evaluation mode."""
+    if not is_surrogate_algorithm(state.config.algorithm):
+        state.config.surrogate = "none"
+        return
+    if state.config.surrogate in {"", "none"} or state.config.surrogate not in SURROGATE_CHOICES:
+        defaults = framework_config.algorithm_default_config(
+            state.config.algorithm,
+            application=state.config.application,
+        )
+        state.config.surrogate = str(defaults.get("surrogate", "early_end"))
+
+
+def sync_algorithm_defaults(state: Any) -> None:
+    """Keep all algorithm-derived GUI state in sync."""
+    sync_algorithm_operator_defaults(state)
+    sync_algorithm_objective_mode(state)
+    sync_surrogate_mode(state)
+
+
+def algorithm_objective_mode(state: Any) -> str:
+    """Return SO, MO, or both for the active algorithm."""
+    algorithm = state.config.algorithm if state.config.algorithm in ALGORITHM_CHOICES else "nsga2"
+    return framework_config.algorithm_objective_mode(algorithm, application=state.config.application)
+
+
+def surrogate_choices_for_state(state: Any) -> dict[str, str]:
+    """Return valid surrogate choices for the current algorithm."""
+    if is_surrogate_algorithm(state.config.algorithm):
+        return {key: value for key, value in SURROGATE_MODE_CHOICES.items() if key != "none"}
+    return {"none": SURROGATE_MODE_CHOICES.get("none", "None")}
+
+
+def _coerce_objective_state(state: Any, desired_mode: str) -> None:
+    """Preserve valid objective selections while enforcing one UI objective mode."""
+    objectives = state.objectives
+    choices = list(objective_choices(state))
+    objectives.mode = desired_mode
+    for key in choices:
+        objectives.weights.setdefault(key, "1.0")
+    valid_selected = [key for key in choices if key in objectives.selected]
+    if desired_mode == "single":
+        objective = objectives.single_objective
+        if objective not in choices:
+            objective = valid_selected[0] if valid_selected else (choices[0] if choices else "")
+        objectives.single_objective = objective
+        objectives.selected = {objective} if objective else set()
+        return
+
+    selected = list(valid_selected)
+    if objectives.single_objective in choices and objectives.single_objective not in selected:
+        selected.insert(0, objectives.single_objective)
+    for key in choices:
+        if key not in selected:
+            selected.append(key)
+        if len(selected) >= 2:
+            break
+    objectives.selected = set(selected)
+    if choices and objectives.single_objective not in choices:
+        objectives.single_objective = choices[0]
 
 
 def operator_choices(operator_type: str) -> tuple[str, ...]:
@@ -1041,9 +1127,7 @@ def start_experiment(state: Any) -> tuple[bool, str]:
             config_path = save_generated_config(state)
             command = [sys.executable, "-m", "eagle.main", "--config", str(config_path)]
         else:
-            config_path = Path(resume_run_dir) / "config.json"
-            if not config_path.exists():
-                raise ValueError(f"Selected run is missing config.json: {config_path}")
+            config_path = load_run_config_into_state(state, resume_run_dir)
             command = [
                 sys.executable,
                 "-m",
@@ -1123,6 +1207,116 @@ def validate_run_dir(run_dir: Path | None) -> Path:
     if not config_path.exists():
         raise ValueError(f"Selected run is missing config.json: {config_path}")
     return path
+
+
+def load_run_config_into_state(state: Any, run_dir: Path | None) -> Path:
+    """Load one run folder's saved config into the shared GUI state."""
+    run_path = validate_run_dir(run_dir)
+    config_path = run_path / "config.json"
+    payload = load_config_payload(config_path)
+    apply_config_payload(state, payload, config_path)
+    return config_path
+
+
+def load_run_config_summary(run_dir: Path | None) -> dict[str, Any]:
+    """Load display-only config fields for one selected run folder."""
+    if run_dir is None:
+        return {
+            "status": "No run selected",
+            "config_path": "",
+            "rows": _run_config_summary_rows({}, None),
+        }
+
+    run_path = Path(run_dir).expanduser().resolve()
+    config_path = run_path / "config.json"
+    if not config_path.exists():
+        return {
+            "status": "Config not found for this run",
+            "config_path": str(config_path),
+            "rows": _run_config_summary_rows({}, run_path),
+        }
+
+    payload = config_service.read_json_mapping_strict(config_path)
+    return {
+        "status": f"Config: {config_path}",
+        "config_path": str(config_path),
+        "rows": _run_config_summary_rows(_display_config_payload(payload), run_path),
+    }
+
+
+def _display_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return flat fields for display without merging defaults."""
+    if not isinstance(payload.get("ea"), dict):
+        return payload
+    flat = dict(payload["ea"])
+    for key in ("algorithm", "evaluator", "eval_mode", "surrogate", "objective_config"):
+        if key in payload and key not in flat:
+            flat[key] = payload[key]
+    if "opponents" in payload and "gameplay_opponents" not in flat:
+        flat["gameplay_opponents"] = payload["opponents"]
+    return flat
+
+
+def _run_config_summary_rows(payload: dict[str, Any], run_path: Path | None) -> list[dict[str, str]]:
+    objective_mode, objective_text = _run_objective_summary(payload)
+    return [
+        {"field": "algorithm", "value": _payload_value(payload, "algorithm")},
+        {"field": "objective mode", "value": objective_mode},
+        {"field": "objective / objectives", "value": objective_text},
+        {"field": "eval mode", "value": _payload_value(payload, "eval_mode", "evaluator")},
+        {"field": "surrogate mode", "value": _payload_value(payload, "surrogate", "surrogate_mode")},
+        {"field": "population size", "value": _payload_value(payload, "population_size")},
+        {"field": "generations", "value": _payload_value(payload, "num_generations")},
+        {"field": "map", "value": _payload_value(payload, "gameplay_map_dir", "map_dir", "map")},
+        {
+            "field": "opponent",
+            "value": _payload_value(
+                payload,
+                "gameplay_opponents",
+                "real_eval_opponents",
+                "opponents",
+                "opponent",
+            ),
+        },
+        {"field": "llm call limit", "value": _payload_value(payload, "llm_call_limit")},
+        {"field": "log path", "value": str(run_path) if run_path is not None else "N/A"},
+    ]
+
+
+def _run_objective_summary(payload: dict[str, Any]) -> tuple[str, str]:
+    objective_config = payload.get("objective_config")
+    if isinstance(objective_config, dict):
+        mode = str(objective_config.get("mode") or "N/A")
+        if mode == "single":
+            return mode, _format_summary_value(objective_config.get("objective"))
+        if mode in {"multi", "weighted_mix"}:
+            return mode, _format_summary_value(objective_config.get("objectives"))
+        return mode, _format_summary_value(
+            objective_config.get("objective") or objective_config.get("objectives")
+        )
+    if "objective" in payload:
+        return "single", _format_summary_value(payload.get("objective"))
+    if "objectives" in payload:
+        return "multi", _format_summary_value(payload.get("objectives"))
+    return "N/A", "N/A"
+
+
+def _payload_value(payload: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        if key in payload:
+            return _format_summary_value(payload.get(key))
+    return "N/A"
+
+
+def _format_summary_value(value: Any) -> str:
+    if value is None or value == "":
+        return "N/A"
+    if isinstance(value, (list, tuple, set)):
+        values = [str(item) for item in value if item not in (None, "")]
+        return ", ".join(values) if values else "(none)"
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
 
 
 def apply_final_test_max_front(config_path: Path, max_front: str) -> None:

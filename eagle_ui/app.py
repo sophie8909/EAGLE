@@ -34,11 +34,8 @@ from eagle_ui.views.analysis_view import build_analysis_view
 from eagle_ui.views.components_view import build_components_view
 from eagle_ui.views.config_view import build_config_summary_view
 from eagle_ui.views.examples_view import build_examples_view
-from eagle_ui.views.final_test_view import build_final_test_view
-from eagle_ui.views.microrts_view import build_microrts_view
 from eagle_ui.views.objectives_view import build_objectives_view
 from eagle_ui.views.operators_view import build_operators_view
-from eagle_ui.views.llm_calls_view import build_llm_calls_view
 from eagle_ui.views.run_view import build_run_view
 
 
@@ -94,6 +91,15 @@ def heartbeat() -> None:
         LOGGER.warning("event loop heartbeat delayed delay_sec=%.3f", delay)
 
 
+async def invoke_refresh(refresh: Any, *args: Any) -> None:
+    """Call a sync or async refresh handle."""
+    if not callable(refresh):
+        return
+    result = refresh(*args)
+    if asyncio.iscoroutine(result):
+        await result
+
+
 nicegui_app.on_connect(on_client_connect)
 nicegui_app.on_disconnect(on_client_disconnect)
 
@@ -115,10 +121,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
         ui.notify("Stopping experiment...")
         message = await asyncio.to_thread(services.stop_experiment, state)
         ui.notify(message, type="positive")
-        for group, name in (("run", "refresh_status"), ("final_test", "refresh_status"), ("microrts", "refresh_status")):
-            refresh = controls.get(group, {}).get(name)
-            if refresh:
-                await refresh()
+        await invoke_refresh(controls.get("run", {}).get("refresh_status"))
 
     async def shutdown_gui() -> None:
         """Stop runtime helpers and exit the NiceGUI app."""
@@ -131,37 +134,21 @@ def build_layout() -> dict[str, dict[str, Any]]:
         await asyncio.to_thread(services.shutdown_runtime, state)
         services.shutdown_app(state, nicegui_app)
 
-    async def refresh_current_page() -> None:
+    async def full_refresh_current_page() -> None:
         """Refresh only the currently visible page to keep UI actions responsive."""
         page = state.runtime.current_page
         LOGGER.info("manual refresh start page=%s", page)
         if page == "experiment":
-            for group in ("components", "examples", "operators", "objectives", "config_summary"):
-                refresh = controls.get(group, {}).get("refresh")
-                if refresh:
-                    result = refresh()
-                    if asyncio.iscoroutine(result):
-                        await result
-            await controls["run"]["refresh_log"]()
-        elif page == "run":
-            await controls["run"]["refresh_log"]()
-        elif page == "final_test":
-            await controls["final_test"]["refresh_all"]()
+            for group in ("operators", "objectives", "config_summary"):
+                await invoke_refresh(controls.get(group, {}).get("refresh"))
+            await controls["run"]["full_refresh"]()
         elif page == "analysis":
-            analysis_refresh_runs = controls.get("analysis", {}).get("refresh_runs")
-            if analysis_refresh_runs:
-                await analysis_refresh_runs()
-            await controls["analysis"]["refresh_analysis"]()
-        elif page == "LLM Calls":
-            await controls["llm_calls"]["refresh_llm_calls"](True)
-        elif page == "microrts":
-            await controls["microrts"]["refresh_status"]()
+            await invoke_refresh(controls.get("analysis", {}).get("refresh_runs"))
+            await invoke_refresh(controls.get("analysis", {}).get("refresh_analysis"))
+        elif page in {"components", "examples"}:
+            await invoke_refresh(controls.get(page, {}).get("refresh"))
         else:
-            refresh = controls.get(page, {}).get("refresh")
-            if refresh:
-                result = refresh()
-                if asyncio.iscoroutine(result):
-                    await result
+            await invoke_refresh(controls.get(page, {}).get("refresh"))
         LOGGER.info("manual refresh end page=%s", page)
 
     with ui.header().classes(f"{HEADER_CLASS} items-center justify-between"):
@@ -171,7 +158,7 @@ def build_layout() -> dict[str, dict[str, Any]]:
                 ui.label("Eagle").classes(title_class("text-h5"))
                 ui.label("EA for Gameplay LLM-agEnt").classes(SUBTITLE_CLASS)
         with ui.row().classes("items-center gap-2"):
-            ui.button("Refresh", on_click=safe_click(refresh_current_page, label="Refresh current page")).classes(
+            ui.button("Full Refresh", on_click=safe_click(full_refresh_current_page, label="Full refresh")).classes(
                 button_class(success=True)
             )
             ui.button("Stop Experiment", on_click=safe_click(stop_experiment, label="Stop Experiment")).classes(
@@ -183,43 +170,29 @@ def build_layout() -> dict[str, dict[str, Any]]:
 
     with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
         experiment_tab = ui.tab("Experiment").classes(TAB_CLASS)
-        final_test_tab = ui.tab("Final Test").classes(TAB_CLASS)
+        components_tab = ui.tab("Components").classes(TAB_CLASS)
+        examples_tab = ui.tab("Examples").classes(TAB_CLASS)
         analysis_tab = ui.tab("Analysis").classes(TAB_CLASS)
-        llm_calls_tab = ui.tab("LLM Calls").classes(TAB_CLASS)
-        microrts_tab = ui.tab("MicroRTS").classes(TAB_CLASS)
 
     with ui.tab_panels(tabs, value=experiment_tab).classes(f"{PAGE_CLASS} w-full"):
         with ui.tab_panel(experiment_tab):
-            with ui.row().classes("w-full gap-4 items-start no-wrap"):
-                with ui.column().classes("w-[60%] gap-3"):
-                    with ui.tabs().classes(f"{CARD_CLASS} w-full") as experiment_tabs:
-                        components_tab = ui.tab("Components").classes(TAB_CLASS)
-                        examples_tab = ui.tab("Examples").classes(TAB_CLASS)
-                        operators_tab = ui.tab("Algorithm").classes(TAB_CLASS)
-                        objectives_tab = ui.tab("Objectives").classes(TAB_CLASS)
-                    with ui.tab_panels(experiment_tabs, value=components_tab).classes(f"{PAGE_CLASS} w-full"):
-                        with ui.tab_panel(components_tab):
-                            controls["components"] = build_components_view(state)
-                            state.runtime.components_refresh = controls["components"].get("refresh")
-                        with ui.tab_panel(examples_tab):
-                            controls["examples"] = build_examples_view(state)
-                        with ui.tab_panel(operators_tab):
-                            controls["operators"] = build_operators_view(state)
-                        with ui.tab_panel(objectives_tab):
-                            controls["objectives"] = build_objectives_view(state)
-                            state.runtime.objectives_refresh = controls["objectives"].get("refresh")
-                with ui.column().classes("w-[40%] gap-3"):
+            with ui.row().classes("w-full gap-4 items-start flex-wrap xl:flex-nowrap"):
+                with ui.column().classes("w-full xl:flex-[3_1_0] min-w-[0] gap-3"):
+                    controls["operators"] = build_operators_view(state)
+                    state.runtime.operators_refresh = controls["operators"].get("refresh")
+                    controls["objectives"] = build_objectives_view(state)
+                    state.runtime.objectives_refresh = controls["objectives"].get("refresh")
+                with ui.column().classes("w-full xl:flex-[2_1_420px] min-w-[360px] gap-3"):
                     controls["run"] = build_run_view(state, log_height=300)
                     controls["config_summary"] = build_config_summary_view(state)
-        with ui.tab_panel(final_test_tab):
-            controls["final_test"] = build_final_test_view(state)
+        with ui.tab_panel(components_tab):
+            controls["components"] = build_components_view(state)
+            state.runtime.components_refresh = controls["components"].get("refresh")
+        with ui.tab_panel(examples_tab):
+            controls["examples"] = build_examples_view(state)
         with ui.tab_panel(analysis_tab):
             controls["analysis"] = build_analysis_view(state)
             state.runtime.analysis_runs_refresh = controls["analysis"].get("refresh_runs")
-        with ui.tab_panel(llm_calls_tab):
-            controls["llm_calls"] = build_llm_calls_view(state)
-        with ui.tab_panel(microrts_tab):
-            controls["microrts"] = build_microrts_view(state)
 
     async def on_tab_change(event: Any) -> None:
         """Refresh tab-specific data when the user changes the top-level page."""
@@ -228,20 +201,16 @@ def build_layout() -> dict[str, dict[str, Any]]:
         if selected == experiment_tab:
             state.runtime.current_page = "experiment"
             await controls["run"]["refresh_log"]()
-        elif selected == final_test_tab:
-            state.runtime.current_page = "final_test"
-            await controls["final_test"]["refresh_all"]()
-        elif selected == llm_calls_tab:
-            state.runtime.current_page = "llm_calls"
-            await controls["llm_calls"]["refresh_llm_calls"](True)
+        elif selected == components_tab:
+            state.runtime.current_page = "components"
+            await invoke_refresh(controls["components"].get("refresh"))
+        elif selected == examples_tab:
+            state.runtime.current_page = "examples"
+            await invoke_refresh(controls["examples"].get("refresh"))
         elif selected == analysis_tab:
             state.runtime.current_page = "analysis"
-            analysis_refresh_runs = controls.get("analysis", {}).get("refresh_runs")
-            if analysis_refresh_runs:
-                await analysis_refresh_runs()
-            await controls["analysis"]["refresh_analysis"]()
-        elif selected == microrts_tab:
-            state.runtime.current_page = "microrts"
+            await invoke_refresh(controls["analysis"].get("refresh_runs"))
+            await invoke_refresh(controls["analysis"].get("refresh_analysis"))
 
     tabs.on("update:model-value", on_tab_change)
     return controls
@@ -262,18 +231,12 @@ async def startup_refresh() -> None:
         ("objectives", "refresh"),
         ("operators", "refresh"),
         ("components", "refresh"),
+        ("examples", "refresh"),
         ("config_summary", "refresh"),
-        ("microrts", "refresh_trace_choices"),
     ):
-        refresh = controls.get(group, {}).get(name)
-        if refresh:
-            refresh()
+        await invoke_refresh(controls.get(group, {}).get(name))
     await controls["run"]["refresh_runs"]()
-    analysis_refresh_runs = controls.get("analysis", {}).get("refresh_runs")
-    if analysis_refresh_runs:
-        await analysis_refresh_runs()
-    await controls["final_test"]["refresh_runs"]()
-    await controls["final_test"]["refresh_all"]()
+    await invoke_refresh(controls.get("analysis", {}).get("refresh_runs"))
     await controls["run"]["refresh_log"]()
 
 
