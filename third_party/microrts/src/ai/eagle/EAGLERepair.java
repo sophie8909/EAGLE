@@ -127,6 +127,8 @@ public class EAGLERepair extends AbstractionLayerAI {
     private JsonArray lastValidMoves = null;
     private Map<String, UnitSnapshot> lastSnapshot = null;
     private boolean lastResponseWasValid = false;
+    private String lastBehaviorSignature = null;
+    private String lastLoggedSkippedBehaviorSignature = null;
 
     private String lastSkipReason = "";
     private String lastCallReason = "";
@@ -297,6 +299,15 @@ public class EAGLERepair extends AbstractionLayerAI {
         }
 
         // Stage 1: snapshot the real MicroRTS state before any new abstract actions are queued.
+        String currentBehaviorSignature = BehaviorStateSignature.from(gs);
+        if (BehaviorStateSignature.isEnabled()
+                && currentBehaviorSignature.equals(lastBehaviorSignature)) {
+            if (!currentBehaviorSignature.equals(lastLoggedSkippedBehaviorSignature)) {
+                System.out.println("[EAGLE] tick skipped because behavior signature unchanged");
+                lastLoggedSkippedBehaviorSignature = currentBehaviorSignature;
+            }
+            return new PlayerAction();
+        }
         Map<String, UnitSnapshot> currentSnapshot = buildGameSnapshot(player, gs);
         DecisionContext context = buildDecisionContext(player, gs, currentSnapshot);
 
@@ -311,6 +322,7 @@ public class EAGLERepair extends AbstractionLayerAI {
             }
             applyLLMMoves(player, gs, emptyResponse.getAsJsonArray("moves"));
             updateDecisionCache(emptyResponse, currentSnapshot, true);
+            lastBehaviorSignature = currentBehaviorSignature;
             return translateActions(player, gs);
         }
 
@@ -354,6 +366,7 @@ public class EAGLERepair extends AbstractionLayerAI {
         // Stage 5: add a local melee fallback for idle combat units after LLM moves are applied.
         applyAutoDefense(player, gs);
         updateDecisionCache(jsonResponse, currentSnapshot, true);
+        lastBehaviorSignature = currentBehaviorSignature;
         appendCsvLog(response, promptContext.featureArrayForCsv);
 
         if (gs.gameover()) {
@@ -1103,6 +1116,8 @@ public class EAGLERepair extends AbstractionLayerAI {
         lastResponseWasValid = false;
         lastSkipReason = "";
         lastCallReason = "";
+        lastBehaviorSignature = null;
+        lastLoggedSkippedBehaviorSignature = null;
         llmLimitReachedLogged = false;
     }
 

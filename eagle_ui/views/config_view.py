@@ -152,6 +152,11 @@ def build_config_view(state: Any) -> dict[str, Any]:
                 value=state.config.agent_class,
                 on_change=lambda event: _set_agent_class(state, str(event.value or "")),
             ).classes(f"{INPUT_CLASS} w-56")
+            controls["config.skip_same_behavior_state"] = ui.checkbox(
+                "Skip unchanged behavior state",
+                value=state.config.skip_same_behavior_state,
+                on_change=lambda event: _set_skip_same_behavior_state(state, bool(event.value)),
+            )
 
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3") as early_end_settings:
             ui.badge("Fitness: Resource Difference").classes("uppercase")
@@ -278,6 +283,7 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
         rows["algorithm"].set_text(state.config.algorithm)
         rows["evaluator"].set_text(_format_eval_mode(state))
         rows["agent"].set_text(services.AGENT_CLASS_CHOICES.get(state.config.agent_class, state.config.agent_class))
+        rows["skip_same_behavior"].set_text(str(state.config.skip_same_behavior_state))
         rows["eval_llm_calls"].set_text(_format_llm_call_limit(state))
         rows["surrogate_llm_calls"].set_text(state.config.surrogate_llm_call_limit)
         rows["fitness"].set_text(_format_fitness_metric(state))
@@ -314,6 +320,7 @@ def build_config_summary_view(state: Any) -> dict[str, Any]:
                 "algorithm": _summary_row("Algorithm"),
                 "evaluator": _summary_row("Evaluation"),
                 "agent": _summary_row("LLM agent"),
+                "skip_same_behavior": _summary_row("Skip same behavior"),
                 "eval_llm_calls": _summary_row("Eval LLM Calls"),
                 "surrogate_llm_calls": _summary_row("Surrogate LLM Calls"),
                 "fitness": _summary_row("Fitness"),
@@ -408,6 +415,11 @@ def _set_eval_mode(state: Any, value: str) -> None:
 
 def _set_agent_class(state: Any, value: str) -> None:
     state.config.agent_class = services.normalize_agent_class(value)
+    refresh_config_summary(state)
+
+
+def _set_skip_same_behavior_state(state: Any, value: bool) -> None:
+    state.config.skip_same_behavior_state = bool(value)
     refresh_config_summary(state)
 
 

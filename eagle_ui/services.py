@@ -24,6 +24,7 @@ from eagle.config import (
     load_config_from_json as load_ea_config_from_json,
     load_config_payload as build_ea_config_from_payload,
     normalize_algorithm_name,
+    normalize_bool,
     select_config_path,
 )
 from eagle.envs.microrts.runner import save_prompt as save_microrts_prompt
@@ -440,6 +441,10 @@ def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path)
     cfg.evaluator = "gameplay"
     cfg.eval_mode = normalize_eval_mode(payload.get("eval_mode", "gameplay"))
     cfg.agent_class = normalize_agent_class(payload.get("agent_class", cfg.agent_class))
+    cfg.skip_same_behavior_state = normalize_bool(
+        payload.get("skip_same_behavior_state", cfg.skip_same_behavior_state),
+        default=True,
+    )
     cfg.surrogate = str(payload.get("surrogate", cfg.surrogate)).strip().lower().replace("-", "_").replace(" ", "_")
     if cfg.surrogate not in SURROGATE_CHOICES:
         cfg.surrogate = SURROGATE_CHOICES[0]
@@ -752,6 +757,7 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
             "llm_call_limit": llm_call_limit,
             "fitness_metric": fitness_metric,
             "agent_class": normalize_agent_class(cfg.agent_class),
+            "skip_same_behavior_state": bool(cfg.skip_same_behavior_state),
             "llm_model": cfg.llm_model.strip(),
             "llm_base_url": cfg.llm_base_url.strip(),
             "gameplay_map_dir": cfg.gameplay_map_dir.strip(),
@@ -2212,6 +2218,11 @@ def launch_microrts_gui(state: Any) -> str:
         set_config_property(ROOT, "AI2", opponent)
         set_config_property(ROOT, "update_interval", str(update_interval))
         set_config_property(ROOT, "llm_interval", str(llm_interval))
+        set_config_property(
+            ROOT,
+            "skip_same_behavior_state",
+            "true" if state.config.skip_same_behavior_state else "false",
+        )
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         _microrts_log_path = LOG_DIR / f"microrts_eagle_ui_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         classpath = f"{microrts_root / 'lib' / '*'}{os.pathsep}{microrts_root / 'bin'}"
@@ -2221,6 +2232,7 @@ def launch_microrts_gui(state: Any) -> str:
             f"-Dmicrorts.prompt={prompt_path}",
             f"-Dmicrorts.llm_interval={llm_interval}",
             f"-Dmicrorts.llm_call_limit={state.config.llm_call_limit}",
+            f"-Deagle.skip_same_behavior_state={str(bool(state.config.skip_same_behavior_state)).lower()}",
             "-cp",
             classpath,
             "rts.MicroRTS",

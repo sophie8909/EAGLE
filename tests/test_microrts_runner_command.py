@@ -47,8 +47,40 @@ class MicroRTSRunnerCommandTests(unittest.TestCase):
 
             command = captured["command"]
             self.assertIn("-Dmicrorts.llm_interval=5", command)
+            self.assertIn("-Deagle.skip_same_behavior_state=true", command)
             self.assertFalse(any(str(arg).startswith("-Dmicrorts.llm_call_limit=") for arg in command))
             self.assertEqual(captured["cwd"], microrts_root)
+
+    def test_launch_java_match_can_disable_same_behavior_skip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            captured: dict[str, object] = {}
+            microrts_root = tmp_path / "microrts"
+            microrts_root.mkdir()
+
+            class FakeProcess:
+                def wait(self, timeout: int | None = None) -> int:
+                    return 0
+
+                def kill(self) -> None:
+                    return None
+
+            def fake_popen(command, **kwargs):
+                captured["command"] = list(command)
+                return FakeProcess()
+
+            with (
+                patch.object(runner, "locate_microrts_root", return_value=microrts_root),
+                patch.object(runner.subprocess, "Popen", side_effect=fake_popen),
+            ):
+                runner.launch_java_match(
+                    project_root=tmp_path,
+                    tick_limit=10,
+                    log_path=tmp_path / "match.log",
+                    skip_same_behavior_state=False,
+                )
+
+            self.assertIn("-Deagle.skip_same_behavior_state=false", captured["command"])
 
     def test_prompt_based_game_uses_configured_agent_class(self) -> None:
         config = SimpleNamespace(agent_class="ai.eagle.EAGLERepair")

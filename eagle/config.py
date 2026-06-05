@@ -54,6 +54,20 @@ def normalize_agent_class(agent_class: Any) -> str:
     return selected if selected in AGENT_CLASS_CHOICES else DEFAULT_AGENT_CLASS
 
 
+def normalize_bool(value: Any, *, default: bool = False) -> bool:
+    """Normalize JSON, form, and environment-style boolean values."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 @lru_cache(maxsize=1)
 def _default_evolution_payload() -> dict[str, Any]:
     """Load the canonical default EA settings from configs/evolution/default.json."""
@@ -137,6 +151,9 @@ class EAConfig:
     llm_call_limit: int = field(default_factory=lambda: int(_default_config_value("llm_call_limit")))
     fitness_metric: str = field(default_factory=lambda: str(_default_config_value("fitness_metric")))
     agent_class: str = field(default_factory=lambda: str(_default_config_value("agent_class")))
+    skip_same_behavior_state: bool = field(
+        default_factory=lambda: bool(_default_config_value("skip_same_behavior_state"))
+    )
     llm_model: str = field(default_factory=lambda: str(_default_config_value("llm_model")))
     llm_base_url: str = field(default_factory=lambda: str(_default_config_value("llm_base_url")))
     gameplay_rate: float = field(default_factory=lambda: float(_default_config_value("gameplay_rate")))
@@ -414,6 +431,7 @@ class EAConfig:
         self.llm_call_limit = max(1, int(self.llm_call_limit))
         self.fitness_metric = str(self.fitness_metric or "default").strip()
         self.agent_class = normalize_agent_class(self.agent_class)
+        self.skip_same_behavior_state = normalize_bool(self.skip_same_behavior_state, default=True)
         self.llm_model = str(self.llm_model or "").strip()
         if not self.llm_model:
             raise ValueError("llm_model must be a non-empty model name.")
@@ -461,6 +479,7 @@ class EAConfig:
             "objective_config": deepcopy(self.objective_config),
             "fitness_metric": self.fitness_metric,
             "agent_class": self.agent_class,
+            "skip_same_behavior_state": self.skip_same_behavior_state,
             "aggressiveness_objective_enabled": self.aggressiveness_objective_enabled,
             "aggressiveness_mode": self.aggressiveness_mode,
             "aggressiveness_llm_weight": self.aggressiveness_llm_weight,

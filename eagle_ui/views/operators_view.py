@@ -212,7 +212,7 @@ def build_operators_view(state: Any) -> dict[str, Any]:
         refresh()
         refresh_config_summary(state)
 
-    def update_config(name: str, value: str) -> None:
+    def update_config(name: str, value: Any) -> None:
         setattr(state.config, name, value)
         refresh_config_summary(state)
 
@@ -274,6 +274,11 @@ def build_operators_view(state: Any) -> dict[str, Any]:
                         services.normalize_agent_class(str(event.value or "")),
                     ),
                 ).classes(f"{INPUT_CLASS} w-full"),
+                "skip_same_behavior_state": ui.checkbox(
+                    "Skip unchanged behavior state",
+                    value=state.config.skip_same_behavior_state,
+                    on_change=lambda event: update_config("skip_same_behavior_state", bool(event.value)),
+                ),
             }
 
         with ui.row().classes(f"{ROW_CLASS} items-center gap-3") as early_end_settings:

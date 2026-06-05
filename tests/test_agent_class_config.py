@@ -18,6 +18,16 @@ class AgentClassConfigTests(unittest.TestCase):
 
         self.assertEqual(config.agent_class, "ai.eagle.EAGLERepair")
 
+    def test_skip_same_behavior_state_defaults_to_true(self) -> None:
+        config = load_config_payload({})
+
+        self.assertTrue(config.skip_same_behavior_state)
+
+    def test_skip_same_behavior_state_can_be_disabled(self) -> None:
+        config = load_config_payload({"skip_same_behavior_state": "false"})
+
+        self.assertFalse(config.skip_same_behavior_state)
+
     def test_missing_surrogate_llm_call_limit_defaults_to_ten(self) -> None:
         config = load_config_payload({})
 

@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ...config import DEFAULT_AGENT_CLASS, normalize_agent_class
+from ...config import DEFAULT_AGENT_CLASS, normalize_agent_class, normalize_bool
 from ...project import MICRORTS_LOGS_DIR, PROJECT_ROOT, ensure_project_directories
 from ...utils.fitness_calculator import calculate_match_score
 from .compiler import compile_microrts, locate_microrts_root
@@ -205,6 +205,7 @@ def launch_java_match(
     prompt_path: Path | None = None,
     llm_interval: int | None = None,
     llm_call_limit: int | None = None,
+    skip_same_behavior_state: bool = True,
     llm_model: str | None = None,
     llm_base_url: str | None = None,
     llm_strict_errors: bool = False,
@@ -224,6 +225,7 @@ def launch_java_match(
     bin_dir = microrts_root / "bin"
     lib_dir = microrts_root / "lib"
     classpath = f"{lib_dir / '*'}{os.pathsep}{bin_dir}"
+    resolved_skip_same_behavior_state = normalize_bool(skip_same_behavior_state, default=True)
     command = ["java"]
     if prompt_path is not None:
         command.append(f"-Dmicrorts.prompt={prompt_path}")
@@ -231,6 +233,7 @@ def launch_java_match(
         command.append(f"-Dmicrorts.llm_interval={int(llm_interval)}")
     if llm_call_limit is not None:
         command.append(f"-Dmicrorts.llm_call_limit={int(llm_call_limit)}")
+    command.append(f"-Deagle.skip_same_behavior_state={str(resolved_skip_same_behavior_state).lower()}")
     if llm_model is not None:
         command.append(f"-Dllama_cpp.model={llm_model}")
     if llm_base_url is not None:
@@ -290,6 +293,7 @@ def launch_java_match(
         env["LLAMA_CPP_BASE_URL"] = str(llm_base_url)
     if llm_strict_errors:
         env["EAGLE_LLM_STRICT"] = "true"
+    env["EAGLE_SKIP_SAME_BEHAVIOR_STATE"] = "true" if resolved_skip_same_behavior_state else "false"
     if interval_mode is not None:
         env["MICRORTS_INTERVAL_MODE"] = str(interval_mode)
     with log_path.open("w", encoding="utf-8") as stream:
@@ -504,6 +508,7 @@ def run_java_agent_game(
     generation: int | None = None,
     individual_id: Any | None = None,
     llm_call_limit: int | None = None,
+    skip_same_behavior_state: bool = True,
     llm_model: str | None = None,
     llm_base_url: str | None = None,
     llm_strict_errors: bool = False,
@@ -554,6 +559,10 @@ def run_java_agent_game(
         max_game_ticks = int(getattr(config, "tick_limit", 5000))
         resolved_map_location = map_location or select_random_map_location(project_root, config)
         resolved_llm_call_limit = None if llm_call_limit is None else int(llm_call_limit)
+        resolved_skip_same_behavior_state = normalize_bool(
+            getattr(config, "skip_same_behavior_state", skip_same_behavior_state),
+            default=True,
+        )
         print(
             "[DEBUG] gameplay launch limits "
             f"test={str(log_prefix).startswith('run_test')} "
@@ -570,6 +579,7 @@ def run_java_agent_game(
             prompt_path=prompt_path,
             llm_interval=config.active_llm_interval(),
             llm_call_limit=resolved_llm_call_limit,
+            skip_same_behavior_state=resolved_skip_same_behavior_state,
             llm_model=llm_model,
             llm_base_url=llm_base_url,
             llm_strict_errors=llm_strict_errors,
@@ -673,6 +683,7 @@ def run_java_agent_game(
             "gameplay_map_dir": _configured_map_dir(config),
             "tick_limit": max_game_ticks,
             "llm_call_limit": resolved_llm_call_limit,
+            "skip_same_behavior_state": resolved_skip_same_behavior_state,
             "llm_model": llm_model,
             "llm_base_url": llm_base_url,
             "interval_mode": interval_mode,
