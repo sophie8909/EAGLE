@@ -2,12 +2,30 @@
 
 set -euo pipefail
 
-SERVER_BIN="${LLAMA_CPP_SERVER_BIN:-llama-server}"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+SCRIPT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
+
+DEFAULT_SERVER_BIN="$SCRIPT_DIR/model/llama-b9174/llama-server"
+DEFAULT_MODEL_PATH="$SCRIPT_DIR/model/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+OLD_SERVER_BIN="/home/mhlab/llama-b9174-bin-ubuntu-vulkan-x64/llama-b9174/llama-server"
+OLD_MODEL_PATH="/home/mhlab/.cache/huggingface/hub/models--bartowski--Meta-Llama-3.1-8B-Instruct-GGUF/snapshots/bf5b95e96dac0462e2a09145ec66cae9a3f12067/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+PLACEHOLDER_MODEL_PATH="/absolute/path/to/your/model.gguf"
+
+SERVER_BIN="${LLAMA_CPP_SERVER_BIN:-$DEFAULT_SERVER_BIN}"
 HOST="${LLAMA_CPP_HOST:-127.0.0.1}"
 PORT="${LLAMA_CPP_PORT:-8080}"
-MODEL_PATH="${LLAMA_CPP_MODEL_PATH:-${MODEL_PATH:-}}"
+MODEL_PATH="${LLAMA_CPP_MODEL_PATH:-$DEFAULT_MODEL_PATH}"
 CTX_SIZE="${LLAMA_CPP_CTX_SIZE:-8192}"
 GPU_LAYERS="${LLAMA_CPP_N_GPU_LAYERS:-999}"
+
+if [[ "$SERVER_BIN" == "$OLD_SERVER_BIN" ]]; then
+  SERVER_BIN="$DEFAULT_SERVER_BIN"
+fi
+
+if [[ "$MODEL_PATH" == "$PLACEHOLDER_MODEL_PATH" || "$MODEL_PATH" == "$OLD_MODEL_PATH" ]]; then
+  MODEL_PATH="$DEFAULT_MODEL_PATH"
+fi
 
 echo "SERVER_BIN=$SERVER_BIN"
 echo "MODEL_PATH=$MODEL_PATH"
