@@ -18,7 +18,14 @@ from pathlib import Path
 from typing import Any
 
 from eagle.core import config as framework_config
-from eagle.config import DEFAULT_AGENT_CLASS, normalize_algorithm_name
+from eagle.config import (
+    DEFAULT_AGENT_CLASS,
+    config_to_payload,
+    load_config_from_json as load_ea_config_from_json,
+    load_config_payload as build_ea_config_from_payload,
+    normalize_algorithm_name,
+    select_config_path,
+)
 from eagle.envs.microrts.runner import save_prompt as save_microrts_prompt
 from eagle.envs.microrts.runner import set_config_property
 from eagle.analysis.evolution_result_analysis import parse_final_test_analysis
@@ -26,18 +33,26 @@ from eagle.eval.microrts.final_test_batch import run_final_test_batch
 from eagle.objectives.registry import get_objectives, list_objective_names, normalize_objective_key, objective_eval_mode
 from eagle.operators.registry import list_operator_names
 from eagle.prompt.example_memory import ExampleMemory
+from eagle.project import (
+    DEFAULT_EVOLUTION_CONFIG_PATH,
+    EAGLE_LOGS_DIR,
+    EVOLUTION_CONFIGS_DIR,
+    EXPERIMENT_CONFIGS_DIR,
+    MICRORTS_LOGS_DIR,
+    PROJECT_ROOT,
+)
 from eagle.utils.component_pool import ComponentPool
 from eagle.utils.token_count import count_prompt_tokens
 from eagle_ui.service_helpers import analysis_service, config_service, process_service
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = PROJECT_ROOT
 RUNTIME_LOG_PATH = ROOT / "logs" / "gui_runtime.log"
-CONFIG_DIR = ROOT / "configs" / "evolution"
-EXPERIMENT_DIR = ROOT / "configs" / "experiments"
-LOG_DIR = ROOT / "logs" / "eagle"
-MICRORTS_LOG_DIR = ROOT / "logs" / "microrts"
-DEFAULT_CONFIG = CONFIG_DIR / "default.json"
+CONFIG_DIR = EVOLUTION_CONFIGS_DIR
+EXPERIMENT_DIR = EXPERIMENT_CONFIGS_DIR
+LOG_DIR = EAGLE_LOGS_DIR
+MICRORTS_LOG_DIR = MICRORTS_LOGS_DIR
+DEFAULT_CONFIG = DEFAULT_EVOLUTION_CONFIG_PATH
 GUI_PROCESS_STATE_PATH = LOG_DIR / "eagle_ui_process_state.json"
 LOG_TAIL_LIMIT = 18_000
 ANALYSIS_SUBPROCESS_TIMEOUT_SEC = 600
@@ -395,7 +410,9 @@ def latest_experiment_run_dir() -> Path | None:
     candidates = [
         path
         for path in LOG_DIR.iterdir()
-        if path.is_dir() and re.fullmatch(r"\d{8}_\d{6}", path.name) and (path / "config.json").exists()
+        if path.is_dir()
+        and re.fullmatch(r"\d{8}_\d{6}", path.name)
+        and select_config_path(path).exists()
     ]
     if not candidates:
         return None
@@ -403,8 +420,8 @@ def latest_experiment_run_dir() -> Path | None:
 
 
 def load_config_payload(config_path: Path) -> dict[str, Any]:
-    """Load a config merged with the default schema base."""
-    return config_service.load_complete_config_payload(config_path, DEFAULT_CONFIG)
+    """Load a config through the canonical EA config loader."""
+    return config_to_payload(load_ea_config_from_json(config_path))
 
 
 def apply_config_payload(state: Any, payload: dict[str, Any], config_path: Path) -> None:
@@ -802,9 +819,11 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
     )
     if eval_mode != "gameplay":
         payload["eval_mode"] = eval_mode
+    else:
+        payload.pop("eval_mode", None)
     if not payload["gameplay_opponents"]:
         raise ValueError("At least one gameplay opponent is required.")
-    return payload
+    return config_to_payload(build_ea_config_from_payload(payload))
 
 
 def objective_choices(state: Any) -> tuple[str, ...]:
@@ -1203,16 +1222,16 @@ def validate_run_dir(run_dir: Path | None) -> Path:
     path = run_dir.expanduser().resolve()
     if not path.exists() or not path.is_dir():
         raise ValueError(f"Run folder does not exist: {path}")
-    config_path = path / "config.json"
+    config_path = select_config_path(path)
     if not config_path.exists():
-        raise ValueError(f"Selected run is missing config.json: {config_path}")
+        raise ValueError(f"Selected run is missing a config file: {path}")
     return path
 
 
 def load_run_config_into_state(state: Any, run_dir: Path | None) -> Path:
     """Load one run folder's saved config into the shared GUI state."""
     run_path = validate_run_dir(run_dir)
-    config_path = run_path / "config.json"
+    config_path = select_config_path(run_path)
     payload = load_config_payload(config_path)
     apply_config_payload(state, payload, config_path)
     return config_path
@@ -1228,7 +1247,7 @@ def load_run_config_summary(run_dir: Path | None) -> dict[str, Any]:
         }
 
     run_path = Path(run_dir).expanduser().resolve()
-    config_path = run_path / "config.json"
+    config_path = select_config_path(run_path)
     if not config_path.exists():
         return {
             "status": "Config not found for this run",
@@ -1236,7 +1255,10 @@ def load_run_config_summary(run_dir: Path | None) -> dict[str, Any]:
             "rows": _run_config_summary_rows({}, run_path),
         }
 
-    payload = config_service.read_json_mapping_strict(config_path)
+    try:
+        payload = load_config_payload(config_path)
+    except ValueError:
+        payload = config_service.read_json_mapping_strict(config_path)
     return {
         "status": f"Config: {config_path}",
         "config_path": str(config_path),
