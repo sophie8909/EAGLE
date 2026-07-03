@@ -1,1 +1,2 @@
-"""CLI entrypoints for the EAGLE project."""
+"""Runnable EAGLE entry points."""
+

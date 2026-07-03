@@ -1,5 +1,2 @@
-"""EAGLE research package."""
+"""Core evolutionary search primitives for EAGLE."""
 
-from .project import PROJECT_ROOT
-
-__all__ = ["PROJECT_ROOT"]

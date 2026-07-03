@@ -1,0 +1,14 @@
+seed_prompts:
+  - "Generate a simple Java MicroRTS agent that extends RandomBiasedAI and never calls an LLM at runtime."
+  - "Generate a conservative Java MicroRTS agent with a valid UnitTypeTable constructor."
+generations: 2
+population_size: 3
+elite_count: 1
+generation_backend: "mock"
+microrts_dir: "third_party/microrts"
+runs_dir: "runs"
+tick_limit: 100
+opponent: "ai.RandomBiasedAI"
+matches_per_candidate: 1
+mock_score_base: 10
+mock_score_step: 1
