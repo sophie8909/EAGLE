@@ -12,7 +12,7 @@ DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "prompt"
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from eagle.config import load_config_from_json
+from eagle.config import load_config_from_json, select_config_path
 from eagle.eval.microrts.full_game_evaluator import FullGameEvaluator
 from eagle.main import _resolve_component_pool_path
 from eagle.utils.checkpoint import CheckpointManager, deserialize_individual
@@ -218,7 +218,12 @@ def export_final_prompt(
     config = load_config_from_json(log_dir)
     component_pool.configure_non_evolving_keys(getattr(config, "non_evolving_prompt_components", None))
     evaluator = FullGameEvaluator(component_pool, config=config)
-    source_config_payload = json.loads((log_dir / "config.json").read_text(encoding="utf-8")) if (log_dir / "config.json").exists() else {}
+    source_config_path = select_config_path(log_dir)
+    source_config_payload = (
+        json.loads(source_config_path.read_text(encoding="utf-8"))
+        if source_config_path.exists()
+        else {}
+    )
     groups, source_name, resolved_ea_mode = load_final_groups(log_dir, ea_mode)
     selected_fronts = groups if resolved_ea_mode == "ga" else groups[:max_front]
     selected_individuals = [

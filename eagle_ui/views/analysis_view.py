@@ -11,6 +11,7 @@ from typing import Any
 
 from nicegui import ui
 
+from eagle.config import select_config_path
 from eagle.analysis.evolution_result_analysis import (
     build_analysis_context,
     parse_final_test_analysis,
@@ -649,7 +650,7 @@ def _build_mutation_weight_options(run_dir: Path | None) -> dict[str, Any] | Non
     with services.LoggedOperation("parsing logs", kind="mutation_weight_history", run_dir=run_dir):
         if run_dir is None:
             return None
-        config_path = run_dir / "config.json"
+        config_path = select_config_path(run_dir)
         if not config_path.exists():
             return None
         try:

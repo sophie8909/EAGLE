@@ -13,7 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
-from eagle.config import load_config_from_json
+from eagle.config import load_config_from_json, select_config_path
 from eagle.main import OPPONENT_LIST
 from eagle.project import PROJECT_ROOT, ensure_directory
 from eagle.representation.fitness import fitness_sort_key
@@ -74,8 +74,9 @@ def run_final_test_batch(
 ) -> dict[str, Any]:
     """Replay one saved run into a timestamped raw final-test results JSON payload."""
     resolved_run_dir = Path(run_dir).resolve()
-    if not (resolved_run_dir / "config.json").exists():
-        raise FileNotFoundError(f"Selected run is missing config.json: {resolved_run_dir / 'config.json'}")
+    config_path = select_config_path(resolved_run_dir)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Selected run is missing a config file: {resolved_run_dir}")
 
     config = load_config_from_json(resolved_run_dir)
     backend_settings = resolve_final_test_backend_settings(config)
@@ -427,4 +428,3 @@ def _load_result_json(result_json_path: Any) -> dict[str, Any] | None:
 def _write_results(output_path: Path, payload: dict[str, Any]) -> None:
     """Persist the current final-test payload to disk."""
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-

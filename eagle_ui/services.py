@@ -20,6 +20,7 @@ from typing import Any
 from eagle.core import config as framework_config
 from eagle.config import (
     DEFAULT_AGENT_CLASS,
+    config_to_section_payload,
     config_to_payload,
     load_config_from_json as load_ea_config_from_json,
     load_config_payload as build_ea_config_from_payload,
@@ -724,8 +725,18 @@ def save_generated_config(state: Any) -> Path:
     return path
 
 
+def build_config(state: Any, component_path_override: str | None = None) -> Any:
+    """Build one canonical EAGLE config object from GUI state."""
+    return build_ea_config_from_payload(_build_raw_config_payload(state, component_path_override))
+
+
 def build_config_payload(state: Any, component_path_override: str | None = None) -> dict[str, Any]:
-    """Build one EAGLE config payload without changing its schema."""
+    """Build one EAGLE config payload through the canonical config object."""
+    return config_to_payload(build_config(state, component_path_override))
+
+
+def _build_raw_config_payload(state: Any, component_path_override: str | None = None) -> dict[str, Any]:
+    """Build the raw GUI field mapping before canonical config validation."""
     cfg = state.config
     sync_algorithm_defaults(state)
     payload = load_config_payload(Path(cfg.base_config_path))
@@ -829,7 +840,7 @@ def build_config_payload(state: Any, component_path_override: str | None = None)
         payload.pop("eval_mode", None)
     if not payload["gameplay_opponents"]:
         raise ValueError("At least one gameplay opponent is required.")
-    return config_to_payload(build_ea_config_from_payload(payload))
+    return payload
 
 
 def objective_choices(state: Any) -> tuple[str, ...]:
@@ -1262,13 +1273,18 @@ def load_run_config_summary(run_dir: Path | None) -> dict[str, Any]:
         }
 
     try:
-        payload = load_config_payload(config_path)
+        config = load_ea_config_from_json(config_path)
+        rows = _run_config_summary_rows_from_sections(
+            config_to_section_payload(config, run_dir=run_path),
+            run_path,
+        )
     except ValueError:
         payload = config_service.read_json_mapping_strict(config_path)
+        rows = _run_config_summary_rows(_display_config_payload(payload), run_path)
     return {
         "status": f"Config: {config_path}",
         "config_path": str(config_path),
-        "rows": _run_config_summary_rows(_display_config_payload(payload), run_path),
+        "rows": rows,
     }
 
 
@@ -1309,6 +1325,41 @@ def _run_config_summary_rows(payload: dict[str, Any], run_path: Path | None) -> 
             ),
         },
         {"field": "llm call limit", "value": _payload_value(payload, "llm_call_limit")},
+        {"field": "log path", "value": str(run_path) if run_path is not None else "N/A"},
+    ]
+
+
+def _run_config_summary_rows_from_sections(
+    sections: dict[str, Any],
+    run_path: Path | None,
+) -> list[dict[str, str]]:
+    """Return display rows from the canonical sectioned config view."""
+    algorithm = dict(sections.get("algorithm") or {})
+    experiment = dict(sections.get("experiment") or {})
+    evaluation = dict(sections.get("evaluation") or {})
+    microrts = dict(sections.get("microrts") or {})
+    llm = dict(sections.get("llm") or {})
+
+    objective_mode, objective_text = _run_objective_summary(dict(algorithm.get("objectives") or {}))
+    surrogate = dict(algorithm.get("surrogate") or {})
+    surrogate_enabled, surrogate_mode = _run_surrogate_summary(
+        {
+            "algorithm": algorithm.get("algorithm_name"),
+            "surrogate": surrogate.get("mode"),
+        }
+    )
+    return [
+        {"field": "algorithm", "value": _format_summary_value(algorithm.get("algorithm_name"))},
+        {"field": "objective mode", "value": objective_mode},
+        {"field": "objective / objectives", "value": objective_text},
+        {"field": "eval mode", "value": _format_summary_value(evaluation.get("eval_mode"))},
+        {"field": "surrogate enabled", "value": surrogate_enabled},
+        {"field": "surrogate mode", "value": surrogate_mode},
+        {"field": "population size", "value": _format_summary_value(experiment.get("population_size"))},
+        {"field": "generations", "value": _format_summary_value(experiment.get("generations"))},
+        {"field": "map", "value": _format_summary_value(microrts.get("map_selection"))},
+        {"field": "opponent", "value": _format_summary_value(microrts.get("opponent_selection"))},
+        {"field": "llm call limit", "value": _format_summary_value(llm.get("call_limit"))},
         {"field": "log path", "value": str(run_path) if run_path is not None else "N/A"},
     ]
 

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eagle.config import select_config_path
 from eagle.objectives.registry import get_objective
 from eagle.core.plugin_loader import load_plugin
 
@@ -60,7 +61,7 @@ def objective_axis_labels(specs: list[ObjectiveSpec]) -> dict[str, str]:
 
 def _load_config_payload(path: Path) -> dict[str, Any]:
     """Return the config JSON mapping for a run directory or config path."""
-    config_path = path / "config.json" if path.is_dir() else path
+    config_path = select_config_path(path) if path.is_dir() else path
     if not config_path.exists():
         return {}
     payload = json.loads(config_path.read_text(encoding="utf-8"))

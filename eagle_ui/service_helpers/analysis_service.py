@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eagle.config import select_config_path
 from eagle.utils.log_parse import parse_log_file
 from eagle.analysis.objective_metadata import load_run_objective_specs, objective_names
 
@@ -31,7 +32,7 @@ GA_ALGORITHMS = {"ga", "ga_surrogate"}
 
 def build_live_analysis_report(run_dir: Path) -> AnalysisReport:
     """Build a compact live GA/MO analysis report from run artifacts."""
-    config = _load_json_file(run_dir / "config.json")
+    config = _load_json_file(select_config_path(run_dir))
     run_state = _load_json_file(run_dir / "run_state.json")
     algorithm = str(config.get("algorithm") or run_state.get("algorithm") or "unknown")
     mode = "GA" if algorithm.lower() in GA_ALGORITHMS else "MO"

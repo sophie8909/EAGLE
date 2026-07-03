@@ -10,7 +10,13 @@ from pathlib import Path
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from eagle.config import EAConfig, load_config_from_json, normalize_algorithm_name, resolve_component_pool_path
+from eagle.config import (
+    EAConfig,
+    load_config_from_json,
+    normalize_algorithm_name,
+    resolve_component_pool_path,
+    select_config_path,
+)
 from eagle.plugins.microrts.evaluation.algorithms import MicroRTSGA, MicroRTSNSGA2
 from eagle.project import EVOLUTION_CONFIGS_DIR
 from eagle.utils.component_pool import ComponentPool
@@ -127,7 +133,7 @@ def _load_extra_config_payload(config_path: str | None) -> dict:
         return {}
     path = Path(config_path)
     if path.is_dir():
-        path = path / "config.json"
+        path = select_config_path(path)
     if not path.exists():
         return {}
     try:
@@ -164,4 +170,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

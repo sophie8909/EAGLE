@@ -48,3 +48,9 @@ third_party/microrts/resources/config.properties
 third_party/microrts/bin/.microrts_compile_stamp
 *.sources
 /logs_legecy
+
+# Local model assets and generated llama.cpp outputs
+/model/
+/models/
+/vendor/llama.cpp/
+/key/uf_token

@@ -5,14 +5,14 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 import math
-from dataclasses import MISSING, dataclass, field, fields
+from dataclasses import MISSING, asdict, dataclass, field, fields
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from eagle.core.config import algorithm_default_config, algorithm_objective_mode, is_surrogate_algorithm, plugin_names
 
-from .project import DEFAULT_EVOLUTION_CONFIG_PATH, PROJECT_ROOT
+from .project import DEFAULT_EVOLUTION_CONFIG_PATH, EAGLE_LOGS_DIR, MICRORTS_ROOT, PROJECT_ROOT
 
 LEGACY_CONFIG_FILENAME = "config.json"
 RESOLVED_CONFIG_FILENAME = "config.resolved.json"
@@ -22,6 +22,116 @@ AGENT_CLASS_CHOICES = {
     "ai.eagle.EAGLERepair",
 }
 DEFAULT_AGENT_CLASS = "ai.eagle.EAGLE"
+
+
+@dataclass(frozen=True)
+class ExperimentSection:
+    """User-facing experiment settings derived from the canonical config."""
+
+    run_name: str | None
+    seed: int | None
+    mode: str
+    generations: int
+    population_size: int
+    resume_run: str | None
+
+
+@dataclass(frozen=True)
+class AlgorithmSection:
+    """Algorithm, objective, and operator settings."""
+
+    algorithm_name: str
+    objective_mode: str
+    objectives: dict[str, Any]
+    selection: dict[str, Any]
+    mutation: dict[str, Any]
+    crossover: dict[str, Any]
+    reflection: dict[str, Any]
+    surrogate: dict[str, Any]
+    adaptive_operator_selection: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class LLMSection:
+    """LLM runtime settings currently used by EAGLE."""
+
+    provider: str
+    model: str
+    base_url: str
+    api_key_env_var: str | None
+    temperature: float | None
+    max_tokens: int | None
+    call_limit: int
+    trace_enabled: bool
+    round_eval_model: str
+
+
+@dataclass(frozen=True)
+class EvaluationSection:
+    """Evaluation backend and final-test settings."""
+
+    backend: str
+    evaluator: str
+    eval_mode: str
+    gameplay_rate: float
+    real_eval_opponents: list[str]
+    surrogate_eval_games: int
+    final_test: dict[str, Any]
+    early_end: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class MicroRTSSection:
+    """MicroRTS backend settings, present only when the backend is active."""
+
+    enabled: bool
+    root: str
+    java_classpath: str | None
+    compile_root: str
+    map_selection: str
+    opponent_selection: list[str]
+    max_cycles: int
+    server_port: int | None
+    llm_interval: list[int]
+    agent_class: str
+    skip_same_behavior_state: bool
+    save_trace_on_test: bool
+
+
+@dataclass(frozen=True)
+class ComponentsSection:
+    """Prompt component and few-shot example settings."""
+
+    prompt_components_path: str
+    examples_path: str
+    enabled_components: list[str]
+    evolving_components: list[str]
+    few_shot: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class LoggingSection:
+    """Resolved run artifact paths."""
+
+    log_root: str
+    run_dir: str | None
+    checkpoint_dir: str | None
+    llm_trace_dir: str | None
+    analysis_dir: str | None
+    microrts_log_dir: str
+
+
+@dataclass(frozen=True)
+class ConfigSections:
+    """Sectioned view of the canonical flat EAGLE config."""
+
+    experiment: ExperimentSection
+    algorithm: AlgorithmSection
+    llm: LLMSection
+    evaluation: EvaluationSection
+    microrts: MicroRTSSection
+    components: ComponentsSection
+    logging: LoggingSection
 
 
 def normalize_algorithm_name(
@@ -738,6 +848,152 @@ def config_to_payload(config: EAConfig) -> dict[str, Any]:
     }
 
 
+def config_to_sections(
+    config: EAConfig,
+    *,
+    run_dir: str | Path | None = None,
+    base_dir: str | Path | None = None,
+) -> ConfigSections:
+    """Return typed section views over the canonical flat config.
+
+    `EAConfig` remains the source of truth for persistence and runtime behavior.
+    These sections give GUI, analysis, and plugin-facing code stable boundaries
+    without introducing another writable config schema.
+    """
+    objective_mode = _objective_mode_from_config(config)
+    run_path = Path(run_dir).expanduser().resolve() if run_dir is not None else None
+    component_path = serialize_config_path(resolve_component_pool_path(config, base_dir=base_dir))
+    examples_path = serialize_config_path(Path(component_path).with_name("examples_pool.jsonl"))
+    microrts_root = serialize_config_path(MICRORTS_ROOT)
+    return ConfigSections(
+        experiment=ExperimentSection(
+            run_name=run_path.name if run_path is not None else None,
+            seed=None,
+            mode=objective_mode,
+            generations=int(config.num_generations),
+            population_size=int(config.population_size),
+            resume_run=str(run_path) if run_path is not None else None,
+        ),
+        algorithm=AlgorithmSection(
+            algorithm_name=str(config.algorithm),
+            objective_mode=objective_mode,
+            objectives=deepcopy(config.objective_config),
+            selection={
+                "method": config.selection_method,
+                "parent_selection_operator": config.parent_selection_operator,
+                "environment_selection_method": config.environment_selection_method,
+                "env_selection_operator": config.env_selection_operator,
+                "tournament_size": config.tournament_size,
+            },
+            mutation={
+                "operator": config.mutation_operator,
+                "selection_mode": config.mutation_selection_mode,
+                "strategy_mutation": dict(config.strategy_mutation),
+            },
+            crossover={
+                "name": config.crossover,
+                "operator": config.crossover_operator,
+                "repair_enabled": bool(config.crossover_repair_enabled),
+            },
+            reflection={
+                "operator": config.reflection_operator,
+                "enabled": bool(config.enable_reflection_operator),
+                "max_components_to_rewrite": int(config.reflection_max_components_to_rewrite),
+            },
+            surrogate={
+                "mode": config.surrogate,
+                "top_ratio": float(config.surrogate_top_ratio),
+                "archive_parent_ratio": float(config.archive_parent_ratio),
+                "recent_match_window": int(config.surrogate_recent_match_window),
+            },
+            adaptive_operator_selection={
+                "enabled": config.mutation_selection_mode == "aos",
+                "mutation_selection_mode": config.mutation_selection_mode,
+            },
+        ),
+        llm=LLMSection(
+            provider="openai_compatible",
+            model=config.llm_model,
+            base_url=config.llm_base_url,
+            api_key_env_var=None,
+            temperature=None,
+            max_tokens=None,
+            call_limit=int(config.llm_call_limit),
+            trace_enabled=bool(config.save_trace_on_test),
+            round_eval_model=config.round_eval_model,
+        ),
+        evaluation=EvaluationSection(
+            backend=config.application,
+            evaluator=config.evaluator,
+            eval_mode=config.eval_mode,
+            gameplay_rate=float(config.gameplay_rate),
+            real_eval_opponents=list(config.gameplay_opponents),
+            surrogate_eval_games=int(config.surrogate_round_samples_per_match),
+            final_test={"max_front": config.final_test_max_front},
+            early_end={
+                "one_eval_rounds": int(config.one_eval_rounds),
+                "gameplay_refresh_interval": int(config.gameplay_refresh_interval),
+            },
+        ),
+        microrts=MicroRTSSection(
+            enabled=config.application == "microrts",
+            root=microrts_root,
+            java_classpath=None,
+            compile_root=microrts_root,
+            map_selection=config.gameplay_map_dir,
+            opponent_selection=list(config.gameplay_opponents),
+            max_cycles=int(config.tick_limit),
+            server_port=None,
+            llm_interval=list(config.llm_interval),
+            agent_class=config.agent_class,
+            skip_same_behavior_state=bool(config.skip_same_behavior_state),
+            save_trace_on_test=bool(config.save_trace_on_test),
+        ),
+        components=ComponentsSection(
+            prompt_components_path=component_path,
+            examples_path=examples_path,
+            enabled_components=list(config.evolving_prompt_components) + list(config.non_evolving_prompt_components),
+            evolving_components=list(config.evolving_prompt_components),
+            few_shot={
+                "enabled": bool(config.use_few_shot_examples),
+                "min_examples": int(config.min_examples),
+                "max_examples": int(config.max_examples),
+                "training_example_sample_count": deepcopy(config.training_example_sample_count),
+                "training_example_fixed_count": bool(config.training_example_fixed_count),
+            },
+        ),
+        logging=LoggingSection(
+            log_root=serialize_config_path(EAGLE_LOGS_DIR),
+            run_dir=str(run_path) if run_path is not None else None,
+            checkpoint_dir=str(run_path) if run_path is not None else None,
+            llm_trace_dir=str(run_path / "llm_calls") if run_path is not None else None,
+            analysis_dir=str(run_path / "analysis") if run_path is not None else None,
+            microrts_log_dir=config.surrogate_log_dir,
+        ),
+    )
+
+
+def config_to_section_payload(
+    config: EAConfig,
+    *,
+    run_dir: str | Path | None = None,
+    base_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Serialize the sectioned config view to a JSON-like mapping."""
+    return asdict(config_to_sections(config, run_dir=run_dir, base_dir=base_dir))
+
+
+def _objective_mode_from_config(config: EAConfig) -> str:
+    """Return `single` or `multi` from objective config, falling back to algorithm metadata."""
+    raw_mode = str(dict(config.objective_config or {}).get("mode") or "").strip().lower()
+    if raw_mode == "single":
+        return "single"
+    if raw_mode in {"multi", "weighted_mix"}:
+        return "multi"
+    plugin_mode = algorithm_objective_mode(config.algorithm, application=config.application)
+    return "single" if plugin_mode == "SO" else "multi"
+
+
 def resolve_config_path(path_text: str | Path, *, base_dir: str | Path | None = None) -> Path:
     """Resolve a config-owned path against its config directory or the repo root."""
     raw_path = Path(path_text)
@@ -784,6 +1040,17 @@ def load_config_from_json(path_or_dir: str | Path, *, validate: bool = True) -> 
         return EAConfig()
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     return load_config_payload(payload, validate=validate)
+
+
+def load_resume_config(run_dir: str | Path, *, validate: bool = True) -> EAConfig:
+    """Load the resolved config from an existing run directory without mutating it."""
+    run_path = Path(run_dir)
+    if not run_path.exists() or not run_path.is_dir():
+        raise FileNotFoundError(f"Resume run directory not found: {run_path}")
+    config_path = select_config_path(run_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Resume run is missing a config file: {run_path}")
+    return load_config_from_json(run_path, validate=validate)
 
 
 def select_config_path(path_or_dir: str | Path, *, prefer_resolved: bool = True) -> Path:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..config import resolve_component_pool_path, resolve_config
+from ..config import load_resume_config, resolve_component_pool_path, resolve_config
 from ..core.plugin_loader import load_plugin
 from ..core.registry import ALGORITHMS, normalize_registry_name
 from ..project import PROMPTS_DIR
@@ -56,10 +56,19 @@ def run_experiment(
     run_final_test: bool = True,
 ) -> Any:
     """Run an experiment selected by config instead of hard-coded branching."""
-    experiment = load_experiment_config(config_path)
     if resume_log_dir is None:
         resume_log_dir = resolve_resume_log_dir_from_config(config_path)
-    base_dir = Path(resume_log_dir) if resume_log_dir else Path(config_path).resolve().parent if config_path else None
+    if resume_log_dir:
+        resolved_resume_log_dir = resolve_resume_log_dir(resume_log_dir)
+        experiment = load_experiment_config(config_path)
+        experiment.ea = load_resume_config(resolved_resume_log_dir)
+        experiment.algorithm = experiment.ea.algorithm
+        experiment.evaluator = experiment.ea.evaluator
+        experiment.opponents = list(experiment.ea.gameplay_opponents)
+        base_dir = Path(resolved_resume_log_dir)
+    else:
+        experiment = load_experiment_config(config_path)
+        base_dir = Path(config_path).resolve().parent if config_path else None
     experiment.ea = resolve_config(experiment.ea, base_dir=base_dir)
     algorithm = build_algorithm(
         experiment,
@@ -67,7 +76,7 @@ def run_experiment(
         opponent_list=opponent_list,
     )
     if resume_log_dir:
-        algorithm.attach_log_dir(resolve_resume_log_dir(resume_log_dir))
+        algorithm.attach_log_dir(resolved_resume_log_dir)
         algorithm.create_log_folder()
     else:
         log_dir = algorithm.create_log_folder()

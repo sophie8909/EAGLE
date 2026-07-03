@@ -1,8 +1,20 @@
 # EAGLE Config Lifecycle
 
 EAGLE uses `eagle.config.EAConfig` as the canonical runtime config model. The
-model is intentionally flat for now because the runtime, GUI, and MicroRTS
-backend already consume those field names directly.
+persisted schema is intentionally flat for now because the runtime, GUI, and
+MicroRTS backend already consume those field names directly.
+
+For UI, analysis, and plugin-facing code that wants clearer boundaries, use the
+typed section view instead of hand-grouping raw dictionaries:
+
+```python
+from eagle.config import config_to_sections, config_to_section_payload
+```
+
+The section view groups the same canonical config into `experiment`,
+`algorithm`, `llm`, `evaluation`, `microrts`, `components`, and `logging`
+sections. It is read-only; new config files are still written with the canonical
+flat `EAConfig` payload.
 
 ## User Config
 
@@ -58,6 +70,10 @@ python -m eagle.main --resume-log-dir logs/eagle/<run> --config logs/eagle/<run>
 When a run folder is loaded, `eagle.config.select_config_path` prefers
 `config.resolved.json` and falls back to `config.json`. Resume does not create a
 new log folder and does not rewrite the saved run config at launch.
+
+Use `eagle.config.load_resume_config` when the caller specifically needs the
+resume contract: resolved-first loading from an existing run directory without
+creating or rewriting artifacts.
 
 ## GUI
 

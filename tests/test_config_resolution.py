@@ -8,9 +8,11 @@ from pathlib import Path
 
 from eagle.config import (
     RESOLVED_CONFIG_FILENAME,
+    config_to_section_payload,
     config_to_payload,
     load_config_from_json,
     load_config_payload,
+    load_resume_config,
     resolve_config,
     resolve_config_path,
     save_resolved_config,
@@ -59,6 +61,38 @@ class ConfigResolutionTests(unittest.TestCase):
 
         self.assertEqual(loaded.algorithm, "ga")
         self.assertEqual(loaded.objective_config, {"mode": "single", "objective": "resource_advantage"})
+
+    def test_resume_config_loads_existing_run_without_creating_new_folder(self) -> None:
+        config = resolve_config(
+            load_config_payload(
+                {
+                    "algorithm": "ga",
+                    "objective_config": {"mode": "single", "objective": "resource_advantage"},
+                }
+            )
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_dir = root / "existing_run"
+            save_resolved_config(config, run_dir)
+            before = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+
+            loaded = load_resume_config(run_dir)
+            after = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+
+        self.assertEqual(loaded.algorithm, "ga")
+        self.assertEqual(before, after)
+
+    def test_sectioned_config_view_exposes_runtime_boundaries(self) -> None:
+        config = resolve_config(load_config_payload({}))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sections = config_to_section_payload(config, run_dir=Path(temp_dir) / "run_a")
+
+        self.assertEqual(sections["experiment"]["mode"], "multi")
+        self.assertEqual(sections["algorithm"]["algorithm_name"], config.algorithm)
+        self.assertEqual(sections["llm"]["base_url"], config.llm_base_url)
+        self.assertTrue(sections["microrts"]["enabled"])
+        self.assertTrue(resolve_config_path(sections["components"]["prompt_components_path"]).exists())
 
     def test_recent_old_experiment_envelope_loads(self) -> None:
         config = load_config_payload(

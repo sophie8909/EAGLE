@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .config import EAConfig, load_config_from_json, resolve_component_pool_path, resolve_config
+from .config import EAConfig, load_config_from_json, load_resume_config, resolve_component_pool_path, resolve_config
 from .core.config import is_surrogate_algorithm
 from .experiment.config import ExperimentConfig, load_experiment_config
 from .experiment.runner import build_algorithm
@@ -64,7 +64,7 @@ def _resolve_component_pool_path_from_config(config: EAConfig, args, resume_log_
 def _resolve_base_config(args, resume_log_dir: str | None) -> EAConfig:
     """Resolve the base config from resume logs, explicit config, or default config."""
     if resume_log_dir:
-        return load_config_from_json(resume_log_dir)
+        return load_resume_config(resume_log_dir)
     if args.config:
         return load_experiment_config(args.config).ea
     if DEFAULT_EVOLUTION_CONFIG_PATH.exists():
