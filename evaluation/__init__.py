@@ -1,0 +1,2 @@
+"""MicroRTS evaluation package."""
+
