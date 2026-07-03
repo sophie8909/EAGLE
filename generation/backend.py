@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
@@ -17,6 +18,10 @@ class GenerationBackend(ABC):
         """Return Java source code for a candidate prompt."""
 
 
+class GenerationBackendUnavailable(RuntimeError):
+    """Raised when the configured generation service cannot be reached."""
+
+
 class MockGenerationBackend(GenerationBackend):
     """Deterministic backend for tests and local pipeline smoke runs."""
 
@@ -27,17 +32,27 @@ class MockGenerationBackend(GenerationBackend):
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
 
-    def __init__(self, base_url: str, model: str, timeout_sec: int = 120) -> None:
+    def __init__(self, base_url: str, model: str, timeout_sec: int = 120, max_retries: int = 2) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout_sec = timeout_sec
+        self.max_retries = max_retries
+
+    @property
+    def chat_completions_url(self) -> str:
+        if self.base_url.endswith("/v1"):
+            return f"{self.base_url}/chat/completions"
+        return f"{self.base_url}/v1/chat/completions"
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
         prompt = (
             "Generate exactly one Java MicroRTS AI class. "
             "Return only Java source code. "
             "The class must use package ai.generated, extend ai.RandomBiasedAI, "
-            f"be named {class_name}, and provide a constructor that accepts UnitTypeTable.\n\n"
+            f"be named {class_name}, and provide a constructor that accepts UnitTypeTable. "
+            "Use import ai.RandomBiasedAI; and import rts.units.UnitTypeTable;. "
+            "Do not import ai.UnitTypeTable. "
+            "Do not add an act() method.\n\n"
             f"Candidate prompt:\n{candidate.prompt}"
         )
         payload = {
@@ -46,16 +61,22 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             "temperature": 0.2,
         }
         request = urllib.request.Request(
-            f"{self.base_url}/v1/chat/completions",
+            self.chat_completions_url,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
-                body = json.loads(response.read().decode("utf-8"))
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"Generation backend request failed: {exc}") from exc
+        for attempt in range(self.max_retries + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                break
+            except (urllib.error.URLError, TimeoutError) as exc:
+                if attempt >= self.max_retries:
+                    raise GenerationBackendUnavailable(f"Generation backend request failed: {exc}") from exc
+                time.sleep(2**attempt)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"Generation backend returned invalid JSON: {exc}") from exc
         return str(body["choices"][0]["message"]["content"])
 
 

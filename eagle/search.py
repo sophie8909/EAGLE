@@ -61,6 +61,7 @@ def run_search(
     population = initialize_population(config)
     evaluated: list[Candidate] = []
     results_path = run_dir / "results.jsonl"
+    stopped_reason: str | None = None
     for generation in range(config.generations):
         evaluated = []
         for index, candidate in enumerate(population):
@@ -76,6 +77,26 @@ def run_search(
             write_candidate_record(candidates_dir, evaluated_candidate)
             append_result(results_path, evaluated_candidate)
             evaluated.append(evaluated_candidate.candidate)
+            print_progress(
+                generation=generation,
+                total_generations=config.generations,
+                index=index,
+                population_size=config.population_size,
+                evaluation=evaluated_candidate,
+            )
+            if is_backend_unavailable(evaluated_candidate):
+                stopped_reason = evaluated_candidate.error or "generation backend unavailable"
+                best = max(evaluated, key=lambda item: item.fitness or 0.0) if evaluated else None
+                write_summary(
+                    run_dir,
+                    config=config,
+                    final_population=evaluated,
+                    best_candidate=best,
+                    mock=mock,
+                    stopped_reason=stopped_reason,
+                )
+                print(f"stopped_reason={stopped_reason}", flush=True)
+                return SearchResult(run_dir=run_dir, final_population=evaluated, best_candidate=best)
         if generation < config.generations - 1:
             population = next_generation(evaluated, config=config, generation=generation + 1)
 
@@ -188,6 +209,32 @@ def mutate_candidate(parent: Candidate, *, config: ExperimentConfig, generation:
     )
 
 
+def print_progress(
+    *,
+    generation: int,
+    total_generations: int,
+    index: int,
+    population_size: int,
+    evaluation: CandidateEvaluation,
+) -> None:
+    candidate = evaluation.candidate
+    detail = ""
+    if evaluation.error:
+        detail = f" error={evaluation.error}"
+    elif evaluation.compile_result is not None and not evaluation.compile_result.ok:
+        stderr = (evaluation.compile_result.stderr or "").splitlines()
+        detail = f" compile_error={stderr[0] if stderr else evaluation.compile_result.returncode}"
+    elif evaluation.match_results and not all(result.ok for result in evaluation.match_results):
+        failed = next((result for result in evaluation.match_results if not result.ok), evaluation.match_results[0])
+        stderr = (failed.stderr or "").splitlines()
+        detail = f" match_error={stderr[0] if stderr else failed.returncode}"
+    print(
+        f"[gen {generation + 1}/{total_generations} cand {index + 1}/{population_size}] "
+        f"{candidate.id} status={candidate.status} fitness={candidate.fitness}{detail}",
+        flush=True,
+    )
+
+
 def append_result(path: Path, evaluation: CandidateEvaluation) -> None:
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(evaluation_to_dict(evaluation), ensure_ascii=False))
@@ -206,11 +253,13 @@ def write_summary(
     final_population: list[Candidate],
     best_candidate: Candidate | None,
     mock: bool,
+    stopped_reason: str | None = None,
 ) -> None:
     payload = {
         "mock": mock,
         "generations": config.generations,
         "population_size": config.population_size,
+        "stopped_reason": stopped_reason,
         "best_candidate": None if best_candidate is None else best_candidate.to_json_dict(),
         "final_population": [candidate.to_json_dict() for candidate in final_population],
     }
@@ -249,3 +298,7 @@ def evaluation_to_dict(evaluation: CandidateEvaluation) -> dict:
         ],
         "error": evaluation.error,
     }
+
+
+def is_backend_unavailable(evaluation: CandidateEvaluation) -> bool:
+    return isinstance(evaluation.error, str) and "Generation backend request failed" in evaluation.error

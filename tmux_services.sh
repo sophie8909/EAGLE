@@ -8,17 +8,22 @@ MODEL_ALIAS="${MODEL_ALIAS:-llama31}"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
+LEGACY_ROOT_SCRIPT_DIR="$SCRIPT_DIR/archive/legacy_runtime/root_scripts"
 
-WATCHDOG_SCRIPT="$SCRIPT_DIR/network_watchdog.sh"
-LLAMA_SERVER_SCRIPT="$SCRIPT_DIR/start_llama_server.sh"
+WATCHDOG_SCRIPT="$LEGACY_ROOT_SCRIPT_DIR/network_watchdog.sh"
+LLAMA_SERVER_SCRIPT="$LEGACY_ROOT_SCRIPT_DIR/start_llama_server.sh"
+EAGLE_MODEL_DIR="$SCRIPT_DIR/model"
+MODEL_BASE_DIR="$SCRIPT_DIR/models"
+LLAMA_CPP_DIR="$SCRIPT_DIR/vendor/llama.cpp"
+HF_TOKEN_FILE="$SCRIPT_DIR/key/uf_token"
 
 usage() {
   cat <<'USAGE'
 Usage: ./tmux_services.sh [base-name] [--model llama31|qwen3]
 
 Starts two tmux sessions:
-  <base-name>-llama-cpp   ./start_llama_server.sh --model <model>
-  <base-name>-watchdog    ./network_watchdog.sh
+  <base-name>-llama-cpp   archive/legacy_runtime/root_scripts/start_llama_server.sh --model <model>
+  <base-name>-watchdog    archive/legacy_runtime/root_scripts/network_watchdog.sh
 
 Defaults:
   base-name: eagle
@@ -77,13 +82,18 @@ if [ ! -f "$LLAMA_SERVER_SCRIPT" ]; then
 fi
 
 printf -v MODEL_ALIAS_Q '%q' "$MODEL_ALIAS"
+printf -v EAGLE_MODEL_DIR_Q '%q' "$EAGLE_MODEL_DIR"
+printf -v MODEL_BASE_DIR_Q '%q' "$MODEL_BASE_DIR"
+printf -v LLAMA_CPP_DIR_Q '%q' "$LLAMA_CPP_DIR"
+printf -v HF_TOKEN_FILE_Q '%q' "$HF_TOKEN_FILE"
+printf -v LLAMA_SERVER_SCRIPT_Q '%q' "$LLAMA_SERVER_SCRIPT"
 
 # Start llama.cpp session
 if tmux has-session -t "$LLAMA_CPP_SESSION" 2>/dev/null; then
   echo "tmux session already running: $LLAMA_CPP_SESSION"
 else
   tmux new-session -d -s "$LLAMA_CPP_SESSION" -c "$SCRIPT_DIR" \
-    "exec bash ./start_llama_server.sh --model $MODEL_ALIAS_Q"
+    "exec env EAGLE_MODEL_DIR=$EAGLE_MODEL_DIR_Q MODEL_BASE_DIR=$MODEL_BASE_DIR_Q LLAMA_CPP_DIR=$LLAMA_CPP_DIR_Q HF_TOKEN_FILE=$HF_TOKEN_FILE_Q bash $LLAMA_SERVER_SCRIPT_Q --model $MODEL_ALIAS_Q"
 
   echo "Started tmux session: $LLAMA_CPP_SESSION"
 fi
@@ -92,8 +102,8 @@ fi
 if tmux has-session -t "$WATCHDOG_SESSION" 2>/dev/null; then
   echo "tmux session already running: $WATCHDOG_SESSION"
 else
-  tmux new-session -d -s "$WATCHDOG_SESSION" \
-    "cd '$SCRIPT_DIR' && exec bash ./network_watchdog.sh"
+  tmux new-session -d -s "$WATCHDOG_SESSION" -c "$LEGACY_ROOT_SCRIPT_DIR" \
+    "exec bash ./network_watchdog.sh"
 
   echo "Started tmux session: $WATCHDOG_SESSION"
 fi

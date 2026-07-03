@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,7 +31,7 @@ def compile_generated_agent(
     command = [
         "javac",
         "-cp",
-        f"{microrts_dir / 'bin'};{microrts_dir / 'lib' / '*'}",
+        os.pathsep.join([str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]),
         "-d",
         str(output_dir),
         str(source_path),

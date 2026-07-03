@@ -32,6 +32,7 @@ def generate_java_agent(
     class_name = generated_class_name(candidate.id)
     raw_output = backend.generate(candidate, class_name)
     source = extract_java_source(raw_output)
+    source = normalize_java_agent_source(source)
     validate_java_agent_source(source, class_name)
     package_dir = workspace_dir / candidate.id / "src" / "ai" / "generated"
     package_dir.mkdir(parents=True, exist_ok=True)
@@ -43,6 +44,22 @@ def generate_java_agent(
         source=source,
         source_path=source_path,
     )
+
+
+def normalize_java_agent_source(source: str) -> str:
+    """Repair small, common MicroRTS import/annotation mistakes in LLM output."""
+    source = source.replace("import ai.UnitTypeTable;", "import rts.units.UnitTypeTable;")
+    source = source.replace("import ai.core.UnitTypeTable;", "import rts.units.UnitTypeTable;")
+    source = re.sub(r"(?m)^\s*@Override\s*\n\s*public\s+void\s+act\s*\(", "    public void act(", source)
+
+    if "UnitTypeTable" in source and "import rts.units.UnitTypeTable;" not in source:
+        source = re.sub(
+            r"(?m)^(package\s+ai\.generated;\s*)$",
+            "\\1\n\nimport rts.units.UnitTypeTable;",
+            source,
+            count=1,
+        )
+    return source
 
 
 def validate_java_agent_source(source: str, class_name: str) -> None:

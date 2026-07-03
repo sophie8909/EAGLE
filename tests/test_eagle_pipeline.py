@@ -6,7 +6,7 @@ from pathlib import Path
 from eagle.config import ExperimentConfig, parse_minimal_yaml
 from eagle.search import run_search
 from generation.backend import MockGenerationBackend, generated_class_name
-from generation.java_agent import generate_java_agent
+from generation.java_agent import generate_java_agent, normalize_java_agent_source
 
 
 class EaglePipelineTests(unittest.TestCase):
@@ -69,6 +69,27 @@ population_size: 3
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertEqual(agent.class_name, generated_class_name(candidate.id))
             self.assertTrue(agent.source_path.exists())
+
+    def test_normalize_java_agent_source_repairs_common_llm_imports(self) -> None:
+        source = """package ai.generated;
+
+import ai.RandomBiasedAI;
+import ai.UnitTypeTable;
+
+public class GeneratedAgent_test extends RandomBiasedAI {
+    public GeneratedAgent_test(UnitTypeTable utt) {
+        super(utt);
+    }
+
+    @Override
+    public void act() {
+    }
+}
+"""
+        normalized = normalize_java_agent_source(source)
+        self.assertIn("import rts.units.UnitTypeTable;", normalized)
+        self.assertNotIn("import ai.UnitTypeTable;", normalized)
+        self.assertNotIn("@Override\n    public void act", normalized)
 
 
 if __name__ == "__main__":
