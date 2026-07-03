@@ -9,7 +9,6 @@ description = "Evolutionary prompt search for generated Java MicroRTS agents"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "matplotlib>=3.8,<4",
 ]
 
 [tool.setuptools.packages.find]

@@ -6,19 +6,19 @@ EAGLE now treats prompts as source-code generators, not as runtime controllers.
 
 1. `eagle` creates a population of candidate prompts.
 2. `generation` sends each prompt to a generation backend and receives Java source code.
-3. `generation.validation` checks the source for the minimum expected Java agent structure.
-4. `agents` writes the source into a generated Java workspace.
-5. `evaluation` builds the Java compile plan, runs MicroRTS when `dry_run=false`, parses match output, and returns fitness.
+3. `generation.java_agent` extracts Java code, checks the minimum expected Java agent structure, and writes it into the run workspace.
+4. `evaluation.compiler` compiles the generated source, or returns a structured mock compile result when `--mock` is used.
+5. `evaluation.microrts_runner` runs MicroRTS matches, or returns structured mock match scores when `--mock` is used.
 6. `eagle` selects and mutates candidate prompts using fitness scores.
 
 ## Module Ownership
 
-- `eagle/`: candidate representation, experiment config, population loop, selection, mutation, and orchestration.
-- `generation/`: prompt-to-Java generation backend interface, template smoke backend, fenced-code parsing, and generated-source validation.
+- `eagle/`: candidate representation, experiment config, search loop, selection, mutation, and orchestration.
+- `generation/`: prompt-to-Java generation backend interface, mock backend, OpenAI-compatible backend, fenced-code parsing, and generated-source validation.
 - `agents/`: filesystem workspace for generated Java agents.
-- `evaluation/`: Java compile command construction, MicroRTS match command construction, match-score parsing, and fitness conversion.
+- `evaluation/`: Java compilation, MicroRTS match adapter, match-score parsing, and fitness conversion.
 - `configs/`: experiment config files for the active architecture.
-- `scripts/`: runnable entry points. `scripts/run_minimal_experiment.py` is the active smoke runner.
+- `scripts/`: runnable entry points. `scripts/run_eagle.py` is the active runner.
 - `docs/`: architecture and handoff documentation for future coding models.
 - `archive/`: old runtime LLM-agent control code and previous framework surfaces.
 
@@ -29,12 +29,23 @@ candidate prompt
   -> generation backend
   -> Java source code
   -> source validation
-  -> agents/generated/src/ai/generated/*.java
-  -> javac compile plan
-  -> MicroRTS match plan
+  -> runs/<run_id>/generated_agents/<candidate_id>/src/ai/generated/*.java
+  -> javac compile result
+  -> MicroRTS match result
   -> match score
   -> fitness
   -> selection and mutation
+```
+
+## Run Artifacts
+
+```text
+runs/<run_id>/
+  config.yaml
+  candidates/
+  generated_agents/
+  results.jsonl
+  summary.json
 ```
 
 ## Removed Or Archived Design

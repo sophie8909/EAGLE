@@ -7,37 +7,34 @@ The active repo is a minimal prompt-to-Java-agent architecture. It no longer lau
 The runnable path is:
 
 ```bash
-python -m scripts.run_minimal_experiment --config configs/minimal_experiment.json
+python scripts/run_eagle.py --config configs/eagle_minimal.yaml --mock
 ```
 
-The default config is a dry run. It writes generated Java source under `agents/generated/` and reports compile and match commands without invoking `javac` or MicroRTS.
+The mock path runs end to end without `javac` or MicroRTS. It writes run artifacts under `runs/<run_id>/`.
 
 ## What Works
 
-- Candidate prompts are represented by `eagle.candidate.CandidatePrompt`.
-- A small population loop evaluates candidates and mutates selected prompts.
-- The `template` generation backend emits compilable-looking Java source that extends `RandomBiasedAI`.
-- Generated Java source is written into the `ai.generated` package workspace.
-- Evaluation produces explicit compile and match command plans.
-- Unit tests cover source generation, parsing, workspace output, and the minimal dry-run experiment.
+- Candidate prompts are represented by `eagle.candidate.Candidate`.
+- `eagle.search` runs initialization, generation, compile, match evaluation, elite selection, and mutation.
+- The `mock` generation backend emits Java source that extends `RandomBiasedAI`.
+- Generated Java source is written under each run's `generated_agents/` directory.
+- Mock compile and match adapters produce structured results for local end-to-end runs.
+- Unit tests cover config parsing, Java generation, and run artifact output.
 
 ## What Is Stubbed
 
-- The real LLM generation backend is not wired.
-- Java compilation is planned but not run when `dry_run=true`.
-- MicroRTS match execution is planned but not run when `dry_run=true`.
-- Fitness is `0.0` in dry-run mode.
-- Selection and mutation are intentionally simple smoke-path implementations.
+- The OpenAI-compatible generation backend is implemented but not exercised by tests.
+- Real Java compilation is implemented through `javac`, but the exact MicroRTS classpath may need adjustment in a real environment.
+- The MicroRTS runner has an explicit TODO for the confirmed batch evaluation main class.
+- Selection and mutation are intentionally simple.
 
 ## Next Steps
 
-1. Add a real generation backend that turns candidate prompts into Java source.
-2. Tighten Java validation beyond token checks.
-3. Compile generated sources into a deterministic build directory.
-4. Add a real MicroRTS match runner and confirm the correct Java main class for batch evaluation.
-5. Parse real match results into fitness.
-6. Replace the smoke mutation operator with prompt-aware mutation and crossover.
-7. Add run artifact logging after the compile and match paths are real.
+1. Confirm the MicroRTS batch evaluation main class and command-line contract.
+2. Run one non-mock compile and match against the vendored MicroRTS tree.
+3. Tighten Java validation beyond token checks.
+4. Replace the simple mutation operator with prompt-aware mutation and crossover.
+5. Add richer run artifact logging only after real match execution is stable.
 
 ## Archive Notes
 

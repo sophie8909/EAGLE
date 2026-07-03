@@ -38,6 +38,7 @@ resources/config.properties
 !eagle/prompts/examples_pool.jsonl
 /logs/
 /agents/generated/
+/runs/
 
 third_party/microrts/resources/config.properties
 /batch_logs

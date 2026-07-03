@@ -1,17 +1,47 @@
-"""Compile command construction for generated Java agents."""
+"""Compilation adapter for generated Java agents."""
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 
 @dataclass(frozen=True)
-class CompilePlan:
-    source_path: Path
-    microrts_dir: Path
+class CompileResult:
+    ok: bool
+    command: list[str]
+    stdout: str = ""
+    stderr: str = ""
+    returncode: int = 0
 
-    def command(self) -> list[str]:
-        classpath = f"{self.microrts_dir / 'bin'};{self.microrts_dir / 'lib' / '*'}"
-        return ["javac", "-cp", classpath, str(self.source_path)]
 
+def compile_generated_agent(
+    source_path: Path,
+    *,
+    microrts_dir: Path,
+    output_dir: Path,
+    mock: bool = False,
+) -> CompileResult:
+    source_path = source_path.resolve()
+    microrts_dir = microrts_dir.resolve()
+    output_dir = output_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    command = [
+        "javac",
+        "-cp",
+        f"{microrts_dir / 'bin'};{microrts_dir / 'lib' / '*'}",
+        "-d",
+        str(output_dir),
+        str(source_path),
+    ]
+    if mock:
+        return CompileResult(ok=True, command=command, stdout="mock compile ok")
+    completed = subprocess.run(command, cwd=microrts_dir, capture_output=True, text=True, check=False)
+    return CompileResult(
+        ok=completed.returncode == 0,
+        command=command,
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+        returncode=completed.returncode,
+    )

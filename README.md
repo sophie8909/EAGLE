@@ -6,21 +6,21 @@ The old design where a Java agent called an LLM during a match has been archived
 
 ## Quick Start
 
-Run the minimal dry-run experiment:
+Run the minimal mock experiment:
 
 ```bash
-python -m scripts.run_minimal_experiment --config configs/minimal_experiment.json
+python scripts/run_eagle.py --config configs/eagle_minimal.yaml --mock
 ```
 
-The default config uses the offline `template` generation backend and `dry_run=true`, so it writes generated Java source and records the compile/match commands without launching MicroRTS.
+The mock path writes generated Java source, mock compile results, mock MicroRTS match results, `results.jsonl`, and `summary.json` under `runs/<run_id>/`.
 
 ## Repository Map
 
 ```text
-eagle/        core EA logic, candidate representation, population loop, operators
-generation/   prompt-to-Java generation, output parsing, generated-source validation
-agents/       generated Java agent workspace
-evaluation/   compile plans, MicroRTS match plans, result parsing, fitness
+eagle/        candidate representation, config loading, search loop, selection, mutation
+generation/   generation backend interface, LLM-compatible backend, Java output parsing and validation
+agents/       generated Java agent workspace helpers
+evaluation/   Java compilation, MicroRTS match adapter, fitness calculation
 configs/      experiment configs
 scripts/      runnable entry points
 docs/         architecture and handoff documentation
