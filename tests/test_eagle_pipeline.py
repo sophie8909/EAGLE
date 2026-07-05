@@ -111,6 +111,72 @@ public class GeneratedAgent_test extends RandomBiasedAI {
         self.assertNotIn("import ai.UnitTypeTable;", normalized)
         self.assertNotIn("@Override\n    public void act", normalized)
 
+    def test_normalize_repairs_elided_abstraction_helpers(self) -> None:
+        source = """package ai.generated;
+
+import ai.abstraction.AbstractionLayerAI;
+import ai.abstraction.pathfinding.AStarPathFinding;
+import ai.abstraction.pathfinding.PathFinding;
+import ai.core.AI;
+import rts.GameState;
+import rts.PhysicalGameState;
+import rts.PlayerAction;
+import rts.units.Unit;
+import rts.units.UnitType;
+import rts.units.UnitTypeTable;
+
+public class GeneratedAgent_test extends AbstractionLayerAI {
+    protected UnitTypeTable utt;
+    protected UnitType resourceType;
+    protected UnitType workerType;
+    protected UnitType baseType;
+    protected UnitType barracksType;
+
+    public GeneratedAgent_test(UnitTypeTable aUtt) {
+        this(aUtt, new AStarPathFinding());
+    }
+
+    public GeneratedAgent_test(UnitTypeTable aUtt, PathFinding aPf) {
+        super(aPf);
+        reset(aUtt);
+    }
+
+    public void reset(UnitTypeTable aUtt) {
+        utt = aUtt;
+        resourceType = utt.getUnitType("Resource");
+        workerType = utt.getUnitType("Worker");
+        baseType = utt.getUnitType("Base");
+        barracksType = utt.getUnitType("Barracks");
+    }
+
+    @Override
+    public AI clone() {
+        return new GeneratedAgent_test(utt, pf);
+    }
+
+    @Override
+    public PlayerAction getAction(int player, GameState gs) throws Exception {
+        applyAutoDefense(player, gs);
+        return translateActions(player, gs);
+    }
+
+    private void defineStrategy(int player, GameState gs) {
+        PhysicalGameState pgs = gs.getPhysicalGameState();
+        Unit base = ownBase(player, pgs);
+        if (base != null) {
+            commandTrain(base, workerType);
+        }
+    }
+
+    // Helper methods...
+}
+"""
+        normalized = normalize_java_agent_source(source)
+        self.assertIn("private boolean commandMove", normalized)
+        self.assertIn("private void applyAutoDefense", normalized)
+        self.assertIn("public List<ParameterSpecification> getParameters()", normalized)
+        self.assertNotIn("Helper methods...", normalized)
+
     def test_game_metrics_use_resource_difference(self) -> None:
         result = MatchResult(
             ok=True,

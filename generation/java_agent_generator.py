@@ -9,6 +9,7 @@ from pathlib import Path
 from eagle.candidate import Candidate
 
 from .backend import GenerationBackend, generated_class_name
+from .agent_template import render_get_parameters_method, render_operation_helper_methods
 from .parsing import extract_java_source
 
 
@@ -54,6 +55,7 @@ def normalize_java_agent_source(source: str) -> str:
     source = source.replace("import ai.UnitTypeTable;", "import rts.units.UnitTypeTable;")
     source = source.replace("import ai.core.UnitTypeTable;", "import rts.units.UnitTypeTable;")
     source = re.sub(r"(?m)^\s*@Override\s*\n\s*public\s+void\s+act\s*\(", "    public void act(", source)
+    source = re.sub(r"(?m)^\s*//\s*Helper methods\.\.\.\s*$\n?", "", source)
 
     if "UnitTypeTable" in source and "import rts.units.UnitTypeTable;" not in source:
         source = re.sub(
@@ -62,7 +64,60 @@ def normalize_java_agent_source(source: str) -> str:
             source,
             count=1,
         )
+    source = repair_abstraction_agent_source(source)
     return source
+
+
+def repair_abstraction_agent_source(source: str) -> str:
+    """Restore required helper methods if an LLM elides the template tail."""
+
+    if "extends AbstractionLayerAI" not in source:
+        return source
+
+    required_imports = [
+        "import ai.abstraction.AbstractionLayerAI;",
+        "import ai.abstraction.pathfinding.AStarPathFinding;",
+        "import ai.abstraction.pathfinding.PathFinding;",
+        "import ai.core.AI;",
+        "import ai.core.ParameterSpecification;",
+        "import java.util.ArrayList;",
+        "import java.util.List;",
+        "import rts.GameState;",
+        "import rts.PhysicalGameState;",
+        "import rts.PlayerAction;",
+        "import rts.units.Unit;",
+        "import rts.units.UnitType;",
+        "import rts.units.UnitTypeTable;",
+    ]
+    for import_line in required_imports:
+        source = ensure_import(source, import_line)
+
+    methods_to_append: list[str] = []
+    if "private boolean commandMove(" not in source or "private void applyAutoDefense(" not in source:
+        methods_to_append.append(render_operation_helper_methods())
+    if "List<ParameterSpecification> getParameters()" not in source:
+        methods_to_append.append(render_get_parameters_method())
+    if not methods_to_append:
+        return source
+    return insert_before_final_class_brace(source, "\n".join(methods_to_append))
+
+
+def ensure_import(source: str, import_line: str) -> str:
+    if import_line in source:
+        return source
+    package_match = re.search(r"(?m)^package\s+ai\.generated;\s*$", source)
+    if package_match:
+        insert_at = package_match.end()
+        return source[:insert_at] + "\n\n" + import_line + source[insert_at:]
+    return import_line + "\n" + source
+
+
+def insert_before_final_class_brace(source: str, block: str) -> str:
+    stripped = source.rstrip()
+    if not stripped.endswith("}"):
+        return source + "\n" + block + "\n"
+    prefix = stripped[:-1].rstrip()
+    return prefix + "\n" + block.rstrip() + "\n}\n"
 
 
 def validate_java_agent_source(source: str, class_name: str) -> None:

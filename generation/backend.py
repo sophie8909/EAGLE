@@ -53,6 +53,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             "Use the supplied MicroRTS operation template when present. "
             "Replace any CLASS_NAME placeholder with the requested class name. "
             "Keep the complete operation helper methods, fill only deterministic strategy logic, "
+            "never replace helper methods with comments or ellipses, "
             "and do not call any network, file, subprocess, environment, or LLM API at runtime.\n\n"
             f"Requested class name: {class_name}\n\n"
             f"Candidate prompt:\n{candidate.strategy_prompt}"

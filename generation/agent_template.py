@@ -215,6 +215,147 @@ public class {class_name} extends AbstractionLayerAI {{
 """
 
 
+OPERATION_HELPER_METHODS = """
+    private boolean commandMove(Unit unit, int x, int y) {
+        if (unit == null || unit.getType() == baseType || unit.getType() == barracksType) {
+            return false;
+        }
+        move(unit, x, y);
+        return true;
+    }
+
+    private boolean commandHarvest(Unit worker, Unit resource, Unit base) {
+        if (worker == null || resource == null || base == null) {
+            return false;
+        }
+        if (worker.getType() != workerType || resource.getType() != resourceType || base.getType() != baseType) {
+            return false;
+        }
+        harvest(worker, resource, base);
+        return true;
+    }
+
+    private boolean commandTrain(Unit producer, UnitType unitType) {
+        if (producer == null || unitType == null) {
+            return false;
+        }
+        if (producer.getType() != baseType && producer.getType() != barracksType) {
+            return false;
+        }
+        train(producer, unitType);
+        return true;
+    }
+
+    private boolean commandBuild(Unit worker, UnitType buildingType, int x, int y) {
+        if (worker == null || buildingType == null || worker.getType() != workerType) {
+            return false;
+        }
+        build(worker, buildingType, x, y);
+        return true;
+    }
+
+    private boolean commandAttack(Unit attacker, Unit target) {
+        if (attacker == null || target == null || !attacker.getType().canAttack) {
+            return false;
+        }
+        if (target.getPlayer() == attacker.getPlayer()) {
+            return false;
+        }
+        attack(attacker, target);
+        return true;
+    }
+
+    private boolean commandIdle(Unit unit) {
+        if (unit == null) {
+            return false;
+        }
+        idle(unit);
+        return true;
+    }
+
+    private boolean isIdleAlly(Unit unit, int player, GameState gs) {
+        return unit != null
+                && unit.getPlayer() == player
+                && gs.getUnitAction(unit) == null
+                && getAbstractAction(unit) == null;
+    }
+
+    private Unit nearestUnit(Unit source, List<Unit> units, int owner, UnitType type) {
+        Unit best = null;
+        int bestDistance = Integer.MAX_VALUE;
+        for (Unit other : units) {
+            if (owner != Integer.MIN_VALUE && other.getPlayer() != owner) {
+                continue;
+            }
+            if (type != null && other.getType() != type) {
+                continue;
+            }
+            int distance = Math.abs(other.getX() - source.getX()) + Math.abs(other.getY() - source.getY());
+            if (distance < bestDistance) {
+                best = other;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
+    private Unit nearestEnemy(Unit source, int player, PhysicalGameState pgs) {
+        Unit best = null;
+        int bestDistance = Integer.MAX_VALUE;
+        for (Unit other : pgs.getUnits()) {
+            if (other.getPlayer() < 0 || other.getPlayer() == player) {
+                continue;
+            }
+            int distance = Math.abs(other.getX() - source.getX()) + Math.abs(other.getY() - source.getY());
+            if (distance < bestDistance) {
+                best = other;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
+    private Unit nearestResource(Unit source, PhysicalGameState pgs) {
+        return nearestUnit(source, pgs.getUnits(), -1, resourceType);
+    }
+
+    private Unit ownBase(int player, PhysicalGameState pgs) {
+        for (Unit unit : pgs.getUnits()) {
+            if (unit.getPlayer() == player && unit.getType() == baseType) {
+                return unit;
+            }
+        }
+        return null;
+    }
+
+    private void applyAutoDefense(int player, GameState gs) {
+        PhysicalGameState pgs = gs.getPhysicalGameState();
+        for (Unit ally : pgs.getUnits()) {
+            if (!isIdleAlly(ally, player, gs) || !ally.getType().canAttack) {
+                continue;
+            }
+            Unit closestEnemy = nearestEnemy(ally, player, pgs);
+            if (closestEnemy != null) {
+                int distance = Math.abs(closestEnemy.getX() - ally.getX()) + Math.abs(closestEnemy.getY() - ally.getY());
+                if (distance <= 1) {
+                    commandAttack(ally, closestEnemy);
+                }
+            }
+        }
+    }
+"""
+
+
+GET_PARAMETERS_METHOD = """
+    @Override
+    public List<ParameterSpecification> getParameters() {
+        List<ParameterSpecification> parameters = new ArrayList<>();
+        parameters.add(new ParameterSpecification("PathFinding", PathFinding.class, new AStarPathFinding()));
+        return parameters;
+    }
+"""
+
+
 MICRORTS_BLANK_STRATEGY_PROMPT = """Generate one Java MicroRTS agent by filling only the blank strategy logic in the template below.
 
 MicroRTS summary:
@@ -237,6 +378,7 @@ Rules for generated code:
 - Use package ai.generated.
 - The class name must be the exact requested class name.
 - Keep the constructors and helper methods compilable.
+- Include the full helper methods from the template. Do not write "helper methods omitted", "...", or comments in place of methods.
 - Fill defineStrategy with deterministic Java logic.
 - Do not include HTTP, URL, Socket, Files, environment variables, subprocesses, or runtime LLM code.
 - Return only Java source code.
@@ -263,3 +405,10 @@ def get_seed_prompt_template(name: str) -> str:
         return microrts_blank_strategy_prompt()
     raise ValueError(f"Unknown seed_prompt_template: {name}")
 
+
+def render_operation_helper_methods() -> str:
+    return OPERATION_HELPER_METHODS
+
+
+def render_get_parameters_method() -> str:
+    return GET_PARAMETERS_METHOD
