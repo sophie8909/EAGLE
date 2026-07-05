@@ -1,24 +1,12 @@
-"""Workspace management for generated Java agents."""
+"""Filesystem helpers for generated-agent workspaces."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
-from eagle.candidate import Candidate
-from generation.backend import generated_class_name
 
+def ensure_workspace(path: str | Path) -> Path:
+    workspace = Path(path)
+    workspace.mkdir(parents=True, exist_ok=True)
+    return workspace
 
-@dataclass(frozen=True)
-class AgentWorkspace:
-    root: Path
-
-    def package_dir(self) -> Path:
-        return self.root / "src" / "ai" / "generated"
-
-    def write_source(self, candidate: Candidate, java_source: str) -> Path:
-        output_dir = self.package_dir()
-        output_dir.mkdir(parents=True, exist_ok=True)
-        path = output_dir / f"{generated_class_name(candidate.id)}.java"
-        path.write_text(java_source, encoding="utf-8")
-        return path

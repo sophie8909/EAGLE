@@ -1,2 +1,2 @@
-"""Generated Java agent workspace package."""
+"""Generated-agent workspace package marker."""
 

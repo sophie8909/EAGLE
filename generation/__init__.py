@@ -1,2 +1,2 @@
-"""Prompt-to-Java generation package."""
+"""Prompt-to-Java generation helpers."""
 

@@ -16,6 +16,10 @@ class CompileResult:
     stderr: str = ""
     returncode: int = 0
 
+    @property
+    def status(self) -> str:
+        return "success" if self.ok else "failed"
+
 
 def compile_generated_agent(
     source_path: Path,
@@ -46,3 +50,4 @@ def compile_generated_agent(
         stderr=completed.stderr,
         returncode=completed.returncode,
     )
+

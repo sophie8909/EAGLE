@@ -3,10 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, parse_minimal_yaml
-from eagle.search import run_search
+from eagle.search import dominates, run_search
+from evaluation.game_metrics import compute_game_metrics
+from evaluation.microrts_runner import MatchResult
 from generation.backend import MockGenerationBackend, generated_class_name
-from generation.java_agent import generate_java_agent, normalize_java_agent_source
+from generation.java_agent_generator import generate_java_agent, normalize_java_agent_source
 
 
 class EaglePipelineTests(unittest.TestCase):
@@ -25,14 +28,12 @@ population_size: 3
 
     def test_mock_generation_returns_valid_java_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            from eagle.candidate import Candidate
-
-            candidate = Candidate(prompt="Generate an agent.")
+            candidate = Candidate(strategy_prompt="Generate an agent.")
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertIn("package ai.generated;", agent.source)
             self.assertIn("extends RandomBiasedAI", agent.source)
 
-    def test_mock_search_writes_run_artifacts(self) -> None:
+    def test_mock_search_writes_nsga2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             config_path = root / "config.yaml"
@@ -40,11 +41,14 @@ population_size: 3
                 "\n".join(
                     [
                         "seed_prompts:",
-                        '  - "Generate a Java MicroRTS agent."',
+                        '  - "Generate a Java MicroRTS economy agent."',
+                        '  - "Generate a Java MicroRTS defensive agent."',
                         "generations: 2",
-                        "population_size: 2",
-                        "elite_count: 1",
+                        "population_size: 3",
+                        "crossover_rate: 1.0",
+                        "mutation_rate: 1.0",
                         'generation_backend: "mock"',
+                        'alignment_backend: "mock"',
                         f'runs_dir: "{(root / "runs").as_posix()}"',
                         "matches_per_candidate: 1",
                     ]
@@ -58,14 +62,20 @@ population_size: 3
             self.assertTrue((result.run_dir / "generated_agents").is_dir())
             self.assertTrue((result.run_dir / "results.jsonl").exists())
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
-            self.assertEqual(summary["best_candidate"]["status"], "evaluated")
-            self.assertEqual(len(summary["final_population"]), 2)
+            self.assertEqual(summary["objectives"], ["game_performance", "strategy_alignment"])
+            self.assertEqual(len(summary["final_population"]), 3)
+            candidate_dir = next((result.run_dir / "candidates").iterdir())
+            self.assertTrue((candidate_dir / "strategy_prompt.txt").exists())
+            self.assertTrue((candidate_dir / "generated_java_source.java").exists())
+            self.assertTrue((candidate_dir / "compile_result.json").exists())
+            self.assertTrue((candidate_dir / "raw_microrts_result.json").exists())
+            self.assertTrue((candidate_dir / "game_metrics.json").exists())
+            self.assertTrue((candidate_dir / "strategy_alignment.json").exists())
+            self.assertTrue((candidate_dir / "objectives.json").exists())
 
     def test_generate_java_agent_uses_candidate_class_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            from eagle.candidate import Candidate
-
-            candidate = Candidate(prompt="Generate a Java MicroRTS agent.")
+            candidate = Candidate(strategy_prompt="Generate a Java MicroRTS agent.")
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertEqual(agent.class_name, generated_class_name(candidate.id))
             self.assertTrue(agent.source_path.exists())
@@ -91,6 +101,25 @@ public class GeneratedAgent_test extends RandomBiasedAI {
         self.assertNotIn("import ai.UnitTypeTable;", normalized)
         self.assertNotIn("@Override\n    public void act", normalized)
 
+    def test_game_metrics_use_resource_difference(self) -> None:
+        result = MatchResult(
+            ok=True,
+            score=0.5,
+            command=[],
+            raw_result={"winner": 0, "final_scoreboard": {"p0_resources": 14, "p1_resources": 8}},
+        )
+        metrics = compute_game_metrics([result])
+        self.assertEqual(metrics.resource_difference, 6)
+        self.assertGreater(metrics.objective, 6)
+
+    def test_dominates_uses_two_objectives(self) -> None:
+        strong = Candidate(fitness_objectives={"game_performance": 2, "strategy_alignment": 0.8})
+        weak = Candidate(fitness_objectives={"game_performance": 1, "strategy_alignment": 0.8})
+        tradeoff = Candidate(fitness_objectives={"game_performance": 3, "strategy_alignment": 0.2})
+        self.assertTrue(dominates(strong, weak))
+        self.assertFalse(dominates(strong, tradeoff))
+
 
 if __name__ == "__main__":
     unittest.main()
+

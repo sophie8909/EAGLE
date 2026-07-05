@@ -1,2 +1,2 @@
-"""Core evolutionary search primitives for EAGLE."""
+"""EAGLE prompt-evolution package."""
 

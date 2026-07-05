@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,7 @@ class MatchResult:
     stdout: str = ""
     stderr: str = ""
     returncode: int = 0
+    raw_result: dict[str, Any] = field(default_factory=dict)
 
 
 def run_microrts_match(
@@ -56,16 +58,30 @@ def run_microrts_match(
         str(result_json_path),
     ]
     if mock:
+        raw_result = {
+            "winner": 0 if mock_score >= 0 else 1,
+            "ticks": tick_limit,
+            "final_scoreboard": {
+                "p0_resources": 50.0 + mock_score,
+                "p1_resources": 50.0,
+                "p0_eval": 50.0 + mock_score,
+                "p1_eval": 50.0,
+                "units_produced": max(1, int(3 + mock_score % 5)),
+                "damage_dealt": max(0.0, mock_score * 2.0),
+            },
+        }
         return MatchResult(
             ok=True,
             score=mock_score,
             command=command,
             stdout=f"mock match {match_index} score={mock_score}",
+            raw_result=raw_result,
         )
     completed = subprocess.run(command, cwd=microrts_dir, capture_output=True, text=True, check=False)
+    raw_result = read_result_json(result_json_path)
     score = parse_score(completed.stdout)
-    if score is None and result_json_path.exists():
-        score = score_from_result_json(result_json_path)
+    if score is None and raw_result:
+        score = score_from_payload(raw_result)
     return MatchResult(
         ok=completed.returncode == 0 and score is not None,
         score=0.0 if score is None else score,
@@ -73,6 +89,7 @@ def run_microrts_match(
         stdout=completed.stdout,
         stderr=completed.stderr,
         returncode=completed.returncode,
+        raw_result=raw_result,
     )
 
 
@@ -83,12 +100,14 @@ def parse_score(output: str) -> float | None:
     return None
 
 
-def score_from_result_json(path: Path) -> float | None:
+def read_result_json(path: Path) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return None
+        return {}
 
+
+def score_from_payload(payload: dict[str, Any]) -> float | None:
     winner = payload.get("winner")
     if winner == 0:
         return 1.0
@@ -102,3 +121,11 @@ def score_from_result_json(path: Path) -> float | None:
     except (TypeError, ValueError):
         return 0.0
     return (p0_eval - p1_eval) / max(1.0, p0_eval + p1_eval)
+
+
+def score_from_result_json(path: Path) -> float | None:
+    payload = read_result_json(path)
+    if not payload:
+        return None
+    return score_from_payload(payload)
+

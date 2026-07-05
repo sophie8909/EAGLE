@@ -1,2 +1,2 @@
-"""MicroRTS evaluation package."""
+"""Evaluation adapters for generated Java MicroRTS agents."""
 

@@ -12,10 +12,13 @@ from typing import Any
 class ExperimentConfig:
     seed_prompts: tuple[str, ...]
     generations: int = 1
-    population_size: int = 2
-    elite_count: int = 1
-    mutation_suffix: str = "Make the Java agent slightly more robust and keep it compilable."
+    population_size: int = 4
+    mutation_suffix: str = "Adjust the strategy while keeping the generated Java agent simple and compilable."
+    crossover_rate: float = 0.75
+    mutation_rate: float = 0.85
+    random_seed: int = 7
     generation_backend: str = "mock"
+    alignment_backend: str = "mock"
     llm_base_url: str = "http://localhost:8080"
     llm_model: str = "local-model"
     microrts_dir: Path = Path("third_party/microrts")
@@ -38,10 +41,6 @@ class ExperimentConfig:
         return cls.from_mapping(payload, raw_config=raw_config)
 
     @classmethod
-    def from_json(cls, path: str | Path) -> "ExperimentConfig":
-        return cls.from_file(path)
-
-    @classmethod
     def from_mapping(cls, payload: dict[str, Any], *, raw_config: str = "") -> "ExperimentConfig":
         seed_prompts = tuple(str(item) for item in payload.get("seed_prompts", []))
         if not seed_prompts:
@@ -50,11 +49,12 @@ class ExperimentConfig:
             seed_prompts=seed_prompts,
             generations=int(payload.get("generations", 1)),
             population_size=int(payload.get("population_size", max(1, len(seed_prompts)))),
-            elite_count=int(payload.get("elite_count", 1)),
-            mutation_suffix=str(
-                payload.get("mutation_suffix", "Make the Java agent slightly more robust and keep it compilable.")
-            ),
+            mutation_suffix=str(payload.get("mutation_suffix", cls.mutation_suffix)),
+            crossover_rate=float(payload.get("crossover_rate", 0.75)),
+            mutation_rate=float(payload.get("mutation_rate", 0.85)),
+            random_seed=int(payload.get("random_seed", 7)),
             generation_backend=str(payload.get("generation_backend", "mock")),
+            alignment_backend=str(payload.get("alignment_backend", payload.get("generation_backend", "mock"))),
             llm_base_url=str(payload.get("llm_base_url", "http://localhost:8080")),
             llm_model=str(payload.get("llm_model", "local-model")),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
@@ -72,10 +72,10 @@ class ExperimentConfig:
             raise ValueError("generations must be at least 1.")
         if self.population_size < 1:
             raise ValueError("population_size must be at least 1.")
-        if self.elite_count < 1:
-            raise ValueError("elite_count must be at least 1.")
-        if self.elite_count > self.population_size:
-            raise ValueError("elite_count cannot exceed population_size.")
+        if not 0.0 <= self.crossover_rate <= 1.0:
+            raise ValueError("crossover_rate must be in [0, 1].")
+        if not 0.0 <= self.mutation_rate <= 1.0:
+            raise ValueError("mutation_rate must be in [0, 1].")
         if self.tick_limit < 1:
             raise ValueError("tick_limit must be at least 1.")
         if self.matches_per_candidate < 1:
@@ -83,7 +83,7 @@ class ExperimentConfig:
 
 
 def parse_minimal_yaml(raw: str) -> dict[str, Any]:
-    """Parse the small YAML subset used by configs/eagle_minimal.yaml."""
+    """Parse the small YAML subset used by EAGLE configs."""
 
     payload: dict[str, Any] = {}
     current_key: str | None = None
@@ -122,3 +122,4 @@ def _parse_scalar(value: str) -> Any:
         return float(value)
     except ValueError:
         return value
+

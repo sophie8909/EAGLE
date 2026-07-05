@@ -46,14 +46,13 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
         prompt = (
-            "Generate exactly one Java MicroRTS AI class. "
-            "Return only Java source code. "
+            "Generate exactly one Java MicroRTS AI class. Return only Java source code. "
             "The class must use package ai.generated, extend ai.RandomBiasedAI, "
             f"be named {class_name}, and provide a constructor that accepts UnitTypeTable. "
             "Use import ai.RandomBiasedAI; and import rts.units.UnitTypeTable;. "
-            "Do not import ai.UnitTypeTable. "
-            "Do not add an act() method.\n\n"
-            f"Candidate prompt:\n{candidate.prompt}"
+            "Do not import ai.UnitTypeTable. Do not call any network, file, or LLM API at runtime. "
+            "Do not add an act() method unless it is complete and does not use an LLM.\n\n"
+            f"Strategy prompt:\n{candidate.strategy_prompt}"
         )
         payload = {
             "model": self.model,
@@ -66,6 +65,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+        body = None
         for attempt in range(self.max_retries + 1):
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
@@ -77,6 +77,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                 time.sleep(2**attempt)
             except json.JSONDecodeError as exc:
                 raise RuntimeError(f"Generation backend returned invalid JSON: {exc}") from exc
+        if body is None:
+            raise GenerationBackendUnavailable("Generation backend returned no response.")
         return str(body["choices"][0]["message"]["content"])
 
 
@@ -103,9 +105,15 @@ public class {class_name} extends RandomBiasedAI {{
 """
 
 
-def build_generation_backend(name: str, *, base_url: str = "http://localhost:8080", model: str = "local-model") -> GenerationBackend:
+def build_generation_backend(
+    name: str,
+    *,
+    base_url: str = "http://localhost:8080",
+    model: str = "local-model",
+) -> GenerationBackend:
     if name == "mock":
         return MockGenerationBackend()
     if name in {"openai", "llama_cpp"}:
         return OpenAICompatibleGenerationBackend(base_url=base_url, model=model)
     raise ValueError(f"Unknown generation backend: {name}")
+

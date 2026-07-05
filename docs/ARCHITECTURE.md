@@ -1,55 +1,62 @@
 # Architecture
 
-EAGLE now treats prompts as source-code generators, not as runtime controllers.
+EAGLE evolves strategy prompts with NSGA-II. The LLM is used before evaluation to generate Java MicroRTS agents. It is not part of runtime game control.
 
 ## Pipeline
 
-1. `eagle` creates a population of candidate prompts.
-2. `generation` sends each prompt to a generation backend and receives Java source code.
-3. `generation.java_agent` extracts Java code, checks the minimum expected Java agent structure, and writes it into the run workspace.
-4. `evaluation.compiler` compiles the generated source, or returns a structured mock compile result when `--mock` is used.
-5. `evaluation.microrts_runner` runs MicroRTS matches, or returns structured mock match scores when `--mock` is used.
-6. `eagle` selects and mutates candidate prompts using fitness scores.
+1. `eagle.search` initializes a population of `strategy_prompt` candidates.
+2. NSGA-II variation creates offspring through prompt crossover and mutation.
+3. `generation/java_agent_generator.py` sends each prompt to a generation backend, extracts Java source, validates the generated class shape, and writes an isolated source file.
+4. `evaluation/compiler.py` compiles the generated Java source.
+5. Compile failures receive worst objectives and persist compiler output.
+6. Compile successes run MicroRTS matches through `evaluation/microrts_runner.py`.
+7. `evaluation/game_metrics.py` parses raw match results and computes the game-performance objective from resource difference plus available match metrics.
+8. `evaluation/strategy_alignment.py` asks an LLM to compare the strategy prompt, generated Java code, and optional match summary. Mock mode uses a deterministic local scorer.
+9. `evaluation/nsga2_objectives.py` converts compile, game, and alignment results into the two maximized NSGA-II objectives.
+10. `eagle.search` performs non-dominated sorting and crowding-distance survivor selection.
 
-## Module Ownership
+## Candidate Representation
 
-- `eagle/`: candidate representation, experiment config, search loop, selection, mutation, and orchestration.
-- `generation/`: prompt-to-Java generation backend interface, mock backend, OpenAI-compatible backend, fenced-code parsing, and generated-source validation.
-- `agents/`: filesystem workspace for generated Java agents.
-- `evaluation/`: Java compilation, MicroRTS match adapter, match-score parsing, and fitness conversion.
-- `configs/`: experiment config files for the active architecture.
-- `scripts/`: runnable entry points. `scripts/run_eagle.py` is the active runner.
-- `docs/`: architecture and handoff documentation for future coding models.
-- `archive/`: old runtime LLM-agent control code and previous framework surfaces.
+Each NSGA-II individual is an `eagle.candidate.Candidate` with:
 
-## Data Flow
+- `strategy_prompt`
+- `generated_java_agent_path`
+- `compile_status`
+- `game_eval_result`
+- `strategy_alignment_result`
+- `fitness_objectives`
 
-```text
-candidate prompt
-  -> generation backend
-  -> Java source code
-  -> source validation
-  -> runs/<run_id>/generated_agents/<candidate_id>/src/ai/generated/*.java
-  -> javac compile result
-  -> MicroRTS match result
-  -> match score
-  -> fitness
-  -> selection and mutation
-```
+The active objective names are:
 
-## Run Artifacts
+- `game_performance`: higher is better. Successful matches use resource difference plus available win/loss and score signals. Compile or match failures get `-1.0`.
+- `strategy_alignment`: higher is better. LLM alignment score in `[0, 1]`; compile failures get `0.0`.
+
+Objectives remain separate. EAGLE does not collapse them into one scalar for NSGA-II selection.
+
+## Artifact Flow
+
+Each run writes:
 
 ```text
 runs/<run_id>/
   config.yaml
-  candidates/
-  generated_agents/
   results.jsonl
   summary.json
+  generation_001_population.json
+  generated_agents/<candidate_id>/src/ai/generated/*.java
+  classes/<candidate_id>/
+  candidates/<candidate_id>/
+    strategy_prompt.txt
+    generated_java_source.java
+    compile_result.json
+    raw_microrts_result.json
+    game_metrics.json
+    strategy_alignment.json
+    objectives.json
+    individual.json
 ```
 
-## Removed Or Archived Design
+## Runtime Boundary
 
-The previous design kept an LLM in the match loop. Java classes under `ai.eagle` loaded a prompt, called a llama.cpp-compatible endpoint during gameplay, parsed JSON moves, and applied actions in real time. That path is no longer active.
+Generated Java agents are ordinary MicroRTS AIs. The generation prompt asks for code that avoids runtime network, file, or LLM APIs, and source validation rejects common runtime LLM/network patterns. The archived runtime-control design is not active.
 
-Old Python plugin, GUI, surrogate, round-evaluation, LLM-call logging, and compatibility layers were moved to `archive/legacy_runtime/`. The old Java runtime LLM agent sources were also moved there. The vendored MicroRTS engine remains under `third_party/microrts/`.

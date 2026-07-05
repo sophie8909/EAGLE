@@ -1,4 +1,4 @@
-"""Run the minimal EAGLE prompt-to-Java pipeline."""
+"""Run the EAGLE NSGA-II prompt-to-Java pipeline."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ from eagle.search import run_search
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run EAGLE generated-agent search.")
+    parser = argparse.ArgumentParser(description="Run EAGLE generated-agent NSGA-II search.")
     parser.add_argument("--config", default="configs/eagle_minimal.yaml")
-    parser.add_argument("--mock", action="store_true", help="Use mock generation, compile, and MicroRTS evaluation.")
+    parser.add_argument("--mock", action="store_true", help="Use mock generation, compile, alignment, and match eval.")
     parser.add_argument("--run-id", default=None)
     args = parser.parse_args()
 
@@ -25,10 +25,11 @@ def main() -> None:
     config = ExperimentConfig.from_file(config_path)
     result = run_search(config, config_path=config_path, mock=args.mock, run_id=args.run_id)
     best = result.best_candidate
-    best_text = "none" if best is None else f"{best.id} fitness={best.fitness}"
+    best_text = "none" if best is None else f"{best.id} objectives={best.fitness_objectives}"
     print(f"run_dir={result.run_dir}")
     print(f"best_candidate={best_text}")
 
 
 if __name__ == "__main__":
     main()
+
