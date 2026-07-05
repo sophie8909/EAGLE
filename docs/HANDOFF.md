@@ -9,7 +9,7 @@ python scripts/run_eagle.py --config configs/eagle_minimal.yaml --mock
 The mock run exercises:
 
 - NSGA-II initialization, prompt crossover, prompt mutation, Pareto ranking, and crowding distance
-- prompt-to-Java generation path
+- prompt-to-Java generation path seeded by `microrts_blank_strategy_agent`
 - mock compile adapter
 - mock MicroRTS match adapter
 - game-performance and strategy-alignment objectives
@@ -25,6 +25,8 @@ The mock run exercises:
 - deterministic mock strategy-alignment scoring
 
 This mode does not require `javac`, MicroRTS, or a live LLM endpoint.
+
+The initial prompt is not a strategy. It only explains MicroRTS, lists legal high-level operations, and provides a blank but fully wired Java `AbstractionLayerAI` template. Strategy text is introduced by variation and by the LLM filling `defineStrategy`.
 
 ## Real MicroRTS Mode Status
 
@@ -49,4 +51,3 @@ The MicroRTS command currently targets `rts.MicroRTS` with a JSON-result flag. C
 2. Confirm and, if needed, adjust the MicroRTS evaluation command.
 3. Add stronger Java safety validation after the real generation style is observed.
 4. Replace simple text variation with prompt-aware mutation/crossover only if it improves measured search behavior.
-

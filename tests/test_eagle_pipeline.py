@@ -8,6 +8,7 @@ from eagle.config import ExperimentConfig, parse_minimal_yaml
 from eagle.search import dominates, run_search
 from evaluation.game_metrics import compute_game_metrics
 from evaluation.microrts_runner import MatchResult
+from generation.agent_template import microrts_blank_strategy_prompt
 from generation.backend import MockGenerationBackend, generated_class_name
 from generation.java_agent_generator import generate_java_agent, normalize_java_agent_source
 
@@ -31,7 +32,16 @@ population_size: 3
             candidate = Candidate(strategy_prompt="Generate an agent.")
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertIn("package ai.generated;", agent.source)
-            self.assertIn("extends RandomBiasedAI", agent.source)
+            self.assertIn("extends AbstractionLayerAI", agent.source)
+            self.assertIn("private void defineStrategy", agent.source)
+            self.assertIn("STRATEGY LOGIC GOES HERE", agent.source)
+
+    def test_seed_prompt_template_expands_to_blank_strategy_prompt(self) -> None:
+        config = ExperimentConfig.from_mapping({"seed_prompt_template": "microrts_blank_strategy_agent"})
+        self.assertEqual(len(config.seed_prompts), 1)
+        self.assertEqual(config.seed_prompts[0], microrts_blank_strategy_prompt())
+        self.assertIn("Available high-level operations", config.seed_prompts[0])
+        self.assertIn("STRATEGY LOGIC GOES HERE", config.seed_prompts[0])
 
     def test_mock_search_writes_nsga2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -122,4 +132,3 @@ public class GeneratedAgent_test extends RandomBiasedAI {
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -1,8 +1,4 @@
-seed_prompts:
-  - "Generate a Java MicroRTS agent that prioritizes economy first, then transitions into light-unit pressure without runtime LLM calls."
-  - "Generate a Java MicroRTS agent that defends its base, keeps workers alive, and counterattacks only after stabilizing."
-  - "Generate a Java MicroRTS agent that rushes early with compact, deterministic Java code."
-  - "Generate a Java MicroRTS agent that balances worker production, barracks timing, and local tactical pressure."
+seed_prompt_template: "microrts_blank_strategy_agent"
 generations: 10
 population_size: 50
 crossover_rate: 0.75
@@ -19,4 +15,3 @@ opponent: "ai.RandomBiasedAI"
 matches_per_candidate: 3
 mock_score_base: 10
 mock_score_step: 1
-

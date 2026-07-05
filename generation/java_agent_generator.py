@@ -82,7 +82,8 @@ def validate_java_agent_source(source: str, class_name: str) -> None:
         r"/v1/chat/completions",
         r"\bSocket\b",
         r"\bFiles\.read",
+        r"\bProcessBuilder\b",
+        r"\bRuntime\.getRuntime\b",
     ]
     if any(re.search(pattern, source) for pattern in forbidden_patterns):
-        raise ValueError("Generated Java agent must not call network, file, or runtime LLM APIs.")
-
+        raise ValueError("Generated Java agent must not call network, file, process, or runtime LLM APIs.")

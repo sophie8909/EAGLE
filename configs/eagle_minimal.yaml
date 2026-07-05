@@ -1,7 +1,4 @@
-seed_prompts:
-  - "Generate a simple Java MicroRTS agent that extends RandomBiasedAI, favors steady worker production, and never calls an LLM at runtime."
-  - "Generate a conservative Java MicroRTS agent with a valid UnitTypeTable constructor, defensive positioning, and safe resource gathering."
-  - "Generate an aggressive Java MicroRTS agent that applies early pressure while keeping the code small and compilable."
+seed_prompt_template: "microrts_blank_strategy_agent"
 generations: 2
 population_size: 4
 crossover_rate: 1.0
@@ -16,4 +13,3 @@ opponent: "ai.RandomBiasedAI"
 matches_per_candidate: 1
 mock_score_base: 10
 mock_score_step: 1
-

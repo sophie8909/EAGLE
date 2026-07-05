@@ -11,6 +11,8 @@ from abc import ABC, abstractmethod
 
 from eagle.candidate import Candidate
 
+from .agent_template import render_blank_strategy_agent
+
 
 class GenerationBackend(ABC):
     @abstractmethod
@@ -26,7 +28,7 @@ class MockGenerationBackend(GenerationBackend):
     """Deterministic backend for tests and local pipeline smoke runs."""
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
-        return render_random_biased_agent(class_name, candidate.id)
+        return render_blank_strategy_agent(class_name)
 
 
 class OpenAICompatibleGenerationBackend(GenerationBackend):
@@ -47,12 +49,13 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
     def generate(self, candidate: Candidate, class_name: str) -> str:
         prompt = (
             "Generate exactly one Java MicroRTS AI class. Return only Java source code. "
-            "The class must use package ai.generated, extend ai.RandomBiasedAI, "
-            f"be named {class_name}, and provide a constructor that accepts UnitTypeTable. "
-            "Use import ai.RandomBiasedAI; and import rts.units.UnitTypeTable;. "
-            "Do not import ai.UnitTypeTable. Do not call any network, file, or LLM API at runtime. "
-            "Do not add an act() method unless it is complete and does not use an LLM.\n\n"
-            f"Strategy prompt:\n{candidate.strategy_prompt}"
+            f"The class must use package ai.generated and must be named {class_name}. "
+            "Use the supplied MicroRTS operation template when present. "
+            "Replace any CLASS_NAME placeholder with the requested class name. "
+            "Keep the complete operation helper methods, fill only deterministic strategy logic, "
+            "and do not call any network, file, subprocess, environment, or LLM API at runtime.\n\n"
+            f"Requested class name: {class_name}\n\n"
+            f"Candidate prompt:\n{candidate.strategy_prompt}"
         )
         payload = {
             "model": self.model,
@@ -90,6 +93,8 @@ def generated_class_name(candidate_id: str) -> str:
 
 
 def render_random_biased_agent(class_name: str, candidate_id: str) -> str:
+    """Legacy tiny mock renderer kept for callers that import it directly."""
+
     return f"""package ai.generated;
 
 import ai.RandomBiasedAI;
@@ -116,4 +121,3 @@ def build_generation_backend(
     if name in {"openai", "llama_cpp"}:
         return OpenAICompatibleGenerationBackend(base_url=base_url, model=model)
     raise ValueError(f"Unknown generation backend: {name}")
-

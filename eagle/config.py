@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from generation.agent_template import get_seed_prompt_template
+
 
 @dataclass(frozen=True)
 class ExperimentConfig:
@@ -43,8 +45,11 @@ class ExperimentConfig:
     @classmethod
     def from_mapping(cls, payload: dict[str, Any], *, raw_config: str = "") -> "ExperimentConfig":
         seed_prompts = tuple(str(item) for item in payload.get("seed_prompts", []))
+        template_name = payload.get("seed_prompt_template")
+        if template_name:
+            seed_prompts = (get_seed_prompt_template(str(template_name)), *seed_prompts)
         if not seed_prompts:
-            raise ValueError("Experiment config must define at least one seed prompt.")
+            raise ValueError("Experiment config must define at least one seed prompt or seed_prompt_template.")
         return cls(
             seed_prompts=seed_prompts,
             generations=int(payload.get("generations", 1)),
@@ -122,4 +127,3 @@ def _parse_scalar(value: str) -> Any:
         return float(value)
     except ValueError:
         return value
-

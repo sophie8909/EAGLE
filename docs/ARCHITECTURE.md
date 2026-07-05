@@ -4,7 +4,7 @@ EAGLE evolves strategy prompts with NSGA-II. The LLM is used before evaluation t
 
 ## Pipeline
 
-1. `eagle.search` initializes a population of `strategy_prompt` candidates.
+1. `eagle.search` initializes a population of `strategy_prompt` candidates. The default seed comes from `seed_prompt_template: "microrts_blank_strategy_agent"` and describes MicroRTS, legal high-level operations, and a blank Java strategy skeleton.
 2. NSGA-II variation creates offspring through prompt crossover and mutation.
 3. `generation/java_agent_generator.py` sends each prompt to a generation backend, extracts Java source, validates the generated class shape, and writes an isolated source file.
 4. `evaluation/compiler.py` compiles the generated Java source.
@@ -33,6 +33,15 @@ The active objective names are:
 
 Objectives remain separate. EAGLE does not collapse them into one scalar for NSGA-II selection.
 
+## Initial Prompt Template
+
+`generation/agent_template.py` owns the built-in initial prompt. It intentionally avoids a concrete strategy such as rush, turtle, or economy-first. Instead, it gives the LLM:
+
+- MicroRTS unit and resource basics
+- available `AbstractionLayerAI` operations: `move`, `harvest`, `train`, `build`, `attack`, and `idle`
+- a compilable Java agent skeleton copied from the old runtime-agent action style but stripped of runtime LLM, HTTP, file, and logging behavior
+- a blank `defineStrategy` method where evolved strategy logic should be inserted
+
 ## Artifact Flow
 
 Each run writes:
@@ -59,4 +68,3 @@ runs/<run_id>/
 ## Runtime Boundary
 
 Generated Java agents are ordinary MicroRTS AIs. The generation prompt asks for code that avoids runtime network, file, or LLM APIs, and source validation rejects common runtime LLM/network patterns. The archived runtime-control design is not active.
-
