@@ -1,6 +1,0 @@
-{
-  "tick_limit": 5000,
-  "llm_intervals": [1, 10],
-  "save_trace_on_test": true
-}
-
