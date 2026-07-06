@@ -21,6 +21,7 @@ from generation.java_agent_generator import GeneratedJavaAgent, generate_java_ag
 from .artifacts import append_result, write_candidate_artifacts, write_generation_manifest, write_summary
 from .candidate import Candidate
 from .config import ExperimentConfig
+from .offspring import make_offspring, mutate_prompt
 
 
 @dataclass(frozen=True)
@@ -84,7 +85,13 @@ def run_search(
 
     for generation in range(1, config.generations):
         assign_rank_and_crowding(evaluated_population)
-        offspring = make_offspring(evaluated_population, config=config, generation=generation, rng=rng)
+        offspring = make_offspring(
+            evaluated_population,
+            config=config,
+            generation=generation,
+            rng=rng,
+            parent_selector=tournament_select,
+        )
         evaluated_offspring = evaluate_population(
             offspring,
             generation=generation,
@@ -258,56 +265,6 @@ def evaluate_candidate(
         game_metrics=game_metrics,
         alignment_result=alignment_result,
         error=error,
-    )
-
-
-def make_offspring(
-    population: list[Candidate],
-    *,
-    config: ExperimentConfig,
-    generation: int,
-    rng: random.Random,
-) -> list[Candidate]:
-    offspring: list[Candidate] = []
-    while len(offspring) < config.population_size:
-        parent_a = tournament_select(population, rng)
-        parent_b = tournament_select(population, rng)
-        operator = "mutation"
-        if len(population) > 1 and rng.random() < config.crossover_rate:
-            prompt = crossover_prompts(parent_a.strategy_prompt, parent_b.strategy_prompt)
-            parent_ids = (parent_a.id, parent_b.id)
-            operator = "crossover"
-        else:
-            prompt = parent_a.strategy_prompt
-            parent_ids = (parent_a.id,)
-        if rng.random() < config.mutation_rate:
-            prompt = mutate_prompt(prompt, config.mutation_suffix, clone_index=len(offspring))
-            operator = f"{operator}+mutation" if operator == "crossover" else "mutation"
-        offspring.append(
-            Candidate(
-                generation=generation,
-                parent_ids=parent_ids,
-                strategy_prompt=prompt,
-                metadata={"operator": operator},
-            )
-        )
-    return offspring
-
-
-def mutate_prompt(prompt: str, mutation_suffix: str, *, clone_index: int) -> str:
-    return (
-        f"{prompt.rstrip()}\n\n"
-        f"Mutation {clone_index + 1}: {mutation_suffix} "
-        "Emphasize one concrete MicroRTS behavior such as economy, defense, scouting, or pressure."
-    )
-
-
-def crossover_prompts(prompt_a: str, prompt_b: str) -> str:
-    return (
-        "Blend these two MicroRTS strategy prompts into one Java-agent generation request.\n\n"
-        f"Parent strategy A:\n{prompt_a.rstrip()}\n\n"
-        f"Parent strategy B:\n{prompt_b.rstrip()}\n\n"
-        "Child strategy: keep the strongest compatible ideas from both parents and avoid runtime LLM calls."
     )
 
 
