@@ -8,22 +8,22 @@ MODEL_ALIAS="${MODEL_ALIAS:-llama31}"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
-LEGACY_ROOT_SCRIPT_DIR="$SCRIPT_DIR/archive/legacy_runtime/root_scripts"
+EXPERIMENT_ENV_DIR="$SCRIPT_DIR/experiment_env"
 
-WATCHDOG_SCRIPT="$LEGACY_ROOT_SCRIPT_DIR/network_watchdog.sh"
-LLAMA_SERVER_SCRIPT="$LEGACY_ROOT_SCRIPT_DIR/start_llama_server.sh"
-EAGLE_MODEL_DIR="$SCRIPT_DIR/model"
-MODEL_BASE_DIR="$SCRIPT_DIR/models"
-LLAMA_CPP_DIR="$SCRIPT_DIR/vendor/llama.cpp"
-HF_TOKEN_FILE="$SCRIPT_DIR/key/uf_token"
+WATCHDOG_SCRIPT="$EXPERIMENT_ENV_DIR/network_watchdog.sh"
+LLAMA_SERVER_SCRIPT="$EXPERIMENT_ENV_DIR/start_llama_server.sh"
+EAGLE_MODEL_DIR="$EXPERIMENT_ENV_DIR/model"
+MODEL_BASE_DIR="$EXPERIMENT_ENV_DIR/models"
+LLAMA_CPP_DIR="$EXPERIMENT_ENV_DIR/vendor/llama.cpp"
+HF_TOKEN_FILE="$EXPERIMENT_ENV_DIR/key/uf_token"
 
 usage() {
   cat <<'USAGE'
 Usage: ./tmux_services.sh [base-name] [--model llama31|qwen3]
 
 Starts two tmux sessions:
-  <base-name>-llama-cpp   archive/legacy_runtime/root_scripts/start_llama_server.sh --model <model>
-  <base-name>-watchdog    archive/legacy_runtime/root_scripts/network_watchdog.sh
+  <base-name>-llama-cpp   experiment_env/start_llama_server.sh --model <model>
+  <base-name>-watchdog    experiment_env/network_watchdog.sh
 
 Defaults:
   base-name: eagle
@@ -102,7 +102,7 @@ fi
 if tmux has-session -t "$WATCHDOG_SESSION" 2>/dev/null; then
   echo "tmux session already running: $WATCHDOG_SESSION"
 else
-  tmux new-session -d -s "$WATCHDOG_SESSION" -c "$LEGACY_ROOT_SCRIPT_DIR" \
+  tmux new-session -d -s "$WATCHDOG_SESSION" -c "$EXPERIMENT_ENV_DIR" \
     "exec bash ./network_watchdog.sh"
 
   echo "Started tmux session: $WATCHDOG_SESSION"
