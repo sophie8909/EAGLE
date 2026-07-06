@@ -150,6 +150,19 @@ def validate_java_agent_source(source: str, class_name: str) -> None:
     first_line = next((line.strip() for line in source.splitlines() if line.strip()), "")
     if first_line and not first_line.startswith(("package ", "import ", "public class ", "class ")):
         raise ValueError("Generated Java source appears to start with explanation text instead of Java.")
+    if "nearestIdleAlly(" in source:
+        raise ValueError("Generated Java agent must not call nonexistent helper nearestIdleAlly().")
+
+    unsafe_iteration_patterns = [
+        r"for\s*\([^:]+:\s*gs\.getUnits\(\)\s*\)",
+        r"for\s*\([^:]+:\s*gs\.getPhysicalGameState\(\)\.getUnits\(\)\s*\)",
+        r"for\s*\([^:]+:\s*pgs\.getUnits\(\)\s*\)",
+    ]
+    if any(re.search(pattern, source) for pattern in unsafe_iteration_patterns):
+        raise ValueError(
+            "Generated Java agent must copy game units before iterating, "
+            "for example new ArrayList<>(gs.getUnits())."
+        )
 
     required_tokens = [
         "package ai.generated;",

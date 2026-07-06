@@ -163,7 +163,7 @@ public class {class_name} extends AbstractionLayerAI {{
     private Unit nearestEnemy(Unit source, int player, PhysicalGameState pgs) {{
         Unit best = null;
         int bestDistance = Integer.MAX_VALUE;
-        for (Unit other : pgs.getUnits()) {{
+        for (Unit other : new ArrayList<>(pgs.getUnits())) {{
             if (other.getPlayer() < 0 || other.getPlayer() == player) {{
                 continue;
             }}
@@ -177,11 +177,11 @@ public class {class_name} extends AbstractionLayerAI {{
     }}
 
     private Unit nearestResource(Unit source, PhysicalGameState pgs) {{
-        return nearestUnit(source, pgs.getUnits(), -1, resourceType);
+        return nearestUnit(source, new ArrayList<>(pgs.getUnits()), -1, resourceType);
     }}
 
     private Unit ownBase(int player, PhysicalGameState pgs) {{
-        for (Unit unit : pgs.getUnits()) {{
+        for (Unit unit : new ArrayList<>(pgs.getUnits())) {{
             if (unit.getPlayer() == player && unit.getType() == baseType) {{
                 return unit;
             }}
@@ -191,7 +191,7 @@ public class {class_name} extends AbstractionLayerAI {{
 
     private void applyAutoDefense(int player, GameState gs) {{
         PhysicalGameState pgs = gs.getPhysicalGameState();
-        for (Unit ally : pgs.getUnits()) {{
+        for (Unit ally : new ArrayList<>(pgs.getUnits())) {{
             if (!isIdleAlly(ally, player, gs) || !ally.getType().canAttack) {{
                 continue;
             }}
@@ -302,7 +302,7 @@ OPERATION_HELPER_METHODS = """
     private Unit nearestEnemy(Unit source, int player, PhysicalGameState pgs) {
         Unit best = null;
         int bestDistance = Integer.MAX_VALUE;
-        for (Unit other : pgs.getUnits()) {
+        for (Unit other : new ArrayList<>(pgs.getUnits())) {
             if (other.getPlayer() < 0 || other.getPlayer() == player) {
                 continue;
             }
@@ -316,11 +316,11 @@ OPERATION_HELPER_METHODS = """
     }
 
     private Unit nearestResource(Unit source, PhysicalGameState pgs) {
-        return nearestUnit(source, pgs.getUnits(), -1, resourceType);
+        return nearestUnit(source, new ArrayList<>(pgs.getUnits()), -1, resourceType);
     }
 
     private Unit ownBase(int player, PhysicalGameState pgs) {
-        for (Unit unit : pgs.getUnits()) {
+        for (Unit unit : new ArrayList<>(pgs.getUnits())) {
             if (unit.getPlayer() == player && unit.getType() == baseType) {
                 return unit;
             }
@@ -330,7 +330,7 @@ OPERATION_HELPER_METHODS = """
 
     private void applyAutoDefense(int player, GameState gs) {
         PhysicalGameState pgs = gs.getPhysicalGameState();
-        for (Unit ally : pgs.getUnits()) {
+        for (Unit ally : new ArrayList<>(pgs.getUnits())) {
             if (!isIdleAlly(ally, player, gs) || !ally.getType().canAttack) {
                 continue;
             }
@@ -374,12 +374,30 @@ Available high-level operations from AbstractionLayerAI:
 - attack(attacker, enemy): attack an enemy unit.
 - idle(unit): explicitly do nothing with a unit.
 
+Available helper methods in the template:
+- commandMove(unit, x, y)
+- commandHarvest(worker, resource, base)
+- commandTrain(baseOrBarracks, unitType)
+- commandBuild(worker, buildingType, x, y)
+- commandAttack(attacker, enemy)
+- commandIdle(unit)
+- isIdleAlly(unit, player, gs)
+- nearestUnit(source, units, owner, type)
+- nearestEnemy(source, player, pgs)
+- nearestResource(source, pgs)
+- ownBase(player, pgs)
+- applyAutoDefense(player, gs)
+
 Rules for generated code:
 - Use package ai.generated.
 - The class name must be the exact requested class name.
 - Keep the constructors and helper methods compilable.
 - Include the full helper methods from the template. Do not write "helper methods omitted", "...", or comments in place of methods.
 - Fill defineStrategy with deterministic Java logic.
+- Only call helper methods listed above. Do not invent helper methods.
+- Do not call nearestIdleAlly.
+- When iterating game units, copy them first with new ArrayList<>(gs.getUnits()) or new ArrayList<>(pgs.getUnits()).
+- Do not modify collections returned directly by GameState or PhysicalGameState while iterating.
 - Do not include HTTP, URL, Socket, Files, environment variables, subprocesses, or runtime LLM code.
 - Return only Java source code.
 

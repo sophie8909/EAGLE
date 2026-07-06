@@ -119,6 +119,61 @@ Done.
         with self.assertRaisesRegex(ValueError, "class declaration"):
             validate_java_agent_source("Here is a strategy explanation with no Java.", "GeneratedAgent_test")
 
+    def test_validate_java_agent_source_rejects_nonexistent_helper(self) -> None:
+        source = """package ai.generated;
+
+import rts.units.UnitTypeTable;
+
+public class GeneratedAgent_test {
+    public GeneratedAgent_test(UnitTypeTable utt) {
+    }
+
+    private void defineStrategy() {
+        nearestIdleAlly(null, 0, null);
+    }
+}
+"""
+        with self.assertRaisesRegex(ValueError, "nearestIdleAlly"):
+            validate_java_agent_source(source, "GeneratedAgent_test")
+
+    def test_validate_java_agent_source_rejects_direct_unit_iteration(self) -> None:
+        source = """package ai.generated;
+
+import rts.units.UnitTypeTable;
+
+public class GeneratedAgent_test {
+    public GeneratedAgent_test(UnitTypeTable utt) {
+    }
+
+    private void defineStrategy() {
+        for (Object unit : pgs.getUnits()) {
+        }
+    }
+}
+"""
+        with self.assertRaisesRegex(ValueError, "copy game units"):
+            validate_java_agent_source(source, "GeneratedAgent_test")
+
+    def test_validate_java_agent_source_accepts_existing_helper_usage(self) -> None:
+        source = """package ai.generated;
+
+import rts.units.UnitTypeTable;
+
+public class GeneratedAgent_test {
+    public GeneratedAgent_test(UnitTypeTable utt) {
+    }
+
+    private void defineStrategy() {
+        commandIdle(null);
+    }
+
+    private boolean commandIdle(Object unit) {
+        return true;
+    }
+}
+"""
+        validate_java_agent_source(source, "GeneratedAgent_test")
+
     def test_clean_generated_java_output_preserves_valid_java_source(self) -> None:
         source = """package ai.generated;
 
