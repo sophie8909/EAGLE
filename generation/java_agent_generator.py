@@ -10,8 +10,6 @@ from eagle.candidate import Candidate
 
 from .backend import GenerationBackend, generated_class_name
 from .agent_template import render_get_parameters_method, render_operation_helper_methods
-from .parsing import extract_java_source
-
 
 @dataclass(frozen=True)
 class GeneratedJavaAgent:
@@ -34,7 +32,7 @@ def generate_java_agent(
 
     class_name = generated_class_name(candidate.id)
     raw_output = backend.generate(candidate, class_name)
-    source = extract_java_source(raw_output)
+    source = clean_generated_java_output(raw_output)
     source = normalize_java_agent_source(source)
     validate_java_agent_source(source, class_name)
     package_dir = workspace_dir / candidate.id / "src" / "ai" / "generated"
@@ -47,6 +45,30 @@ def generate_java_agent(
         source=source,
         source_path=source_path,
     )
+
+
+def clean_generated_java_output(output: str) -> str:
+    """Keep the Java source and remove common LLM wrapper text."""
+
+    source = output.strip()
+
+    fence_match = re.search(r"```(?:java)?\s*(.*?)```", source, re.DOTALL | re.IGNORECASE)
+    if fence_match:
+        source = fence_match.group(1).strip()
+
+    starts = [
+        match.start()
+        for pattern in (r"(?m)^package\s+", r"(?m)^import\s+", r"(?m)^(?:public\s+)?class\s+")
+        if (match := re.search(pattern, source))
+    ]
+    if starts:
+        source = source[min(starts) :].strip()
+
+    final_brace = source.rfind("}")
+    if final_brace != -1:
+        source = source[: final_brace + 1].strip()
+
+    return source
 
 
 def normalize_java_agent_source(source: str) -> str:
@@ -121,6 +143,14 @@ def insert_before_final_class_brace(source: str, block: str) -> str:
 
 
 def validate_java_agent_source(source: str, class_name: str) -> None:
+    if "```" in source:
+        raise ValueError("Generated Java source still contains markdown code fences.")
+    if not re.search(r"\bclass\s+\w+", source):
+        raise ValueError("Generated Java source does not contain a Java class declaration.")
+    first_line = next((line.strip() for line in source.splitlines() if line.strip()), "")
+    if first_line and not first_line.startswith(("package ", "import ", "public class ", "class ")):
+        raise ValueError("Generated Java source appears to start with explanation text instead of Java.")
+
     required_tokens = [
         "package ai.generated;",
         f"public class {class_name}",

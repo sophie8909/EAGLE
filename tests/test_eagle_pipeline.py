@@ -11,7 +11,12 @@ from evaluation.game_metrics import compute_game_metrics
 from evaluation.microrts_runner import MatchResult
 from generation.agent_template import microrts_blank_strategy_prompt
 from generation.backend import MockGenerationBackend, generated_class_name
-from generation.java_agent_generator import generate_java_agent, normalize_java_agent_source
+from generation.java_agent_generator import (
+    clean_generated_java_output,
+    generate_java_agent,
+    normalize_java_agent_source,
+    validate_java_agent_source,
+)
 
 
 class EaglePipelineTests(unittest.TestCase):
@@ -90,6 +95,43 @@ population_size: 3
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertEqual(agent.class_name, generated_class_name(candidate.id))
             self.assertTrue(agent.source_path.exists())
+
+    def test_clean_generated_java_output_strips_markdown_fences(self) -> None:
+        output = """Here is the Java:
+```java
+package ai.generated;
+
+import rts.units.UnitTypeTable;
+
+public class GeneratedAgent_test {
+    public GeneratedAgent_test(UnitTypeTable utt) {
+    }
+}
+```
+Done.
+"""
+        cleaned = clean_generated_java_output(output)
+        self.assertNotIn("```", cleaned)
+        self.assertTrue(cleaned.startswith("package ai.generated;"))
+        self.assertTrue(cleaned.endswith("}"))
+
+    def test_validate_java_agent_source_rejects_non_java_output(self) -> None:
+        with self.assertRaisesRegex(ValueError, "class declaration"):
+            validate_java_agent_source("Here is a strategy explanation with no Java.", "GeneratedAgent_test")
+
+    def test_clean_generated_java_output_preserves_valid_java_source(self) -> None:
+        source = """package ai.generated;
+
+import ai.RandomBiasedAI;
+import rts.units.UnitTypeTable;
+
+public class GeneratedAgent_test extends RandomBiasedAI {
+    public GeneratedAgent_test(UnitTypeTable utt) {
+        super(utt);
+    }
+}
+"""
+        self.assertEqual(clean_generated_java_output(source), source.strip())
 
     def test_normalize_java_agent_source_repairs_common_llm_imports(self) -> None:
         source = """package ai.generated;

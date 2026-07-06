@@ -48,12 +48,17 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
         prompt = (
-            "Generate exactly one Java MicroRTS AI class. Return only Java source code. "
+            "Generate exactly one complete compilable Java MicroRTS AI class. "
+            "Return raw Java source only. No markdown, no explanation, no code fences. "
             f"The class must use package ai.generated and must be named {class_name}. "
             "Use the supplied MicroRTS operation template when present. "
             "Replace any CLASS_NAME placeholder with the requested class name. "
             "Keep the complete operation helper methods, fill only deterministic strategy logic, "
             "never replace helper methods with comments or ellipses, "
+            "do not redeclare local variables in the same method, "
+            "reuse existing variables or choose unique names, "
+            "do not assign UnitType values to Unit variables, "
+            "prefer the simple MicroRTS API usage shown in the template, "
             "and do not call any network, file, subprocess, environment, or LLM API at runtime.\n\n"
             f"Requested class name: {class_name}\n\n"
             f"Candidate prompt:\n{candidate.strategy_prompt}"
@@ -75,6 +80,16 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                 with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
                     body = json.loads(response.read().decode("utf-8"))
                 break
+            except urllib.error.HTTPError as exc:
+                message = backend_http_error_message(
+                    exc,
+                    url=self.chat_completions_url,
+                    model=self.model,
+                    request_body_size=len(request.data or b""),
+                )
+                if exc.code == 400 or attempt >= self.max_retries:
+                    raise GenerationBackendUnavailable(message) from exc
+                time.sleep(2**attempt)
             except (urllib.error.URLError, TimeoutError) as exc:
                 if attempt >= self.max_retries:
                     raise GenerationBackendUnavailable(f"Generation backend request failed: {exc}") from exc
@@ -84,6 +99,21 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         if body is None:
             raise GenerationBackendUnavailable("Generation backend returned no response.")
         return str(body["choices"][0]["message"]["content"])
+
+
+def backend_http_error_message(
+    exc: urllib.error.HTTPError,
+    *,
+    url: str,
+    model: str,
+    request_body_size: int,
+) -> str:
+    response_body = exc.read().decode("utf-8", errors="replace")[:300]
+    return (
+        f"Generation backend HTTP {exc.code}: {exc.reason}. "
+        f"url={url} model={model} request_body_size={request_body_size} "
+        f"response_body_start={response_body!r}"
+    )
 
 
 def generated_class_name(candidate_id: str) -> str:
