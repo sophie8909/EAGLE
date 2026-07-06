@@ -13,7 +13,7 @@ from .candidate import Candidate
 from .config import ExperimentConfig
 
 if TYPE_CHECKING:
-    from .search import CandidateEvaluation
+    from .evaluation import CandidateEvaluation
 
 
 def append_result(path: Path, evaluation: CandidateEvaluation) -> None:
