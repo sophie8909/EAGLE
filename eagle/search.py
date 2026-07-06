@@ -228,13 +228,18 @@ def evaluate_candidate(
         alignment_result=alignment_result,
     )
     status = "evaluated" if compile_result is not None and compile_result.ok and error is None else "failed"
-    evaluated_candidate = candidate.with_updates(
+    evaluated_candidate = Candidate(
+        id=candidate.id,
+        generation=candidate.generation,
+        parent_ids=candidate.parent_ids,
+        strategy_prompt=candidate.strategy_prompt,
         generated_java_agent_path=str(agent.source_path) if agent else None,
         compile_status=compile_result.status if compile_result else "not_run",
         game_eval_result=game_metrics.to_json_dict() if game_metrics else {},
         strategy_alignment_result=alignment_result.to_json_dict() if alignment_result else {},
         fitness_objectives=objectives,
         status=status,
+        metadata=candidate.metadata,
     )
     return CandidateEvaluation(
         candidate=evaluated_candidate,
@@ -553,4 +558,3 @@ def match_to_dict(result: MatchResult) -> dict:
 
 def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-

@@ -93,24 +93,6 @@ def generated_class_name(candidate_id: str) -> str:
     return f"GeneratedAgent_{cleaned}"
 
 
-def render_random_biased_agent(class_name: str, candidate_id: str) -> str:
-    """Legacy tiny mock renderer kept for callers that import it directly."""
-
-    return f"""package ai.generated;
-
-import ai.RandomBiasedAI;
-import rts.units.UnitTypeTable;
-
-public class {class_name} extends RandomBiasedAI {{
-    public static final String CANDIDATE_ID = "{candidate_id}";
-
-    public {class_name}(UnitTypeTable utt) {{
-        super(utt);
-    }}
-}}
-"""
-
-
 def build_generation_backend(
     name: str,
     *,
