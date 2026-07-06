@@ -56,3 +56,9 @@ third_party/microrts/bin/.microrts_compile_stamp
 /models/
 /vendor/llama.cpp/
 /key/uf_token
+/experiment_env/model/
+/experiment_env/models/
+/experiment_env/vendor/llama.cpp/
+/experiment_env/key/uf_token
+
+/legecy
