@@ -5,7 +5,8 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, parse_minimal_yaml
-from eagle.search import dominates, run_search
+from eagle.search import run_search
+from eagle.selection import dominates
 from evaluation.game_metrics import compute_game_metrics
 from evaluation.microrts_runner import MatchResult
 from generation.agent_template import microrts_blank_strategy_prompt
