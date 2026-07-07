@@ -6,13 +6,17 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, parse_minimal_yaml
+from eagle.evaluation import evaluate_candidate
 from eagle.offspring import make_offspring, normalize_prompt
 from eagle.search import run_search
 from eagle.selection import dominates
-from evaluation.game_metrics import compute_game_metrics
+from evaluation.compiler import CompileResult
+from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.microrts_runner import MatchResult
+from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE, build_objectives
+from evaluation.strategy_alignment import StrategyAlignmentResult
 from generation.agent_template import microrts_blank_strategy_prompt
-from generation.backend import MockGenerationBackend, generated_class_name
+from generation.backend import GenerationBackend, MockGenerationBackend, generated_class_name
 from generation.java_agent_generator import (
     clean_generated_java_output,
     generate_java_agent,
@@ -333,7 +337,49 @@ public class GeneratedAgent_test extends AbstractionLayerAI {
         self.assertEqual(metrics.resource_difference, 6)
         self.assertGreater(metrics.objective, 6)
 
-    def test_dominates_uses_two_objectives(self) -> None:
+    def test_compile_failure_gets_failed_game_performance(self) -> None:
+        objectives = build_objectives(
+            compile_result=CompileResult(ok=False, command=[], stderr="javac failed", returncode=1),
+            game_metrics=None,
+            alignment_result=None,
+            evaluation_failed=True,
+        )
+        self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertEqual(objectives["strategy_alignment"], 0.0)
+
+    def test_backend_failure_gets_failed_game_performance(self) -> None:
+        class FailingBackend(GenerationBackend):
+            def generate(self, candidate: Candidate, class_name: str) -> str:
+                raise RuntimeError("backend down")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            evaluation = evaluate_candidate(
+                Candidate(strategy_prompt="Generate an agent."),
+                config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}),
+                backend=FailingBackend(),
+                alignment_backend="mock",
+                generated_agents_dir=root / "generated_agents",
+                classes_dir=root / "classes",
+                mock=True,
+                ordinal=0,
+            )
+        self.assertEqual(evaluation.candidate.status, "failed")
+        self.assertEqual(evaluation.candidate.compile_status, "not_run")
+        self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertEqual(evaluation.candidate.fitness_objectives["strategy_alignment"], 0.0)
+
+    def test_valid_evaluated_candidate_keeps_actual_game_score(self) -> None:
+        objectives = build_objectives(
+            compile_result=CompileResult(ok=True, command=[]),
+            game_metrics=GameMetrics(resource_difference=-24.0, objective=-24.0),
+            alignment_result=StrategyAlignmentResult(score=0.5, rationale="ok"),
+            evaluation_failed=False,
+        )
+        self.assertEqual(objectives["game_performance"], -24.0)
+        self.assertEqual(objectives["strategy_alignment"], 0.5)
+
+    def test_dominates_uses_objective_vector(self) -> None:
         strong = Candidate(fitness_objectives={"game_performance": 2, "strategy_alignment": 0.8})
         weak = Candidate(fitness_objectives={"game_performance": 1, "strategy_alignment": 0.8})
         tradeoff = Candidate(fitness_objectives={"game_performance": 3, "strategy_alignment": 0.2})

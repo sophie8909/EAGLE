@@ -128,14 +128,21 @@ def evaluate_candidate(
 
     # Objective computation converts compile, match, and alignment results into fitness values.
     length = prompt_length(candidate.strategy_prompt)
+    evaluation_failed = (
+        error is not None
+        or compile_result is None
+        or not compile_result.ok
+        or any(not result.ok for result in match_results)
+    )
     objectives = compute_objectives(
         compile_result=compile_result,
         game_metrics=game_metrics,
         alignment_result=alignment_result,
         prompt_chars=length["chars"],
         max_prompt_chars=config.max_prompt_chars,
+        evaluation_failed=evaluation_failed,
     )
-    status = "evaluated" if compile_result is not None and compile_result.ok and error is None else "failed"
+    status = "failed" if evaluation_failed else "evaluated"
     evaluated_candidate = Candidate(
         id=candidate.id,
         generation=candidate.generation,
@@ -188,6 +195,7 @@ def compute_objectives(
     alignment_result: StrategyAlignmentResult | None,
     prompt_chars: int,
     max_prompt_chars: int,
+    evaluation_failed: bool,
 ) -> dict[str, float]:
     return build_objectives(
         compile_result=compile_result,
@@ -195,6 +203,7 @@ def compute_objectives(
         alignment_result=alignment_result,
         prompt_chars=prompt_chars,
         max_prompt_chars=max_prompt_chars,
+        evaluation_failed=evaluation_failed,
     )
 
 
