@@ -14,7 +14,7 @@ from .artifacts import write_generation_manifest, write_summary
 from .candidate import Candidate
 from .config import ExperimentConfig
 from .evaluation import evaluate_population
-from .offspring import make_offspring, mutate_prompt
+from .offspring import make_offspring, mutate_prompt, normalize_prompt
 from .selection import (
     assign_rank_and_crowding,
     best_candidate,
@@ -124,7 +124,11 @@ def initialize_population(config: ExperimentConfig) -> list[Candidate]:
             Candidate(
                 generation=0,
                 parent_ids=(source.id,),
-                strategy_prompt=mutate_prompt(source.strategy_prompt, config.mutation_suffix, clone_index=len(population)),
+                strategy_prompt=normalize_prompt(
+                    mutate_prompt(source.strategy_prompt, config.mutation_suffix, clone_index=len(population)),
+                    max_chars=config.max_prompt_chars,
+                    max_lines=config.max_prompt_lines,
+                ),
                 metadata={"operator": "seed_mutation"},
             )
         )

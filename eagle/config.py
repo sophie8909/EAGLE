@@ -28,6 +28,8 @@ class ExperimentConfig:
     tick_limit: int = 100
     opponent: str = "ai.RandomBiasedAI"
     matches_per_candidate: int = 1
+    max_prompt_chars: int = 4000
+    max_prompt_lines: int = 80
     mock_score_base: float = 10.0
     mock_score_step: float = 1.0
     raw_config: str = ""
@@ -67,6 +69,8 @@ class ExperimentConfig:
             tick_limit=int(payload.get("tick_limit", 100)),
             opponent=str(payload.get("opponent", "ai.RandomBiasedAI")),
             matches_per_candidate=int(payload.get("matches_per_candidate", 1)),
+            max_prompt_chars=int(payload.get("max_prompt_chars", 4000)),
+            max_prompt_lines=int(payload.get("max_prompt_lines", 80)),
             mock_score_base=float(payload.get("mock_score_base", 10.0)),
             mock_score_step=float(payload.get("mock_score_step", 1.0)),
             raw_config=raw_config,

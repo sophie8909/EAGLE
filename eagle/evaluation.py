@@ -17,6 +17,7 @@ from generation.java_agent_generator import GeneratedJavaAgent, generate_java_ag
 from .artifacts import append_result, write_candidate_artifacts
 from .candidate import Candidate
 from .config import ExperimentConfig
+from .offspring import prompt_length
 
 
 @dataclass(frozen=True)
@@ -126,10 +127,13 @@ def evaluate_candidate(
         error = str(exc)
 
     # Objective computation converts compile, match, and alignment results into fitness values.
+    length = prompt_length(candidate.strategy_prompt)
     objectives = compute_objectives(
         compile_result=compile_result,
         game_metrics=game_metrics,
         alignment_result=alignment_result,
+        prompt_chars=length["chars"],
+        max_prompt_chars=config.max_prompt_chars,
     )
     status = "evaluated" if compile_result is not None and compile_result.ok and error is None else "failed"
     evaluated_candidate = Candidate(
@@ -143,7 +147,7 @@ def evaluate_candidate(
         strategy_alignment_result=alignment_result.to_json_dict() if alignment_result else {},
         fitness_objectives=objectives,
         status=status,
-        metadata=candidate.metadata,
+        metadata={**candidate.metadata, "prompt_chars": length["chars"], "prompt_lines": length["lines"]},
     )
     return CandidateEvaluation(
         candidate=evaluated_candidate,
@@ -182,11 +186,15 @@ def compute_objectives(
     compile_result: CompileResult | None,
     game_metrics: GameMetrics | None,
     alignment_result: StrategyAlignmentResult | None,
+    prompt_chars: int,
+    max_prompt_chars: int,
 ) -> dict[str, float]:
     return build_objectives(
         compile_result=compile_result,
         game_metrics=game_metrics,
         alignment_result=alignment_result,
+        prompt_chars=prompt_chars,
+        max_prompt_chars=max_prompt_chars,
     )
 
 
@@ -206,6 +214,9 @@ def print_progress(
         detail = f" compile_error={stderr[0] if stderr else evaluation.compile_result.returncode}"
     print(
         f"[gen {generation} cand {index + 1}/{population_size}] "
-        f"{candidate.id} status={candidate.status} objectives={candidate.fitness_objectives}{detail}",
+        f"{candidate.id} status={candidate.status} "
+        f"prompt_chars={candidate.metadata.get('prompt_chars', 0)} "
+        f"prompt_lines={candidate.metadata.get('prompt_lines', 0)} "
+        f"objectives={candidate.fitness_objectives}{detail}",
         flush=True,
     )

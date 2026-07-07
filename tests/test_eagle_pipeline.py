@@ -1,10 +1,12 @@
 import json
+import random
 import tempfile
 import unittest
 from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, parse_minimal_yaml
+from eagle.offspring import make_offspring, normalize_prompt
 from eagle.search import run_search
 from eagle.selection import dominates
 from evaluation.game_metrics import compute_game_metrics
@@ -32,6 +34,48 @@ population_size: 3
         self.assertEqual(payload["seed_prompts"], ["Generate an agent."])
         self.assertEqual(payload["generations"], 2)
         self.assertEqual(payload["population_size"], 3)
+
+    def test_config_defaults_limit_evolved_prompt_length(self) -> None:
+        config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
+        self.assertEqual(config.max_prompt_chars, 4000)
+        self.assertEqual(config.max_prompt_lines, 80)
+
+    def test_normalize_prompt_truncates_long_prompt(self) -> None:
+        prompt = "\n".join(f"line {index}" for index in range(10))
+        normalized = normalize_prompt(prompt, max_chars=20, max_lines=4)
+        self.assertLessEqual(len(normalized), 20)
+        self.assertLessEqual(len(normalized.splitlines()), 4)
+        self.assertTrue(normalized.startswith("line 0"))
+
+    def test_normalize_prompt_collapses_blank_lines(self) -> None:
+        prompt = "  first\n\n\n\nsecond\n\n\nthird  "
+        normalized = normalize_prompt(prompt, max_chars=100, max_lines=10)
+        self.assertEqual(normalized, "first\n\nsecond\n\nthird")
+
+    def test_make_offspring_prompts_stay_under_limits(self) -> None:
+        parent = Candidate(strategy_prompt=("keep this intent\n" + "extra\n" * 200).strip())
+        config = ExperimentConfig.from_mapping(
+            {
+                "seed_prompts": ["seed"],
+                "population_size": 2,
+                "crossover_rate": 1.0,
+                "mutation_rate": 1.0,
+                "max_prompt_chars": 120,
+                "max_prompt_lines": 6,
+            }
+        )
+        offspring = make_offspring(
+            [parent, Candidate(strategy_prompt="second parent\n" + "more\n" * 200)],
+            config=config,
+            generation=1,
+            rng=random.Random(1),
+            parent_selector=lambda population, rng: population[0],
+        )
+        self.assertEqual(len(offspring), 2)
+        for child in offspring:
+            self.assertLessEqual(len(child.strategy_prompt), 120)
+            self.assertLessEqual(len(child.strategy_prompt.splitlines()), 6)
+            self.assertTrue(child.strategy_prompt.startswith("Blend these two MicroRTS"))
 
     def test_mock_generation_returns_valid_java_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -78,7 +122,7 @@ population_size: 3
             self.assertTrue((result.run_dir / "generated_agents").is_dir())
             self.assertTrue((result.run_dir / "results.jsonl").exists())
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
-            self.assertEqual(summary["objectives"], ["game_performance", "strategy_alignment"])
+            self.assertEqual(summary["objectives"], ["game_performance", "strategy_alignment", "prompt_length"])
             self.assertEqual(len(summary["final_population"]), 3)
             candidate_dir = next((result.run_dir / "candidates").iterdir())
             self.assertTrue((candidate_dir / "strategy_prompt.txt").exists())
@@ -88,6 +132,9 @@ population_size: 3
             self.assertTrue((candidate_dir / "game_metrics.json").exists())
             self.assertTrue((candidate_dir / "strategy_alignment.json").exists())
             self.assertTrue((candidate_dir / "objectives.json").exists())
+            individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
+            self.assertIn("prompt_chars", individual["metadata"])
+            self.assertIn("prompt_lines", individual["metadata"])
 
     def test_generate_java_agent_uses_candidate_class_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

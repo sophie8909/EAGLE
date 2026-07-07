@@ -40,6 +40,11 @@ def make_offspring(
         if rng.random() < config.mutation_rate:
             prompt = mutate_prompt(prompt, config.mutation_suffix, clone_index=len(offspring))
             operator = f"{operator}+mutation" if operator == "crossover" else "mutation"
+        prompt = normalize_prompt(
+            prompt,
+            max_chars=config.max_prompt_chars,
+            max_lines=config.max_prompt_lines,
+        )
 
         offspring.append(
             Candidate(
@@ -71,3 +76,33 @@ def crossover_prompts(prompt_a: str, prompt_b: str) -> str:
         f"Parent strategy B:\n{prompt_b.rstrip()}\n\n"
         "Child strategy: keep the strongest compatible ideas from both parents and avoid runtime LLM calls."
     )
+
+
+def normalize_prompt(prompt: str, *, max_chars: int, max_lines: int) -> str:
+    """Clean and cap evolved prompts before sending them to the backend."""
+
+    lines: list[str] = []
+    previous_blank = False
+    for line in prompt.strip().splitlines():
+        if not line.strip():
+            if lines and not previous_blank:
+                lines.append("")
+            previous_blank = True
+            continue
+        lines.append(line.rstrip())
+        previous_blank = False
+
+    while lines and not lines[-1]:
+        lines.pop()
+
+    prompt = "\n".join(lines[:max_lines])
+    return prompt[:max_chars].rstrip()
+
+
+def prompt_length(prompt: str) -> dict[str, int]:
+    """Return the simple prompt size numbers saved with each candidate."""
+
+    return {
+        "chars": len(prompt),
+        "lines": len(prompt.splitlines()),
+    }

@@ -23,12 +23,13 @@ class Candidate:
     status: str = "pending"
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def objective_vector(self) -> tuple[float, float]:
+    def objective_vector(self) -> tuple[float, ...]:
         if not self.fitness_objectives:
             return (0.0, 0.0)
         return (
             float(self.fitness_objectives.get("game_performance", 0.0)),
             float(self.fitness_objectives.get("strategy_alignment", 0.0)),
+            float(self.fitness_objectives.get("prompt_length", 0.0)),
         )
 
     def to_json_dict(self) -> dict[str, Any]:
