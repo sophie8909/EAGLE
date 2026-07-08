@@ -26,6 +26,7 @@ from generation.java_agent_generator import (
     validate_strategy_body,
     validate_java_agent_source,
 )
+from scripts.analyze_run import analyze_run, format_report
 
 
 class EaglePipelineTests(unittest.TestCase):
@@ -449,6 +450,76 @@ public class GeneratedAgent_test extends AbstractionLayerAI {
         tradeoff = Candidate(fitness_objectives={"game_performance": 3, "strategy_alignment": 0.2})
         self.assertTrue(dominates(strong, weak))
         self.assertFalse(dominates(strong, tradeoff))
+
+    def test_analyze_run_falls_back_to_failed_candidate_debug(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first = root / "failed_candidates" / "cand_a"
+            second = root / "failed_candidates" / "cand_b"
+            first.mkdir(parents=True)
+            second.mkdir(parents=True)
+            (first / "failure.json").write_text(
+                json.dumps(
+                    {
+                        "failure_category": "Java validation failure",
+                        "failure_reason": "Generated Java agent must iterate over units(gs).",
+                        "validation_result": {
+                            "ok": False,
+                            "error": "Generated Java agent must iterate over units(gs).",
+                        },
+                        "compile_result": None,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (second / "failure.json").write_text(
+                json.dumps(
+                    {
+                        "failure_category": "Java compile failure",
+                        "failure_reason": "compile failed",
+                        "validation_result": {"ok": True, "error": ""},
+                        "compile_result": {
+                            "stderr": "Agent.java:1: error: cannot find symbol\nStrategyTable table;\n^\n"
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary = analyze_run(root)
+            report = format_report(summary)
+
+        self.assertEqual(summary["total_candidates"], 2)
+        self.assertEqual(summary["failed_candidates"], 2)
+        self.assertIsNone(summary["success_count"])
+        self.assertEqual(summary["failure_category_counts"]["Java validation failure"], 1)
+        self.assertEqual(summary["compile_root_cause_counts"]["cannot find symbol"], 1)
+        self.assertIn("Success count: unknown", report)
+
+    def test_analyze_run_reads_legacy_results_jsonl(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            record = {
+                "candidate": {
+                    "id": "cand_a",
+                    "parent_ids": [],
+                    "status": "failed",
+                    "compile_status": "failed",
+                    "fitness_objectives": {"game_performance": -1000.0},
+                },
+                "compile": {
+                    "stderr": "Agent.java:1: error: incompatible types: UnitType cannot be converted to Unit\n"
+                },
+                "error": None,
+            }
+            (root / "results.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
+            summary = analyze_run(root)
+
+        self.assertEqual(summary["total_candidates"], 1)
+        self.assertEqual(summary["failed_candidates"], 1)
+        self.assertEqual(summary["success_count"], 0)
+        self.assertEqual(summary["failure_category_counts"]["Java compile failure"], 1)
+        self.assertEqual(summary["compile_root_cause_counts"]["incompatible types"], 1)
 
 
 if __name__ == "__main__":
