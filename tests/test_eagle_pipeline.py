@@ -232,17 +232,18 @@ population_size: 3
             self.assertIn("return new PlayerAction();", agent.source)
             self.assertIn(f"return new {agent.class_name}();", agent.source)
             self.assertIn("private PlayerAction chooseAction", agent.source)
-            self.assertIn("PlayerActionGenerator pag = new PlayerActionGenerator(gs, player);", agent.source)
-            self.assertIn("return pag.getRandom();", agent.source)
+            self.assertIn("PlayerAction pa = new PlayerAction();", agent.source)
+            self.assertIn("pa.fillWithNones(gs, player, 10);", agent.source)
+            self.assertIn("return pa;", agent.source)
 
     def test_seed_prompt_template_expands_to_blank_strategy_prompt(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompt_template": "microrts_blank_strategy_agent"})
         self.assertEqual(len(config.seed_prompts), 1)
         self.assertEqual(config.seed_prompts[0], microrts_blank_strategy_prompt())
-        self.assertIn("based directly on ai.RandomAI", config.seed_prompts[0])
-        self.assertIn("PlayerActionGenerator", config.seed_prompts[0])
+        self.assertIn("starts from ai.PassiveAI", config.seed_prompts[0])
+        self.assertIn("fillWithNones", config.seed_prompts[0])
 
-    def test_random_ai_baseline_compiles_against_microrts(self) -> None:
+    def test_passive_ai_initial_baseline_compiles_against_microrts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source_dir = root / "src" / "ai" / "generated"

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 
-RANDOM_AI_STRATEGY_BODY = """PlayerActionGenerator pag = new PlayerActionGenerator(gs, player);
-        return pag.getRandom();"""
+PASSIVE_AI_STRATEGY_BODY = """PlayerAction pa = new PlayerAction();
+        pa.fillWithNones(gs, player, 10);
+        return pa;"""
 
 
 RANDOM_AI_AGENT_TEMPLATE = """package ai.generated;
@@ -61,14 +62,15 @@ public class {class_name} extends AI {{
 MICRORTS_BLANK_STRATEGY_PROMPT = """Generate Java statements for the body of chooseAction in this MicroRTS AI.
 
 MicroRTS baseline:
-- The scaffold is based directly on ai.RandomAI from this repository's MicroRTS source.
+- The initial evolved strategy starts from ai.PassiveAI from this repository's MicroRTS source.
 - The scaffold owns imports, class declaration, constructors, reset, clone, getAction, and getParameters.
 - getAction already checks gs.canExecuteAnyAction(player), catches exceptions, and returns a valid PlayerAction.
 - The generated body should return a PlayerAction.
 
 Allowed starting point:
-- PlayerActionGenerator pag = new PlayerActionGenerator(gs, player);
-- return pag.getRandom();
+- PlayerAction pa = new PlayerAction();
+- pa.fillWithNones(gs, player, 10);
+- return pa;
 
 Rules for generated code:
 - Output only Java statements for the body of chooseAction.
@@ -85,7 +87,7 @@ Current known-good scaffold:
 
 
 def render_blank_strategy_agent(class_name: str) -> str:
-    return render_strategy_agent(class_name, RANDOM_AI_STRATEGY_BODY)
+    return render_strategy_agent(class_name, PASSIVE_AI_STRATEGY_BODY)
 
 
 def render_strategy_agent(class_name: str, strategy_body: str) -> str:

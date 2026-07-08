@@ -38,7 +38,7 @@ Objectives remain separate. EAGLE does not collapse them into one scalar for NSG
 `generation/agent_template.py` owns the built-in initial prompt. It intentionally avoids a concrete strategy such as rush, turtle, or economy-first. Instead, it gives the LLM:
 
 - MicroRTS unit and resource basics
-- a known-good Java agent skeleton based directly on MicroRTS `ai.RandomAI`
+- an initial no-op strategy body based directly on MicroRTS `ai.PassiveAI`
 - a `chooseAction` method body where future strategy logic should be inserted
 
 ## Artifact Flow
