@@ -15,7 +15,7 @@ from eagle.search import run_search
 from eagle.selection import Selection, SelectionContext, dominates
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
-from evaluation.microrts_runner import MatchResult
+from evaluation.microrts_runner import MatchResult, run_microrts_match
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE, build_objectives
 from evaluation.strategy_alignment import StrategyAlignmentResult
 from generation.agent_template import microrts_blank_strategy_prompt, render_blank_strategy_agent, render_strategy_agent
@@ -49,6 +49,33 @@ population_size: 3
         config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
         self.assertEqual(config.max_prompt_chars, 4000)
         self.assertEqual(config.max_prompt_lines, 80)
+
+    def test_training_opponent_defaults_to_random_ai_player1(self) -> None:
+        config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
+        self.assertEqual(config.opponent, "ai.RandomAI")
+
+    def test_training_config_ignores_non_random_ai_opponent(self) -> None:
+        config = ExperimentConfig.from_mapping(
+            {
+                "seed_prompts": ["Generate an agent."],
+                "opponent": "ai.PassiveAI",
+            }
+        )
+        self.assertEqual(config.opponent, "ai.RandomAI")
+
+    def test_training_match_command_uses_candidate_player0_and_random_ai_player1(self) -> None:
+        result = run_microrts_match(
+            microrts_dir=Path("third_party/microrts"),
+            classes_dir=Path("classes"),
+            agent_class="ai.generated.GeneratedAgent_test",
+            opponent="ai.RandomAI",
+            tick_limit=100,
+            match_index=0,
+            mock=True,
+        )
+        self.assertLess(result.command.index("--ai1"), result.command.index("--ai2"))
+        self.assertEqual(result.command[result.command.index("--ai1") + 1], "ai.generated.GeneratedAgent_test")
+        self.assertEqual(result.command[result.command.index("--ai2") + 1], "ai.RandomAI")
 
     def test_normalize_prompt_truncates_long_prompt(self) -> None:
         prompt = "\n".join(f"line {index}" for index in range(10))
@@ -395,11 +422,54 @@ public class GeneratedAgent_test extends RandomBiasedAI {
         )
         metrics = compute_game_metrics([result])
         self.assertEqual(metrics.resource_difference, 6)
+        self.assertEqual(metrics.weighted_resource_difference, 6)
+        self.assertEqual(metrics.player0_resource, 14)
+        self.assertEqual(metrics.player1_resource, 8)
         self.assertEqual(metrics.player_resource, 14)
         self.assertEqual(metrics.enemy_resource, 8)
-        self.assertEqual(metrics.to_json_dict()["player_resource"], 14)
-        self.assertEqual(metrics.resource_breakdown["player_resource"], 14)
+        self.assertEqual(metrics.winner, 0)
+        self.assertEqual(metrics.to_json_dict()["player0_resource"], 14)
+        self.assertEqual(metrics.resource_breakdown["player0_resource"], 14)
         self.assertGreater(metrics.objective, 6)
+
+    def test_player0_resource_advantage_is_positive(self) -> None:
+        metrics = compute_game_metrics(
+            [
+                MatchResult(
+                    ok=True,
+                    score=0.0,
+                    command=[],
+                    raw_result={"final_scoreboard": {"p0_resources": 20, "p1_resources": 5}},
+                )
+            ]
+        )
+        self.assertEqual(metrics.weighted_resource_difference, 15)
+
+    def test_player1_resource_advantage_is_negative(self) -> None:
+        metrics = compute_game_metrics(
+            [
+                MatchResult(
+                    ok=True,
+                    score=0.0,
+                    command=[],
+                    raw_result={"final_scoreboard": {"p0_resources": 4, "p1_resources": 11}},
+                )
+            ]
+        )
+        self.assertEqual(metrics.weighted_resource_difference, -7)
+
+    def test_equal_resources_have_zero_weighted_difference(self) -> None:
+        metrics = compute_game_metrics(
+            [
+                MatchResult(
+                    ok=True,
+                    score=0.0,
+                    command=[],
+                    raw_result={"final_scoreboard": {"p0_resources": 9, "p1_resources": 9}},
+                )
+            ]
+        )
+        self.assertEqual(metrics.weighted_resource_difference, 0)
 
     def test_compile_failure_gets_failed_game_performance(self) -> None:
         objectives = build_objectives(

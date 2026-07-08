@@ -19,6 +19,11 @@ class MatchResult:
     stderr: str = ""
     returncode: int = 0
     raw_result: dict[str, Any] = field(default_factory=dict)
+    player0_resource: float | None = None
+    player1_resource: float | None = None
+    weighted_resource_difference: float | None = None
+    winner: int | None = None
+    final_cycle: int | None = None
 
 
 def run_microrts_match(
@@ -76,6 +81,7 @@ def run_microrts_match(
             command=command,
             stdout=f"mock match {match_index} score={mock_score}",
             raw_result=raw_result,
+            **final_match_values(raw_result, fallback_score=mock_score),
         )
     completed = subprocess.run(command, cwd=microrts_dir, capture_output=True, text=True, check=False)
     raw_result = read_result_json(result_json_path)
@@ -90,6 +96,7 @@ def run_microrts_match(
         stderr=completed.stderr,
         returncode=completed.returncode,
         raw_result=raw_result,
+        **final_match_values(raw_result, fallback_score=0.0 if score is None else score),
     )
 
 
@@ -129,3 +136,35 @@ def score_from_result_json(path: Path) -> float | None:
         return None
     return score_from_payload(payload)
 
+
+def final_match_values(payload: dict[str, Any], *, fallback_score: float) -> dict[str, float | int | None]:
+    """Return final match values from player 0's perspective."""
+
+    scoreboard = payload.get("final_scoreboard") or {}
+    player0_resource = float_or_none(scoreboard.get("p0_resources", scoreboard.get("p0_eval")))
+    player1_resource = float_or_none(scoreboard.get("p1_resources", scoreboard.get("p1_eval")))
+    if player0_resource is None:
+        player0_resource = float(fallback_score)
+    if player1_resource is None:
+        player1_resource = 0.0
+    return {
+        "player0_resource": player0_resource,
+        "player1_resource": player1_resource,
+        "weighted_resource_difference": player0_resource - player1_resource,
+        "winner": int_or_none(payload.get("winner")),
+        "final_cycle": int_or_none(payload.get("final_cycle", payload.get("ticks"))),
+    }
+
+
+def float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None

@@ -170,6 +170,11 @@ def match_to_dict(result: MatchResult) -> dict:
         "stdout": result.stdout,
         "stderr": result.stderr,
         "returncode": result.returncode,
+        "player0_resource": result.player0_resource,
+        "player1_resource": result.player1_resource,
+        "weighted_resource_difference": result.weighted_resource_difference,
+        "winner": result.winner,
+        "final_cycle": result.final_cycle,
         "raw_result": result.raw_result,
     }
 

@@ -12,6 +12,9 @@ from generation.agent_template import get_seed_prompt_template
 from .candidate import DEFAULT_GENERATION_PROMPT
 
 
+TRAINING_OPPONENT = "ai.RandomAI"
+
+
 @dataclass(frozen=True)
 class ExperimentConfig:
     seed_prompts: tuple[str, ...]
@@ -28,7 +31,7 @@ class ExperimentConfig:
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     tick_limit: int = 100
-    opponent: str = "ai.RandomBiasedAI"
+    opponent: str = TRAINING_OPPONENT
     matches_per_candidate: int = 1
     max_prompt_chars: int = 4000
     max_prompt_lines: int = 80
@@ -70,7 +73,8 @@ class ExperimentConfig:
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
             tick_limit=int(payload.get("tick_limit", 100)),
-            opponent=str(payload.get("opponent", "ai.RandomBiasedAI")),
+            # EA training always evaluates the generated candidate as player 0 against RandomAI as player 1.
+            opponent=TRAINING_OPPONENT,
             matches_per_candidate=int(payload.get("matches_per_candidate", 1)),
             max_prompt_chars=int(payload.get("max_prompt_chars", 4000)),
             max_prompt_lines=int(payload.get("max_prompt_lines", 80)),
