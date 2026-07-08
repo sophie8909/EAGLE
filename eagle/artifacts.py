@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from evaluation.compiler import CompileResult
 from evaluation.microrts_runner import MatchResult
+from generation.java_agent_generator import ValidationResult
 
 from .candidate import Candidate
 from .config import ExperimentConfig
@@ -44,6 +45,29 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     )
     write_json(candidate_dir / "objectives.json", evaluation.candidate.fitness_objectives)
     write_json(candidate_dir / "individual.json", evaluation.candidate.to_json_dict())
+    write_json(candidate_dir / "candidate_result.json", candidate_result_to_dict(evaluation.result))
+    if evaluation.result.failure_category is not None:
+        write_failed_candidate_debug(candidates_dir.parent, evaluation)
+
+
+def write_failed_candidate_debug(run_dir: Path, evaluation: CandidateEvaluation) -> None:
+    """Save raw stage outputs for a failed candidate."""
+
+    debug_dir = run_dir / "failed_candidates" / evaluation.candidate.id
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    result = evaluation.result
+    (debug_dir / "raw_llm_output.txt").write_text(result.raw_llm_output or "", encoding="utf-8")
+    (debug_dir / "extracted_code.java").write_text(result.extracted_code or "", encoding="utf-8")
+    (debug_dir / "assembled_java.java").write_text(result.assembled_java or "", encoding="utf-8")
+    write_json(
+        debug_dir / "failure.json",
+        {
+            "failure_category": result.failure_category,
+            "failure_reason": result.failure_reason,
+            "validation_result": validation_to_dict(result.validation_result),
+            "compile_result": compile_to_dict(result.compile_result),
+        },
+    )
 
 
 def write_generation_manifest(run_dir: Path, generation: int, population: list[Candidate]) -> None:
@@ -79,6 +103,7 @@ def write_summary(
 def evaluation_to_dict(evaluation: CandidateEvaluation) -> dict:
     return {
         "candidate": evaluation.candidate.to_json_dict(),
+        "candidate_result": candidate_result_to_dict(evaluation.result),
         "agent": None
         if evaluation.agent is None
         else {
@@ -92,6 +117,31 @@ def evaluation_to_dict(evaluation: CandidateEvaluation) -> dict:
         "strategy_alignment": evaluation.alignment_result.to_json_dict() if evaluation.alignment_result else None,
         "objectives": evaluation.candidate.fitness_objectives,
         "error": evaluation.error,
+    }
+
+
+def candidate_result_to_dict(result) -> dict:
+    return {
+        "candidate_id": result.candidate_id,
+        "parent_ids": list(result.parent_ids),
+        "raw_llm_output": result.raw_llm_output,
+        "extracted_code": result.extracted_code,
+        "assembled_java": result.assembled_java,
+        "validation_result": validation_to_dict(result.validation_result),
+        "compile_result": compile_to_dict(result.compile_result),
+        "match_result": [match_to_dict(item) for item in result.match_result or []],
+        "final_score": result.final_score,
+        "failure_category": result.failure_category,
+        "failure_reason": result.failure_reason,
+    }
+
+
+def validation_to_dict(result: ValidationResult | None) -> dict | None:
+    if result is None:
+        return None
+    return {
+        "ok": result.ok,
+        "error": result.error,
     }
 
 

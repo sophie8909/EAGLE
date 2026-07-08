@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from eagle.candidate import Candidate
+from eagle.artifacts import write_candidate_artifacts
 from eagle.config import ExperimentConfig, parse_minimal_yaml
 from eagle.evaluation import evaluate_candidate
 from eagle.offspring import make_offspring, normalize_prompt
@@ -138,6 +139,7 @@ population_size: 3
             self.assertTrue((candidate_dir / "game_metrics.json").exists())
             self.assertTrue((candidate_dir / "strategy_alignment.json").exists())
             self.assertTrue((candidate_dir / "objectives.json").exists())
+            self.assertTrue((candidate_dir / "candidate_result.json").exists())
             individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
             self.assertIn("prompt_chars", individual["metadata"])
             self.assertIn("prompt_lines", individual["metadata"])
@@ -370,7 +372,7 @@ public class GeneratedAgent_test extends AbstractionLayerAI {
             compile_result=CompileResult(ok=False, command=[], stderr="javac failed", returncode=1),
             game_metrics=None,
             alignment_result=None,
-            evaluation_failed=True,
+            failure_category="Java compile failure",
         )
         self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertEqual(objectives["strategy_alignment"], 0.0)
@@ -394,6 +396,7 @@ public class GeneratedAgent_test extends AbstractionLayerAI {
             )
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.candidate.compile_status, "not_run")
+        self.assertEqual(evaluation.result.failure_category, "Backend request failure")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertEqual(evaluation.candidate.fitness_objectives["strategy_alignment"], 0.0)
 
@@ -406,8 +409,9 @@ public class GeneratedAgent_test extends AbstractionLayerAI {
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
+            candidate = Candidate(strategy_prompt="Generate an agent.")
             evaluation = evaluate_candidate(
-                Candidate(strategy_prompt="Generate an agent."),
+                candidate,
                 config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}),
                 backend=UnsafeIterationBackend(),
                 alignment_backend="mock",
@@ -417,15 +421,24 @@ public class GeneratedAgent_test extends AbstractionLayerAI {
                 ordinal=0,
             )
         self.assertEqual(evaluation.candidate.status, "failed")
+        self.assertEqual(evaluation.result.failure_category, "Java validation failure")
+        self.assertIn("gs.getUnits()", evaluation.result.extracted_code)
+        self.assertIn("gs.getUnits()", evaluation.result.assembled_java)
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertIn("units(gs)", evaluation.error or "")
+        write_candidate_artifacts(root / "candidates", evaluation)
+        debug_dir = root / "failed_candidates" / candidate.id
+        self.assertTrue((debug_dir / "raw_llm_output.txt").exists())
+        self.assertTrue((debug_dir / "extracted_code.java").exists())
+        self.assertTrue((debug_dir / "assembled_java.java").exists())
+        self.assertTrue((debug_dir / "failure.json").exists())
 
     def test_valid_evaluated_candidate_keeps_actual_game_score(self) -> None:
         objectives = build_objectives(
             compile_result=CompileResult(ok=True, command=[]),
             game_metrics=GameMetrics(resource_difference=-24.0, objective=-24.0),
             alignment_result=StrategyAlignmentResult(score=0.5, rationale="ok"),
-            evaluation_failed=False,
+            failure_category=None,
         )
         self.assertEqual(objectives["game_performance"], -24.0)
         self.assertEqual(objectives["strategy_alignment"], 0.5)

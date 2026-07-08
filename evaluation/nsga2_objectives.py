@@ -19,10 +19,10 @@ def build_objectives(
     alignment_result: StrategyAlignmentResult | None,
     prompt_chars: int = 0,
     max_prompt_chars: int = 4000,
-    evaluation_failed: bool = False,
+    failure_category: str | None = None,
 ) -> dict[str, float]:
     prompt_length_score = max(0.0, 1.0 - (prompt_chars / max(1, max_prompt_chars)))
-    if evaluation_failed or compile_result is None or not compile_result.ok:
+    if failure_category is not None:
         return {
             "game_performance": FAILED_GAME_PERFORMANCE,
             "strategy_alignment": LOW_ALIGNMENT_OBJECTIVE,
