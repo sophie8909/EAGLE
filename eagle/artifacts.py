@@ -68,6 +68,7 @@ def write_failed_candidate_debug(run_dir: Path, evaluation: CandidateEvaluation)
             "failure_reason": result.failure_reason,
             "validation_result": validation_to_dict(result.validation_result),
             "compile_result": compile_to_dict(result.compile_result),
+            "game_metrics": result.game_metrics,
         },
     )
 
@@ -132,6 +133,7 @@ def candidate_result_to_dict(result) -> dict:
         "validation_result": validation_to_dict(result.validation_result),
         "compile_result": compile_to_dict(result.compile_result),
         "match_result": [match_to_dict(item) for item in result.match_result or []],
+        "game_metrics": result.game_metrics,
         "final_score": result.final_score,
         "failure_category": result.failure_category,
         "failure_reason": result.failure_reason,

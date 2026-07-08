@@ -50,7 +50,8 @@ def run_search(
     alignment_backend = "mock" if mock else config.alignment_backend
 
     # Search owns the algorithm order; the operator classes own only their local behavior.
-    mutation = Mutation(config, method="default")
+    strategy_mutation = Mutation(config, method="strategy_reflection")
+    code_mutation = Mutation(config, method="code_generation_reflection")
     crossover = Crossover(method="uniform")
     selection = Selection(method="binary_tournament")
 
@@ -68,7 +69,7 @@ def run_search(
     results_path = run_dir / "results.jsonl"
 
     # NSGA-II begins with a complete evaluated population so every candidate has objectives.
-    population = initialize_population(config, mutation)
+    population = initialize_population(config, strategy_mutation)
     evaluated_population = evaluate_population(
         population,
         generation=0,
@@ -92,7 +93,7 @@ def run_search(
             config=config,
             generation=generation,
             rng=rng,
-            mutation=mutation,
+            mutations=(strategy_mutation, code_mutation),
             crossover=crossover,
             selection=selection,
         )
@@ -168,7 +169,7 @@ def create_offspring(
     config: ExperimentConfig,
     generation: int,
     rng: random.Random,
-    mutation: Mutation,
+    mutations: tuple[Mutation, Mutation],
     crossover: Crossover,
     selection: Selection,
 ) -> list[Candidate]:
@@ -201,9 +202,34 @@ def create_offspring(
                 metadata={"operator": "mutation"},
             )
 
-        # Mutation is applied after crossover/copy so every child follows the same variation order.
+        # Mutation is applied after crossover/copy. The two reflection targets are selected 50/50.
         if rng.random() < config.mutation_rate:
-            child = mutation.mutate(child, MutationContext(generation=generation, index=context_index))
+            feedback_parent = parent_b if child.strategy_prompt == parent_b.strategy_prompt else parent_a
+            mutation = rng.choice(mutations)
+            child = mutation.mutate(
+                child,
+                mutation_context_from_candidate(feedback_parent, generation=generation, index=context_index),
+            )
 
         offspring.append(child)
     return offspring
+
+
+def mutation_context_from_candidate(candidate: Candidate, *, generation: int, index: int) -> MutationContext:
+    # Game performance feedback and alignment feedback stay separate because they improve different fields.
+    return MutationContext(
+        generation=generation,
+        index=index,
+        game_performance=number_or_none(candidate.fitness_objectives.get("game_performance")),
+        player_resource=number_or_none(candidate.game_eval_result.get("player_resource")),
+        enemy_resource=number_or_none(candidate.game_eval_result.get("enemy_resource")),
+        resource_breakdown=candidate.game_eval_result.get("resource_breakdown") or {},
+        alignment_score=number_or_none(candidate.strategy_alignment_result.get("score")),
+        alignment_reason=str(candidate.strategy_alignment_result.get("rationale", "")),
+    )
+
+
+def number_or_none(value: object) -> float | None:
+    if isinstance(value, int | float):
+        return float(value)
+    return None

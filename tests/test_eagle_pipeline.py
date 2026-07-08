@@ -87,20 +87,47 @@ population_size: 3
         self.assertEqual(candidate.previous_code, "")
         self.assertIn("Previous Java code:\n(empty)", candidate.generation_input())
 
-    def test_mutation_dispatch_calls_default_mutation(self) -> None:
+    def test_mutation_dispatch_calls_strategy_reflection(self) -> None:
         config = ExperimentConfig.from_mapping(
             {
                 "seed_prompts": ["seed"],
-                "max_prompt_chars": 120,
-                "max_prompt_lines": 6,
+                "max_prompt_chars": 300,
+                "max_prompt_lines": 8,
             }
         )
-        parent = Candidate(id="parent", strategy_prompt="keep this intent")
-        child = Mutation(config, method="default").mutate(parent, MutationContext(generation=1, index=0))
+        parent = Candidate(
+            id="parent",
+            strategy_prompt="keep this intent",
+            previous_code="old code",
+            generation_prompt="generate",
+        )
+        child = Mutation(config, method="strategy_reflection").mutate(
+            parent,
+            MutationContext(generation=1, index=0, game_performance=3.0, player_resource=12.0, enemy_resource=7.0),
+        )
         self.assertEqual(child.generation, 1)
         self.assertEqual(child.parent_ids, ("parent",))
-        self.assertIn("Mutation 1:", child.strategy_prompt)
+        self.assertIn("Strategy reflection 1:", child.strategy_prompt)
+        self.assertEqual(child.previous_code, parent.previous_code)
+        self.assertEqual(child.generation_prompt, parent.generation_prompt)
         self.assertEqual(child.metadata["operator"], "mutation")
+
+    def test_mutation_dispatch_calls_code_generation_reflection(self) -> None:
+        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+        parent = Candidate(
+            id="parent",
+            strategy_prompt="keep this strategy",
+            previous_code="return pag.getRandom();",
+            generation_prompt="generate",
+        )
+        child = Mutation(config, method="code_generation_reflection").mutate(
+            parent,
+            MutationContext(generation=1, index=0, alignment_score=0.25, alignment_reason="used random action"),
+        )
+        self.assertEqual(child.strategy_prompt, parent.strategy_prompt)
+        self.assertIn("Code generation reflection 1:", child.previous_code)
+        self.assertIn("alignment_score=0.250", child.previous_code)
+        self.assertEqual(child.generation_prompt, parent.generation_prompt)
 
     def test_unknown_mutation_method_raises_value_error(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
@@ -368,6 +395,10 @@ public class GeneratedAgent_test extends RandomBiasedAI {
         )
         metrics = compute_game_metrics([result])
         self.assertEqual(metrics.resource_difference, 6)
+        self.assertEqual(metrics.player_resource, 14)
+        self.assertEqual(metrics.enemy_resource, 8)
+        self.assertEqual(metrics.to_json_dict()["player_resource"], 14)
+        self.assertEqual(metrics.resource_breakdown["player_resource"], 14)
         self.assertGreater(metrics.objective, 6)
 
     def test_compile_failure_gets_failed_game_performance(self) -> None:

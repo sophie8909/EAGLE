@@ -42,6 +42,7 @@ class CandidateResult:
     validation_result: ValidationResult | None = None
     compile_result: CompileResult | None = None
     match_result: list[MatchResult] | None = None
+    game_metrics: dict[str, object] | None = None
     final_score: dict[str, float] | None = None
     failure_category: str | None = None
     failure_reason: str | None = None
@@ -194,6 +195,7 @@ def evaluate_candidate(
         validation_result=generation_result.validation_result,
         compile_result=compile_result,
         match_result=match_results,
+        game_metrics=game_metrics.to_json_dict() if game_metrics else None,
         final_score=objectives,
         failure_category=failure_category,
         failure_reason=failure_reason,
