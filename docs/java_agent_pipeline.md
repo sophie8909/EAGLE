@@ -67,3 +67,21 @@ The normal per-candidate folder still contains:
 - `raw_microrts_result.json`
 - `objectives.json`
 - `individual.json`
+
+## GUI Replay
+
+Use `scripts/play_candidate_gui.py` when you want to manually watch one already-generated candidate in MicroRTS:
+
+```bash
+python scripts/play_candidate_gui.py runs/<run_id> <candidate_id>
+```
+
+Candidate ids come from `summary.json`, `generation_###_population.json`, `results.jsonl`, or the folder names under `runs/<run_id>/candidates/`.
+
+The script reuses the generated Java source under `runs/<run_id>/generated_agents/<candidate_id>/`, compiles it, and launches one visible match. The generated candidate always plays as player 0. The player 1 opponent defaults to `ai.PassiveAI` and can be replaced with `--opponent`. The script does not regenerate code, mutate candidates, run crossover, or participate in the EA search.
+
+Optional replay settings:
+
+```bash
+python scripts/play_candidate_gui.py runs/<run_id> <candidate_id> --map maps/8x8/basesWorkers8x8.xml --opponent ai.RandomAI --max-cycles 500 --utt-version 1
+```
