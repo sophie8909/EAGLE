@@ -62,6 +62,31 @@ population_size: 3
         normalized = normalize_prompt(prompt, max_chars=100, max_lines=10)
         self.assertEqual(normalized, "first\n\nsecond\n\nthird")
 
+    def test_candidate_stores_three_generation_parts(self) -> None:
+        candidate = Candidate(
+            strategy_prompt="rush with workers",
+            previous_code="return pag.getRandom();",
+            generation_prompt="write Java",
+        )
+        self.assertEqual(candidate.strategy_prompt, "rush with workers")
+        self.assertEqual(candidate.previous_code, "return pag.getRandom();")
+        self.assertEqual(candidate.generation_prompt, "write Java")
+
+    def test_generation_input_includes_three_parts_in_order(self) -> None:
+        candidate = Candidate(
+            strategy_prompt="strategy part",
+            previous_code="previous code part",
+            generation_prompt="generation prompt part",
+        )
+        generation_input = candidate.generation_input()
+        self.assertLess(generation_input.index("strategy part"), generation_input.index("previous code part"))
+        self.assertLess(generation_input.index("previous code part"), generation_input.index("generation prompt part"))
+
+    def test_initial_candidate_can_have_empty_previous_code(self) -> None:
+        candidate = Candidate(strategy_prompt="strategy", generation_prompt="generate")
+        self.assertEqual(candidate.previous_code, "")
+        self.assertIn("Previous Java code:\n(empty)", candidate.generation_input())
+
     def test_mutation_dispatch_calls_default_mutation(self) -> None:
         config = ExperimentConfig.from_mapping(
             {
@@ -85,34 +110,40 @@ population_size: 3
                 MutationContext(generation=1, index=0),
             )
 
-    def test_crossover_uniform_returns_valid_child_candidate(self) -> None:
-        config = ExperimentConfig.from_mapping(
-            {
-                "seed_prompts": ["seed"],
-                "max_prompt_chars": 400,
-                "max_prompt_lines": 20,
-            }
+    def test_crossover_uniform_selects_candidate_components(self) -> None:
+        parent_a = Candidate(
+            id="a",
+            strategy_prompt="strategy A",
+            previous_code="code A",
+            generation_prompt="generation A",
         )
-        parent_a = Candidate(id="a", strategy_prompt="economy first")
-        parent_b = Candidate(id="b", strategy_prompt="defend base")
-        child = Crossover(config, method="uniform").crossover(
+        parent_b = Candidate(
+            id="b",
+            strategy_prompt="strategy B",
+            previous_code="code B",
+            generation_prompt="generation B",
+        )
+        child = Crossover(method="uniform").crossover(
             parent_a,
             parent_b,
-            CrossoverContext(generation=2, index=0),
+            CrossoverContext(generation=2, index=0, rng=random.Random(1)),
         )
         self.assertEqual(child.generation, 2)
         self.assertEqual(child.parent_ids, ("a", "b"))
         self.assertEqual(child.metadata["operator"], "crossover")
-        self.assertIn("Parent strategy A", child.strategy_prompt)
-        self.assertIn("Parent strategy B", child.strategy_prompt)
+        self.assertIn(child.strategy_prompt, {parent_a.strategy_prompt, parent_b.strategy_prompt})
+        self.assertIn(child.previous_code, {parent_a.previous_code, parent_b.previous_code})
+        self.assertIn(child.generation_prompt, {parent_a.generation_prompt, parent_b.generation_prompt})
+        self.assertNotIn("strategy A\nstrategy B", child.strategy_prompt)
+        self.assertNotIn("code A\ncode B", child.previous_code)
+        self.assertNotIn("generation A\ngeneration B", child.generation_prompt)
 
     def test_unknown_crossover_method_raises_value_error(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
         with self.assertRaisesRegex(ValueError, "Unknown crossover method"):
-            Crossover(config, method="unknown").crossover(
+            Crossover(method="unknown").crossover(
                 Candidate(strategy_prompt="a"),
                 Candidate(strategy_prompt="b"),
-                CrossoverContext(generation=1, index=0),
+                CrossoverContext(generation=1, index=0, rng=random.Random(1)),
             )
 
     def test_selection_binary_tournament_returns_k_candidates(self) -> None:

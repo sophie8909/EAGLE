@@ -51,7 +51,7 @@ def run_search(
 
     # Search owns the algorithm order; the operator classes own only their local behavior.
     mutation = Mutation(config, method="default")
-    crossover = Crossover(config, method="uniform")
+    crossover = Crossover(method="uniform")
     selection = Selection(method="binary_tournament")
 
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -86,7 +86,7 @@ def run_search(
         # Rank and crowding distance guide tournament parent selection.
         assign_rank_and_crowding(evaluated_population)
 
-        # Selection chooses parents, crossover combines prompts, and mutation nudges the child prompt.
+        # Selection chooses parents, crossover chooses components, and mutation can adjust the child afterward.
         offspring = create_offspring(
             evaluated_population,
             config=config,
@@ -139,7 +139,13 @@ def run_search(
 def initialize_population(config: ExperimentConfig, mutation: Mutation) -> list[Candidate]:
     # Seed prompts are the first generation; extra slots are simple mutated copies of seeds.
     population = [
-        Candidate(generation=0, strategy_prompt=prompt, metadata={"seed_index": index})
+        Candidate(
+            generation=0,
+            strategy_prompt=prompt,
+            previous_code="",
+            generation_prompt=config.generation_prompt,
+            metadata={"seed_index": index},
+        )
         for index, prompt in enumerate(config.seed_prompts)
     ]
     while len(population) < config.population_size:
@@ -148,6 +154,8 @@ def initialize_population(config: ExperimentConfig, mutation: Mutation) -> list[
             generation=0,
             parent_ids=(source.id,),
             strategy_prompt=source.strategy_prompt,
+            previous_code=source.previous_code,
+            generation_prompt=source.generation_prompt,
             metadata={"operator": "seed_mutation"},
         )
         population.append(mutation.mutate(seed_child, MutationContext(generation=0, index=len(population))))
@@ -172,12 +180,12 @@ def create_offspring(
         parent_a = selection.select(population, 1, SelectionContext(rng=rng))[0]
         parent_b = selection.select(population, 1, SelectionContext(rng=rng))[0]
 
-        # Crossover creates a prompt from two parents; otherwise the child starts as a copy.
+        # Crossover chooses each candidate component from either parent; otherwise the child starts as a copy.
         if len(population) > 1 and rng.random() < config.crossover_rate:
             child = crossover.crossover(
                 parent_a,
                 parent_b,
-                CrossoverContext(generation=generation, index=context_index),
+                CrossoverContext(generation=generation, index=context_index, rng=rng),
             )
         else:
             child = Candidate(
@@ -188,6 +196,8 @@ def create_offspring(
                     max_chars=config.max_prompt_chars,
                     max_lines=config.max_prompt_lines,
                 ),
+                previous_code=parent_a.previous_code,
+                generation_prompt=parent_a.generation_prompt,
                 metadata={"operator": "mutation"},
             )
 

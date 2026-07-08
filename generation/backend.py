@@ -47,23 +47,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         return f"{self.base_url}/v1/chat/completions"
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
-        prompt = (
-            "Generate only Java statements for the body of chooseAction(int player, GameState gs). "
-            "Return raw Java statements only. No markdown, no explanation, no code fences. "
-            "Do not output a package declaration, imports, class declaration, constructors, fields, or helper methods. "
-            "Start from the RandomAI behavior shown in the scaffold: create PlayerActionGenerator(gs, player) "
-            "and return pag.getRandom(). "
-            "Do not define helper methods, do not invent helper methods, and never call nearestIdleAlly. "
-            "Do not invent action APIs. "
-            "do not redeclare local variables in the same method, "
-            "reuse existing variables or choose unique names, "
-            "do not assign UnitType values to Unit variables, "
-            "do not use custom imports, Optional, StrategyTable, streams, or lambdas, "
-            "prefer the simple MicroRTS API usage shown in the template, "
-            "and do not call any network, file, subprocess, environment, or LLM API at runtime.\n\n"
-            f"Requested class name: {class_name}\n\n"
-            f"Candidate prompt:\n{candidate.strategy_prompt}"
-        )
+        prompt = candidate.generation_input(class_name=class_name)
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],

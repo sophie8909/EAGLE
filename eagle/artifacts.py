@@ -31,6 +31,8 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     candidate_dir = candidates_dir / evaluation.candidate.id
     candidate_dir.mkdir(parents=True, exist_ok=True)
     (candidate_dir / "strategy_prompt.txt").write_text(evaluation.candidate.strategy_prompt, encoding="utf-8")
+    (candidate_dir / "previous_code.java").write_text(evaluation.candidate.previous_code, encoding="utf-8")
+    (candidate_dir / "generation_prompt.txt").write_text(evaluation.candidate.generation_prompt, encoding="utf-8")
     if evaluation.agent is not None:
         (candidate_dir / "generated_java_source.java").write_text(evaluation.agent.source, encoding="utf-8")
     write_json(candidate_dir / "compile_result.json", compile_to_dict(evaluation.compile_result))

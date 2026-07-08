@@ -48,5 +48,7 @@ class Mutation:
                 max_chars=self.config.max_prompt_chars,
                 max_lines=self.config.max_prompt_lines,
             ),
+            previous_code=candidate.previous_code,
+            generation_prompt=candidate.generation_prompt,
             metadata={**candidate.metadata, "operator": operator},
         )

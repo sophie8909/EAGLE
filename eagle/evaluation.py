@@ -164,11 +164,14 @@ def evaluate_candidate(
         failure_category=failure_category,
     )
     status = "failed" if failure_category is not None else "evaluated"
+    previous_code = agent.source if agent is not None else generation_result.assembled_java or candidate.previous_code
     evaluated_candidate = Candidate(
         id=candidate.id,
         generation=candidate.generation,
         parent_ids=candidate.parent_ids,
         strategy_prompt=candidate.strategy_prompt,
+        previous_code=previous_code,
+        generation_prompt=candidate.generation_prompt,
         generated_java_agent_path=str(agent.source_path) if agent else None,
         compile_status=compile_result.status if compile_result else "not_run",
         game_eval_result=game_metrics.to_json_dict() if game_metrics else {},
