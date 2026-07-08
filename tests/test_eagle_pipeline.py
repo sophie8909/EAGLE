@@ -4,13 +4,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from eagle.candidate import Candidate
 from eagle.artifacts import write_candidate_artifacts
+from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, parse_minimal_yaml
+from eagle.crossover import Crossover, CrossoverContext
 from eagle.evaluation import evaluate_candidate
-from eagle.offspring import make_offspring, normalize_prompt
+from eagle.mutation import Mutation, MutationContext
+from eagle.offspring import normalize_prompt
 from eagle.search import run_search
-from eagle.selection import dominates
+from eagle.selection import Selection, SelectionContext, dominates
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.microrts_runner import MatchResult
@@ -60,30 +62,80 @@ population_size: 3
         normalized = normalize_prompt(prompt, max_chars=100, max_lines=10)
         self.assertEqual(normalized, "first\n\nsecond\n\nthird")
 
-    def test_make_offspring_prompts_stay_under_limits(self) -> None:
-        parent = Candidate(strategy_prompt=("keep this intent\n" + "extra\n" * 200).strip())
+    def test_mutation_dispatch_calls_default_mutation(self) -> None:
         config = ExperimentConfig.from_mapping(
             {
                 "seed_prompts": ["seed"],
-                "population_size": 2,
-                "crossover_rate": 1.0,
-                "mutation_rate": 1.0,
                 "max_prompt_chars": 120,
                 "max_prompt_lines": 6,
             }
         )
-        offspring = make_offspring(
-            [parent, Candidate(strategy_prompt="second parent\n" + "more\n" * 200)],
-            config=config,
-            generation=1,
-            rng=random.Random(1),
-            parent_selector=lambda population, rng: population[0],
+        parent = Candidate(id="parent", strategy_prompt="keep this intent")
+        child = Mutation(config, method="default").mutate(parent, MutationContext(generation=1, index=0))
+        self.assertEqual(child.generation, 1)
+        self.assertEqual(child.parent_ids, ("parent",))
+        self.assertIn("Mutation 1:", child.strategy_prompt)
+        self.assertEqual(child.metadata["operator"], "mutation")
+
+    def test_unknown_mutation_method_raises_value_error(self) -> None:
+        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+        with self.assertRaisesRegex(ValueError, "Unknown mutation method"):
+            Mutation(config, method="unknown").mutate(
+                Candidate(strategy_prompt="strategy"),
+                MutationContext(generation=1, index=0),
+            )
+
+    def test_crossover_uniform_returns_valid_child_candidate(self) -> None:
+        config = ExperimentConfig.from_mapping(
+            {
+                "seed_prompts": ["seed"],
+                "max_prompt_chars": 400,
+                "max_prompt_lines": 20,
+            }
         )
-        self.assertEqual(len(offspring), 2)
-        for child in offspring:
-            self.assertLessEqual(len(child.strategy_prompt), 120)
-            self.assertLessEqual(len(child.strategy_prompt.splitlines()), 6)
-            self.assertTrue(child.strategy_prompt.startswith("Blend these two MicroRTS"))
+        parent_a = Candidate(id="a", strategy_prompt="economy first")
+        parent_b = Candidate(id="b", strategy_prompt="defend base")
+        child = Crossover(config, method="uniform").crossover(
+            parent_a,
+            parent_b,
+            CrossoverContext(generation=2, index=0),
+        )
+        self.assertEqual(child.generation, 2)
+        self.assertEqual(child.parent_ids, ("a", "b"))
+        self.assertEqual(child.metadata["operator"], "crossover")
+        self.assertIn("Parent strategy A", child.strategy_prompt)
+        self.assertIn("Parent strategy B", child.strategy_prompt)
+
+    def test_unknown_crossover_method_raises_value_error(self) -> None:
+        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+        with self.assertRaisesRegex(ValueError, "Unknown crossover method"):
+            Crossover(config, method="unknown").crossover(
+                Candidate(strategy_prompt="a"),
+                Candidate(strategy_prompt="b"),
+                CrossoverContext(generation=1, index=0),
+            )
+
+    def test_selection_binary_tournament_returns_k_candidates(self) -> None:
+        population = [
+            Candidate(id="a", fitness_objectives={"game_performance": 1.0, "strategy_alignment": 0.1}),
+            Candidate(id="b", fitness_objectives={"game_performance": 2.0, "strategy_alignment": 0.2}),
+            Candidate(id="c", fitness_objectives={"game_performance": 3.0, "strategy_alignment": 0.3}),
+        ]
+        selected = Selection(method="binary_tournament").select(
+            population,
+            5,
+            SelectionContext(rng=random.Random(1)),
+        )
+        self.assertEqual(len(selected), 5)
+        self.assertTrue(all(candidate in population for candidate in selected))
+
+    def test_unknown_selection_method_raises_value_error(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unknown selection method"):
+            Selection(method="unknown").select(
+                [Candidate(strategy_prompt="strategy")],
+                1,
+                SelectionContext(rng=random.Random(1)),
+            )
 
     def test_mock_generation_returns_valid_java_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

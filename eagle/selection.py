@@ -4,8 +4,26 @@ from __future__ import annotations
 
 import math
 import random
+from dataclasses import dataclass
 
 from .candidate import Candidate
+
+
+@dataclass(frozen=True)
+class SelectionContext:
+    rng: random.Random
+
+
+class Selection:
+    """Select candidates using one configured selection method."""
+
+    def __init__(self, *, method: str = "binary_tournament") -> None:
+        self.method = method
+
+    def select(self, population: list[Candidate], k: int, context: SelectionContext) -> list[Candidate]:
+        if self.method == "binary_tournament":
+            return [tournament_select(population, context.rng) for _ in range(k)]
+        raise ValueError(f"Unknown selection method: {self.method}")
 
 
 def tournament_select(population: list[Candidate], rng: random.Random) -> Candidate:

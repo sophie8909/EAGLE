@@ -13,13 +13,16 @@ from generation.backend import build_generation_backend
 from .artifacts import write_generation_manifest, write_summary
 from .candidate import Candidate
 from .config import ExperimentConfig
+from .crossover import Crossover, CrossoverContext
 from .evaluation import evaluate_population
-from .offspring import make_offspring, mutate_prompt, normalize_prompt
+from .mutation import Mutation, MutationContext
+from .offspring import normalize_prompt
 from .selection import (
+    Selection,
+    SelectionContext,
     assign_rank_and_crowding,
     best_candidate,
     select_next_generation,
-    tournament_select,
 )
 
 
@@ -45,6 +48,12 @@ def run_search(
         model=config.llm_model,
     )
     alignment_backend = "mock" if mock else config.alignment_backend
+
+    # Search owns the algorithm order; the operator classes own only their local behavior.
+    mutation = Mutation(config, method="default")
+    crossover = Crossover(config, method="uniform")
+    selection = Selection(method="binary_tournament")
+
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = config.runs_dir / active_run_id
     candidates_dir = run_dir / "candidates"
@@ -57,7 +66,9 @@ def run_search(
     copy2(config_path, run_dir / "config.yaml")
 
     results_path = run_dir / "results.jsonl"
-    population = initialize_population(config)
+
+    # NSGA-II begins with a complete evaluated population so every candidate has objectives.
+    population = initialize_population(config, mutation)
     evaluated_population = evaluate_population(
         population,
         generation=0,
@@ -72,14 +83,21 @@ def run_search(
     )
 
     for generation in range(1, config.generations):
+        # Rank and crowding distance guide tournament parent selection.
         assign_rank_and_crowding(evaluated_population)
-        offspring = make_offspring(
+
+        # Selection chooses parents, crossover combines prompts, and mutation nudges the child prompt.
+        offspring = create_offspring(
             evaluated_population,
             config=config,
             generation=generation,
             rng=rng,
-            parent_selector=tournament_select,
+            mutation=mutation,
+            crossover=crossover,
+            selection=selection,
         )
+
+        # New children must be evaluated before survivor selection can compare them to parents.
         evaluated_offspring = evaluate_population(
             offspring,
             generation=generation,
@@ -92,13 +110,18 @@ def run_search(
             results_path=results_path,
             mock=mock,
         )
+
+        # Survivor selection keeps the best Pareto fronts and preserves spread within a partial front.
         evaluated_population = select_next_generation(
             evaluated_population,
             evaluated_offspring,
             population_size=config.population_size,
         )
+
+        # Save the generation view after survivor selection so artifacts match the active population.
         write_generation_manifest(run_dir, generation, evaluated_population)
 
+    # Final rank/crowding data makes the summary and best-candidate choice inspectable.
     assign_rank_and_crowding(evaluated_population)
     best = best_candidate(evaluated_population)
     final_fronts = assign_rank_and_crowding(evaluated_population)
@@ -113,23 +136,64 @@ def run_search(
     return SearchResult(run_dir=run_dir, final_population=evaluated_population, best_candidate=best)
 
 
-def initialize_population(config: ExperimentConfig) -> list[Candidate]:
+def initialize_population(config: ExperimentConfig, mutation: Mutation) -> list[Candidate]:
+    # Seed prompts are the first generation; extra slots are simple mutated copies of seeds.
     population = [
         Candidate(generation=0, strategy_prompt=prompt, metadata={"seed_index": index})
         for index, prompt in enumerate(config.seed_prompts)
     ]
     while len(population) < config.population_size:
         source = population[len(population) % len(config.seed_prompts)]
-        population.append(
-            Candidate(
-                generation=0,
-                parent_ids=(source.id,),
+        seed_child = Candidate(
+            generation=0,
+            parent_ids=(source.id,),
+            strategy_prompt=source.strategy_prompt,
+            metadata={"operator": "seed_mutation"},
+        )
+        population.append(mutation.mutate(seed_child, MutationContext(generation=0, index=len(population))))
+    return population[: config.population_size]
+
+
+def create_offspring(
+    population: list[Candidate],
+    *,
+    config: ExperimentConfig,
+    generation: int,
+    rng: random.Random,
+    mutation: Mutation,
+    crossover: Crossover,
+    selection: Selection,
+) -> list[Candidate]:
+    offspring: list[Candidate] = []
+    while len(offspring) < config.population_size:
+        context_index = len(offspring)
+
+        # Binary tournament uses current rank/crowding values to pick each parent.
+        parent_a = selection.select(population, 1, SelectionContext(rng=rng))[0]
+        parent_b = selection.select(population, 1, SelectionContext(rng=rng))[0]
+
+        # Crossover creates a prompt from two parents; otherwise the child starts as a copy.
+        if len(population) > 1 and rng.random() < config.crossover_rate:
+            child = crossover.crossover(
+                parent_a,
+                parent_b,
+                CrossoverContext(generation=generation, index=context_index),
+            )
+        else:
+            child = Candidate(
+                generation=generation,
+                parent_ids=(parent_a.id,),
                 strategy_prompt=normalize_prompt(
-                    mutate_prompt(source.strategy_prompt, config.mutation_suffix, clone_index=len(population)),
+                    parent_a.strategy_prompt,
                     max_chars=config.max_prompt_chars,
                     max_lines=config.max_prompt_lines,
                 ),
-                metadata={"operator": "seed_mutation"},
+                metadata={"operator": "mutation"},
             )
-        )
-    return population[: config.population_size]
+
+        # Mutation is applied after crossover/copy so every child follows the same variation order.
+        if rng.random() < config.mutation_rate:
+            child = mutation.mutate(child, MutationContext(generation=generation, index=context_index))
+
+        offspring.append(child)
+    return offspring
