@@ -15,12 +15,14 @@ from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.microrts_runner import MatchResult
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE, build_objectives
 from evaluation.strategy_alignment import StrategyAlignmentResult
-from generation.agent_template import microrts_blank_strategy_prompt
+from generation.agent_template import microrts_blank_strategy_prompt, render_strategy_agent
 from generation.backend import GenerationBackend, MockGenerationBackend, generated_class_name
 from generation.java_agent_generator import (
     clean_generated_java_output,
+    extract_strategy_body,
     generate_java_agent,
     normalize_java_agent_source,
+    validate_strategy_body,
     validate_java_agent_source,
 )
 
@@ -188,22 +190,48 @@ public class GeneratedAgent_test {
             validate_java_agent_source(source, "GeneratedAgent_test")
 
     def test_validate_java_agent_source_rejects_direct_unit_iteration(self) -> None:
+        source = render_strategy_agent(
+            "GeneratedAgent_test",
+            """for (Unit unit : gs.getUnits()) {
+            commandIdle(unit);
+        }""",
+        )
+        with self.assertRaisesRegex(ValueError, "units\\(gs\\)"):
+            validate_java_agent_source(source, "GeneratedAgent_test")
+
+    def test_validate_java_agent_source_accepts_units_helper_iteration(self) -> None:
+        source = render_strategy_agent(
+            "GeneratedAgent_test",
+            """for (Unit unit : units(gs)) {
+            commandIdle(unit);
+        }""",
+        )
+        validate_java_agent_source(source, "GeneratedAgent_test")
+
+    def test_validate_strategy_body_rejects_duplicate_helper_method(self) -> None:
+        body = """private boolean commandMove(Unit unit, int x, int y) {
+            return false;
+        }"""
+        with self.assertRaisesRegex(ValueError, "must not define methods"):
+            validate_strategy_body(body)
+
+    def test_extract_strategy_body_keeps_only_define_strategy_logic(self) -> None:
         source = """package ai.generated;
 
-import rts.units.UnitTypeTable;
-
-public class GeneratedAgent_test {
-    public GeneratedAgent_test(UnitTypeTable utt) {
+    private void defineStrategy() {
+        for (Unit unit : units(gs)) {
+            commandIdle(unit);
+        }
     }
 
-    private void defineStrategy() {
-        for (Object unit : pgs.getUnits()) {
-        }
+    private boolean commandMove(Unit unit, int x, int y) {
+        return false;
     }
 }
 """
-        with self.assertRaisesRegex(ValueError, "copy game units"):
-            validate_java_agent_source(source, "GeneratedAgent_test")
+        body = extract_strategy_body(source)
+        self.assertIn("units(gs)", body)
+        self.assertNotIn("commandMove(Unit", body)
 
     def test_validate_java_agent_source_accepts_existing_helper_usage(self) -> None:
         source = """package ai.generated;
@@ -368,6 +396,29 @@ public class GeneratedAgent_test extends AbstractionLayerAI {
         self.assertEqual(evaluation.candidate.compile_status, "not_run")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertEqual(evaluation.candidate.fitness_objectives["strategy_alignment"], 0.0)
+
+    def test_validation_failure_gets_failed_game_performance(self) -> None:
+        class UnsafeIterationBackend(GenerationBackend):
+            def generate(self, candidate: Candidate, class_name: str) -> str:
+                return """for (Unit unit : gs.getUnits()) {
+                    commandIdle(unit);
+                }"""
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            evaluation = evaluate_candidate(
+                Candidate(strategy_prompt="Generate an agent."),
+                config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}),
+                backend=UnsafeIterationBackend(),
+                alignment_backend="mock",
+                generated_agents_dir=root / "generated_agents",
+                classes_dir=root / "classes",
+                mock=True,
+                ordinal=0,
+            )
+        self.assertEqual(evaluation.candidate.status, "failed")
+        self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertIn("units(gs)", evaluation.error or "")
 
     def test_valid_evaluated_candidate_keeps_actual_game_score(self) -> None:
         objectives = build_objectives(

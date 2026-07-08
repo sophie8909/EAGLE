@@ -73,8 +73,11 @@ public class {class_name} extends AbstractionLayerAI {{
     }}
 
     private void defineStrategy(int player, GameState gs) {{
-        // STRATEGY LOGIC GOES HERE.
-        // Use the command helpers below. Leave units idle when no safe action is chosen.
+        {strategy_body}
+    }}
+
+    private List<Unit> units(GameState gs) {{
+        return new ArrayList<>(gs.getUnits());
     }}
 
     private boolean commandMove(Unit unit, int x, int y) {{
@@ -191,7 +194,7 @@ public class {class_name} extends AbstractionLayerAI {{
 
     private void applyAutoDefense(int player, GameState gs) {{
         PhysicalGameState pgs = gs.getPhysicalGameState();
-        for (Unit ally : new ArrayList<>(pgs.getUnits())) {{
+        for (Unit ally : units(gs)) {{
             if (!isIdleAlly(ally, player, gs) || !ally.getType().canAttack) {{
                 continue;
             }}
@@ -216,6 +219,10 @@ public class {class_name} extends AbstractionLayerAI {{
 
 
 OPERATION_HELPER_METHODS = """
+    private List<Unit> units(GameState gs) {
+        return new ArrayList<>(gs.getUnits());
+    }
+
     private boolean commandMove(Unit unit, int x, int y) {
         if (unit == null || unit.getType() == baseType || unit.getType() == barracksType) {
             return false;
@@ -330,7 +337,7 @@ OPERATION_HELPER_METHODS = """
 
     private void applyAutoDefense(int player, GameState gs) {
         PhysicalGameState pgs = gs.getPhysicalGameState();
-        for (Unit ally : new ArrayList<>(pgs.getUnits())) {
+        for (Unit ally : units(gs)) {
             if (!isIdleAlly(ally, player, gs) || !ally.getType().canAttack) {
                 continue;
             }
@@ -381,6 +388,7 @@ Available helper methods in the template:
 - commandBuild(worker, buildingType, x, y)
 - commandAttack(attacker, enemy)
 - commandIdle(unit)
+- units(gs)
 - isIdleAlly(unit, player, gs)
 - nearestUnit(source, units, owner, type)
 - nearestEnemy(source, player, pgs)
@@ -392,14 +400,17 @@ Rules for generated code:
 - Use package ai.generated.
 - The class name must be the exact requested class name.
 - Keep the constructors and helper methods compilable.
-- Include the full helper methods from the template. Do not write "helper methods omitted", "...", or comments in place of methods.
-- Fill defineStrategy with deterministic Java logic.
+- Output only deterministic Java statements for the body of defineStrategy.
+- Do not output package declarations, imports, classes, constructors, fields, or helper method definitions.
 - Only call helper methods listed above. Do not invent helper methods.
+- Do not define commandMove, commandAttack, commandHarvest, commandTrain, commandBuild, commandIdle, nearestUnit, nearestEnemy, nearestResource, ownBase, units, or applyAutoDefense.
 - Do not call nearestIdleAlly.
-- When iterating game units, copy them first with new ArrayList<>(gs.getUnits()) or new ArrayList<>(pgs.getUnits()).
+- When iterating game units, use units(gs).
+- Do not iterate directly over gs.getUnits().
 - Do not modify collections returned directly by GameState or PhysicalGameState while iterating.
+- Do not use custom imports, Optional, StrategyTable, streams, or lambdas.
 - Do not include HTTP, URL, Socket, Files, environment variables, subprocesses, or runtime LLM code.
-- Return only Java source code.
+- Return only the defineStrategy body. No markdown fences.
 
 Blank strategy template:
 ```java
@@ -408,13 +419,21 @@ Blank strategy template:
 """
 
 
+DEFAULT_STRATEGY_BODY = """// STRATEGY LOGIC GOES HERE.
+        // Use the command helpers below. Leave units idle when no safe action is chosen."""
+
+
 def render_blank_strategy_agent(class_name: str) -> str:
-    return BLANK_STRATEGY_AGENT_TEMPLATE.format(class_name=class_name)
+    return render_strategy_agent(class_name, DEFAULT_STRATEGY_BODY)
+
+
+def render_strategy_agent(class_name: str, strategy_body: str) -> str:
+    return BLANK_STRATEGY_AGENT_TEMPLATE.format(class_name=class_name, strategy_body=strategy_body)
 
 
 def microrts_blank_strategy_prompt() -> str:
     return MICRORTS_BLANK_STRATEGY_PROMPT.format(
-        template=BLANK_STRATEGY_AGENT_TEMPLATE.format(class_name="CLASS_NAME")
+        template=render_blank_strategy_agent("CLASS_NAME")
     )
 
 
