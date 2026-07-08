@@ -11,12 +11,12 @@ from eagle.evaluation import evaluate_candidate
 from eagle.offspring import make_offspring, normalize_prompt
 from eagle.search import run_search
 from eagle.selection import dominates
-from evaluation.compiler import CompileResult
+from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.microrts_runner import MatchResult
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE, build_objectives
 from evaluation.strategy_alignment import StrategyAlignmentResult
-from generation.agent_template import microrts_blank_strategy_prompt, render_strategy_agent
+from generation.agent_template import microrts_blank_strategy_prompt, render_blank_strategy_agent, render_strategy_agent
 from generation.backend import GenerationBackend, MockGenerationBackend, generated_class_name
 from generation.java_agent_generator import (
     clean_generated_java_output,
@@ -90,16 +90,35 @@ population_size: 3
             candidate = Candidate(strategy_prompt="Generate an agent.")
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertIn("package ai.generated;", agent.source)
-            self.assertIn("extends AbstractionLayerAI", agent.source)
-            self.assertIn("private void defineStrategy", agent.source)
-            self.assertIn("STRATEGY LOGIC GOES HERE", agent.source)
+            self.assertIn("extends AI", agent.source)
+            self.assertIn("public PlayerAction getAction", agent.source)
+            self.assertIn("return new PlayerAction();", agent.source)
+            self.assertIn(f"return new {agent.class_name}();", agent.source)
+            self.assertIn("private PlayerAction chooseAction", agent.source)
+            self.assertIn("PlayerActionGenerator pag = new PlayerActionGenerator(gs, player);", agent.source)
+            self.assertIn("return pag.getRandom();", agent.source)
 
     def test_seed_prompt_template_expands_to_blank_strategy_prompt(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompt_template": "microrts_blank_strategy_agent"})
         self.assertEqual(len(config.seed_prompts), 1)
         self.assertEqual(config.seed_prompts[0], microrts_blank_strategy_prompt())
-        self.assertIn("Available high-level operations", config.seed_prompts[0])
-        self.assertIn("STRATEGY LOGIC GOES HERE", config.seed_prompts[0])
+        self.assertIn("based directly on ai.RandomAI", config.seed_prompts[0])
+        self.assertIn("PlayerActionGenerator", config.seed_prompts[0])
+
+    def test_random_ai_baseline_compiles_against_microrts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_dir = root / "src" / "ai" / "generated"
+            source_dir.mkdir(parents=True)
+            source_path = source_dir / "GeneratedAgent_test.java"
+            source_path.write_text(render_blank_strategy_agent("GeneratedAgent_test"), encoding="utf-8")
+            result = compile_generated_agent(
+                source_path,
+                microrts_dir=Path("third_party/microrts"),
+                output_dir=root / "classes",
+                mock=False,
+            )
+        self.assertTrue(result.ok, result.stderr)
 
     def test_mock_search_writes_nsga2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -176,19 +195,7 @@ Done.
             validate_java_agent_source("Here is a strategy explanation with no Java.", "GeneratedAgent_test")
 
     def test_validate_java_agent_source_rejects_nonexistent_helper(self) -> None:
-        source = """package ai.generated;
-
-import rts.units.UnitTypeTable;
-
-public class GeneratedAgent_test {
-    public GeneratedAgent_test(UnitTypeTable utt) {
-    }
-
-    private void defineStrategy() {
-        nearestIdleAlly(null, 0, null);
-    }
-}
-"""
+        source = render_strategy_agent("GeneratedAgent_test", "nearestIdleAlly(null, 0, null);")
         with self.assertRaisesRegex(ValueError, "nearestIdleAlly"):
             validate_java_agent_source(source, "GeneratedAgent_test")
 
@@ -196,18 +203,17 @@ public class GeneratedAgent_test {
         source = render_strategy_agent(
             "GeneratedAgent_test",
             """for (Unit unit : gs.getUnits()) {
-            commandIdle(unit);
+            return new PlayerAction();
         }""",
         )
-        with self.assertRaisesRegex(ValueError, "units\\(gs\\)"):
+        with self.assertRaisesRegex(ValueError, "gs.getUnits"):
             validate_java_agent_source(source, "GeneratedAgent_test")
 
-    def test_validate_java_agent_source_accepts_units_helper_iteration(self) -> None:
+    def test_validate_java_agent_source_accepts_random_ai_body(self) -> None:
         source = render_strategy_agent(
             "GeneratedAgent_test",
-            """for (Unit unit : units(gs)) {
-            commandIdle(unit);
-        }""",
+            """PlayerActionGenerator pag = new PlayerActionGenerator(gs, player);
+        return pag.getRandom();""",
         )
         validate_java_agent_source(source, "GeneratedAgent_test")
 
@@ -218,43 +224,22 @@ public class GeneratedAgent_test {
         with self.assertRaisesRegex(ValueError, "must not define methods"):
             validate_strategy_body(body)
 
-    def test_extract_strategy_body_keeps_only_define_strategy_logic(self) -> None:
+    def test_extract_strategy_body_keeps_only_choose_action_logic(self) -> None:
         source = """package ai.generated;
 
-    private void defineStrategy() {
-        for (Unit unit : units(gs)) {
-            commandIdle(unit);
-        }
+    private PlayerAction chooseAction(int player, GameState gs) throws Exception {
+        PlayerActionGenerator pag = new PlayerActionGenerator(gs, player);
+        return pag.getRandom();
     }
 
-    private boolean commandMove(Unit unit, int x, int y) {
-        return false;
+    public PlayerAction getAction(int player, GameState gs) {
+        return new PlayerAction();
     }
 }
 """
         body = extract_strategy_body(source)
-        self.assertIn("units(gs)", body)
-        self.assertNotIn("commandMove(Unit", body)
-
-    def test_validate_java_agent_source_accepts_existing_helper_usage(self) -> None:
-        source = """package ai.generated;
-
-import rts.units.UnitTypeTable;
-
-public class GeneratedAgent_test {
-    public GeneratedAgent_test(UnitTypeTable utt) {
-    }
-
-    private void defineStrategy() {
-        commandIdle(null);
-    }
-
-    private boolean commandIdle(Object unit) {
-        return true;
-    }
-}
-"""
-        validate_java_agent_source(source, "GeneratedAgent_test")
+        self.assertIn("pag.getRandom()", body)
+        self.assertNotIn("getAction", body)
 
     def test_clean_generated_java_output_preserves_valid_java_source(self) -> None:
         source = """package ai.generated;
@@ -290,72 +275,6 @@ public class GeneratedAgent_test extends RandomBiasedAI {
         self.assertIn("import rts.units.UnitTypeTable;", normalized)
         self.assertNotIn("import ai.UnitTypeTable;", normalized)
         self.assertNotIn("@Override\n    public void act", normalized)
-
-    def test_normalize_repairs_elided_abstraction_helpers(self) -> None:
-        source = """package ai.generated;
-
-import ai.abstraction.AbstractionLayerAI;
-import ai.abstraction.pathfinding.AStarPathFinding;
-import ai.abstraction.pathfinding.PathFinding;
-import ai.core.AI;
-import rts.GameState;
-import rts.PhysicalGameState;
-import rts.PlayerAction;
-import rts.units.Unit;
-import rts.units.UnitType;
-import rts.units.UnitTypeTable;
-
-public class GeneratedAgent_test extends AbstractionLayerAI {
-    protected UnitTypeTable utt;
-    protected UnitType resourceType;
-    protected UnitType workerType;
-    protected UnitType baseType;
-    protected UnitType barracksType;
-
-    public GeneratedAgent_test(UnitTypeTable aUtt) {
-        this(aUtt, new AStarPathFinding());
-    }
-
-    public GeneratedAgent_test(UnitTypeTable aUtt, PathFinding aPf) {
-        super(aPf);
-        reset(aUtt);
-    }
-
-    public void reset(UnitTypeTable aUtt) {
-        utt = aUtt;
-        resourceType = utt.getUnitType("Resource");
-        workerType = utt.getUnitType("Worker");
-        baseType = utt.getUnitType("Base");
-        barracksType = utt.getUnitType("Barracks");
-    }
-
-    @Override
-    public AI clone() {
-        return new GeneratedAgent_test(utt, pf);
-    }
-
-    @Override
-    public PlayerAction getAction(int player, GameState gs) throws Exception {
-        applyAutoDefense(player, gs);
-        return translateActions(player, gs);
-    }
-
-    private void defineStrategy(int player, GameState gs) {
-        PhysicalGameState pgs = gs.getPhysicalGameState();
-        Unit base = ownBase(player, pgs);
-        if (base != null) {
-            commandTrain(base, workerType);
-        }
-    }
-
-    // Helper methods...
-}
-"""
-        normalized = normalize_java_agent_source(source)
-        self.assertIn("private boolean commandMove", normalized)
-        self.assertIn("private void applyAutoDefense", normalized)
-        self.assertIn("public List<ParameterSpecification> getParameters()", normalized)
-        self.assertNotIn("Helper methods...", normalized)
 
     def test_game_metrics_use_resource_difference(self) -> None:
         result = MatchResult(
@@ -405,7 +324,7 @@ public class GeneratedAgent_test extends AbstractionLayerAI {
         class UnsafeIterationBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 return """for (Unit unit : gs.getUnits()) {
-                    commandIdle(unit);
+                    return new PlayerAction();
                 }"""
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -426,7 +345,7 @@ public class GeneratedAgent_test extends AbstractionLayerAI {
         self.assertIn("gs.getUnits()", evaluation.result.extracted_code)
         self.assertIn("gs.getUnits()", evaluation.result.assembled_java)
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
-        self.assertIn("units(gs)", evaluation.error or "")
+        self.assertIn("gs.getUnits", evaluation.error or "")
         write_candidate_artifacts(root / "candidates", evaluation)
         debug_dir = root / "failed_candidates" / candidate.id
         self.assertTrue((debug_dir / "raw_llm_output.txt").exists())
@@ -462,10 +381,10 @@ public class GeneratedAgent_test extends AbstractionLayerAI {
                 json.dumps(
                     {
                         "failure_category": "Java validation failure",
-                        "failure_reason": "Generated Java agent must iterate over units(gs).",
+                        "failure_reason": "Generated Java agent must not iterate directly over gs.getUnits().",
                         "validation_result": {
                             "ok": False,
-                            "error": "Generated Java agent must iterate over units(gs).",
+                            "error": "Generated Java agent must not iterate directly over gs.getUnits().",
                         },
                         "compile_result": None,
                     }

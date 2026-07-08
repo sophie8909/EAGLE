@@ -28,7 +28,7 @@ Each NSGA-II individual is an `eagle.candidate.Candidate` with:
 
 The active objective names are:
 
-- `game_performance`: higher is better. Successful matches use resource difference plus available win/loss and score signals. Compile or match failures get `-1.0`.
+- `game_performance`: higher is better. Successful matches use resource difference plus available win/loss and score signals. Failed candidates get `-1000.0`.
 - `strategy_alignment`: higher is better. LLM alignment score in `[0, 1]`; compile failures get `0.0`.
 
 Objectives remain separate. EAGLE does not collapse them into one scalar for NSGA-II selection.
@@ -38,9 +38,8 @@ Objectives remain separate. EAGLE does not collapse them into one scalar for NSG
 `generation/agent_template.py` owns the built-in initial prompt. It intentionally avoids a concrete strategy such as rush, turtle, or economy-first. Instead, it gives the LLM:
 
 - MicroRTS unit and resource basics
-- available `AbstractionLayerAI` operations: `move`, `harvest`, `train`, `build`, `attack`, and `idle`
-- a compilable Java agent skeleton copied from the old runtime-agent action style but stripped of runtime LLM, HTTP, file, and logging behavior
-- a blank `defineStrategy` method where evolved strategy logic should be inserted
+- a known-good Java agent skeleton based directly on MicroRTS `ai.RandomAI`
+- a `chooseAction` method body where future strategy logic should be inserted
 
 ## Artifact Flow
 

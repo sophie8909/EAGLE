@@ -26,7 +26,7 @@ The mock run exercises:
 
 This mode does not require `javac`, MicroRTS, or a live LLM endpoint.
 
-The initial prompt is not a strategy. It only explains MicroRTS, lists legal high-level operations, and provides a blank but fully wired Java `AbstractionLayerAI` template. Strategy text is introduced by variation and by the LLM filling `defineStrategy`.
+The initial prompt starts from the known-good MicroRTS `ai.RandomAI` structure. Future generated agents should edit only the `chooseAction` strategy body while the scaffold keeps imports, class shell, `getAction`, `clone`, and parameters fixed.
 
 ## Real MicroRTS Mode Status
 

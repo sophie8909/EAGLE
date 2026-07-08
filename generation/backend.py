@@ -48,15 +48,13 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
         prompt = (
-            "Generate only Java statements for the body of defineStrategy(int player, GameState gs). "
+            "Generate only Java statements for the body of chooseAction(int player, GameState gs). "
             "Return raw Java statements only. No markdown, no explanation, no code fences. "
             "Do not output a package declaration, imports, class declaration, constructors, fields, or helper methods. "
-            "only call helper methods that exist in the template: commandMove, commandHarvest, "
-            "commandTrain, commandBuild, commandAttack, commandIdle, units, isIdleAlly, nearestUnit, "
-            "nearestEnemy, nearestResource, ownBase, applyAutoDefense, "
-            "do not define helper methods, do not invent helper methods, and never call nearestIdleAlly, "
-            "when iterating game units, use units(gs), never gs.getUnits(), "
-            "do not modify collections returned directly by GameState or PhysicalGameState while iterating, "
+            "Start from the RandomAI behavior shown in the scaffold: create PlayerActionGenerator(gs, player) "
+            "and return pag.getRandom(). "
+            "Do not define helper methods, do not invent helper methods, and never call nearestIdleAlly. "
+            "Do not invent action APIs. "
             "do not redeclare local variables in the same method, "
             "reuse existing variables or choose unique names, "
             "do not assign UnitType values to Unit variables, "

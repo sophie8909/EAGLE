@@ -3,432 +3,93 @@
 from __future__ import annotations
 
 
-BLANK_STRATEGY_AGENT_TEMPLATE = """package ai.generated;
+RANDOM_AI_STRATEGY_BODY = """PlayerActionGenerator pag = new PlayerActionGenerator(gs, player);
+        return pag.getRandom();"""
 
-import ai.abstraction.AbstractionLayerAI;
-import ai.abstraction.pathfinding.AStarPathFinding;
-import ai.abstraction.pathfinding.PathFinding;
+
+RANDOM_AI_AGENT_TEMPLATE = """package ai.generated;
+
 import ai.core.AI;
 import ai.core.ParameterSpecification;
 import java.util.ArrayList;
 import java.util.List;
 import rts.GameState;
-import rts.PhysicalGameState;
 import rts.PlayerAction;
-import rts.units.Unit;
-import rts.units.UnitType;
+import rts.PlayerActionGenerator;
 import rts.units.UnitTypeTable;
 
-public class {class_name} extends AbstractionLayerAI {{
-    protected UnitTypeTable utt;
-    protected UnitType resourceType;
-    protected UnitType workerType;
-    protected UnitType lightType;
-    protected UnitType heavyType;
-    protected UnitType rangedType;
-    protected UnitType baseType;
-    protected UnitType barracksType;
-
-    public {class_name}(UnitTypeTable aUtt) {{
-        this(aUtt, new AStarPathFinding());
+public class {class_name} extends AI {{
+    public {class_name}(UnitTypeTable utt) {{
     }}
 
-    public {class_name}(UnitTypeTable aUtt, PathFinding aPf) {{
-        super(aPf);
-        reset(aUtt);
-    }}
-
-    public void reset(UnitTypeTable aUtt) {{
-        utt = aUtt;
-        resourceType = utt.getUnitType("Resource");
-        workerType = utt.getUnitType("Worker");
-        lightType = utt.getUnitType("Light");
-        heavyType = utt.getUnitType("Heavy");
-        rangedType = utt.getUnitType("Ranged");
-        baseType = utt.getUnitType("Base");
-        barracksType = utt.getUnitType("Barracks");
+    public {class_name}() {{
     }}
 
     @Override
     public void reset() {{
-        super.reset();
-        if (utt != null) {{
-            reset(utt);
-        }}
     }}
 
     @Override
     public AI clone() {{
-        return new {class_name}(utt, pf);
+        return new {class_name}();
     }}
 
     @Override
     public PlayerAction getAction(int player, GameState gs) throws Exception {{
-        if (gs.gameover()) {{
-            return translateActions(player, gs);
+        try {{
+            if (!gs.canExecuteAnyAction(player)) {{
+                return new PlayerAction();
+            }}
+            return chooseAction(player, gs);
+        }} catch (Exception exc) {{
+            return new PlayerAction();
         }}
-        defineStrategy(player, gs);
-        applyAutoDefense(player, gs);
-        return translateActions(player, gs);
     }}
 
-    private void defineStrategy(int player, GameState gs) {{
+    private PlayerAction chooseAction(int player, GameState gs) throws Exception {{
         {strategy_body}
-    }}
-
-    private List<Unit> units(GameState gs) {{
-        return new ArrayList<>(gs.getUnits());
-    }}
-
-    private boolean commandMove(Unit unit, int x, int y) {{
-        if (unit == null || unit.getType() == baseType || unit.getType() == barracksType) {{
-            return false;
-        }}
-        move(unit, x, y);
-        return true;
-    }}
-
-    private boolean commandHarvest(Unit worker, Unit resource, Unit base) {{
-        if (worker == null || resource == null || base == null) {{
-            return false;
-        }}
-        if (worker.getType() != workerType || resource.getType() != resourceType || base.getType() != baseType) {{
-            return false;
-        }}
-        harvest(worker, resource, base);
-        return true;
-    }}
-
-    private boolean commandTrain(Unit producer, UnitType unitType) {{
-        if (producer == null || unitType == null) {{
-            return false;
-        }}
-        if (producer.getType() != baseType && producer.getType() != barracksType) {{
-            return false;
-        }}
-        train(producer, unitType);
-        return true;
-    }}
-
-    private boolean commandBuild(Unit worker, UnitType buildingType, int x, int y) {{
-        if (worker == null || buildingType == null || worker.getType() != workerType) {{
-            return false;
-        }}
-        build(worker, buildingType, x, y);
-        return true;
-    }}
-
-    private boolean commandAttack(Unit attacker, Unit target) {{
-        if (attacker == null || target == null || !attacker.getType().canAttack) {{
-            return false;
-        }}
-        if (target.getPlayer() == attacker.getPlayer()) {{
-            return false;
-        }}
-        attack(attacker, target);
-        return true;
-    }}
-
-    private boolean commandIdle(Unit unit) {{
-        if (unit == null) {{
-            return false;
-        }}
-        idle(unit);
-        return true;
-    }}
-
-    private boolean isIdleAlly(Unit unit, int player, GameState gs) {{
-        return unit != null
-                && unit.getPlayer() == player
-                && gs.getUnitAction(unit) == null
-                && getAbstractAction(unit) == null;
-    }}
-
-    private Unit nearestUnit(Unit source, List<Unit> units, int owner, UnitType type) {{
-        Unit best = null;
-        int bestDistance = Integer.MAX_VALUE;
-        for (Unit other : units) {{
-            if (owner != Integer.MIN_VALUE && other.getPlayer() != owner) {{
-                continue;
-            }}
-            if (type != null && other.getType() != type) {{
-                continue;
-            }}
-            int distance = Math.abs(other.getX() - source.getX()) + Math.abs(other.getY() - source.getY());
-            if (distance < bestDistance) {{
-                best = other;
-                bestDistance = distance;
-            }}
-        }}
-        return best;
-    }}
-
-    private Unit nearestEnemy(Unit source, int player, PhysicalGameState pgs) {{
-        Unit best = null;
-        int bestDistance = Integer.MAX_VALUE;
-        for (Unit other : new ArrayList<>(pgs.getUnits())) {{
-            if (other.getPlayer() < 0 || other.getPlayer() == player) {{
-                continue;
-            }}
-            int distance = Math.abs(other.getX() - source.getX()) + Math.abs(other.getY() - source.getY());
-            if (distance < bestDistance) {{
-                best = other;
-                bestDistance = distance;
-            }}
-        }}
-        return best;
-    }}
-
-    private Unit nearestResource(Unit source, PhysicalGameState pgs) {{
-        return nearestUnit(source, new ArrayList<>(pgs.getUnits()), -1, resourceType);
-    }}
-
-    private Unit ownBase(int player, PhysicalGameState pgs) {{
-        for (Unit unit : new ArrayList<>(pgs.getUnits())) {{
-            if (unit.getPlayer() == player && unit.getType() == baseType) {{
-                return unit;
-            }}
-        }}
-        return null;
-    }}
-
-    private void applyAutoDefense(int player, GameState gs) {{
-        PhysicalGameState pgs = gs.getPhysicalGameState();
-        for (Unit ally : units(gs)) {{
-            if (!isIdleAlly(ally, player, gs) || !ally.getType().canAttack) {{
-                continue;
-            }}
-            Unit closestEnemy = nearestEnemy(ally, player, pgs);
-            if (closestEnemy != null) {{
-                int distance = Math.abs(closestEnemy.getX() - ally.getX()) + Math.abs(closestEnemy.getY() - ally.getY());
-                if (distance <= 1) {{
-                    commandAttack(ally, closestEnemy);
-                }}
-            }}
-        }}
     }}
 
     @Override
     public List<ParameterSpecification> getParameters() {{
-        List<ParameterSpecification> parameters = new ArrayList<>();
-        parameters.add(new ParameterSpecification("PathFinding", PathFinding.class, new AStarPathFinding()));
-        return parameters;
+        return new ArrayList<>();
     }}
 }}
 """
 
 
-OPERATION_HELPER_METHODS = """
-    private List<Unit> units(GameState gs) {
-        return new ArrayList<>(gs.getUnits());
-    }
+MICRORTS_BLANK_STRATEGY_PROMPT = """Generate Java statements for the body of chooseAction in this MicroRTS AI.
 
-    private boolean commandMove(Unit unit, int x, int y) {
-        if (unit == null || unit.getType() == baseType || unit.getType() == barracksType) {
-            return false;
-        }
-        move(unit, x, y);
-        return true;
-    }
+MicroRTS baseline:
+- The scaffold is based directly on ai.RandomAI from this repository's MicroRTS source.
+- The scaffold owns imports, class declaration, constructors, reset, clone, getAction, and getParameters.
+- getAction already checks gs.canExecuteAnyAction(player), catches exceptions, and returns a valid PlayerAction.
+- The generated body should return a PlayerAction.
 
-    private boolean commandHarvest(Unit worker, Unit resource, Unit base) {
-        if (worker == null || resource == null || base == null) {
-            return false;
-        }
-        if (worker.getType() != workerType || resource.getType() != resourceType || base.getType() != baseType) {
-            return false;
-        }
-        harvest(worker, resource, base);
-        return true;
-    }
-
-    private boolean commandTrain(Unit producer, UnitType unitType) {
-        if (producer == null || unitType == null) {
-            return false;
-        }
-        if (producer.getType() != baseType && producer.getType() != barracksType) {
-            return false;
-        }
-        train(producer, unitType);
-        return true;
-    }
-
-    private boolean commandBuild(Unit worker, UnitType buildingType, int x, int y) {
-        if (worker == null || buildingType == null || worker.getType() != workerType) {
-            return false;
-        }
-        build(worker, buildingType, x, y);
-        return true;
-    }
-
-    private boolean commandAttack(Unit attacker, Unit target) {
-        if (attacker == null || target == null || !attacker.getType().canAttack) {
-            return false;
-        }
-        if (target.getPlayer() == attacker.getPlayer()) {
-            return false;
-        }
-        attack(attacker, target);
-        return true;
-    }
-
-    private boolean commandIdle(Unit unit) {
-        if (unit == null) {
-            return false;
-        }
-        idle(unit);
-        return true;
-    }
-
-    private boolean isIdleAlly(Unit unit, int player, GameState gs) {
-        return unit != null
-                && unit.getPlayer() == player
-                && gs.getUnitAction(unit) == null
-                && getAbstractAction(unit) == null;
-    }
-
-    private Unit nearestUnit(Unit source, List<Unit> units, int owner, UnitType type) {
-        Unit best = null;
-        int bestDistance = Integer.MAX_VALUE;
-        for (Unit other : units) {
-            if (owner != Integer.MIN_VALUE && other.getPlayer() != owner) {
-                continue;
-            }
-            if (type != null && other.getType() != type) {
-                continue;
-            }
-            int distance = Math.abs(other.getX() - source.getX()) + Math.abs(other.getY() - source.getY());
-            if (distance < bestDistance) {
-                best = other;
-                bestDistance = distance;
-            }
-        }
-        return best;
-    }
-
-    private Unit nearestEnemy(Unit source, int player, PhysicalGameState pgs) {
-        Unit best = null;
-        int bestDistance = Integer.MAX_VALUE;
-        for (Unit other : new ArrayList<>(pgs.getUnits())) {
-            if (other.getPlayer() < 0 || other.getPlayer() == player) {
-                continue;
-            }
-            int distance = Math.abs(other.getX() - source.getX()) + Math.abs(other.getY() - source.getY());
-            if (distance < bestDistance) {
-                best = other;
-                bestDistance = distance;
-            }
-        }
-        return best;
-    }
-
-    private Unit nearestResource(Unit source, PhysicalGameState pgs) {
-        return nearestUnit(source, new ArrayList<>(pgs.getUnits()), -1, resourceType);
-    }
-
-    private Unit ownBase(int player, PhysicalGameState pgs) {
-        for (Unit unit : new ArrayList<>(pgs.getUnits())) {
-            if (unit.getPlayer() == player && unit.getType() == baseType) {
-                return unit;
-            }
-        }
-        return null;
-    }
-
-    private void applyAutoDefense(int player, GameState gs) {
-        PhysicalGameState pgs = gs.getPhysicalGameState();
-        for (Unit ally : units(gs)) {
-            if (!isIdleAlly(ally, player, gs) || !ally.getType().canAttack) {
-                continue;
-            }
-            Unit closestEnemy = nearestEnemy(ally, player, pgs);
-            if (closestEnemy != null) {
-                int distance = Math.abs(closestEnemy.getX() - ally.getX()) + Math.abs(closestEnemy.getY() - ally.getY());
-                if (distance <= 1) {
-                    commandAttack(ally, closestEnemy);
-                }
-            }
-        }
-    }
-"""
-
-
-GET_PARAMETERS_METHOD = """
-    @Override
-    public List<ParameterSpecification> getParameters() {
-        List<ParameterSpecification> parameters = new ArrayList<>();
-        parameters.add(new ParameterSpecification("PathFinding", PathFinding.class, new AStarPathFinding()));
-        return parameters;
-    }
-"""
-
-
-MICRORTS_BLANK_STRATEGY_PROMPT = """Generate one Java MicroRTS agent by filling only the blank strategy logic in the template below.
-
-MicroRTS summary:
-- The game is a small real-time strategy environment on a tile map.
-- Players control Base, Barracks, Worker, Light, Heavy, and Ranged units.
-- Neutral Resource units can be harvested by Workers and returned to a friendly Base.
-- Buildings produce units. Bases train Workers. Barracks train Light, Heavy, or Ranged units.
-- Combat units attack enemy units. Workers can harvest, build, move, and attack weakly.
-- A generated agent must decide actions inside getAction and must not call any LLM, network, file, or external service at runtime.
-
-Available high-level operations from AbstractionLayerAI:
-- move(unit, x, y): move a non-building unit toward a map coordinate.
-- harvest(worker, resource, base): make a Worker gather from a Resource and return to a Base.
-- train(baseOrBarracks, unitType): train Worker from Base or combat units from Barracks.
-- build(worker, buildingType, x, y): build Base or Barracks at a target coordinate.
-- attack(attacker, enemy): attack an enemy unit.
-- idle(unit): explicitly do nothing with a unit.
-
-Available helper methods in the template:
-- commandMove(unit, x, y)
-- commandHarvest(worker, resource, base)
-- commandTrain(baseOrBarracks, unitType)
-- commandBuild(worker, buildingType, x, y)
-- commandAttack(attacker, enemy)
-- commandIdle(unit)
-- units(gs)
-- isIdleAlly(unit, player, gs)
-- nearestUnit(source, units, owner, type)
-- nearestEnemy(source, player, pgs)
-- nearestResource(source, pgs)
-- ownBase(player, pgs)
-- applyAutoDefense(player, gs)
+Allowed starting point:
+- PlayerActionGenerator pag = new PlayerActionGenerator(gs, player);
+- return pag.getRandom();
 
 Rules for generated code:
-- Use package ai.generated.
-- The class name must be the exact requested class name.
-- Keep the constructors and helper methods compilable.
-- Output only deterministic Java statements for the body of defineStrategy.
+- Output only Java statements for the body of chooseAction.
 - Do not output package declarations, imports, classes, constructors, fields, or helper method definitions.
-- Only call helper methods listed above. Do not invent helper methods.
-- Do not define commandMove, commandAttack, commandHarvest, commandTrain, commandBuild, commandIdle, nearestUnit, nearestEnemy, nearestResource, ownBase, units, or applyAutoDefense.
-- Do not call nearestIdleAlly.
-- When iterating game units, use units(gs).
-- Do not iterate directly over gs.getUnits().
-- Do not modify collections returned directly by GameState or PhysicalGameState while iterating.
-- Do not use custom imports, Optional, StrategyTable, streams, or lambdas.
-- Do not include HTTP, URL, Socket, Files, environment variables, subprocesses, or runtime LLM code.
-- Return only the defineStrategy body. No markdown fences.
+- Do not use custom imports, Optional, StrategyTable, streams, lambdas, files, network, subprocesses, or runtime LLM code.
+- Do not call invented action APIs.
+- Return only the chooseAction body. No markdown fences.
 
-Blank strategy template:
+Current known-good scaffold:
 ```java
 {template}
 ```
 """
 
 
-DEFAULT_STRATEGY_BODY = """// STRATEGY LOGIC GOES HERE.
-        // Use the command helpers below. Leave units idle when no safe action is chosen."""
-
-
 def render_blank_strategy_agent(class_name: str) -> str:
-    return render_strategy_agent(class_name, DEFAULT_STRATEGY_BODY)
+    return render_strategy_agent(class_name, RANDOM_AI_STRATEGY_BODY)
 
 
 def render_strategy_agent(class_name: str, strategy_body: str) -> str:
-    return BLANK_STRATEGY_AGENT_TEMPLATE.format(class_name=class_name, strategy_body=strategy_body)
+    return RANDOM_AI_AGENT_TEMPLATE.format(class_name=class_name, strategy_body=strategy_body)
 
 
 def microrts_blank_strategy_prompt() -> str:
@@ -441,11 +102,3 @@ def get_seed_prompt_template(name: str) -> str:
     if name == "microrts_blank_strategy_agent":
         return microrts_blank_strategy_prompt()
     raise ValueError(f"Unknown seed_prompt_template: {name}")
-
-
-def render_operation_helper_methods() -> str:
-    return OPERATION_HELPER_METHODS
-
-
-def render_get_parameters_method() -> str:
-    return GET_PARAMETERS_METHOD

@@ -9,7 +9,7 @@ from pathlib import Path
 from eagle.candidate import Candidate
 
 from .backend import GenerationBackend, generated_class_name
-from .agent_template import render_get_parameters_method, render_operation_helper_methods, render_strategy_agent
+from .agent_template import render_strategy_agent
 
 
 @dataclass(frozen=True)
@@ -211,14 +211,16 @@ def normalize_java_agent_source(source: str) -> str:
             source,
             count=1,
         )
-    source = repair_abstraction_agent_source(source)
     return source
 
 
 def extract_strategy_body(output: str) -> str:
-    """Return only the code intended for defineStrategy."""
+    """Return only the code intended for chooseAction."""
 
-    match = re.search(r"\b(?:private|public|protected)?\s*void\s+defineStrategy\s*\([^)]*\)\s*\{", output)
+    match = re.search(
+        r"\b(?:private|public|protected)?\s+PlayerAction\s+chooseAction\s*\([^)]*\)\s*(?:throws\s+Exception\s*)?\{",
+        output,
+    )
     if not match:
         return output.strip()
 
@@ -236,7 +238,7 @@ def extract_strategy_body(output: str) -> str:
 
 def indent_strategy_body(strategy_body: str) -> str:
     if not strategy_body.strip():
-        return "commandIdle(null);"
+        return "return new PlayerAction();"
     return "\n        ".join(line.rstrip() for line in strategy_body.strip().splitlines())
 
 
@@ -262,74 +264,11 @@ def validate_strategy_body(strategy_body: str) -> None:
 
     forbidden_helpers = [
         "nearestIdleAlly",
-        "commandMove",
-        "commandHarvest",
-        "commandTrain",
-        "commandBuild",
-        "commandAttack",
-        "commandIdle",
-        "nearestUnit",
-        "nearestEnemy",
-        "nearestResource",
-        "ownBase",
-        "units",
-        "applyAutoDefense",
+        "chooseAction",
     ]
     for helper_name in forbidden_helpers:
         if re.search(rf"\b(?:private|public|protected)\s+[\w<>\[\], ?]+\s+{helper_name}\s*\(", strategy_body):
             raise ValueError(f"Generated strategy body must not define helper method {helper_name}().")
-
-
-def repair_abstraction_agent_source(source: str) -> str:
-    """Restore required helper methods if an LLM elides the template tail."""
-
-    if "extends AbstractionLayerAI" not in source:
-        return source
-
-    required_imports = [
-        "import ai.abstraction.AbstractionLayerAI;",
-        "import ai.abstraction.pathfinding.AStarPathFinding;",
-        "import ai.abstraction.pathfinding.PathFinding;",
-        "import ai.core.AI;",
-        "import ai.core.ParameterSpecification;",
-        "import java.util.ArrayList;",
-        "import java.util.List;",
-        "import rts.GameState;",
-        "import rts.PhysicalGameState;",
-        "import rts.PlayerAction;",
-        "import rts.units.Unit;",
-        "import rts.units.UnitType;",
-        "import rts.units.UnitTypeTable;",
-    ]
-    for import_line in required_imports:
-        source = ensure_import(source, import_line)
-
-    methods_to_append: list[str] = []
-    if "private boolean commandMove(" not in source or "private void applyAutoDefense(" not in source:
-        methods_to_append.append(render_operation_helper_methods())
-    if "List<ParameterSpecification> getParameters()" not in source:
-        methods_to_append.append(render_get_parameters_method())
-    if not methods_to_append:
-        return source
-    return insert_before_final_class_brace(source, "\n".join(methods_to_append))
-
-
-def ensure_import(source: str, import_line: str) -> str:
-    if import_line in source:
-        return source
-    package_match = re.search(r"(?m)^package\s+ai\.generated;\s*$", source)
-    if package_match:
-        insert_at = package_match.end()
-        return source[:insert_at] + "\n\n" + import_line + source[insert_at:]
-    return import_line + "\n" + source
-
-
-def insert_before_final_class_brace(source: str, block: str) -> str:
-    stripped = source.rstrip()
-    if not stripped.endswith("}"):
-        return source + "\n" + block + "\n"
-    prefix = stripped[:-1].rstrip()
-    return prefix + "\n" + block.rstrip() + "\n}\n"
 
 
 def validate_java_agent_source(source: str, class_name: str) -> None:
@@ -350,7 +289,7 @@ def validate_java_agent_source(source: str, class_name: str) -> None:
     ]
     if any(re.search(pattern, source) for pattern in unsafe_iteration_patterns):
         raise ValueError(
-            "Generated Java agent must iterate over units(gs), not gs.getUnits() or pgs.getUnits()."
+            "Generated Java agent must not iterate directly over gs.getUnits() or pgs.getUnits()."
         )
 
     required_tokens = [

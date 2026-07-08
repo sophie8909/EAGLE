@@ -6,7 +6,7 @@ EAGLE now treats Java-agent generation as a sequence of small stages. The goal i
 
 1. Prompt/input building
    - Owned by `generation/backend.py`.
-   - The backend prompt asks for only the body of `defineStrategy(int player, GameState gs)`.
+   - The backend prompt asks for only the body of `chooseAction(int player, GameState gs)`.
 
 2. LLM generation
    - Owned by the configured `GenerationBackend`.
@@ -18,13 +18,15 @@ EAGLE now treats Java-agent generation as a sequence of small stages. The goal i
 
 4. Java assembly
    - Owned by `generation/agent_template.py`.
-   - The scaffold owns imports, class shell, constructors, shared helpers, and `units(gs)`.
-   - The LLM owns only deterministic statements inside `defineStrategy`.
+   - The scaffold is based directly on MicroRTS `ai.RandomAI`.
+   - The scaffold owns imports, class shell, constructors, `reset`, `clone`, `getAction`, and `getParameters`.
+   - The LLM owns only statements inside `chooseAction`.
+   - This RandomAI-based scaffold is the known-good Java agent starting point. Future generated agents should edit strategy logic from this baseline.
 
 5. Java validation
    - Owned by `generation/java_agent_generator.py`.
    - The generated body must not define imports, classes, fields, helper methods, `Optional`, `StrategyTable`, streams, or lambdas.
-   - Unit loops must use `units(gs)`, not direct `gs.getUnits()` or `pgs.getUnits()`.
+   - Unit loops must not iterate directly over `gs.getUnits()` or `pgs.getUnits()`.
 
 6. Java compilation
    - Owned by `evaluation/compiler.py`.
