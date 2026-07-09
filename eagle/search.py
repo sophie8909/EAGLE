@@ -9,6 +9,7 @@ from pathlib import Path
 from shutil import copy2
 
 from generation.backend import build_generation_backend
+from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE
 
 from .artifacts import write_generation_manifest, write_summary
 from .candidate import Candidate
@@ -202,10 +203,10 @@ def create_offspring(
                 metadata={"operator": "mutation"},
             )
 
-        # Mutation is applied after crossover/copy. The two reflection targets are selected 50/50.
+        # Mutation is usually 50/50, but failed agents first get code-generation reflection.
         if rng.random() < config.mutation_rate:
             feedback_parent = parent_b if child.strategy_prompt == parent_b.strategy_prompt else parent_a
-            mutation = rng.choice(mutations)
+            mutation = choose_mutation(feedback_parent, mutations, rng)
             child = mutation.mutate(
                 child,
                 mutation_context_from_candidate(feedback_parent, generation=generation, index=context_index),
@@ -213,6 +214,14 @@ def create_offspring(
 
         offspring.append(child)
     return offspring
+
+
+def choose_mutation(feedback_parent: Candidate, mutations: tuple[Mutation, Mutation], rng: random.Random) -> Mutation:
+    # Failed agents need code-generation reflection first because their Java did not become a valid evaluated agent.
+    game_performance = number_or_none(feedback_parent.fitness_objectives.get("game_performance"))
+    if game_performance == FAILED_GAME_PERFORMANCE:
+        return mutations[1]
+    return rng.choice(mutations)
 
 
 def mutation_context_from_candidate(candidate: Candidate, *, generation: int, index: int) -> MutationContext:

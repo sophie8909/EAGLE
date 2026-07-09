@@ -11,7 +11,7 @@ from eagle.crossover import Crossover, CrossoverContext
 from eagle.evaluation import evaluate_candidate
 from eagle.mutation import Mutation, MutationContext
 from eagle.offspring import normalize_prompt
-from eagle.search import run_search
+from eagle.search import choose_mutation, run_search
 from eagle.selection import Selection, SelectionContext, dominates
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
@@ -155,6 +155,14 @@ population_size: 3
         self.assertIn("Code generation reflection 1:", child.previous_code)
         self.assertIn("alignment_score=0.250", child.previous_code)
         self.assertEqual(child.generation_prompt, parent.generation_prompt)
+
+    def test_failed_game_performance_selects_code_generation_reflection(self) -> None:
+        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+        strategy_mutation = Mutation(config, method="strategy_reflection")
+        code_mutation = Mutation(config, method="code_generation_reflection")
+        failed_parent = Candidate(fitness_objectives={"game_performance": FAILED_GAME_PERFORMANCE})
+        selected = choose_mutation(failed_parent, (strategy_mutation, code_mutation), random.Random(1))
+        self.assertIs(selected, code_mutation)
 
     def test_unknown_mutation_method_raises_value_error(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
