@@ -30,7 +30,15 @@ def main() -> int:
     parser.add_argument("run_dir", help="Run directory, for example runs/20260708_123456_000000")
     parser.add_argument("candidate_id", help="Candidate id from a run artifact or generation population file")
     parser.add_argument("--map", default=None, help=f"MicroRTS map path. Default: {DEFAULT_MAP}")
-    parser.add_argument("--opponent", default=DEFAULT_OPPONENT, help=f"Player 1 opponent AI class. Default: {DEFAULT_OPPONENT}")
+    parser.add_argument(
+        "--opponent",
+        default=DEFAULT_OPPONENT,
+        help=(
+            "Player 1 opponent Java class name. Common choices: "
+            "ai.RandomAI, ai.RandomBiasedAI, ai.abstraction.LightRush, ai.abstraction.HeavyRush. "
+            f"Default: {DEFAULT_OPPONENT}"
+        ),
+    )
     parser.add_argument("--max-cycles", type=int, default=None, help="Maximum MicroRTS game cycles")
     parser.add_argument("--utt-version", type=int, default=1, help="UnitTypeTable version passed to MicroRTS")
     args = parser.parse_args()
