@@ -22,12 +22,3 @@ def normalize_prompt(prompt: str, *, max_chars: int, max_lines: int) -> str:
 
     prompt = "\n".join(lines[:max_lines])
     return prompt[:max_chars].rstrip()
-
-
-def prompt_length(prompt: str) -> dict[str, int]:
-    """Return the simple prompt size numbers saved with each candidate."""
-
-    return {
-        "chars": len(prompt),
-        "lines": len(prompt.splitlines()),
-    }

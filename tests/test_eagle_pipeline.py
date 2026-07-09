@@ -287,7 +287,7 @@ population_size: 3
             self.assertTrue((result.run_dir / "generated_agents").is_dir())
             self.assertTrue((result.run_dir / "results.jsonl").exists())
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
-            self.assertEqual(summary["objectives"], ["game_performance", "strategy_alignment", "prompt_length"])
+            self.assertEqual(summary["objectives"], ["game_performance", "strategy_alignment"])
             self.assertEqual(len(summary["final_population"]), 3)
             candidate_dir = next((result.run_dir / "candidates").iterdir())
             self.assertTrue((candidate_dir / "strategy_prompt.txt").exists())
@@ -299,8 +299,7 @@ population_size: 3
             self.assertTrue((candidate_dir / "objectives.json").exists())
             self.assertTrue((candidate_dir / "candidate_result.json").exists())
             individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
-            self.assertIn("prompt_chars", individual["metadata"])
-            self.assertIn("prompt_lines", individual["metadata"])
+            self.assertNotIn("prompt_length", individual["fitness_objectives"])
 
     def test_generate_java_agent_uses_candidate_class_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

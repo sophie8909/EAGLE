@@ -17,7 +17,6 @@ from generation.java_agent_generator import GeneratedJavaAgent, ValidationResult
 from .artifacts import append_result, write_candidate_artifacts
 from .candidate import Candidate
 from .config import ExperimentConfig
-from .offspring import prompt_length
 
 
 @dataclass(frozen=True)
@@ -155,13 +154,10 @@ def evaluate_candidate(
         alignment_result = StrategyAlignmentResult(score=0.0, rationale=f"{failure_category}; alignment not evaluated.")
 
     # Objective computation converts compile, match, and alignment results into fitness values.
-    length = prompt_length(candidate.strategy_prompt)
     objectives = compute_objectives(
         compile_result=compile_result,
         game_metrics=game_metrics,
         alignment_result=alignment_result,
-        prompt_chars=length["chars"],
-        max_prompt_chars=config.max_prompt_chars,
         failure_category=failure_category,
     )
     status = "failed" if failure_category is not None else "evaluated"
@@ -181,8 +177,6 @@ def evaluate_candidate(
         status=status,
         metadata={
             **candidate.metadata,
-            "prompt_chars": length["chars"],
-            "prompt_lines": length["lines"],
             "failure_category": failure_category,
         },
     )
@@ -308,16 +302,12 @@ def compute_objectives(
     compile_result: CompileResult | None,
     game_metrics: GameMetrics | None,
     alignment_result: StrategyAlignmentResult | None,
-    prompt_chars: int,
-    max_prompt_chars: int,
     failure_category: str | None,
 ) -> dict[str, float]:
     return build_objectives(
         compile_result=compile_result,
         game_metrics=game_metrics,
         alignment_result=alignment_result,
-        prompt_chars=prompt_chars,
-        max_prompt_chars=max_prompt_chars,
         failure_category=failure_category,
     )
 
@@ -339,8 +329,6 @@ def print_progress(
     print(
         f"[gen {generation} cand {index + 1}/{population_size}] "
         f"{candidate.id} status={candidate.status} "
-        f"prompt_chars={candidate.metadata.get('prompt_chars', 0)} "
-        f"prompt_lines={candidate.metadata.get('prompt_lines', 0)} "
         f"objectives={candidate.fitness_objectives}{detail}",
         flush=True,
     )

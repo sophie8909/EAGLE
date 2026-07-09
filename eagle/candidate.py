@@ -54,7 +54,6 @@ class Candidate:
         return (
             float(self.fitness_objectives.get("game_performance", 0.0)),
             float(self.fitness_objectives.get("strategy_alignment", 0.0)),
-            float(self.fitness_objectives.get("prompt_length", 0.0)),
         )
 
     def generation_input(self, *, class_name: str = "") -> str:

@@ -95,7 +95,7 @@ def write_summary(
         "mock": mock,
         "generations": config.generations,
         "population_size": config.population_size,
-        "objectives": ["game_performance", "strategy_alignment", "prompt_length"],
+        "objectives": ["game_performance", "strategy_alignment"],
         "best_candidate": None if best_candidate is None else best_candidate.to_json_dict(),
         "pareto_fronts": [[candidate.id for candidate in front] for front in pareto_fronts],
         "final_population": [candidate.to_json_dict() for candidate in final_population],
