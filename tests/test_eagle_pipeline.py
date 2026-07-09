@@ -50,32 +50,32 @@ population_size: 3
         self.assertEqual(config.max_prompt_chars, 4000)
         self.assertEqual(config.max_prompt_lines, 80)
 
-    def test_training_opponent_defaults_to_random_ai_player1(self) -> None:
+    def test_training_opponent_defaults_to_lightrush_player1(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
-        self.assertEqual(config.opponent, "ai.RandomAI")
+        self.assertEqual(config.opponent, "ai.abstraction.LightRush")
 
-    def test_training_config_ignores_non_random_ai_opponent(self) -> None:
+    def test_training_config_ignores_non_lightrush_opponent(self) -> None:
         config = ExperimentConfig.from_mapping(
             {
                 "seed_prompts": ["Generate an agent."],
                 "opponent": "ai.PassiveAI",
             }
         )
-        self.assertEqual(config.opponent, "ai.RandomAI")
+        self.assertEqual(config.opponent, "ai.abstraction.LightRush")
 
-    def test_training_match_command_uses_candidate_player0_and_random_ai_player1(self) -> None:
+    def test_training_match_command_uses_candidate_player0_and_lightrush_player1(self) -> None:
         result = run_microrts_match(
             microrts_dir=Path("third_party/microrts"),
             classes_dir=Path("classes"),
             agent_class="ai.generated.GeneratedAgent_test",
-            opponent="ai.RandomAI",
+            opponent="ai.abstraction.LightRush",
             tick_limit=100,
             match_index=0,
             mock=True,
         )
         self.assertLess(result.command.index("--ai1"), result.command.index("--ai2"))
         self.assertEqual(result.command[result.command.index("--ai1") + 1], "ai.generated.GeneratedAgent_test")
-        self.assertEqual(result.command[result.command.index("--ai2") + 1], "ai.RandomAI")
+        self.assertEqual(result.command[result.command.index("--ai2") + 1], "ai.abstraction.LightRush")
 
     def test_normalize_prompt_truncates_long_prompt(self) -> None:
         prompt = "\n".join(f"line {index}" for index in range(10))

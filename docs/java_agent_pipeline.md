@@ -21,7 +21,7 @@ EAGLE now treats Java-agent generation as a sequence of small stages. The goal i
    - The initial strategy body starts from MicroRTS `ai.PassiveAI`.
    - The scaffold owns imports, class shell, constructors, `reset`, `clone`, `getAction`, and `getParameters`.
    - The LLM owns only statements inside `chooseAction`.
-   - This PassiveAI-style no-op body is the initial evolvable prompt starting point. EA training still evaluates against `ai.RandomAI` as player 1.
+   - This PassiveAI-style no-op body is the initial evolvable prompt starting point. EA training evaluates against `ai.abstraction.LightRush` as player 1.
 
 5. Java validation
    - Owned by `generation/java_agent_generator.py`.
