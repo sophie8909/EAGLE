@@ -66,6 +66,24 @@ def run_microrts_match(
         raw_result = {
             "winner": 0 if mock_score >= 0 else 1,
             "ticks": tick_limit,
+            "players": {
+                "p0": {
+                    "unit_count": 0,
+                    "player_resources": 50.0 + mock_score,
+                    "carried_resources": 0.0,
+                    "resource_total": 50.0 + mock_score,
+                    "material_total": 0.0,
+                    "unit_types": {},
+                },
+                "p1": {
+                    "unit_count": 0,
+                    "player_resources": 50.0,
+                    "carried_resources": 0.0,
+                    "resource_total": 50.0,
+                    "material_total": 0.0,
+                    "unit_types": {},
+                },
+            },
             "final_scoreboard": {
                 "p0_resources": 50.0 + mock_score,
                 "p1_resources": 50.0,
@@ -141,16 +159,34 @@ def final_match_values(payload: dict[str, Any], *, fallback_score: float) -> dic
     """Return final match values from player 0's perspective."""
 
     scoreboard = payload.get("final_scoreboard") or {}
-    player0_resource = float_or_none(scoreboard.get("p0_resources", scoreboard.get("p0_eval")))
-    player1_resource = float_or_none(scoreboard.get("p1_resources", scoreboard.get("p1_eval")))
+    players = payload.get("players") or {}
+    p0 = players.get("p0") or {}
+    p1 = players.get("p1") or {}
+    player0_resource = float_or_none(p0.get("resource_total"))
+    player1_resource = float_or_none(p1.get("resource_total"))
+    player0_material = float_or_none(p0.get("material_total"))
+    player1_material = float_or_none(p1.get("material_total"))
+
+    if player0_resource is None:
+        player0_resource = float_or_none(scoreboard.get("p0_resources", scoreboard.get("p0_eval")))
+    if player1_resource is None:
+        player1_resource = float_or_none(scoreboard.get("p1_resources", scoreboard.get("p1_eval")))
+    if player0_material is None:
+        player0_material = float_or_none(scoreboard.get("p0_material", scoreboard.get("p0_eval")))
+    if player1_material is None:
+        player1_material = float_or_none(scoreboard.get("p1_material", scoreboard.get("p1_eval")))
     if player0_resource is None:
         player0_resource = float(fallback_score)
     if player1_resource is None:
         player1_resource = 0.0
+    if player0_material is None:
+        player0_material = 0.0
+    if player1_material is None:
+        player1_material = 0.0
     return {
         "player0_resource": player0_resource,
         "player1_resource": player1_resource,
-        "weighted_resource_difference": player0_resource - player1_resource,
+        "weighted_resource_difference": (player0_resource + player0_material) - (player1_resource + player1_material),
         "winner": int_or_none(payload.get("winner")),
         "final_cycle": int_or_none(payload.get("final_cycle", payload.get("ticks"))),
     }

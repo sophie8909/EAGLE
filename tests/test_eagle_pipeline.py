@@ -419,11 +419,17 @@ public class GeneratedAgent_test extends RandomBiasedAI {
             ok=True,
             score=0.5,
             command=[],
-            raw_result={"winner": 0, "final_scoreboard": {"p0_resources": 14, "p1_resources": 8}},
+            raw_result={
+                "winner": 0,
+                "players": {
+                    "p0": {"resource_total": 14, "material_total": 3},
+                    "p1": {"resource_total": 8, "material_total": 1},
+                },
+            },
         )
         metrics = compute_game_metrics([result])
-        self.assertEqual(metrics.resource_difference, 6)
-        self.assertEqual(metrics.weighted_resource_difference, 6)
+        self.assertEqual(metrics.resource_difference, 8)
+        self.assertEqual(metrics.weighted_resource_difference, 8)
         self.assertEqual(metrics.player0_resource, 14)
         self.assertEqual(metrics.player1_resource, 8)
         self.assertEqual(metrics.player_resource, 14)
@@ -431,7 +437,7 @@ public class GeneratedAgent_test extends RandomBiasedAI {
         self.assertEqual(metrics.winner, 0)
         self.assertEqual(metrics.to_json_dict()["player0_resource"], 14)
         self.assertEqual(metrics.resource_breakdown["player0_resource"], 14)
-        self.assertGreater(metrics.objective, 6)
+        self.assertEqual(metrics.objective, 108)
 
     def test_player0_resource_advantage_is_positive(self) -> None:
         metrics = compute_game_metrics(
@@ -440,7 +446,12 @@ public class GeneratedAgent_test extends RandomBiasedAI {
                     ok=True,
                     score=0.0,
                     command=[],
-                    raw_result={"final_scoreboard": {"p0_resources": 20, "p1_resources": 5}},
+                    raw_result={
+                        "players": {
+                            "p0": {"resource_total": 20, "material_total": 0},
+                            "p1": {"resource_total": 5, "material_total": 0},
+                        }
+                    },
                 )
             ]
         )
@@ -453,7 +464,12 @@ public class GeneratedAgent_test extends RandomBiasedAI {
                     ok=True,
                     score=0.0,
                     command=[],
-                    raw_result={"final_scoreboard": {"p0_resources": 4, "p1_resources": 11}},
+                    raw_result={
+                        "players": {
+                            "p0": {"resource_total": 4, "material_total": 0},
+                            "p1": {"resource_total": 11, "material_total": 0},
+                        }
+                    },
                 )
             ]
         )
@@ -466,11 +482,71 @@ public class GeneratedAgent_test extends RandomBiasedAI {
                     ok=True,
                     score=0.0,
                     command=[],
-                    raw_result={"final_scoreboard": {"p0_resources": 9, "p1_resources": 9}},
+                    raw_result={
+                        "players": {
+                            "p0": {"resource_total": 9, "material_total": 0},
+                            "p1": {"resource_total": 9, "material_total": 0},
+                        }
+                    },
                 )
             ]
         )
         self.assertEqual(metrics.weighted_resource_difference, 0)
+        self.assertEqual(metrics.objective, 0)
+
+    def test_win_loss_bonus_is_plus_or_minus_100(self) -> None:
+        win_metrics = compute_game_metrics(
+            [
+                MatchResult(
+                    ok=True,
+                    score=0.0,
+                    command=[],
+                    raw_result={
+                        "winner": 0,
+                        "players": {
+                            "p0": {"resource_total": 5, "material_total": 0},
+                            "p1": {"resource_total": 5, "material_total": 0},
+                        },
+                    },
+                )
+            ]
+        )
+        loss_metrics = compute_game_metrics(
+            [
+                MatchResult(
+                    ok=True,
+                    score=0.0,
+                    command=[],
+                    raw_result={
+                        "winner": 1,
+                        "players": {
+                            "p0": {"resource_total": 5, "material_total": 0},
+                            "p1": {"resource_total": 5, "material_total": 0},
+                        },
+                    },
+                )
+            ]
+        )
+        self.assertEqual(win_metrics.objective, 100)
+        self.assertEqual(loss_metrics.objective, -100)
+
+    def test_unit_material_cost_is_added_to_resource_difference(self) -> None:
+        metrics = compute_game_metrics(
+            [
+                MatchResult(
+                    ok=True,
+                    score=0.0,
+                    command=[],
+                    raw_result={
+                        "players": {
+                            "p0": {"resource_total": 3, "material_total": 10},
+                            "p1": {"resource_total": 5, "material_total": 1},
+                        }
+                    },
+                )
+            ]
+        )
+        self.assertEqual(metrics.weighted_resource_difference, 7)
 
     def test_compile_failure_gets_failed_game_performance(self) -> None:
         objectives = build_objectives(

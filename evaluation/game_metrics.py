@@ -50,8 +50,7 @@ def compute_game_metrics(match_results: list[MatchResult]) -> GameMetrics:
     player0_resource = sum(item["player0_resource"] for item in summaries) / len(summaries)
     player1_resource = sum(item["player1_resource"] for item in summaries) / len(summaries)
     win_bonus = sum(item["win_score"] for item in summaries) / len(summaries)
-    score = sum(float(result.score) for result in successful) / len(successful)
-    objective = weighted_resource_diff + win_bonus + score
+    objective = win_bonus + weighted_resource_diff
     return GameMetrics(
         resource_difference=weighted_resource_diff,
         objective=objective,
@@ -66,13 +65,17 @@ def compute_game_metrics(match_results: list[MatchResult]) -> GameMetrics:
             "player0_resource": player0_resource,
             "player1_resource": player1_resource,
             "weighted_resource_difference": weighted_resource_diff,
+            "win_bonus": win_bonus,
             "player_resource": player0_resource,
             "enemy_resource": player1_resource,
             "matches": [
                 {
                     "player0_resource": item["player0_resource"],
                     "player1_resource": item["player1_resource"],
+                    "player0_material": item["player0_material"],
+                    "player1_material": item["player1_material"],
                     "weighted_resource_difference": item["weighted_resource_difference"],
+                    "win_score": item["win_score"],
                     "unit_stockpiles": item["unit_stockpiles"],
                     "winner": item["winner"],
                     "final_cycle": item["final_cycle"],
@@ -88,21 +91,35 @@ def compute_game_metrics(match_results: list[MatchResult]) -> GameMetrics:
 def summarize_match(result: MatchResult) -> dict[str, Any]:
     payload = result.raw_result or {}
     scoreboard = payload.get("final_scoreboard") or {}
+    players = payload.get("players") or {}
+    p0 = players.get("p0") or {}
+    p1 = players.get("p1") or {}
     p0_resources = result.player0_resource
     if p0_resources is None:
-        p0_resources = _float_or_default(scoreboard.get("p0_resources", scoreboard.get("p0_eval")), result.score)
+        p0_resources = _float_or_default(
+            p0.get("resource_total", scoreboard.get("p0_resources", scoreboard.get("p0_eval"))),
+            result.score,
+        )
     p1_resources = result.player1_resource
     if p1_resources is None:
-        p1_resources = _float_or_default(scoreboard.get("p1_resources", scoreboard.get("p1_eval")), 0.0)
+        p1_resources = _float_or_default(
+            p1.get("resource_total", scoreboard.get("p1_resources", scoreboard.get("p1_eval"))),
+            0.0,
+        )
+    p0_material = _float_or_default(p0.get("material_total", scoreboard.get("p0_material")), 0.0)
+    p1_material = _float_or_default(p1.get("material_total", scoreboard.get("p1_material")), 0.0)
     weighted_resource_difference = result.weighted_resource_difference
     if weighted_resource_difference is None:
-        weighted_resource_difference = p0_resources - p1_resources
+        weighted_resource_difference = (p0_resources + p0_material) - (p1_resources + p1_material)
     winner = result.winner if result.winner is not None else payload.get("winner")
-    win_score = 1.0 if winner == 0 else -1.0 if winner == 1 else 0.0
+    win_score = 100.0 if winner == 0 else -100.0 if winner == 1 else 0.0
     return {
         # Player 0 is always the generated candidate during EA evaluation.
+        # The resource difference counts stored resources plus unit material value.
         "player0_resource": p0_resources,
         "player1_resource": p1_resources,
+        "player0_material": p0_material,
+        "player1_material": p1_material,
         "weighted_resource_difference": weighted_resource_difference,
         "player_resource": p0_resources,
         "enemy_resource": p1_resources,
