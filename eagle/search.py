@@ -235,6 +235,11 @@ def mutation_context_from_candidate(candidate: Candidate, *, generation: int, in
         resource_breakdown=candidate.game_eval_result.get("resource_breakdown") or {},
         alignment_score=number_or_none(candidate.strategy_alignment_result.get("score")),
         alignment_reason=str(candidate.strategy_alignment_result.get("rationale", "")),
+        compile_success=candidate.compile_status == "success",
+        validation_success=candidate.metadata.get("failure_category") != "Java validation failure",
+        runtime_success=candidate.status == "evaluated",
+        error_category=str(candidate.metadata.get("failure_category") or ""),
+        error_message=str(candidate.metadata.get("failure_reason") or ""),
     )
 
 

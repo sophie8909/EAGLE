@@ -31,6 +31,16 @@ from generation.java_agent_generator import (
 from scripts.analyze_run import analyze_run, format_report
 
 
+class RecordingMutationBackend:
+    def __init__(self, responses: list[str]) -> None:
+        self.responses = responses
+        self.prompts: list[str] = []
+
+    def generate(self, prompt: str) -> str:
+        self.prompts.append(prompt)
+        return self.responses[len(self.prompts) - 1]
+
+
 class EaglePipelineTests(unittest.TestCase):
     def test_parse_minimal_yaml(self) -> None:
         payload = parse_minimal_yaml(
@@ -115,6 +125,7 @@ population_size: 3
         self.assertIn("Previous Java code:\n(empty)", candidate.generation_input())
 
     def test_mutation_dispatch_calls_strategy_reflection(self) -> None:
+        backend = RecordingMutationBackend(["strategy analysis", "revised strategy only"])
         config = ExperimentConfig.from_mapping(
             {
                 "seed_prompts": ["seed"],
@@ -128,18 +139,24 @@ population_size: 3
             previous_code="old code",
             generation_prompt="generate",
         )
-        child = Mutation(config, method="strategy_reflection").mutate(
+        child = Mutation(config, method="strategy_reflection", backend=backend).mutate(
             parent,
             MutationContext(generation=1, index=0, game_performance=3.0, player_resource=12.0, enemy_resource=7.0),
         )
         self.assertEqual(child.generation, 1)
         self.assertEqual(child.parent_ids, ("parent",))
-        self.assertIn("Strategy reflection 1:", child.strategy_prompt)
+        self.assertEqual(len(backend.prompts), 2)
+        self.assertIn("Analyze this strategy's result.", backend.prompts[0])
+        self.assertIn("strategy analysis", backend.prompts[1])
+        self.assertEqual(child.strategy_prompt, "revised strategy only")
         self.assertEqual(child.previous_code, parent.previous_code)
         self.assertEqual(child.generation_prompt, parent.generation_prompt)
+        self.assertEqual(child.metadata["mutation_reflection"], "strategy analysis")
+        self.assertEqual(child.metadata["mutation_rewrite"], "revised strategy only")
         self.assertEqual(child.metadata["operator"], "mutation")
 
     def test_mutation_dispatch_calls_code_generation_reflection(self) -> None:
+        backend = RecordingMutationBackend(["code analysis", "revised generation instruction"])
         config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
         parent = Candidate(
             id="parent",
@@ -147,14 +164,29 @@ population_size: 3
             previous_code="return pag.getRandom();",
             generation_prompt="generate",
         )
-        child = Mutation(config, method="code_generation_reflection").mutate(
+        child = Mutation(config, method="code_generation_reflection", backend=backend).mutate(
             parent,
-            MutationContext(generation=1, index=0, alignment_score=0.25, alignment_reason="used random action"),
+            MutationContext(
+                generation=1,
+                index=0,
+                alignment_score=0.25,
+                alignment_reason="used random action",
+                compile_success=False,
+                validation_success=True,
+                runtime_success=False,
+                error_category="Java compile failure",
+                error_message="cannot find symbol",
+            ),
         )
+        self.assertEqual(len(backend.prompts), 2)
+        self.assertIn("Analyze why this code-generation instruction produced this result.", backend.prompts[0])
+        self.assertIn("cannot find symbol", backend.prompts[0])
+        self.assertIn("code analysis", backend.prompts[1])
         self.assertEqual(child.strategy_prompt, parent.strategy_prompt)
-        self.assertIn("Code generation reflection 1:", child.previous_code)
-        self.assertIn("alignment_score=0.250", child.previous_code)
-        self.assertEqual(child.generation_prompt, parent.generation_prompt)
+        self.assertEqual(child.previous_code, parent.previous_code)
+        self.assertEqual(child.generation_prompt, "revised generation instruction")
+        self.assertEqual(child.metadata["mutation_reflection"], "code analysis")
+        self.assertEqual(child.metadata["mutation_rewrite"], "revised generation instruction")
 
     def test_failed_game_performance_selects_code_generation_reflection(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})

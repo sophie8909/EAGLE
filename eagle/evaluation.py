@@ -178,6 +178,7 @@ def evaluate_candidate(
         metadata={
             **candidate.metadata,
             "failure_category": failure_category,
+            "failure_reason": failure_reason,
         },
     )
     result = CandidateResult(
