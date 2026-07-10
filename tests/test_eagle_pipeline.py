@@ -14,8 +14,16 @@ from eagle.offspring import normalize_prompt
 from eagle.search import choose_mutation, run_search
 from eagle.selection import Selection, SelectionContext, dominates
 from evaluation.compiler import CompileResult, compile_generated_agent
+from evaluation.game_performance import (
+    GamePerformanceConfig,
+    compute_performance_breakdown,
+    parse_round_state,
+    read_tick_telemetry,
+    telemetry_summary,
+    tick_telemetry,
+)
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
-from evaluation.microrts_runner import MatchResult, run_microrts_match
+from evaluation.microrts_runner import MatchResult, persist_match_artifacts, run_microrts_match
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE, build_objectives
 from evaluation.strategy_alignment import StrategyAlignmentResult
 from generation.agent_template import microrts_blank_strategy_prompt, render_blank_strategy_agent, render_strategy_agent
@@ -74,15 +82,16 @@ population_size: 3
         self.assertEqual(config.opponent, "ai.abstraction.LightRush")
 
     def test_training_match_command_uses_candidate_player0_and_lightrush_player1(self) -> None:
-        result = run_microrts_match(
-            microrts_dir=Path("third_party/microrts"),
-            classes_dir=Path("classes"),
-            agent_class="ai.generated.GeneratedAgent_test",
-            opponent="ai.abstraction.LightRush",
-            tick_limit=100,
-            match_index=0,
-            mock=True,
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = run_microrts_match(
+                microrts_dir=Path("third_party/microrts"),
+                classes_dir=Path(temp_dir) / "classes",
+                agent_class="ai.generated.GeneratedAgent_test",
+                opponent="ai.abstraction.LightRush",
+                tick_limit=100,
+                match_index=0,
+                mock=True,
+            )
         self.assertLess(result.command.index("--ai1"), result.command.index("--ai2"))
         self.assertEqual(result.command[result.command.index("--ai1") + 1], "ai.generated.GeneratedAgent_test")
         self.assertEqual(result.command[result.command.index("--ai2") + 1], "ai.abstraction.LightRush")
@@ -476,7 +485,7 @@ public class GeneratedAgent_test extends RandomBiasedAI {
         self.assertEqual(metrics.winner, 0)
         self.assertEqual(metrics.to_json_dict()["player0_resource"], 14)
         self.assertEqual(metrics.resource_breakdown["player0_resource"], 14)
-        self.assertEqual(metrics.objective, 108)
+        self.assertEqual(metrics.objective, 1012)
 
     def test_player0_resource_advantage_is_positive(self) -> None:
         metrics = compute_game_metrics(
@@ -566,8 +575,8 @@ public class GeneratedAgent_test extends RandomBiasedAI {
                 )
             ]
         )
-        self.assertEqual(win_metrics.objective, 100)
-        self.assertEqual(loss_metrics.objective, -100)
+        self.assertEqual(win_metrics.objective, 1000)
+        self.assertEqual(loss_metrics.objective, -1000)
 
     def test_unit_material_cost_is_added_to_resource_difference(self) -> None:
         metrics = compute_game_metrics(
@@ -586,6 +595,158 @@ public class GeneratedAgent_test extends RandomBiasedAI {
             ]
         )
         self.assertEqual(metrics.weighted_resource_difference, 7)
+
+    def test_longer_survival_scores_higher_for_matching_losses(self) -> None:
+        config = GamePerformanceConfig(survival_weight=200.0)
+        tick = tick_telemetry(0, 5, 5, {}, {}, config)
+        short_loss = compute_performance_breakdown(
+            result="p1_win",
+            winner=1,
+            end_tick=10,
+            max_tick=100,
+            ticks=[tick],
+            scoring_config=config,
+        )
+        long_loss = compute_performance_breakdown(
+            result="p1_win",
+            winner=1,
+            end_tick=30,
+            max_tick=100,
+            ticks=[tick],
+            scoring_config=config,
+        )
+        self.assertGreater(long_loss.total_performance, short_loss.total_performance)
+        self.assertGreater(long_loss.survival_score, short_loss.survival_score)
+
+    def test_average_state_score_ignores_trace_length(self) -> None:
+        config = GamePerformanceConfig()
+        one_tick = [tick_telemetry(0, 5, 3, {}, {}, config)]
+        three_ticks = [
+            tick_telemetry(0, 5, 3, {}, {}, config),
+            tick_telemetry(1, 5, 3, {}, {}, config),
+            tick_telemetry(2, 5, 3, {}, {}, config),
+        ]
+        short = compute_performance_breakdown(
+            result="draw",
+            winner=-1,
+            end_tick=1,
+            max_tick=10,
+            ticks=one_tick,
+            scoring_config=config,
+        )
+        long = compute_performance_breakdown(
+            result="draw",
+            winner=-1,
+            end_tick=3,
+            max_tick=10,
+            ticks=three_ticks,
+            scoring_config=config,
+        )
+        self.assertEqual(short.average_state_score, long.average_state_score)
+
+    def test_player_enemy_perspective_inverts_state_differences(self) -> None:
+        text = "\n".join(
+            [
+                "current time 7 p0 player 0(9) p1 player 1(4)",
+                "(1,1) Ally Worker Unit {HP=1, resources=0}",
+                "(2,2) Enemy Light Unit {HP=4, resources=0}",
+            ]
+        )
+        config = GamePerformanceConfig()
+        player0 = parse_round_state(text, player_index=0, scoring_config=config)
+        player1 = parse_round_state(text, player_index=1, scoring_config=config)
+        self.assertEqual(player0.resource_diff, -player1.resource_diff)
+        self.assertEqual(player0.army_value_diff, -player1.army_value_diff)
+        self.assertEqual(player0.state_score, -player1.state_score)
+
+    def test_terminal_tick_appears_once_in_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            content = "\n".join(
+                [
+                    "current time 3 p0 player 0(5) p1 player 1(5)",
+                    "(1,1) Ally Base Unit {HP=10, resources=0}",
+                    "(6,6) Enemy Base Unit {HP=10, resources=0}",
+                ]
+            )
+            (root / "round_000000.log").write_text("current time 0 p0 player 0(5) p1 player 1(5)\n", encoding="utf-8")
+            (root / "round_000003.log").write_text(content, encoding="utf-8")
+            (root / "round_000003_duplicate.log").write_text(content, encoding="utf-8")
+            ticks = read_tick_telemetry(root, player_index=0, scoring_config=GamePerformanceConfig())
+        self.assertEqual([tick.tick for tick in ticks], [0, 3])
+
+    def test_separate_matches_do_not_overwrite_replay_and_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first = run_microrts_match(
+                microrts_dir=Path("third_party/microrts"),
+                classes_dir=root / "classes",
+                agent_class="ai.generated.GeneratedAgent_test",
+                opponent="ai.abstraction.LightRush",
+                tick_limit=10,
+                match_index=0,
+                match_artifacts_dir=root / "matches",
+                mock=True,
+            )
+            second = run_microrts_match(
+                microrts_dir=Path("third_party/microrts"),
+                classes_dir=root / "classes",
+                agent_class="ai.generated.GeneratedAgent_test",
+                opponent="ai.abstraction.LightRush",
+                tick_limit=10,
+                match_index=1,
+                match_artifacts_dir=root / "matches",
+                mock=True,
+            )
+            self.assertNotEqual(first.replay_path, second.replay_path)
+            self.assertNotEqual(first.telemetry_path, second.telemetry_path)
+            self.assertTrue((root / first.replay_path).exists())
+            self.assertTrue((root / first.telemetry_path).exists())
+            self.assertTrue((root / second.replay_path).exists())
+            self.assertTrue((root / second.telemetry_path).exists())
+
+    def test_performance_total_is_sum_of_four_components(self) -> None:
+        config = GamePerformanceConfig()
+        breakdown = compute_performance_breakdown(
+            result="p0_win",
+            winner=0,
+            end_tick=5,
+            max_tick=10,
+            ticks=[tick_telemetry(5, 7, 2, {"Worker": 1}, {"Light": 1}, config)],
+            scoring_config=config,
+        )
+        self.assertEqual(
+            breakdown.total_performance,
+            breakdown.result_score
+            + breakdown.average_state_score
+            + breakdown.survival_score
+            + breakdown.final_resource_diff,
+        )
+
+    def test_persistence_failure_reports_error_without_false_loss(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            round_state_dir = root / "round_states"
+            round_state_dir.mkdir()
+            (round_state_dir / "round_000000.log").write_text(
+                "current time 0 p0 player 0(5) p1 player 1(5)\n",
+                encoding="utf-8",
+            )
+            telemetry_path = root / "telemetry.json"
+            telemetry_path.mkdir()
+            telemetry, summary, error = persist_match_artifacts(
+                raw_result={"winner": 0, "final_tick": 0, "result": "p0_win"},
+                round_state_dir=round_state_dir,
+                replay_path=root / "replay.xml",
+                telemetry_path=telemetry_path,
+                summary_path=root / "summary.json",
+                match_dir=root,
+                tick_limit=10,
+                scoring_config=GamePerformanceConfig(),
+            )
+        self.assertIsNotNone(error)
+        self.assertEqual(summary["result"], "p0_win")
+        self.assertEqual(telemetry.performance.result_score, 1000)
 
     def test_compile_failure_gets_failed_game_performance(self) -> None:
         objectives = build_objectives(

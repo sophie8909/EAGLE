@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from evaluation.compiler import CompileResult, compile_generated_agent
+from evaluation.game_performance import GamePerformanceConfig
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.microrts_runner import MatchResult, run_microrts_match
 from evaluation.nsga2_objectives import build_objectives
@@ -69,6 +70,7 @@ def evaluate_population(
             alignment_backend=alignment_backend,
             generated_agents_dir=generated_agents_dir,
             classes_dir=classes_dir,
+            match_artifacts_dir=candidates_dir / candidate.id / "matches",
             mock=mock,
             ordinal=index,
         )
@@ -94,6 +96,7 @@ def evaluate_candidate(
     classes_dir: Path,
     mock: bool,
     ordinal: int,
+    match_artifacts_dir: Path | None = None,
 ) -> CandidateEvaluation:
     agent: GeneratedJavaAgent | None = None
     compile_result: CompileResult | None = None
@@ -133,6 +136,7 @@ def evaluate_candidate(
             agent=agent,
             config=config,
             classes_dir=classes_dir,
+            match_artifacts_dir=match_artifacts_dir,
             mock=mock,
             ordinal=ordinal,
         )
@@ -229,6 +233,7 @@ def evaluate_matches(
     agent: GeneratedJavaAgent,
     config: ExperimentConfig,
     classes_dir: Path,
+    match_artifacts_dir: Path | None,
     mock: bool,
     ordinal: int,
 ) -> tuple[list[MatchResult], str | None]:
@@ -243,6 +248,8 @@ def evaluate_matches(
                     opponent=config.opponent,
                     tick_limit=config.tick_limit,
                     match_index=match_index,
+                    match_artifacts_dir=match_artifacts_dir,
+                    scoring_config=scoring_config_from_experiment(config),
                     mock=mock,
                     mock_score=config.mock_score_base + config.mock_score_step * (ordinal + match_index),
                 )
@@ -254,6 +261,20 @@ def evaluate_matches(
     if failed_matches:
         return match_results, match_error_message(failed_matches[0])
     return match_results, None
+
+
+def scoring_config_from_experiment(config: ExperimentConfig) -> GamePerformanceConfig:
+    return GamePerformanceConfig(
+        result_win_score=config.result_win_score,
+        result_draw_score=config.result_draw_score,
+        result_loss_score=config.result_loss_score,
+        result_error_score=config.result_error_score,
+        army_weight=config.state_army_weight,
+        building_weight=config.state_building_weight,
+        resource_weight=config.state_resource_weight,
+        survival_weight=config.survival_weight,
+        final_resource_weight=config.final_resource_weight,
+    )
 
 
 def compile_error_message(result: CompileResult) -> str:

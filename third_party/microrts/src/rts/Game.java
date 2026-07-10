@@ -170,6 +170,7 @@ public class Game {
         String tracePath = System.getProperty("microrts.trace.path", "").trim();
         String roundStateDirPath = System.getProperty("microrts.round_state_dir", "").trim();
         Trace trace = tracePath.isEmpty() ? null : new Trace(utt);
+        writeRoundStateSnapshot(roundStateDirPath, gs.getTime(), false);
 
         while (!gameover && gs.getTime() < maxCycles) {
             long timeToNextUpdate = System.currentTimeMillis() + updateInterval;

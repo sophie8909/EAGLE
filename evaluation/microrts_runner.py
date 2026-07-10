@@ -9,6 +9,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .game_performance import (
+    GamePerformanceBreakdown,
+    GamePerformanceConfig,
+    MatchTelemetry,
+    build_match_telemetry,
+    telemetry_summary,
+    write_summary_json,
+    write_telemetry_json,
+)
+
 
 @dataclass(frozen=True)
 class MatchResult:
@@ -24,6 +34,12 @@ class MatchResult:
     weighted_resource_difference: float | None = None
     winner: int | None = None
     final_cycle: int | None = None
+    telemetry: MatchTelemetry | None = None
+    performance_breakdown: GamePerformanceBreakdown | None = None
+    replay_path: str | None = None
+    telemetry_path: str | None = None
+    summary_path: str | None = None
+    persistence_error: str | None = None
 
 
 def run_microrts_match(
@@ -34,14 +50,31 @@ def run_microrts_match(
     opponent: str,
     tick_limit: int,
     match_index: int,
+    match_artifacts_dir: Path | None = None,
+    scoring_config: GamePerformanceConfig | None = None,
     mock: bool = False,
     mock_score: float = 0.0,
 ) -> MatchResult:
     microrts_dir = microrts_dir.resolve()
     classes_dir = classes_dir.resolve()
-    result_json_path = classes_dir / f"match_{match_index}.json"
+    scoring_config = scoring_config or GamePerformanceConfig()
+    map_path = "maps/8x8/basesWorkers8x8.xml"
+    match_dir = match_directory(
+        match_artifacts_dir or classes_dir,
+        match_index=match_index,
+        opponent=opponent,
+        map_path=map_path,
+        seed=None,
+    )
+    result_json_path = match_dir / "result.json"
+    replay_path = match_dir / "replay.xml"
+    round_state_dir = match_dir / "round_states"
+    telemetry_path = match_dir / "telemetry.json"
+    summary_path = match_dir / "summary.json"
     command = [
         "java",
+        f"-Dmicrorts.trace.path={replay_path}",
+        f"-Dmicrorts.round_state_dir={round_state_dir}",
         "-cp",
         os.pathsep.join([str(classes_dir), str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]),
         "rts.MicroRTS",
@@ -50,7 +83,7 @@ def run_microrts_match(
         "--headless",
         "true",
         "-m",
-        "maps/8x8/basesWorkers8x8.xml",
+        map_path,
         "-c",
         str(tick_limit),
         "-i",
@@ -63,9 +96,13 @@ def run_microrts_match(
         str(result_json_path),
     ]
     if mock:
+        match_dir.mkdir(parents=True, exist_ok=True)
         raw_result = {
             "winner": 0 if mock_score >= 0 else 1,
-            "ticks": tick_limit,
+            "final_tick": tick_limit,
+            "max_cycles": tick_limit,
+            "result": "p0_win" if mock_score >= 0 else "p1_win",
+            "tick_timeout": False,
             "players": {
                 "p0": {
                     "unit_count": 0,
@@ -93,19 +130,55 @@ def run_microrts_match(
                 "damage_dealt": max(0.0, mock_score * 2.0),
             },
         }
+        write_mock_round_state(round_state_dir, tick=0, p0_resource=50.0, p1_resource=50.0)
+        write_mock_round_state(round_state_dir, tick=tick_limit, p0_resource=50.0 + mock_score, p1_resource=50.0)
+        replay_path.write_text("<mock-replay />\n", encoding="utf-8")
+        telemetry, _, persistence_error = persist_match_artifacts(
+            raw_result=raw_result,
+            round_state_dir=round_state_dir,
+            replay_path=replay_path,
+            telemetry_path=telemetry_path,
+            summary_path=summary_path,
+            match_dir=match_dir,
+            tick_limit=tick_limit,
+            scoring_config=scoring_config,
+        )
+        score = telemetry.performance.total_performance if telemetry.performance is not None else mock_score
         return MatchResult(
             ok=True,
-            score=mock_score,
+            score=score,
             command=command,
             stdout=f"mock match {match_index} score={mock_score}",
             raw_result=raw_result,
+            telemetry=telemetry,
+            performance_breakdown=telemetry.performance,
+            replay_path=relative_or_absolute(replay_path, match_dir.parent.parent),
+            telemetry_path=relative_or_absolute(telemetry_path, match_dir.parent.parent),
+            summary_path=relative_or_absolute(summary_path, match_dir.parent.parent),
+            persistence_error=persistence_error,
             **final_match_values(raw_result, fallback_score=mock_score),
         )
+    match_dir.mkdir(parents=True, exist_ok=True)
     completed = subprocess.run(command, cwd=microrts_dir, capture_output=True, text=True, check=False)
     raw_result = read_result_json(result_json_path)
     score = parse_score(completed.stdout)
     if score is None and raw_result:
         score = score_from_payload(raw_result)
+    telemetry: MatchTelemetry | None = None
+    persistence_error: str | None = None
+    if raw_result:
+        telemetry, _, persistence_error = persist_match_artifacts(
+            raw_result=raw_result,
+            round_state_dir=round_state_dir,
+            replay_path=replay_path,
+            telemetry_path=telemetry_path,
+            summary_path=summary_path,
+            match_dir=match_dir,
+            tick_limit=tick_limit,
+            scoring_config=scoring_config,
+        )
+        if telemetry.performance is not None:
+            score = telemetry.performance.total_performance
     return MatchResult(
         ok=completed.returncode == 0 and score is not None,
         score=0.0 if score is None else score,
@@ -114,8 +187,93 @@ def run_microrts_match(
         stderr=completed.stderr,
         returncode=completed.returncode,
         raw_result=raw_result,
+        telemetry=telemetry,
+        performance_breakdown=None if telemetry is None else telemetry.performance,
+        replay_path=None if not replay_path.exists() else relative_or_absolute(replay_path, match_dir.parent.parent),
+        telemetry_path=None if telemetry is None else relative_or_absolute(telemetry_path, match_dir.parent.parent),
+        summary_path=None if telemetry is None else relative_or_absolute(summary_path, match_dir.parent.parent),
+        persistence_error=persistence_error,
         **final_match_values(raw_result, fallback_score=0.0 if score is None else score),
     )
+
+
+def match_directory(
+    root: Path,
+    *,
+    match_index: int,
+    opponent: str,
+    map_path: str,
+    seed: int | None,
+) -> Path:
+    seed_label = "none" if seed is None else str(seed)
+    match_id = f"match_{match_index:03d}_p0_vs_{safe_path_part(opponent)}_{safe_path_part(map_path)}_seed_{seed_label}"
+    return root / match_id
+
+
+def persist_match_artifacts(
+    *,
+    raw_result: dict[str, Any],
+    round_state_dir: Path,
+    replay_path: Path,
+    telemetry_path: Path,
+    summary_path: Path,
+    match_dir: Path,
+    tick_limit: int,
+    scoring_config: GamePerformanceConfig,
+) -> tuple[MatchTelemetry, dict[str, Any], str | None]:
+    telemetry = build_match_telemetry(
+        raw_result=raw_result,
+        round_state_dir=round_state_dir,
+        max_tick=tick_limit,
+        player_index=0,
+        opponent_index=1,
+        replay_path=relative_or_absolute(replay_path, match_dir),
+        scoring_config=scoring_config,
+    )
+    summary = telemetry_summary(
+        telemetry,
+        telemetry_path=relative_or_absolute(telemetry_path, match_dir),
+        summary_path=relative_or_absolute(summary_path, match_dir),
+    )
+    try:
+        write_telemetry_json(telemetry_path, telemetry)
+        write_summary_json(summary_path, summary)
+    except OSError as exc:
+        return telemetry, summary, f"failed to persist match artifacts: {exc}"
+    return telemetry, summary, None
+
+
+def write_mock_round_state(round_state_dir: Path, *, tick: int, p0_resource: float, p1_resource: float) -> None:
+    round_state_dir.mkdir(parents=True, exist_ok=True)
+    (round_state_dir / f"round_{tick:06d}.log").write_text(
+        "\n".join(
+            [
+                f"ROUND_TICK: {tick}",
+                "GAMEOVER: false",
+                f"current time {tick} p0 player 0({p0_resource}) p1 player 1({p1_resource})",
+                "=== Dynamic Prompt ===",
+                "Map size: 8x8",
+                f"Turn: {tick}",
+                "Feature locations:",
+                "(1,1) Ally Base Unit {HP=10, resources=0}",
+                "(6,6) Enemy Base Unit {HP=10, resources=0}",
+                "======================",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def safe_path_part(value: str) -> str:
+    return "".join(char if char.isalnum() else "_" for char in value).strip("_") or "value"
+
+
+def relative_or_absolute(path: Path, root: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
 
 
 def parse_score(output: str) -> float | None:

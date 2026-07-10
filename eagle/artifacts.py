@@ -175,6 +175,13 @@ def match_to_dict(result: MatchResult) -> dict:
         "weighted_resource_difference": result.weighted_resource_difference,
         "winner": result.winner,
         "final_cycle": result.final_cycle,
+        "performance_breakdown": None
+        if result.performance_breakdown is None
+        else result.performance_breakdown.to_json_dict(),
+        "replay_path": result.replay_path,
+        "telemetry_path": result.telemetry_path,
+        "summary_path": result.summary_path,
+        "persistence_error": result.persistence_error,
         "raw_result": result.raw_result,
     }
 

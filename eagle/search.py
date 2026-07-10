@@ -233,6 +233,8 @@ def mutation_context_from_candidate(candidate: Candidate, *, generation: int, in
         player_resource=number_or_none(candidate.game_eval_result.get("player0_resource")),
         enemy_resource=number_or_none(candidate.game_eval_result.get("player1_resource")),
         resource_breakdown=candidate.game_eval_result.get("resource_breakdown") or {},
+        performance_breakdown=candidate.game_eval_result.get("performance_breakdown") or {},
+        temporal_summary=candidate.game_eval_result.get("temporal_summary") or {},
         alignment_score=number_or_none(candidate.strategy_alignment_result.get("score")),
         alignment_reason=str(candidate.strategy_alignment_result.get("rationale", "")),
         compile_success=candidate.compile_status == "success",

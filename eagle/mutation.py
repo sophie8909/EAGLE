@@ -18,6 +18,8 @@ class MutationContext:
     player_resource: float | None = None
     enemy_resource: float | None = None
     resource_breakdown: dict[str, object] | None = None
+    performance_breakdown: dict[str, object] | None = None
+    temporal_summary: dict[str, object] | None = None
     alignment_score: float | None = None
     alignment_reason: str = ""
     compile_success: bool | None = None
@@ -153,6 +155,8 @@ Evaluation:
 - Player resources: {format_feedback(context.player_resource)}
 - Enemy resources: {format_feedback(context.enemy_resource)}
 - Resource breakdown: {context.resource_breakdown or {}}
+- Performance breakdown: {context.performance_breakdown or {}}
+- Temporal summary: {context.temporal_summary or {}}
 
 Analyze this strategy's result.
 

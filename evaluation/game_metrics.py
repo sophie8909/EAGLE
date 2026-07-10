@@ -5,6 +5,13 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .game_performance import (
+    GamePerformanceConfig,
+    GamePerformanceBreakdown,
+    compute_performance_breakdown,
+    tick_from_result,
+    telemetry_temporal_summary,
+)
 from .microrts_runner import MatchResult
 
 
@@ -22,6 +29,8 @@ class GameMetrics:
     resource_breakdown: dict[str, Any] = field(default_factory=dict)
     raw_metrics: dict[str, Any] = field(default_factory=dict)
     match_summaries: list[dict[str, Any]] = field(default_factory=list)
+    performance_breakdown: dict[str, Any] = field(default_factory=dict)
+    temporal_summary: dict[str, Any] = field(default_factory=dict)
 
     def to_json_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -49,8 +58,9 @@ def compute_game_metrics(match_results: list[MatchResult]) -> GameMetrics:
     weighted_resource_diff = sum(item["weighted_resource_difference"] for item in summaries) / len(summaries)
     player0_resource = sum(item["player0_resource"] for item in summaries) / len(summaries)
     player1_resource = sum(item["player1_resource"] for item in summaries) / len(summaries)
-    win_bonus = sum(item["win_score"] for item in summaries) / len(summaries)
-    objective = win_bonus + weighted_resource_diff
+    objective = sum(item["performance"] for item in summaries) / len(summaries)
+    breakdown = average_breakdowns(successful)
+    temporal = {"matches": [telemetry_temporal_summary(result.telemetry) for result in successful if result.telemetry]}
     return GameMetrics(
         resource_difference=weighted_resource_diff,
         objective=objective,
@@ -65,7 +75,6 @@ def compute_game_metrics(match_results: list[MatchResult]) -> GameMetrics:
             "player0_resource": player0_resource,
             "player1_resource": player1_resource,
             "weighted_resource_difference": weighted_resource_diff,
-            "win_bonus": win_bonus,
             "player_resource": player0_resource,
             "enemy_resource": player1_resource,
             "matches": [
@@ -75,16 +84,22 @@ def compute_game_metrics(match_results: list[MatchResult]) -> GameMetrics:
                     "player0_material": item["player0_material"],
                     "player1_material": item["player1_material"],
                     "weighted_resource_difference": item["weighted_resource_difference"],
-                    "win_score": item["win_score"],
+                    "performance": item["performance"],
+                    "performance_breakdown": item["performance_breakdown"],
                     "unit_stockpiles": item["unit_stockpiles"],
                     "winner": item["winner"],
                     "final_cycle": item["final_cycle"],
+                    "replay_path": item["replay_path"],
+                    "telemetry_path": item["telemetry_path"],
+                    "summary_path": item["summary_path"],
                 }
                 for item in summaries
             ],
         },
         raw_metrics={"matches": [match_to_dict(result) for result in match_results]},
         match_summaries=summaries,
+        performance_breakdown=breakdown,
+        temporal_summary=temporal,
     )
 
 
@@ -112,7 +127,7 @@ def summarize_match(result: MatchResult) -> dict[str, Any]:
     if weighted_resource_difference is None:
         weighted_resource_difference = (p0_resources + p0_material) - (p1_resources + p1_material)
     winner = result.winner if result.winner is not None else payload.get("winner")
-    win_score = 100.0 if winner == 0 else -100.0 if winner == 1 else 0.0
+    performance_breakdown = result.performance_breakdown or fallback_performance_breakdown(result, payload)
     return {
         # Player 0 is always the generated candidate during EA evaluation.
         # The resource difference counts stored resources plus unit material value.
@@ -124,7 +139,8 @@ def summarize_match(result: MatchResult) -> dict[str, Any]:
         "player_resource": p0_resources,
         "enemy_resource": p1_resources,
         "resource_difference": weighted_resource_difference,
-        "win_score": win_score,
+        "performance": performance_breakdown.total_performance,
+        "performance_breakdown": performance_breakdown.to_json_dict(),
         "score": result.score,
         "winner": winner,
         "final_cycle": result.final_cycle if result.final_cycle is not None else payload.get("ticks"),
@@ -135,6 +151,9 @@ def summarize_match(result: MatchResult) -> dict[str, Any]:
             "player": scoreboard.get("p0_units", scoreboard.get("p0_unit_count")),
             "enemy": scoreboard.get("p1_units", scoreboard.get("p1_unit_count")),
         },
+        "replay_path": result.replay_path,
+        "telemetry_path": result.telemetry_path,
+        "summary_path": result.summary_path,
     }
 
 
@@ -151,8 +170,47 @@ def match_to_dict(result: MatchResult) -> dict[str, Any]:
         "weighted_resource_difference": result.weighted_resource_difference,
         "winner": result.winner,
         "final_cycle": result.final_cycle,
+        "performance_breakdown": None if result.performance_breakdown is None else result.performance_breakdown.to_json_dict(),
+        "replay_path": result.replay_path,
+        "telemetry_path": result.telemetry_path,
+        "summary_path": result.summary_path,
+        "persistence_error": result.persistence_error,
         "raw_result": result.raw_result,
     }
+
+
+def average_breakdowns(results: list[MatchResult]) -> dict[str, float]:
+    breakdowns = [
+        result.performance_breakdown or fallback_performance_breakdown(result, result.raw_result or {})
+        for result in results
+    ]
+    if not breakdowns:
+        return {}
+    return {
+        "result_score": sum(item.result_score for item in breakdowns) / len(breakdowns),
+        "average_state_score": sum(item.average_state_score for item in breakdowns) / len(breakdowns),
+        "survival_score": sum(item.survival_score for item in breakdowns) / len(breakdowns),
+        "final_resource_diff": sum(item.final_resource_diff for item in breakdowns) / len(breakdowns),
+        "total_performance": sum(item.total_performance for item in breakdowns) / len(breakdowns),
+    }
+
+
+def fallback_performance_breakdown(result: MatchResult, payload: dict[str, Any]) -> GamePerformanceBreakdown:
+    end_tick = result.final_cycle
+    if end_tick is None:
+        end_tick = _int_or_default(payload.get("final_tick", payload.get("ticks")), 0)
+    max_tick = max(1, _int_or_default(payload.get("max_cycles"), end_tick))
+    config = GamePerformanceConfig()
+    tick = tick_from_result(payload, tick=end_tick, player_index=0, scoring_config=config)
+    return compute_performance_breakdown(
+        result=str(payload.get("result") or ""),
+        winner=result.winner if result.winner is not None else payload.get("winner"),
+        end_tick=end_tick,
+        max_tick=max_tick,
+        ticks=[tick],
+        scoring_config=config,
+        player_index=0,
+    )
 
 
 def _float_or_default(value: Any, default: float) -> float:
@@ -160,3 +218,10 @@ def _float_or_default(value: Any, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return float(default)
+
+
+def _int_or_default(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
