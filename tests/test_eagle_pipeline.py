@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import tempfile
 import unittest
@@ -67,6 +68,9 @@ population_size: 3
         config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
         self.assertEqual(config.max_prompt_chars, 4000)
         self.assertEqual(config.max_prompt_lines, 80)
+        self.assertEqual(config.result_win_score, 100.0)
+        self.assertEqual(config.result_draw_score, 0.0)
+        self.assertEqual(config.result_loss_score, -100.0)
 
     def test_training_opponent_defaults_to_lightrush_player1(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
@@ -95,6 +99,52 @@ population_size: 3
         self.assertLess(result.command.index("--ai1"), result.command.index("--ai2"))
         self.assertEqual(result.command[result.command.index("--ai1") + 1], "ai.generated.GeneratedAgent_test")
         self.assertEqual(result.command[result.command.index("--ai2") + 1], "ai.abstraction.LightRush")
+
+    def test_match_artifact_paths_are_absolute_for_java_process(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            relative_artifacts = Path(os.path.relpath(Path(temp_dir) / "candidate_a" / "matches", Path.cwd()))
+            result = run_microrts_match(
+                microrts_dir=Path("third_party/microrts"),
+                classes_dir=Path("relative_classes"),
+                agent_class="ai.generated.GeneratedAgent_test",
+                opponent="ai.abstraction.LightRush",
+                tick_limit=100,
+                match_index=0,
+                match_artifacts_dir=relative_artifacts,
+                mock=True,
+            )
+        trace_arg = next(arg for arg in result.command if arg.startswith("-Dmicrorts.trace.path="))
+        round_state_arg = next(arg for arg in result.command if arg.startswith("-Dmicrorts.round_state_dir="))
+        result_json_arg = result.command[result.command.index("--result-json") + 1]
+        self.assertTrue(Path(trace_arg.split("=", 1)[1]).is_absolute())
+        self.assertTrue(Path(round_state_arg.split("=", 1)[1]).is_absolute())
+        self.assertTrue(Path(result_json_arg).is_absolute())
+
+    def test_completed_loss_is_ok_and_preserves_total_performance(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = run_microrts_match(
+                microrts_dir=Path("third_party/microrts"),
+                classes_dir=Path(temp_dir) / "classes",
+                agent_class="ai.generated.GeneratedAgent_test",
+                opponent="ai.abstraction.LightRush",
+                tick_limit=100,
+                match_index=0,
+                match_artifacts_dir=Path(temp_dir) / "matches",
+                mock=True,
+                mock_score=-5.0,
+            )
+        metrics = compute_game_metrics([result])
+        objectives = build_objectives(
+            compile_result=CompileResult(ok=True, command=[]),
+            game_metrics=metrics,
+            alignment_result=StrategyAlignmentResult(score=0.0, rationale=""),
+            failure_category=None,
+        )
+        self.assertTrue(result.ok)
+        self.assertEqual(result.winner, 1)
+        self.assertEqual(result.performance_breakdown.result_score, -100)
+        self.assertEqual(objectives["game_performance"], result.performance_breakdown.total_performance)
+        self.assertNotEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
 
     def test_normalize_prompt_truncates_long_prompt(self) -> None:
         prompt = "\n".join(f"line {index}" for index in range(10))
@@ -485,7 +535,7 @@ public class GeneratedAgent_test extends RandomBiasedAI {
         self.assertEqual(metrics.winner, 0)
         self.assertEqual(metrics.to_json_dict()["player0_resource"], 14)
         self.assertEqual(metrics.resource_breakdown["player0_resource"], 14)
-        self.assertEqual(metrics.objective, 1012)
+        self.assertEqual(metrics.objective, 112)
 
     def test_player0_resource_advantage_is_positive(self) -> None:
         metrics = compute_game_metrics(
@@ -575,8 +625,31 @@ public class GeneratedAgent_test extends RandomBiasedAI {
                 )
             ]
         )
-        self.assertEqual(win_metrics.objective, 1000)
-        self.assertEqual(loss_metrics.objective, -1000)
+        self.assertEqual(win_metrics.performance_breakdown["result_score"], 100)
+        self.assertEqual(loss_metrics.performance_breakdown["result_score"], -100)
+        self.assertEqual(win_metrics.objective, 100)
+        self.assertEqual(loss_metrics.objective, -100)
+
+    def test_draw_or_timeout_result_score_is_zero(self) -> None:
+        metrics = compute_game_metrics(
+            [
+                MatchResult(
+                    ok=True,
+                    score=0.0,
+                    command=[],
+                    raw_result={
+                        "winner": -1,
+                        "tick_timeout": True,
+                        "players": {
+                            "p0": {"resource_total": 5, "material_total": 0},
+                            "p1": {"resource_total": 5, "material_total": 0},
+                        },
+                    },
+                )
+            ]
+        )
+        self.assertEqual(metrics.performance_breakdown["result_score"], 0)
+        self.assertEqual(metrics.objective, 0)
 
     def test_unit_material_cost_is_added_to_resource_difference(self) -> None:
         metrics = compute_game_metrics(
@@ -746,7 +819,7 @@ public class GeneratedAgent_test extends RandomBiasedAI {
             )
         self.assertIsNotNone(error)
         self.assertEqual(summary["result"], "p0_win")
-        self.assertEqual(telemetry.performance.result_score, 1000)
+        self.assertEqual(telemetry.performance.result_score, 100)
 
     def test_compile_failure_gets_failed_game_performance(self) -> None:
         objectives = build_objectives(
@@ -754,6 +827,16 @@ public class GeneratedAgent_test extends RandomBiasedAI {
             game_metrics=None,
             alignment_result=None,
             failure_category="Java compile failure",
+        )
+        self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertEqual(objectives["strategy_alignment"], 0.0)
+
+    def test_runtime_failure_gets_failed_game_performance(self) -> None:
+        objectives = build_objectives(
+            compile_result=CompileResult(ok=True, command=[]),
+            game_metrics=None,
+            alignment_result=None,
+            failure_category="Runtime match failure",
         )
         self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertEqual(objectives["strategy_alignment"], 0.0)

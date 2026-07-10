@@ -59,8 +59,9 @@ def run_microrts_match(
     classes_dir = classes_dir.resolve()
     scoring_config = scoring_config or GamePerformanceConfig()
     map_path = "maps/8x8/basesWorkers8x8.xml"
+    match_artifacts_root = (match_artifacts_dir or classes_dir).resolve()
     match_dir = match_directory(
-        match_artifacts_dir or classes_dir,
+        match_artifacts_root,
         match_index=match_index,
         opponent=opponent,
         map_path=map_path,

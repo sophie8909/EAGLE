@@ -38,10 +38,9 @@ class ExperimentConfig:
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
     mock_score_base: float = 10.0
     mock_score_step: float = 1.0
-    result_win_score: float = 1000.0
+    result_win_score: float = 100.0
     result_draw_score: float = 0.0
-    result_loss_score: float = -1000.0
-    result_error_score: float = -2000.0
+    result_loss_score: float = -100.0
     state_army_weight: float = 1.0
     state_building_weight: float = 1.0
     state_resource_weight: float = 1.0
@@ -90,10 +89,9 @@ class ExperimentConfig:
             generation_prompt=str(payload.get("generation_prompt", DEFAULT_GENERATION_PROMPT)),
             mock_score_base=float(payload.get("mock_score_base", 10.0)),
             mock_score_step=float(payload.get("mock_score_step", 1.0)),
-            result_win_score=float(payload.get("result_win_score", 1000.0)),
+            result_win_score=float(payload.get("result_win_score", 100.0)),
             result_draw_score=float(payload.get("result_draw_score", 0.0)),
-            result_loss_score=float(payload.get("result_loss_score", -1000.0)),
-            result_error_score=float(payload.get("result_error_score", -2000.0)),
+            result_loss_score=float(payload.get("result_loss_score", -100.0)),
             state_army_weight=float(payload.get("state_army_weight", 1.0)),
             state_building_weight=float(payload.get("state_building_weight", 1.0)),
             state_resource_weight=float(payload.get("state_resource_weight", 1.0)),

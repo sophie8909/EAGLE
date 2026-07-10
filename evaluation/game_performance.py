@@ -9,10 +9,9 @@ from pathlib import Path
 from typing import Any
 
 
-RESULT_WIN_SCORE = 1000.0
+RESULT_WIN_SCORE = 100.0
 RESULT_DRAW_SCORE = 0.0
-RESULT_LOSS_SCORE = -1000.0
-RESULT_ERROR_SCORE = -2000.0
+RESULT_LOSS_SCORE = -100.0
 
 UNIT_COSTS = {
     "Resource": 0.0,
@@ -32,7 +31,6 @@ class GamePerformanceConfig:
     result_win_score: float = RESULT_WIN_SCORE
     result_draw_score: float = RESULT_DRAW_SCORE
     result_loss_score: float = RESULT_LOSS_SCORE
-    result_error_score: float = RESULT_ERROR_SCORE
     army_weight: float = 1.0
     building_weight: float = 1.0
     resource_weight: float = 1.0
@@ -280,8 +278,6 @@ def score_result(
     player_index: int,
     scoring_config: GamePerformanceConfig,
 ) -> float:
-    if result == "match_execution_error":
-        return scoring_config.result_error_score
     winner_int = int_or_none(winner)
     if winner_int == player_index:
         return scoring_config.result_win_score

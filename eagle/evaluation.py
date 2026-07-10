@@ -268,7 +268,6 @@ def scoring_config_from_experiment(config: ExperimentConfig) -> GamePerformanceC
         result_win_score=config.result_win_score,
         result_draw_score=config.result_draw_score,
         result_loss_score=config.result_loss_score,
-        result_error_score=config.result_error_score,
         army_weight=config.state_army_weight,
         building_weight=config.state_building_weight,
         resource_weight=config.state_resource_weight,
