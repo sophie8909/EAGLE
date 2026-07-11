@@ -39,6 +39,8 @@ class CandidateResult:
     raw_llm_output: str = ""
     extracted_code: str = ""
     assembled_java: str = ""
+    module_raw_outputs: dict[str, str] | None = None
+    module_bodies: dict[str, str] | None = None
     validation_result: ValidationResult | None = None
     compile_result: CompileResult | None = None
     match_result: list[MatchResult] | None = None
@@ -166,6 +168,7 @@ def evaluate_candidate(
     )
     status = "failed" if failure_category is not None else "evaluated"
     previous_code = agent.source if agent is not None else generation_result.assembled_java or candidate.previous_code
+    module_bodies = generation_result.module_bodies or candidate.module_bodies
     evaluated_candidate = Candidate(
         id=candidate.id,
         generation=candidate.generation,
@@ -173,6 +176,8 @@ def evaluate_candidate(
         strategy_prompt=candidate.strategy_prompt,
         previous_code=previous_code,
         generation_prompt=candidate.generation_prompt,
+        module_prompts=candidate.module_prompts,
+        module_bodies=module_bodies,
         generated_java_agent_path=str(agent.source_path) if agent else None,
         compile_status=compile_result.status if compile_result else "not_run",
         game_eval_result=game_metrics.to_json_dict() if game_metrics else {},
@@ -191,6 +196,8 @@ def evaluate_candidate(
         raw_llm_output=generation_result.raw_llm_output,
         extracted_code=generation_result.extracted_code,
         assembled_java=generation_result.assembled_java,
+        module_raw_outputs=generation_result.module_raw_outputs,
+        module_bodies=generation_result.module_bodies,
         validation_result=generation_result.validation_result,
         compile_result=compile_result,
         match_result=match_results,

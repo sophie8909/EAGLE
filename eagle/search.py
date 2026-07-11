@@ -146,6 +146,7 @@ def initialize_population(config: ExperimentConfig, mutation: Mutation) -> list[
             strategy_prompt=prompt,
             previous_code="",
             generation_prompt=config.generation_prompt,
+            module_prompts={"controller": prompt},
             metadata={"seed_index": index},
         )
         for index, prompt in enumerate(config.seed_prompts)
@@ -158,6 +159,8 @@ def initialize_population(config: ExperimentConfig, mutation: Mutation) -> list[
             strategy_prompt=source.strategy_prompt,
             previous_code=source.previous_code,
             generation_prompt=source.generation_prompt,
+            module_prompts=source.module_prompts,
+            module_bodies=source.module_bodies,
             metadata={"operator": "seed_mutation"},
         )
         population.append(mutation.mutate(seed_child, MutationContext(generation=0, index=len(population))))
@@ -200,6 +203,8 @@ def create_offspring(
                 ),
                 previous_code=parent_a.previous_code,
                 generation_prompt=parent_a.generation_prompt,
+                module_prompts=parent_a.module_prompts,
+                module_bodies=parent_a.module_bodies,
                 metadata={"operator": "mutation"},
             )
 

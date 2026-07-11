@@ -7,15 +7,47 @@ from typing import Any
 from uuid import uuid4
 
 
+MODULE_NAMES: tuple[str, ...] = (
+    "controller",
+    "economy",
+    "combat",
+    "expansion",
+    "target_selection",
+    "path_selection",
+)
+
+DEFAULT_MODULE_PROMPTS: dict[str, str] = {
+    "controller": "Decide how to combine economy, combat, expansion, target, and path proposals.",
+    "economy": "Propose simple economy actions such as waiting, harvesting, or keeping units available.",
+    "combat": "Propose simple combat priorities without directly issuing MicroRTS actions.",
+    "expansion": "Propose simple expansion or production priorities without direct action assembly.",
+    "target_selection": "Choose a target unit from a provided candidate list.",
+    "path_selection": "Choose a target location for a unit.",
+}
+
+DEFAULT_MODULE_BODIES: dict[str, str] = {
+    "controller": (
+        "Decision decision = new Decision();\n"
+        "decision.proposals.addAll(economy(context));\n"
+        "decision.proposals.addAll(expansion(context));\n"
+        "decision.proposals.addAll(combat(context));\n"
+        "return decision;"
+    ),
+    "economy": "return new ArrayList<>();",
+    "combat": "return new ArrayList<>();",
+    "expansion": "return new ArrayList<>();",
+    "target_selection": "return candidates.isEmpty() ? null : candidates.get(0);",
+    "path_selection": "return new PathChoice(targetX, targetY);",
+}
+
 DEFAULT_GENERATION_PROMPT = (
-    "Requested class name: {class_name}\n\n"
-    "Generate only Java statements for the body of chooseAction(int player, GameState gs). "
+    "Requested class name: {class_name}\n"
+    "Requested module: {module_name}\n\n"
+    "Generate only Java statements for the requested function body. "
     "Return raw Java statements only. No markdown, no explanation, no code fences. "
     "Do not output a package declaration, imports, class declaration, constructors, fields, or helper methods. "
-    "Start from the PassiveAI behavior shown in the scaffold: create a PlayerAction, "
-    "call pa.fillWithNones(gs, player, 10), and return pa. "
     "Do not define helper methods, do not invent helper methods, and never call nearestIdleAlly. "
-    "Do not invent action APIs. "
+    "Do not directly assemble PlayerAction objects; return structured Decision, ActionProposal, Unit, or PathChoice values. "
     "Do not redeclare local variables in the same method, "
     "reuse existing variables or choose unique names, "
     "do not assign UnitType values to Unit variables, "
@@ -27,12 +59,7 @@ DEFAULT_GENERATION_PROMPT = (
 
 @dataclass(frozen=True)
 class Candidate:
-    """One NSGA-II individual with explicit prompt/code parts.
-
-    The strategy prompt is the evolvable natural-language strategy. Previous code is reference
-    Java carried from the selected parent after evaluation. The generation prompt is the fixed
-    instruction that tells the LLM how to turn the strategy and reference code into Java.
-    """
+    """One NSGA-II individual with six evolvable Java function modules."""
 
     id: str = field(default_factory=lambda: uuid4().hex[:12])
     generation: int = 0
@@ -40,6 +67,8 @@ class Candidate:
     strategy_prompt: str = ""
     previous_code: str = ""
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
+    module_prompts: dict[str, str] = field(default_factory=dict)
+    module_bodies: dict[str, str] = field(default_factory=dict)
     generated_java_agent_path: str | None = None
     compile_status: str = "pending"
     game_eval_result: dict[str, Any] = field(default_factory=dict)
@@ -47,6 +76,17 @@ class Candidate:
     fitness_objectives: dict[str, float] = field(default_factory=dict)
     status: str = "pending"
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        prompts = {name: DEFAULT_MODULE_PROMPTS[name] for name in MODULE_NAMES}
+        prompts.update(self.module_prompts)
+        if self.strategy_prompt:
+            prompts["controller"] = self.strategy_prompt
+
+        bodies = {name: DEFAULT_MODULE_BODIES[name] for name in MODULE_NAMES}
+        bodies.update({key: value for key, value in self.module_bodies.items() if key in MODULE_NAMES})
+        object.__setattr__(self, "module_prompts", prompts)
+        object.__setattr__(self, "module_bodies", bodies)
 
     def objective_vector(self) -> tuple[float, ...]:
         if not self.fitness_objectives:
@@ -56,14 +96,17 @@ class Candidate:
             float(self.fitness_objectives.get("strategy_alignment", 0.0)),
         )
 
-    def generation_input(self, *, class_name: str = "") -> str:
-        """Build the LLM input in the fixed EAGLE order."""
+    def generation_input(self, *, class_name: str = "", module_name: str = "controller") -> str:
+        """Build one function-generation prompt for a single evolvable module."""
 
-        generation_prompt = self.generation_prompt.replace("{class_name}", class_name)
-        previous_code = self.previous_code.strip() or "(empty)"
+        generation_prompt = self.generation_prompt.replace("{class_name}", class_name).replace(
+            "{module_name}", module_name
+        )
+        existing_body = self.module_bodies.get(module_name, "").strip() or "(empty)"
         return (
-            f"Strategy prompt:\n{self.strategy_prompt.strip()}\n\n"
-            f"Previous Java code:\n{previous_code}\n\n"
+            f"Module name:\n{module_name}\n\n"
+            f"Module prompt:\n{self.module_prompts.get(module_name, '').strip()}\n\n"
+            f"Previous module body:\n{existing_body}\n\n"
             f"Generation prompt:\n{generation_prompt.strip()}"
         )
 

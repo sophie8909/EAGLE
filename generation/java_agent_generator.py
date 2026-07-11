@@ -6,10 +6,10 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from eagle.candidate import Candidate
+from eagle.candidate import Candidate, MODULE_NAMES
 
 from .backend import GenerationBackend, generated_class_name
-from .agent_template import render_strategy_agent
+from .agent_template import render_function_agent
 
 
 @dataclass(frozen=True)
@@ -26,6 +26,8 @@ class GeneratedJavaAgent:
     source_path: Path
     raw_llm_output: str = ""
     extracted_code: str = ""
+    module_raw_outputs: dict[str, str] = field(default_factory=dict)
+    module_bodies: dict[str, str] = field(default_factory=dict)
     validation_result: ValidationResult = field(default_factory=lambda: ValidationResult(ok=True))
 
     @property
@@ -39,6 +41,8 @@ class JavaAgentGenerationResult:
     package_name: str = "ai.generated"
     raw_llm_output: str = ""
     extracted_code: str = ""
+    module_raw_outputs: dict[str, str] = field(default_factory=dict)
+    module_bodies: dict[str, str] = field(default_factory=dict)
     assembled_java: str = ""
     validation_result: ValidationResult = field(default_factory=lambda: ValidationResult(ok=False, error="not_run"))
     agent: GeneratedJavaAgent | None = None
@@ -70,30 +74,36 @@ def generate_java_agent_result(
     """Run LLM output, extraction, assembly, validation, and source writing."""
 
     class_name = generated_class_name(candidate.id)
-    raw_output = ""
-    extracted_code = ""
+    module_raw_outputs: dict[str, str] = {}
+    module_bodies: dict[str, str] = {}
     source = ""
 
     try:
-        raw_output = request_strategy_body(candidate, backend, class_name)
+        for module_name in MODULE_NAMES:
+            raw_output = request_module_body(candidate, backend, class_name, module_name)
+            module_raw_outputs[module_name] = raw_output
+            module_bodies[module_name] = extract_code_from_output(raw_output)
     except (RuntimeError, ValueError, OSError) as exc:
         reason = str(exc)
         return JavaAgentGenerationResult(
             class_name=class_name,
-            raw_llm_output=raw_output,
+            raw_llm_output=join_module_text(module_raw_outputs),
+            module_raw_outputs=module_raw_outputs,
+            module_bodies=module_bodies,
             failure_category=classify_generation_error(reason),
             failure_reason=reason,
         )
 
     try:
-        extracted_code = extract_code_from_output(raw_output)
-        source = assemble_java_agent(class_name, extracted_code)
+        source = assemble_java_agent(class_name, module_bodies)
         validation = validate_assembled_java(source, class_name)
         if not validation.ok:
             return JavaAgentGenerationResult(
                 class_name=class_name,
-                raw_llm_output=raw_output,
-                extracted_code=extracted_code,
+                raw_llm_output=join_module_text(module_raw_outputs),
+                extracted_code=join_module_text(module_bodies),
+                module_raw_outputs=module_raw_outputs,
+                module_bodies=module_bodies,
                 assembled_java=source,
                 validation_result=validation,
                 failure_category="Java validation failure",
@@ -103,8 +113,10 @@ def generate_java_agent_result(
         reason = str(exc)
         return JavaAgentGenerationResult(
             class_name=class_name,
-            raw_llm_output=raw_output,
-            extracted_code=extracted_code,
+            raw_llm_output=join_module_text(module_raw_outputs),
+            extracted_code=join_module_text(module_bodies),
+            module_raw_outputs=module_raw_outputs,
+            module_bodies=module_bodies,
             assembled_java=source,
             validation_result=ValidationResult(ok=False, error=reason),
             failure_category="Java validation failure",
@@ -120,24 +132,28 @@ def generate_java_agent_result(
         package_name="ai.generated",
         source=source,
         source_path=source_path,
-        raw_llm_output=raw_output,
-        extracted_code=extracted_code,
+        raw_llm_output=join_module_text(module_raw_outputs),
+        extracted_code=join_module_text(module_bodies),
+        module_raw_outputs=module_raw_outputs,
+        module_bodies=module_bodies,
         validation_result=validation,
     )
     return JavaAgentGenerationResult(
         class_name=class_name,
-        raw_llm_output=raw_output,
-        extracted_code=extracted_code,
+        raw_llm_output=join_module_text(module_raw_outputs),
+        extracted_code=join_module_text(module_bodies),
+        module_raw_outputs=module_raw_outputs,
+        module_bodies=module_bodies,
         assembled_java=source,
         validation_result=validation,
         agent=agent,
     )
 
 
-def request_strategy_body(candidate: Candidate, backend: GenerationBackend, class_name: str) -> str:
-    """Ask the backend for the strategy body text."""
+def request_module_body(candidate: Candidate, backend: GenerationBackend, class_name: str, module_name: str) -> str:
+    """Ask the backend for one module body text."""
 
-    return backend.generate(candidate, class_name)
+    return backend.generate_module(candidate, class_name, module_name)
 
 
 def extract_code_from_output(raw_output: str) -> str:
@@ -146,11 +162,16 @@ def extract_code_from_output(raw_output: str) -> str:
     return extract_strategy_body(clean_generated_java_output(raw_output))
 
 
-def assemble_java_agent(class_name: str, strategy_body: str) -> str:
-    """Insert strategy-body code into the fixed Java scaffold."""
+def assemble_java_agent(class_name: str, module_bodies: dict[str, str]) -> str:
+    """Insert function bodies into the fixed Java scaffold."""
 
-    validate_strategy_body(strategy_body)
-    return render_strategy_agent(class_name, indent_strategy_body(strategy_body))
+    for module_name in MODULE_NAMES:
+        validate_strategy_body(module_bodies[module_name])
+    return render_function_agent(class_name, module_bodies)
+
+
+def join_module_text(values: dict[str, str]) -> str:
+    return "\n\n".join(f"// {name}\n{values.get(name, '')}" for name in MODULE_NAMES)
 
 
 def validate_assembled_java(source: str, class_name: str) -> ValidationResult:
@@ -215,10 +236,15 @@ def normalize_java_agent_source(source: str) -> str:
 
 
 def extract_strategy_body(output: str) -> str:
-    """Return only the code intended for chooseAction."""
+    """Return only the code intended for one generated function body."""
 
     match = re.search(
-        r"\b(?:private|public|protected)?\s+PlayerAction\s+chooseAction\s*\([^)]*\)\s*(?:throws\s+Exception\s*)?\{",
+        (
+            r"\b(?:private|public|protected)?\s+"
+            r"(?:Decision|List<ActionProposal>|Unit|PathChoice|PlayerAction)\s+"
+            r"(?:decide|economy|combat|expansion|selectTarget|findPath|chooseAction)\s*"
+            r"\([^)]*\)\s*(?:throws\s+Exception\s*)?\{"
+        ),
         output,
     )
     if not match:
@@ -257,6 +283,8 @@ def validate_strategy_body(strategy_body: str) -> None:
         (r"\bStrategyTable\b", "Generated strategy body must not use StrategyTable."),
         (r"\.stream\s*\(", "Generated strategy body must not use streams."),
         (r"->", "Generated strategy body must not use lambdas."),
+        (r"\bPlayerAction\b", "Generated function body must not directly assemble PlayerAction objects."),
+        (r"\bPlayerActionGenerator\b", "Generated function body must not directly use PlayerActionGenerator."),
     ]
     for pattern, message in forbidden_patterns:
         if re.search(pattern, strategy_body):
@@ -297,6 +325,12 @@ def validate_java_agent_source(source: str, class_name: str) -> None:
         f"public class {class_name}",
         "UnitTypeTable",
         f"public {class_name}(UnitTypeTable",
+        "private Decision decide(AgentContext context)",
+        "private List<ActionProposal> economy(AgentContext context)",
+        "private List<ActionProposal> combat(AgentContext context)",
+        "private List<ActionProposal> expansion(AgentContext context)",
+        "private Unit selectTarget(AgentContext context, Unit actor, List<Unit> candidates)",
+        "private PathChoice findPath(AgentContext context, Unit unit, int targetX, int targetY)",
     ]
     missing = [token for token in required_tokens if token not in source]
     if missing:

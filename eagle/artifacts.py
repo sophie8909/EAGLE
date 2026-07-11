@@ -33,6 +33,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     (candidate_dir / "strategy_prompt.txt").write_text(evaluation.candidate.strategy_prompt, encoding="utf-8")
     (candidate_dir / "previous_code.java").write_text(evaluation.candidate.previous_code, encoding="utf-8")
     (candidate_dir / "generation_prompt.txt").write_text(evaluation.candidate.generation_prompt, encoding="utf-8")
+    write_module_artifacts(candidate_dir, evaluation.candidate)
     if evaluation.agent is not None:
         (candidate_dir / "generated_java_source.java").write_text(evaluation.agent.source, encoding="utf-8")
     write_json(candidate_dir / "compile_result.json", compile_to_dict(evaluation.compile_result))
@@ -130,6 +131,8 @@ def candidate_result_to_dict(result) -> dict:
         "raw_llm_output": result.raw_llm_output,
         "extracted_code": result.extracted_code,
         "assembled_java": result.assembled_java,
+        "module_raw_outputs": result.module_raw_outputs or {},
+        "module_bodies": result.module_bodies or {},
         "validation_result": validation_to_dict(result.validation_result),
         "compile_result": compile_to_dict(result.compile_result),
         "match_result": [match_to_dict(item) for item in result.match_result or []],
@@ -188,3 +191,12 @@ def match_to_dict(result: MatchResult) -> dict:
 
 def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def write_module_artifacts(candidate_dir: Path, candidate: Candidate) -> None:
+    modules_dir = candidate_dir / "modules"
+    for module_name, prompt in candidate.module_prompts.items():
+        module_dir = modules_dir / module_name
+        module_dir.mkdir(parents=True, exist_ok=True)
+        (module_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+        (module_dir / "body.java").write_text(candidate.module_bodies.get(module_name, ""), encoding="utf-8")
