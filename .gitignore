@@ -62,3 +62,4 @@ third_party/microrts/bin/.microrts_compile_stamp
 /experiment_env/key/uf_token
 
 /legecy
+/third_party/microrts/runs
