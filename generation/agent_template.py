@@ -49,29 +49,17 @@ public class {class_name} extends AI {{
         }}
     }}
 
-    private Decision decide(AgentContext context) throws Exception {{
-        {controller_body}
-    }}
+    {controller_method}
 
-    private List<ActionProposal> economy(AgentContext context) throws Exception {{
-        {economy_body}
-    }}
+    {economy_method}
 
-    private List<ActionProposal> combat(AgentContext context) throws Exception {{
-        {combat_body}
-    }}
+    {combat_method}
 
-    private List<ActionProposal> expansion(AgentContext context) throws Exception {{
-        {expansion_body}
-    }}
+    {expansion_method}
 
-    private Unit selectTarget(AgentContext context, Unit actor, List<Unit> candidates) throws Exception {{
-        {target_selection_body}
-    }}
+    {target_selection_method}
 
-    private PathChoice findPath(AgentContext context, Unit unit, int targetX, int targetY) throws Exception {{
-        {path_selection_body}
-    }}
+    {path_selection_method}
 
     private PlayerAction executeDecision(AgentContext context, Decision decision) throws Exception {{
         PlayerActionGenerator generator = new PlayerActionGenerator(context.gs, context.player);
@@ -134,7 +122,7 @@ public class {class_name} extends AI {{
 """
 
 
-MICRORTS_BLANK_STRATEGY_PROMPT = """Generate Java statements for one function body in this MicroRTS AI.
+MICRORTS_BLANK_STRATEGY_PROMPT = """Generate exactly one complete Java method for one module in this MicroRTS AI.
 
 The agent has six evolvable functions:
 - controller / decision
@@ -149,8 +137,9 @@ conflict handling, and PlayerAction assembly. Generated functions return structu
 values such as Decision, ActionProposal, Unit, or PathChoice.
 
 Rules:
-- Output only Java statements for the requested function body.
-- Do not output package declarations, imports, classes, constructors, fields, or helper methods.
+- Output exactly one complete Java method declaration for the requested module.
+- Output raw Java only: no markdown fences and no explanation.
+- Do not output package declarations, imports, classes, interfaces, enums, constructors, fields, or helper methods.
 - Do not mutate global state.
 - Do not use custom imports, Optional, StrategyTable, streams, lambdas, files, network, subprocesses, or runtime LLM code.
 - No markdown fences.
@@ -170,18 +159,18 @@ def render_function_agent(class_name: str, module_bodies: dict[str, str]) -> str
     bodies = {name: indent_body(module_bodies.get(name, DEFAULT_MODULE_BODIES[name])) for name in MODULE_NAMES}
     return FUNCTION_AGENT_TEMPLATE.format(
         class_name=class_name,
-        controller_body=bodies["controller"],
-        economy_body=bodies["economy"],
-        combat_body=bodies["combat"],
-        expansion_body=bodies["expansion"],
-        target_selection_body=bodies["target_selection"],
-        path_selection_body=bodies["path_selection"],
+        controller_method=bodies["controller"],
+        economy_method=bodies["economy"],
+        combat_method=bodies["combat"],
+        expansion_method=bodies["expansion"],
+        target_selection_method=bodies["target_selection"],
+        path_selection_method=bodies["path_selection"],
     )
 
 
 def indent_body(body: str) -> str:
     if not body.strip():
-        return "return new ArrayList<>();"
+        raise ValueError("Generated module method must not be empty.")
     return "\n        ".join(line.rstrip() for line in body.strip().splitlines())
 
 

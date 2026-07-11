@@ -9,6 +9,7 @@ from pathlib import Path
 from eagle.candidate import Candidate, MODULE_NAMES
 
 from .backend import GenerationBackend, generated_class_name
+from .java_module_validator import validate_function_module
 from .agent_template import render_function_agent
 
 
@@ -159,14 +160,14 @@ def request_module_body(candidate: Candidate, backend: GenerationBackend, class_
 def extract_code_from_output(raw_output: str) -> str:
     """Clean wrapper text and extract the strategy-body code."""
 
-    return extract_strategy_body(clean_generated_java_output(raw_output))
+    return clean_generated_java_output(raw_output)
 
 
 def assemble_java_agent(class_name: str, module_bodies: dict[str, str]) -> str:
     """Insert function bodies into the fixed Java scaffold."""
 
     for module_name in MODULE_NAMES:
-        validate_strategy_body(module_bodies[module_name])
+        validate_function_module(module_bodies[module_name], module_name)
     return render_function_agent(class_name, module_bodies)
 
 
@@ -233,70 +234,6 @@ def normalize_java_agent_source(source: str) -> str:
             count=1,
         )
     return source
-
-
-def extract_strategy_body(output: str) -> str:
-    """Return only the code intended for one generated function body."""
-
-    match = re.search(
-        (
-            r"\b(?:private|public|protected)?\s+"
-            r"(?:Decision|List<ActionProposal>|Unit|PathChoice|PlayerAction)\s+"
-            r"(?:decide|economy|combat|expansion|selectTarget|findPath|chooseAction)\s*"
-            r"\([^)]*\)\s*(?:throws\s+Exception\s*)?\{"
-        ),
-        output,
-    )
-    if not match:
-        return output.strip()
-
-    depth = 1
-    index = match.end()
-    while index < len(output) and depth:
-        char = output[index]
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-        index += 1
-    return output[match.end() : index - 1].strip()
-
-
-def indent_strategy_body(strategy_body: str) -> str:
-    if not strategy_body.strip():
-        return "return new PlayerAction();"
-    return "\n        ".join(line.rstrip() for line in strategy_body.strip().splitlines())
-
-
-def validate_strategy_body(strategy_body: str) -> None:
-    """Reject code that tries to alter the fixed scaffold."""
-
-    forbidden_patterns = [
-        (r"(?m)^\s*package\s+", "Generated strategy body must not include a package declaration."),
-        (r"(?m)^\s*import\s+", "Generated strategy body must not include imports."),
-        (r"\bclass\s+\w+", "Generated strategy body must not define classes."),
-        (
-            r"\b(?:private|public|protected)\s+[\w<>\[\], ?]+\s+\w+\s*\(",
-            "Generated strategy body must not define methods.",
-        ),
-        (r"\bOptional\b", "Generated strategy body must not use Optional."),
-        (r"\bStrategyTable\b", "Generated strategy body must not use StrategyTable."),
-        (r"\.stream\s*\(", "Generated strategy body must not use streams."),
-        (r"->", "Generated strategy body must not use lambdas."),
-        (r"\bPlayerAction\b", "Generated function body must not directly assemble PlayerAction objects."),
-        (r"\bPlayerActionGenerator\b", "Generated function body must not directly use PlayerActionGenerator."),
-    ]
-    for pattern, message in forbidden_patterns:
-        if re.search(pattern, strategy_body):
-            raise ValueError(message)
-
-    forbidden_helpers = [
-        "nearestIdleAlly",
-        "chooseAction",
-    ]
-    for helper_name in forbidden_helpers:
-        if re.search(rf"\b(?:private|public|protected)\s+[\w<>\[\], ?]+\s+{helper_name}\s*\(", strategy_body):
-            raise ValueError(f"Generated strategy body must not define helper method {helper_name}().")
 
 
 def validate_java_agent_source(source: str, class_name: str) -> None:

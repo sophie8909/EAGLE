@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from eagle.artifacts import write_candidate_artifacts
-from eagle.candidate import Candidate, MODULE_NAMES
+from eagle.candidate import Candidate, DEFAULT_MODULE_BODIES, MODULE_NAMES
 from eagle.config import ExperimentConfig, parse_minimal_yaml
 from eagle.crossover import Crossover, CrossoverContext
 from eagle.evaluation import evaluate_candidate
@@ -31,10 +31,8 @@ from generation.agent_template import microrts_blank_strategy_prompt, render_bla
 from generation.backend import GenerationBackend, MockGenerationBackend, generated_class_name
 from generation.java_agent_generator import (
     clean_generated_java_output,
-    extract_strategy_body,
     generate_java_agent,
     normalize_java_agent_source,
-    validate_strategy_body,
     validate_java_agent_source,
 )
 from scripts.analyze_run import analyze_run, format_report
@@ -449,36 +447,8 @@ Done.
             validate_java_agent_source(source, "GeneratedAgent_test")
 
     def test_validate_java_agent_source_accepts_random_ai_body(self) -> None:
-        source = render_function_agent("GeneratedAgent_test", {"controller": "return new Decision();"})
+        source = render_function_agent("GeneratedAgent_test", {"controller": "private Decision decide(AgentContext context) { return new Decision(); }"})
         validate_java_agent_source(source, "GeneratedAgent_test")
-
-    def test_validate_strategy_body_rejects_duplicate_helper_method(self) -> None:
-        body = """private boolean commandMove(Unit unit, int x, int y) {
-            return false;
-        }"""
-        with self.assertRaisesRegex(ValueError, "must not define methods"):
-            validate_strategy_body(body)
-
-    def test_validate_strategy_body_rejects_direct_player_action_assembly(self) -> None:
-        with self.assertRaisesRegex(ValueError, "PlayerAction"):
-            validate_strategy_body("PlayerAction pa = new PlayerAction();")
-
-    def test_extract_strategy_body_keeps_only_function_logic(self) -> None:
-        source = """package ai.generated;
-
-    private Decision decide(AgentContext context) throws Exception {
-        Decision decision = new Decision();
-        return decision;
-    }
-
-    public PlayerAction getAction(int player, GameState gs) {
-        return new PlayerAction();
-    }
-}
-"""
-        body = extract_strategy_body(source)
-        self.assertIn("Decision decision", body)
-        self.assertNotIn("getAction", body)
 
     def test_clean_generated_java_output_preserves_valid_java_source(self) -> None:
         source = """package ai.generated;
@@ -870,9 +840,17 @@ public class GeneratedAgent_test extends RandomBiasedAI {
     def test_validation_failure_gets_failed_game_performance(self) -> None:
         class UnsafeIterationBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
-                return """for (Unit unit : gs.getUnits()) {
-                    return new PlayerAction();
-                }"""
+                return DEFAULT_MODULE_BODIES["controller"]
+
+            def generate_module(self, candidate: Candidate, class_name: str, module_name: str) -> str:
+                if module_name == "controller":
+                    return """private Decision decide(AgentContext context) {
+                        for (Unit unit : gs.getUnits()) {
+                            return new Decision();
+                        }
+                        return new Decision();
+                    }"""
+                return DEFAULT_MODULE_BODIES[module_name]
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

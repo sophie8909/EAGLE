@@ -44,15 +44,15 @@ class RuleBasedMutationBackend:
                 "The strategy likely needs clearer economy and spending priorities. "
                 "Preserve any stable defensive behavior, then focus the next generation on one concrete improvement."
             )
-        if "Rewrite the strategy description." in prompt:
-            return section_between(prompt, 'Current function body:\\n', '\\n\\nReflection:') or "return new ArrayList<>();"
+        if "Rewrite exactly one complete Java method for this module." in prompt:
+            return section_between(prompt, 'Current function body:\n', '\n\nReflection:')
         if "Analyze why this code-generation instruction produced this result." in prompt:
             return (
                 "The instruction likely needs stricter Java correctness constraints. "
                 "Preserve working scaffold rules and add one concrete guard against the observed failure."
             )
-        if "Rewrite the code-generation instruction." in prompt:
-            return section_between(prompt, 'Current function body:\\n', '\\n\\nReflection:') or "return new ArrayList<>();"
+        if "Rewrite exactly one complete Java method for this module." in prompt:
+            return section_between(prompt, 'Current function body:\n', '\n\nReflection:')
         return prompt.strip()
 
 
@@ -209,17 +209,18 @@ Reflection:
 
 {mutation_suffix}
 
-Rewrite only this Java function body.
+Rewrite exactly one complete Java method for this module.
 
 Requirements:
 - Preserve behaviors that the reflection says likely worked.
 - Apply the single most useful change from the reflection.
 - Make only one or two focused changes.
 - Keep it concise.
-- Output Java statements only.
+- Output exactly one complete Java method declaration.
+- Do not add imports, fields, helpers, classes, markdown, or explanation.
 - Do not include analysis, labels, markdown, or explanation.
 
-Output only the revised Java function body.
+Output only the revised complete Java method.
 """
 
 
@@ -265,7 +266,7 @@ Reflection:
 
 {mutation_suffix}
 
-Rewrite only this Java function body.
+Rewrite exactly one complete Java method for this module.
 
 Requirements:
 - Preserve constraints that likely worked.
@@ -273,10 +274,11 @@ Requirements:
 - Make only one or two focused changes.
 - Keep it concise.
 - Prefer concrete Java-generation constraints over vague advice.
-- Output Java statements only.
+- Output exactly one complete Java method declaration.
+- Do not add imports, fields, helpers, classes, markdown, or explanation.
 - Do not include analysis, labels, markdown, or explanation.
 
-Output only the revised Java function body.
+Output only the revised complete Java method.
 """
 
 

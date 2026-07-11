@@ -20,7 +20,7 @@ class GenerationBackend(ABC):
         """Return Java source code for a candidate prompt."""
 
     def generate_module(self, candidate: Candidate, class_name: str, module_name: str) -> str:
-        """Return Java statements for one generated function body."""
+        """Return exactly one complete Java method for a generated module."""
 
         return self.generate(candidate, class_name)
 

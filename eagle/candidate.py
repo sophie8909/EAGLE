@@ -27,24 +27,26 @@ DEFAULT_MODULE_PROMPTS: dict[str, str] = {
 
 DEFAULT_MODULE_BODIES: dict[str, str] = {
     "controller": (
-        "Decision decision = new Decision();\n"
-        "decision.proposals.addAll(economy(context));\n"
-        "decision.proposals.addAll(expansion(context));\n"
-        "decision.proposals.addAll(combat(context));\n"
-        "return decision;"
+        "private Decision decide(AgentContext context) {\n"
+        "    Decision decision = new Decision();\n"
+        "    decision.proposals.addAll(economy(context));\n"
+        "    decision.proposals.addAll(expansion(context));\n"
+        "    decision.proposals.addAll(combat(context));\n"
+        "    return decision;\n"
+        "}"
     ),
-    "economy": "return new ArrayList<>();",
-    "combat": "return new ArrayList<>();",
-    "expansion": "return new ArrayList<>();",
-    "target_selection": "return candidates.isEmpty() ? null : candidates.get(0);",
-    "path_selection": "return new PathChoice(targetX, targetY);",
+    "economy": "private List<ActionProposal> economy(AgentContext context) {\n    return new ArrayList<>();\n}",
+    "combat": "private List<ActionProposal> combat(AgentContext context) {\n    return new ArrayList<>();\n}",
+    "expansion": "private List<ActionProposal> expansion(AgentContext context) {\n    return new ArrayList<>();\n}",
+    "target_selection": ("private Unit selectTarget(AgentContext context, Unit actor, List<Unit> candidates) {\n" "    return candidates.isEmpty() ? null : candidates.get(0);\n}"),
+    "path_selection": ("private PathChoice findPath(AgentContext context, Unit unit, int targetX, int targetY) {\n" "    return new PathChoice(targetX, targetY);\n}"),
 }
 
 DEFAULT_GENERATION_PROMPT = (
     "Requested class name: {class_name}\n"
     "Requested module: {module_name}\n\n"
-    "Generate only Java statements for the requested function body. "
-    "Return raw Java statements only. No markdown, no explanation, no code fences. "
+    "Generate exactly one complete Java method declaration for the requested module. "
+    "Return only that raw Java method: no markdown fences and no explanation. "
     "Do not output a package declaration, imports, class declaration, constructors, fields, or helper methods. "
     "Do not define helper methods, do not invent helper methods, and never call nearestIdleAlly. "
     "Do not directly assemble PlayerAction objects; return structured Decision, ActionProposal, Unit, or PathChoice values. "
