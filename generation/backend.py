@@ -8,10 +8,14 @@ import time
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from eagle.candidate import Candidate
 
 from .agent_template import render_blank_strategy_agent
+
+if TYPE_CHECKING:
+    from eagle.llm_logging import LLMCallLogger
 
 
 class GenerationBackend(ABC):
@@ -42,11 +46,12 @@ class MockGenerationBackend(GenerationBackend):
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
 
-    def __init__(self, base_url: str, model: str, timeout_sec: int = 120, max_retries: int = 2) -> None:
+    def __init__(self, base_url: str, model: str, timeout_sec: int = 120, max_retries: int = 2, logger: LLMCallLogger | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout_sec = timeout_sec
         self.max_retries = max_retries
+        self.logger = logger
 
     @property
     def chat_completions_url(self) -> str:
@@ -70,31 +75,97 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        body = None
-        for attempt in range(self.max_retries + 1):
+        for attempt_index in range(self.max_retries + 1):
+            attempt = attempt_index + 1
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
-                    body = json.loads(response.read().decode("utf-8"))
-                break
+                    response_text = response.read().decode("utf-8")
+                body = json.loads(response_text)
+                content = str(body["choices"][0]["message"]["content"])
+                self._log_call(
+                    candidate=candidate,
+                    module_name=module_name,
+                    prompt=prompt,
+                    response_text=content,
+                    status="success",
+                    attempt=attempt,
+                )
+                return content
             except urllib.error.HTTPError as exc:
+                response_text = exc.read().decode("utf-8", errors="replace")
                 message = backend_http_error_message(
                     exc,
                     url=self.chat_completions_url,
                     model=self.model,
                     request_body_size=len(request.data or b""),
+                    response_body=response_text,
                 )
-                if exc.code == 400 or attempt >= self.max_retries:
+                self._log_call(
+                    candidate=candidate,
+                    module_name=module_name,
+                    prompt=prompt,
+                    response_text=response_text,
+                    status="error",
+                    attempt=attempt,
+                    error=message,
+                )
+                if exc.code == 400 or attempt_index >= self.max_retries:
                     raise GenerationBackendUnavailable(message) from exc
-                time.sleep(2**attempt)
+                time.sleep(2**attempt_index)
             except (urllib.error.URLError, TimeoutError) as exc:
-                if attempt >= self.max_retries:
-                    raise GenerationBackendUnavailable(f"Generation backend request failed: {exc}") from exc
-                time.sleep(2**attempt)
-            except json.JSONDecodeError as exc:
-                raise RuntimeError(f"Generation backend returned invalid JSON: {exc}") from exc
-        if body is None:
-            raise GenerationBackendUnavailable("Generation backend returned no response.")
-        return str(body["choices"][0]["message"]["content"])
+                message = f"Generation backend request failed: {exc}"
+                self._log_call(
+                    candidate=candidate,
+                    module_name=module_name,
+                    prompt=prompt,
+                    status="error",
+                    attempt=attempt,
+                    error=message,
+                )
+                if attempt_index >= self.max_retries:
+                    raise GenerationBackendUnavailable(message) from exc
+                time.sleep(2**attempt_index)
+            except (json.JSONDecodeError, KeyError, TypeError) as exc:
+                message = f"Generation backend returned invalid JSON: {exc}"
+                self._log_call(
+                    candidate=candidate,
+                    module_name=module_name,
+                    prompt=prompt,
+                    response_text=locals().get("response_text", ""),
+                    status="error",
+                    attempt=attempt,
+                    error=message,
+                )
+                raise RuntimeError(message) from exc
+        raise GenerationBackendUnavailable("Generation backend returned no response.")
+
+    def _log_call(
+        self,
+        *,
+        candidate: Candidate,
+        module_name: str,
+        prompt: str,
+        status: str,
+        attempt: int,
+        response_text: str = "",
+        error: str | None = None,
+    ) -> None:
+        if self.logger is None:
+            return
+        self.logger.write(
+            stage="generation",
+            input_text=prompt,
+            response_text=response_text,
+            status=status,
+            backend="openai_compatible",
+            model=self.model,
+            candidate_id=candidate.id,
+            generation=candidate.generation,
+            module_name=module_name,
+            attempt=attempt,
+            error=error,
+            metadata={"class_name": generated_class_name(candidate.id), "url": self.chat_completions_url},
+        )
 
 
 def backend_http_error_message(
@@ -103,8 +174,9 @@ def backend_http_error_message(
     url: str,
     model: str,
     request_body_size: int,
+    response_body: str = "",
 ) -> str:
-    response_body = exc.read().decode("utf-8", errors="replace")[:300]
+    response_body = response_body[:300]
     return (
         f"Generation backend HTTP {exc.code}: {exc.reason}. "
         f"url={url} model={model} request_body_size={request_body_size} "
@@ -124,9 +196,10 @@ def build_generation_backend(
     *,
     base_url: str = "http://localhost:8080",
     model: str = "local-model",
+    logger: LLMCallLogger | None = None,
 ) -> GenerationBackend:
     if name == "mock":
         return MockGenerationBackend()
     if name in {"openai", "llama_cpp"}:
-        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model)
+        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger)
     raise ValueError(f"Unknown generation backend: {name}")

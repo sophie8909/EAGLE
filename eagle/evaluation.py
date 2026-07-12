@@ -18,6 +18,7 @@ from generation.java_agent_generator import GeneratedJavaAgent, ValidationResult
 from .artifacts import append_result, write_candidate_artifacts
 from .candidate import Candidate
 from .config import ExperimentConfig
+from .llm_logging import LLMCallLogger
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,7 @@ def evaluate_population(
     candidates_dir: Path,
     results_path: Path,
     mock: bool,
+    llm_logger: LLMCallLogger | None = None,
 ) -> list[Candidate]:
     evaluated: list[Candidate] = []
     for index, candidate in enumerate(population):
@@ -75,6 +77,7 @@ def evaluate_population(
             match_artifacts_dir=candidates_dir / candidate.id / "matches",
             mock=mock,
             ordinal=index,
+            llm_logger=llm_logger,
         )
         write_candidate_artifacts(candidates_dir, evaluation)
         append_result(results_path, evaluation)
@@ -99,6 +102,7 @@ def evaluate_candidate(
     mock: bool,
     ordinal: int,
     match_artifacts_dir: Path | None = None,
+    llm_logger: LLMCallLogger | None = None,
 ) -> CandidateEvaluation:
     agent: GeneratedJavaAgent | None = None
     compile_result: CompileResult | None = None
@@ -154,6 +158,7 @@ def evaluate_candidate(
             game_metrics=game_metrics,
             config=config,
             alignment_backend=alignment_backend,
+            llm_logger=llm_logger,
         )
     elif failure_category is not None:
         game_metrics = compute_game_metrics([])
@@ -311,6 +316,7 @@ def score_strategy_alignment(
     game_metrics: GameMetrics,
     config: ExperimentConfig,
     alignment_backend: str,
+    llm_logger: LLMCallLogger | None = None,
 ) -> StrategyAlignmentResult:
     try:
         return evaluate_strategy_alignment(
@@ -320,6 +326,9 @@ def score_strategy_alignment(
             backend=alignment_backend,
             base_url=config.llm_base_url,
             model=config.llm_model,
+            logger=llm_logger,
+            candidate_id=candidate.id,
+            generation=candidate.generation,
         )
     except (RuntimeError, ValueError, OSError) as exc:
         return StrategyAlignmentResult(score=0.0, rationale=f"Alignment evaluation failed: {exc}")

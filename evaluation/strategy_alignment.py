@@ -7,7 +7,10 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from eagle.llm_logging import LLMCallLogger
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,9 @@ def evaluate_strategy_alignment(
     backend: str = "mock",
     base_url: str = "http://localhost:8080",
     model: str = "local-model",
+    logger: LLMCallLogger | None = None,
+    candidate_id: str | None = None,
+    generation: int | None = None,
 ) -> StrategyAlignmentResult:
     """Score whether generated Java behavior matches the evolved prompt."""
 
@@ -41,6 +47,9 @@ def evaluate_strategy_alignment(
         match_summary=match_summary,
         base_url=base_url,
         model=model,
+        logger=logger,
+        candidate_id=candidate_id,
+        generation=generation,
     )
 
 
@@ -68,6 +77,9 @@ def llm_strategy_alignment(
     base_url: str,
     model: str,
     timeout_sec: int = 120,
+    logger: LLMCallLogger | None = None,
+    candidate_id: str | None = None,
+    generation: int | None = None,
 ) -> StrategyAlignmentResult:
     base_url = base_url.rstrip("/")
     url = f"{base_url}/chat/completions" if base_url.endswith("/v1") else f"{base_url}/v1/chat/completions"
@@ -91,14 +103,58 @@ def llm_strategy_alignment(
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout_sec) as response:
-            body = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"Strategy alignment backend request failed: {exc}") from exc
-    content = str(body["choices"][0]["message"]["content"])
-    parsed = _extract_json_object(content)
-    score = max(0.0, min(1.0, float(parsed.get("score", 0.0))))
-    rationale = str(parsed.get("rationale", "")).strip() or "No rationale returned."
+            response_text = response.read().decode("utf-8")
+        body = json.loads(response_text)
+        content = str(body["choices"][0]["message"]["content"])
+        parsed = _extract_json_object(content)
+        score = max(0.0, min(1.0, float(parsed.get("score", 0.0))))
+        rationale = str(parsed.get("rationale", "")).strip() or "No rationale returned."
+    except urllib.error.HTTPError as exc:
+        response_text = exc.read().decode("utf-8", errors="replace")
+        message = f"Strategy alignment backend HTTP {exc.code}: {exc.reason}"
+        _log_alignment_call(
+            logger, user_prompt, response_text, "error", model, candidate_id, generation, message, url
+        )
+        raise RuntimeError(message) from exc
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, TypeError, ValueError, RuntimeError) as exc:
+        message = f"Strategy alignment backend request failed: {exc}"
+        _log_alignment_call(
+            logger, user_prompt, locals().get("response_text", ""), "error",
+            model, candidate_id, generation, message, url
+        )
+        raise RuntimeError(message) from exc
+    _log_alignment_call(
+        logger, user_prompt, content, "success", model, candidate_id, generation, None, url
+    )
     return StrategyAlignmentResult(score=score, rationale=rationale, raw_response=content)
+
+
+def _log_alignment_call(
+    logger: LLMCallLogger | None,
+    input_text: str,
+    response_text: str,
+    status: str,
+    model: str,
+    candidate_id: str | None,
+    generation: int | None,
+    error: str | None,
+    url: str,
+) -> None:
+    if logger is None:
+        return
+    logger.write(
+        stage="alignment",
+        input_text=input_text,
+        response_text=response_text,
+        status=status,
+        backend="openai_compatible",
+        model=model,
+        candidate_id=candidate_id,
+        generation=generation,
+        attempt=1,
+        error=error,
+        metadata={"url": url},
+    )
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:

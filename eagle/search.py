@@ -17,6 +17,7 @@ from .config import ExperimentConfig
 from .crossover import Crossover, CrossoverContext
 from .evaluation import evaluate_population
 from .mutation import Mutation, MutationContext
+from .llm_logging import LLMCallLogger
 from .offspring import normalize_prompt
 from .selection import (
     Selection,
@@ -43,13 +44,6 @@ def run_search(
 ) -> SearchResult:
     config.validate()
     rng = random.Random(config.random_seed)
-    generation_backend = build_generation_backend(
-        "mock" if mock else config.generation_backend,
-        base_url=config.llm_base_url,
-        model=config.llm_model,
-    )
-    alignment_backend = "mock" if mock else config.alignment_backend
-
     # Search owns the algorithm order; the operator classes own only their local behavior.
     strategy_mutation = Mutation(config, method="strategy_reflection")
     code_mutation = Mutation(config, method="code_generation_reflection")
@@ -67,6 +61,14 @@ def run_search(
     classes_dir.mkdir()
     copy2(config_path, run_dir / "config.yaml")
 
+    llm_logger = LLMCallLogger(run_dir / "llm_logs")
+    generation_backend = build_generation_backend(
+        "mock" if mock else config.generation_backend,
+        base_url=config.llm_base_url,
+        model=config.llm_model,
+        logger=llm_logger,
+    )
+    alignment_backend = "mock" if mock else config.alignment_backend
     results_path = run_dir / "results.jsonl"
 
     # NSGA-II begins with a complete evaluated population so every candidate has objectives.
@@ -82,6 +84,7 @@ def run_search(
         candidates_dir=candidates_dir,
         results_path=results_path,
         mock=mock,
+        llm_logger=llm_logger,
     )
 
     for generation in range(1, config.generations):
@@ -111,6 +114,7 @@ def run_search(
             candidates_dir=candidates_dir,
             results_path=results_path,
             mock=mock,
+            llm_logger=llm_logger,
         )
 
         # Survivor selection keeps the best Pareto fronts and preserves spread within a partial front.
