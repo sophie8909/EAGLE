@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from generation.agent_template import get_seed_prompt_template
+from generation.agent_template import (
+    DEFAULT_AGENT_TEMPLATE_PATH,
+    DEFAULT_BEHAVIORS_TEMPLATE_PATH,
+    get_seed_prompt_template,
+)
 
 from .candidate import DEFAULT_GENERATION_PROMPT
 
@@ -30,6 +34,8 @@ class ExperimentConfig:
     llm_model: str = "local-model"
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
+    agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
+    behaviors_template_path: Path = DEFAULT_BEHAVIORS_TEMPLATE_PATH
     tick_limit: int = 100
     opponent: str = TRAINING_OPPONENT
     matches_per_candidate: int = 1
@@ -80,6 +86,8 @@ class ExperimentConfig:
             llm_model=str(payload.get("llm_model", "local-model")),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
+            agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
+            behaviors_template_path=_repository_path(payload.get("behaviors_template_path"), DEFAULT_BEHAVIORS_TEMPLATE_PATH),
             tick_limit=int(payload.get("tick_limit", 100)),
             # EA training always evaluates the generated candidate as player 0 against LightRush as player 1.
             opponent=TRAINING_OPPONENT,
@@ -113,6 +121,15 @@ class ExperimentConfig:
             raise ValueError("tick_limit must be at least 1.")
         if self.matches_per_candidate < 1:
             raise ValueError("matches_per_candidate must be at least 1.")
+        from generation.agent_template import JavaTemplatePaths, validate_java_templates
+        validate_java_templates(JavaTemplatePaths(self.agent_template_path, self.behaviors_template_path))
+
+
+def _repository_path(value: object | None, default: Path) -> Path:
+    if value is None:
+        return default
+    path = Path(str(value))
+    return path if path.is_absolute() else DEFAULT_AGENT_TEMPLATE_PATH.parents[2] / path
 
 
 def parse_minimal_yaml(raw: str) -> dict[str, Any]:

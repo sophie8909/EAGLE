@@ -304,11 +304,11 @@ population_size: 3
             individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
             self.assertNotIn("prompt_length", individual["fitness_objectives"])
 
-    def test_generate_java_agent_uses_candidate_class_name(self) -> None:
+    def test_generate_java_agent_uses_stable_template_class_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             candidate = Candidate(strategy_prompt="Generate a Java MicroRTS agent.")
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
-            self.assertEqual(agent.class_name, generated_class_name(candidate.id))
+            self.assertEqual(agent.class_name, "CandidateAgent")
             self.assertTrue(agent.source_path.exists())
 
     def test_validate_java_agent_source_rejects_non_java_output(self) -> None:

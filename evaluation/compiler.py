@@ -30,6 +30,9 @@ def compile_generated_agent(
 ) -> CompileResult:
     source_paths = (source_path,) if isinstance(source_path, Path) else source_path
     source_paths = tuple(path.resolve() for path in source_paths)
+    for path in source_paths:
+        if "EAGLE_BODY" in path.read_text(encoding="utf-8"):
+            raise ValueError(f"Refusing to compile unresolved Java behavior template: {path}")
     microrts_dir = microrts_dir.resolve()
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)

@@ -1,42 +1,41 @@
 # Java Agent Pipeline
 
-Each candidate is one complete strategy genome with three candidate-level components: the overall strategy description, the complete behavior-function collection, and generation guidance. The six required behavior functions are never crossed over, mutated, or requested independently.
+Each candidate evolves one complete strategy: the overall strategy description, the complete six-function behavior collection, and generation guidance. EAGLE requests and replaces all behavior bodies together.
+
+## Repository-owned Java sources
+
+The source structure lives in `eagle/java_templates/`:
+
+- `CandidateAgent.java` is the fixed, manually editable MicroRTS wrapper. It owns AI lifecycle methods, context creation, calls to every predefined behavior method, action assembly, fallback handling, clone/reset, and framework parameters. Candidate creation copies this file without changing it.
+- `CandidateBehaviors.java` is the evolvable behavior template. It owns the fixed class, imports, signatures, and one unique `/* EAGLE_BODY:<function_name> */` marker for each required behavior.
+
+Python does not own either Java class skeleton. It validates the checked-in templates, validates the backend's JSON function set and bodies, replaces the markers, rejects unresolved markers, and writes the rendered behavior source. The unrendered behavior template is never compiled.
+
+Changing a behavior signature requires coordinated edits to both Java templates and `eagle/module_contract.py` (plus `MODULE_NAMES` in `eagle/candidate.py` when a function is added or removed).
 
 ## Generation boundary
 
-The generation backend receives one prompt describing every fixed function slot and the previous complete function set. It must return exactly one JSON object:
+The backend returns only one JSON object containing every fixed function body:
 
 ```json
 {"functions":{"controller":"...","economy":"...","combat":"...","expansion":"...","target_selection":"...","path_selection":"..."}}
 ```
 
-Values are method bodies only. Parsing rejects missing or unknown keys. Each body is then validated independently for emptiness, Markdown fences, package/import/type declarations, nested method declarations, and attempts to escape the predefined method scope.
+Missing, duplicate-template, unknown, empty, fenced, or scope-escaping functions fail before compilation.
 
-## Java sources
+## Runtime and artifacts
 
-`generation/agent_template.py` renders two sources:
+Both rendered sources compile together in one `javac` invocation. Candidate class output directories isolate the stable `ai.generated.CandidateAgent` class name. Successful candidates proceed to MicroRTS evaluation.
 
-- `GeneratedAgent_<id>.java` is the fixed MicroRTS wrapper. It owns `AI` lifecycle methods, `GameState` context collection, action assembly, fallback handling, and framework parameters. No LLM output is inserted into this file.
-- `GeneratedAgent_<id>Behaviors.java` is the only generated/evolved Java source. All six predefined methods are rendered together from the validated bodies.
-
-`evaluation/compiler.py` compiles both sources in one `javac` invocation. Successful candidates proceed through existing Java validation and MicroRTS evaluation. Generation, JSON parsing, body validation, or compilation failures retain the `-1000` game-performance score; completed matches retain their real score.
-
-## Evolution
-
-Strategy reflection updates the overall intended MicroRTS strategy. Code-generation reflection updates the complete generation guidance using compilation/validation/runtime errors, alignment feedback, and the previous complete function set. The next generation request always regenerates all bodies together.
-
-Crossover selects candidate components. The behavior-function dictionary is selected whole from one parent; there is no per-function crossover.
-
-## Candidate artifacts
-
-Each candidate directory includes:
+Each candidate artifact directory contains at least:
 
 ```text
-prompt.json
-CandidateAgent.java
-CandidateBehaviors.java
-compile.log
-result.json
+candidate/
+  CandidateAgent.java
+  CandidateBehaviors.java
+  prompt.json
+  compile.log
+  result.json
 ```
 
-The Java filenames are stable artifact labels; their declared generated class names remain candidate-specific. Existing detailed metrics and debug artifacts are also retained.
+Detailed metrics and debug artifacts are retained alongside these files.

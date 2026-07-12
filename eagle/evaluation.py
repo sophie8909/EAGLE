@@ -13,6 +13,7 @@ from evaluation.microrts_runner import MatchResult, run_microrts_match
 from evaluation.nsga2_objectives import build_objectives
 from evaluation.strategy_alignment import StrategyAlignmentResult, evaluate_strategy_alignment
 from generation.backend import GenerationBackend
+from generation.agent_template import JavaTemplatePaths
 from generation.java_agent_generator import GeneratedJavaAgent, ValidationResult, generate_java_agent_result
 
 from .artifacts import append_result, write_candidate_artifacts
@@ -113,7 +114,7 @@ def evaluate_candidate(
     failure_reason: str | None = None
 
     # LLM generation, extraction, scaffold assembly, and Java validation.
-    generation_result = generate_java_agent_result(candidate, backend, generated_agents_dir)
+    generation_result = generate_java_agent_result(candidate, backend, generated_agents_dir, template_paths=JavaTemplatePaths(config.agent_template_path, config.behaviors_template_path))
     agent = generation_result.agent
     failure_category = generation_result.failure_category
     failure_reason = generation_result.failure_reason
