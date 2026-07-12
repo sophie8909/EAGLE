@@ -35,7 +35,16 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     (candidate_dir / "generation_prompt.txt").write_text(evaluation.candidate.generation_prompt, encoding="utf-8")
     write_module_artifacts(candidate_dir, evaluation.candidate)
     if evaluation.agent is not None:
-        (candidate_dir / "generated_java_source.java").write_text(evaluation.agent.source, encoding="utf-8")
+        (candidate_dir / "CandidateAgent.java").write_text(evaluation.agent.source, encoding="utf-8")
+        (candidate_dir / "CandidateBehaviors.java").write_text(evaluation.agent.behavior_source, encoding="utf-8")
+        (candidate_dir / "generated_java_source.java").write_text(evaluation.agent.behavior_source, encoding="utf-8")
+    write_json(candidate_dir / "prompt.json", {
+        "strategy_description": evaluation.candidate.strategy_prompt,
+        "generation_guidance": evaluation.candidate.generation_prompt,
+        "previous_behavior_functions": evaluation.candidate.module_bodies,
+    })
+    compile_log = "" if evaluation.compile_result is None else evaluation.compile_result.stdout + evaluation.compile_result.stderr
+    (candidate_dir / "compile.log").write_text(compile_log, encoding="utf-8")
     write_json(candidate_dir / "compile_result.json", compile_to_dict(evaluation.compile_result))
     write_json(candidate_dir / "raw_microrts_result.json", [match_to_dict(result) for result in evaluation.match_results])
     write_json(
@@ -49,6 +58,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     write_json(candidate_dir / "objectives.json", evaluation.candidate.fitness_objectives)
     write_json(candidate_dir / "individual.json", evaluation.candidate.to_json_dict())
     write_json(candidate_dir / "candidate_result.json", candidate_result_to_dict(evaluation.result))
+    write_json(candidate_dir / "result.json", candidate_result_to_dict(evaluation.result))
     if evaluation.result.failure_category is not None:
         write_failed_candidate_debug(candidates_dir.parent, evaluation)
 

@@ -172,7 +172,7 @@ def evaluate_candidate(
         failure_category=failure_category,
     )
     status = "failed" if failure_category is not None else "evaluated"
-    previous_code = agent.source if agent is not None else generation_result.assembled_java or candidate.previous_code
+    previous_code = agent.behavior_source if agent is not None else generation_result.assembled_java or candidate.previous_code
     module_bodies = generation_result.module_bodies or candidate.module_bodies
     evaluated_candidate = Candidate(
         id=candidate.id,
@@ -232,7 +232,7 @@ def compile_agent_source(
     mock: bool,
 ) -> CompileResult:
     return compile_generated_agent(
-        agent.source_path,
+        agent.source_paths,
         microrts_dir=config.microrts_dir,
         output_dir=classes_dir / candidate_id,
         mock=mock,

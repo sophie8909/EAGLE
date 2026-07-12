@@ -166,93 +166,10 @@ population_size: 3
         self.assertEqual(set(payload["module_bodies"]), set(MODULE_NAMES))
         self.assertEqual(payload["module_prompts"]["economy"], "save resources")
 
-    def test_generation_input_includes_one_module_prompt_and_body(self) -> None:
-        candidate = Candidate(
-            module_prompts={"economy": "economy prompt part"},
-            module_bodies={"economy": "economy body part"},
-            generation_prompt="generation prompt part",
-        )
-        generation_input = candidate.generation_input(module_name="economy")
-        self.assertLess(generation_input.index("economy"), generation_input.index("economy prompt part"))
-        self.assertLess(generation_input.index("economy prompt part"), generation_input.index("economy body part"))
-        self.assertLess(generation_input.index("economy body part"), generation_input.index("generation prompt part"))
-
     def test_initial_candidate_has_default_module_bodies(self) -> None:
         candidate = Candidate(strategy_prompt="strategy", generation_prompt="generate")
         self.assertEqual(set(candidate.module_bodies), set(MODULE_NAMES))
         self.assertIn("Decision decision", candidate.module_bodies["controller"])
-
-    def test_mutation_dispatch_calls_strategy_reflection(self) -> None:
-        backend = RecordingMutationBackend(["strategy analysis", "return new ArrayList<>();"])
-        config = ExperimentConfig.from_mapping(
-            {
-                "seed_prompts": ["seed"],
-                "max_prompt_chars": 300,
-                "max_prompt_lines": 8,
-            }
-        )
-        parent = Candidate(
-            id="parent",
-            strategy_prompt="keep this intent",
-            previous_code="old code",
-            generation_prompt="generate",
-        )
-        child = Mutation(config, method="strategy_reflection", backend=backend).mutate(
-            parent,
-            MutationContext(generation=1, index=0, game_performance=3.0, player_resource=12.0, enemy_resource=7.0),
-        )
-        self.assertEqual(child.generation, 1)
-        self.assertEqual(child.parent_ids, ("parent",))
-        self.assertEqual(len(backend.prompts), 2)
-        self.assertIn("Analyze this strategy's result.", backend.prompts[0])
-        self.assertIn("strategy analysis", backend.prompts[1])
-        self.assertEqual(child.module_bodies["controller"], "return new ArrayList<>();")
-        for module_name in MODULE_NAMES:
-            if module_name != "controller":
-                self.assertEqual(child.module_bodies[module_name], parent.module_bodies[module_name])
-        self.assertEqual(child.previous_code, parent.previous_code)
-        self.assertEqual(child.generation_prompt, parent.generation_prompt)
-        self.assertEqual(child.metadata["mutation_reflection"], "strategy analysis")
-        self.assertEqual(child.metadata["mutation_rewrite"], "return new ArrayList<>();")
-        self.assertEqual(child.metadata["mutation_module"], "controller")
-        self.assertEqual(child.metadata["operator"], "mutation")
-
-    def test_mutation_dispatch_calls_code_generation_reflection(self) -> None:
-        backend = RecordingMutationBackend(["code analysis", "return candidates.isEmpty() ? null : candidates.get(0);"])
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
-        parent = Candidate(
-            id="parent",
-            strategy_prompt="keep this strategy",
-            previous_code="return pag.getRandom();",
-            generation_prompt="generate",
-        )
-        child = Mutation(config, method="code_generation_reflection", backend=backend).mutate(
-            parent,
-            MutationContext(
-                generation=1,
-                index=0,
-                alignment_score=0.25,
-                alignment_reason="used random action",
-                compile_success=False,
-                validation_success=True,
-                runtime_success=False,
-                error_category="Java compile failure",
-                error_message="cannot find symbol in selectTarget",
-            ),
-        )
-        self.assertEqual(len(backend.prompts), 2)
-        self.assertIn("Analyze why this code-generation instruction produced this result.", backend.prompts[0])
-        self.assertIn("cannot find symbol", backend.prompts[0])
-        self.assertIn("code analysis", backend.prompts[1])
-        self.assertEqual(child.module_bodies["target_selection"], "return candidates.isEmpty() ? null : candidates.get(0);")
-        for module_name in MODULE_NAMES:
-            if module_name != "target_selection":
-                self.assertEqual(child.module_bodies[module_name], parent.module_bodies[module_name])
-        self.assertEqual(child.previous_code, parent.previous_code)
-        self.assertEqual(child.generation_prompt, parent.generation_prompt)
-        self.assertEqual(child.metadata["mutation_module"], "target_selection")
-        self.assertEqual(child.metadata["mutation_reflection"], "code analysis")
-        self.assertEqual(child.metadata["mutation_rewrite"], "return candidates.isEmpty() ? null : candidates.get(0);")
 
     def test_failed_game_performance_selects_code_generation_reflection(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
@@ -331,32 +248,18 @@ population_size: 3
             self.assertIn("extends AI", agent.source)
             self.assertIn("public PlayerAction getAction", agent.source)
             self.assertIn(f"return new {agent.class_name}();", agent.source)
-            self.assertIn("private Decision decide", agent.source)
-            self.assertIn("private List<ActionProposal> economy", agent.source)
-            self.assertIn("private Unit selectTarget", agent.source)
+            self.assertNotIn("Decision decision = new Decision()", agent.source)
+            self.assertIn("Decision decision = new Decision()", agent.behavior_source)
+            self.assertIn("List<ActionProposal> economy", agent.behavior_source)
+            self.assertIn("Unit selectTarget", agent.behavior_source)
             self.assertEqual(set(agent.module_bodies), set(MODULE_NAMES))
 
     def test_seed_prompt_template_expands_to_blank_strategy_prompt(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompt_template": "microrts_blank_strategy_agent"})
         self.assertEqual(len(config.seed_prompts), 1)
         self.assertEqual(config.seed_prompts[0], microrts_blank_strategy_prompt())
-        self.assertIn("six evolvable functions", config.seed_prompts[0])
+        self.assertIn("six predefined behavior functions", config.seed_prompts[0])
         self.assertIn("PlayerAction assembly", config.seed_prompts[0])
-
-    def test_passive_ai_initial_baseline_compiles_against_microrts(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            source_dir = root / "src" / "ai" / "generated"
-            source_dir.mkdir(parents=True)
-            source_path = source_dir / "GeneratedAgent_test.java"
-            source_path.write_text(render_blank_strategy_agent("GeneratedAgent_test"), encoding="utf-8")
-            result = compile_generated_agent(
-                source_path,
-                microrts_dir=Path("third_party/microrts"),
-                output_dir=root / "classes",
-                mock=False,
-            )
-        self.assertTrue(result.ok, result.stderr)
 
     def test_mock_search_writes_nsga2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -408,82 +311,9 @@ population_size: 3
             self.assertEqual(agent.class_name, generated_class_name(candidate.id))
             self.assertTrue(agent.source_path.exists())
 
-    def test_clean_generated_java_output_strips_markdown_fences(self) -> None:
-        output = """Here is the Java:
-```java
-package ai.generated;
-
-import rts.units.UnitTypeTable;
-
-public class GeneratedAgent_test {
-    public GeneratedAgent_test(UnitTypeTable utt) {
-    }
-}
-```
-Done.
-"""
-        cleaned = clean_generated_java_output(output)
-        self.assertNotIn("```", cleaned)
-        self.assertTrue(cleaned.startswith("package ai.generated;"))
-        self.assertTrue(cleaned.endswith("}"))
-
     def test_validate_java_agent_source_rejects_non_java_output(self) -> None:
         with self.assertRaisesRegex(ValueError, "class declaration"):
             validate_java_agent_source("Here is a strategy explanation with no Java.", "GeneratedAgent_test")
-
-    def test_validate_java_agent_source_rejects_nonexistent_helper(self) -> None:
-        source = render_function_agent("GeneratedAgent_test", {"controller": "nearestIdleAlly(null, 0, null);"})
-        with self.assertRaisesRegex(ValueError, "nearestIdleAlly"):
-            validate_java_agent_source(source, "GeneratedAgent_test")
-
-    def test_validate_java_agent_source_rejects_direct_unit_iteration(self) -> None:
-        source = render_function_agent(
-            "GeneratedAgent_test",
-            {"controller": """for (Unit unit : gs.getUnits()) {
-            return new Decision();
-        }"""},
-        )
-        with self.assertRaisesRegex(ValueError, "gs.getUnits"):
-            validate_java_agent_source(source, "GeneratedAgent_test")
-
-    def test_validate_java_agent_source_accepts_random_ai_body(self) -> None:
-        source = render_function_agent("GeneratedAgent_test", {"controller": "private Decision decide(AgentContext context) { return new Decision(); }"})
-        validate_java_agent_source(source, "GeneratedAgent_test")
-
-    def test_clean_generated_java_output_preserves_valid_java_source(self) -> None:
-        source = """package ai.generated;
-
-import ai.RandomBiasedAI;
-import rts.units.UnitTypeTable;
-
-public class GeneratedAgent_test extends RandomBiasedAI {
-    public GeneratedAgent_test(UnitTypeTable utt) {
-        super(utt);
-    }
-}
-"""
-        self.assertEqual(clean_generated_java_output(source), source.strip())
-
-    def test_normalize_java_agent_source_repairs_common_llm_imports(self) -> None:
-        source = """package ai.generated;
-
-import ai.RandomBiasedAI;
-import ai.UnitTypeTable;
-
-public class GeneratedAgent_test extends RandomBiasedAI {
-    public GeneratedAgent_test(UnitTypeTable utt) {
-        super(utt);
-    }
-
-    @Override
-    public void act() {
-    }
-}
-"""
-        normalized = normalize_java_agent_source(source)
-        self.assertIn("import rts.units.UnitTypeTable;", normalized)
-        self.assertNotIn("import ai.UnitTypeTable;", normalized)
-        self.assertNotIn("@Override\n    public void act", normalized)
 
     def test_game_metrics_use_resource_difference(self) -> None:
         result = MatchResult(
@@ -836,46 +666,6 @@ public class GeneratedAgent_test extends RandomBiasedAI {
         self.assertEqual(evaluation.result.failure_category, "Backend request failure")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertEqual(evaluation.candidate.fitness_objectives["strategy_alignment"], 0.0)
-
-    def test_validation_failure_gets_failed_game_performance(self) -> None:
-        class UnsafeIterationBackend(GenerationBackend):
-            def generate(self, candidate: Candidate, class_name: str) -> str:
-                return DEFAULT_MODULE_BODIES["controller"]
-
-            def generate_module(self, candidate: Candidate, class_name: str, module_name: str) -> str:
-                if module_name == "controller":
-                    return """private Decision decide(AgentContext context) {
-                        for (Unit unit : gs.getUnits()) {
-                            return new Decision();
-                        }
-                        return new Decision();
-                    }"""
-                return DEFAULT_MODULE_BODIES[module_name]
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            candidate = Candidate(strategy_prompt="Generate an agent.")
-            evaluation = evaluate_candidate(
-                candidate,
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}),
-                backend=UnsafeIterationBackend(),
-                alignment_backend="mock",
-                generated_agents_dir=root / "generated_agents",
-                classes_dir=root / "classes",
-                mock=True,
-                ordinal=0,
-            )
-        self.assertEqual(evaluation.candidate.status, "failed")
-        self.assertEqual(evaluation.result.failure_category, "Java validation failure")
-        self.assertIn("gs.getUnits()", evaluation.result.extracted_code)
-        self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
-        self.assertTrue("gs.getUnits" in (evaluation.error or "") or "PlayerAction" in (evaluation.error or ""))
-        write_candidate_artifacts(root / "candidates", evaluation)
-        debug_dir = root / "failed_candidates" / candidate.id
-        self.assertTrue((debug_dir / "raw_llm_output.txt").exists())
-        self.assertTrue((debug_dir / "extracted_code.java").exists())
-        self.assertTrue((debug_dir / "assembled_java.java").exists())
-        self.assertTrue((debug_dir / "failure.json").exists())
 
     def test_valid_evaluated_candidate_keeps_actual_game_score(self) -> None:
         objectives = build_objectives(

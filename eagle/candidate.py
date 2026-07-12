@@ -29,26 +29,23 @@ DEFAULT_MODULE_PROMPTS: dict[str, str] = {
 
 DEFAULT_MODULE_BODIES: dict[str, str] = {
     "controller": (
-        "private Decision decide(AgentContext context) {\n"
-        "    Decision decision = new Decision();\n"
-        "    decision.proposals.addAll(economy(context));\n"
-        "    decision.proposals.addAll(expansion(context));\n"
-        "    decision.proposals.addAll(combat(context));\n"
-        "    return decision;\n"
-        "}"
+        "Decision decision = new Decision();\n"
+        "decision.proposals.addAll(economy(context));\n"
+        "decision.proposals.addAll(expansion(context));\n"
+        "decision.proposals.addAll(combat(context));\n"
+        "return decision;"
     ),
-    "economy": "private List<ActionProposal> economy(AgentContext context) {\n    return new ArrayList<>();\n}",
-    "combat": "private List<ActionProposal> combat(AgentContext context) {\n    return new ArrayList<>();\n}",
-    "expansion": "private List<ActionProposal> expansion(AgentContext context) {\n    return new ArrayList<>();\n}",
-    "target_selection": ("private Unit selectTarget(AgentContext context, Unit actor, List<Unit> candidates) {\n" "    return candidates.isEmpty() ? null : candidates.get(0);\n}"),
-    "path_selection": ("private PathChoice findPath(AgentContext context, Unit unit, int targetX, int targetY) {\n" "    return new PathChoice(targetX, targetY);\n}"),
+    "economy": "return new ArrayList<>();",
+    "combat": "return new ArrayList<>();",
+    "expansion": "return new ArrayList<>();",
+    "target_selection": "return candidates.isEmpty() ? null : candidates.get(0);",
+    "path_selection": "return new PathChoice(targetX, targetY);",
 }
-
 DEFAULT_GENERATION_PROMPT = (
     "Requested class name: {class_name}\n"
     "Requested module: {module_name}\n\n"
-    "Generate exactly one complete Java method declaration for the requested module. "
-    "Return only that raw Java method: no markdown fences and no explanation. "
+    "Generate one JSON object containing every required function body. "
+    "Return only JSON with a functions object: no markdown fences and no explanation. "
     "Do not output a package declaration, imports, class declaration, constructors, fields, or helper methods. "
     "Do not define helper methods, do not invent helper methods, and never call nearestIdleAlly. "
     "Do not directly assemble PlayerAction objects; return structured Decision, ActionProposal, Unit, or PathChoice values. "
@@ -101,21 +98,27 @@ class Candidate:
         )
 
     def generation_input(self, *, class_name: str = "", module_name: str = "controller") -> str:
-        """Build one function-generation prompt for a single evolvable module."""
-
-        generation_prompt = self.generation_prompt.replace("{class_name}", class_name).replace(
-            "{module_name}", module_name
+        """Build one request for the complete behavior-function collection."""
+        declarations = "\n".join(
+            f'- "{name}": body for `{contract.declaration}`'
+            for name, contract in MODULE_METHOD_CONTRACTS.items()
         )
-        existing_body = self.module_bodies.get(module_name, "").strip() or "(empty)"
-        required_declaration = MODULE_METHOD_CONTRACTS[module_name].declaration
-        return (
-            f"Module name:\n{module_name}\n\n"
-            f"Required method declaration (must match exactly):\n{required_declaration}\n\n"
-            f"Module prompt:\n{self.module_prompts.get(module_name, '').strip()}\n\n"
-            f"Previous module body:\n{existing_body}\n\n"
-            f"Generation prompt:\n{generation_prompt.strip()}"
-        )
+        previous = "\n".join(f"[{name}]\n{self.module_bodies[name]}" for name in MODULE_NAMES)
+        return f"""Candidate class: {class_name}
 
+Overall strategy:
+{self.strategy_prompt.strip()}
+
+Required keys and fixed method slots:
+{declarations}
+
+Previous complete function set:
+{previous}
+
+Generation guidance:
+{self.generation_prompt.strip()}
+
+Regenerate all required function bodies together. Return only JSON shaped as {{"functions": {{...}}}}."""
     def to_json_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["parent_ids"] = list(self.parent_ids)

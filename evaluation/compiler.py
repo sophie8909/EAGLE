@@ -22,13 +22,14 @@ class CompileResult:
 
 
 def compile_generated_agent(
-    source_path: Path,
+    source_path: Path | tuple[Path, ...],
     *,
     microrts_dir: Path,
     output_dir: Path,
     mock: bool = False,
 ) -> CompileResult:
-    source_path = source_path.resolve()
+    source_paths = (source_path,) if isinstance(source_path, Path) else source_path
+    source_paths = tuple(path.resolve() for path in source_paths)
     microrts_dir = microrts_dir.resolve()
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -38,7 +39,7 @@ def compile_generated_agent(
         os.pathsep.join([str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]),
         "-d",
         str(output_dir),
-        str(source_path),
+        *(str(path) for path in source_paths),
     ]
     if mock:
         return CompileResult(ok=True, command=command, stdout="mock compile ok")
@@ -50,4 +51,3 @@ def compile_generated_agent(
         stderr=completed.stderr,
         returncode=completed.returncode,
     )
-

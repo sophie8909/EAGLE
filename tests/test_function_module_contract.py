@@ -1,77 +1,68 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
-
+import random
 from eagle.candidate import Candidate, DEFAULT_MODULE_BODIES, MODULE_NAMES
-from eagle.module_contract import MODULE_METHOD_CONTRACTS
+from eagle.crossover import Crossover, CrossoverContext
+from eagle.mutation import Mutation, MutationContext
 from evaluation.compiler import compile_generated_agent
-from generation.agent_template import render_blank_strategy_agent, render_function_agent
+from generation.agent_template import render_agent_wrapper, render_behavior_class
+from generation.backend import MockGenerationBackend
+from generation.java_agent_generator import generate_java_agent, parse_behavior_functions
 from generation.java_module_validator import validate_function_module
+from eagle.config import ExperimentConfig
 
+class StructuredBehaviorGenerationTests(unittest.TestCase):
+    def test_structured_parser_requires_exact_complete_function_set(self):
+        payload = json.dumps({"functions": DEFAULT_MODULE_BODIES})
+        self.assertEqual(parse_behavior_functions(payload), DEFAULT_MODULE_BODIES)
+        for functions in ({**DEFAULT_MODULE_BODIES, "helper": "return;"}, {k:v for k,v in DEFAULT_MODULE_BODIES.items() if k != "combat"}):
+            with self.assertRaises(ValueError): parse_behavior_functions(json.dumps({"functions": functions}))
 
-class FunctionModuleContractTests(unittest.TestCase):
-    def test_valid_complete_method(self):
-        validate_function_module(DEFAULT_MODULE_BODIES["controller"], "controller")
+    def test_function_body_validation_rejects_scope_and_declarations(self):
+        for body in ("", "```java\nreturn null;\n```", "return null; }", "class Helper {}", "private int helper() { return 1; }"):
+            with self.assertRaises(ValueError): validate_function_module(body, "controller")
+        validate_function_module("if (context.player == 0) { return new Decision(); }\nreturn new Decision();", "controller")
 
-    def test_generation_prompt_names_exact_required_method(self):
-        candidate = Candidate()
-        for module_name, contract in MODULE_METHOD_CONTRACTS.items():
-            prompt = candidate.generation_input(class_name="GeneratedAgent_test", module_name=module_name)
-            self.assertIn(
-                f"Required method declaration (must match exactly):\n{contract.declaration}",
-                prompt,
-            )
-        controller_prompt = candidate.generation_input(module_name="controller")
-        self.assertIn("private Decision decide(AgentContext context)", controller_prompt)
-        self.assertNotIn("private Decision controller(", controller_prompt)
+    def test_renderer_separates_fixed_wrapper_from_generated_behaviors(self):
+        wrapper = render_agent_wrapper("CandidateAgent")
+        behaviors = render_behavior_class("CandidateAgent", DEFAULT_MODULE_BODIES)
+        self.assertIn("extends AI", wrapper)
+        self.assertIn("new CandidateAgentBehaviors", wrapper)
+        self.assertNotIn("Decision decision = new Decision()", wrapper)
+        self.assertIn("Decision decision = new Decision()", behaviors)
+        self.assertNotIn("extends AI", behaviors)
+        for name in MODULE_NAMES:
+            for line in DEFAULT_MODULE_BODIES[name].splitlines(): self.assertIn(line, behaviors)
 
-
-    def test_statement_body_rejected(self):
-        with self.assertRaises(ValueError):
-            validate_function_module("return new Decision();", "controller")
-
-    def test_wrong_name_rejected(self):
-        with self.assertRaisesRegex(ValueError, "name"):
-            validate_function_module("private Decision wrong(AgentContext context) { return new Decision(); }", "controller")
-
-    def test_wrong_return_rejected(self):
-        with self.assertRaisesRegex(ValueError, "return type"):
-            validate_function_module("private Unit decide(AgentContext context) { return null; }", "controller")
-
-    def test_wrong_parameters_rejected(self):
-        with self.assertRaisesRegex(ValueError, "parameter types"):
-            validate_function_module("private Decision decide(Unit context) { return new Decision(); }", "controller")
-
-    def test_two_methods_and_helper_rejected(self):
-        for suffix in (
-            " private Decision decide(AgentContext context) { return new Decision(); }",
-            " private int helper() { return 1; }",
-        ):
-            with self.assertRaisesRegex(ValueError, "exactly one"):
-                validate_function_module(DEFAULT_MODULE_BODIES["controller"] + suffix, "controller")
-
-    def test_fields_and_imports_rejected(self):
-        for source in ("private int value;", "import java.util.List;\n" + DEFAULT_MODULE_BODIES["controller"]):
-            with self.assertRaises(ValueError):
-                validate_function_module(source, "controller")
-
-    def test_assembled_methods_occur_once(self):
-        source = render_function_agent("GeneratedAgent_test", DEFAULT_MODULE_BODIES)
-        signatures = (
-            "private Decision decide(", "private List<ActionProposal> economy(",
-            "private List<ActionProposal> combat(", "private List<ActionProposal> expansion(",
-            "private Unit selectTarget(", "private PathChoice findPath(",
-        )
-        for signature in signatures:
-            self.assertEqual(source.count(signature), 1)
-
-    def test_base_candidate_compiles(self):
+    def test_mock_generation_writes_two_java_files(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
-            source_path = Path(temp) / "GeneratedAgent_test.java"
-            source_path.write_text(render_blank_strategy_agent("GeneratedAgent_test"), encoding="utf-8")
-            result = compile_generated_agent(source_path, microrts_dir=Path("third_party/microrts"), output_dir=Path(temp) / "classes")
+            agent = generate_java_agent(Candidate(strategy_prompt="balanced"), MockGenerationBackend(), Path(temp))
+            self.assertTrue(agent.source_path.exists())
+            self.assertTrue(agent.behavior_source_path.exists())
+            self.assertNotEqual(agent.source_path, agent.behavior_source_path)
+
+    def test_crossover_selects_behavior_collection_as_one_component(self):
+        bodies_a = {name: f"{name} A" for name in MODULE_NAMES}
+        bodies_b = {name: f"{name} B" for name in MODULE_NAMES}
+        child = Crossover().crossover(
+            Candidate(id="a", module_bodies=bodies_a), Candidate(id="b", module_bodies=bodies_b),
+            CrossoverContext(generation=1, index=0, rng=random.Random(2)),
+        )
+        self.assertIn(child.module_bodies, (bodies_a, bodies_b))
+    def test_strategy_reflection_changes_strategy_not_individual_functions(self):
+        class Backend:
+            responses = iter(("reflection", "revised overall strategy"))
+            def generate(self, prompt): return next(self.responses)
+        parent = Candidate(id="parent", strategy_prompt="old strategy")
+        child = Mutation(ExperimentConfig.from_mapping({"seed_prompts":["seed"]}), backend=Backend()).mutate(parent, MutationContext(1, 0))
+        self.assertEqual(child.strategy_prompt, "revised overall strategy")
+        self.assertEqual(child.module_bodies, parent.module_bodies)
+    def test_fixed_wrapper_and_behaviors_compile_together(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
+            agent = generate_java_agent(Candidate(strategy_prompt="balanced"), MockGenerationBackend(), Path(temp))
+            result = compile_generated_agent(agent.source_paths, microrts_dir=Path("third_party/microrts"), output_dir=Path(temp)/"classes")
             self.assertTrue(result.ok, result.stderr)
 
-
-if __name__ == "__main__":
-    unittest.main()
+if __name__ == "__main__": unittest.main()

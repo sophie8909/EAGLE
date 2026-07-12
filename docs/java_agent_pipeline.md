@@ -1,87 +1,42 @@
 # Java Agent Pipeline
 
-EAGLE now treats Java-agent generation as a sequence of small stages. The goal is to make failed candidates easy to inspect.
+Each candidate is one complete strategy genome with three candidate-level components: the overall strategy description, the complete behavior-function collection, and generation guidance. The six required behavior functions are never crossed over, mutated, or requested independently.
 
-## Stages
+## Generation boundary
 
-1. Prompt/input building
-   - Owned by `generation/backend.py`.
-   - The backend prompt asks for only the body of `chooseAction(int player, GameState gs)`.
+The generation backend receives one prompt describing every fixed function slot and the previous complete function set. It must return exactly one JSON object:
 
-2. LLM generation
-   - Owned by the configured `GenerationBackend`.
-   - The raw text is saved in `CandidateResult.raw_llm_output`.
-
-3. Output extraction
-   - Owned by `generation/java_agent_generator.py`.
-   - `extract_code_from_output()` removes wrappers and keeps only strategy-body code.
-
-4. Java assembly
-   - Owned by `generation/agent_template.py`.
-   - The initial strategy body starts from MicroRTS `ai.PassiveAI`.
-   - The scaffold owns imports, class shell, constructors, `reset`, `clone`, `getAction`, and `getParameters`.
-   - The LLM owns only statements inside `chooseAction`.
-   - This PassiveAI-style no-op body is the initial evolvable prompt starting point. EA training evaluates against `ai.abstraction.LightRush` as player 1.
-
-5. Java validation
-   - Owned by `generation/java_agent_generator.py`.
-   - The generated body must not define imports, classes, fields, helper methods, `Optional`, `StrategyTable`, streams, or lambdas.
-   - Unit loops must not iterate directly over `gs.getUnits()` or `pgs.getUnits()`.
-
-6. Java compilation
-   - Owned by `evaluation/compiler.py`.
-   - Compile errors are stored in `compile_result.json` and `CandidateResult.compile_result`.
-
-7. Match evaluation
-   - Owned by `evaluation/microrts_runner.py` and coordinated in `eagle/evaluation.py`.
-   - Match outputs are stored in `raw_microrts_result.json` and `CandidateResult.match_result`.
-
-8. Scoring/result recording
-   - Failure-to-score mapping lives in `evaluation/nsga2_objectives.py`.
-   - Any failure category receives `game_performance = -1000.0` and `strategy_alignment = 0.0`.
-   - Artifacts are written by `eagle/artifacts.py`.
-
-## Failure Categories
-
-- `Backend request failure`
-- `Java validation failure`
-- `Java compile failure`
-- `Runtime match failure`
-- `Timeout`
-- `Other`
-
-## Debugging
-
-For each failed candidate, inspect:
-
-- `runs/<run_id>/failed_candidates/<candidate_id>/raw_llm_output.txt`
-- `runs/<run_id>/failed_candidates/<candidate_id>/extracted_code.java`
-- `runs/<run_id>/failed_candidates/<candidate_id>/assembled_java.java`
-- `runs/<run_id>/failed_candidates/<candidate_id>/failure.json`
-
-The normal per-candidate folder still contains:
-
-- `strategy_prompt.txt`
-- `candidate_result.json`
-- `compile_result.json`
-- `raw_microrts_result.json`
-- `objectives.json`
-- `individual.json`
-
-## GUI Replay
-
-Use `scripts/play_candidate_gui.py` when you want to manually watch one already-generated candidate in MicroRTS:
-
-```bash
-python scripts/play_candidate_gui.py runs/<run_id> <candidate_id>
+```json
+{"functions":{"controller":"...","economy":"...","combat":"...","expansion":"...","target_selection":"...","path_selection":"..."}}
 ```
 
-Candidate ids come from `summary.json`, `generation_###_population.json`, `results.jsonl`, or the folder names under `runs/<run_id>/candidates/`.
+Values are method bodies only. Parsing rejects missing or unknown keys. Each body is then validated independently for emptiness, Markdown fences, package/import/type declarations, nested method declarations, and attempts to escape the predefined method scope.
 
-The script reuses the generated Java source under `runs/<run_id>/generated_agents/<candidate_id>/`, compiles it, and launches one visible match. The generated candidate always plays as player 0. The player 1 opponent defaults to `ai.PassiveAI` and can be replaced with `--opponent`. The script does not regenerate code, mutate candidates, run crossover, or participate in the EA search.
+## Java sources
 
-Optional replay settings:
+`generation/agent_template.py` renders two sources:
 
-```bash
-python scripts/play_candidate_gui.py runs/<run_id> <candidate_id> --map maps/8x8/basesWorkers8x8.xml --opponent ai.RandomAI --max-cycles 500 --utt-version 1
+- `GeneratedAgent_<id>.java` is the fixed MicroRTS wrapper. It owns `AI` lifecycle methods, `GameState` context collection, action assembly, fallback handling, and framework parameters. No LLM output is inserted into this file.
+- `GeneratedAgent_<id>Behaviors.java` is the only generated/evolved Java source. All six predefined methods are rendered together from the validated bodies.
+
+`evaluation/compiler.py` compiles both sources in one `javac` invocation. Successful candidates proceed through existing Java validation and MicroRTS evaluation. Generation, JSON parsing, body validation, or compilation failures retain the `-1000` game-performance score; completed matches retain their real score.
+
+## Evolution
+
+Strategy reflection updates the overall intended MicroRTS strategy. Code-generation reflection updates the complete generation guidance using compilation/validation/runtime errors, alignment feedback, and the previous complete function set. The next generation request always regenerates all bodies together.
+
+Crossover selects candidate components. The behavior-function dictionary is selected whole from one parent; there is no per-function crossover.
+
+## Candidate artifacts
+
+Each candidate directory includes:
+
+```text
+prompt.json
+CandidateAgent.java
+CandidateBehaviors.java
+compile.log
+result.json
 ```
+
+The Java filenames are stable artifact labels; their declared generated class names remain candidate-specific. Existing detailed metrics and debug artifacts are also retained.

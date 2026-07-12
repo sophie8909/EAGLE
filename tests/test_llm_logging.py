@@ -38,7 +38,7 @@ class LLMLoggingTests(unittest.TestCase):
                 model="model",
                 candidate_id="candidate-a",
                 generation=2,
-                module_name="controller",
+                module_name="all_behaviors",
             )
             second = logger.write(
                 stage="alignment",
@@ -54,7 +54,7 @@ class LLMLoggingTests(unittest.TestCase):
             self.assertEqual(payload["input"], "???")
             self.assertEqual(payload["response"], "???")
             self.assertEqual(payload["candidate_id"], "candidate-a")
-            self.assertEqual(payload["module_name"], "controller")
+            self.assertEqual(payload["module_name"], "all_behaviors")
             self.assertEqual(payload["generation"], 2)
 
     def test_generation_http_call_logs_exact_prompt_and_response(self):
@@ -68,7 +68,7 @@ class LLMLoggingTests(unittest.TestCase):
             body = {"choices": [{"message": {"content": response}}]}
             with patch("generation.backend.urllib.request.urlopen", return_value=FakeResponse(body)):
                 self.assertEqual(
-                    backend.generate_module(candidate, "GeneratedAgent_candidate_a", "controller"),
+                    backend.generate(candidate, "GeneratedAgent_candidate_a"),
                     response,
                 )
             files = list(Path(temp).glob("*.json"))
@@ -76,7 +76,7 @@ class LLMLoggingTests(unittest.TestCase):
             payload = json.loads(files[0].read_text(encoding="utf-8"))
             self.assertEqual(payload["stage"], "generation")
             self.assertEqual(payload["response"], response)
-            self.assertEqual(payload["module_name"], "controller")
+            self.assertEqual(payload["module_name"], "all_behaviors")
             self.assertEqual(payload["candidate_id"], "candidate-a")
             self.assertIn("private Decision decide(AgentContext context)", payload["input"])
 
@@ -93,7 +93,7 @@ class LLMLoggingTests(unittest.TestCase):
             with patch("generation.backend.urllib.request.urlopen", side_effect=effects), patch(
                 "generation.backend.time.sleep"
             ):
-                backend.generate_module(candidate, "GeneratedAgent_candidate_retry", "controller")
+                backend.generate(candidate, "GeneratedAgent_candidate_retry")
             payloads = [
                 json.loads(path.read_text(encoding="utf-8"))
                 for path in sorted(Path(temp).glob("*.json"))

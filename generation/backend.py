@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from eagle.candidate import Candidate
 
-from .agent_template import render_blank_strategy_agent
+
 
 if TYPE_CHECKING:
     from eagle.llm_logging import LLMCallLogger
@@ -23,12 +23,6 @@ class GenerationBackend(ABC):
     def generate(self, candidate: Candidate, class_name: str) -> str:
         """Return Java source code for a candidate prompt."""
 
-    def generate_module(self, candidate: Candidate, class_name: str, module_name: str) -> str:
-        """Return exactly one complete Java method for a generated module."""
-
-        return self.generate(candidate, class_name)
-
-
 class GenerationBackendUnavailable(RuntimeError):
     """Raised when the configured generation service cannot be reached."""
 
@@ -37,11 +31,7 @@ class MockGenerationBackend(GenerationBackend):
     """Deterministic backend for tests and local pipeline smoke runs."""
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
-        return render_blank_strategy_agent(class_name)
-
-    def generate_module(self, candidate: Candidate, class_name: str, module_name: str) -> str:
-        return candidate.module_bodies[module_name]
-
+        return json.dumps({"functions": candidate.module_bodies}, ensure_ascii=False)
 
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
@@ -60,10 +50,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         return f"{self.base_url}/v1/chat/completions"
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
-        return self.generate_module(candidate, class_name, "controller")
-
-    def generate_module(self, candidate: Candidate, class_name: str, module_name: str) -> str:
-        prompt = candidate.generation_input(class_name=class_name, module_name=module_name)
+        prompt = candidate.generation_input(class_name=class_name)
+        module_name = "all_behaviors"
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
