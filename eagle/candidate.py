@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from .module_contract import MODULE_METHOD_CONTRACTS
+
 
 MODULE_NAMES: tuple[str, ...] = (
     "controller",
@@ -105,8 +107,10 @@ class Candidate:
             "{module_name}", module_name
         )
         existing_body = self.module_bodies.get(module_name, "").strip() or "(empty)"
+        required_declaration = MODULE_METHOD_CONTRACTS[module_name].declaration
         return (
             f"Module name:\n{module_name}\n\n"
+            f"Required method declaration (must match exactly):\n{required_declaration}\n\n"
             f"Module prompt:\n{self.module_prompts.get(module_name, '').strip()}\n\n"
             f"Previous module body:\n{existing_body}\n\n"
             f"Generation prompt:\n{generation_prompt.strip()}"

@@ -2,7 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from eagle.candidate import DEFAULT_MODULE_BODIES, MODULE_NAMES
+from eagle.candidate import Candidate, DEFAULT_MODULE_BODIES, MODULE_NAMES
+from eagle.module_contract import MODULE_METHOD_CONTRACTS
 from evaluation.compiler import compile_generated_agent
 from generation.agent_template import render_blank_strategy_agent, render_function_agent
 from generation.java_module_validator import validate_function_module
@@ -11,6 +12,19 @@ from generation.java_module_validator import validate_function_module
 class FunctionModuleContractTests(unittest.TestCase):
     def test_valid_complete_method(self):
         validate_function_module(DEFAULT_MODULE_BODIES["controller"], "controller")
+
+    def test_generation_prompt_names_exact_required_method(self):
+        candidate = Candidate()
+        for module_name, contract in MODULE_METHOD_CONTRACTS.items():
+            prompt = candidate.generation_input(class_name="GeneratedAgent_test", module_name=module_name)
+            self.assertIn(
+                f"Required method declaration (must match exactly):\n{contract.declaration}",
+                prompt,
+            )
+        controller_prompt = candidate.generation_input(module_name="controller")
+        self.assertIn("private Decision decide(AgentContext context)", controller_prompt)
+        self.assertNotIn("private Decision controller(", controller_prompt)
+
 
     def test_statement_body_rejected(self):
         with self.assertRaises(ValueError):

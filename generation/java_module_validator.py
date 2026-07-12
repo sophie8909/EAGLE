@@ -1,20 +1,5 @@
 """Structural validation for generated Java module methods."""
-from dataclasses import dataclass
-
-@dataclass(frozen=True)
-class Contract:
-    name: str
-    returns: str
-    params: tuple[str, ...]
-
-CONTRACTS = {
-    "controller": Contract("decide", "Decision", ("AgentContext",)),
-    "economy": Contract("economy", "List<ActionProposal>", ("AgentContext",)),
-    "combat": Contract("combat", "List<ActionProposal>", ("AgentContext",)),
-    "expansion": Contract("expansion", "List<ActionProposal>", ("AgentContext",)),
-    "target_selection": Contract("selectTarget", "Unit", ("AgentContext","Unit","List<Unit>")),
-    "path_selection": Contract("findPath", "PathChoice", ("AgentContext","Unit","int","int")),
-}
+from eagle.module_contract import MODULE_METHOD_CONTRACTS
 
 def tokens(source: str) -> list[str]:
     out=[]; i=0
@@ -43,7 +28,7 @@ def tokens(source: str) -> list[str]:
     return out
 
 def validate_function_module(source: str, module: str) -> None:
-    contract=CONTRACTS[module]; ts=tokens(source)
+    contract=MODULE_METHOD_CONTRACTS[module]; ts=tokens(source)
     if not ts: raise ValueError("Generated module method must not be empty.")
     bad=next((x for x in ts if x in {"package","import","class","interface","enum","record"}),None)
     if bad: raise ValueError(f"Generated module method must not declare {bad}.")
@@ -55,8 +40,8 @@ def validate_function_module(source: str, module: str) -> None:
         raise ValueError("Generated module method contains unsupported modifiers.")
     if paren<3 or header[-1]!=")": raise ValueError("Generated module must be one complete Java method declaration.")
     name=header[paren-1]; returns="".join(header[1:paren-1])
-    if name!=contract.name: raise ValueError(f"Generated module method name must be {contract.name}, got {name}.")
-    if returns!=contract.returns: raise ValueError(f"Generated {contract.name} return type must be {contract.returns}, got {returns}.")
+    if name!=contract.method_name: raise ValueError(f"Generated module method name must be {contract.method_name}, got {name}.")
+    if returns!=contract.return_type: raise ValueError(f"Generated {contract.method_name} return type must be {contract.return_type}, got {returns}.")
     groups=[]; cur=[]; depth=0
     for x in header[paren+1:-1]:
         depth += (x=="<")-(x==">")
@@ -64,8 +49,8 @@ def validate_function_module(source: str, module: str) -> None:
         else: cur.append(x)
     if cur: groups.append(cur)
     actual=tuple("".join(g[:-1]) for g in groups if len(g)>=2)
-    if len(actual)!=len(groups) or actual!=contract.params:
-        raise ValueError(f"Generated {contract.name} parameter types must be ({', '.join(contract.params)}), got ({', '.join(actual)}).")
+    if len(actual)!=len(groups) or actual!=contract.parameter_types:
+        raise ValueError(f"Generated {contract.method_name} parameter types must be ({', '.join(contract.parameter_types)}), got ({', '.join(actual)}).")
     depth=0; close=None
     for i in range(brace,len(ts)):
         depth += (ts[i]=="{")-(ts[i]=="}")

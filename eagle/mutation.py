@@ -8,6 +8,7 @@ from typing import Protocol
 from .candidate import Candidate, MODULE_NAMES
 from .config import ExperimentConfig
 from .offspring import normalize_prompt
+from .module_contract import MODULE_METHOD_CONTRACTS
 
 
 @dataclass(frozen=True)
@@ -201,6 +202,9 @@ def build_strategy_rewrite_prompt(candidate: Candidate, reflection: str, mutatio
     return f"""Current module:
 {module_name}
 
+Required method declaration (must match exactly):
+{MODULE_METHOD_CONTRACTS[module_name].declaration}
+
 Current function body:
 {candidate.module_bodies[module_name].rstrip()}
 
@@ -227,6 +231,9 @@ Output only the revised complete Java method.
 def build_code_reflection_prompt(candidate: Candidate, context: MutationContext, module_name: str) -> str:
     return f"""Current module:
 {module_name}
+
+Required method declaration (must match exactly):
+{MODULE_METHOD_CONTRACTS[module_name].declaration}
 
 Current function body:
 {candidate.module_bodies[module_name].rstrip()}
@@ -257,6 +264,9 @@ Output only the analysis.
 def build_code_rewrite_prompt(candidate: Candidate, reflection: str, mutation_suffix: str, module_name: str) -> str:
     return f"""Current module:
 {module_name}
+
+Required method declaration (must match exactly):
+{MODULE_METHOD_CONTRACTS[module_name].declaration}
 
 Current function body:
 {candidate.module_bodies[module_name].rstrip()}
