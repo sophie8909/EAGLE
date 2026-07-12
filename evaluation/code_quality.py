@@ -82,20 +82,24 @@ def evaluate_function_output(raw: str, behavior_template: str) -> FunctionScoreR
     unknown = tuple(sorted(set(functions) - set(MODULE_NAMES)))
     if unknown: parsing_errors.append(f"Unknown behavior function keys: {', '.join(unknown)}")
     template_names = PLACEHOLDER_PATTERN.findall(behavior_template)
-    validations: dict[str, FunctionValidation] = {}; bodies: dict[str, str] = {}
+    validations: dict[str, FunctionValidation] = {}; bodies: dict[str, str] = {}; score_units = 0
     for name in MODULE_NAMES:
         errors: list[str] = []
         value = functions.get(name)
-        if name not in functions: errors.append("Required function key is missing")
+        if name not in functions:
+            errors.append("Required function key is missing")
+            score_units -= 1
         elif not isinstance(value, str): errors.append("Function body must be a string")
+        elif not value.strip(): errors.append("Function body is empty")
         else:
             bodies[name] = value
             try: validate_function_module(value, name)
             except ValueError as exc: errors.append(str(exc))
         if template_names.count(name) != 1: errors.append("Predefined template slot is missing or duplicated")
+        if not errors: score_units += 1
         validations[name] = FunctionValidation(not errors, tuple(errors))
     valid_count = sum(item.valid for item in validations.values()); required = len(MODULE_NAMES)
-    return FunctionScoreResult(100.0 * valid_count / required, required, valid_count, validations, unknown, tuple(parsing_errors), bodies)
+    return FunctionScoreResult(100.0 * score_units / required, required, valid_count, validations, unknown, tuple(parsing_errors), bodies)
 
 def build_code_quality(compiler: CompilerDiagnostics, functions: FunctionScoreResult, strategy_score: float | None, judge_error: str | None = None) -> CodeQualityBreakdown:
     score = 0.0 if strategy_score is None else float(strategy_score)

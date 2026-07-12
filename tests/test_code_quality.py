@@ -37,10 +37,23 @@ class CodeQualityTests(unittest.TestCase):
         self.assertEqual(result.function_score, 100)
         self.assertEqual(result.valid_function_count, len(MODULE_NAMES))
 
-    def test_partial_valid_functions_score_proportionally(self):
+    def test_missing_functions_subtract_from_score(self):
         functions = dict(DEFAULT_MODULE_BODIES); functions.pop(MODULE_NAMES[0]); functions.pop(MODULE_NAMES[1])
         result = evaluate_function_output(json.dumps({"functions": functions}), self.template)
-        self.assertAlmostEqual(result.function_score, 100 * (len(MODULE_NAMES)-2) / len(MODULE_NAMES))
+        self.assertAlmostEqual(result.function_score, 100 * (len(MODULE_NAMES)-4) / len(MODULE_NAMES))
+
+    def test_present_empty_function_scores_zero(self):
+        functions = {name: "" for name in MODULE_NAMES}
+        result = evaluate_function_output(json.dumps({"functions": functions}), self.template)
+        self.assertEqual(result.function_score, 0)
+        self.assertEqual(result.valid_function_count, 0)
+        self.assertEqual(result.function_validation[MODULE_NAMES[0]].errors, ("Function body is empty",))
+
+    def test_nonempty_valid_function_adds_to_score(self):
+        functions = {MODULE_NAMES[0]: DEFAULT_MODULE_BODIES[MODULE_NAMES[0]]}
+        result = evaluate_function_output(json.dumps({"functions": functions}), self.template)
+        self.assertAlmostEqual(result.function_score, 100 * (1 - (len(MODULE_NAMES) - 1)) / len(MODULE_NAMES))
+        self.assertEqual(result.valid_function_count, 1)
 
     def test_unknown_functions_do_not_increase_score(self):
         result = evaluate_function_output(json.dumps({"functions": {**DEFAULT_MODULE_BODIES, "helper": "return;"}}), self.template)

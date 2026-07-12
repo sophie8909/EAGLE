@@ -252,6 +252,62 @@ population_size: 3
             self.assertIn("Unit selectTarget", agent.behavior_source)
             self.assertEqual(set(agent.module_bodies), set(MODULE_NAMES))
 
+    def test_empty_function_uses_compilable_stub_and_still_runs(self) -> None:
+        class StaticGenerationBackend(GenerationBackend):
+            def generate(self, candidate: Candidate, class_name: str) -> str:
+                functions = dict(DEFAULT_MODULE_BODIES)
+                functions["economy"] = ""
+                return json.dumps({"functions": functions})
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
+            evaluation = evaluate_candidate(
+                Candidate(strategy_prompt="Generate an agent."),
+                config=config,
+                backend=StaticGenerationBackend(),
+                strategy_consistency_backend="mock",
+                generated_agents_dir=root / "generated_agents",
+                classes_dir=root / "classes",
+                match_artifacts_dir=root / "matches",
+                mock=True,
+                ordinal=0,
+            )
+        self.assertTrue(evaluation.code_quality_breakdown.compile_success)
+        self.assertEqual(len(evaluation.match_results), 1)
+        self.assertEqual(evaluation.candidate.status, "evaluated")
+        self.assertIsNotNone(evaluation.agent)
+        self.assertIn("Invalid generated function: economy", evaluation.agent.behavior_source)
+        self.assertAlmostEqual(
+            evaluation.code_quality_breakdown.function_score,
+            100 * (len(MODULE_NAMES) - 1) / len(MODULE_NAMES),
+        )
+
+    def test_missing_functions_use_compilable_stubs_and_still_run(self) -> None:
+        class InvalidJsonBackend(GenerationBackend):
+            def generate(self, candidate: Candidate, class_name: str) -> str:
+                return ""
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
+            evaluation = evaluate_candidate(
+                Candidate(strategy_prompt="Generate an agent."),
+                config=config,
+                backend=InvalidJsonBackend(),
+                strategy_consistency_backend="mock",
+                generated_agents_dir=root / "generated_agents",
+                classes_dir=root / "classes",
+                match_artifacts_dir=root / "matches",
+                mock=True,
+                ordinal=0,
+            )
+        self.assertTrue(evaluation.code_quality_breakdown.compile_success)
+        self.assertEqual(len(evaluation.match_results), 1)
+        self.assertEqual(evaluation.candidate.status, "evaluated")
+        self.assertEqual(evaluation.code_quality_breakdown.function_score, -100)
+        self.assertTrue(all("Required function key is missing" in result.errors for result in evaluation.function_score_result.function_validation.values()))
+
     def test_seed_prompt_template_expands_to_blank_strategy_prompt(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompt_template": "microrts_blank_strategy_agent"})
         self.assertEqual(len(config.seed_prompts), 1)
