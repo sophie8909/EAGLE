@@ -1,22 +1,12 @@
-microrts.jar
+# Editors and operating-system files
 *.*~
-*.class
-/bin/
+/.idea/
+/.vscode/
 /.classpath
 /.project
-/.idea
-/.vscode
 
-# Experiment logs and temporary files
-Response*.csv
-LLM_Gemini_*.json
-tournament_results_*.json
-benchmark_results_*.txt
-sources.list
-/traces/
-!/examples/traces/
-
-# Python
+# Python environments and caches
+/.venv/
 __pycache__/
 *.pyc
 *.pyc.*
@@ -24,32 +14,47 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .pycache_verify/
+
+# Local test scratch directories
+/.codex_tmp_prompt_test/
+/_tmp_surrogate_check/
 /eagle/ea/_tmp_recent_logs_test/
 /eagle/ea/tmpf5cvr_e9/
-/_tmp_surrogate_check/
-*.pyctournament/traces/*.json
-tournament/traces/*.xml
-tournament/traces/*.json
-tournament/traces/*.xml
+
+# Java and MicroRTS build outputs
+microrts.jar
+*.class
+*.sources
+/bin/
+sources.list
 resources/config.properties
-resources/config.properties
-/.venv
+*.xml
+/third_party/microrts/bin/.microrts_compile_stamp
+/third_party/microrts/prompt.txt
+/third_party/microrts/runs/
+
+# Experiment inputs, outputs, and logs
+Response*.csv
+LLM_Gemini_*.json
+tournament_results_*.json
+benchmark_results_*.txt
 *.jsonl
 !eagle/prompts/examples_pool.jsonl
-/logs/
 /agents/generated/
+/batch_logs/
+/logs/
+/prompt/
 /runs/
+/traces/
+!/examples/traces/
+tournament/traces/*.json
+tournament/traces/*.xml
 
-third_party/microrts/resources/config.properties
-/batch_logs
-/prompt
-/prompt
-*.xml
-third_party/microrts/prompt.txt
-third_party/microrts/resources/config.properties
-third_party/microrts/bin/.microrts_compile_stamp
-*.sources
-/logs_legecy
+# Historical spelling retained for existing local directories
+/legacy/
+/legecy/
+/logs_legacy/
+/logs_legecy/
 
 # Local model assets and generated llama.cpp outputs
 /model/
@@ -60,6 +65,3 @@ third_party/microrts/bin/.microrts_compile_stamp
 /experiment_env/models/
 /experiment_env/vendor/llama.cpp/
 /experiment_env/key/uf_token
-
-/legecy
-/third_party/microrts/runs
