@@ -39,3 +39,7 @@ candidate/
 ```
 
 Detailed metrics and debug artifacts are retained alongside these files.
+
+## Code-quality objective
+
+NSGA-II maximizes `game_performance` and `code_quality`. Code quality is the sum of the actual `javac` compilation score, the proportional predefined-function validity score, and the 0�V10 strategy-consistency judge score. Each component, compiler warning/error counts, per-function validation, unknown generated names, judge reasoning, and judge infrastructure errors are stored separately in candidate artifacts and reflection feedback. A compilation failure prevents the MicroRTS match but does not overwrite function or strategy-consistency scores.

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from evaluation.compiler import CompileResult
+from evaluation.code_quality import analyze_compilation
 from evaluation.microrts_runner import MatchResult
 from generation.java_agent_generator import ValidationResult
 
@@ -52,8 +53,8 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
         evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else {},
     )
     write_json(
-        candidate_dir / "strategy_alignment.json",
-        evaluation.alignment_result.to_json_dict() if evaluation.alignment_result else {},
+        candidate_dir / "code_quality.json",
+        {"code_quality": evaluation.code_quality_breakdown.code_quality, "code_quality_breakdown": evaluation.code_quality_breakdown.to_json_dict(), "strategy_consistency": evaluation.strategy_consistency_result.to_json_dict() if evaluation.strategy_consistency_result else None},
     )
     write_json(candidate_dir / "objectives.json", evaluation.candidate.fitness_objectives)
     write_json(candidate_dir / "individual.json", evaluation.candidate.to_json_dict())
@@ -79,6 +80,10 @@ def write_failed_candidate_debug(run_dir: Path, evaluation: CandidateEvaluation)
             "failure_reason": result.failure_reason,
             "validation_result": validation_to_dict(result.validation_result),
             "compile_result": compile_to_dict(result.compile_result),
+            "function_validation": result.function_validation or {},
+        "strategy_consistency": result.strategy_consistency,
+            "code_quality": (result.final_score or {}).get("code_quality"),
+            "code_quality_breakdown": result.code_quality_breakdown,
             "game_metrics": result.game_metrics,
         },
     )
@@ -106,7 +111,7 @@ def write_summary(
         "mock": mock,
         "generations": config.generations,
         "population_size": config.population_size,
-        "objectives": ["game_performance", "strategy_alignment"],
+        "objectives": ["game_performance", "code_quality"],
         "best_candidate": None if best_candidate is None else best_candidate.to_json_dict(),
         "pareto_fronts": [[candidate.id for candidate in front] for front in pareto_fronts],
         "final_population": [candidate.to_json_dict() for candidate in final_population],
@@ -128,7 +133,8 @@ def evaluation_to_dict(evaluation: CandidateEvaluation) -> dict:
         "compile": compile_to_dict(evaluation.compile_result),
         "matches": [match_to_dict(result) for result in evaluation.match_results],
         "game_metrics": evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else None,
-        "strategy_alignment": evaluation.alignment_result.to_json_dict() if evaluation.alignment_result else None,
+        "code_quality": {"code_quality": evaluation.code_quality_breakdown.code_quality, "code_quality_breakdown": evaluation.code_quality_breakdown.to_json_dict()},
+        "strategy_consistency": evaluation.strategy_consistency_result.to_json_dict() if evaluation.strategy_consistency_result else None,
         "objectives": evaluation.candidate.fitness_objectives,
         "error": evaluation.error,
     }
@@ -145,6 +151,10 @@ def candidate_result_to_dict(result) -> dict:
         "module_bodies": result.module_bodies or {},
         "validation_result": validation_to_dict(result.validation_result),
         "compile_result": compile_to_dict(result.compile_result),
+        "function_validation": result.function_validation or {},
+        "strategy_consistency": result.strategy_consistency,
+        "code_quality": (result.final_score or {}).get("code_quality"),
+        "code_quality_breakdown": result.code_quality_breakdown,
         "match_result": [match_to_dict(item) for item in result.match_result or []],
         "game_metrics": result.game_metrics,
         "final_score": result.final_score,
@@ -172,6 +182,7 @@ def compile_to_dict(result: CompileResult | None) -> dict | None:
         "stdout": result.stdout,
         "stderr": result.stderr,
         "returncode": result.returncode,
+        **analyze_compilation(result).to_json_dict(),
     }
 
 

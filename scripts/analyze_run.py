@@ -62,6 +62,7 @@ def read_candidate_results(run_dir: Path) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for path in sorted((run_dir / "candidates").glob("*/candidate_result.json")):
         payload = read_json(path)
+        payload["final_score"] = migrate_legacy_objectives(payload.get("final_score"))
         payload["candidate_path"] = str(path.parent)
         records.append(payload)
     return records
@@ -102,13 +103,22 @@ def read_results_jsonl(run_dir: Path) -> list[dict[str, Any]]:
                     "parent_ids": candidate.get("parent_ids", []),
                     "validation_result": validation_result,
                     "compile_result": compile_result,
-                    "final_score": candidate.get("fitness_objectives"),
+                    "final_score": migrate_legacy_objectives(candidate.get("fitness_objectives")),
                     "failure_category": failure_category,
                     "failure_reason": failure_reason,
                     "candidate_path": str(run_dir / "candidates" / str(candidate.get("id", ""))),
                 }
             )
     return records
+
+
+def migrate_legacy_objectives(objectives: object) -> object:
+    """Translate legacy objective names only while reading old artifacts."""
+    if not isinstance(objectives, dict) or "code_quality" in objectives or "strategy_alignment" not in objectives:
+        return objectives
+    migrated = dict(objectives)
+    migrated["code_quality"] = migrated.pop("strategy_alignment")
+    return migrated
 
 
 def category_from_legacy_record(candidate: dict[str, Any], error: str) -> str:

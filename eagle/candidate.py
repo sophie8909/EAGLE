@@ -73,7 +73,7 @@ class Candidate:
     generated_java_agent_path: str | None = None
     compile_status: str = "pending"
     game_eval_result: dict[str, Any] = field(default_factory=dict)
-    strategy_alignment_result: dict[str, Any] = field(default_factory=dict)
+    code_quality_result: dict[str, Any] = field(default_factory=dict)
     fitness_objectives: dict[str, float] = field(default_factory=dict)
     status: str = "pending"
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -94,7 +94,7 @@ class Candidate:
             return (0.0, 0.0)
         return (
             float(self.fitness_objectives.get("game_performance", 0.0)),
-            float(self.fitness_objectives.get("strategy_alignment", 0.0)),
+            float(self.fitness_objectives.get("code_quality", 0.0)),
         )
 
     def generation_input(self, *, class_name: str = "", module_name: str = "controller") -> str:

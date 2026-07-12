@@ -1,229 +1,77 @@
 """Candidate evaluation for generated-agent searches."""
-
 from __future__ import annotations
-
-import json
 from dataclasses import dataclass
 from pathlib import Path
-
+from evaluation.code_quality import CodeQualityBreakdown, FunctionScoreResult, analyze_compilation, build_code_quality
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_performance import GamePerformanceConfig
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.microrts_runner import MatchResult, run_microrts_match
 from evaluation.nsga2_objectives import build_objectives
-from evaluation.strategy_alignment import StrategyAlignmentResult, evaluate_strategy_alignment
-from generation.backend import GenerationBackend
+from evaluation.strategy_consistency import StrategyConsistencyResult, evaluate_strategy_consistency
 from generation.agent_template import JavaTemplatePaths
+from generation.backend import GenerationBackend
 from generation.java_agent_generator import GeneratedJavaAgent, ValidationResult, generate_java_agent_result
-
 from .artifacts import append_result, write_candidate_artifacts
 from .candidate import Candidate
 from .config import ExperimentConfig
 from .llm_logging import LLMCallLogger
 
-
 @dataclass(frozen=True)
 class CandidateEvaluation:
-    candidate: Candidate
-    result: "CandidateResult"
-    agent: GeneratedJavaAgent | None
-    compile_result: CompileResult | None
-    match_results: list[MatchResult]
-    game_metrics: GameMetrics | None
-    alignment_result: StrategyAlignmentResult | None
-    error: str | None = None
-
+    candidate: Candidate; result: "CandidateResult"; agent: GeneratedJavaAgent|None; compile_result: CompileResult|None
+    match_results: list[MatchResult]; game_metrics: GameMetrics|None; strategy_consistency_result: StrategyConsistencyResult|None
+    code_quality_breakdown: CodeQualityBreakdown; function_score_result: FunctionScoreResult|None; error: str|None=None
 
 @dataclass(frozen=True)
 class CandidateResult:
-    candidate_id: str
-    parent_ids: tuple[str, ...]
-    raw_llm_output: str = ""
-    extracted_code: str = ""
-    assembled_java: str = ""
-    module_raw_outputs: dict[str, str] | None = None
-    module_bodies: dict[str, str] | None = None
-    validation_result: ValidationResult | None = None
-    compile_result: CompileResult | None = None
-    match_result: list[MatchResult] | None = None
-    game_metrics: dict[str, object] | None = None
-    final_score: dict[str, float] | None = None
-    failure_category: str | None = None
-    failure_reason: str | None = None
+    candidate_id:str; parent_ids:tuple[str,...]; raw_llm_output:str=""; extracted_code:str=""; assembled_java:str=""
+    module_raw_outputs:dict[str,str]|None=None; module_bodies:dict[str,str]|None=None; validation_result:ValidationResult|None=None
+    function_validation:dict[str,dict]|None=None; compile_result:CompileResult|None=None; strategy_consistency:dict|None=None
+    code_quality_breakdown:dict|None=None; match_result:list[MatchResult]|None=None; game_metrics:dict[str,object]|None=None
+    final_score:dict[str,float]|None=None; failure_category:str|None=None; failure_reason:str|None=None
 
-
-def evaluate_population(
-    population: list[Candidate],
-    *,
-    generation: int,
-    config: ExperimentConfig,
-    backend: GenerationBackend,
-    alignment_backend: str,
-    generated_agents_dir: Path,
-    classes_dir: Path,
-    candidates_dir: Path,
-    results_path: Path,
-    mock: bool,
-    llm_logger: LLMCallLogger | None = None,
-) -> list[Candidate]:
-    evaluated: list[Candidate] = []
-    for index, candidate in enumerate(population):
-        evaluation = evaluate_candidate(
-            candidate,
-            config=config,
-            backend=backend,
-            alignment_backend=alignment_backend,
-            generated_agents_dir=generated_agents_dir,
-            classes_dir=classes_dir,
-            match_artifacts_dir=candidates_dir / candidate.id / "matches",
-            mock=mock,
-            ordinal=index,
-            llm_logger=llm_logger,
-        )
-        write_candidate_artifacts(candidates_dir, evaluation)
-        append_result(results_path, evaluation)
-        evaluated.append(evaluation.candidate)
-        print_progress(
-            generation=generation,
-            index=index,
-            population_size=len(population),
-            evaluation=evaluation,
-        )
+def evaluate_population(population:list[Candidate],*,generation:int,config:ExperimentConfig,backend:GenerationBackend,strategy_consistency_backend:str,generated_agents_dir:Path,classes_dir:Path,candidates_dir:Path,results_path:Path,mock:bool,llm_logger:LLMCallLogger|None=None)->list[Candidate]:
+    evaluated=[]
+    for index,candidate in enumerate(population):
+        evaluation=evaluate_candidate(candidate,config=config,backend=backend,strategy_consistency_backend=strategy_consistency_backend,generated_agents_dir=generated_agents_dir,classes_dir=classes_dir,match_artifacts_dir=candidates_dir/candidate.id/"matches",mock=mock,ordinal=index,llm_logger=llm_logger)
+        write_candidate_artifacts(candidates_dir,evaluation); append_result(results_path,evaluation); evaluated.append(evaluation.candidate)
+        print_progress(generation=generation,index=index,population_size=len(population),evaluation=evaluation)
     return evaluated
 
-
-def evaluate_candidate(
-    candidate: Candidate,
-    *,
-    config: ExperimentConfig,
-    backend: GenerationBackend,
-    alignment_backend: str,
-    generated_agents_dir: Path,
-    classes_dir: Path,
-    mock: bool,
-    ordinal: int,
-    match_artifacts_dir: Path | None = None,
-    llm_logger: LLMCallLogger | None = None,
-) -> CandidateEvaluation:
-    agent: GeneratedJavaAgent | None = None
-    compile_result: CompileResult | None = None
-    match_results: list[MatchResult] = []
-    game_metrics: GameMetrics | None = None
-    alignment_result: StrategyAlignmentResult | None = None
-    failure_category: str | None = None
-    failure_reason: str | None = None
-
-    # LLM generation, extraction, scaffold assembly, and Java validation.
-    generation_result = generate_java_agent_result(candidate, backend, generated_agents_dir, template_paths=JavaTemplatePaths(config.agent_template_path, config.behaviors_template_path))
-    agent = generation_result.agent
-    failure_category = generation_result.failure_category
-    failure_reason = generation_result.failure_reason
-
+def evaluate_candidate(candidate:Candidate,*,config:ExperimentConfig,backend:GenerationBackend,strategy_consistency_backend:str,generated_agents_dir:Path,classes_dir:Path,mock:bool,ordinal:int,match_artifacts_dir:Path|None=None,llm_logger:LLMCallLogger|None=None)->CandidateEvaluation:
+    generation=generate_java_agent_result(candidate,backend,generated_agents_dir,template_paths=JavaTemplatePaths(config.agent_template_path,config.behaviors_template_path))
+    agent=generation.agent; functions=generation.function_score_result
+    if functions is None:
+        from evaluation.code_quality import evaluate_function_output
+        behavior_template=config.behaviors_template_path.read_text(encoding="utf-8"); functions=evaluate_function_output(generation.raw_llm_output,behavior_template)
+    compile_result=None; compile_error=None
     if agent is not None:
-        # Java compilation decides whether the agent can be evaluated.
-        try:
-            compile_result = compile_agent_source(
-                agent,
-                config=config,
-                classes_dir=classes_dir,
-                candidate_id=candidate.id,
-                mock=mock,
-            )
-        except (RuntimeError, OSError) as exc:
-            failure_category = "Other"
-            failure_reason = str(exc)
-        if compile_result is not None and not compile_result.ok:
-            failure_category = "Java compile failure"
-            failure_reason = compile_error_message(compile_result)
-
-    if agent is not None and compile_result is not None and compile_result.ok:
-        # MicroRTS match execution produces raw match results for scoring.
-        match_results, match_error = evaluate_matches(
-            candidate=candidate,
-            agent=agent,
-            config=config,
-            classes_dir=classes_dir,
-            match_artifacts_dir=match_artifacts_dir,
-            mock=mock,
-            ordinal=ordinal,
-        )
-        if match_error is not None:
-            failure_category = match_failure_category(match_error)
-            failure_reason = match_error
-
-    if failure_category is None and match_results:
-        game_metrics = compute_game_metrics(match_results)
-        alignment_result = score_strategy_alignment(
-            candidate=candidate,
-            agent=agent,
-            game_metrics=game_metrics,
-            config=config,
-            alignment_backend=alignment_backend,
-            llm_logger=llm_logger,
-        )
-    elif failure_category is not None:
-        game_metrics = compute_game_metrics([])
-        alignment_result = StrategyAlignmentResult(score=0.0, rationale=f"{failure_category}; alignment not evaluated.")
-
-    # Objective computation converts compile, match, and alignment results into fitness values.
-    objectives = compute_objectives(
-        compile_result=compile_result,
-        game_metrics=game_metrics,
-        alignment_result=alignment_result,
-        failure_category=failure_category,
-    )
-    status = "failed" if failure_category is not None else "evaluated"
-    previous_code = agent.behavior_source if agent is not None else generation_result.assembled_java or candidate.previous_code
-    module_bodies = generation_result.module_bodies or candidate.module_bodies
-    evaluated_candidate = Candidate(
-        id=candidate.id,
-        generation=candidate.generation,
-        parent_ids=candidate.parent_ids,
-        strategy_prompt=candidate.strategy_prompt,
-        previous_code=previous_code,
-        generation_prompt=candidate.generation_prompt,
-        module_prompts=candidate.module_prompts,
-        module_bodies=module_bodies,
-        generated_java_agent_path=str(agent.source_path) if agent else None,
-        compile_status=compile_result.status if compile_result else "not_run",
-        game_eval_result=game_metrics.to_json_dict() if game_metrics else {},
-        strategy_alignment_result=alignment_result.to_json_dict() if alignment_result else {},
-        fitness_objectives=objectives,
-        status=status,
-        metadata={
-            **candidate.metadata,
-            "failure_category": failure_category,
-            "failure_reason": failure_reason,
-        },
-    )
-    result = CandidateResult(
-        candidate_id=candidate.id,
-        parent_ids=candidate.parent_ids,
-        raw_llm_output=generation_result.raw_llm_output,
-        extracted_code=generation_result.extracted_code,
-        assembled_java=generation_result.assembled_java,
-        module_raw_outputs=generation_result.module_raw_outputs,
-        module_bodies=generation_result.module_bodies,
-        validation_result=generation_result.validation_result,
-        compile_result=compile_result,
-        match_result=match_results,
-        game_metrics=game_metrics.to_json_dict() if game_metrics else None,
-        final_score=objectives,
-        failure_category=failure_category,
-        failure_reason=failure_reason,
-    )
-    return CandidateEvaluation(
-        candidate=evaluated_candidate,
-        result=result,
-        agent=agent,
-        compile_result=compile_result,
-        match_results=match_results,
-        game_metrics=game_metrics,
-        alignment_result=alignment_result,
-        error=failure_reason,
-    )
-
-
+        try: compile_result=compile_agent_source(agent,config=config,classes_dir=classes_dir,candidate_id=candidate.id,mock=mock)
+        except (RuntimeError,OSError,ValueError) as exc: compile_error=str(exc)
+    compiler=analyze_compilation(compile_result)
+    consistency=None
+    if agent is not None:
+        consistency=evaluate_strategy_consistency(strategy_prompt=candidate.strategy_prompt,generated_behavior_code=agent.behavior_source,backend=strategy_consistency_backend,base_url=config.llm_base_url,model=config.llm_model,logger=llm_logger,candidate_id=candidate.id,generation=candidate.generation)
+    else:
+        consistency=StrategyConsistencyResult(None,"",error="Strategy consistency was not run because Java rendering failed.")
+    quality=build_code_quality(compiler,functions,consistency.score,consistency.error)
+    matches=[]; game_metrics=None; match_error=None
+    if compiler.compile_success and agent is not None:
+        matches,match_error=evaluate_matches(candidate=candidate,agent=agent,config=config,classes_dir=classes_dir,match_artifacts_dir=match_artifacts_dir,mock=mock,ordinal=ordinal)
+        if not match_error: game_metrics=compute_game_metrics(matches)
+    game_failure=not compiler.compile_success or match_error is not None
+    if game_failure: game_metrics=compute_game_metrics([])
+    failure_category=None; failure_reason=None
+    if generation.failure_category and agent is None: failure_category=generation.failure_category; failure_reason=generation.failure_reason
+    elif not compiler.compile_success: failure_category="Java compile failure"; failure_reason=(compile_error or compile_error_message(compile_result)) if compile_result else (compile_error or "Compilation was not run.")
+    elif match_error: failure_category=match_failure_category(match_error); failure_reason=match_error
+    elif consistency.error: failure_category="Evaluator infrastructure failure"; failure_reason=consistency.error
+    objectives=build_objectives(game_metrics=game_metrics,code_quality=quality,game_failure=game_failure)
+    quality_payload={"code_quality":quality.code_quality,"code_quality_breakdown":quality.to_json_dict(),"strategy_consistency":consistency.to_json_dict(),"function_validation":functions.to_json_dict()}
+    evaluated_candidate=Candidate(id=candidate.id,generation=candidate.generation,parent_ids=candidate.parent_ids,strategy_prompt=candidate.strategy_prompt,previous_code=agent.behavior_source if agent else generation.assembled_java or candidate.previous_code,generation_prompt=candidate.generation_prompt,module_prompts=candidate.module_prompts,module_bodies=generation.module_bodies or candidate.module_bodies,generated_java_agent_path=str(agent.source_path) if agent else None,compile_status=compile_result.status if compile_result else "not_run",game_eval_result=game_metrics.to_json_dict() if game_metrics else {},code_quality_result=quality_payload,fitness_objectives=objectives,status="failed" if failure_category else "evaluated",metadata={**candidate.metadata,"failure_category":failure_category,"failure_reason":failure_reason})
+    result=CandidateResult(candidate.id,candidate.parent_ids,generation.raw_llm_output,generation.extracted_code,generation.assembled_java,generation.module_raw_outputs,generation.module_bodies,generation.validation_result,{k:v.to_json_dict() for k,v in functions.function_validation.items()},compile_result,consistency.to_json_dict(),quality.to_json_dict(),matches,game_metrics.to_json_dict() if game_metrics else None,objectives,failure_category,failure_reason)
+    return CandidateEvaluation(evaluated_candidate,result,agent,compile_result,matches,game_metrics,consistency,quality,functions,failure_reason)
 def compile_agent_source(
     agent: GeneratedJavaAgent,
     *,
@@ -310,46 +158,6 @@ def match_failure_category(reason: str) -> str:
     return "Runtime match failure"
 
 
-def score_strategy_alignment(
-    *,
-    candidate: Candidate,
-    agent: GeneratedJavaAgent,
-    game_metrics: GameMetrics,
-    config: ExperimentConfig,
-    alignment_backend: str,
-    llm_logger: LLMCallLogger | None = None,
-) -> StrategyAlignmentResult:
-    try:
-        return evaluate_strategy_alignment(
-            strategy_prompt=candidate.strategy_prompt,
-            generated_java_code=agent.source,
-            match_summary=json.dumps(game_metrics.match_summaries, ensure_ascii=False),
-            backend=alignment_backend,
-            base_url=config.llm_base_url,
-            model=config.llm_model,
-            logger=llm_logger,
-            candidate_id=candidate.id,
-            generation=candidate.generation,
-        )
-    except (RuntimeError, ValueError, OSError) as exc:
-        return StrategyAlignmentResult(score=0.0, rationale=f"Alignment evaluation failed: {exc}")
-
-
-def compute_objectives(
-    *,
-    compile_result: CompileResult | None,
-    game_metrics: GameMetrics | None,
-    alignment_result: StrategyAlignmentResult | None,
-    failure_category: str | None,
-) -> dict[str, float]:
-    return build_objectives(
-        compile_result=compile_result,
-        game_metrics=game_metrics,
-        alignment_result=alignment_result,
-        failure_category=failure_category,
-    )
-
-
 def print_progress(
     *,
     generation: int,
@@ -367,6 +175,7 @@ def print_progress(
     print(
         f"[gen {generation} cand {index + 1}/{population_size}] "
         f"{candidate.id} status={candidate.status} "
-        f"objectives={candidate.fitness_objectives}{detail}",
+        f"objectives={candidate.fitness_objectives} "
+        f"code_quality_breakdown={evaluation.code_quality_breakdown.to_json_dict()}{detail}",
         flush=True,
     )

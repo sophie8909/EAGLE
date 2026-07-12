@@ -16,8 +16,13 @@ class MutationContext:
     resource_breakdown: dict[str, object] | None = None
     performance_breakdown: dict[str, object] | None = None
     temporal_summary: dict[str, object] | None = None
-    alignment_score: float | None = None
-    alignment_reason: str = ""
+    compilation_score: float | None = None
+    compiler_errors: tuple[str, ...] = ()
+    compiler_warnings: tuple[str, ...] = ()
+    function_score: float | None = None
+    function_validation: dict[str, object] | None = None
+    strategy_consistency_score: float | None = None
+    strategy_consistency_reason: str = ""
     compile_success: bool | None = None
     validation_success: bool | None = None
     runtime_success: bool | None = None
@@ -58,7 +63,7 @@ def build_strategy_reflection_prompt(candidate: Candidate, context: MutationCont
 def build_strategy_rewrite_prompt(candidate: Candidate, reflection: str, suffix: str) -> str:
     return f"""Current overall strategy:\n{candidate.strategy_prompt}\n\nReflection:\n{reflection}\n\n{suffix}\n\nRewrite the overall strategy. Output only the revised strategy description."""
 def build_code_reflection_prompt(candidate: Candidate, context: MutationContext) -> str:
-    return f"""Current generation guidance:\n{candidate.generation_prompt}\n\nPrevious complete function set:\n{candidate.module_bodies}\n\nEvaluation: alignment={context.alignment_score}, compile={context.compile_success}, validation={context.validation_success}, runtime={context.runtime_success}, error={context.error_category}: {context.error_message}\nAnalyze why this code-generation instruction produced this result for the complete function set."""
+    return f"""Current generation guidance:\n{candidate.generation_prompt}\n\nPrevious complete function set:\n{candidate.module_bodies}\n\nCompilation score: {context.compilation_score}\nCompiler errors: {list(context.compiler_errors)}\nCompiler warnings: {list(context.compiler_warnings)}\nFunction score: {context.function_score}/100\nPer-function validation: {context.function_validation or {}}\nStrategy consistency score: {context.strategy_consistency_score}/10\nJudge feedback: {context.strategy_consistency_reason}\nRuntime success: {context.runtime_success}\nError: {context.error_category}: {context.error_message}\nAnalyze the complete function set and propose guidance that regenerates all required behavior bodies together."""
 def build_code_rewrite_prompt(candidate: Candidate, reflection: str, suffix: str) -> str:
     return f"""Current generation guidance:\n{candidate.generation_prompt}\n\nPrevious complete function set:\n{candidate.module_bodies}\n\nReflection:\n{reflection}\n\n{suffix}\n\nRewrite the complete generation guidance. The next request must regenerate all required function bodies together. Output only revised guidance."""
 def section_between(text: str,start: str,end: str) -> str:

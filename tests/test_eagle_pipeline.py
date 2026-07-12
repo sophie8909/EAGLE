@@ -26,7 +26,7 @@ from evaluation.game_performance import (
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.microrts_runner import MatchResult, persist_match_artifacts, run_microrts_match
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE, build_objectives
-from evaluation.strategy_alignment import StrategyAlignmentResult
+from evaluation.code_quality import CodeQualityBreakdown
 from generation.agent_template import microrts_blank_strategy_prompt, render_blank_strategy_agent, render_function_agent
 from generation.backend import GenerationBackend, MockGenerationBackend, generated_class_name
 from generation.java_agent_generator import (
@@ -48,6 +48,9 @@ class RecordingMutationBackend:
         return self.responses[len(self.prompts) - 1]
 
 
+
+def quality_fixture() -> CodeQualityBreakdown:
+    return CodeQualityBreakdown(0.0, 100.0, 5.0, 0, 6, 6, True, 0, {})
 class EaglePipelineTests(unittest.TestCase):
     def test_parse_minimal_yaml(self) -> None:
         payload = parse_minimal_yaml(
@@ -132,12 +135,7 @@ population_size: 3
                 mock_score=-5.0,
             )
         metrics = compute_game_metrics([result])
-        objectives = build_objectives(
-            compile_result=CompileResult(ok=True, command=[]),
-            game_metrics=metrics,
-            alignment_result=StrategyAlignmentResult(score=0.0, rationale=""),
-            failure_category=None,
-        )
+        objectives = build_objectives(game_metrics=metrics, code_quality=quality_fixture(), game_failure=False)
         self.assertTrue(result.ok)
         self.assertEqual(result.winner, 1)
         self.assertEqual(result.performance_breakdown.result_score, -100)
@@ -220,9 +218,9 @@ population_size: 3
 
     def test_selection_binary_tournament_returns_k_candidates(self) -> None:
         population = [
-            Candidate(id="a", fitness_objectives={"game_performance": 1.0, "strategy_alignment": 0.1}),
-            Candidate(id="b", fitness_objectives={"game_performance": 2.0, "strategy_alignment": 0.2}),
-            Candidate(id="c", fitness_objectives={"game_performance": 3.0, "strategy_alignment": 0.3}),
+            Candidate(id="a", fitness_objectives={"game_performance": 1.0, "code_quality": 0.1}),
+            Candidate(id="b", fitness_objectives={"game_performance": 2.0, "code_quality": 0.2}),
+            Candidate(id="c", fitness_objectives={"game_performance": 3.0, "code_quality": 0.3}),
         ]
         selected = Selection(method="binary_tournament").select(
             population,
@@ -290,7 +288,7 @@ population_size: 3
             self.assertTrue((result.run_dir / "generated_agents").is_dir())
             self.assertTrue((result.run_dir / "results.jsonl").exists())
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
-            self.assertEqual(summary["objectives"], ["game_performance", "strategy_alignment"])
+            self.assertEqual(summary["objectives"], ["game_performance", "code_quality"])
             self.assertEqual(len(summary["final_population"]), 3)
             candidate_dir = next((result.run_dir / "candidates").iterdir())
             self.assertTrue((candidate_dir / "strategy_prompt.txt").exists())
@@ -298,7 +296,10 @@ population_size: 3
             self.assertTrue((candidate_dir / "compile_result.json").exists())
             self.assertTrue((candidate_dir / "raw_microrts_result.json").exists())
             self.assertTrue((candidate_dir / "game_metrics.json").exists())
-            self.assertTrue((candidate_dir / "strategy_alignment.json").exists())
+            self.assertTrue((candidate_dir / "code_quality.json").exists())
+            quality = json.loads((candidate_dir / "code_quality.json").read_text(encoding="utf-8"))
+            self.assertIn("code_quality_breakdown", quality)
+            self.assertEqual(quality["code_quality"], sum(quality["code_quality_breakdown"][name] for name in ("compilation_score", "function_score", "strategy_consistency_score")))
             self.assertTrue((candidate_dir / "objectives.json").exists())
             self.assertTrue((candidate_dir / "candidate_result.json").exists())
             individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
@@ -624,63 +625,22 @@ population_size: 3
         self.assertEqual(summary["result"], "p0_win")
         self.assertEqual(telemetry.performance.result_score, 100)
 
-    def test_compile_failure_gets_failed_game_performance(self) -> None:
-        objectives = build_objectives(
-            compile_result=CompileResult(ok=False, command=[], stderr="javac failed", returncode=1),
-            game_metrics=None,
-            alignment_result=None,
-            failure_category="Java compile failure",
-        )
-        self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
-        self.assertEqual(objectives["strategy_alignment"], 0.0)
-
-    def test_runtime_failure_gets_failed_game_performance(self) -> None:
-        objectives = build_objectives(
-            compile_result=CompileResult(ok=True, command=[]),
-            game_metrics=None,
-            alignment_result=None,
-            failure_category="Runtime match failure",
-        )
-        self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
-        self.assertEqual(objectives["strategy_alignment"], 0.0)
-
     def test_backend_failure_gets_failed_game_performance(self) -> None:
         class FailingBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 raise RuntimeError("backend down")
-
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            evaluation = evaluate_candidate(
-                Candidate(strategy_prompt="Generate an agent."),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}),
-                backend=FailingBackend(),
-                alignment_backend="mock",
-                generated_agents_dir=root / "generated_agents",
-                classes_dir=root / "classes",
-                mock=True,
-                ordinal=0,
-            )
+            evaluation = evaluate_candidate(Candidate(strategy_prompt="Generate an agent."), config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}), backend=FailingBackend(), strategy_consistency_backend="mock", generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
         self.assertEqual(evaluation.candidate.status, "failed")
-        self.assertEqual(evaluation.candidate.compile_status, "not_run")
         self.assertEqual(evaluation.result.failure_category, "Backend request failure")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
-        self.assertEqual(evaluation.candidate.fitness_objectives["strategy_alignment"], 0.0)
-
-    def test_valid_evaluated_candidate_keeps_actual_game_score(self) -> None:
-        objectives = build_objectives(
-            compile_result=CompileResult(ok=True, command=[]),
-            game_metrics=GameMetrics(resource_difference=-24.0, objective=-24.0),
-            alignment_result=StrategyAlignmentResult(score=0.5, rationale="ok"),
-            failure_category=None,
-        )
-        self.assertEqual(objectives["game_performance"], -24.0)
-        self.assertEqual(objectives["strategy_alignment"], 0.5)
+        self.assertIn("code_quality", evaluation.candidate.fitness_objectives)
 
     def test_dominates_uses_objective_vector(self) -> None:
-        strong = Candidate(fitness_objectives={"game_performance": 2, "strategy_alignment": 0.8})
-        weak = Candidate(fitness_objectives={"game_performance": 1, "strategy_alignment": 0.8})
-        tradeoff = Candidate(fitness_objectives={"game_performance": 3, "strategy_alignment": 0.2})
+        strong = Candidate(fitness_objectives={"game_performance": 2, "code_quality": 0.8})
+        weak = Candidate(fitness_objectives={"game_performance": 1, "code_quality": 0.8})
+        tradeoff = Candidate(fitness_objectives={"game_performance": 3, "code_quality": 0.2})
         self.assertTrue(dominates(strong, weak))
         self.assertFalse(dominates(strong, tradeoff))
 

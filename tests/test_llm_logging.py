@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from eagle.candidate import Candidate
 from eagle.llm_logging import LLMCallLogger
-from evaluation.strategy_alignment import evaluate_strategy_alignment
+from evaluation.strategy_consistency import evaluate_strategy_consistency
 from generation.backend import OpenAICompatibleGenerationBackend
 
 
@@ -102,29 +102,29 @@ class LLMLoggingTests(unittest.TestCase):
             self.assertEqual([item["attempt"] for item in payloads], [1, 2])
             self.assertEqual(payloads[0]["input"], payloads[1]["input"])
 
-    def test_alignment_http_call_logs_exact_prompt_and_response(self):
+    def test_strategy_consistency_http_call_logs_exact_prompt_and_response(self):
         with tempfile.TemporaryDirectory() as temp:
             logger = LLMCallLogger(Path(temp))
-            response = '{"score": 0.75, "rationale": "aligned"}'
+            response = '{"score": 8, "reason": "consistent"}'
             body = {"choices": [{"message": {"content": response}}]}
-            with patch("evaluation.strategy_alignment.urllib.request.urlopen", return_value=FakeResponse(body)):
-                result = evaluate_strategy_alignment(
+            with patch("evaluation.strategy_consistency.urllib.request.urlopen", return_value=FakeResponse(body)):
+                result = evaluate_strategy_consistency(
                     strategy_prompt="attack",
-                    generated_java_code="class Agent {}",
+                    generated_behavior_code="class Agent {}",
                     backend="openai",
                     model="test-model",
                     logger=logger,
                     candidate_id="candidate-b",
                     generation=4,
                 )
-            self.assertEqual(result.score, 0.75)
+            self.assertEqual(result.score, 8)
             files = list(Path(temp).glob("*.json"))
             self.assertEqual(len(files), 1)
             payload = json.loads(files[0].read_text(encoding="utf-8"))
-            self.assertEqual(payload["stage"], "alignment")
+            self.assertEqual(payload["stage"], "strategy_consistency")
             self.assertEqual(payload["response"], response)
             self.assertEqual(payload["candidate_id"], "candidate-b")
-            self.assertIn("Strategy prompt:\nattack", payload["input"])
+            self.assertIn("Strategy description:\nattack", payload["input"])
 
 
 if __name__ == "__main__":

@@ -68,7 +68,7 @@ def run_search(
         model=config.llm_model,
         logger=llm_logger,
     )
-    alignment_backend = "mock" if mock else config.alignment_backend
+    strategy_consistency_backend = "mock" if mock else config.strategy_consistency_backend
     results_path = run_dir / "results.jsonl"
 
     # NSGA-II begins with a complete evaluated population so every candidate has objectives.
@@ -78,7 +78,7 @@ def run_search(
         generation=0,
         config=config,
         backend=generation_backend,
-        alignment_backend=alignment_backend,
+        strategy_consistency_backend=strategy_consistency_backend,
         generated_agents_dir=generated_agents_dir,
         classes_dir=classes_dir,
         candidates_dir=candidates_dir,
@@ -108,7 +108,7 @@ def run_search(
             generation=generation,
             config=config,
             backend=generation_backend,
-            alignment_backend=alignment_backend,
+            strategy_consistency_backend=strategy_consistency_backend,
             generated_agents_dir=generated_agents_dir,
             classes_dir=classes_dir,
             candidates_dir=candidates_dir,
@@ -234,7 +234,7 @@ def choose_mutation(feedback_parent: Candidate, mutations: tuple[Mutation, Mutat
 
 
 def mutation_context_from_candidate(candidate: Candidate, *, generation: int, index: int) -> MutationContext:
-    # Game performance feedback and alignment feedback stay separate because they improve different fields.
+    # Game-performance and code-quality feedback improve separate evolutionary components.
     return MutationContext(
         generation=generation,
         index=index,
@@ -244,8 +244,13 @@ def mutation_context_from_candidate(candidate: Candidate, *, generation: int, in
         resource_breakdown=candidate.game_eval_result.get("resource_breakdown") or {},
         performance_breakdown=candidate.game_eval_result.get("performance_breakdown") or {},
         temporal_summary=candidate.game_eval_result.get("temporal_summary") or {},
-        alignment_score=number_or_none(candidate.strategy_alignment_result.get("score")),
-        alignment_reason=str(candidate.strategy_alignment_result.get("rationale", "")),
+        compilation_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("compilation_score")),
+        compiler_errors=tuple((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("compiler_errors") or []),
+        compiler_warnings=tuple((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("compiler_warnings") or []),
+        function_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("function_score")),
+        function_validation=candidate.code_quality_result.get("function_validation") or {},
+        strategy_consistency_score=number_or_none((candidate.code_quality_result.get("strategy_consistency") or {}).get("score")),
+        strategy_consistency_reason=str((candidate.code_quality_result.get("strategy_consistency") or {}).get("reason", "")),
         compile_success=candidate.compile_status == "success",
         validation_success=candidate.metadata.get("failure_category") != "Java validation failure",
         runtime_success=candidate.status == "evaluated",
