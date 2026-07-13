@@ -44,17 +44,23 @@ def generate_java_agent_result(candidate:Candidate,backend:GenerationBackend,wor
     except (RuntimeError,ValueError,OSError) as exc:
         reason=str(exc); return JavaAgentGenerationResult(raw_llm_output=locals().get("raw",""),validation_result=ValidationResult(False,reason),failure_category=classify_generation_error(reason),failure_reason=reason)
     functions=evaluate_function_output(raw,behavior_template)
-    render_bodies={name:functions.bodies.get(name,f'throw new UnsupportedOperationException("Invalid generated function: {name}");') for name in MODULE_NAMES}
+    errors=function_output_errors(functions)
+    if errors:
+        reason="; ".join(errors)
+        return JavaAgentGenerationResult(raw_llm_output=raw,module_raw_outputs={"all":raw},module_bodies=functions.bodies,validation_result=ValidationResult(False,reason),function_score_result=functions,failure_category="Java validation failure",failure_reason=reason)
+    render_bodies=functions.bodies
     try: behaviors=render_behavior_template(behavior_template,render_bodies)
     except ValueError as exc:
         reason=str(exc); return JavaAgentGenerationResult(raw_llm_output=raw,module_bodies=functions.bodies,function_score_result=functions,validation_result=ValidationResult(False,reason),failure_category="Java validation failure",failure_reason=reason)
     package_dir=workspace_dir/candidate.id; package_dir.mkdir(parents=True,exist_ok=True)
     wrapper_path=package_dir/"CandidateAgent.java"; behavior_path=package_dir/"CandidateBehaviors.java"
     shutil.copyfile(paths.agent_template_path,wrapper_path); behavior_path.write_text(behaviors,encoding="utf-8")
-    errors=list(functions.parsing_errors)+[f"{name}: {error}" for name,item in functions.function_validation.items() for error in item.errors]
-    validation=ValidationResult(not errors,"; ".join(errors))
+    validation=ValidationResult(True,"")
     agent=GeneratedJavaAgent("CandidateAgent","ai.generated",agent_template,wrapper_path,behaviors,behavior_path,raw,json.dumps({"functions":functions.bodies},ensure_ascii=False),{"all":raw},functions.bodies,validation)
-    return JavaAgentGenerationResult(raw_llm_output=raw,extracted_code=agent.extracted_code,module_raw_outputs={"all":raw},module_bodies=functions.bodies,assembled_java=behaviors,validation_result=validation,function_score_result=functions,agent=agent,failure_category="Java validation failure" if errors else None,failure_reason=validation.error or None)
+    return JavaAgentGenerationResult(raw_llm_output=raw,extracted_code=agent.extracted_code,module_raw_outputs={"all":raw},module_bodies=functions.bodies,assembled_java=behaviors,validation_result=validation,function_score_result=functions,agent=agent)
+
+def function_output_errors(functions:FunctionScoreResult)->list[str]:
+    return list(functions.parsing_errors)+[f"{name}: {error}" for name,item in functions.function_validation.items() for error in item.errors]
 
 def parse_behavior_functions(raw:str)->dict[str,str]:
     _,template=load_java_templates(JavaTemplatePaths()); result=evaluate_function_output(raw,template)

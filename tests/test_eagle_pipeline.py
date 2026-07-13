@@ -252,7 +252,7 @@ population_size: 3
             self.assertIn("Unit selectTarget", agent.behavior_source)
             self.assertEqual(set(agent.module_bodies), set(MODULE_NAMES))
 
-    def test_empty_function_uses_compilable_stub_and_still_runs(self) -> None:
+    def test_empty_function_fails_before_compile_or_matches(self) -> None:
         class StaticGenerationBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 functions = dict(DEFAULT_MODULE_BODIES)
@@ -273,17 +273,18 @@ population_size: 3
                 mock=True,
                 ordinal=0,
             )
-        self.assertTrue(evaluation.code_quality_breakdown.compile_success)
-        self.assertEqual(len(evaluation.match_results), 1)
-        self.assertEqual(evaluation.candidate.status, "evaluated")
-        self.assertIsNotNone(evaluation.agent)
-        self.assertIn("Invalid generated function: economy", evaluation.agent.behavior_source)
+        self.assertIsNone(evaluation.agent)
+        self.assertIsNone(evaluation.compile_result)
+        self.assertEqual(evaluation.match_results, [])
+        self.assertEqual(evaluation.candidate.status, "failed")
+        self.assertEqual(evaluation.result.failure_category, "Java validation failure")
+        self.assertFalse(evaluation.code_quality_breakdown.compile_success)
         self.assertAlmostEqual(
             evaluation.code_quality_breakdown.function_score,
             100 * (len(MODULE_NAMES) - 1) / len(MODULE_NAMES),
         )
 
-    def test_missing_functions_use_compilable_stubs_and_still_run(self) -> None:
+    def test_missing_functions_fail_before_compile_or_matches(self) -> None:
         class InvalidJsonBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 return ""
@@ -302,9 +303,12 @@ population_size: 3
                 mock=True,
                 ordinal=0,
             )
-        self.assertTrue(evaluation.code_quality_breakdown.compile_success)
-        self.assertEqual(len(evaluation.match_results), 1)
-        self.assertEqual(evaluation.candidate.status, "evaluated")
+        self.assertIsNone(evaluation.agent)
+        self.assertIsNone(evaluation.compile_result)
+        self.assertEqual(evaluation.match_results, [])
+        self.assertEqual(evaluation.candidate.status, "failed")
+        self.assertEqual(evaluation.result.failure_category, "Java validation failure")
+        self.assertFalse(evaluation.code_quality_breakdown.compile_success)
         self.assertEqual(evaluation.code_quality_breakdown.function_score, -100)
         self.assertTrue(all("Required function key is missing" in result.errors for result in evaluation.function_score_result.function_validation.values()))
 
@@ -692,6 +696,35 @@ population_size: 3
         self.assertEqual(evaluation.result.failure_category, "Backend request failure")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertIn("code_quality", evaluation.candidate.fitness_objectives)
+
+    def test_invalid_behavior_json_fails_before_compile_or_matches(self) -> None:
+        class InvalidJsonBackend(GenerationBackend):
+            def generate(self, candidate: Candidate, class_name: str) -> str:
+                return "```json\n{}\n```"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidate = Candidate(id="badjson", strategy_prompt="Generate an agent.")
+            evaluation = evaluate_candidate(
+                candidate,
+                config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}),
+                backend=InvalidJsonBackend(),
+                strategy_consistency_backend="mock",
+                generated_agents_dir=root / "generated_agents",
+                classes_dir=root / "classes",
+                mock=True,
+                ordinal=0,
+            )
+
+        self.assertIsNone(evaluation.agent)
+        self.assertIsNone(evaluation.compile_result)
+        self.assertEqual(evaluation.match_results, [])
+        self.assertEqual(evaluation.candidate.status, "failed")
+        self.assertEqual(evaluation.result.failure_category, "Java validation failure")
+        self.assertIn("not valid JSON", evaluation.result.failure_reason or "")
+        self.assertEqual(evaluation.candidate.compile_status, "not_run")
+        self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertTrue(evaluation.code_quality_breakdown.function_parsing_errors)
 
     def test_dominates_uses_objective_vector(self) -> None:
         strong = Candidate(fitness_objectives={"game_performance": 2, "code_quality": 0.8})
