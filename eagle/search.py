@@ -145,7 +145,6 @@ def initialize_population(config: ExperimentConfig, mutation: Mutation) -> list[
             strategy_prompt=prompt,
             previous_code="",
             generation_prompt=config.generation_prompt,
-            module_prompts={"controller": prompt},
             metadata={"seed_index": index},
         )
         for index, prompt in enumerate(config.seed_prompts)
@@ -158,8 +157,6 @@ def initialize_population(config: ExperimentConfig, mutation: Mutation) -> list[
             strategy_prompt=source.strategy_prompt,
             previous_code=source.previous_code,
             generation_prompt=source.generation_prompt,
-            module_prompts=source.module_prompts,
-            module_bodies=source.module_bodies,
             metadata={"operator": "seed_mutation"},
         )
         population.append(mutation.mutate(seed_child, MutationContext(generation=0, index=len(population))))
@@ -202,8 +199,6 @@ def create_offspring(
                 ),
                 previous_code=parent_a.previous_code,
                 generation_prompt=parent_a.generation_prompt,
-                module_prompts=parent_a.module_prompts,
-                module_bodies=parent_a.module_bodies,
                 metadata={"operator": "mutation"},
             )
 
@@ -242,8 +237,8 @@ def mutation_context_from_candidate(candidate: Candidate, *, generation: int, in
         compilation_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("compilation_score")),
         compiler_errors=tuple((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("compiler_errors") or []),
         compiler_warnings=tuple((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("compiler_warnings") or []),
-        function_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("function_score")),
-        function_validation=candidate.code_quality_result.get("function_validation") or {},
+        strategy_region_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("strategy_region_score")),
+        strategy_region_validation=candidate.code_quality_result.get("strategy_region_validation") or {},
         static_quality_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("static_quality_score")),
         static_metrics=(candidate.code_quality_result.get("code_quality_breakdown") or {}).get("static_metrics") or {},
         compile_success=candidate.compile_status == "success",

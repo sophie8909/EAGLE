@@ -1,25 +1,19 @@
-import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from eagle.candidate import Candidate, DEFAULT_MODULE_BODIES, MODULE_NAMES
+from eagle.candidate import Candidate
 from evaluation.code_quality import (
     analyze_compilation,
     analyze_static_code,
     build_code_quality,
-    evaluate_function_output,
+    evaluate_agent_strategy_region,
 )
 from evaluation.compiler import CompileResult
-from generation.agent_template import JavaTemplatePaths, load_java_template
 from scripts.analyze_run import read_candidate_results
 
 
 class CodeQualityTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.template = load_java_template(JavaTemplatePaths())
-
     def test_compilation_failure_scores_negative_1000(self):
         result = analyze_compilation(
             CompileResult(False, [], stderr="A.java:1: error: bad\n1 error", returncode=1)
@@ -44,86 +38,33 @@ class CodeQualityTests(unittest.TestCase):
         self.assertEqual(result.compilation_score, -100)
         self.assertEqual(result.compile_error_count, 0)
 
-    def test_all_valid_functions_score_100(self):
-        result = evaluate_function_output(
-            json.dumps({"functions": DEFAULT_MODULE_BODIES}),
-            self.template,
+    def test_complete_java_strategy_region_scores_100(self):
+        result = evaluate_agent_strategy_region(
+            "private void decide(AgentContext context) { commandIdle(unit); }"
         )
-        self.assertEqual(result.function_score, 100)
-        self.assertEqual(result.valid_function_count, len(MODULE_NAMES))
-
-    def test_outer_json_fence_is_unwrapped(self):
-        fence = chr(96) * 3
-        raw = fence + "json\n" + json.dumps({"functions": DEFAULT_MODULE_BODIES}) + "\n" + fence
-        result = evaluate_function_output(raw, self.template)
-        self.assertEqual(result.function_score, 100)
-        self.assertEqual(result.parsing_errors, ())
-
-    def test_text_outside_json_fence_remains_invalid(self):
-        fence = chr(96) * 3
-        raw = (
-            "Here is the result:\n"
-            + fence
-            + "json\n"
-            + json.dumps({"functions": DEFAULT_MODULE_BODIES})
-            + "\n"
-            + fence
-        )
-        result = evaluate_function_output(raw, self.template)
-        self.assertTrue(result.parsing_errors)
-        self.assertEqual(result.valid_function_count, 0)
-
-    def test_missing_functions_subtract_from_score(self):
-        functions = dict(DEFAULT_MODULE_BODIES)
-        functions.pop(MODULE_NAMES[0])
-        functions.pop(MODULE_NAMES[1])
-        result = evaluate_function_output(
-            json.dumps({"functions": functions}),
-            self.template,
-        )
-        self.assertAlmostEqual(
-            result.function_score,
-            100 * (len(MODULE_NAMES) - 4) / len(MODULE_NAMES),
-        )
-
-    def test_present_empty_function_scores_zero(self):
-        functions = {name: "" for name in MODULE_NAMES}
-        result = evaluate_function_output(
-            json.dumps({"functions": functions}),
-            self.template,
-        )
-        self.assertEqual(result.function_score, 0)
-        self.assertEqual(result.valid_function_count, 0)
+        self.assertEqual(result.strategy_region_score, 100)
+        self.assertEqual(result.required_region_count, 1)
+        self.assertEqual(result.valid_region_count, 1)
         self.assertEqual(
-            result.function_validation[MODULE_NAMES[0]].errors,
-            ("Function body is empty",),
+            set(result.strategy_region_validation),
+            {"agent_strategy_region"},
         )
 
-    def test_nonempty_valid_function_adds_to_score(self):
-        functions = {MODULE_NAMES[0]: DEFAULT_MODULE_BODIES[MODULE_NAMES[0]]}
-        result = evaluate_function_output(
-            json.dumps({"functions": functions}),
-            self.template,
+    def test_missing_strategy_region_scores_negative_100(self):
+        result = evaluate_agent_strategy_region(
+            "",
+            error="Agent strategy markers are missing.",
         )
-        self.assertAlmostEqual(
-            result.function_score,
-            100 * (1 - (len(MODULE_NAMES) - 1)) / len(MODULE_NAMES),
+        self.assertEqual(result.strategy_region_score, -100)
+        self.assertEqual(result.valid_region_count, 0)
+        self.assertIn(
+            "Agent strategy markers are missing.",
+            result.strategy_region_validation["agent_strategy_region"].errors,
         )
-        self.assertEqual(result.valid_function_count, 1)
-
-    def test_unknown_functions_do_not_increase_score(self):
-        result = evaluate_function_output(
-            json.dumps(
-                {"functions": {**DEFAULT_MODULE_BODIES, "helper": "return;"}}
-            ),
-            self.template,
-        )
-        self.assertEqual(result.function_score, 100)
-        self.assertEqual(result.unknown_function_names, ("helper",))
 
     def test_static_score_changes_with_executable_code_length(self):
-        short = analyze_static_code({"controller": "int budget = 10;"})
-        long = analyze_static_code({"controller": "int budget = 100;"})
+        short = analyze_static_code({"agent_strategy_region": "int budget = 10;"})
+        long = analyze_static_code({"agent_strategy_region": "int budget = 100;"})
         self.assertEqual(short.statement_count, long.statement_count)
         self.assertNotEqual(
             short.implementation_substance_score,
@@ -132,9 +73,15 @@ class CodeQualityTests(unittest.TestCase):
         self.assertNotEqual(short.static_quality_score, long.static_quality_score)
 
     def test_comments_and_whitespace_do_not_create_fitness_difference(self):
-        compact = analyze_static_code({"controller": "commandIdle(context);"})
+        compact = analyze_static_code(
+            {"agent_strategy_region": "commandIdle(context);"}
+        )
         padded = analyze_static_code(
-            {"controller": "  // explanation\n\n commandIdle( context ); /* note */"}
+            {
+                "agent_strategy_region": (
+                    "  // explanation\n\n commandIdle( context ); /* note */"
+                )
+            }
         )
         self.assertEqual(
             compact.effective_character_count,
@@ -145,7 +92,7 @@ class CodeQualityTests(unittest.TestCase):
     def test_action_and_state_coverage_are_reported_objectively(self):
         metrics = analyze_static_code(
             {
-                "controller": (
+                "agent_strategy_region": (
                     "if (context.player.getResources() > 0) {\n"
                     "    commandTrain(context, base, workerType);\n"
                     "} else {\n"
@@ -162,12 +109,32 @@ class CodeQualityTests(unittest.TestCase):
         self.assertIn("player", metrics.state_signals_used)
         self.assertIn("resources", metrics.state_signals_used)
 
+    def test_strategy_connectivity_uses_declared_methods_not_fixed_names(self):
+        metrics = analyze_static_code(
+            {
+                "agent_strategy_region": (
+                    "private void decide(AgentContext context) { customPlan(context); }\n"
+                    "private void customPlan(AgentContext context) { commandIdle(unit); }"
+                )
+            }
+        )
+        self.assertEqual(metrics.strategy_functions_called, ("customPlan",))
+        self.assertGreater(metrics.strategy_connectivity_score, 0)
+
     def test_duplicate_executable_lines_reduce_maintainability(self):
         unique = analyze_static_code(
-            {"controller": "commandIdle(context);\ncommandMove(context, unit, 1, 1);"}
+            {
+                "agent_strategy_region": (
+                    "commandIdle(context);\ncommandMove(context, unit, 1, 1);"
+                )
+            }
         )
         duplicate = analyze_static_code(
-            {"controller": "commandIdle(context);\ncommandIdle(context);"}
+            {
+                "agent_strategy_region": (
+                    "commandIdle(context);\ncommandIdle(context);"
+                )
+            }
         )
         self.assertEqual(duplicate.duplicate_line_count, 1)
         self.assertLess(
@@ -179,15 +146,19 @@ class CodeQualityTests(unittest.TestCase):
         compiler = analyze_compilation(
             CompileResult(True, [], stderr="A.java:1: warning: unchecked")
         )
-        functions = evaluate_function_output(
-            json.dumps({"functions": DEFAULT_MODULE_BODIES}),
-            self.template,
+        strategy_region = (
+            "private void decide(AgentContext context) { commandIdle(unit); }"
         )
-        quality = build_code_quality(compiler, functions, DEFAULT_MODULE_BODIES)
+        structure = evaluate_agent_strategy_region(strategy_region)
+        quality = build_code_quality(
+            compiler,
+            structure,
+            {"agent_strategy_region": strategy_region},
+        )
         self.assertEqual(
             quality.code_quality,
             quality.compilation_score
-            + quality.function_score
+            + quality.strategy_region_score
             + quality.static_quality_score,
         )
         self.assertIsNotNone(quality.static_metrics)
@@ -203,6 +174,8 @@ class CodeQualityTests(unittest.TestCase):
         self.assertEqual(candidate.objective_vector(), (4.0, 108.0))
 
     def test_legacy_artifact_is_migrated_only_by_reader(self):
+        import json
+
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "candidates" / "old"
             path.mkdir(parents=True)

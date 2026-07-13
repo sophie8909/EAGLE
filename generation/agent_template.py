@@ -1,4 +1,4 @@
-"""Repository-backed single-file Java template rendering."""
+"""Repository-backed complete single-file Java template."""
 
 from __future__ import annotations
 
@@ -6,12 +6,15 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from eagle.candidate import DEFAULT_MODULE_BODIES, MODULE_NAMES
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_AGENT_TEMPLATE_PATH = REPOSITORY_ROOT / "eagle" / "java_templates" / "CandidateAgent.java"
-PLACEHOLDER_PATTERN = re.compile(r"/\*\s*EAGLE_BODY:([A-Za-z0-9_]+)\s*\*/")
+DEFAULT_AGENT_TEMPLATE_PATH = (
+    REPOSITORY_ROOT / "eagle" / "java_templates" / "CandidateAgent.java"
+)
+STRATEGY_START_MARKER = "// EAGLE_AGENT_STRATEGY_START"
+STRATEGY_END_MARKER = "// EAGLE_AGENT_STRATEGY_END"
+ACTION_HELPERS_START_MARKER = "// EAGLE_ACTION_HELPERS_START"
+ACTION_HELPERS_END_MARKER = "// EAGLE_ACTION_HELPERS_END"
 ACTION_HELPER_METHODS: tuple[str, ...] = (
     "commandMove",
     "commandHarvest",
@@ -20,7 +23,14 @@ ACTION_HELPER_METHODS: tuple[str, ...] = (
     "commandAttack",
     "commandIdle",
 )
-MICRORTS_BLANK_STRATEGY_PROMPT = """Describe one complete MicroRTS strategy implemented in one CandidateAgent.java file. six predefined behavior functions are evolvable: controller, economy, combat, expansion, target selection, and path selection. The fixed agent supplies six typed action helpers: commandMove, commandHarvest, commandTrain, commandBuild, commandAttack, and commandIdle. Generated code fills only the six predefined method bodies and must use the provided helpers instead of assembling PlayerAction directly."""
+MICRORTS_BLANK_STRATEGY_PROMPT = (
+    "Design one complete MicroRTS strategy in one CandidateAgent.java file. "
+    "The Java template marks the editable strategy region with "
+    "EAGLE_AGENT_STRATEGY_START and EAGLE_AGENT_STRATEGY_END comments. "
+    "Control units through the six fixed action helpers: commandMove, "
+    "commandHarvest, commandTrain, commandBuild, commandAttack, and commandIdle. "
+    "Return the entire compilable Java source file, not JSON or partial method bodies."
+)
 
 
 @dataclass(frozen=True)
@@ -34,15 +44,23 @@ def validate_java_template(paths: JavaTemplatePaths) -> None:
         raise ValueError(f"Java agent template does not exist: {path}")
     template = path.read_text(encoding="utf-8")
     if "public final class CandidateAgent extends AbstractionLayerAI" not in template:
-        raise ValueError("Java agent template must declare CandidateAgent as an AbstractionLayerAI.")
-    found = PLACEHOLDER_PATTERN.findall(template)
-    for name in MODULE_NAMES:
-        count = found.count(name)
-        if count != 1:
-            raise ValueError(f"Agent placeholder EAGLE_BODY:{name} must exist exactly once; found {count}.")
-    unknown = sorted(set(found) - set(MODULE_NAMES))
-    if unknown:
-        raise ValueError(f"Unknown agent placeholders: {', '.join(unknown)}")
+        raise ValueError(
+            "Java agent template must declare CandidateAgent as an AbstractionLayerAI."
+        )
+    _validate_marker_pair(
+        template,
+        STRATEGY_START_MARKER,
+        STRATEGY_END_MARKER,
+        "Agent strategy",
+    )
+    _validate_marker_pair(
+        template,
+        ACTION_HELPERS_START_MARKER,
+        ACTION_HELPERS_END_MARKER,
+        "Action helper",
+    )
+    if "EAGLE_BODY:" in template:
+        raise ValueError("Java agent template must not contain EAGLE_BODY placeholders.")
     for helper in ACTION_HELPER_METHODS:
         count = len(re.findall(rf"\bprivate\s+boolean\s+{helper}\s*\(", template))
         if count != 1:
@@ -51,35 +69,41 @@ def validate_java_template(paths: JavaTemplatePaths) -> None:
         raise ValueError("Java agent template must translate AbstractionLayerAI actions.")
 
 
+def _validate_marker_pair(
+    source: str,
+    start_marker: str,
+    end_marker: str,
+    label: str,
+) -> None:
+    start_count = source.count(start_marker)
+    end_count = source.count(end_marker)
+    if start_count != 1 or end_count != 1:
+        raise ValueError(
+            f"{label} markers must each exist exactly once; "
+            f"found start={start_count}, end={end_count}."
+        )
+    if source.index(start_marker) >= source.index(end_marker):
+        raise ValueError(f"{label} start marker must appear before its end marker.")
+
+
 def load_java_template(paths: JavaTemplatePaths) -> str:
     validate_java_template(paths)
     return paths.agent_template_path.read_text(encoding="utf-8")
 
 
-def render_agent_template(template: str, module_bodies: dict[str, str]) -> str:
-    unknown = sorted(set(module_bodies) - set(MODULE_NAMES))
-    missing = sorted(set(MODULE_NAMES) - set(module_bodies))
-    if unknown:
-        raise ValueError(f"Unknown generated function names: {', '.join(unknown)}")
-    if missing:
-        raise ValueError(f"Missing generated function names: {', '.join(missing)}")
-    rendered = template
-    for name in MODULE_NAMES:
-        marker = f"/* EAGLE_BODY:{name} */"
-        count = rendered.count(marker)
-        if count != 1:
-            raise ValueError(f"Agent placeholder EAGLE_BODY:{name} must exist exactly once; found {count}.")
-        rendered = rendered.replace(marker, indent_body(module_bodies[name], 8), 1)
-    if "EAGLE_BODY" in rendered:
-        raise ValueError("Rendered Java agent contains unresolved EAGLE_BODY placeholders.")
-    return rendered
-
-
-def indent_body(body: str, spaces: int = 8) -> str:
-    if not body.strip():
-        raise ValueError("Generated function body must not be empty.")
-    prefix = " " * spaces
-    return "\n".join(prefix + line.rstrip() for line in body.strip().splitlines())
+def extract_strategy_region(source: str) -> str:
+    _validate_marker_pair(
+        source,
+        STRATEGY_START_MARKER,
+        STRATEGY_END_MARKER,
+        "Agent strategy",
+    )
+    start = source.index(STRATEGY_START_MARKER) + len(STRATEGY_START_MARKER)
+    end = source.index(STRATEGY_END_MARKER)
+    region = source[start:end].strip()
+    if not region:
+        raise ValueError("Agent strategy region must not be empty.")
+    return region
 
 
 def get_seed_prompt_template(name: str) -> str:
@@ -93,11 +117,6 @@ def microrts_blank_strategy_prompt() -> str:
 
 
 def render_blank_strategy_agent(class_name: str = "CandidateAgent") -> str:
-    return render_function_agent(class_name, DEFAULT_MODULE_BODIES)
-
-
-def render_function_agent(class_name: str, module_bodies: dict[str, str]) -> str:
     if class_name != "CandidateAgent":
         raise ValueError("Repository template declares only CandidateAgent.")
-    template = load_java_template(JavaTemplatePaths())
-    return render_agent_template(template, module_bodies)
+    return load_java_template(JavaTemplatePaths())

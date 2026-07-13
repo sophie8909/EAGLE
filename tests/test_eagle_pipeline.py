@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from eagle.artifacts import write_candidate_artifacts
-from eagle.candidate import Candidate, DEFAULT_MODULE_BODIES, MODULE_NAMES
+from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, parse_minimal_yaml
 from eagle.crossover import Crossover, CrossoverContext
 from eagle.evaluation import evaluate_candidate, print_progress
@@ -30,7 +30,13 @@ from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.microrts_runner import MatchResult, persist_match_artifacts, run_microrts_match
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE, build_objectives
 from evaluation.code_quality import CodeQualityBreakdown
-from generation.agent_template import microrts_blank_strategy_prompt, render_blank_strategy_agent, render_function_agent
+from generation.agent_template import (
+    STRATEGY_START_MARKER,
+    JavaTemplatePaths,
+    load_java_template,
+    microrts_blank_strategy_prompt,
+    render_blank_strategy_agent,
+)
 from generation.backend import GenerationBackend, MockGenerationBackend, generated_class_name
 from generation.java_agent_generator import (
     clean_generated_java_output,
@@ -80,7 +86,7 @@ class EaglePipelineTests(unittest.TestCase):
             )
         text = output.getvalue()
         self.assertIn("code_quality_total=105.0", text)
-        self.assertIn("compilation=0.0 + function=100.0 + static=5.0 = 105.0", text)
+        self.assertIn("compilation=0.0 + strategy_region=100.0 + static=5.0 = 105.0", text)
     def test_parse_minimal_yaml(self) -> None:
         payload = parse_minimal_yaml(
             """
@@ -183,21 +189,6 @@ population_size: 3
         normalized = normalize_prompt(prompt, max_chars=100, max_lines=10)
         self.assertEqual(normalized, "first\n\nsecond\n\nthird")
 
-    def test_candidate_serializes_function_modules(self) -> None:
-        candidate = Candidate(
-            module_prompts={"economy": "save resources"},
-            module_bodies={"economy": "return new ArrayList<>();"},
-        )
-        payload = candidate.to_json_dict()
-        self.assertEqual(set(payload["module_prompts"]), set(MODULE_NAMES))
-        self.assertEqual(set(payload["module_bodies"]), set(MODULE_NAMES))
-        self.assertEqual(payload["module_prompts"]["economy"], "save resources")
-
-    def test_initial_candidate_has_default_module_bodies(self) -> None:
-        candidate = Candidate(strategy_prompt="strategy", generation_prompt="generate")
-        self.assertEqual(set(candidate.module_bodies), set(MODULE_NAMES))
-        self.assertIn("economy(context);", candidate.module_bodies["controller"])
-
     def test_failed_game_performance_selects_code_generation_reflection(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
         strategy_mutation = Mutation(config, method="strategy_reflection")
@@ -214,17 +205,19 @@ population_size: 3
                 MutationContext(generation=1, index=0),
             )
 
-    def test_crossover_uniform_selects_function_modules(self) -> None:
-        bodies_a = {module_name: f"{module_name} body A" for module_name in MODULE_NAMES}
-        bodies_b = {module_name: f"{module_name} body B" for module_name in MODULE_NAMES}
-        parent_a = Candidate(
-            id="a",
-            module_bodies=bodies_a,
+    def test_crossover_uniform_selects_complete_java_source(self) -> None:
+        source_a = load_java_template(JavaTemplatePaths()).replace(
+            "private void decide",
+            "private void decideA",
+            1,
         )
-        parent_b = Candidate(
-            id="b",
-            module_bodies=bodies_b,
+        source_b = load_java_template(JavaTemplatePaths()).replace(
+            "private void decide",
+            "private void decideB",
+            1,
         )
+        parent_a = Candidate(id="a", previous_code=source_a)
+        parent_b = Candidate(id="b", previous_code=source_b)
         child = Crossover(method="uniform").crossover(
             parent_a,
             parent_b,
@@ -233,10 +226,7 @@ population_size: 3
         self.assertEqual(child.generation, 2)
         self.assertEqual(child.parent_ids, ("a", "b"))
         self.assertEqual(child.metadata["operator"], "crossover")
-        for module_name in MODULE_NAMES:
-            self.assertIn(child.module_bodies[module_name], {bodies_a[module_name], bodies_b[module_name]})
-            self.assertNotIn("body A\n", child.module_bodies[module_name])
-
+        self.assertIn(child.previous_code, (source_a, source_b))
     def test_unknown_crossover_method_raises_value_error(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unknown crossover method"):
             Crossover(method="unknown").crossover(
@@ -280,13 +270,13 @@ population_size: 3
             self.assertIn("private boolean commandMove", agent.source)
             self.assertIn("private boolean commandIdle", agent.source)
             self.assertEqual(agent.source_paths, (agent.source_path,))
-            self.assertEqual(set(agent.module_bodies), set(MODULE_NAMES))
+            self.assertTrue(agent.strategy_region)
 
-    def test_missing_java_strategy_method_fails_before_compile_or_matches(self) -> None:
+    def test_missing_java_strategy_marker_fails_before_compile_or_matches(self) -> None:
         class StaticGenerationBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
-                source = render_function_agent(class_name, DEFAULT_MODULE_BODIES)
-                return source.replace("private void economy(", "private void removedEconomy(")
+                source = load_java_template(JavaTemplatePaths())
+                return source.replace(STRATEGY_START_MARKER, "")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -307,9 +297,9 @@ population_size: 3
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
         self.assertFalse(evaluation.code_quality_breakdown.compile_success)
-        self.assertEqual(evaluation.code_quality_breakdown.function_score, -100)
+        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
 
-    def test_missing_functions_fail_before_compile_or_matches(self) -> None:
+    def test_empty_java_response_fails_before_compile_or_matches(self) -> None:
         class NonJavaBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 return ""
@@ -333,15 +323,15 @@ population_size: 3
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
         self.assertFalse(evaluation.code_quality_breakdown.compile_success)
-        self.assertEqual(evaluation.code_quality_breakdown.function_score, -100)
-        self.assertTrue(all("Required function key is missing" in result.errors for result in evaluation.function_score_result.function_validation.values()))
+        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
+        self.assertIn("strategy region", " ".join(evaluation.strategy_region_score_result.strategy_region_validation["agent_strategy_region"].errors).lower())
 
     def test_seed_prompt_template_expands_to_blank_strategy_prompt(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompt_template": "microrts_blank_strategy_agent"})
         self.assertEqual(len(config.seed_prompts), 1)
         self.assertEqual(config.seed_prompts[0], microrts_blank_strategy_prompt())
-        self.assertIn("six predefined behavior functions", config.seed_prompts[0])
-        self.assertIn("six typed action helpers", config.seed_prompts[0])
+        self.assertIn("one CandidateAgent.java file", config.seed_prompts[0])
+        self.assertIn("six fixed action helpers", config.seed_prompts[0])
 
     def test_mock_search_writes_nsga2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -384,7 +374,20 @@ population_size: 3
             self.assertTrue((candidate_dir / "code_quality.json").exists())
             quality = json.loads((candidate_dir / "code_quality.json").read_text(encoding="utf-8"))
             self.assertIn("code_quality_breakdown", quality)
-            self.assertEqual(quality["code_quality"], sum(quality["code_quality_breakdown"][name] for name in ("compilation_score", "function_score", "static_quality_score")))
+            self.assertEqual(
+                quality["code_quality"],
+                round(
+                    sum(
+                        quality["code_quality_breakdown"][name]
+                        for name in (
+                            "compilation_score",
+                            "strategy_region_score",
+                            "static_quality_score",
+                        )
+                    ),
+                    6,
+                ),
+            )
             self.assertTrue((candidate_dir / "objectives.json").exists())
             self.assertTrue((candidate_dir / "candidate_result.json").exists())
             individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
@@ -745,7 +748,7 @@ population_size: 3
         self.assertEqual(evaluation.match_results, [])
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
-        self.assertIn("private void decide", evaluation.result.failure_reason or "")
+        self.assertIn("EAGLE_AGENT_STRATEGY_START", evaluation.result.failure_reason or "")
         self.assertEqual(evaluation.candidate.compile_status, "not_run")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertTrue(evaluation.code_quality_breakdown.function_parsing_errors)

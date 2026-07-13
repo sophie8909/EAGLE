@@ -31,9 +31,11 @@ class MockGenerationBackend(GenerationBackend):
     """Deterministic backend for tests and local pipeline smoke runs."""
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
-        from .agent_template import render_function_agent
+        from .agent_template import JavaTemplatePaths, load_java_template
 
-        return render_function_agent(class_name, candidate.module_bodies)
+        if class_name != "CandidateAgent":
+            raise ValueError("Repository template declares only CandidateAgent.")
+        return load_java_template(JavaTemplatePaths())
 
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""

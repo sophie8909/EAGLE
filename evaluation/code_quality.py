@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import math
 import re
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from typing import Any
 
-from eagle.candidate import MODULE_NAMES
-from generation.agent_template import PLACEHOLDER_PATTERN
-from generation.java_module_validator import validate_function_module
 
 from .compiler import CompileResult
 
@@ -33,7 +29,7 @@ class CompilerDiagnostics:
 
 
 @dataclass(frozen=True)
-class FunctionValidation:
+class StrategyRegionValidation:
     valid: bool
     errors: tuple[str, ...] = ()
 
@@ -42,31 +38,28 @@ class FunctionValidation:
 
 
 @dataclass(frozen=True)
-class FunctionScoreResult:
-    function_score: float
-    required_function_count: int
-    valid_function_count: int
-    function_validation: dict[str, FunctionValidation]
-    unknown_function_names: tuple[str, ...] = ()
-    parsing_errors: tuple[str, ...] = ()
-    bodies: dict[str, str] = field(default_factory=dict)
+class StrategyRegionScoreResult:
+    strategy_region_score: float
+    required_region_count: int
+    valid_region_count: int
+    strategy_region_validation: dict[str, StrategyRegionValidation]
+    strategy_region: str = ""
 
     def to_json_dict(self) -> dict[str, Any]:
         return {
-            "function_score": self.function_score,
-            "required_function_count": self.required_function_count,
-            "valid_function_count": self.valid_function_count,
-            "function_validation": {
-                key: value.to_json_dict() for key, value in self.function_validation.items()
+            "strategy_region_score": self.strategy_region_score,
+            "required_region_count": self.required_region_count,
+            "valid_region_count": self.valid_region_count,
+            "strategy_region_validation": {
+                key: value.to_json_dict()
+                for key, value in self.strategy_region_validation.items()
             },
-            "unknown_function_names": list(self.unknown_function_names),
-            "parsing_errors": list(self.parsing_errors),
         }
 
 
 @dataclass(frozen=True)
 class StaticCodeMetrics:
-    analyzed_function_count: int
+    analyzed_region_count: int
     effective_line_count: int
     effective_character_count: int
     statement_count: int
@@ -99,31 +92,32 @@ class StaticCodeMetrics:
 @dataclass(frozen=True)
 class CodeQualityBreakdown:
     compilation_score: float
-    function_score: float
+    strategy_region_score: float
     static_quality_score: float
     warning_count: int
-    required_function_count: int
-    valid_function_count: int
+    required_region_count: int
+    valid_region_count: int
     compile_success: bool
     compile_error_count: int
-    function_validation: dict[str, dict[str, Any]]
+    strategy_region_validation: dict[str, dict[str, Any]]
     compiler_errors: tuple[str, ...] = ()
     compiler_warnings: tuple[str, ...] = ()
     static_metrics: StaticCodeMetrics | None = None
-    unknown_generated_functions: tuple[str, ...] = ()
-    function_parsing_errors: tuple[str, ...] = ()
 
     @property
     def code_quality(self) -> float:
-        return self.compilation_score + self.function_score + self.static_quality_score
+        return round(
+            self.compilation_score
+            + self.strategy_region_score
+            + self.static_quality_score,
+            6,
+        )
 
     def to_json_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["code_quality"] = self.code_quality
         payload["compiler_errors"] = list(self.compiler_errors)
         payload["compiler_warnings"] = list(self.compiler_warnings)
-        payload["unknown_generated_functions"] = list(self.unknown_generated_functions)
-        payload["function_parsing_errors"] = list(self.function_parsing_errors)
         return payload
 
 
@@ -151,69 +145,25 @@ def analyze_compilation(result: CompileResult | None) -> CompilerDiagnostics:
     )
 
 
-_OUTER_JSON_FENCE = re.compile(
-    r"\A\s*" + chr(96) * 3 + r"(?:json)?\s*(.*?)\s*" + chr(96) * 3 + r"\s*\Z",
-    re.DOTALL | re.IGNORECASE,
-)
-
-
-def unwrap_outer_json_fence(raw: str) -> str:
-    """Remove one fence only when it encloses the entire model response."""
-    match = _OUTER_JSON_FENCE.fullmatch(raw)
-    return match.group(1).strip() if match else raw
-
-
-def evaluate_function_output(raw: str, behavior_template: str) -> FunctionScoreResult:
-    parsing_errors: list[str] = []
-    functions: dict[str, object] = {}
-    try:
-        payload = json.loads(unwrap_outer_json_fence(raw))
-        if not isinstance(payload, dict) or not isinstance(payload.get("functions"), dict):
-            parsing_errors.append("Generated behavior response must contain a functions object.")
-        else:
-            functions = payload["functions"]
-            if set(payload) != {"functions"}:
-                parsing_errors.append("Generated behavior response must contain only a functions object.")
-    except json.JSONDecodeError as exc:
-        parsing_errors.append(f"Generated behavior response is not valid JSON: {exc}")
-    unknown = tuple(sorted(set(functions) - set(MODULE_NAMES)))
-    if unknown:
-        parsing_errors.append(f"Unknown behavior function keys: {', '.join(unknown)}")
-    template_names = PLACEHOLDER_PATTERN.findall(behavior_template)
-    validations: dict[str, FunctionValidation] = {}
-    bodies: dict[str, str] = {}
-    score_units = 0
-    for name in MODULE_NAMES:
-        errors: list[str] = []
-        value = functions.get(name)
-        if name not in functions:
-            errors.append("Required function key is missing")
-            score_units -= 1
-        elif not isinstance(value, str):
-            errors.append("Function body must be a string")
-        elif not value.strip():
-            errors.append("Function body is empty")
-        else:
-            bodies[name] = value
-            try:
-                validate_function_module(value, name)
-            except ValueError as exc:
-                errors.append(str(exc))
-        if template_names.count(name) != 1:
-            errors.append("Predefined template slot is missing or duplicated")
-        if not errors:
-            score_units += 1
-        validations[name] = FunctionValidation(not errors, tuple(errors))
-    valid_count = sum(item.valid for item in validations.values())
-    required = len(MODULE_NAMES)
-    return FunctionScoreResult(
-        100.0 * score_units / required,
-        required,
-        valid_count,
-        validations,
-        unknown,
-        tuple(parsing_errors),
-        bodies,
+def evaluate_agent_strategy_region(
+    strategy_region: str,
+    *,
+    error: str | None = None,
+) -> StrategyRegionScoreResult:
+    """Score the one marked strategy region from a complete Java source file."""
+    errors: list[str] = []
+    if error:
+        errors.append(error)
+    if not strategy_region.strip():
+        errors.append("Complete Java source is missing a non-empty Agent strategy region.")
+    valid = not errors
+    validation = StrategyRegionValidation(valid, tuple(errors))
+    return StrategyRegionScoreResult(
+        strategy_region_score=100.0 if valid else -100.0,
+        required_region_count=1,
+        valid_region_count=1 if valid else 0,
+        strategy_region_validation={"agent_strategy_region": validation},
+        strategy_region=strategy_region,
     )
 
 
@@ -225,7 +175,6 @@ _ACTION_HELPERS = (
     "commandAttack",
     "commandIdle",
 )
-_STRATEGY_FUNCTIONS = ("economy", "combat", "expansion", "selectTarget", "findPath")
 _STATE_SIGNALS: dict[str, str] = {
     "units": r"\bcontext\.units\b",
     "game_state": r"\bcontext\.gs\b",
@@ -240,12 +189,12 @@ _STATE_SIGNALS: dict[str, str] = {
 }
 
 
-def analyze_static_code(module_bodies: dict[str, str]) -> StaticCodeMetrics:
-    """Score generated strategy bodies using deterministic, explainable metrics."""
+def analyze_static_code(strategy_regions: dict[str, str]) -> StaticCodeMetrics:
+    """Score the marked Java strategy region using deterministic metrics."""
     bodies = [
-        module_bodies.get(name, "")
-        for name in MODULE_NAMES
-        if module_bodies.get(name, "").strip()
+        body
+        for body in strategy_regions.values()
+        if isinstance(body, str) and body.strip()
     ]
     if not bodies:
         return StaticCodeMetrics(
@@ -277,15 +226,26 @@ def analyze_static_code(module_bodies: dict[str, str]) -> StaticCodeMetrics:
     action_helpers_used = tuple(
         name for name in _ACTION_HELPERS if re.search(rf"\b{name}\s*\(", cleaned)
     )
+    declared_strategy_methods = set(
+        re.findall(
+            r"\bprivate\s+(?:static\s+)?[\w<>\[\], ?]+\s+([A-Za-z_]\w*)\s*\(",
+            cleaned,
+        )
+    )
+    call_counts = Counter(re.findall(r"\b([A-Za-z_]\w*)\s*\(", cleaned))
     strategy_functions_called = tuple(
-        name for name in _STRATEGY_FUNCTIONS if re.search(rf"\b{name}\s*\(", cleaned)
+        sorted(
+            name
+            for name in declared_strategy_methods
+            if call_counts[name] > 1 and name not in _ACTION_HELPERS
+        )
     )
     state_signals_used = tuple(
         name for name, pattern in _STATE_SIGNALS.items() if re.search(pattern, cleaned)
     )
 
     action_score = 20.0 * len(action_helpers_used) / len(_ACTION_HELPERS)
-    connectivity_score = 10.0 * len(strategy_functions_called) / len(_STRATEGY_FUNCTIONS)
+    connectivity_score = min(10.0, 2.0 * len(strategy_functions_called))
     state_score = 15.0 * len(state_signals_used) / len(_STATE_SIGNALS)
     control_score = (
         10.0 * (1.0 - math.exp(-branch_count / 8.0))
@@ -322,7 +282,7 @@ def analyze_static_code(module_bodies: dict[str, str]) -> StaticCodeMetrics:
 
     rounded = lambda value: round(value, 6)
     return StaticCodeMetrics(
-        analyzed_function_count=len(bodies),
+        analyzed_region_count=len(bodies),
         effective_line_count=len(meaningful_lines),
         effective_character_count=effective_character_count,
         statement_count=statement_count,
@@ -420,26 +380,24 @@ def _max_brace_depth(source: str) -> int:
 
 def build_code_quality(
     compiler: CompilerDiagnostics,
-    functions: FunctionScoreResult,
-    module_bodies: dict[str, str],
+    strategy_region: StrategyRegionScoreResult,
+    strategy_regions: dict[str, str],
 ) -> CodeQualityBreakdown:
-    metrics = analyze_static_code(module_bodies)
+    metrics = analyze_static_code(strategy_regions)
     return CodeQualityBreakdown(
         compilation_score=compiler.compilation_score,
-        function_score=functions.function_score,
+        strategy_region_score=strategy_region.strategy_region_score,
         static_quality_score=metrics.static_quality_score,
         warning_count=compiler.warning_count,
-        required_function_count=functions.required_function_count,
-        valid_function_count=functions.valid_function_count,
+        required_region_count=strategy_region.required_region_count,
+        valid_region_count=strategy_region.valid_region_count,
         compile_success=compiler.compile_success,
         compile_error_count=compiler.compile_error_count,
-        function_validation={
+        strategy_region_validation={
             key: value.to_json_dict()
-            for key, value in functions.function_validation.items()
+            for key, value in strategy_region.strategy_region_validation.items()
         },
         compiler_errors=compiler.errors,
         compiler_warnings=compiler.warnings,
         static_metrics=metrics,
-        unknown_generated_functions=functions.unknown_function_names,
-        function_parsing_errors=functions.parsing_errors,
     )

@@ -68,30 +68,85 @@ public final class CandidateAgent extends AbstractionLayerAI {
         return translateActions(player, gs);
     }
 
+    // EAGLE_AGENT_STRATEGY_START
+    // Edit this region to implement the complete strategy. Use the action helpers below to control units.
     private void decide(AgentContext context) {
-        /* EAGLE_BODY:controller */
+        economy(context);
+        expansion(context);
+        combat(context);
     }
 
     private void economy(AgentContext context) {
-        /* EAGLE_BODY:economy */
+        Unit base = ownBase(context);
+        for (Unit unit : context.units) {
+            if (!isIdleAlly(unit, context) || unit.getType() != workerType) {
+                continue;
+            }
+            Unit resource = nearestResource(unit, context);
+            if (resource != null && base != null) {
+                commandHarvest(unit, resource, base);
+            } else {
+                commandIdle(unit);
+            }
+        }
     }
 
     private void combat(AgentContext context) {
-        /* EAGLE_BODY:combat */
+        for (Unit unit : context.units) {
+            if (!isIdleAlly(unit, context) || !unit.getType().canAttack) {
+                continue;
+            }
+            Unit target = selectTarget(context, unit, context.units);
+            if (target != null) {
+                commandAttack(unit, target);
+            } else {
+                commandIdle(unit);
+            }
+        }
     }
 
     private void expansion(AgentContext context) {
-        /* EAGLE_BODY:expansion */
+        int resources = context.gs.getPlayer(context.player).getResources();
+        for (Unit unit : context.units) {
+            if (!isIdleAlly(unit, context)) {
+                continue;
+            }
+            if (unit.getType() == baseType && resources >= workerType.cost) {
+                commandTrain(unit, workerType);
+                return;
+            }
+            if (unit.getType() == barracksType && resources >= lightType.cost) {
+                commandTrain(unit, lightType);
+                return;
+            }
+        }
     }
 
     private Unit selectTarget(AgentContext context, Unit actor, List<Unit> candidates) {
-        /* EAGLE_BODY:target_selection */
+        Unit best = null;
+        int bestDistance = Integer.MAX_VALUE;
+        for (Unit candidate : candidates) {
+            if (candidate.getPlayer() < 0 || candidate.getPlayer() == context.player) {
+                continue;
+            }
+            int distance = Math.abs(candidate.getX() - actor.getX())
+                    + Math.abs(candidate.getY() - actor.getY());
+            if (distance < bestDistance) {
+                best = candidate;
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
     private PathChoice findPath(AgentContext context, Unit unit, int targetX, int targetY) {
-        /* EAGLE_BODY:path_selection */
+        return new PathChoice(targetX, targetY);
     }
 
+    // EAGLE_AGENT_STRATEGY_END
+
+    // EAGLE_ACTION_HELPERS_START
+    // Stable Agent operation API: strategy code should issue actions through these helpers.
     private boolean commandMove(Unit unit, int x, int y) {
         if (unit == null || unit.getType() == baseType || unit.getType() == barracksType) {
             return false;
@@ -148,6 +203,8 @@ public final class CandidateAgent extends AbstractionLayerAI {
         idle(unit);
         return true;
     }
+
+    // EAGLE_ACTION_HELPERS_END
 
     private boolean isIdleAlly(Unit unit, AgentContext context) {
         return unit != null

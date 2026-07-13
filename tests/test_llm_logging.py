@@ -53,7 +53,7 @@ class LLMLoggingTests(unittest.TestCase):
             self.assertEqual(payload["input"], "???")
             self.assertEqual(payload["response"], "???")
             self.assertEqual(payload["candidate_id"], "candidate-a")
-            self.assertEqual(payload["module_name"], "complete_java_agent")
+            self.assertEqual(payload["module_name"], "all_behaviors")
             self.assertEqual(payload["generation"], 2)
 
     def test_generation_http_call_logs_exact_prompt_and_response(self):

@@ -1,53 +1,46 @@
 # Java Agent Pipeline
 
-Each candidate evolves one complete strategy: an overall strategy description, six Java behavior functions, and generation guidance.
+Each candidate evolves one overall strategy, one complete CandidateAgent.java source file, and generation guidance. There is no JSON function map and no six-body fill-in protocol.
 
-## Single repository-owned Java source
+## Single complete Java source
 
-The complete source structure lives in `eagle/java_templates/CandidateAgent.java`. It owns:
+The repository reference source is eagle/java_templates/CandidateAgent.java. It contains:
 
-- the `AbstractionLayerAI` lifecycle and `UnitTypeTable` setup;
-- all six evolvable strategy methods;
-- the fixed `AgentContext` and path choice types;
-- action translation through `translateActions`;
-- six typed action helpers: `commandMove`, `commandHarvest`, `commandTrain`, `commandBuild`, `commandAttack`, and `commandIdle`;
-- safe lookup helpers and adjacent-enemy auto-defense.
+- the AbstractionLayerAI lifecycle and UnitTypeTable setup;
+- one strategy region marked by EAGLE_AGENT_STRATEGY_START and EAGLE_AGENT_STRATEGY_END comments;
+- one fixed action API region marked by EAGLE_ACTION_HELPERS_START and EAGLE_ACTION_HELPERS_END comments;
+- six typed action helpers: commandMove, commandHarvest, commandTrain, commandBuild, commandAttack, and commandIdle;
+- AgentContext, lookup helpers, action translation, and adjacent-enemy auto-defense.
 
-There is no separate behavior class or second Java source.
+The strategy region is not divided into predefined bodies. The model may add, remove, rename, or reorganize strategy helper methods inside that region. It operates units through the six fixed action helpers.
 
 ## Complete Java generation contract
 
-The generation prompt includes the current complete known-good `CandidateAgent.java` and requires the backend to return the entire revised Java file, from `package ai.generated;` through the final class brace.
+Every generation request includes the previous complete CandidateAgent.java, or the repository template for a new candidate. The final prompt instructions require one complete Java file from package ai.generated; through the final class brace.
 
-The response may be raw Java or one enclosing `java` code fence. Explanation text, JSON wrappers, omitted sections, placeholders, ellipses, missing strategy methods, missing action helpers, changed class identity, and forbidden runtime I/O or LLM APIs fail validation before compilation.
+The model response content must be Java source, not JSON, a functions object, a patch, individual method bodies, an explanation, or Markdown fences. The OpenAI-compatible HTTP transport still uses JSON around the chat message because that is the API protocol; only the message content is treated as generated Java.
 
-After validating the complete file, Python extracts the bodies of the six exact strategy method signatures. Those bodies continue to drive function scoring, mutation, crossover, and candidate persistence. The complete LLM-produced Java source is the source passed to `javac`; Python does not re-render a different file after generation.
-
-Changing a strategy signature requires coordinated edits to `CandidateAgent.java` and `eagle/module_contract.py` (plus `MODULE_NAMES` in `eagle/candidate.py` when a function is added or removed).
+Python validates the complete class identity, lifecycle entry point, strategy markers, fixed action-helper markers, six action-helper declarations, and forbidden runtime I/O. It extracts only the single marked strategy region for objective static analysis. The exact complete source returned by the model is written to CandidateAgent.java and passed to javac without re-rendering.
 
 ## Generated layout
 
-For candidate `<id>`, successful generation writes:
+For candidate ID, successful generation writes one file under:
 
-```text
-generated_agents/
-  <id>/
-    CandidateAgent.java
-```
+    generated_agents/<id>/CandidateAgent.java
 
-Candidate artifacts save the same complete generated source as `CandidateAgent.java` and `generated_java_source.java` for inspection.
+Candidate artifacts also save that same complete source as CandidateAgent.java and generated_java_source.java. Candidate results expose strategy_region for score auditing; they do not store six generated body entries.
 
 ## Deterministic code-quality fitness
 
-Code quality no longer uses an LLM judge. The objective is the sum of compilation score, required-function score, and a deterministic static-quality score from 0 to 100.
+Code quality uses compilation status, complete-Java strategy-region validity, and deterministic static metrics. No evaluator LLM is used.
 
-Static quality analyzes only the six generated strategy method bodies, not the fixed repository template:
+Static quality analyzes only the single marked strategy region:
 
 - 20 points for coverage of the six command helpers;
-- 10 points for connections among strategy functions;
+- up to 10 points for calls among strategy methods declared by that candidate;
 - 15 points for reading distinct game-state signals;
 - up to 15 smooth points for branches and loops;
 - up to 15 smooth points for executable statement count and effective code length;
-- up to 25 maintainability points, reduced by excessive complexity, nesting, duplicate lines, oversized bodies, and very long lines.
+- up to 25 maintainability points, reduced by excessive complexity, nesting, duplicate lines, oversized regions, and very long lines.
 
-Comments, whitespace, and string contents are removed before measurement, so formatting changes do not manufacture fitness differences. Effective executable length changes the score continuously, while code above 12,000 effective characters receives an oversize penalty. Every raw metric and component score is persisted under code_quality_breakdown.static_metrics for audit and mutation feedback.
+Comments, whitespace, and string contents are removed before measurement. Effective executable length changes the score continuously, while code above 12,000 effective characters receives an oversize penalty. Raw metrics and component scores are saved under code_quality_breakdown.static_metrics.
