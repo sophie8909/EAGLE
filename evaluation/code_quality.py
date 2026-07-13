@@ -1,6 +1,7 @@
 """Component scoring for the code_quality optimization objective."""
 from __future__ import annotations
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 from eagle.candidate import MODULE_NAMES
@@ -67,11 +68,19 @@ def analyze_compilation(result: CompileResult | None) -> CompilerDiagnostics:
         return CompilerDiagnostics(False, max(1, len(errors)), len(warnings), -1000.0, errors=errors or ((result.stderr or "javac failed").strip(),), warnings=warnings)
     return CompilerDiagnostics(True, 0, len(warnings), 0.0 if not warnings else -50.0 * len(warnings), warnings=warnings)
 
+_OUTER_JSON_FENCE = re.compile(r"\A\s*```(?:json)?\s*(.*?)\s*```\s*\Z", re.DOTALL | re.IGNORECASE)
+
+
+def unwrap_outer_json_fence(raw: str) -> str:
+    """Remove one fence only when it encloses the entire model response."""
+    match = _OUTER_JSON_FENCE.fullmatch(raw)
+    return match.group(1).strip() if match else raw
+
 def evaluate_function_output(raw: str, behavior_template: str) -> FunctionScoreResult:
     parsing_errors: list[str] = []
     functions: dict[str, object] = {}
     try:
-        payload = json.loads(raw)
+        payload = json.loads(unwrap_outer_json_fence(raw))
         if not isinstance(payload, dict) or not isinstance(payload.get("functions"), dict):
             parsing_errors.append("Generated behavior response must contain a functions object.")
         else:

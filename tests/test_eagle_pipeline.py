@@ -167,7 +167,7 @@ population_size: 3
     def test_initial_candidate_has_default_module_bodies(self) -> None:
         candidate = Candidate(strategy_prompt="strategy", generation_prompt="generate")
         self.assertEqual(set(candidate.module_bodies), set(MODULE_NAMES))
-        self.assertIn("Decision decision", candidate.module_bodies["controller"])
+        self.assertIn("economy(context);", candidate.module_bodies["controller"])
 
     def test_failed_game_performance_selects_code_generation_reflection(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
@@ -243,13 +243,14 @@ population_size: 3
             candidate = Candidate(strategy_prompt="Generate an agent.")
             agent = generate_java_agent(candidate, MockGenerationBackend(), Path(temp_dir))
             self.assertIn("package ai.generated;", agent.source)
-            self.assertIn("extends AI", agent.source)
+            self.assertIn("extends AbstractionLayerAI", agent.source)
             self.assertIn("public PlayerAction getAction", agent.source)
-            self.assertIn(f"return new {agent.class_name}();", agent.source)
-            self.assertNotIn("Decision decision = new Decision()", agent.source)
-            self.assertIn("Decision decision = new Decision()", agent.behavior_source)
-            self.assertIn("List<ActionProposal> economy", agent.behavior_source)
-            self.assertIn("Unit selectTarget", agent.behavior_source)
+            self.assertIn(f"return new {agent.class_name}(utt, pf);", agent.source)
+            self.assertIn("private void economy", agent.source)
+            self.assertIn("private Unit selectTarget", agent.source)
+            self.assertIn("private boolean commandMove", agent.source)
+            self.assertIn("private boolean commandIdle", agent.source)
+            self.assertEqual(agent.source_paths, (agent.source_path,))
             self.assertEqual(set(agent.module_bodies), set(MODULE_NAMES))
 
     def test_empty_function_fails_before_compile_or_matches(self) -> None:
@@ -317,7 +318,7 @@ population_size: 3
         self.assertEqual(len(config.seed_prompts), 1)
         self.assertEqual(config.seed_prompts[0], microrts_blank_strategy_prompt())
         self.assertIn("six predefined behavior functions", config.seed_prompts[0])
-        self.assertIn("PlayerAction assembly", config.seed_prompts[0])
+        self.assertIn("six typed action helpers", config.seed_prompts[0])
 
     def test_mock_search_writes_nsga2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -353,6 +354,7 @@ population_size: 3
             candidate_dir = next((result.run_dir / "candidates").iterdir())
             self.assertTrue((candidate_dir / "strategy_prompt.txt").exists())
             self.assertTrue((candidate_dir / "generated_java_source.java").exists())
+            self.assertFalse((candidate_dir / "CandidateBehaviors.java").exists())
             self.assertTrue((candidate_dir / "compile_result.json").exists())
             self.assertTrue((candidate_dir / "raw_microrts_result.json").exists())
             self.assertTrue((candidate_dir / "game_metrics.json").exists())
@@ -721,7 +723,7 @@ population_size: 3
         self.assertEqual(evaluation.match_results, [])
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
-        self.assertIn("not valid JSON", evaluation.result.failure_reason or "")
+        self.assertIn("must contain a functions object", evaluation.result.failure_reason or "")
         self.assertEqual(evaluation.candidate.compile_status, "not_run")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertTrue(evaluation.code_quality_breakdown.function_parsing_errors)

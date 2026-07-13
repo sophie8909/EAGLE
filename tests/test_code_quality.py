@@ -6,13 +6,13 @@ from eagle.candidate import Candidate, DEFAULT_MODULE_BODIES, MODULE_NAMES
 from evaluation.code_quality import analyze_compilation, build_code_quality, evaluate_function_output
 from evaluation.compiler import CompileResult
 from evaluation.strategy_consistency import parse_strategy_consistency
-from generation.agent_template import JavaTemplatePaths, load_java_templates
+from generation.agent_template import JavaTemplatePaths, load_java_template
 from scripts.analyze_run import read_candidate_results
 
 class CodeQualityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        _, cls.template = load_java_templates(JavaTemplatePaths())
+        cls.template = load_java_template(JavaTemplatePaths())
 
     def test_compilation_failure_scores_negative_1000(self):
         result = analyze_compilation(CompileResult(False, [], stderr="A.java:1: error: bad\n1 error", returncode=1))
@@ -37,6 +37,17 @@ class CodeQualityTests(unittest.TestCase):
         self.assertEqual(result.function_score, 100)
         self.assertEqual(result.valid_function_count, len(MODULE_NAMES))
 
+    def test_outer_json_fence_is_unwrapped(self):
+        raw = "```json\n" + json.dumps({"functions": DEFAULT_MODULE_BODIES}) + "\n```"
+        result = evaluate_function_output(raw, self.template)
+        self.assertEqual(result.function_score, 100)
+        self.assertEqual(result.parsing_errors, ())
+
+    def test_text_outside_json_fence_remains_invalid(self):
+        raw = "Here is the result:\n```json\n" + json.dumps({"functions": DEFAULT_MODULE_BODIES}) + "\n```"
+        result = evaluate_function_output(raw, self.template)
+        self.assertTrue(result.parsing_errors)
+        self.assertEqual(result.valid_function_count, 0)
     def test_missing_functions_subtract_from_score(self):
         functions = dict(DEFAULT_MODULE_BODIES); functions.pop(MODULE_NAMES[0]); functions.pop(MODULE_NAMES[1])
         result = evaluate_function_output(json.dumps({"functions": functions}), self.template)

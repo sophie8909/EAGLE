@@ -40,11 +40,11 @@ def evaluate_population(population:list[Candidate],*,generation:int,config:Exper
     return evaluated
 
 def evaluate_candidate(candidate:Candidate,*,config:ExperimentConfig,backend:GenerationBackend,strategy_consistency_backend:str,generated_agents_dir:Path,classes_dir:Path,mock:bool,ordinal:int,match_artifacts_dir:Path|None=None,llm_logger:LLMCallLogger|None=None)->CandidateEvaluation:
-    generation=generate_java_agent_result(candidate,backend,generated_agents_dir,template_paths=JavaTemplatePaths(config.agent_template_path,config.behaviors_template_path))
+    generation=generate_java_agent_result(candidate,backend,generated_agents_dir,template_paths=JavaTemplatePaths(config.agent_template_path))
     agent=generation.agent; functions=generation.function_score_result
     if functions is None:
         from evaluation.code_quality import evaluate_function_output
-        behavior_template=config.behaviors_template_path.read_text(encoding="utf-8"); functions=evaluate_function_output(generation.raw_llm_output,behavior_template)
+        behavior_template=config.agent_template_path.read_text(encoding="utf-8"); functions=evaluate_function_output(generation.raw_llm_output,behavior_template)
     compile_result=None; compile_error=None
     if agent is not None:
         try: compile_result=compile_agent_source(agent,config=config,classes_dir=classes_dir,candidate_id=candidate.id,mock=mock)

@@ -22,10 +22,10 @@ class ModuleMethodContract:
 
 
 MODULE_METHOD_CONTRACTS: dict[str, ModuleMethodContract] = {
-    "controller": ModuleMethodContract("decide", "Decision", (("AgentContext", "context"),)),
-    "economy": ModuleMethodContract("economy", "List<ActionProposal>", (("AgentContext", "context"),)),
-    "combat": ModuleMethodContract("combat", "List<ActionProposal>", (("AgentContext", "context"),)),
-    "expansion": ModuleMethodContract("expansion", "List<ActionProposal>", (("AgentContext", "context"),)),
+    "controller": ModuleMethodContract("decide", "void", (("AgentContext", "context"),)),
+    "economy": ModuleMethodContract("economy", "void", (("AgentContext", "context"),)),
+    "combat": ModuleMethodContract("combat", "void", (("AgentContext", "context"),)),
+    "expansion": ModuleMethodContract("expansion", "void", (("AgentContext", "context"),)),
     "target_selection": ModuleMethodContract(
         "selectTarget",
         "Unit",

@@ -37,8 +37,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     write_module_artifacts(candidate_dir, evaluation.candidate)
     if evaluation.agent is not None:
         (candidate_dir / "CandidateAgent.java").write_text(evaluation.agent.source, encoding="utf-8")
-        (candidate_dir / "CandidateBehaviors.java").write_text(evaluation.agent.behavior_source, encoding="utf-8")
-        (candidate_dir / "generated_java_source.java").write_text(evaluation.agent.behavior_source, encoding="utf-8")
+        (candidate_dir / "generated_java_source.java").write_text(evaluation.agent.source, encoding="utf-8")
     write_json(candidate_dir / "prompt.json", {
         "strategy_description": evaluation.candidate.strategy_prompt,
         "generation_guidance": evaluation.candidate.generation_prompt,

@@ -19,42 +19,102 @@ MODULE_NAMES: tuple[str, ...] = (
 )
 
 DEFAULT_MODULE_PROMPTS: dict[str, str] = {
-    "controller": "Decide how to combine economy, combat, expansion, target, and path proposals.",
-    "economy": "Propose simple economy actions such as waiting, harvesting, or keeping units available.",
-    "combat": "Propose simple combat priorities without directly issuing MicroRTS actions.",
-    "expansion": "Propose simple expansion or production priorities without direct action assembly.",
-    "target_selection": "Choose a target unit from a provided candidate list.",
-    "path_selection": "Choose a target location for a unit.",
+    "controller": "Coordinate the economy, expansion, and combat behavior functions.",
+    "economy": "Assign idle Workers to harvest or explicitly idle them when harvesting is impossible.",
+    "combat": "Select enemy targets and issue attack or idle commands for allied combat-capable units.",
+    "expansion": "Train units and build production structures when resources and idle producers allow it.",
+    "target_selection": "Choose a valid enemy target from the provided unit snapshot.",
+    "path_selection": "Choose a reachable target coordinate for commandMove.",
 }
 
 DEFAULT_MODULE_BODIES: dict[str, str] = {
-    "controller": (
-        "Decision decision = new Decision();\n"
-        "decision.proposals.addAll(economy(context));\n"
-        "decision.proposals.addAll(expansion(context));\n"
-        "decision.proposals.addAll(combat(context));\n"
-        "return decision;"
+    "controller": "economy(context);\nexpansion(context);\ncombat(context);",
+    "economy": (
+        "Unit base = ownBase(context);\n"
+        "for (Unit unit : context.units) {\n"
+        "    if (!isIdleAlly(unit, context) || unit.getType() != workerType) {\n"
+        "        continue;\n"
+        "    }\n"
+        "    Unit resource = nearestResource(unit, context);\n"
+        "    if (resource != null && base != null) {\n"
+        "        commandHarvest(unit, resource, base);\n"
+        "    } else {\n"
+        "        commandIdle(unit);\n"
+        "    }\n"
+        "}"
     ),
-    "economy": "return new ArrayList<>();",
-    "combat": "return new ArrayList<>();",
-    "expansion": "return new ArrayList<>();",
-    "target_selection": "return candidates.isEmpty() ? null : candidates.get(0);",
+    "combat": (
+        "for (Unit unit : context.units) {\n"
+        "    if (!isIdleAlly(unit, context) || !unit.getType().canAttack) {\n"
+        "        continue;\n"
+        "    }\n"
+        "    Unit target = selectTarget(context, unit, context.units);\n"
+        "    if (target != null) {\n"
+        "        commandAttack(unit, target);\n"
+        "    } else {\n"
+        "        commandIdle(unit);\n"
+        "    }\n"
+        "}"
+    ),
+    "expansion": (
+        "int resources = context.gs.getPlayer(context.player).getResources();\n"
+        "for (Unit unit : context.units) {\n"
+        "    if (!isIdleAlly(unit, context)) {\n"
+        "        continue;\n"
+        "    }\n"
+        "    if (unit.getType() == baseType && resources >= workerType.cost) {\n"
+        "        commandTrain(unit, workerType);\n"
+        "        return;\n"
+        "    }\n"
+        "    if (unit.getType() == barracksType && resources >= lightType.cost) {\n"
+        "        commandTrain(unit, lightType);\n"
+        "        return;\n"
+        "    }\n"
+        "}"
+    ),
+    "target_selection": (
+        "Unit best = null;\n"
+        "int bestDistance = Integer.MAX_VALUE;\n"
+        "for (Unit candidate : candidates) {\n"
+        "    if (candidate.getPlayer() < 0 || candidate.getPlayer() == context.player) {\n"
+        "        continue;\n"
+        "    }\n"
+        "    int distance = Math.abs(candidate.getX() - actor.getX())\n"
+        "            + Math.abs(candidate.getY() - actor.getY());\n"
+        "    if (distance < bestDistance) {\n"
+        "        best = candidate;\n"
+        "        bestDistance = distance;\n"
+        "    }\n"
+        "}\n"
+        "return best;"
+    ),
     "path_selection": "return new PathChoice(targetX, targetY);",
 }
+
+ACTION_API_GUIDE = """Fixed action helpers already implemented in CandidateAgent.java:
+- commandMove(Unit unit, int x, int y)
+- commandHarvest(Unit worker, Unit resource, Unit base)
+- commandTrain(Unit producer, UnitType unitType)
+- commandBuild(Unit worker, UnitType buildingType, int x, int y)
+- commandAttack(Unit attacker, Unit target)
+- commandIdle(Unit unit)
+
+Fixed lookup helpers:
+- isIdleAlly(Unit unit, AgentContext context)
+- nearestEnemy(Unit source, AgentContext context)
+- nearestResource(Unit source, AgentContext context)
+- ownBase(AgentContext context)
+
+AgentContext exposes context.player, context.gs, and the snapshot context.units.
+Known UnitType fields are resourceType, workerType, lightType, heavyType, rangedType, baseType, and barracksType."""
+
 DEFAULT_GENERATION_PROMPT = (
-    "Requested class name: {class_name}\n"
-    "Requested module: {module_name}\n\n"
     "Generate one JSON object containing every required function body. "
     "Return only JSON with a functions object: no markdown fences and no explanation. "
-    "Do not output a package declaration, imports, class declaration, constructors, fields, or helper methods. "
-    "Do not define helper methods, do not invent helper methods, and never call nearestIdleAlly. "
-    "Do not directly assemble PlayerAction objects; return structured Decision, ActionProposal, Unit, or PathChoice values. "
-    "Do not redeclare local variables in the same method, "
-    "reuse existing variables or choose unique names, "
-    "do not assign UnitType values to Unit variables, "
-    "do not use custom imports, Optional, StrategyTable, streams, or lambdas, "
-    "prefer the simple MicroRTS API usage shown in the template, "
-    "and do not call any network, file, subprocess, environment, or LLM API at runtime."
+    "Each value must be a Java method body string, not a complete method declaration or nested body object. "
+    "Do not output package declarations, imports, classes, constructors, fields, or helper methods. "
+    "Use only the fixed action and lookup helpers shown in the prompt; do not invent helper methods. "
+    "Do not assemble PlayerAction directly and do not call network, file, subprocess, environment, or LLM APIs at runtime."
 )
 
 
@@ -98,7 +158,7 @@ class Candidate:
         )
 
     def generation_input(self, *, class_name: str = "", module_name: str = "controller") -> str:
-        """Build one request for the complete behavior-function collection."""
+        """Build one request for the complete single-file behavior-function collection."""
         declarations = "\n".join(
             f'- "{name}": body for `{contract.declaration}`'
             for name, contract in MODULE_METHOD_CONTRACTS.items()
@@ -109,8 +169,10 @@ class Candidate:
 Overall strategy:
 {self.strategy_prompt.strip()}
 
-Required keys and fixed method slots:
+Required keys and fixed method slots in the single CandidateAgent.java file:
 {declarations}
+
+{ACTION_API_GUIDE}
 
 Previous complete function set:
 {previous}
@@ -119,6 +181,7 @@ Generation guidance:
 {self.generation_prompt.strip()}
 
 Regenerate all required function bodies together. Return only JSON shaped as {{"functions": {{...}}}}."""
+
     def to_json_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["parent_ids"] = list(self.parent_ids)

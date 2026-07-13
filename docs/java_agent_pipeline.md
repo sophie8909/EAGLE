@@ -1,45 +1,42 @@
 # Java Agent Pipeline
 
-Each candidate evolves one complete strategy: the overall strategy description, the complete six-function behavior collection, and generation guidance. EAGLE requests and replaces all behavior bodies together.
+Each candidate evolves one complete strategy: an overall strategy description, six Java behavior-function bodies, and generation guidance. EAGLE requests and replaces all six bodies together.
 
-## Repository-owned Java sources
+## Single repository-owned Java source
 
-The source structure lives in `eagle/java_templates/`:
+The complete source structure lives in `eagle/java_templates/CandidateAgent.java`. It owns:
 
-- `CandidateAgent.java` is the fixed, manually editable MicroRTS wrapper. It owns AI lifecycle methods, context creation, calls to every predefined behavior method, action assembly, fallback handling, clone/reset, and framework parameters. Candidate creation copies this file without changing it.
-- `CandidateBehaviors.java` is the evolvable behavior template. It owns the fixed class, imports, signatures, and one unique `/* EAGLE_BODY:<function_name> */` marker for each required behavior.
+- the `AbstractionLayerAI` lifecycle and `UnitTypeTable` setup;
+- all six evolvable `/* EAGLE_BODY:<function_name> */` slots;
+- the fixed `AgentContext` and path choice types;
+- action translation through `translateActions`;
+- six typed action helpers: `commandMove`, `commandHarvest`, `commandTrain`, `commandBuild`, `commandAttack`, and `commandIdle`;
+- safe lookup helpers and adjacent-enemy auto-defense.
 
-Python does not own either Java class skeleton. It validates the checked-in templates, validates the backend's JSON function set and bodies, replaces the markers, rejects unresolved markers, and writes the rendered behavior source. The unrendered behavior template is never compiled.
+Python validates this checked-in template, validates the backend JSON function set and bodies, replaces the six markers, rejects unresolved markers, and writes exactly one rendered `CandidateAgent.java`. There is no separate behavior class or second Java source.
 
-Changing a behavior signature requires coordinated edits to both Java templates and `eagle/module_contract.py` (plus `MODULE_NAMES` in `eagle/candidate.py` when a function is added or removed).
+Changing a behavior signature requires coordinated edits to `CandidateAgent.java` and `eagle/module_contract.py` (plus `MODULE_NAMES` in `eagle/candidate.py` when a function is added or removed).
 
 ## Generation boundary
 
-The backend returns only one JSON object containing every fixed function body:
+The backend returns one JSON object containing every fixed function body:
 
 ```json
 {"functions":{"controller":"...","economy":"...","combat":"...","expansion":"...","target_selection":"...","path_selection":"..."}}
 ```
 
-Missing, duplicate-template, unknown, empty, fenced, or scope-escaping functions fail before compilation.
+Each value must be a Java method body string. Complete method declarations, nested `{ "body": ... }` objects, extra function keys, empty bodies, package/import/type declarations, helper method declarations, markdown inside function bodies, text outside the outer JSON fence, and unbalanced scopes fail validation before compilation. One `json` fence enclosing the entire response is removed before strict JSON parsing.
 
-## Runtime and artifacts
+The generation prompt lists the exact six fixed action helper signatures and the available `AgentContext`, unit-type, and lookup fields. Generated bodies issue high-level actions through these helpers; they do not construct `PlayerAction` or access runtime LLM/network/file APIs.
 
-Both rendered sources compile together in one `javac` invocation. Candidate class output directories isolate the stable `ai.generated.CandidateAgent` class name. Successful candidates proceed to MicroRTS evaluation.
+## Generated layout
 
-Each candidate artifact directory contains at least:
+For candidate `<id>`, successful generation writes:
 
 ```text
-candidate/
-  CandidateAgent.java
-  CandidateBehaviors.java
-  prompt.json
-  compile.log
-  result.json
+generated_agents/
+  <id>/
+    CandidateAgent.java
 ```
 
-Detailed metrics and debug artifacts are retained alongside these files.
-
-## Code-quality objective
-
-NSGA-II maximizes `game_performance` and `code_quality`. Code quality is the sum of the actual `javac` compilation score, the proportional predefined-function validity score, and the 0�V10 strategy-consistency judge score. Each component, compiler warning/error counts, per-function validation, unknown generated names, judge reasoning, and judge infrastructure errors are stored separately in candidate artifacts and reflection feedback. A compilation failure prevents the MicroRTS match but does not overwrite function or strategy-consistency scores.
+Only that source is passed to `javac`. Candidate artifacts also save the same rendered source as `CandidateAgent.java` and `generated_java_source.java` for inspection.
