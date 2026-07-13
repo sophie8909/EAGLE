@@ -3,13 +3,16 @@ import os
 import random
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+from types import SimpleNamespace
 from pathlib import Path
 
 from eagle.artifacts import write_candidate_artifacts
 from eagle.candidate import Candidate, DEFAULT_MODULE_BODIES, MODULE_NAMES
 from eagle.config import ExperimentConfig, parse_minimal_yaml
 from eagle.crossover import Crossover, CrossoverContext
-from eagle.evaluation import evaluate_candidate
+from eagle.evaluation import evaluate_candidate, print_progress
 from eagle.mutation import Mutation, MutationContext
 from eagle.offspring import normalize_prompt
 from eagle.search import choose_mutation, run_search
@@ -52,6 +55,32 @@ class RecordingMutationBackend:
 def quality_fixture() -> CodeQualityBreakdown:
     return CodeQualityBreakdown(0.0, 100.0, 5.0, 0, 6, 6, True, 0, {})
 class EaglePipelineTests(unittest.TestCase):
+    def test_progress_prints_matching_code_quality_total_and_components(self) -> None:
+        quality = quality_fixture()
+        evaluation = SimpleNamespace(
+            candidate=SimpleNamespace(
+                id="score-test",
+                status="evaluated",
+                fitness_objectives={
+                    "game_performance": 1.0,
+                    "code_quality": quality.code_quality,
+                },
+            ),
+            error=None,
+            compile_result=None,
+            code_quality_breakdown=quality,
+        )
+        output = StringIO()
+        with redirect_stdout(output):
+            print_progress(
+                generation=0,
+                index=0,
+                population_size=1,
+                evaluation=evaluation,
+            )
+        text = output.getvalue()
+        self.assertIn("code_quality_total=105.0", text)
+        self.assertIn("compilation=0.0 + function=100.0 + static=5.0 = 105.0", text)
     def test_parse_minimal_yaml(self) -> None:
         payload = parse_minimal_yaml(
             """

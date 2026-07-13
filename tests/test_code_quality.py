@@ -191,6 +191,10 @@ class CodeQualityTests(unittest.TestCase):
             + quality.static_quality_score,
         )
         self.assertIsNotNone(quality.static_metrics)
+        self.assertEqual(
+            quality.to_json_dict()["code_quality"],
+            quality.code_quality,
+        )
 
     def test_optimizer_vector_uses_code_quality(self):
         candidate = Candidate(

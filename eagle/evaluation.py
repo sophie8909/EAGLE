@@ -159,6 +159,7 @@ def print_progress(
     evaluation: CandidateEvaluation,
 ) -> None:
     candidate = evaluation.candidate
+    quality = evaluation.code_quality_breakdown
     detail = ""
     if evaluation.error:
         detail = f" error={evaluation.error}"
@@ -169,6 +170,11 @@ def print_progress(
         f"[gen {generation} cand {index + 1}/{population_size}] "
         f"{candidate.id} status={candidate.status} "
         f"objectives={candidate.fitness_objectives} "
-        f"code_quality_breakdown={evaluation.code_quality_breakdown.to_json_dict()}{detail}",
+        f"code_quality_total={quality.code_quality} "
+        f"code_quality_components=("
+        f"compilation={quality.compilation_score} + "
+        f"function={quality.function_score} + "
+        f"static={quality.static_quality_score} = "
+        f"{quality.code_quality}){detail}",
         flush=True,
     )

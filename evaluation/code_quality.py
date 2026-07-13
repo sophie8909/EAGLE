@@ -119,6 +119,7 @@ class CodeQualityBreakdown:
 
     def to_json_dict(self) -> dict[str, Any]:
         payload = asdict(self)
+        payload["code_quality"] = self.code_quality
         payload["compiler_errors"] = list(self.compiler_errors)
         payload["compiler_warnings"] = list(self.compiler_warnings)
         payload["unknown_generated_functions"] = list(self.unknown_generated_functions)
