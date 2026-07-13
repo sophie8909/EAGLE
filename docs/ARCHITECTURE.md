@@ -11,7 +11,7 @@ EAGLE is a small research pipeline that evolves text prompts. Each prompt is use
 5. `generation/java_agent_generator.py` asks the generation backend for Java, cleans/validates the source, and writes one Java file.
 6. `evaluation/compiler.py` compiles the generated Java agent.
 7. `evaluation/microrts_runner.py` runs MicroRTS matches, or returns deterministic mock results in mock mode.
-8. `eagle/evaluation.py` computes game metrics, strategy alignment, and final objective values.
+8. `eagle/evaluation.py` computes game metrics, deterministic static code quality, and final objective values.
 9. `eagle/offspring.py` creates child prompts through simple text crossover and mutation.
 10. `eagle/selection.py` ranks candidates with Pareto sorting and crowding distance, then selects the next generation.
 11. `eagle/artifacts.py` writes run summaries, per-candidate files, and JSONL results.
@@ -36,7 +36,7 @@ Edit here when: changing the order of the experiment loop or adding a new top-le
 
 ### `eagle/evaluation.py`
 
-Owns: evaluating one candidate or one population: Java generation, compilation, MicroRTS match execution, alignment scoring, objective computation, and progress printing.
+Owns: evaluating one candidate or one population: Java generation, compilation, MicroRTS match execution, deterministic code-quality scoring, objective computation, and progress printing.
 
 Should not own: population initialization, offspring creation, NSGA-II selection, or artifact schemas beyond calling artifact writers.
 

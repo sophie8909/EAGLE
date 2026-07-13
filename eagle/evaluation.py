@@ -8,19 +8,17 @@ from evaluation.game_performance import GamePerformanceConfig
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.microrts_runner import MatchResult, run_microrts_match
 from evaluation.nsga2_objectives import build_objectives
-from evaluation.strategy_consistency import StrategyConsistencyResult, evaluate_strategy_consistency
 from generation.agent_template import JavaTemplatePaths
 from generation.backend import GenerationBackend
 from generation.java_agent_generator import GeneratedJavaAgent, ValidationResult, generate_java_agent_result
 from .artifacts import append_result, write_candidate_artifacts
 from .candidate import Candidate
 from .config import ExperimentConfig
-from .llm_logging import LLMCallLogger
 
 @dataclass(frozen=True)
 class CandidateEvaluation:
     candidate: Candidate; result: "CandidateResult"; agent: GeneratedJavaAgent|None; compile_result: CompileResult|None
-    match_results: list[MatchResult]; game_metrics: GameMetrics|None; strategy_consistency_result: StrategyConsistencyResult|None
+    match_results: list[MatchResult]; game_metrics: GameMetrics|None; strategy_consistency_result: object|None
     code_quality_breakdown: CodeQualityBreakdown; function_score_result: FunctionScoreResult|None; error: str|None=None
 
 @dataclass(frozen=True)
@@ -31,15 +29,15 @@ class CandidateResult:
     code_quality_breakdown:dict|None=None; match_result:list[MatchResult]|None=None; game_metrics:dict[str,object]|None=None
     final_score:dict[str,float]|None=None; failure_category:str|None=None; failure_reason:str|None=None
 
-def evaluate_population(population:list[Candidate],*,generation:int,config:ExperimentConfig,backend:GenerationBackend,strategy_consistency_backend:str,generated_agents_dir:Path,classes_dir:Path,candidates_dir:Path,results_path:Path,mock:bool,llm_logger:LLMCallLogger|None=None)->list[Candidate]:
+def evaluate_population(population:list[Candidate],*,generation:int,config:ExperimentConfig,backend:GenerationBackend,generated_agents_dir:Path,classes_dir:Path,candidates_dir:Path,results_path:Path,mock:bool)->list[Candidate]:
     evaluated=[]
     for index,candidate in enumerate(population):
-        evaluation=evaluate_candidate(candidate,config=config,backend=backend,strategy_consistency_backend=strategy_consistency_backend,generated_agents_dir=generated_agents_dir,classes_dir=classes_dir,match_artifacts_dir=candidates_dir/candidate.id/"matches",mock=mock,ordinal=index,llm_logger=llm_logger)
+        evaluation=evaluate_candidate(candidate,config=config,backend=backend,generated_agents_dir=generated_agents_dir,classes_dir=classes_dir,match_artifacts_dir=candidates_dir/candidate.id/"matches",mock=mock,ordinal=index)
         write_candidate_artifacts(candidates_dir,evaluation); append_result(results_path,evaluation); evaluated.append(evaluation.candidate)
         print_progress(generation=generation,index=index,population_size=len(population),evaluation=evaluation)
     return evaluated
 
-def evaluate_candidate(candidate:Candidate,*,config:ExperimentConfig,backend:GenerationBackend,strategy_consistency_backend:str,generated_agents_dir:Path,classes_dir:Path,mock:bool,ordinal:int,match_artifacts_dir:Path|None=None,llm_logger:LLMCallLogger|None=None)->CandidateEvaluation:
+def evaluate_candidate(candidate:Candidate,*,config:ExperimentConfig,backend:GenerationBackend,generated_agents_dir:Path,classes_dir:Path,mock:bool,ordinal:int,match_artifacts_dir:Path|None=None)->CandidateEvaluation:
     generation=generate_java_agent_result(candidate,backend,generated_agents_dir,template_paths=JavaTemplatePaths(config.agent_template_path))
     agent=generation.agent; functions=generation.function_score_result
     if functions is None:
@@ -50,12 +48,8 @@ def evaluate_candidate(candidate:Candidate,*,config:ExperimentConfig,backend:Gen
         try: compile_result=compile_agent_source(agent,config=config,classes_dir=classes_dir,candidate_id=candidate.id,mock=mock)
         except (RuntimeError,OSError,ValueError) as exc: compile_error=str(exc)
     compiler=analyze_compilation(compile_result)
-    consistency=None
-    if agent is not None:
-        consistency=evaluate_strategy_consistency(strategy_prompt=candidate.strategy_prompt,generated_behavior_code=agent.behavior_source,backend=strategy_consistency_backend,base_url=config.llm_base_url,model=config.llm_model,logger=llm_logger,candidate_id=candidate.id,generation=candidate.generation)
-    else:
-        consistency=StrategyConsistencyResult(None,"",error="Strategy consistency was not run because Java rendering failed.")
-    quality=build_code_quality(compiler,functions,consistency.score,consistency.error)
+    # Code quality is deterministic and makes no evaluator LLM call.
+    quality=build_code_quality(compiler,functions,generation.module_bodies or functions.bodies)
     matches=[]; game_metrics=None; match_error=None
     if compiler.compile_success and agent is not None:
         matches,match_error=evaluate_matches(candidate=candidate,agent=agent,config=config,classes_dir=classes_dir,match_artifacts_dir=match_artifacts_dir,mock=mock,ordinal=ordinal)
@@ -66,12 +60,11 @@ def evaluate_candidate(candidate:Candidate,*,config:ExperimentConfig,backend:Gen
     if generation.failure_category and agent is None: failure_category=generation.failure_category; failure_reason=generation.failure_reason
     elif not compiler.compile_success: failure_category="Java compile failure"; failure_reason=(compile_error or compile_error_message(compile_result)) if compile_result else (compile_error or "Compilation was not run.")
     elif match_error: failure_category=match_failure_category(match_error); failure_reason=match_error
-    elif consistency.error: failure_category="Evaluator infrastructure failure"; failure_reason=consistency.error
     objectives=build_objectives(game_metrics=game_metrics,code_quality=quality,game_failure=game_failure)
-    quality_payload={"code_quality":quality.code_quality,"code_quality_breakdown":quality.to_json_dict(),"strategy_consistency":consistency.to_json_dict(),"function_validation":functions.to_json_dict()}
+    quality_payload={"code_quality":quality.code_quality,"code_quality_breakdown":quality.to_json_dict(),"strategy_consistency":None,"function_validation":functions.to_json_dict()}
     evaluated_candidate=Candidate(id=candidate.id,generation=candidate.generation,parent_ids=candidate.parent_ids,strategy_prompt=candidate.strategy_prompt,previous_code=agent.behavior_source if agent else generation.assembled_java or candidate.previous_code,generation_prompt=candidate.generation_prompt,module_prompts=candidate.module_prompts,module_bodies=generation.module_bodies or candidate.module_bodies,generated_java_agent_path=str(agent.source_path) if agent else None,compile_status=compile_result.status if compile_result else "not_run",game_eval_result=game_metrics.to_json_dict() if game_metrics else {},code_quality_result=quality_payload,fitness_objectives=objectives,status="failed" if failure_category else "evaluated",metadata={**candidate.metadata,"failure_category":failure_category,"failure_reason":failure_reason})
-    result=CandidateResult(candidate.id,candidate.parent_ids,generation.raw_llm_output,generation.extracted_code,generation.assembled_java,generation.module_raw_outputs,generation.module_bodies,generation.validation_result,{k:v.to_json_dict() for k,v in functions.function_validation.items()},compile_result,consistency.to_json_dict(),quality.to_json_dict(),matches,game_metrics.to_json_dict() if game_metrics else None,objectives,failure_category,failure_reason)
-    return CandidateEvaluation(evaluated_candidate,result,agent,compile_result,matches,game_metrics,consistency,quality,functions,failure_reason)
+    result=CandidateResult(candidate.id,candidate.parent_ids,generation.raw_llm_output,generation.extracted_code,generation.assembled_java,generation.module_raw_outputs,generation.module_bodies,generation.validation_result,{k:v.to_json_dict() for k,v in functions.function_validation.items()},compile_result,None,quality.to_json_dict(),matches,game_metrics.to_json_dict() if game_metrics else None,objectives,failure_category,failure_reason)
+    return CandidateEvaluation(evaluated_candidate,result,agent,compile_result,matches,game_metrics,None,quality,functions,failure_reason)
 def compile_agent_source(
     agent: GeneratedJavaAgent,
     *,

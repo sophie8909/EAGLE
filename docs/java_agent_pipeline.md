@@ -36,3 +36,18 @@ generated_agents/
 ```
 
 Candidate artifacts save the same complete generated source as `CandidateAgent.java` and `generated_java_source.java` for inspection.
+
+## Deterministic code-quality fitness
+
+Code quality no longer uses an LLM judge. The objective is the sum of compilation score, required-function score, and a deterministic static-quality score from 0 to 100.
+
+Static quality analyzes only the six generated strategy method bodies, not the fixed repository template:
+
+- 20 points for coverage of the six command helpers;
+- 10 points for connections among strategy functions;
+- 15 points for reading distinct game-state signals;
+- up to 15 smooth points for branches and loops;
+- up to 15 smooth points for executable statement count and effective code length;
+- up to 25 maintainability points, reduced by excessive complexity, nesting, duplicate lines, oversized bodies, and very long lines.
+
+Comments, whitespace, and string contents are removed before measurement, so formatting changes do not manufacture fitness differences. Effective executable length changes the score continuously, while code above 12,000 effective characters receives an oversize penalty. Every raw metric and component score is persisted under code_quality_breakdown.static_metrics for audit and mutation feedback.

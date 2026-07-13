@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 from eagle.candidate import Candidate
 from eagle.llm_logging import LLMCallLogger
-from evaluation.strategy_consistency import evaluate_strategy_consistency
 from generation.backend import OpenAICompatibleGenerationBackend
 
 
@@ -54,7 +53,7 @@ class LLMLoggingTests(unittest.TestCase):
             self.assertEqual(payload["input"], "???")
             self.assertEqual(payload["response"], "???")
             self.assertEqual(payload["candidate_id"], "candidate-a")
-            self.assertEqual(payload["module_name"], "all_behaviors")
+            self.assertEqual(payload["module_name"], "complete_java_agent")
             self.assertEqual(payload["generation"], 2)
 
     def test_generation_http_call_logs_exact_prompt_and_response(self):
@@ -76,9 +75,9 @@ class LLMLoggingTests(unittest.TestCase):
             payload = json.loads(files[0].read_text(encoding="utf-8"))
             self.assertEqual(payload["stage"], "generation")
             self.assertEqual(payload["response"], response)
-            self.assertEqual(payload["module_name"], "all_behaviors")
+            self.assertEqual(payload["module_name"], "complete_java_agent")
             self.assertEqual(payload["candidate_id"], "candidate-a")
-            self.assertIn("private Decision decide(AgentContext context)", payload["input"])
+            self.assertIn("private void decide(AgentContext context)", payload["input"])
 
     def test_generation_retry_writes_one_log_per_http_attempt(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -101,31 +100,6 @@ class LLMLoggingTests(unittest.TestCase):
             self.assertEqual([item["status"] for item in payloads], ["error", "success"])
             self.assertEqual([item["attempt"] for item in payloads], [1, 2])
             self.assertEqual(payloads[0]["input"], payloads[1]["input"])
-
-    def test_strategy_consistency_http_call_logs_exact_prompt_and_response(self):
-        with tempfile.TemporaryDirectory() as temp:
-            logger = LLMCallLogger(Path(temp))
-            response = '{"score": 8, "reason": "consistent"}'
-            body = {"choices": [{"message": {"content": response}}]}
-            with patch("evaluation.strategy_consistency.urllib.request.urlopen", return_value=FakeResponse(body)):
-                result = evaluate_strategy_consistency(
-                    strategy_prompt="attack",
-                    generated_behavior_code="class Agent {}",
-                    backend="openai",
-                    model="test-model",
-                    logger=logger,
-                    candidate_id="candidate-b",
-                    generation=4,
-                )
-            self.assertEqual(result.score, 8)
-            files = list(Path(temp).glob("*.json"))
-            self.assertEqual(len(files), 1)
-            payload = json.loads(files[0].read_text(encoding="utf-8"))
-            self.assertEqual(payload["stage"], "strategy_consistency")
-            self.assertEqual(payload["response"], response)
-            self.assertEqual(payload["candidate_id"], "candidate-b")
-            self.assertIn("Strategy description:\nattack", payload["input"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -28,7 +28,6 @@ class ExperimentConfig:
     mutation_rate: float = 0.85
     random_seed: int = 7
     generation_backend: str = "mock"
-    strategy_consistency_backend: str = "mock"
     llm_base_url: str = "http://localhost:8080"
     llm_model: str = "local-model"
     microrts_dir: Path = Path("third_party/microrts")
@@ -79,7 +78,6 @@ class ExperimentConfig:
             mutation_rate=float(payload.get("mutation_rate", 0.85)),
             random_seed=int(payload.get("random_seed", 7)),
             generation_backend=str(payload.get("generation_backend", "mock")),
-            strategy_consistency_backend=str(payload.get("strategy_consistency_backend", "mock")),
             llm_base_url=str(payload.get("llm_base_url", "http://localhost:8080")),
             llm_model=str(payload.get("llm_model", "local-model")),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),

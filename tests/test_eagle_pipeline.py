@@ -266,7 +266,6 @@ population_size: 3
                 Candidate(strategy_prompt="Generate an agent."),
                 config=config,
                 backend=StaticGenerationBackend(),
-                strategy_consistency_backend="mock",
                 generated_agents_dir=root / "generated_agents",
                 classes_dir=root / "classes",
                 match_artifacts_dir=root / "matches",
@@ -293,7 +292,6 @@ population_size: 3
                 Candidate(strategy_prompt="Generate an agent."),
                 config=config,
                 backend=NonJavaBackend(),
-                strategy_consistency_backend="mock",
                 generated_agents_dir=root / "generated_agents",
                 classes_dir=root / "classes",
                 match_artifacts_dir=root / "matches",
@@ -357,7 +355,7 @@ population_size: 3
             self.assertTrue((candidate_dir / "code_quality.json").exists())
             quality = json.loads((candidate_dir / "code_quality.json").read_text(encoding="utf-8"))
             self.assertIn("code_quality_breakdown", quality)
-            self.assertEqual(quality["code_quality"], sum(quality["code_quality_breakdown"][name] for name in ("compilation_score", "function_score", "strategy_consistency_score")))
+            self.assertEqual(quality["code_quality"], sum(quality["code_quality_breakdown"][name] for name in ("compilation_score", "function_score", "static_quality_score")))
             self.assertTrue((candidate_dir / "objectives.json").exists())
             self.assertTrue((candidate_dir / "candidate_result.json").exists())
             individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
@@ -371,7 +369,7 @@ population_size: 3
             self.assertTrue(agent.source_path.exists())
 
     def test_validate_java_agent_source_rejects_non_java_output(self) -> None:
-        with self.assertRaisesRegex(ValueError, "class declaration"):
+        with self.assertRaisesRegex(ValueError, "missing required content"):
             validate_java_agent_source("Here is a strategy explanation with no Java.", "GeneratedAgent_test")
 
     def test_game_metrics_use_resource_difference(self) -> None:
@@ -689,7 +687,7 @@ population_size: 3
                 raise RuntimeError("backend down")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            evaluation = evaluate_candidate(Candidate(strategy_prompt="Generate an agent."), config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}), backend=FailingBackend(), strategy_consistency_backend="mock", generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
+            evaluation = evaluate_candidate(Candidate(strategy_prompt="Generate an agent."), config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}), backend=FailingBackend(), generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Backend request failure")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
@@ -707,7 +705,6 @@ population_size: 3
                 candidate,
                 config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}),
                 backend=NonJavaBackend(),
-                strategy_consistency_backend="mock",
                 generated_agents_dir=root / "generated_agents",
                 classes_dir=root / "classes",
                 mock=True,

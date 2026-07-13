@@ -68,7 +68,6 @@ def run_search(
         model=config.llm_model,
         logger=llm_logger,
     )
-    strategy_consistency_backend = "mock" if mock else config.strategy_consistency_backend
     results_path = run_dir / "results.jsonl"
 
     # NSGA-II begins with a complete evaluated population so every candidate has objectives.
@@ -78,13 +77,11 @@ def run_search(
         generation=0,
         config=config,
         backend=generation_backend,
-        strategy_consistency_backend=strategy_consistency_backend,
         generated_agents_dir=generated_agents_dir,
         classes_dir=classes_dir,
         candidates_dir=candidates_dir,
         results_path=results_path,
         mock=mock,
-        llm_logger=llm_logger,
     )
 
     for generation in range(1, config.generations):
@@ -108,13 +105,11 @@ def run_search(
             generation=generation,
             config=config,
             backend=generation_backend,
-            strategy_consistency_backend=strategy_consistency_backend,
             generated_agents_dir=generated_agents_dir,
             classes_dir=classes_dir,
             candidates_dir=candidates_dir,
             results_path=results_path,
             mock=mock,
-            llm_logger=llm_logger,
         )
 
         # Survivor selection keeps the best Pareto fronts and preserves spread within a partial front.
@@ -249,8 +244,8 @@ def mutation_context_from_candidate(candidate: Candidate, *, generation: int, in
         compiler_warnings=tuple((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("compiler_warnings") or []),
         function_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("function_score")),
         function_validation=candidate.code_quality_result.get("function_validation") or {},
-        strategy_consistency_score=number_or_none((candidate.code_quality_result.get("strategy_consistency") or {}).get("score")),
-        strategy_consistency_reason=str((candidate.code_quality_result.get("strategy_consistency") or {}).get("reason", "")),
+        static_quality_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("static_quality_score")),
+        static_metrics=(candidate.code_quality_result.get("code_quality_breakdown") or {}).get("static_metrics") or {},
         compile_success=candidate.compile_status == "success",
         validation_success=candidate.metadata.get("failure_category") != "Java validation failure",
         runtime_success=candidate.status == "evaluated",
