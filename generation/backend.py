@@ -31,7 +31,9 @@ class MockGenerationBackend(GenerationBackend):
     """Deterministic backend for tests and local pipeline smoke runs."""
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
-        return json.dumps({"functions": candidate.module_bodies}, ensure_ascii=False)
+        from .agent_template import render_function_agent
+
+        return render_function_agent(class_name, candidate.module_bodies)
 
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
@@ -51,7 +53,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
         prompt = candidate.generation_input(class_name=class_name)
-        module_name = "all_behaviors"
+        module_name = "complete_java_agent"
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],

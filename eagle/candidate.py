@@ -109,12 +109,11 @@ AgentContext exposes context.player, context.gs, and the snapshot context.units.
 Known UnitType fields are resourceType, workerType, lightType, heavyType, rangedType, baseType, and barracksType."""
 
 DEFAULT_GENERATION_PROMPT = (
-    "Generate one JSON object containing every required function body. "
-    "Return only JSON with a functions object: no markdown fences and no explanation. "
-    "Each value must be a Java method body string, not a complete method declaration or nested body object. "
-    "Do not output package declarations, imports, classes, constructors, fields, or helper methods. "
-    "Use only the fixed action and lookup helpers shown in the prompt; do not invent helper methods. "
-    "Do not assemble PlayerAction directly and do not call network, file, subprocess, environment, or LLM APIs at runtime."
+    "Generate one complete, compilable CandidateAgent.java source file. "
+    "Return the entire Java file from the package declaration through the final class brace. "
+    "Return raw Java only: no markdown fence, JSON wrapper, explanation, placeholder, ellipsis, or omitted section. "
+    "Preserve the package, class name, constructors, lifecycle methods, nested types, six action helpers, lookup helpers, and imports. "
+    "Implement all six strategy methods with deterministic Java and do not call network, file, subprocess, environment, or runtime LLM APIs."
 )
 
 
@@ -158,30 +157,32 @@ class Candidate:
         )
 
     def generation_input(self, *, class_name: str = "", module_name: str = "controller") -> str:
-        """Build one request for the complete single-file behavior-function collection."""
+        """Build one request for a complete single-file Java agent."""
+        from generation.agent_template import render_function_agent
+
         declarations = "\n".join(
-            f'- "{name}": body for `{contract.declaration}`'
-            for name, contract in MODULE_METHOD_CONTRACTS.items()
+            f"- {contract.declaration}"
+            for contract in MODULE_METHOD_CONTRACTS.values()
         )
-        previous = "\n".join(f"[{name}]\n{self.module_bodies[name]}" for name in MODULE_NAMES)
-        return f"""Candidate class: {class_name}
+        current_source = render_function_agent("CandidateAgent", self.module_bodies)
+        return f"""Generate the complete Java source file for CandidateAgent.
 
 Overall strategy:
 {self.strategy_prompt.strip()}
 
-Required keys and fixed method slots in the single CandidateAgent.java file:
+All six strategy methods must be present with these exact signatures:
 {declarations}
 
 {ACTION_API_GUIDE}
 
-Previous complete function set:
-{previous}
-
-Generation guidance:
+Generation requirements:
 {self.generation_prompt.strip()}
 
-Regenerate all required function bodies together. Return only JSON shaped as {{"functions": {{...}}}}."""
+Start from this complete known-good source. Return the complete revised Java file, including every unchanged section:
 
+```java
+{current_source}
+```"""
     def to_json_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["parent_ids"] = list(self.parent_ids)

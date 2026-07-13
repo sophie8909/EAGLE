@@ -72,15 +72,20 @@ class StructuredBehaviorGenerationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unknown generated function names"):
             render_agent_template(template, {**DEFAULT_MODULE_BODIES, "helper": "return;"})
 
-    def test_structured_parser_requires_exact_complete_function_set(self):
-        self.assertEqual(
-            parse_behavior_functions(json.dumps({"functions": DEFAULT_MODULE_BODIES})),
-            DEFAULT_MODULE_BODIES,
-        )
-        with self.assertRaises(ValueError):
-            parse_behavior_functions(
-                json.dumps({"functions": {**DEFAULT_MODULE_BODIES, "helper": "return;"}})
-            )
+    def test_complete_java_parser_extracts_exact_function_set(self):
+        template = load_java_template(JavaTemplatePaths())
+        source = render_agent_template(template, DEFAULT_MODULE_BODIES)
+        self.assertEqual(parse_behavior_functions(source), DEFAULT_MODULE_BODIES)
+        with self.assertRaisesRegex(ValueError, "selectTarget.*exactly once"):
+            parse_behavior_functions(source.replace("private Unit selectTarget(", "private Unit removedTarget("))
+
+    def test_generation_prompt_requires_complete_java_file(self):
+        prompt = Candidate(strategy_prompt="balanced").generation_input(class_name="CandidateAgent")
+        self.assertIn("Generate the complete Java source file", prompt)
+        self.assertIn("package ai.generated;", prompt)
+        self.assertIn("private boolean commandMove", prompt)
+        self.assertIn("final class brace", prompt)
+        self.assertNotIn("Return only JSON", prompt)
 
     def test_function_body_validation_rejects_scope_and_declarations(self):
         bodies = (

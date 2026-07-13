@@ -253,12 +253,11 @@ population_size: 3
             self.assertEqual(agent.source_paths, (agent.source_path,))
             self.assertEqual(set(agent.module_bodies), set(MODULE_NAMES))
 
-    def test_empty_function_fails_before_compile_or_matches(self) -> None:
+    def test_missing_java_strategy_method_fails_before_compile_or_matches(self) -> None:
         class StaticGenerationBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
-                functions = dict(DEFAULT_MODULE_BODIES)
-                functions["economy"] = ""
-                return json.dumps({"functions": functions})
+                source = render_function_agent(class_name, DEFAULT_MODULE_BODIES)
+                return source.replace("private void economy(", "private void removedEconomy(")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -280,13 +279,10 @@ population_size: 3
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
         self.assertFalse(evaluation.code_quality_breakdown.compile_success)
-        self.assertAlmostEqual(
-            evaluation.code_quality_breakdown.function_score,
-            100 * (len(MODULE_NAMES) - 1) / len(MODULE_NAMES),
-        )
+        self.assertEqual(evaluation.code_quality_breakdown.function_score, -100)
 
     def test_missing_functions_fail_before_compile_or_matches(self) -> None:
-        class InvalidJsonBackend(GenerationBackend):
+        class NonJavaBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 return ""
 
@@ -296,7 +292,7 @@ population_size: 3
             evaluation = evaluate_candidate(
                 Candidate(strategy_prompt="Generate an agent."),
                 config=config,
-                backend=InvalidJsonBackend(),
+                backend=NonJavaBackend(),
                 strategy_consistency_backend="mock",
                 generated_agents_dir=root / "generated_agents",
                 classes_dir=root / "classes",
@@ -699,8 +695,8 @@ population_size: 3
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertIn("code_quality", evaluation.candidate.fitness_objectives)
 
-    def test_invalid_behavior_json_fails_before_compile_or_matches(self) -> None:
-        class InvalidJsonBackend(GenerationBackend):
+    def test_non_java_response_fails_before_compile_or_matches(self) -> None:
+        class NonJavaBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 return "```json\n{}\n```"
 
@@ -710,7 +706,7 @@ population_size: 3
             evaluation = evaluate_candidate(
                 candidate,
                 config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}),
-                backend=InvalidJsonBackend(),
+                backend=NonJavaBackend(),
                 strategy_consistency_backend="mock",
                 generated_agents_dir=root / "generated_agents",
                 classes_dir=root / "classes",
@@ -723,7 +719,7 @@ population_size: 3
         self.assertEqual(evaluation.match_results, [])
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
-        self.assertIn("must contain a functions object", evaluation.result.failure_reason or "")
+        self.assertIn("private void decide", evaluation.result.failure_reason or "")
         self.assertEqual(evaluation.candidate.compile_status, "not_run")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertTrue(evaluation.code_quality_breakdown.function_parsing_errors)
