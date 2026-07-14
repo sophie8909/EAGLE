@@ -32,6 +32,8 @@ DEFAULT_GENERATION_PROMPT = (
     "Implement the marked strategy region with deterministic Java and do not call network, file, subprocess, environment, or runtime LLM APIs."
 )
 
+LINEAGE_SCHEMA_VERSION = "1.0"
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -43,13 +45,42 @@ class Candidate:
     strategy_prompt: str = ""
     previous_code: str = ""
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
-    generated_java_agent_path: str | None = None
+    generated_java: str = ""
+    generated_java_path: str | None = None
+    operator: str = "seed"
+    mutation_type: str | None = None
+    strategy_parent_id: str | None = None
+    previous_code_parent_id: str | None = None
+    generation_prompt_parent_id: str | None = None
+    source_candidate_ids: tuple[str, ...] = ()
     compile_status: str = "pending"
     game_eval_result: dict[str, Any] = field(default_factory=dict)
     code_quality_result: dict[str, Any] = field(default_factory=dict)
     fitness_objectives: dict[str, float] = field(default_factory=dict)
     status: str = "pending"
+    failure_stage: str | None = None
+    failure_reason: str | None = None
+    artifacts: dict[str, str] = field(default_factory=dict)
+    timing: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def candidate_id(self) -> str:
+        """Canonical candidate identity while internal callers migrate from id."""
+
+        return self.id
+
+    @property
+    def generated_java_agent_path(self) -> str | None:
+        """Compatibility alias for the pre-Phase-1 field name."""
+
+        return self.generated_java_path
+
+    @property
+    def inheritable_previous_code(self) -> str:
+        """Return the evaluated phenotype used as a child's Previous Code."""
+
+        return self.generated_java
 
     def objective_vector(self) -> tuple[float, ...]:
         if not self.fitness_objectives:
@@ -105,5 +136,38 @@ Never return JSON, a functions object, individual method bodies, a patch, an exp
 
     def to_json_dict(self) -> dict[str, Any]:
         payload = asdict(self)
+        payload["candidate_id"] = self.candidate_id
         payload["parent_ids"] = list(self.parent_ids)
+        payload["source_candidate_ids"] = list(self.resolved_source_candidate_ids())
         return payload
+
+    def resolved_source_candidate_ids(self) -> tuple[str, ...]:
+        """Return stable contributing candidate IDs without inspecting component text."""
+
+        ordered = (
+            *self.source_candidate_ids,
+            self.strategy_parent_id,
+            self.previous_code_parent_id,
+            self.generation_prompt_parent_id,
+        )
+        unique: list[str] = []
+        for candidate_id in ordered:
+            if candidate_id is not None and candidate_id not in unique:
+                unique.append(candidate_id)
+        return tuple(unique)
+
+    def lineage_to_json_dict(self) -> dict[str, Any]:
+        """Serialize canonical first-class lineage independent of generic metadata."""
+
+        return {
+            "lineage_schema_version": LINEAGE_SCHEMA_VERSION,
+            "candidate_id": self.candidate_id,
+            "generation": self.generation,
+            "parent_ids": list(self.parent_ids),
+            "operator": self.operator,
+            "mutation_type": self.mutation_type,
+            "strategy_parent_id": self.strategy_parent_id,
+            "previous_code_parent_id": self.previous_code_parent_id,
+            "generation_prompt_parent_id": self.generation_prompt_parent_id,
+            "source_candidate_ids": list(self.resolved_source_candidate_ids()),
+        }

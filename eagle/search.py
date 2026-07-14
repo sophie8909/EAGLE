@@ -11,7 +11,7 @@ from shutil import copy2
 from generation.backend import build_generation_backend
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE
 
-from .artifacts import write_generation_manifest, write_summary
+from .artifacts import write_generation_manifest, write_resolved_config, write_summary
 from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import Crossover, CrossoverContext
@@ -68,10 +68,11 @@ def run_search(
         model=config.llm_model,
         logger=llm_logger,
     )
+    write_resolved_config(run_dir, config, mock=mock)
     results_path = run_dir / "results.jsonl"
 
     # NSGA-II begins with a complete evaluated population so every candidate has objectives.
-    population = initialize_population(config, strategy_mutation)
+    population = initialize_population(config)
     evaluated_population = evaluate_population(
         population,
         generation=0,
@@ -137,29 +138,30 @@ def run_search(
     return SearchResult(run_dir=run_dir, final_population=evaluated_population, best_candidate=best)
 
 
-def initialize_population(config: ExperimentConfig, mutation: Mutation) -> list[Candidate]:
-    # Seed prompts are the first generation; extra slots are simple mutated copies of seeds.
+def initialize_population(config: ExperimentConfig) -> list[Candidate]:
+    # Generation zero contains independent seeds; candidate ancestry starts after evaluation.
     population = [
         Candidate(
             generation=0,
             strategy_prompt=prompt,
             previous_code="",
             generation_prompt=config.generation_prompt,
+            operator="seed",
             metadata={"seed_index": index},
         )
         for index, prompt in enumerate(config.seed_prompts)
     ]
     while len(population) < config.population_size:
-        source = population[len(population) % len(config.seed_prompts)]
-        seed_child = Candidate(
+        seed_index = len(population)
+        prompt = config.seed_prompts[seed_index % len(config.seed_prompts)]
+        population.append(Candidate(
             generation=0,
-            parent_ids=(source.id,),
-            strategy_prompt=source.strategy_prompt,
-            previous_code=source.previous_code,
-            generation_prompt=source.generation_prompt,
-            metadata={"operator": "seed_mutation"},
-        )
-        population.append(mutation.mutate(seed_child, MutationContext(generation=0, index=len(population))))
+            strategy_prompt=prompt,
+            previous_code="",
+            generation_prompt=config.generation_prompt,
+            operator="seed",
+            metadata={"seed_index": seed_index},
+        ))
     return population[: config.population_size]
 
 
@@ -197,14 +199,21 @@ def create_offspring(
                     max_chars=config.max_prompt_chars,
                     max_lines=config.max_prompt_lines,
                 ),
-                previous_code=parent_a.previous_code,
+                previous_code=parent_a.inheritable_previous_code,
                 generation_prompt=parent_a.generation_prompt,
-                metadata={"operator": "mutation"},
+                operator="copy",
+                strategy_parent_id=parent_a.id,
+                previous_code_parent_id=parent_a.id,
+                generation_prompt_parent_id=parent_a.id,
+                source_candidate_ids=(parent_a.id,),
             )
 
         # Mutation is usually 50/50, but failed agents first get code-generation reflection.
         if rng.random() < config.mutation_rate:
-            feedback_parent = parent_b if child.strategy_prompt == parent_b.strategy_prompt else parent_a
+            feedback_parent = parent_for_component(
+                child.strategy_parent_id,
+                (parent_a, parent_b),
+            )
             mutation = choose_mutation(feedback_parent, mutations, rng)
             child = mutation.mutate(
                 child,
@@ -213,6 +222,15 @@ def create_offspring(
 
         offspring.append(child)
     return offspring
+
+
+def parent_for_component(parent_id: str | None, parents: tuple[Candidate, Candidate]) -> Candidate:
+    """Resolve recorded component provenance without comparing component text."""
+
+    for parent in parents:
+        if parent.id == parent_id:
+            return parent
+    raise ValueError(f"Recorded component parent {parent_id!r} is not a direct parent.")
 
 
 def choose_mutation(feedback_parent: Candidate, mutations: tuple[Mutation, Mutation], rng: random.Random) -> Mutation:

@@ -216,8 +216,8 @@ population_size: 3
             "private void decideB",
             1,
         )
-        parent_a = Candidate(id="a", previous_code=source_a)
-        parent_b = Candidate(id="b", previous_code=source_b)
+        parent_a = Candidate(id="a", previous_code="old-a", generated_java=source_a)
+        parent_b = Candidate(id="b", previous_code="old-b", generated_java=source_b)
         child = Crossover(method="uniform").crossover(
             parent_a,
             parent_b,
@@ -225,8 +225,9 @@ population_size: 3
         )
         self.assertEqual(child.generation, 2)
         self.assertEqual(child.parent_ids, ("a", "b"))
-        self.assertEqual(child.metadata["operator"], "crossover")
+        self.assertEqual(child.operator, "crossover")
         self.assertIn(child.previous_code, (source_a, source_b))
+        self.assertIn(child.previous_code_parent_id, ("a", "b"))
     def test_unknown_crossover_method_raises_value_error(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unknown crossover method"):
             Crossover(method="unknown").crossover(
@@ -364,9 +365,13 @@ population_size: 3
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["objectives"], ["game_performance", "code_quality"])
             self.assertEqual(len(summary["final_population"]), 3)
+            self.assertTrue((result.run_dir / "resolved_config.json").exists())
             candidate_dir = next((result.run_dir / "candidates").iterdir())
-            self.assertTrue((candidate_dir / "strategy_prompt.txt").exists())
-            self.assertTrue((candidate_dir / "generated_java_source.java").exists())
+            self.assertTrue((candidate_dir / "lineage.json").exists())
+            self.assertTrue((candidate_dir / "genotype" / "strategy_prompt.txt").exists())
+            self.assertTrue(
+                (candidate_dir / "generation" / "normalized_candidate.java").exists()
+            )
             self.assertFalse((candidate_dir / "CandidateBehaviors.java").exists())
             self.assertTrue((candidate_dir / "compile_result.json").exists())
             self.assertTrue((candidate_dir / "raw_microrts_result.json").exists())
@@ -751,7 +756,8 @@ population_size: 3
         self.assertIn("EAGLE_AGENT_STRATEGY_START", evaluation.result.failure_reason or "")
         self.assertEqual(evaluation.candidate.compile_status, "not_run")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
-        self.assertTrue(evaluation.code_quality_breakdown.function_parsing_errors)
+        self.assertEqual(evaluation.candidate.failure_stage, "validation")
+        self.assertTrue(evaluation.result.validation_result.error)
 
     def test_dominates_uses_objective_vector(self) -> None:
         strong = Candidate(fitness_objectives={"game_performance": 2, "code_quality": 0.8})

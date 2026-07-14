@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from evaluation.compiler import CompileResult
 from evaluation.code_quality import analyze_compilation
-from evaluation.microrts_runner import MatchResult
+from evaluation.microrts_runner import DEFAULT_MAP_PATH, MatchResult
 from generation.java_agent_generator import ValidationResult
 
 from .candidate import Candidate
@@ -16,6 +17,9 @@ from .config import ExperimentConfig
 
 if TYPE_CHECKING:
     from .evaluation import CandidateEvaluation
+
+ARTIFACT_SCHEMA_VERSION = "phase1-v1"
+OBJECTIVE_FORMULA_VERSION = "legacy-current-v1"
 
 
 def append_result(path: Path, evaluation: CandidateEvaluation) -> None:
@@ -26,17 +30,43 @@ def append_result(path: Path, evaluation: CandidateEvaluation) -> None:
         handle.write("\n")
 
 
+def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
+    """Persist lineage and the pre-generation genotype before external work."""
+
+    candidate_dir = candidates_dir / candidate.id
+    genotype_dir = candidate_dir / "genotype"
+    genotype_dir.mkdir(parents=True, exist_ok=True)
+    (genotype_dir / "strategy_prompt.txt").write_text(candidate.strategy_prompt, encoding="utf-8")
+    (genotype_dir / "previous_code.java").write_text(candidate.previous_code, encoding="utf-8")
+    (genotype_dir / "generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
+    write_json(candidate_dir / "lineage.json", candidate.lineage_to_json_dict())
+    if candidate.operator in {"crossover", "crossover+mutation"}:
+        crossover_dir = candidate_dir / "crossover"
+        crossover_dir.mkdir(exist_ok=True)
+        write_json(
+            crossover_dir / "provenance.json",
+            {
+                "lineage_schema_version": candidate.lineage_to_json_dict()["lineage_schema_version"],
+                "candidate_id": candidate.candidate_id,
+                "strategy_parent_id": candidate.strategy_parent_id,
+                "previous_code_parent_id": candidate.previous_code_parent_id,
+                "generation_prompt_parent_id": candidate.generation_prompt_parent_id,
+            },
+        )
+
+
 def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluation) -> None:
     """Save the per-candidate prompt, Java source, metrics, and objective files."""
 
     candidate_dir = candidates_dir / evaluation.candidate.id
     candidate_dir.mkdir(parents=True, exist_ok=True)
-    (candidate_dir / "strategy_prompt.txt").write_text(evaluation.candidate.strategy_prompt, encoding="utf-8")
-    (candidate_dir / "previous_code.java").write_text(evaluation.candidate.previous_code, encoding="utf-8")
-    (candidate_dir / "generation_prompt.txt").write_text(evaluation.candidate.generation_prompt, encoding="utf-8")
-    if evaluation.agent is not None:
-        (candidate_dir / "CandidateAgent.java").write_text(evaluation.agent.source, encoding="utf-8")
-        (candidate_dir / "generated_java_source.java").write_text(evaluation.agent.source, encoding="utf-8")
+    write_candidate_inputs(candidates_dir, evaluation.candidate)
+    generation_dir = candidate_dir / "generation"
+    generation_dir.mkdir(exist_ok=True)
+    (generation_dir / "normalized_candidate.java").write_text(
+        evaluation.candidate.generated_java,
+        encoding="utf-8",
+    )
     write_json(candidate_dir / "prompt.json", {
         "strategy_description": evaluation.candidate.strategy_prompt,
         "generation_guidance": evaluation.candidate.generation_prompt,
@@ -85,6 +115,61 @@ def write_failed_candidate_debug(run_dir: Path, evaluation: CandidateEvaluation)
             "game_metrics": result.game_metrics,
         },
     )
+
+
+def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool) -> None:
+    """Write actual post-default and post-override runtime values."""
+
+    llm_backend = "mock" if mock else config.generation_backend
+    is_mock_backend = llm_backend == "mock"
+    payload = {
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        "objective_formula_version": OBJECTIVE_FORMULA_VERSION,
+        "population_size": config.population_size,
+        "generation_count": config.generations,
+        "crossover_rate": config.crossover_rate,
+        "mutation_rate": config.mutation_rate,
+        "mutation_selection_policy": "failed_game_to_code_otherwise_seeded_random",
+        "matches_per_candidate": config.matches_per_candidate,
+        "opponent": config.opponent,
+        "map": DEFAULT_MAP_PATH,
+        "max_cycles": config.tick_limit,
+        "ea_random_seed": config.random_seed,
+        "microrts_match_seeds": None,
+        "llm_backend": llm_backend,
+        "llm_model": None if is_mock_backend else config.llm_model,
+        "llm_temperature": None if is_mock_backend else 0.2,
+        "retry_policy": {
+            "max_attempts": 1 if is_mock_backend else 3,
+            "timeout_seconds": None if is_mock_backend else 120,
+            "backoff": "none" if is_mock_backend else "exponential_seconds",
+        },
+        "prompt_version": None,
+        "git_commit_hash": git_commit_hash(),
+        "unsupported": {
+            "microrts_match_seeds": "The current runner does not accept match seeds.",
+            "prompt_version": "The current configurable generation prompt is not versioned.",
+        },
+    }
+    write_json(run_dir / "resolved_config.json", payload)
+
+
+def git_commit_hash() -> str | None:
+    """Return the checked-out commit or null when Git identity is unavailable."""
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parents[1],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = result.stdout.strip()
+    return value or None
 
 
 def write_generation_manifest(run_dir: Path, generation: int, population: list[Candidate]) -> None:

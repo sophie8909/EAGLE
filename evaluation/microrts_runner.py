@@ -19,6 +19,8 @@ from .game_performance import (
     write_telemetry_json,
 )
 
+DEFAULT_MAP_PATH = "maps/8x8/basesWorkers8x8.xml"
+
 
 @dataclass(frozen=True)
 class MatchResult:
@@ -58,7 +60,7 @@ def run_microrts_match(
     microrts_dir = microrts_dir.resolve()
     classes_dir = classes_dir.resolve()
     scoring_config = scoring_config or GamePerformanceConfig()
-    map_path = "maps/8x8/basesWorkers8x8.xml"
+    map_path = DEFAULT_MAP_PATH
     match_artifacts_root = (match_artifacts_dir or classes_dir).resolve()
     match_dir = match_directory(
         match_artifacts_root,

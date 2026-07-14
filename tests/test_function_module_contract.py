@@ -105,8 +105,8 @@ class CompleteJavaGenerationTests(unittest.TestCase):
         source_a = template.replace("private void decide", "private void decideA", 1)
         source_b = template.replace("private void decide", "private void decideB", 1)
         child = Crossover().crossover(
-            Candidate(id="a", previous_code=source_a),
-            Candidate(id="b", previous_code=source_b),
+            Candidate(id="a", previous_code="old-a", generated_java=source_a),
+            Candidate(id="b", previous_code="old-b", generated_java=source_b),
             CrossoverContext(1, 0, random.Random(2)),
         )
         self.assertIn(child.previous_code, (source_a, source_b))

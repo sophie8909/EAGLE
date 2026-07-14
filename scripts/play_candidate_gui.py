@@ -128,9 +128,13 @@ def find_generated_agent_source(run_dir: Path, candidate_id: str) -> Path | None
         if java_files:
             return java_files[0]
 
-    artifact_source = run_dir / "candidates" / candidate_id / "generated_java_source.java"
+    candidate_dir = run_dir / "candidates" / candidate_id
+    artifact_source = candidate_dir / "generation" / "normalized_candidate.java"
     if artifact_source.exists():
         return artifact_source
+    legacy_source = candidate_dir / "generated_java_source.java"
+    if legacy_source.exists():
+        return legacy_source
     return None
 
 

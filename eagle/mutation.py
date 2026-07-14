@@ -55,8 +55,32 @@ class Mutation:
         rewrite=self.backend.generate(build_code_rewrite_prompt(candidate, reflection, self.config.mutation_suffix))
         return self._copy(candidate, context, strategy_prompt=candidate.strategy_prompt, generation_prompt=normalize_prompt(rewrite,max_chars=self.config.max_prompt_chars,max_lines=self.config.max_prompt_lines), reflection=reflection, rewrite=rewrite)
     def _copy(self,candidate: Candidate,context: MutationContext,*,strategy_prompt: str,generation_prompt: str,reflection: str,rewrite: str) -> Candidate:
-        operator="crossover+mutation" if candidate.metadata.get("operator")=="crossover" else "mutation"
-        return Candidate(generation=context.generation,parent_ids=candidate.parent_ids or (candidate.id,),strategy_prompt=strategy_prompt,previous_code=candidate.previous_code,generation_prompt=generation_prompt,metadata={**candidate.metadata,"operator":operator,"mutation_method":self.method,"mutation_reflection":reflection,"mutation_rewrite":rewrite})
+        operator = "crossover+mutation" if candidate.operator == "crossover" else "mutation"
+        mutation_type = "strategy" if self.method == "strategy_reflection" else "code"
+        direct_parent_id = candidate.parent_ids[0] if candidate.parent_ids else candidate.id
+        strategy_parent_id = candidate.strategy_parent_id or direct_parent_id
+        previous_code_parent_id = candidate.previous_code_parent_id or direct_parent_id
+        generation_prompt_parent_id = candidate.generation_prompt_parent_id or direct_parent_id
+        source_candidate_ids = candidate.resolved_source_candidate_ids() or (direct_parent_id,)
+        return Candidate(
+            generation=context.generation,
+            parent_ids=candidate.parent_ids or (candidate.id,),
+            strategy_prompt=strategy_prompt,
+            previous_code=candidate.previous_code,
+            generation_prompt=generation_prompt,
+            operator=operator,
+            mutation_type=mutation_type,
+            strategy_parent_id=strategy_parent_id,
+            previous_code_parent_id=previous_code_parent_id,
+            generation_prompt_parent_id=generation_prompt_parent_id,
+            source_candidate_ids=source_candidate_ids,
+            metadata={
+                **candidate.metadata,
+                "mutation_method": self.method,
+                "mutation_reflection": reflection,
+                "mutation_rewrite": rewrite,
+            },
+        )
 
 def build_strategy_reflection_prompt(candidate: Candidate, context: MutationContext) -> str:
     return f"""Current overall strategy:\n{candidate.strategy_prompt}\n\nPrevious complete Java agent:\n{candidate.previous_code}\n\nEvaluation: game={context.game_performance}, resources={context.resource_breakdown or {}}, temporal={context.temporal_summary or {}}\nAnalyze this strategy's result. Reflect on the complete MicroRTS strategy, not one function."""
