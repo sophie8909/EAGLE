@@ -16,9 +16,10 @@ from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import Crossover, CrossoverContext
 from .evaluation import evaluate_population
-from .mutation import Mutation, MutationContext, build_reflection_backend
+from .mutation import MutationContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
 from .offspring import normalize_prompt
+from .rewrite import PromptRewriteMutation
 from .selection import (
     Selection,
     SelectionContext,
@@ -35,13 +36,7 @@ class SearchResult:
     best_candidate: Candidate | None
 
 
-def run_search(
-    config: ExperimentConfig,
-    *,
-    config_path: Path,
-    mock: bool = False,
-    run_id: str | None = None,
-) -> SearchResult:
+def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = False, run_id: str | None = None) -> SearchResult:
     config.validate()
     rng = random.Random(config.random_seed)
     crossover = Crossover(method="uniform")
@@ -59,29 +54,22 @@ def run_search(
     copy2(config_path, run_dir / "config.yaml")
 
     llm_logger = LLMCallLogger(run_dir / "llm_logs")
-    generation_backend_name = "mock" if mock else config.generation_backend
-    generation_backend = build_generation_backend(
-        generation_backend_name,
-        base_url=config.llm_base_url,
-        model=config.llm_model,
-        logger=llm_logger,
-    )
-    reflection_backend = build_reflection_backend(
-        generation_backend_name,
-        base_url=config.llm_base_url,
-        model=config.llm_model,
-    )
-    strategy_mutation = Mutation(
+    backend_name = "mock" if mock else config.generation_backend
+    generation_backend = build_generation_backend(backend_name, base_url=config.llm_base_url, model=config.llm_model, logger=llm_logger)
+    reflection_backend = build_reflection_backend(backend_name, base_url=config.llm_base_url, model=config.llm_model)
+    strategy_mutation = PromptRewriteMutation(
         config,
-        method="strategy_reflection",
-        backend=reflection_backend,
+        mutation_type="strategy",
+        reflection_backend=reflection_backend,
+        rewrite_backend=reflection_backend,
         artifact_root=candidates_dir,
         logger=llm_logger,
     )
-    code_mutation = Mutation(
+    code_mutation = PromptRewriteMutation(
         config,
-        method="code_generation_reflection",
-        backend=reflection_backend,
+        mutation_type="code",
+        reflection_backend=reflection_backend,
+        rewrite_backend=reflection_backend,
         artifact_root=candidates_dir,
         logger=llm_logger,
     )
@@ -124,86 +112,37 @@ def run_search(
             results_path=results_path,
             mock=mock,
         )
-        evaluated_population = select_next_generation(
-            evaluated_population,
-            evaluated_offspring,
-            population_size=config.population_size,
-        )
+        evaluated_population = select_next_generation(evaluated_population, evaluated_offspring, population_size=config.population_size)
         write_generation_manifest(run_dir, generation, evaluated_population)
 
     assign_rank_and_crowding(evaluated_population)
     best = best_candidate(evaluated_population)
     final_fronts = assign_rank_and_crowding(evaluated_population)
-    write_summary(
-        run_dir,
-        config=config,
-        final_population=evaluated_population,
-        best_candidate=best,
-        pareto_fronts=final_fronts,
-        mock=mock,
-    )
+    write_summary(run_dir, config=config, final_population=evaluated_population, best_candidate=best, pareto_fronts=final_fronts, mock=mock)
     return SearchResult(run_dir=run_dir, final_population=evaluated_population, best_candidate=best)
 
 
 def initialize_population(config: ExperimentConfig) -> list[Candidate]:
-    population = [
-        Candidate(
-            generation=0,
-            strategy_prompt=prompt,
-            previous_code="",
-            generation_prompt=config.generation_prompt,
-            operator="seed",
-            metadata={"seed_index": index},
-        )
-        for index, prompt in enumerate(config.seed_prompts)
-    ]
+    population = [Candidate(generation=0, strategy_prompt=prompt, previous_code="", generation_prompt=config.generation_prompt, operator="seed", metadata={"seed_index": index}) for index, prompt in enumerate(config.seed_prompts)]
     while len(population) < config.population_size:
         seed_index = len(population)
-        prompt = config.seed_prompts[seed_index % len(config.seed_prompts)]
-        population.append(
-            Candidate(
-                generation=0,
-                strategy_prompt=prompt,
-                previous_code="",
-                generation_prompt=config.generation_prompt,
-                operator="seed",
-                metadata={"seed_index": seed_index},
-            )
-        )
+        population.append(Candidate(generation=0, strategy_prompt=config.seed_prompts[seed_index % len(config.seed_prompts)], previous_code="", generation_prompt=config.generation_prompt, operator="seed", metadata={"seed_index": seed_index}))
     return population[: config.population_size]
 
 
-def create_offspring(
-    population: list[Candidate],
-    *,
-    config: ExperimentConfig,
-    generation: int,
-    rng: random.Random,
-    mutations: tuple[Mutation, Mutation],
-    crossover: Crossover,
-    selection: Selection,
-    artifact_root: Path | None = None,
-) -> list[Candidate]:
+def create_offspring(population: list[Candidate], *, config: ExperimentConfig, generation: int, rng: random.Random, mutations: tuple[PromptRewriteMutation, PromptRewriteMutation], crossover: Crossover, selection: Selection, artifact_root: Path | None = None) -> list[Candidate]:
     offspring: list[Candidate] = []
     while len(offspring) < config.population_size:
         context_index = len(offspring)
         parent_a = selection.select(population, 1, SelectionContext(rng=rng))[0]
         parent_b = selection.select(population, 1, SelectionContext(rng=rng))[0]
         if len(population) > 1 and rng.random() < config.crossover_rate:
-            child = crossover.crossover(
-                parent_a,
-                parent_b,
-                CrossoverContext(generation=generation, index=context_index, rng=rng),
-            )
+            child = crossover.crossover(parent_a, parent_b, CrossoverContext(generation=generation, index=context_index, rng=rng))
         else:
             child = Candidate(
                 generation=generation,
                 parent_ids=(parent_a.id,),
-                strategy_prompt=normalize_prompt(
-                    parent_a.strategy_prompt,
-                    max_chars=config.max_prompt_chars,
-                    max_lines=config.max_prompt_lines,
-                ),
+                strategy_prompt=normalize_prompt(parent_a.strategy_prompt, max_chars=config.max_prompt_chars, max_lines=config.max_prompt_lines),
                 previous_code=parent_a.inheritable_previous_code,
                 generation_prompt=parent_a.generation_prompt,
                 operator="copy",
@@ -212,38 +151,28 @@ def create_offspring(
                 generation_prompt_parent_id=parent_a.id,
                 source_candidate_ids=(parent_a.id,),
             )
-
         if rng.random() < config.mutation_rate:
             feedback_parent = parent_for_component(child.strategy_parent_id, (parent_a, parent_b))
             mutation = choose_mutation(feedback_parent, mutations, rng)
-            child = mutation.mutate(
-                child,
-                mutation_context_from_candidate(feedback_parent, generation=generation, index=context_index),
-                artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
-            )
+            child = mutation.mutate(child, mutation_context_from_candidate(feedback_parent, generation=generation, index=context_index), artifact_dir=(artifact_root / child.id) if artifact_root is not None else None)
         offspring.append(child)
     return offspring
 
 
 def parent_for_component(parent_id: str | None, parents: tuple[Candidate, Candidate]) -> Candidate:
-    """Resolve recorded component provenance without comparing component text."""
-
     for parent in parents:
         if parent.id == parent_id:
             return parent
     raise ValueError(f"Recorded component parent {parent_id!r} is not a direct parent.")
 
 
-def choose_mutation(feedback_parent: Candidate, mutations: tuple[Mutation, Mutation], rng: random.Random) -> Mutation:
-    game_performance = number_or_none(feedback_parent.fitness_objectives.get("game_performance"))
-    if game_performance == FAILED_GAME_PERFORMANCE:
+def choose_mutation(feedback_parent: Candidate, mutations: tuple[PromptRewriteMutation, PromptRewriteMutation], rng: random.Random) -> PromptRewriteMutation:
+    if number_or_none(feedback_parent.fitness_objectives.get("game_performance")) == FAILED_GAME_PERFORMANCE:
         return mutations[1]
     return rng.choice(mutations)
 
 
 def mutation_context_from_candidate(candidate: Candidate, *, generation: int, index: int) -> MutationContext:
-    """Map current evaluation data into the typed evidence boundary."""
-
     game = candidate.game_eval_result or {}
     quality = candidate.code_quality_result.get("code_quality_breakdown") or {}
     matches = tuple(game.get("match_results") or game.get("matches") or ())
@@ -293,9 +222,7 @@ def mutation_context_from_candidate(candidate: Candidate, *, generation: int, in
 
 
 def number_or_none(value: object) -> float | None:
-    if isinstance(value, int | float):
-        return float(value)
-    return None
+    return float(value) if isinstance(value, int | float) else None
 
 
 def _as_int(value: object) -> int | None:

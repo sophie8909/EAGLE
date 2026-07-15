@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-07-15 after Phase 2A Reflection Framework. This file describes active source/tests/configuration. It is not normative. Recent retained runs predate the current complete-file implementation and are treated as legacy format evidence only.
+Snapshot: 2026-07-15 after Phase 2B Prompt Rewrite Pipeline. This file describes active source/tests/configuration. It is not normative. Recent retained runs predate the current complete-file implementation and are treated as legacy format evidence only.
 
 ## Status summary
 
@@ -9,7 +9,7 @@ Snapshot: 2026-07-15 after Phase 2A Reflection Framework. This file describes ac
 | Candidate | Frozen `Candidate` retains the pre-generation `strategy_prompt`, `previous_code`, and `generation_prompt`, stores normalized output separately as `generated_java`, and exposes first-class identity, operator, mutation, component provenance, failure, artifact, and timing fields. | The Phase 1 genotype/phenotype boundary is implemented; later stages still need to populate the complete artifact/timing records. |
 | Java generation | One request asks for complete `ai.generated.CandidateAgent`; raw/fenced source is normalized and written once. | Complete-file boundary exists. Validation imposes a fixed template/marker/action-helper layout not required by the spec. |
 | Crossover | `eagle/crossover.py` independently chooses all three components, takes Previous Code from the selected parent's `generated_java`, and records each selected parent ID. Search feedback routing uses recorded provenance rather than prompt equality. | Phase 1 inheritance and component provenance are implemented and deterministic under the EA RNG. |
-| Mutation | Strategy and Code Reflection use a typed LLM backend abstraction with bounded retries, full evidence prompts, raw response persistence, and per-attempt timing. Phase 2A intentionally leaves prompts unchanged; Rewrite is not active yet. | Reflection framework is implemented; Rewrite and final three-call mutation remain for Phase 2B/2C. |
+| Mutation | Strategy and Code mutations use typed Reflection followed by prompt-only Rewrite with bounded retries, full evidence prompts, raw request/response persistence, original prompt retention, and per-attempt timing. Phase 2B still does not generate Java. | Reflection and Rewrite are implemented; final Java Generation connection remains for Phase 2C. |
 | Selection | Binary tournament, Pareto sorting, crowding distance, and elitist parent+offspring survivors operate on two objective values. | Broadly aligned; population manifests and tie behavior need contract tests. |
 | Validation | Requires exact package/class/superclass text, strategy markers, helper markers, six helper declarations, translation call, and a small forbidden-pattern set. | Over-constrains internal layout and under-specifies the full external runtime/security contract. |
 | Compilation | Runs `javac` in an isolated candidate directory with MicroRTS classpath. | No `-Xlint`; diagnostics are parsed from matching lines, not structured/deduplicated/capped consistently. |
@@ -18,8 +18,8 @@ Snapshot: 2026-07-15 after Phase 2A Reflection Framework. This file describes ac
 | `game_performance` | Current score combines ±100/0 result with unbounded average state, final resource difference, and up to 200 survival points, then averages successful matches. | Conflicts with the bounded canonical formula. |
 | `code_quality` | Deterministic sum of compile score, marked-region ±100, and static text metrics. `strategy_consistency` is always `None`. | Does not implement failure-stage ranges, capability scoring, or alignment LLM. |
 | Failure handling | Generation/validation, compile, and match failures receive first-class `failure_stage`/`failure_reason` plus legacy categories. Game failure is `-1000`; code quality comes from the current component sum. | State retention is aligned, but the required failure-score hierarchy and integration/runtime progress formulas remain missing. |
-| Artifacts | Candidates additionally persist Reflection request/raw-response attempt files, mutation metadata, and candidate timing. | Phase 2A reflection evidence is durable; rewrite/generation attempt trees and full timing remain later Phase 2 work. |
-| LLM logging | Final-generation and Reflection attempts write UTC-stamped JSON; Reflection retries are logged per stage. | Rewrite/alignment calls and complete generation timing remain absent. |
+| Artifacts | Candidates additionally persist Reflection and Rewrite request/raw-response attempt files, original prompts, mutation metadata, and candidate timing. | Phase 2B mutation evidence is durable; final generation attempt tree and complete timing remain for Phase 2C. |
+| LLM logging | Final-generation, Reflection, and Rewrite attempts write UTC-stamped JSON; retries are logged per stage. | Alignment calls and complete generation timing remain absent. |
 
 ## Active configuration
 

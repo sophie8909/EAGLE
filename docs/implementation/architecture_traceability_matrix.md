@@ -2,7 +2,7 @@
 
 This document is the primary implementation tracking and verification checklist for the EAGLE architecture. It does not redefine the architecture. The authoritative contract remains [`../eagle_architecture_spec.md`](../eagle_architecture_spec.md); each row names exactly one responsibility-focused canonical owner.
 
-Statuses describe the active repository after Phase 2A Reflection Framework on 2026-07-15. A path in **Implementation** or **Tests** is repository evidence, not proof that the contract is complete. A path prefixed with `Expected:` in **Artifact** is required output that the current implementation does not necessarily write.
+Statuses describe the active repository after Phase 2B Prompt Rewrite Pipeline on 2026-07-15. A path in **Implementation** or **Tests** is repository evidence, not proof that the contract is complete. A path prefixed with `Expected:` in **Artifact** is required output that the current implementation does not necessarily write.
 
 Allowed status values:
 
@@ -176,7 +176,7 @@ This table lists absent or materially incomplete proof. A row may be removed onl
 | --- | --- | --- | --- |
 | Fixed strategy/action markers and six helper declarations in `generation/agent_template.py` and `generation/java_agent_generator.py` | VAL-02 external runtime contract | Blocked by DEC-02 | Resolved identity/integration spec, validator fixtures, and valid arbitrary-internal agents pass. |
 | Marker/static-text fitness in `evaluation/code_quality.py` | EVAL-11–EVAL-13 successful Code Quality | Blocked by DEC-01 and evaluation telemetry | Versioned canonical formula and cross-stage tests pass. |
-| Local no-op `RuleBasedMutationBackend` | EVO-07/EVO-08/EVO-10/EVO-11 real LLM stages | Phase 2A isolated the legacy backend; Rewrite and final-generation replacement remain | Real staged calls, output validation, artifacts, timing, and failure tests pass. |
+| Local no-op `RuleBasedMutationBackend` | EVO-07/EVO-08/EVO-10/EVO-11 real LLM stages | Phase 2B has replaced the no-op active path with Reflection-to-Rewrite stages; final-generation replacement remains | Real staged calls, output validation, artifacts, timing, and failure tests pass. |
 | Generic `behavior_parent` and prompt-equality feedback | EVO-04 + ART-06 component provenance | Completed in Phase 1 | Active writes and feedback routing use versioned first-class provenance; old artifacts remain legacy evidence only. |
 | Flat run/candidate files and duplicate source/result payloads | ART-01–ART-12 canonical artifact schema | Phase 1 foundation | Canonical lineage/genotype/phenotype/config paths exist; complete stage trees, readers, and duplicate removal remain G-12. |
 | Copied input config with silently forced opponent | ART-07 resolved configuration | Completed in Phase 1 | Input config remains preserved separately while resolved runtime values, versions, unsupported fields, and Git commit round-trip. |

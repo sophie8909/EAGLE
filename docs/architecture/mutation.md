@@ -84,3 +84,7 @@ next inherited state: A1 + B3 + C2
 ## Implementation milestone
 
 Phase 2A implements the Reflection stage for both mutation types with typed evidence, a backend abstraction, bounded retries, raw request/response artifacts, and UTC attempt timing. It intentionally does not rewrite prompts or generate Java; those stages are delivered in Phase 2B and 2C.
+
+## Phase 2B implementation milestone
+
+Phase 2B adds Strategy Prompt Rewrite and Generation Prompt Rewrite after Reflection. Rewritten prompt components are first-class candidate state, original prompt values are retained in mutation artifacts, and Java generation remains deferred to Phase 2C.
