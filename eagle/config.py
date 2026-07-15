@@ -7,10 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from generation.agent_template import (
-    DEFAULT_AGENT_TEMPLATE_PATH,
-    get_seed_prompt_template,
-)
+from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH, get_seed_prompt_template
 
 from .candidate import DEFAULT_GENERATION_PROMPT
 
@@ -24,6 +21,7 @@ class ExperimentConfig:
     generations: int = 1
     population_size: int = 4
     mutation_suffix: str = "Adjust the strategy while keeping the generated Java agent simple and compilable."
+    mutation_max_attempts: int = 3
     crossover_rate: float = 0.75
     mutation_rate: float = 0.85
     random_seed: int = 7
@@ -55,10 +53,7 @@ class ExperimentConfig:
     def from_file(cls, path: str | Path) -> "ExperimentConfig":
         config_path = Path(path)
         raw_config = config_path.read_text(encoding="utf-8")
-        if config_path.suffix.lower() == ".json":
-            payload = json.loads(raw_config)
-        else:
-            payload = parse_minimal_yaml(raw_config)
+        payload = json.loads(raw_config) if config_path.suffix.lower() == ".json" else parse_minimal_yaml(raw_config)
         return cls.from_mapping(payload, raw_config=raw_config)
 
     @classmethod
@@ -74,6 +69,7 @@ class ExperimentConfig:
             generations=int(payload.get("generations", 1)),
             population_size=int(payload.get("population_size", max(1, len(seed_prompts)))),
             mutation_suffix=str(payload.get("mutation_suffix", cls.mutation_suffix)),
+            mutation_max_attempts=int(payload.get("mutation_max_attempts", cls.mutation_max_attempts)),
             crossover_rate=float(payload.get("crossover_rate", 0.75)),
             mutation_rate=float(payload.get("mutation_rate", 0.85)),
             random_seed=int(payload.get("random_seed", 7)),
@@ -84,7 +80,6 @@ class ExperimentConfig:
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
             tick_limit=int(payload.get("tick_limit", 100)),
-            # EA training always evaluates the generated candidate as player 0 against LightRush as player 1.
             opponent=TRAINING_OPPONENT,
             matches_per_candidate=int(payload.get("matches_per_candidate", 1)),
             max_prompt_chars=int(payload.get("max_prompt_chars", 4000)),
@@ -112,6 +107,8 @@ class ExperimentConfig:
             raise ValueError("crossover_rate must be in [0, 1].")
         if not 0.0 <= self.mutation_rate <= 1.0:
             raise ValueError("mutation_rate must be in [0, 1].")
+        if self.mutation_max_attempts < 1:
+            raise ValueError("mutation_max_attempts must be at least 1.")
         if self.tick_limit < 1:
             raise ValueError("tick_limit must be at least 1.")
         if self.matches_per_candidate < 1:

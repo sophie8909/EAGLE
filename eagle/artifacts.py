@@ -18,7 +18,8 @@ from .config import ExperimentConfig
 if TYPE_CHECKING:
     from .evaluation import CandidateEvaluation
 
-ARTIFACT_SCHEMA_VERSION = "phase1-v1"
+
+ARTIFACT_SCHEMA_VERSION = "phase2a-v1"
 OBJECTIVE_FORMULA_VERSION = "legacy-current-v1"
 
 
@@ -56,17 +57,18 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
 
 
 def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluation) -> None:
-    """Save the per-candidate prompt, Java source, metrics, and objective files."""
+    """Save per-candidate state plus the Phase 2A mutation evidence."""
 
     candidate_dir = candidates_dir / evaluation.candidate.id
     candidate_dir.mkdir(parents=True, exist_ok=True)
     write_candidate_inputs(candidates_dir, evaluation.candidate)
     generation_dir = candidate_dir / "generation"
     generation_dir.mkdir(exist_ok=True)
-    (generation_dir / "normalized_candidate.java").write_text(
-        evaluation.candidate.generated_java,
-        encoding="utf-8",
-    )
+    (generation_dir / "normalized_candidate.java").write_text(evaluation.candidate.generated_java, encoding="utf-8")
+    mutation_record = evaluation.candidate.metadata.get("mutation")
+    if mutation_record is not None:
+        write_json(candidate_dir / "mutation" / "metadata.json", mutation_record)
+    write_json(candidate_dir / "timing.json", evaluation.candidate.timing)
     write_json(candidate_dir / "prompt.json", {
         "strategy_description": evaluation.candidate.strategy_prompt,
         "generation_guidance": evaluation.candidate.generation_prompt,
@@ -76,14 +78,12 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     (candidate_dir / "compile.log").write_text(compile_log, encoding="utf-8")
     write_json(candidate_dir / "compile_result.json", compile_to_dict(evaluation.compile_result))
     write_json(candidate_dir / "raw_microrts_result.json", [match_to_dict(result) for result in evaluation.match_results])
-    write_json(
-        candidate_dir / "game_metrics.json",
-        evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else {},
-    )
-    write_json(
-        candidate_dir / "code_quality.json",
-        {"code_quality": evaluation.code_quality_breakdown.code_quality, "code_quality_breakdown": evaluation.code_quality_breakdown.to_json_dict(), "strategy_consistency": evaluation.strategy_consistency_result.to_json_dict() if evaluation.strategy_consistency_result else None},
-    )
+    write_json(candidate_dir / "game_metrics.json", evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else {})
+    write_json(candidate_dir / "code_quality.json", {
+        "code_quality": evaluation.code_quality_breakdown.code_quality,
+        "code_quality_breakdown": evaluation.code_quality_breakdown.to_json_dict(),
+        "strategy_consistency": evaluation.strategy_consistency_result.to_json_dict() if evaluation.strategy_consistency_result else None,
+    })
     write_json(candidate_dir / "objectives.json", evaluation.candidate.fitness_objectives)
     write_json(candidate_dir / "individual.json", evaluation.candidate.to_json_dict())
     write_json(candidate_dir / "candidate_result.json", candidate_result_to_dict(evaluation.result))
@@ -101,20 +101,17 @@ def write_failed_candidate_debug(run_dir: Path, evaluation: CandidateEvaluation)
     (debug_dir / "raw_llm_output.txt").write_text(result.raw_llm_output or "", encoding="utf-8")
     (debug_dir / "extracted_code.java").write_text(result.extracted_code or "", encoding="utf-8")
     (debug_dir / "assembled_java.java").write_text(result.assembled_java or "", encoding="utf-8")
-    write_json(
-        debug_dir / "failure.json",
-        {
-            "failure_category": result.failure_category,
-            "failure_reason": result.failure_reason,
-            "validation_result": validation_to_dict(result.validation_result),
-            "compile_result": compile_to_dict(result.compile_result),
-            "strategy_region_validation": result.strategy_region_validation or {},
-            "strategy_consistency": result.strategy_consistency,
-            "code_quality": (result.final_score or {}).get("code_quality"),
-            "code_quality_breakdown": result.code_quality_breakdown,
-            "game_metrics": result.game_metrics,
-        },
-    )
+    write_json(debug_dir / "failure.json", {
+        "failure_category": result.failure_category,
+        "failure_reason": result.failure_reason,
+        "validation_result": validation_to_dict(result.validation_result),
+        "compile_result": compile_to_dict(result.compile_result),
+        "strategy_region_validation": result.strategy_region_validation or {},
+        "strategy_consistency": result.strategy_consistency,
+        "code_quality": (result.final_score or {}).get("code_quality"),
+        "code_quality_breakdown": result.code_quality_breakdown,
+        "game_metrics": result.game_metrics,
+    })
 
 
 def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool) -> None:
@@ -141,6 +138,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "llm_temperature": None if is_mock_backend else 0.2,
         "retry_policy": {
             "max_attempts": 1 if is_mock_backend else 3,
+            "mutation_max_attempts": config.mutation_max_attempts,
             "timeout_seconds": None if is_mock_backend else 120,
             "backoff": "none" if is_mock_backend else "exponential_seconds",
         },
@@ -158,14 +156,7 @@ def git_commit_hash() -> str | None:
     """Return the checked-out commit or null when Git identity is unavailable."""
 
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=Path(__file__).resolve().parents[1],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
+        result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], check=True, capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.SubprocessError):
         return None
     value = result.stdout.strip()
@@ -173,24 +164,11 @@ def git_commit_hash() -> str | None:
 
 
 def write_generation_manifest(run_dir: Path, generation: int, population: list[Candidate]) -> None:
-    """Save the selected population for one generation."""
-
-    payload = [candidate.to_json_dict() for candidate in population]
-    write_json(run_dir / f"generation_{generation:03d}_population.json", payload)
+    write_json(run_dir / f"generation_{generation:03d}_population.json", [candidate.to_json_dict() for candidate in population])
 
 
-def write_summary(
-    run_dir: Path,
-    *,
-    config: ExperimentConfig,
-    final_population: list[Candidate],
-    best_candidate: Candidate | None,
-    pareto_fronts: list[list[Candidate]],
-    mock: bool,
-) -> None:
-    """Save the final run summary and Pareto front membership."""
-
-    payload = {
+def write_summary(run_dir: Path, *, config: ExperimentConfig, final_population: list[Candidate], best_candidate: Candidate | None, pareto_fronts: list[list[Candidate]], mock: bool) -> None:
+    write_json(run_dir / "summary.json", {
         "mock": mock,
         "generations": config.generations,
         "population_size": config.population_size,
@@ -198,21 +176,14 @@ def write_summary(
         "best_candidate": None if best_candidate is None else best_candidate.to_json_dict(),
         "pareto_fronts": [[candidate.id for candidate in front] for front in pareto_fronts],
         "final_population": [candidate.to_json_dict() for candidate in final_population],
-    }
-    write_json(run_dir / "summary.json", payload)
+    })
 
 
 def evaluation_to_dict(evaluation: CandidateEvaluation) -> dict:
     return {
         "candidate": evaluation.candidate.to_json_dict(),
         "candidate_result": candidate_result_to_dict(evaluation.result),
-        "agent": None
-        if evaluation.agent is None
-        else {
-            "class_name": evaluation.agent.class_name,
-            "qualified_class_name": evaluation.agent.qualified_class_name,
-            "source_path": str(evaluation.agent.source_path),
-        },
+        "agent": None if evaluation.agent is None else {"class_name": evaluation.agent.class_name, "qualified_class_name": evaluation.agent.qualified_class_name, "source_path": str(evaluation.agent.source_path)},
         "compile": compile_to_dict(evaluation.compile_result),
         "matches": [match_to_dict(result) for result in evaluation.match_results],
         "game_metrics": evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else None,
@@ -246,26 +217,13 @@ def candidate_result_to_dict(result) -> dict:
 
 
 def validation_to_dict(result: ValidationResult | None) -> dict | None:
-    if result is None:
-        return None
-    return {
-        "ok": result.ok,
-        "error": result.error,
-    }
+    return None if result is None else {"ok": result.ok, "error": result.error}
 
 
 def compile_to_dict(result: CompileResult | None) -> dict | None:
     if result is None:
         return None
-    return {
-        "ok": result.ok,
-        "status": result.status,
-        "command": result.command,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-        "returncode": result.returncode,
-        **analyze_compilation(result).to_json_dict(),
-    }
+    return {"ok": result.ok, "status": result.status, "command": result.command, "stdout": result.stdout, "stderr": result.stderr, "returncode": result.returncode, **analyze_compilation(result).to_json_dict()}
 
 
 def match_to_dict(result: MatchResult) -> dict:
@@ -281,9 +239,7 @@ def match_to_dict(result: MatchResult) -> dict:
         "weighted_resource_difference": result.weighted_resource_difference,
         "winner": result.winner,
         "final_cycle": result.final_cycle,
-        "performance_breakdown": None
-        if result.performance_breakdown is None
-        else result.performance_breakdown.to_json_dict(),
+        "performance_breakdown": None if result.performance_breakdown is None else result.performance_breakdown.to_json_dict(),
         "replay_path": result.replay_path,
         "telemetry_path": result.telemetry_path,
         "summary_path": result.summary_path,
@@ -293,4 +249,5 @@ def match_to_dict(result: MatchResult) -> dict:
 
 
 def write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

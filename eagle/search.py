@@ -16,7 +16,7 @@ from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import Crossover, CrossoverContext
 from .evaluation import evaluate_population
-from .mutation import Mutation, MutationContext
+from .mutation import Mutation, MutationContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
 from .offspring import normalize_prompt
 from .selection import (
@@ -44,9 +44,6 @@ def run_search(
 ) -> SearchResult:
     config.validate()
     rng = random.Random(config.random_seed)
-    # Search owns the algorithm order; the operator classes own only their local behavior.
-    strategy_mutation = Mutation(config, method="strategy_reflection")
-    code_mutation = Mutation(config, method="code_generation_reflection")
     crossover = Crossover(method="uniform")
     selection = Selection(method="binary_tournament")
 
@@ -62,16 +59,35 @@ def run_search(
     copy2(config_path, run_dir / "config.yaml")
 
     llm_logger = LLMCallLogger(run_dir / "llm_logs")
+    generation_backend_name = "mock" if mock else config.generation_backend
     generation_backend = build_generation_backend(
-        "mock" if mock else config.generation_backend,
+        generation_backend_name,
         base_url=config.llm_base_url,
         model=config.llm_model,
+        logger=llm_logger,
+    )
+    reflection_backend = build_reflection_backend(
+        generation_backend_name,
+        base_url=config.llm_base_url,
+        model=config.llm_model,
+    )
+    strategy_mutation = Mutation(
+        config,
+        method="strategy_reflection",
+        backend=reflection_backend,
+        artifact_root=candidates_dir,
+        logger=llm_logger,
+    )
+    code_mutation = Mutation(
+        config,
+        method="code_generation_reflection",
+        backend=reflection_backend,
+        artifact_root=candidates_dir,
         logger=llm_logger,
     )
     write_resolved_config(run_dir, config, mock=mock)
     results_path = run_dir / "results.jsonl"
 
-    # NSGA-II begins with a complete evaluated population so every candidate has objectives.
     population = initialize_population(config)
     evaluated_population = evaluate_population(
         population,
@@ -86,10 +102,7 @@ def run_search(
     )
 
     for generation in range(1, config.generations):
-        # Rank and crowding distance guide tournament parent selection.
         assign_rank_and_crowding(evaluated_population)
-
-        # Selection chooses parents, crossover chooses components, and mutation can adjust the child afterward.
         offspring = create_offspring(
             evaluated_population,
             config=config,
@@ -98,9 +111,8 @@ def run_search(
             mutations=(strategy_mutation, code_mutation),
             crossover=crossover,
             selection=selection,
+            artifact_root=candidates_dir,
         )
-
-        # New children must be evaluated before survivor selection can compare them to parents.
         evaluated_offspring = evaluate_population(
             offspring,
             generation=generation,
@@ -112,18 +124,13 @@ def run_search(
             results_path=results_path,
             mock=mock,
         )
-
-        # Survivor selection keeps the best Pareto fronts and preserves spread within a partial front.
         evaluated_population = select_next_generation(
             evaluated_population,
             evaluated_offspring,
             population_size=config.population_size,
         )
-
-        # Save the generation view after survivor selection so artifacts match the active population.
         write_generation_manifest(run_dir, generation, evaluated_population)
 
-    # Final rank/crowding data makes the summary and best-candidate choice inspectable.
     assign_rank_and_crowding(evaluated_population)
     best = best_candidate(evaluated_population)
     final_fronts = assign_rank_and_crowding(evaluated_population)
@@ -139,7 +146,6 @@ def run_search(
 
 
 def initialize_population(config: ExperimentConfig) -> list[Candidate]:
-    # Generation zero contains independent seeds; candidate ancestry starts after evaluation.
     population = [
         Candidate(
             generation=0,
@@ -154,14 +160,16 @@ def initialize_population(config: ExperimentConfig) -> list[Candidate]:
     while len(population) < config.population_size:
         seed_index = len(population)
         prompt = config.seed_prompts[seed_index % len(config.seed_prompts)]
-        population.append(Candidate(
-            generation=0,
-            strategy_prompt=prompt,
-            previous_code="",
-            generation_prompt=config.generation_prompt,
-            operator="seed",
-            metadata={"seed_index": seed_index},
-        ))
+        population.append(
+            Candidate(
+                generation=0,
+                strategy_prompt=prompt,
+                previous_code="",
+                generation_prompt=config.generation_prompt,
+                operator="seed",
+                metadata={"seed_index": seed_index},
+            )
+        )
     return population[: config.population_size]
 
 
@@ -174,16 +182,13 @@ def create_offspring(
     mutations: tuple[Mutation, Mutation],
     crossover: Crossover,
     selection: Selection,
+    artifact_root: Path | None = None,
 ) -> list[Candidate]:
     offspring: list[Candidate] = []
     while len(offspring) < config.population_size:
         context_index = len(offspring)
-
-        # Binary tournament uses current rank/crowding values to pick each parent.
         parent_a = selection.select(population, 1, SelectionContext(rng=rng))[0]
         parent_b = selection.select(population, 1, SelectionContext(rng=rng))[0]
-
-        # Crossover chooses each candidate component from either parent; otherwise the child starts as a copy.
         if len(population) > 1 and rng.random() < config.crossover_rate:
             child = crossover.crossover(
                 parent_a,
@@ -208,18 +213,14 @@ def create_offspring(
                 source_candidate_ids=(parent_a.id,),
             )
 
-        # Mutation is usually 50/50, but failed agents first get code-generation reflection.
         if rng.random() < config.mutation_rate:
-            feedback_parent = parent_for_component(
-                child.strategy_parent_id,
-                (parent_a, parent_b),
-            )
+            feedback_parent = parent_for_component(child.strategy_parent_id, (parent_a, parent_b))
             mutation = choose_mutation(feedback_parent, mutations, rng)
             child = mutation.mutate(
                 child,
                 mutation_context_from_candidate(feedback_parent, generation=generation, index=context_index),
+                artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
             )
-
         offspring.append(child)
     return offspring
 
@@ -234,7 +235,6 @@ def parent_for_component(parent_id: str | None, parents: tuple[Candidate, Candid
 
 
 def choose_mutation(feedback_parent: Candidate, mutations: tuple[Mutation, Mutation], rng: random.Random) -> Mutation:
-    # Failed agents need code-generation reflection first because their Java did not become a valid evaluated agent.
     game_performance = number_or_none(feedback_parent.fitness_objectives.get("game_performance"))
     if game_performance == FAILED_GAME_PERFORMANCE:
         return mutations[1]
@@ -242,23 +242,48 @@ def choose_mutation(feedback_parent: Candidate, mutations: tuple[Mutation, Mutat
 
 
 def mutation_context_from_candidate(candidate: Candidate, *, generation: int, index: int) -> MutationContext:
-    # Game-performance and code-quality feedback improve separate evolutionary components.
+    """Map current evaluation data into the typed evidence boundary."""
+
+    game = candidate.game_eval_result or {}
+    quality = candidate.code_quality_result.get("code_quality_breakdown") or {}
+    matches = tuple(game.get("match_results") or game.get("matches") or ())
     return MutationContext(
         generation=generation,
         index=index,
         game_performance=number_or_none(candidate.fitness_objectives.get("game_performance")),
-        player_resource=number_or_none(candidate.game_eval_result.get("player0_resource")),
-        enemy_resource=number_or_none(candidate.game_eval_result.get("player1_resource")),
-        resource_breakdown=candidate.game_eval_result.get("resource_breakdown") or {},
-        performance_breakdown=candidate.game_eval_result.get("performance_breakdown") or {},
-        temporal_summary=candidate.game_eval_result.get("temporal_summary") or {},
-        compilation_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("compilation_score")),
-        compiler_errors=tuple((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("compiler_errors") or []),
-        compiler_warnings=tuple((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("compiler_warnings") or []),
-        strategy_region_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("strategy_region_score")),
+        player_resource=number_or_none(game.get("player0_resource")),
+        enemy_resource=number_or_none(game.get("player1_resource")),
+        resource_breakdown=game.get("resource_breakdown") or {},
+        performance_breakdown=game.get("performance_breakdown") or {},
+        temporal_summary=game.get("temporal_summary") or {},
+        match_summary=game,
+        per_match_results=matches,
+        wins=_as_int(game.get("wins")),
+        draws=_as_int(game.get("draws")),
+        losses=_as_int(game.get("losses")),
+        final_player_resources=game.get("final_player_resources") or {},
+        final_enemy_resources=game.get("final_enemy_resources") or {},
+        final_resource_difference=game.get("final_resource_difference"),
+        unit_material_statistics=game.get("unit_material_statistics") or {},
+        survival_statistics=game.get("survival_statistics") or {},
+        round_state_summary=game.get("round_state_summary") or {},
+        behavior_summary=game.get("behavior_summary") or {},
+        latest_child_java=candidate.generated_java,
+        raw_generation_response=str(candidate.metadata.get("raw_generation_response") or ""),
+        validation_result=candidate.metadata.get("validation_result") or {},
+        compilation_result=candidate.metadata.get("compile_result") or {},
+        integration_result=candidate.metadata.get("integration_result") or {},
+        runtime_result=game,
+        completed_match_count=_as_int(game.get("completed_match_count")),
+        function_capability_score=number_or_none(quality.get("function_score")),
+        strategy_alignment_score=number_or_none(quality.get("strategy_alignment_score")),
+        compilation_score=number_or_none(quality.get("compilation_score")),
+        compiler_errors=tuple(quality.get("compiler_errors") or []),
+        compiler_warnings=tuple(quality.get("compiler_warnings") or []),
+        strategy_region_score=number_or_none(quality.get("strategy_region_score")),
         strategy_region_validation=candidate.code_quality_result.get("strategy_region_validation") or {},
-        static_quality_score=number_or_none((candidate.code_quality_result.get("code_quality_breakdown") or {}).get("static_quality_score")),
-        static_metrics=(candidate.code_quality_result.get("code_quality_breakdown") or {}).get("static_metrics") or {},
+        static_quality_score=number_or_none(quality.get("static_quality_score")),
+        static_metrics=quality.get("static_metrics") or {},
         compile_success=candidate.compile_status == "success",
         validation_success=candidate.metadata.get("failure_category") != "Java validation failure",
         runtime_success=candidate.status == "evaluated",
@@ -271,3 +296,7 @@ def number_or_none(value: object) -> float | None:
     if isinstance(value, int | float):
         return float(value)
     return None
+
+
+def _as_int(value: object) -> int | None:
+    return int(value) if isinstance(value, int) else None

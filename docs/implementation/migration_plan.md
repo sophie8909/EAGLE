@@ -31,17 +31,15 @@ Exit satisfied: evaluated candidates retain both Java states; inheritance uses `
 
 The four originally planned items are complete as Phase 1 foundation work: generated-Java inheritance, three component source IDs, provenance-aware feedback-parent routing, and all parent-choice/equal-text tests. No later mutation or evaluation behavior was implemented.
 
-The next active milestone is Phase 3.
+Phase 2A Reflection Framework is complete. The next active milestone is Phase 2B Prompt Rewrite.
 
-## Phase 3: real two-stage mutation
+## Phase 2: real two-stage mutation (in progress)
 
-1. Define typed Strategy and Code feedback payloads.
-2. Add independent Reflection and Rewrite LLM transports/stages.
-3. Validate rewrite-only outputs.
-4. Persist requests, raw responses, retries, failures, and timings.
-5. Keep the final Java generation call separate and mandatory.
+1. Phase 2A (complete): define typed Strategy and Code Reflection evidence, add independent Reflection transport/stage, validate reflection-only output, and persist requests, raw responses, retries, failures, and timing.
+2. Phase 2B (next): add Rewrite transports, prompt-only output validation, and rewrite artifacts without Java generation.
+3. Phase 2C: connect Reflection, Rewrite, and mandatory final Java Generation with state-transition and lineage tests.
 
-Closes: G-03, G-04; advances G-12/G-13.
+Phase 2A advances G-03, G-04, G-12, and G-13; the complete rows remain open until Phase 2C passes.
 
 ## Phase 4: Java boundary and stage classification
 

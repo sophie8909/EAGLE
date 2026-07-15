@@ -55,13 +55,7 @@ class CompleteJavaGenerationTests(unittest.TestCase):
             agent_path.write_text(template.replace(STRATEGY_START_MARKER, ""), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Agent strategy markers"):
                 validate_java_template(JavaTemplatePaths(agent_path))
-            agent_path.write_text(
-                template.replace(
-                    STRATEGY_START_MARKER,
-                    STRATEGY_START_MARKER + "\n" + STRATEGY_START_MARKER,
-                ),
-                encoding="utf-8",
-            )
+            agent_path.write_text(template.replace(STRATEGY_START_MARKER, STRATEGY_START_MARKER + "\n" + STRATEGY_START_MARKER), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Agent strategy markers"):
                 validate_java_template(JavaTemplatePaths(agent_path))
 
@@ -69,10 +63,7 @@ class CompleteJavaGenerationTests(unittest.TestCase):
         template = load_java_template(JavaTemplatePaths())
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
             agent_path = Path(temp) / "CandidateAgent.java"
-            agent_path.write_text(
-                template.replace("private boolean commandIdle(", "private boolean removedIdle("),
-                encoding="utf-8",
-            )
+            agent_path.write_text(template.replace("private boolean commandIdle(", "private boolean removedIdle("), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "commandIdle.*exactly once"):
                 validate_java_template(JavaTemplatePaths(agent_path))
 
@@ -88,11 +79,7 @@ class CompleteJavaGenerationTests(unittest.TestCase):
 
     def test_mock_generation_writes_only_complete_candidate_agent(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
-            agent = generate_java_agent(
-                Candidate(strategy_prompt="balanced"),
-                MockGenerationBackend(),
-                Path(temp),
-            )
+            agent = generate_java_agent(Candidate(strategy_prompt="balanced"), MockGenerationBackend(), Path(temp))
             self.assertEqual(agent.source_paths, (agent.source_path,))
             self.assertEqual(agent.source_path.name, "CandidateAgent.java")
             self.assertEqual(agent.source_path.read_text(encoding="utf-8"), agent.source)
@@ -104,41 +91,26 @@ class CompleteJavaGenerationTests(unittest.TestCase):
         template = load_java_template(JavaTemplatePaths())
         source_a = template.replace("private void decide", "private void decideA", 1)
         source_b = template.replace("private void decide", "private void decideB", 1)
-        child = Crossover().crossover(
-            Candidate(id="a", previous_code="old-a", generated_java=source_a),
-            Candidate(id="b", previous_code="old-b", generated_java=source_b),
-            CrossoverContext(1, 0, random.Random(2)),
-        )
+        child = Crossover().crossover(Candidate(id="a", previous_code="old-a", generated_java=source_a), Candidate(id="b", previous_code="old-b", generated_java=source_b), CrossoverContext(1, 0, random.Random(2)))
         self.assertIn(child.previous_code, (source_a, source_b))
 
-    def test_strategy_reflection_preserves_complete_previous_java(self):
+    def test_strategy_reflection_preserves_complete_previous_java_without_rewriting(self):
         class Backend:
-            responses = iter(("reflection", "revised overall strategy"))
             def generate(self, prompt):
-                return next(self.responses)
+                return "reflection"
 
         source = load_java_template(JavaTemplatePaths())
         parent = Candidate(id="parent", strategy_prompt="old strategy", previous_code=source)
-        child = Mutation(
-            ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
-            backend=Backend(),
-        ).mutate(parent, MutationContext(1, 0))
-        self.assertEqual(child.strategy_prompt, "revised overall strategy")
+        child = Mutation(ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}), backend=Backend()).mutate(parent, MutationContext(1, 0))
+        self.assertEqual(child.strategy_prompt, "old strategy")
         self.assertEqual(child.previous_code, source)
+        self.assertEqual(child.metadata["mutation"]["reflection"]["reflection"], "reflection")
 
     @unittest.skipUnless(shutil.which("javac"), "javac is required for the real template compile test")
     def test_complete_marked_template_compiles(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
-            agent = generate_java_agent(
-                Candidate(strategy_prompt="balanced"),
-                MockGenerationBackend(),
-                Path(temp),
-            )
-            result = compile_generated_agent(
-                agent.source_paths,
-                microrts_dir=Path("third_party/microrts"),
-                output_dir=Path(temp) / "classes",
-            )
+            agent = generate_java_agent(Candidate(strategy_prompt="balanced"), MockGenerationBackend(), Path(temp))
+            result = compile_generated_agent(agent.source_paths, microrts_dir=Path("third_party/microrts"), output_dir=Path(temp) / "classes")
             self.assertTrue(result.ok, result.stderr)
 
 
