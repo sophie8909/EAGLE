@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 
-from .compiler import CompileResult
+from .compiler import CompileResult, parse_compiler_diagnostics
 
 
 @dataclass(frozen=True)
@@ -124,14 +124,16 @@ class CodeQualityBreakdown:
 def analyze_compilation(result: CompileResult | None) -> CompilerDiagnostics:
     if result is None:
         return CompilerDiagnostics(False, 1, 0, -1000.0, errors=("Compilation was not run.",))
-    lines = (result.stdout + "\n" + result.stderr).splitlines()
-    warnings = tuple(line.strip() for line in lines if "warning:" in line.lower() and "error:" not in line.lower())
-    errors = tuple(line.strip() for line in lines if "error:" in line.lower())
+    diagnostics = result.diagnostics or parse_compiler_diagnostics(result.stdout + "\n" + result.stderr)
+    warning_items = tuple(item for item in diagnostics if item.severity == "warning")
+    error_items = tuple(item for item in diagnostics if item.severity == "error")
+    warnings = tuple(item.message for item in warning_items)
+    errors = tuple(item.message for item in error_items)
     if not result.ok:
         return CompilerDiagnostics(
             False,
-            max(1, len(errors)),
-            len(warnings),
+            max(1, len(error_items)),
+            len(warning_items),
             -1000.0,
             errors=errors or ((result.stderr or "javac failed").strip(),),
             warnings=warnings,
@@ -139,11 +141,10 @@ def analyze_compilation(result: CompileResult | None) -> CompilerDiagnostics:
     return CompilerDiagnostics(
         True,
         0,
-        len(warnings),
-        0.0 if not warnings else -50.0 * len(warnings),
+        len(warning_items),
+        0.0 if not warning_items else -50.0 * len(warning_items),
         warnings=warnings,
     )
-
 
 def evaluate_agent_strategy_region(
     strategy_region: str,
