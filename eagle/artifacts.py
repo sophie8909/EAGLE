@@ -63,6 +63,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     candidate_dir.mkdir(parents=True, exist_ok=True)
     write_candidate_inputs(candidates_dir, evaluation.candidate)
     _write_generation_artifacts(candidate_dir, evaluation)
+    write_json(candidate_dir / "validation" / "validation_result.json", validation_to_dict(evaluation.result.validation_result))
     mutation_record = evaluation.candidate.metadata.get("mutation")
     if mutation_record is not None:
         write_json(candidate_dir / "mutation" / "metadata.json", mutation_record)
@@ -262,7 +263,7 @@ def candidate_result_to_dict(result) -> dict:
 
 
 def validation_to_dict(result: ValidationResult | None) -> dict | None:
-    return None if result is None else {"ok": result.ok, "error": result.error}
+    return None if result is None else result.to_json_dict()
 
 
 def compile_to_dict(result: CompileResult | None) -> dict | None:

@@ -28,7 +28,7 @@ public final class CandidateAgent extends AbstractionLayerAI {
         this(utt, new AStarPathFinding());
     }
 
-    public CandidateAgent(UnitTypeTable utt, PathFinding pathFinding) {
+    public CandidateAgent(UnitTypeTable utt, AStarPathFinding pathFinding) {
         super(pathFinding);
         reset(utt);
     }
