@@ -101,6 +101,7 @@ class PromptRewriteStage:
     ) -> RewriteResult:
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
+            _write_text(artifact_dir / "mutation" / "rewrite_request.txt", request)
         attempts: list[ReflectionAttempt] = []
         last_response = ""
         last_error: str | None = None
@@ -133,6 +134,7 @@ class PromptRewriteStage:
                 _write_text(artifact_dir / "mutation" / f"{stage}_attempt_{attempt_number:03d}_response_raw.txt", response)
                 if response:
                     _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", response)
+                    _write_text(artifact_dir / "mutation" / "rewrite_response_raw.txt", response)
             if self.logger is not None:
                 self.logger.write(
                     stage=stage,
@@ -162,6 +164,7 @@ class PromptRewriteStage:
             time.sleep(0)
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", last_response)
+            _write_text(artifact_dir / "mutation" / "rewrite_response_raw.txt", last_response)
         return RewriteResult(
             stage=stage,
             rewrite_type=rewrite_type,

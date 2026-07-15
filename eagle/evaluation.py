@@ -1,6 +1,8 @@
 """Candidate evaluation for generated-agent searches."""
 from __future__ import annotations
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import time
 from pathlib import Path
 from evaluation.code_quality import CodeQualityBreakdown, StrategyRegionScoreResult, analyze_compilation, build_code_quality
 from evaluation.compiler import CompileResult, compile_generated_agent
@@ -20,6 +22,7 @@ class CandidateEvaluation:
     candidate: Candidate; result: "CandidateResult"; agent: GeneratedJavaAgent|None; compile_result: CompileResult|None
     match_results: list[MatchResult]; game_metrics: GameMetrics|None; strategy_consistency_result: object|None
     code_quality_breakdown: CodeQualityBreakdown; strategy_region_score_result: StrategyRegionScoreResult|None; error: str|None=None
+    generation_timing: dict[str, object] | None = None
 
 @dataclass(frozen=True)
 class CandidateResult:
@@ -39,7 +42,23 @@ def evaluate_population(population:list[Candidate],*,generation:int,config:Exper
     return evaluated
 
 def evaluate_candidate(candidate:Candidate,*,config:ExperimentConfig,backend:GenerationBackend,generated_agents_dir:Path,classes_dir:Path,mock:bool,ordinal:int,match_artifacts_dir:Path|None=None)->CandidateEvaluation:
+    generation_started_at = _utc_now()
+    generation_monotonic_started = time.monotonic()
     generation=generate_java_agent_result(candidate,backend,generated_agents_dir,template_paths=JavaTemplatePaths(config.agent_template_path))
+    generation_finished_at = _utc_now()
+    generation_timing = {
+        "started_at": generation_started_at,
+        "finished_at": generation_finished_at,
+        "duration_seconds": max(0.0, time.monotonic() - generation_monotonic_started),
+        "attempts": [{
+            "attempt": 1,
+            "started_at": generation_started_at,
+            "finished_at": generation_finished_at,
+            "duration_seconds": max(0.0, time.monotonic() - generation_monotonic_started),
+            "status": "success" if generation.agent is not None else "error",
+            "error": generation.failure_reason,
+        }],
+    }
     agent=generation.agent; region_score=generation.strategy_region_score_result
     if region_score is None:
         from evaluation.code_quality import evaluate_agent_strategy_region
@@ -95,7 +114,7 @@ def evaluate_candidate(candidate:Candidate,*,config:ExperimentConfig,backend:Gen
         failure_stage=failure_stage,
         failure_reason=failure_reason,
         artifacts=candidate.artifacts,
-        timing=candidate.timing,
+        timing={**candidate.timing, "generation_llm": generation_timing},
         metadata={
             **candidate.metadata,
             "failure_category": failure_category,
@@ -103,7 +122,11 @@ def evaluate_candidate(candidate:Candidate,*,config:ExperimentConfig,backend:Gen
         },
     )
     result=CandidateResult(candidate.id,candidate.parent_ids,generation.raw_llm_output,generation.extracted_code,generation.assembled_java,generation.strategy_region,generation.validation_result,{k:v.to_json_dict() for k,v in region_score.strategy_region_validation.items()},compile_result,None,quality.to_json_dict(),matches,game_metrics.to_json_dict() if game_metrics else None,objectives,failure_category,failure_reason)
-    return CandidateEvaluation(evaluated_candidate,result,agent,compile_result,matches,game_metrics,None,quality,region_score,failure_reason)
+    return CandidateEvaluation(evaluated_candidate,result,agent,compile_result,matches,game_metrics,None,quality,region_score,failure_reason,generation_timing)
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def compile_agent_source(
     agent: GeneratedJavaAgent,
     *,

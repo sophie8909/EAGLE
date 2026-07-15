@@ -1,15 +1,15 @@
 # Current implementation status
 
-Snapshot: 2026-07-15 after Phase 2B Prompt Rewrite Pipeline. This file describes active source/tests/configuration. It is not normative. Recent retained runs predate the current complete-file implementation and are treated as legacy format evidence only.
+Snapshot: 2026-07-15 after Phase 2C Full Mutation Pipeline. This file describes active source/tests/configuration. It is not normative. Recent retained runs predate the current complete-file implementation and are treated as legacy format evidence only.
 
 ## Status summary
 
 | Area | Active behavior | Contract alignment |
 | --- | --- | --- |
-| Candidate | Frozen `Candidate` retains the pre-generation `strategy_prompt`, `previous_code`, and `generation_prompt`, stores normalized output separately as `generated_java`, and exposes first-class identity, operator, mutation, component provenance, failure, artifact, and timing fields. | The Phase 1 genotype/phenotype boundary is implemented; later stages still need to populate the complete artifact/timing records. |
+| Candidate | Frozen `Candidate` retains the pre-generation `strategy_prompt`, `previous_code`, and `generation_prompt`, stores normalized output separately as `generated_java`, and exposes first-class identity, operator, mutation, component provenance, failure, artifact, and timing fields. | The Phase 1 genotype/phenotype boundary and Phase 2 mutation state transitions are implemented; later validation/integration/match stages remain outside this milestone. |
 | Java generation | One request asks for complete `ai.generated.CandidateAgent`; raw/fenced source is normalized and written once. | Complete-file boundary exists. Validation imposes a fixed template/marker/action-helper layout not required by the spec. |
 | Crossover | `eagle/crossover.py` independently chooses all three components, takes Previous Code from the selected parent's `generated_java`, and records each selected parent ID. Search feedback routing uses recorded provenance rather than prompt equality. | Phase 1 inheritance and component provenance are implemented and deterministic under the EA RNG. |
-| Mutation | Strategy and Code mutations use typed Reflection followed by prompt-only Rewrite with bounded retries, full evidence prompts, raw request/response persistence, original prompt retention, and per-attempt timing. Phase 2B still does not generate Java. | Reflection and Rewrite are implemented; final Java Generation connection remains for Phase 2C. |
+| Mutation | Strategy and Code mutations use Reflection followed by prompt-only Rewrite and the existing final Java Generation stage. Rewritten prompts are candidate state; inherited previous Java remains distinct from the generated phenotype. | Phase 2C is implemented; later validation/integration/match stages remain outside this milestone. |
 | Selection | Binary tournament, Pareto sorting, crowding distance, and elitist parent+offspring survivors operate on two objective values. | Broadly aligned; population manifests and tie behavior need contract tests. |
 | Validation | Requires exact package/class/superclass text, strategy markers, helper markers, six helper declarations, translation call, and a small forbidden-pattern set. | Over-constrains internal layout and under-specifies the full external runtime/security contract. |
 | Compilation | Runs `javac` in an isolated candidate directory with MicroRTS classpath. | No `-Xlint`; diagnostics are parsed from matching lines, not structured/deduplicated/capped consistently. |
@@ -18,8 +18,8 @@ Snapshot: 2026-07-15 after Phase 2B Prompt Rewrite Pipeline. This file describes
 | `game_performance` | Current score combines ±100/0 result with unbounded average state, final resource difference, and up to 200 survival points, then averages successful matches. | Conflicts with the bounded canonical formula. |
 | `code_quality` | Deterministic sum of compile score, marked-region ±100, and static text metrics. `strategy_consistency` is always `None`. | Does not implement failure-stage ranges, capability scoring, or alignment LLM. |
 | Failure handling | Generation/validation, compile, and match failures receive first-class `failure_stage`/`failure_reason` plus legacy categories. Game failure is `-1000`; code quality comes from the current component sum. | State retention is aligned, but the required failure-score hierarchy and integration/runtime progress formulas remain missing. |
-| Artifacts | Candidates additionally persist Reflection and Rewrite request/raw-response attempt files, original prompts, mutation metadata, and candidate timing. | Phase 2B mutation evidence is durable; final generation attempt tree and complete timing remain for Phase 2C. |
-| LLM logging | Final-generation, Reflection, and Rewrite attempts write UTC-stamped JSON; retries are logged per stage. | Alignment calls and complete generation timing remain absent. |
+| Artifacts | Candidates additionally persist Reflection and Rewrite request/raw-response attempt files, original prompts, mutation metadata, and candidate timing. | Phase 2C mutation and final-generation request/response/source artifacts are durable with independent stage timing; broader validation, integration, and match artifact completion remains open. |
+| LLM logging | Final-generation, Reflection, and Rewrite attempts write UTC-stamped JSON; candidate timing now records all three mutation-pipeline LLM stages. | Alignment and later evaluation-stage timing remain absent. |
 
 ## Active configuration
 
@@ -32,9 +32,9 @@ Snapshot: 2026-07-15 after Phase 2B Prompt Rewrite Pipeline. This file describes
 
 ## Active tests
 
-The test suite covers current config parsing, LightRush forcing, complete template/marker/helper validation, one-file mock generation, genotype/phenotype separation, generated-Java inheritance, all eight crossover provenance combinations including equal text, seed/copy/crossover/mutation lineage serialization, canonical Phase 1 artifacts, resolved runtime values, current mutation preservation, NSGA-II helpers, current gameplay arithmetic, current deterministic code quality, legacy analysis, and final-generation HTTP logging/retries.
+The test suite covers Phase 2C Strategy/Code Reflection-to-Rewrite-to-Generation call order, state transitions, lineage, canonical artifacts, timing, and terminal generation failure retention, in addition to current config parsing, LightRush forcing, complete template/marker/helper validation, one-file mock generation, genotype/phenotype separation, generated-Java inheritance, all eight crossover provenance combinations including equal text, seed/copy/crossover/mutation lineage serialization, canonical Phase 1 artifacts, resolved runtime values, current mutation preservation, NSGA-II helpers, current gameplay arithmetic, current deterministic code quality, legacy analysis, and final-generation HTTP logging/retries.
 
-It does not prove the architecture contract's real two-stage LLM mutations, external-only Java validation, integration stage, 10-match/no-regeneration invariant, bounded objective formulas, failure hierarchy, full artifact/timing schema completion, schema migration/readback, or current-source real MicroRTS end-to-end behavior.
+It does not prove the architecture contract's 10-match evaluation, external-only Java validation, integration stage, 10-match/no-regeneration invariant, bounded objective formulas, failure hierarchy, full artifact/timing schema completion, schema migration/readback, or current-source real MicroRTS end-to-end behavior.
 
 ## Recent run evidence
 

@@ -243,6 +243,7 @@ class ReflectionStage:
     ) -> ReflectionResult:
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
+            _write_text(artifact_dir / "mutation" / "reflection_request.txt", request)
 
         attempts: list[ReflectionAttempt] = []
         last_response = ""
@@ -280,6 +281,7 @@ class ReflectionStage:
                 )
                 if response:
                     _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", response)
+                    _write_text(artifact_dir / "mutation" / "reflection_response_raw.txt", response)
             if self.logger is not None:
                 self.logger.write(
                     stage=stage,
@@ -310,6 +312,7 @@ class ReflectionStage:
 
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", last_response)
+            _write_text(artifact_dir / "mutation" / "reflection_response_raw.txt", last_response)
         return ReflectionResult(
             stage=stage,
             reflection_type=reflection_type,

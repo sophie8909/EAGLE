@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from .evaluation import CandidateEvaluation
 
 
-ARTIFACT_SCHEMA_VERSION = "phase2a-v1"
+ARTIFACT_SCHEMA_VERSION = "phase2c-v1"
 OBJECTIVE_FORMULA_VERSION = "legacy-current-v1"
 
 
@@ -62,12 +62,11 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     candidate_dir = candidates_dir / evaluation.candidate.id
     candidate_dir.mkdir(parents=True, exist_ok=True)
     write_candidate_inputs(candidates_dir, evaluation.candidate)
-    generation_dir = candidate_dir / "generation"
-    generation_dir.mkdir(exist_ok=True)
-    (generation_dir / "normalized_candidate.java").write_text(evaluation.candidate.generated_java, encoding="utf-8")
+    _write_generation_artifacts(candidate_dir, evaluation)
     mutation_record = evaluation.candidate.metadata.get("mutation")
     if mutation_record is not None:
         write_json(candidate_dir / "mutation" / "metadata.json", mutation_record)
+        _write_canonical_mutation_artifacts(candidate_dir, mutation_record)
     write_json(candidate_dir / "timing.json", evaluation.candidate.timing)
     write_json(candidate_dir / "prompt.json", {
         "strategy_description": evaluation.candidate.strategy_prompt,
@@ -90,6 +89,51 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     write_json(candidate_dir / "result.json", candidate_result_to_dict(evaluation.result))
     if evaluation.result.failure_category is not None:
         write_failed_candidate_debug(candidates_dir.parent, evaluation)
+
+
+def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvaluation) -> None:
+    """Persist the complete final Java-generation request and response envelope."""
+
+    generation_dir = candidate_dir / "generation"
+    generation_dir.mkdir(parents=True, exist_ok=True)
+    request = evaluation.candidate.generation_input(class_name="CandidateAgent")
+    result = evaluation.result
+    (generation_dir / "request.txt").write_text(request, encoding="utf-8")
+    (generation_dir / "response_raw.txt").write_text(result.raw_llm_output or "", encoding="utf-8")
+    (generation_dir / "extracted_candidate.java").write_text(result.extracted_code or "", encoding="utf-8")
+    (generation_dir / "normalized_candidate.java").write_text(
+        result.assembled_java or evaluation.candidate.generated_java or "",
+        encoding="utf-8",
+    )
+    write_json(generation_dir / "result.json", {
+        "status": "success" if evaluation.agent is not None else "failed",
+        "failure_category": result.failure_category,
+        "failure_reason": result.failure_reason,
+        "validation_result": validation_to_dict(result.validation_result),
+        "attempts": (evaluation.generation_timing or {}).get("attempts", []),
+    })
+
+
+def _write_canonical_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> None:
+    """Expose stage-independent names required by the mutation artifact schema."""
+
+    mutation_dir = candidate_dir / "mutation"
+    reflection = mutation_record.get("reflection") or {}
+    if reflection:
+        (mutation_dir / "reflection_request.txt").write_text(
+            str(reflection.get("request") or ""), encoding="utf-8"
+        )
+        (mutation_dir / "reflection_response_raw.txt").write_text(
+            str(reflection.get("raw_response") or ""), encoding="utf-8"
+        )
+    rewrite = mutation_record.get("rewrite")
+    if rewrite:
+        (mutation_dir / "rewrite_request.txt").write_text(
+            str(rewrite.get("request") or ""), encoding="utf-8"
+        )
+        (mutation_dir / "rewrite_response_raw.txt").write_text(
+            str(rewrite.get("raw_response") or ""), encoding="utf-8"
+        )
 
 
 def write_failed_candidate_debug(run_dir: Path, evaluation: CandidateEvaluation) -> None:
@@ -191,6 +235,7 @@ def evaluation_to_dict(evaluation: CandidateEvaluation) -> dict:
         "strategy_consistency": evaluation.strategy_consistency_result.to_json_dict() if evaluation.strategy_consistency_result else None,
         "objectives": evaluation.candidate.fitness_objectives,
         "error": evaluation.error,
+        "generation_timing": evaluation.generation_timing,
     }
 
 

@@ -31,15 +31,17 @@ Exit satisfied: evaluated candidates retain both Java states; inheritance uses `
 
 The four originally planned items are complete as Phase 1 foundation work: generated-Java inheritance, three component source IDs, provenance-aware feedback-parent routing, and all parent-choice/equal-text tests. No later mutation or evaluation behavior was implemented.
 
-Phase 2A Reflection Framework and Phase 2B Prompt Rewrite are complete. The next active milestone is Phase 2C Full Mutation Pipeline.
+Phase 2A Reflection Framework, Phase 2B Prompt Rewrite, and Phase 2C Full Mutation Pipeline are complete. The next active milestone is the later Java/evaluation contract work.
 
-## Phase 2: real two-stage mutation (in progress)
+## Phase 2: complete two-stage mutation (complete)
 
-1. Phase 2A (complete): typed Strategy and Code Reflection evidence, independent Reflection transport/stage, reflection-only output validation, and durable attempts/timing.
-2. Phase 2B (complete): Rewrite transports, prompt-only validation, original prompt retention, and durable Rewrite attempts/timing without Java generation.
-3. Phase 2C (next): connect Reflection, Rewrite, and mandatory final Java Generation with state-transition and lineage tests.
+1. Phase 2A: typed Strategy and Code Reflection evidence, independent Reflection transport/stage, reflection-only output validation, bounded retries, raw artifacts, and UTC attempt timing.
+2. Phase 2B: Strategy Prompt Rewrite and Generation Prompt Rewrite with prompt-only validation, original prompt retention, bounded retries, raw artifacts, and timing.
+3. Phase 2C: final Java Generation consumes the rewritten genotype plus inherited previous_code; generation request/raw/extracted/normalized artifacts and independent generation timing are persisted for success and failure.
+4. Strategy state transitions are A1+B2+C1 -> A2+B2+C1 -> A2+B3+C1; Code transitions are A1+B2+C1 -> A1+B2+C2 -> A1+B3+C2.
+5. Phase 2 tests cover both mutation types, call order, component isolation, lineage, candidate state, canonical artifacts, timing, and terminal generation failure retention.
 
-Phase 2A and 2B advance G-03, G-04, G-12, and G-13; complete mutation rows remain open until Phase 2C passes.
+Closes the Phase 2 mutation pipeline portion of G-03, EVO-06-EVO-13, ART-02/ART-03, and TEST-02. G-04, G-12, and G-13 retain only the later evaluation/stage portions documented in the gap table.
 
 ## Phase 4: Java boundary and stage classification
 

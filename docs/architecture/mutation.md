@@ -88,3 +88,13 @@ Phase 2A implements the Reflection stage for both mutation types with typed evid
 ## Phase 2B implementation milestone
 
 Phase 2B adds Strategy Prompt Rewrite and Generation Prompt Rewrite after Reflection. Rewritten prompt components are first-class candidate state, original prompt values are retained in mutation artifacts, and Java generation remains deferred to Phase 2C.
+
+
+## Phase 2C implementation milestone
+
+Phase 2C connects both mutation types to the existing final Java Generation boundary.
+The rewritten genotype is passed unchanged into the candidate generation input, which
+contains the rewritten strategy prompt or generation prompt, inherited previous_code,
+and the other prompt component. Evaluation then stores the new generated_java phenotype
+while retaining previous_code. Mutation and generation have independent canonical
+artifacts and timing records, including terminal generation failures.
