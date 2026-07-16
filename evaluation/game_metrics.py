@@ -225,3 +225,6 @@ def _int_or_default(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return int(default)
+
+# Activate the Phase 4 ten-match aggregator at the stable public API.
+from .canonical_game_metrics import *  # noqa: E402,F401,F403

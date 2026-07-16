@@ -208,7 +208,7 @@ def evaluate_candidate(
 
     game_failure = not compiler.compile_success or integration_result is not None and not integration_result.ok or match_error is not None
     if game_failure:
-        game_metrics = compute_game_metrics([])
+        game_metrics = compute_game_metrics(matches)
 
     failure_category: str | None = None
     failure_reason: str | None = None
@@ -390,11 +390,9 @@ def scoring_config_from_experiment(config: ExperimentConfig) -> GamePerformanceC
         result_win_score=config.result_win_score,
         result_draw_score=config.result_draw_score,
         result_loss_score=config.result_loss_score,
-        army_weight=config.state_army_weight,
-        building_weight=config.state_building_weight,
-        resource_weight=config.state_resource_weight,
-        survival_weight=config.survival_weight,
-        final_resource_weight=config.final_resource_weight,
+        material_scale=config.material_scale,
+        resource_scale=config.resource_scale,
+        unit_values=dict(config.unit_material_values),
     )
 
 

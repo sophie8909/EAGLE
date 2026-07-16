@@ -174,8 +174,8 @@ population_size: 3
         self.assertTrue(result.ok)
         self.assertEqual(result.winner, 1)
         self.assertEqual(result.performance_breakdown.result_score, -100)
-        self.assertEqual(objectives["game_performance"], result.performance_breakdown.total_performance)
-        self.assertNotEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertEqual(metrics.completed_match_count, 1)
 
     def test_normalize_prompt_truncates_long_prompt(self) -> None:
         prompt = "\n".join(f"line {index}" for index in range(10))
@@ -295,7 +295,7 @@ population_size: 3
         self.assertIsNotNone(evaluation.agent)
         self.assertTrue(evaluation.compile_result and evaluation.compile_result.ok)
         self.assertTrue(evaluation.integration_result and evaluation.integration_result.ok)
-        self.assertEqual(len(evaluation.match_results), 1)
+        self.assertEqual(len(evaluation.match_results), 10)
         self.assertEqual(evaluation.candidate.status, "evaluated")
         self.assertIsNone(evaluation.result.failure_category)
         self.assertTrue(evaluation.code_quality_breakdown.compile_success)
@@ -433,7 +433,7 @@ population_size: 3
         self.assertEqual(metrics.winner, 0)
         self.assertEqual(metrics.to_json_dict()["player0_resource"], 14)
         self.assertEqual(metrics.resource_breakdown["player0_resource"], 14)
-        self.assertEqual(metrics.objective, 112)
+        self.assertEqual(metrics.objective, FAILED_GAME_PERFORMANCE)
 
     def test_player0_resource_advantage_is_positive(self) -> None:
         metrics = compute_game_metrics(
@@ -488,7 +488,7 @@ population_size: 3
             ]
         )
         self.assertEqual(metrics.weighted_resource_difference, 0)
-        self.assertEqual(metrics.objective, 0)
+        self.assertEqual(metrics.objective, FAILED_GAME_PERFORMANCE)
 
     def test_win_loss_bonus_is_plus_or_minus_100(self) -> None:
         win_metrics = compute_game_metrics(
@@ -525,8 +525,8 @@ population_size: 3
         )
         self.assertEqual(win_metrics.performance_breakdown["result_score"], 100)
         self.assertEqual(loss_metrics.performance_breakdown["result_score"], -100)
-        self.assertEqual(win_metrics.objective, 100)
-        self.assertEqual(loss_metrics.objective, -100)
+        self.assertEqual(win_metrics.objective, FAILED_GAME_PERFORMANCE)
+        self.assertEqual(loss_metrics.objective, FAILED_GAME_PERFORMANCE)
 
     def test_draw_or_timeout_result_score_is_zero(self) -> None:
         metrics = compute_game_metrics(
@@ -547,7 +547,7 @@ population_size: 3
             ]
         )
         self.assertEqual(metrics.performance_breakdown["result_score"], 0)
-        self.assertEqual(metrics.objective, 0)
+        self.assertEqual(metrics.objective, FAILED_GAME_PERFORMANCE)
 
     def test_unit_material_cost_is_added_to_resource_difference(self) -> None:
         metrics = compute_game_metrics(
@@ -568,7 +568,7 @@ population_size: 3
         self.assertEqual(metrics.weighted_resource_difference, 7)
 
     def test_longer_survival_scores_higher_for_matching_losses(self) -> None:
-        config = GamePerformanceConfig(survival_weight=200.0)
+        config = GamePerformanceConfig()
         tick = tick_telemetry(0, 5, 5, {}, {}, config)
         short_loss = compute_performance_breakdown(
             result="p1_win",

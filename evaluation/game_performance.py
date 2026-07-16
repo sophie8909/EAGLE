@@ -386,3 +386,8 @@ def int_or_none(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+# Phase 4 replaces the legacy unbounded scorer above while preserving this
+# public module path for callers and historical artifact readers.
+from .canonical_game_performance import *  # noqa: E402,F401,F403
+from .canonical_game_performance import DEFAULT_UNIT_VALUES as UNIT_COSTS  # noqa: E402,F401

@@ -16,6 +16,15 @@ from .candidate import DEFAULT_GENERATION_PROMPT
 TRAINING_OPPONENT = "ai.abstraction.LightRush"
 MATCHES_PER_CANDIDATE = 10
 
+DEFAULT_UNIT_MATERIAL_VALUES = (
+    ("Resource", 0.0),
+    ("Base", 10.0),
+    ("Barracks", 5.0),
+    ("Worker", 1.0),
+    ("Light", 2.0),
+    ("Heavy", 4.0),
+    ("Ranged", 2.0),
+)
 
 @dataclass(frozen=True)
 class ExperimentConfig:
@@ -47,11 +56,9 @@ class ExperimentConfig:
     result_win_score: float = 100.0
     result_draw_score: float = 0.0
     result_loss_score: float = -100.0
-    state_army_weight: float = 1.0
-    state_building_weight: float = 1.0
-    state_resource_weight: float = 1.0
-    survival_weight: float = 200.0
-    final_resource_weight: float = 1.0
+    material_scale: float = 10.0
+    resource_scale: float = 10.0
+    unit_material_values: tuple[tuple[str, float], ...] = DEFAULT_UNIT_MATERIAL_VALUES
     raw_config: str = ""
 
     @classmethod
@@ -98,11 +105,9 @@ class ExperimentConfig:
             result_win_score=float(payload.get("result_win_score", 100.0)),
             result_draw_score=float(payload.get("result_draw_score", 0.0)),
             result_loss_score=float(payload.get("result_loss_score", -100.0)),
-            state_army_weight=float(payload.get("state_army_weight", 1.0)),
-            state_building_weight=float(payload.get("state_building_weight", 1.0)),
-            state_resource_weight=float(payload.get("state_resource_weight", 1.0)),
-            survival_weight=float(payload.get("survival_weight", 200.0)),
-            final_resource_weight=float(payload.get("final_resource_weight", 1.0)),
+            material_scale=float(payload.get("material_scale", 10.0)),
+            resource_scale=float(payload.get("resource_scale", 10.0)),
+            unit_material_values=_parse_unit_material_values(payload.get("unit_material_values")),
             raw_config=raw_config,
         )
 
@@ -128,6 +133,12 @@ class ExperimentConfig:
         if len(set(self.resolved_match_seeds)) != MATCHES_PER_CANDIDATE:
             raise ValueError("match_seeds must be distinct.")
         from generation.agent_template import JavaTemplatePaths, validate_java_template
+        if self.material_scale <= 0 or self.resource_scale <= 0:
+            raise ValueError("material_scale and resource_scale must be greater than zero.")
+        if not self.unit_material_values:
+            raise ValueError("unit_material_values must not be empty.")
+        if any(value < 0 for _, value in self.unit_material_values):
+            raise ValueError("unit material values must be non-negative.")
         validate_java_template(JavaTemplatePaths(self.agent_template_path))
 
     @property
@@ -139,6 +150,16 @@ class ExperimentConfig:
         rng = random.Random(self.random_seed)
 
         return tuple(rng.sample(range(1, 2_147_483_647), MATCHES_PER_CANDIDATE))
+
+def _parse_unit_material_values(value: object) -> tuple[tuple[str, float], ...]:
+    resolved = dict(DEFAULT_UNIT_MATERIAL_VALUES)
+    if value is None:
+        return tuple(resolved.items())
+    if not isinstance(value, dict):
+        raise ValueError("unit_material_values must be a mapping.")
+    resolved.update({str(name): float(cost) for name, cost in value.items()})
+    return tuple(sorted(resolved.items()))
+
 
 def _repository_path(value: object | None, default: Path) -> Path:
     if value is None:
