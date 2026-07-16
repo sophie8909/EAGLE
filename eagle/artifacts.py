@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     from .evaluation import CandidateEvaluation
 
 
-ARTIFACT_SCHEMA_VERSION = "phase2c-v1"
-OBJECTIVE_FORMULA_VERSION = "legacy-current-v1"
+ARTIFACT_SCHEMA_VERSION = "phase4-v1"
+OBJECTIVE_FORMULA_VERSION = "eagle-objectives-phase4-v1"
 
 
 def append_result(path: Path, evaluation: CandidateEvaluation) -> None:
@@ -100,6 +100,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
         write_json(candidate_dir / "mutation" / "metadata.json", mutation_record)
         _write_canonical_mutation_artifacts(candidate_dir, mutation_record)
     write_json(candidate_dir / "timing.json", evaluation.candidate.timing)
+    _write_evaluation_artifacts(candidate_dir, evaluation)
     write_json(candidate_dir / "prompt.json", {
         "strategy_description": evaluation.candidate.strategy_prompt,
         "generation_guidance": evaluation.candidate.generation_prompt,
@@ -114,6 +115,8 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
         "code_quality": evaluation.code_quality_breakdown.code_quality,
         "code_quality_breakdown": evaluation.code_quality_breakdown.to_json_dict(),
         "strategy_consistency": evaluation.strategy_consistency_result.to_json_dict() if evaluation.strategy_consistency_result else None,
+        "function_capability": None if evaluation.function_capability_result is None else evaluation.function_capability_result.to_json_dict(),
+        "strategy_alignment": None if evaluation.strategy_alignment_result is None else evaluation.strategy_alignment_result.to_json_dict(),
     })
     write_json(candidate_dir / "objectives.json", evaluation.candidate.fitness_objectives)
     write_json(candidate_dir / "individual.json", evaluation.candidate.to_json_dict())
@@ -121,6 +124,97 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     write_json(candidate_dir / "result.json", candidate_result_to_dict(evaluation.result))
     if evaluation.result.failure_category is not None:
         write_failed_candidate_debug(candidates_dir.parent, evaluation)
+
+
+def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvaluation) -> None:
+    """Persist canonical post-Integration evaluation evidence and objective values."""
+
+    alignment_dir = candidate_dir / "strategy_alignment"
+    alignment_dir.mkdir(parents=True, exist_ok=True)
+    alignment = evaluation.strategy_alignment_result
+    if alignment is None:
+        request = ""
+        raw_response = ""
+        alignment_payload = {
+            "status": "blocked",
+            "request": request,
+            "raw_response": raw_response,
+            "parsed_response": None,
+            "score": 0.0,
+            "reason": "Strategy Alignment runs only after ten valid matches.",
+            "error": evaluation.result.failure_reason,
+            "attempts": [],
+        }
+    else:
+        request = alignment.request
+        raw_response = alignment.raw_response
+        alignment_payload = alignment.to_json_dict()
+    (alignment_dir / "request.txt").write_text(request, encoding="utf-8")
+    (alignment_dir / "response_raw.txt").write_text(raw_response, encoding="utf-8")
+    write_json(alignment_dir / "result.json", alignment_payload)
+
+    evaluation_dir = candidate_dir / "evaluation"
+    game_payload = evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else {}
+    capability = evaluation.function_capability_result
+    capability_payload = (
+        {
+            "status": "blocked",
+            "function_score": 0,
+            "reason": "Function Capability runs only after ten valid matches.",
+            "evidence": {},
+        }
+        if capability is None
+        else {"status": "success", **capability.to_json_dict()}
+    )
+    code_quality_payload = evaluation.code_quality_breakdown.to_json_dict()
+    objectives_payload = {
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        "objective_formula_version": OBJECTIVE_FORMULA_VERSION,
+        "candidate_id": evaluation.candidate.id,
+        "game_performance": evaluation.candidate.fitness_objectives["game_performance"],
+        "code_quality": evaluation.candidate.fitness_objectives["code_quality"],
+        "objective_names": ["game_performance", "code_quality"],
+    }
+    write_json(evaluation_dir / "game_performance.json", game_payload)
+    write_json(evaluation_dir / "function_capability.json", capability_payload)
+    write_json(evaluation_dir / "code_quality.json", code_quality_payload)
+    write_json(evaluation_dir / "objectives.json", objectives_payload)
+    write_json(
+        evaluation_dir / "summary.json",
+        {
+            "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+            "objective_formula_version": OBJECTIVE_FORMULA_VERSION,
+            "candidate_id": evaluation.candidate.id,
+            "status": evaluation.candidate.status,
+            "failure_stage": evaluation.result.failure_stage,
+            "failure_category": evaluation.result.failure_category,
+            "failure_reason": evaluation.result.failure_reason,
+            "completed_match_count": sum(result.ok for result in evaluation.match_results),
+            "match_count": len(evaluation.match_results),
+            "objectives": objectives_payload,
+            "artifacts": {
+                "game_performance": "evaluation/game_performance.json",
+                "function_capability": "evaluation/function_capability.json",
+                "strategy_alignment": "strategy_alignment/result.json",
+                "code_quality": "evaluation/code_quality.json",
+                "objectives": "evaluation/objectives.json",
+                "timing": "timing.json",
+            },
+        },
+    )
+    if evaluation.result.failure_stage == "runtime":
+        write_json(
+            evaluation_dir / "runtime_failure.json",
+            {
+                "status": "failed",
+                "failure_stage": "runtime",
+                "failure_category": evaluation.result.failure_category,
+                "failure_reason": evaluation.result.failure_reason,
+                "completed_match_count": sum(result.ok for result in evaluation.match_results),
+                "attempted_match_count": len(evaluation.match_results),
+                "retained_matches": [match_to_dict(result) for result in evaluation.match_results],
+            },
+        )
 
 
 def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvaluation) -> None:
@@ -222,6 +316,8 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
             "timeout_seconds": None if is_mock_backend else 120,
             "backoff": "none" if is_mock_backend else "exponential_seconds",
         },
+        "strategy_alignment_backend": "mock" if mock else config.alignment_backend,
+        "strategy_alignment_model": None if mock else config.llm_model,
         "prompt_version": None,
         "git_commit_hash": git_commit_hash(),
         "unsupported": {
@@ -269,6 +365,8 @@ def evaluation_to_dict(evaluation: CandidateEvaluation) -> dict:
         "game_metrics": evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else None,
         "code_quality": {"code_quality": evaluation.code_quality_breakdown.code_quality, "code_quality_breakdown": evaluation.code_quality_breakdown.to_json_dict()},
         "strategy_consistency": evaluation.strategy_consistency_result.to_json_dict() if evaluation.strategy_consistency_result else None,
+        "function_capability": None if evaluation.function_capability_result is None else evaluation.function_capability_result.to_json_dict(),
+        "strategy_alignment": None if evaluation.strategy_alignment_result is None else evaluation.strategy_alignment_result.to_json_dict(),
         "objectives": evaluation.candidate.fitness_objectives,
         "error": evaluation.error,
         "generation_timing": evaluation.generation_timing,
@@ -288,6 +386,8 @@ def candidate_result_to_dict(result) -> dict:
         "strategy_region_validation": result.strategy_region_validation or {},
         "strategy_consistency": result.strategy_consistency,
         "code_quality": (result.final_score or {}).get("code_quality"),
+        "function_capability": result.function_capability,
+        "strategy_alignment": result.strategy_alignment,
         "code_quality_breakdown": result.code_quality_breakdown,
         "match_result": [match_to_dict(item) for item in result.match_result or []],
         "game_metrics": result.game_metrics,
@@ -330,6 +430,8 @@ def compile_to_dict(result: CompileResult | None) -> dict | None:
 
 
 def match_to_dict(result: MatchResult) -> dict:
+    if hasattr(result, "to_json_dict"):
+        return result.to_json_dict()
     return {
         "ok": result.ok,
         "score": result.score,
@@ -337,20 +439,12 @@ def match_to_dict(result: MatchResult) -> dict:
         "stdout": result.stdout,
         "stderr": result.stderr,
         "returncode": result.returncode,
-        "player0_resource": result.player0_resource,
-        "player1_resource": result.player1_resource,
-        "weighted_resource_difference": result.weighted_resource_difference,
-        "winner": result.winner,
-        "final_cycle": result.final_cycle,
-        "performance_breakdown": None if result.performance_breakdown is None else result.performance_breakdown.to_json_dict(),
-        "replay_path": result.replay_path,
-        "telemetry_path": result.telemetry_path,
-        "summary_path": result.summary_path,
-        "persistence_error": result.persistence_error,
         "raw_result": result.raw_result,
     }
 
 
 def write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(path)

@@ -11,11 +11,13 @@ from evaluation.code_quality import (
     CodeQualityBreakdown,
     StrategyRegionScoreResult,
     analyze_compilation,
-    build_code_quality,
+    build_failure_code_quality,
+    build_successful_code_quality,
 )
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.game_performance import GamePerformanceConfig
+from evaluation.function_capability import FunctionCapabilityResult, evaluate_function_capability
 from evaluation.microrts_runner import (
     IntegrationResult,
     MatchResult,
@@ -25,6 +27,11 @@ from evaluation.microrts_runner import (
     run_microrts_match,
 )
 from evaluation.nsga2_objectives import build_objectives
+from evaluation.strategy_alignment import (
+    StrategyAlignmentResult,
+    build_strategy_alignment_backend,
+    evaluate_strategy_alignment,
+)
 from generation.agent_template import JavaTemplatePaths
 from generation.backend import GenerationBackend
 from generation.java_agent_generator import (
@@ -50,6 +57,8 @@ class CandidateEvaluation:
     code_quality_breakdown: CodeQualityBreakdown
     strategy_region_score_result: StrategyRegionScoreResult | None
     error: str | None = None
+    function_capability_result: FunctionCapabilityResult | None = None
+    strategy_alignment_result: StrategyAlignmentResult | None = None
     generation_timing: dict[str, object] | None = None
 
 
@@ -67,6 +76,8 @@ class CandidateResult:
     strategy_consistency: dict | None = None
     code_quality_breakdown: dict | None = None
     match_result: list[MatchResult] | None = None
+    function_capability: dict | None = None
+    strategy_alignment: dict | None = None
     game_metrics: dict[str, object] | None = None
     final_score: dict[str, float] | None = None
     failure_category: str | None = None
@@ -172,16 +183,13 @@ def evaluate_candidate(
         compilation_duration = max(0.0, time.monotonic() - compilation_started)
 
     compiler = analyze_compilation(compile_result)
-    quality = build_code_quality(
-        compiler,
-        region_score,
-        {"agent_strategy_region": generation.strategy_region} if generation.strategy_region else {},
-    )
-
     integration_result: IntegrationResult | None = None
     matches: list[MatchResult] = []
-    game_metrics: GameMetrics | None = None
     match_error: str | None = None
+    evaluation_started_at: str | None = None
+    evaluation_finished_at: str | None = None
+    evaluation_started: float | None = None
+
     if compiler.compile_success and agent is not None:
         integration_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent / "integration"
         integration_result = integrate_microrts_agent(
@@ -192,6 +200,8 @@ def evaluate_candidate(
             mock=mock,
         )
         if integration_result.ok:
+            evaluation_started_at = _utc_now()
+            evaluation_started = time.monotonic()
             matches, match_error = evaluate_matches(
                 candidate=candidate,
                 agent=agent,
@@ -201,45 +211,99 @@ def evaluate_candidate(
                 mock=mock,
                 ordinal=ordinal,
             )
-            if not match_error:
-                game_metrics = compute_game_metrics(matches)
         else:
             match_error = integration_result.failure_reason or "MicroRTS integration failed."
-
-    game_failure = not compiler.compile_success or integration_result is not None and not integration_result.ok or match_error is not None
-    if game_failure:
-        game_metrics = compute_game_metrics(matches)
 
     failure_category: str | None = None
     failure_reason: str | None = None
     failure_stage: str | None = None
-    if generation.failure_category and agent is None:
-        failure_category = generation.failure_category
-        failure_reason = generation.failure_reason
-        failure_stage = generation.failure_stage or ("validation" if generation.validation_result.failed_checks else "generation")
+    completed_matches = sum(result.ok for result in matches)
+    if agent is None:
+        validation_failed = bool(generation.validation_result.failed_checks)
+        failure_stage = generation.failure_stage or ("validation" if validation_failed else "generation")
+        failure_category = generation.failure_category or f"{failure_stage}_failure"
+        failure_reason = generation.failure_reason or "Java generation did not produce a valid agent."
     elif not compiler.compile_success:
         failure_category = "Java compile failure"
-        failure_reason = (compile_error or compile_error_message(compile_result)) if compile_result else (compile_error or "Compilation was not run.")
+        failure_reason = (
+            compile_error or compile_error_message(compile_result)
+            if compile_result
+            else compile_error or "Compilation was not run."
+        )
         failure_stage = "compilation"
     elif integration_result is not None and not integration_result.ok:
         failure_category = "MicroRTS integration failure"
         failure_reason = integration_result.failure_reason
         failure_stage = "integration"
-    elif match_error:
+    elif match_error or completed_matches != 10:
         failed_match = next((result for result in matches if not result.ok), None)
         failure_category = (
             failed_match.failure_category
             if failed_match is not None and failed_match.failure_category
             else "partial_evaluation"
         )
-        failure_reason = match_error
+        failure_reason = match_error or f"partial evaluation: completed {completed_matches} of 10 matches"
         failure_stage = "runtime"
 
-    objectives = build_objectives(game_metrics=game_metrics, code_quality=quality, game_failure=game_failure)
+    objective_started_at = _utc_now()
+    objective_started = time.monotonic()
+    game_metrics = compute_game_metrics(matches)
+    capability_result: FunctionCapabilityResult | None = None
+    alignment_result: StrategyAlignmentResult | None = None
+    if failure_stage is None:
+        capability_result = evaluate_function_capability(generation.assembled_java, matches)
+        alignment_backend = build_strategy_alignment_backend(
+            "mock" if mock else config.alignment_backend,
+            base_url=config.llm_base_url,
+            model=config.llm_model,
+        )
+        alignment_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent / "strategy_alignment"
+        alignment_result = evaluate_strategy_alignment(
+            strategy_prompt=candidate.strategy_prompt,
+            generated_java=generation.assembled_java,
+            behavior_summary=game_metrics.behavior_summary,
+            backend=alignment_backend,
+            artifact_dir=alignment_dir,
+        )
+        quality = build_successful_code_quality(compiler, capability_result, alignment_result)
+    else:
+        quality = build_failure_code_quality(
+            failure_stage,
+            compiler=compiler,
+            integration_pass_ratio=(
+                0.0 if integration_result is None else integration_result.integration_pass_ratio
+            ),
+            completed_matches=completed_matches,
+        )
+    objectives = build_objectives(
+        game_metrics=game_metrics,
+        code_quality=quality,
+        game_failure=failure_stage is not None,
+    )
+    objective_finished_at = _utc_now()
+    objective_duration = max(0.0, time.monotonic() - objective_started)
+
+    evaluation_duration: float | None = None
+    if evaluation_started is not None:
+        evaluation_finished_at = _utc_now()
+        evaluation_duration = max(0.0, time.monotonic() - evaluation_started)
+    match_durations = [max(0.0, result.duration_seconds) for result in matches]
+    alignment_timing = {
+        "started_at": None,
+        "finished_at": None,
+        "duration_seconds": None,
+        "attempts": [],
+    } if alignment_result is None else {
+        "started_at": alignment_result.started_at,
+        "finished_at": alignment_result.finished_at,
+        "duration_seconds": alignment_result.duration_seconds,
+        "attempts": [dict(item) for item in alignment_result.attempts],
+    }
     quality_payload = {
         "code_quality": quality.code_quality,
         "code_quality_breakdown": quality.to_json_dict(),
-        "strategy_consistency": None,
+        "function_capability": None if capability_result is None else capability_result.to_json_dict(),
+        "strategy_alignment": None if alignment_result is None else alignment_result.to_json_dict(),
         "strategy_region_validation": region_score.to_json_dict(),
     }
     timing = {
@@ -248,6 +312,11 @@ def evaluate_candidate(
         "validation_duration_seconds": generation.validation_timing.get("duration_seconds") or 0.0,
         "compilation_duration_seconds": compilation_duration or 0.0,
         "integration_duration_seconds": 0.0 if integration_result is None else integration_result.duration_seconds,
+        "evaluation_duration_seconds": evaluation_duration,
+        "matches_total_duration_seconds": round(sum(match_durations), 9),
+        "match_durations_seconds": match_durations,
+        "strategy_alignment_llm": alignment_timing,
+        "objective_calculation_duration_seconds": objective_duration,
         "validation": generation.validation_timing,
         "compilation": {
             "started_at": compilation_started_at,
@@ -268,6 +337,22 @@ def evaluate_candidate(
             "duration_seconds": integration_result.duration_seconds,
             "status": integration_result.status,
             "error": integration_result.failure_reason,
+        },
+        "evaluation": {
+            "started_at": evaluation_started_at,
+            "finished_at": evaluation_finished_at,
+            "duration_seconds": evaluation_duration,
+            "status": (
+                "blocked" if evaluation_started_at is None else "success" if failure_stage is None else "failed"
+            ),
+            "error": failure_reason,
+        },
+        "objective_calculation": {
+            "started_at": objective_started_at,
+            "finished_at": objective_finished_at,
+            "duration_seconds": objective_duration,
+            "status": "success",
+            "error": None,
         },
     }
     evaluated_candidate = Candidate(
@@ -311,6 +396,8 @@ def evaluate_candidate(
         strategy_region_validation={k: v.to_json_dict() for k, v in region_score.strategy_region_validation.items()},
         compile_result=compile_result,
         code_quality_breakdown=quality.to_json_dict(),
+        function_capability=None if capability_result is None else capability_result.to_json_dict(),
+        strategy_alignment=None if alignment_result is None else alignment_result.to_json_dict(),
         match_result=matches,
         game_metrics=game_metrics.to_json_dict() if game_metrics else None,
         final_score=objectives,
@@ -330,6 +417,8 @@ def evaluate_candidate(
         strategy_consistency_result=None,
         code_quality_breakdown=quality,
         strategy_region_score_result=region_score,
+        function_capability_result=capability_result,
+        strategy_alignment_result=alignment_result,
         error=failure_reason,
         generation_timing=generation_timing,
     )

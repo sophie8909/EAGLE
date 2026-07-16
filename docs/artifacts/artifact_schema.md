@@ -128,3 +128,7 @@ attempt files remain available for compatibility and retry inspection. The final
 Java-generation stage owns generation/request.txt, response_raw.txt,
 extracted_candidate.java, normalized_candidate.java, and result.json. Final generation
 failures do not remove the earlier mutation evidence.
+
+## Phase 4 implementation note
+
+Evaluation artifacts use `artifact_schema_version = phase4-v1`. Each candidate writes one directory per match plus canonical `strategy_alignment/` and `evaluation/` payloads for game performance, Function Capability, Code Quality, objective values, evaluation summary, and runtime failure evidence. Existing flat candidate files remain temporary compatibility aliases for current readers and are tracked for removal in the migration plan.

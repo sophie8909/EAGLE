@@ -89,3 +89,7 @@ timing.json now includes independent reflection_llm, rewrite_llm, and generation
 records for the mutation path. Each record has UTC start/finish timestamps, a monotonic
 duration, and one-based attempt records. The generation record is closed and retained
 when Java extraction or validation fails after Reflection and Rewrite have completed.
+
+## Phase 4 implementation note
+
+Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 10 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.

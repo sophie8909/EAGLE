@@ -7,6 +7,7 @@ import time
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+from pathlib import Path
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -102,6 +103,7 @@ def evaluate_strategy_alignment(
     generated_java: str,
     behavior_summary: dict[str, Any] | None,
     backend: StrategyAlignmentBackend,
+    artifact_dir: Path | None = None,
 ) -> StrategyAlignmentResult:
     request = build_alignment_request(strategy_prompt, generated_java, behavior_summary)
     started_at = _utc_now()
@@ -111,11 +113,17 @@ def evaluate_strategy_alignment(
     error: str | None = None
     parsed: dict[str, Any] | None = None
     score = 0.0
+    if artifact_dir is not None:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "request.txt").write_text(request, encoding="utf-8")
+        (artifact_dir / "response_raw.txt").write_text("", encoding="utf-8")
     reason = ""
     try:
         raw_response = backend.evaluate(request)
         parsed = parse_strategy_alignment_response(raw_response)
         score = float(parsed["score"])
+        if artifact_dir is not None:
+            (artifact_dir / "response_raw.txt").write_text(raw_response, encoding="utf-8")
         reason = str(parsed["reason"])
     except (RuntimeError, ValueError, TypeError) as exc:
         status = "failed"

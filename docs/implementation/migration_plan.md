@@ -31,7 +31,7 @@ Exit satisfied: evaluated candidates retain both Java states; inheritance uses `
 
 The four originally planned items are complete as Phase 1 foundation work: generated-Java inheritance, three component source IDs, provenance-aware feedback-parent routing, and all parent-choice/equal-text tests. No later mutation or evaluation behavior was implemented.
 
-Phase 2A Reflection Framework, Phase 2B Prompt Rewrite, and Phase 2C Full Mutation Pipeline are complete. The next active milestone is the later Java/evaluation contract work.
+Phase 2A Reflection Framework, Phase 2B Prompt Rewrite, and Phase 2C Full Mutation Pipeline are complete. Phase 3 Java boundaries and the complete Phase 4 Evaluation Layer are also complete.
 
 ## Phase 2: complete two-stage mutation (complete)
 
@@ -56,7 +56,7 @@ Closes: G-09, G-10, and the integration portion of G-11. G-08 scoring hierarchy 
 Exit satisfied: source validation accepts arbitrary valid internals while enforcing the external identity/security contract; compilation emits structured deduplicated diagnostics; integration persists seven ordered checks and stops before matches on failure. Validation, compilation, and integration result/timing artifacts remain inspectable on every terminal path.
 
 
-## Phase 4: 10-match LightRush evaluation
+## Phase 4: complete Evaluation Layer (complete 2026-07-16)
 
 1. Enforce `matches_per_candidate = 10` and LightRush in architecture configs.
 2. Resolve map/cycles/seeds into runtime configuration.
@@ -64,9 +64,9 @@ Exit satisfied: source validation accepts arbitrary valid internals while enforc
 4. Prove one source hash/compile serves all 10 matches with no generation calls.
 5. Retain partial match evidence and runtime-progress classification.
 
-Closes: G-05 and G-11.
+Closes: G-04 through G-08 and G-11. Exit satisfied: exactly 10 seeded LightRush matches reuse one source/class set; runtime failures are typed; canonical Game Performance and Code Quality (including Function Capability and Strategy Alignment) feed exactly two objectives; evaluation artifacts and timing pass focused and full-suite tests.
 
-## Phase 5: objectives
+## Phase 5: objectives (completed inside the Phase 4 Evaluation Layer milestone)
 
 1. Implement and version the bounded `game_performance` formula.
 2. Implement warning, capability, and independent Strategy Alignment components.
@@ -74,14 +74,14 @@ Closes: G-05 and G-11.
 4. Implement all failure-stage formulas and cross-stage ordering tests.
 5. Keep exactly two NSGA-II objectives.
 
-Closes: G-06, G-07, remaining G-08, active portion of G-16.
+Completed as part of the user-scoped Phase 4 milestone. G-16 retains only version-gated legacy reader/help cleanup; canonical Strategy Alignment is active solely inside Code Quality.
 
-## Phase 6: artifact and timing completion
+## Phase 6: remaining artifact and timing completion
 
-1. Write the canonical run/generation/candidate/stage/match hierarchy.
-2. Add atomic writes, schema versions, hashes, attempt records, and unified timing.
+1. Preserve the completed Phase 4 match/alignment/evaluation/objective hierarchy and finish the broader run/generation population hierarchy.
+2. Preserve Phase 4 schema/formula versions, hashes, alignment attempts, and evaluation timing; add candidate-total plus selection/crossover timing.
 3. Remove duplicate current artifacts or document temporary compatibility aliases.
-4. Add schema migration/readback tooling and golden-tree tests.
+4. Add remaining schema migration/readback tooling and full-run golden-tree tests; Phase 4 evaluation artifact/timing tests are complete.
 
 Closes: G-12, G-13, G-15.
 

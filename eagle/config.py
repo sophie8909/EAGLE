@@ -126,6 +126,8 @@ class ExperimentConfig:
             raise ValueError("mutation_max_attempts must be at least 1.")
         if self.tick_limit < 1:
             raise ValueError("tick_limit must be at least 1.")
+        if self.alignment_backend not in {"mock", "openai", "llama_cpp"}:
+            raise ValueError("alignment_backend must be mock, openai, or llama_cpp.")
         if self.matches_per_candidate != MATCHES_PER_CANDIDATE:
             raise ValueError(f"matches_per_candidate must be exactly {MATCHES_PER_CANDIDATE}.")
         if self.match_timeout_seconds <= 0:
