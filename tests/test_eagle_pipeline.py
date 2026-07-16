@@ -59,7 +59,16 @@ class RecordingMutationBackend:
 
 
 def quality_fixture() -> CodeQualityBreakdown:
-    return CodeQualityBreakdown(0.0, 100.0, 5.0, 0, 6, 6, True, 0, {})
+    return CodeQualityBreakdown(
+        compilation_score=0.0,
+        function_score=100.0,
+        strategy_alignment_score=5.0,
+        successful_base=500.0,
+        score=605.0,
+        warning_count=0,
+        compile_success=True,
+        compile_error_count=0,
+    )
 class EaglePipelineTests(unittest.TestCase):
     def test_progress_prints_matching_code_quality_total_and_components(self) -> None:
         quality = quality_fixture()
@@ -85,8 +94,8 @@ class EaglePipelineTests(unittest.TestCase):
                 evaluation=evaluation,
             )
         text = output.getvalue()
-        self.assertIn("code_quality_total=105.0", text)
-        self.assertIn("compilation=0.0 + strategy_region=100.0 + static=5.0 = 105.0", text)
+        self.assertIn("code_quality_total=605.0", text)
+        self.assertIn("successful_base=500.0 + compilation=0.0 + function=100.0 + strategy_alignment=5.0 = 605.0", text)
     def test_parse_minimal_yaml(self) -> None:
         payload = parse_minimal_yaml(
             """
@@ -299,7 +308,7 @@ population_size: 3
         self.assertEqual(evaluation.candidate.status, "evaluated")
         self.assertIsNone(evaluation.result.failure_category)
         self.assertTrue(evaluation.code_quality_breakdown.compile_success)
-        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
+        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, 0)
 
     def test_empty_java_response_fails_before_compile_or_matches(self) -> None:
         class NonJavaBackend(GenerationBackend):
@@ -325,7 +334,7 @@ population_size: 3
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
         self.assertFalse(evaluation.code_quality_breakdown.compile_success)
-        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
+        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, 0)
         self.assertIn("strategy region", " ".join(evaluation.strategy_region_score_result.strategy_region_validation["agent_strategy_region"].errors).lower())
 
     def test_seed_prompt_template_expands_to_blank_strategy_prompt(self) -> None:
@@ -386,9 +395,10 @@ population_size: 3
                     sum(
                         quality["code_quality_breakdown"][name]
                         for name in (
+                            "successful_base",
                             "compilation_score",
-                            "strategy_region_score",
-                            "static_quality_score",
+                            "function_score",
+                            "strategy_alignment_score",
                         )
                     ),
                     6,

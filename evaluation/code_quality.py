@@ -402,3 +402,6 @@ def build_code_quality(
         compiler_warnings=compiler.warnings,
         static_metrics=metrics,
     )
+
+# Phase 4 activates the failure-aware successful formula at the stable API path.
+from .canonical_code_quality import *  # noqa: E402,F401,F403

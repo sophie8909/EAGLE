@@ -437,9 +437,10 @@ def print_progress(*, generation: int, index: int, population_size: int, evaluat
         f"objectives={candidate.fitness_objectives} "
         f"code_quality_total={quality.code_quality} "
         f"code_quality_components=("
+        f"successful_base={quality.successful_base} + "
         f"compilation={quality.compilation_score} + "
-        f"strategy_region={quality.strategy_region_score} + "
-        f"static={quality.static_quality_score} = "
+        f"function={quality.function_score} + "
+        f"strategy_alignment={quality.strategy_alignment_score} = "
         f"{quality.code_quality}){detail}",
         flush=True,
     )

@@ -14,11 +14,11 @@ from scripts.analyze_run import read_candidate_results
 
 
 class CodeQualityTests(unittest.TestCase):
-    def test_compilation_failure_scores_negative_1000(self):
+    def test_compilation_failure_is_scored_by_failure_stage(self):
         result = analyze_compilation(
             CompileResult(False, [], stderr="A.java:1: error: bad\n1 error", returncode=1)
         )
-        self.assertEqual(result.compilation_score, -1000)
+        self.assertEqual(result.compilation_score, 0)
         self.assertEqual(result.compile_error_count, 1)
         self.assertFalse(result.compile_success)
 
@@ -27,7 +27,7 @@ class CodeQualityTests(unittest.TestCase):
         self.assertEqual(result.compilation_score, 0)
         self.assertEqual(result.warning_count, 0)
 
-    def test_each_warning_subtracts_50_without_counting_errors(self):
+    def test_each_warning_subtracts_50_and_diagnostics_retain_errors(self):
         output = (
             "A.java:1: warning: unchecked conversion\n"
             "A.java:2: error: bad\n"
@@ -36,7 +36,7 @@ class CodeQualityTests(unittest.TestCase):
         result = analyze_compilation(CompileResult(True, [], stderr=output))
         self.assertEqual(result.warning_count, 2)
         self.assertEqual(result.compilation_score, -100)
-        self.assertEqual(result.compile_error_count, 0)
+        self.assertEqual(result.compile_error_count, 1)
 
     def test_complete_java_strategy_region_scores_100(self):
         result = evaluate_agent_strategy_region(
@@ -157,11 +157,9 @@ class CodeQualityTests(unittest.TestCase):
         )
         self.assertEqual(
             quality.code_quality,
-            quality.compilation_score
-            + quality.strategy_region_score
-            + quality.static_quality_score,
+            500 + quality.compilation_score,
         )
-        self.assertIsNotNone(quality.static_metrics)
+        self.assertIsNone(quality.static_metrics)
         self.assertEqual(
             quality.to_json_dict()["code_quality"],
             quality.code_quality,
