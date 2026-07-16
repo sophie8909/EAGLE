@@ -141,7 +141,7 @@ class Phase3IntegrationTests(unittest.TestCase):
             tuple(check.name for check in evaluation.integration_result.checks),
             INTEGRATION_CHECK_NAMES,
         )
-        self.assertEqual(len(evaluation.match_results), 1)
+        self.assertEqual(len(evaluation.match_results), 10)
         self.assertIsNone(evaluation.candidate.failure_stage)
 
 

@@ -205,10 +205,11 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "mutation_selection_policy": "failed_game_to_code_otherwise_seeded_random",
         "matches_per_candidate": config.matches_per_candidate,
         "opponent": config.opponent,
-        "map": DEFAULT_MAP_PATH,
+        "map": config.map_path,
         "max_cycles": config.tick_limit,
         "ea_random_seed": config.random_seed,
-        "microrts_match_seeds": None,
+        "microrts_match_seeds": list(config.resolved_match_seeds),
+        "match_timeout_seconds": config.match_timeout_seconds,
         "llm_backend": llm_backend,
         "llm_model": None if is_mock_backend else config.llm_model,
         "llm_temperature": None if is_mock_backend else 0.2,
@@ -221,7 +222,6 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "prompt_version": None,
         "git_commit_hash": git_commit_hash(),
         "unsupported": {
-            "microrts_match_seeds": "The current runner does not accept match seeds.",
             "prompt_version": "The current configurable generation prompt is not versioned.",
         },
     }

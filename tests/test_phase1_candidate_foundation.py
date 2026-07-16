@@ -391,7 +391,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertEqual(payload["generation_count"], 4)
         self.assertEqual(payload["crossover_rate"], 0.25)
         self.assertEqual(payload["mutation_rate"], 0.5)
-        self.assertEqual(payload["matches_per_candidate"], 3)
+        self.assertEqual(payload["matches_per_candidate"], 10)
         self.assertEqual(payload["opponent"], "ai.abstraction.LightRush")
         self.assertEqual(payload["max_cycles"], 345)
         self.assertEqual(payload["ea_random_seed"], 41)
@@ -405,9 +405,10 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             OBJECTIVE_FORMULA_VERSION,
         )
         self.assertRegex(payload["git_commit_hash"], r"^[0-9a-f]{40}$")
-        self.assertIsNone(payload["microrts_match_seeds"])
+        self.assertEqual(len(payload["microrts_match_seeds"]), 10)
+        self.assertEqual(len(set(payload["microrts_match_seeds"])), 10)
         self.assertIsNone(payload["prompt_version"])
-        self.assertIn("microrts_match_seeds", payload["unsupported"])
+        self.assertNotIn("microrts_match_seeds", payload["unsupported"])
         self.assertIn("prompt_version", payload["unsupported"])
 
     def test_generic_metadata_is_not_needed_to_reconstruct_lineage(self) -> None:

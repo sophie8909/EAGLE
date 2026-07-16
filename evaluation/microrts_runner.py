@@ -762,3 +762,16 @@ def int_or_none(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+# The standalone integration probe above is Phase 3.  Match execution is owned
+# by the canonical post-integration adapter and re-exported here for compatibility.
+from .runtime_evaluation import (  # noqa: E402,F401
+    MatchResult,
+    classify_runtime_failure,
+    hash_class_directory,
+    hash_file,
+    match_directory,
+    read_result_json,
+    run_microrts_match,
+    validate_match_result,
+)

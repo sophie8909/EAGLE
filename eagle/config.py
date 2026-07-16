@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ from .candidate import DEFAULT_GENERATION_PROMPT
 
 
 TRAINING_OPPONENT = "ai.abstraction.LightRush"
+MATCHES_PER_CANDIDATE = 10
 
 
 @dataclass(frozen=True)
@@ -33,7 +35,10 @@ class ExperimentConfig:
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
     tick_limit: int = 100
     opponent: str = TRAINING_OPPONENT
-    matches_per_candidate: int = 1
+    matches_per_candidate: int = MATCHES_PER_CANDIDATE
+    map_path: str = "maps/8x8/basesWorkers8x8.xml"
+    match_timeout_seconds: float = 120.0
+    match_seeds: tuple[int, ...] = ()
     max_prompt_chars: int = 4000
     max_prompt_lines: int = 80
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
@@ -81,7 +86,10 @@ class ExperimentConfig:
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
             tick_limit=int(payload.get("tick_limit", 100)),
             opponent=TRAINING_OPPONENT,
-            matches_per_candidate=int(payload.get("matches_per_candidate", 1)),
+            matches_per_candidate=MATCHES_PER_CANDIDATE,
+            map_path=str(payload.get("map_path", "maps/8x8/basesWorkers8x8.xml")),
+            match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
+            match_seeds=tuple(int(value) for value in payload.get("match_seeds", ())),
             max_prompt_chars=int(payload.get("max_prompt_chars", 4000)),
             max_prompt_lines=int(payload.get("max_prompt_lines", 80)),
             generation_prompt=str(payload.get("generation_prompt", DEFAULT_GENERATION_PROMPT)),
@@ -111,11 +119,26 @@ class ExperimentConfig:
             raise ValueError("mutation_max_attempts must be at least 1.")
         if self.tick_limit < 1:
             raise ValueError("tick_limit must be at least 1.")
-        if self.matches_per_candidate < 1:
-            raise ValueError("matches_per_candidate must be at least 1.")
+        if self.matches_per_candidate != MATCHES_PER_CANDIDATE:
+            raise ValueError(f"matches_per_candidate must be exactly {MATCHES_PER_CANDIDATE}.")
+        if self.match_timeout_seconds <= 0:
+            raise ValueError("match_timeout_seconds must be greater than zero.")
+        if len(self.resolved_match_seeds) != MATCHES_PER_CANDIDATE:
+            raise ValueError(f"match_seeds must contain exactly {MATCHES_PER_CANDIDATE} values.")
+        if len(set(self.resolved_match_seeds)) != MATCHES_PER_CANDIDATE:
+            raise ValueError("match_seeds must be distinct.")
         from generation.agent_template import JavaTemplatePaths, validate_java_template
         validate_java_template(JavaTemplatePaths(self.agent_template_path))
 
+    @property
+    def resolved_match_seeds(self) -> tuple[int, ...]:
+        """Return the explicit or deterministically derived ten match seeds."""
+
+        if self.match_seeds:
+            return self.match_seeds
+        rng = random.Random(self.random_seed)
+
+        return tuple(rng.sample(range(1, 2_147_483_647), MATCHES_PER_CANDIDATE))
 
 def _repository_path(value: object | None, default: Path) -> Path:
     if value is None:

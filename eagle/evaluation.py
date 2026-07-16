@@ -20,6 +20,8 @@ from evaluation.microrts_runner import (
     IntegrationResult,
     MatchResult,
     integrate_microrts_agent,
+    hash_class_directory,
+    hash_file,
     run_microrts_match,
 )
 from evaluation.nsga2_objectives import build_objectives
@@ -224,7 +226,12 @@ def evaluate_candidate(
         failure_reason = integration_result.failure_reason
         failure_stage = "integration"
     elif match_error:
-        failure_category = match_failure_category(match_error)
+        failed_match = next((result for result in matches if not result.ok), None)
+        failure_category = (
+            failed_match.failure_category
+            if failed_match is not None and failed_match.failure_category
+            else "partial_evaluation"
+        )
         failure_reason = match_error
         failure_stage = "runtime"
 
@@ -343,28 +350,38 @@ def compile_agent_source(agent: GeneratedJavaAgent, *, config: ExperimentConfig,
 
 def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int) -> tuple[list[MatchResult], str | None]:
     match_results: list[MatchResult] = []
+    source_hash = hash_file(agent.source_path)
+    candidate_classes_dir = classes_dir / candidate.id
+    class_hash = hash_class_directory(candidate_classes_dir)
+    seeds = config.resolved_match_seeds
     try:
-        for match_index in range(config.matches_per_candidate):
-            match_results.append(
-                run_microrts_match(
-                    microrts_dir=config.microrts_dir,
-                    classes_dir=classes_dir / candidate.id,
-                    agent_class=agent.qualified_class_name,
-                    opponent=config.opponent,
-                    tick_limit=config.tick_limit,
-                    match_index=match_index,
-                    match_artifacts_dir=match_artifacts_dir,
-                    scoring_config=scoring_config_from_experiment(config),
-                    mock=mock,
-                    mock_score=config.mock_score_base + config.mock_score_step * (ordinal + match_index),
-                )
+        for match_index in range(10):
+            result = run_microrts_match(
+                microrts_dir=config.microrts_dir,
+                classes_dir=candidate_classes_dir,
+                agent_class=agent.qualified_class_name,
+                opponent=config.opponent,
+                tick_limit=config.tick_limit,
+                match_index=match_index,
+                match_artifacts_dir=match_artifacts_dir,
+                scoring_config=scoring_config_from_experiment(config),
+                mock=mock,
+                mock_score=config.mock_score_base + config.mock_score_step * (ordinal + match_index),
+                seed=seeds[match_index],
+                timeout_seconds=config.match_timeout_seconds,
+                map_path=config.map_path,
+                candidate_id=candidate.id,
+                source_hash=source_hash,
+                class_hash=class_hash,
             )
+            match_results.append(result)
+            if not result.ok:
+                return match_results, match_error_message(result)
     except (RuntimeError, OSError) as exc:
         return match_results, str(exc)
 
-    failed_matches = [result for result in match_results if not result.ok]
-    if failed_matches:
-        return match_results, match_error_message(failed_matches[0])
+    if len(match_results) != 10:
+        return match_results, f"partial evaluation: completed {len(match_results)} of 10 matches"
     return match_results, None
 
 
@@ -393,6 +410,8 @@ def compile_error_message(result: CompileResult) -> str:
 
 def match_error_message(result: MatchResult) -> str:
     stderr = (result.stderr or "").strip()
+    if result.failure_reason:
+        return result.failure_reason
     if stderr:
         return stderr.splitlines()[0]
     return f"match returned {result.returncode}"
