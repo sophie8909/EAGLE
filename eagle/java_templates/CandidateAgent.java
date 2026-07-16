@@ -54,7 +54,7 @@ public final class CandidateAgent extends AbstractionLayerAI {
 
     @Override
     public AI clone() {
-        return new CandidateAgent(utt, pf);
+        return new CandidateAgent(utt, new AStarPathFinding());
     }
 
     @Override

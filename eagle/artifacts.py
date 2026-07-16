@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from evaluation.compiler import CompileResult
 from evaluation.code_quality import analyze_compilation
-from evaluation.microrts_runner import DEFAULT_MAP_PATH, MatchResult
+from evaluation.microrts_runner import DEFAULT_MAP_PATH, INTEGRATION_CHECK_NAMES, IntegrationResult, MatchResult
 from generation.java_agent_generator import ValidationResult
 
 from .candidate import Candidate
@@ -63,14 +63,38 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     candidate_dir.mkdir(parents=True, exist_ok=True)
     write_candidate_inputs(candidates_dir, evaluation.candidate)
     _write_generation_artifacts(candidate_dir, evaluation)
-    write_json(candidate_dir / "validation" / "validation_result.json", validation_to_dict(evaluation.result.validation_result))
+    validation_payload = validation_to_dict(evaluation.result.validation_result)
+    if validation_payload is None:
+        validation_payload = {"status": "blocked", "failure_stage": evaluation.result.failure_stage, "failure_reason": evaluation.result.failure_reason}
+    validation_payload["timing"] = evaluation.candidate.timing.get("validation")
+    write_json(candidate_dir / "validation" / "validation_result.json", validation_payload)
     compilation_dir = candidate_dir / "compilation"
     compilation_dir.mkdir(parents=True, exist_ok=True)
     compilation = evaluation.compile_result
-    write_json(compilation_dir / "compilation_result.json", compile_to_dict(compilation))
+    compilation_payload = compile_to_dict(compilation)
+    if compilation_payload is None:
+        compilation_payload = blocked_compilation_payload(
+            evaluation.result.failure_stage,
+            evaluation.result.failure_reason or "Compilation was not run because an earlier stage failed.",
+        )
+    compilation_payload["timing"] = evaluation.candidate.timing.get("compilation")
+    write_json(compilation_dir / "compilation_result.json", compilation_payload)
     (compilation_dir / "command.txt").write_text("" if compilation is None else " ".join(compilation.command), encoding="utf-8")
     (compilation_dir / "stdout.txt").write_text("" if compilation is None else compilation.stdout, encoding="utf-8")
     (compilation_dir / "stderr.txt").write_text("" if compilation is None else compilation.stderr, encoding="utf-8")
+    integration_dir = candidate_dir / "integration"
+    integration_dir.mkdir(parents=True, exist_ok=True)
+    integration = evaluation.integration_result
+    integration_payload = integration_to_dict(integration)
+    if integration_payload is None:
+        integration_payload = blocked_integration_payload(
+            evaluation.result.failure_stage,
+            evaluation.result.failure_reason or "Integration was not run because an earlier stage failed.",
+        )
+    integration_payload["timing"] = evaluation.candidate.timing.get("integration")
+    write_json(integration_dir / "integration_result.json", integration_payload)
+    (integration_dir / "stdout.txt").write_text("" if integration is None else integration.stdout, encoding="utf-8")
+    (integration_dir / "stderr.txt").write_text("" if integration is None else integration.stderr, encoding="utf-8")
     mutation_record = evaluation.candidate.metadata.get("mutation")
     if mutation_record is not None:
         write_json(candidate_dir / "mutation" / "metadata.json", mutation_record)
@@ -237,6 +261,7 @@ def evaluation_to_dict(evaluation: CandidateEvaluation) -> dict:
         "candidate_result": candidate_result_to_dict(evaluation.result),
         "agent": None if evaluation.agent is None else {"class_name": evaluation.agent.class_name, "qualified_class_name": evaluation.agent.qualified_class_name, "source_path": str(evaluation.agent.source_path)},
         "compile": compile_to_dict(evaluation.compile_result),
+        "integration": integration_to_dict(evaluation.integration_result),
         "matches": [match_to_dict(result) for result in evaluation.match_results],
         "game_metrics": evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else None,
         "code_quality": {"code_quality": evaluation.code_quality_breakdown.code_quality, "code_quality_breakdown": evaluation.code_quality_breakdown.to_json_dict()},
@@ -266,6 +291,8 @@ def candidate_result_to_dict(result) -> dict:
         "final_score": result.final_score,
         "failure_category": result.failure_category,
         "failure_reason": result.failure_reason,
+        "failure_stage": result.failure_stage,
+        "integration_result": integration_to_dict(result.integration_result),
     }
 
 
@@ -273,10 +300,30 @@ def validation_to_dict(result: ValidationResult | None) -> dict | None:
     return None if result is None else result.to_json_dict()
 
 
+def integration_to_dict(result: IntegrationResult | None) -> dict | None:
+    return None if result is None else result.to_json_dict()
+
+
+def blocked_compilation_payload(failure_stage: str | None, reason: str) -> dict:
+    return {
+        "ok": False, "status": "blocked", "command": [], "stdout": "", "stderr": "", "returncode": None, "diagnostics": [], "warning_count": 0, "error_count": 0, "failure_stage": failure_stage, "failure_reason": reason,
+    }
+
+def blocked_integration_payload(failure_stage: str | None, reason: str) -> dict:
+    return {
+        "status": "blocked",
+        "ordered_checks": [{"check": name, "status": "blocked", "reason": reason} for name in INTEGRATION_CHECK_NAMES],
+        "integration_pass_ratio": 0.0,
+        "failure_stage": failure_stage,
+        "failure_reason": reason,
+    }
+
+
 def compile_to_dict(result: CompileResult | None) -> dict | None:
     if result is None:
         return None
-    return {"ok": result.ok, "status": result.status, "command": result.command, "stdout": result.stdout, "stderr": result.stderr, "returncode": result.returncode, **analyze_compilation(result).to_json_dict()}
+    analysis = analyze_compilation(result)
+    return {"ok": result.ok, "status": result.status, "command": result.command, "stdout": result.stdout, "stderr": result.stderr, "returncode": result.returncode, "diagnostics": [item.to_json_dict() for item in result.diagnostics], "warning_count": len(result.warnings), "error_count": len(result.errors), **analysis.to_json_dict()}
 
 
 def match_to_dict(result: MatchResult) -> dict:

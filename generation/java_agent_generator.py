@@ -10,7 +10,7 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from evaluation.code_quality import StrategyRegionScoreResult, evaluate_agent_strategy_region
-from .agent_template import JavaTemplatePaths, extract_strategy_region, load_java_template
+from .agent_template import JavaTemplatePaths, extract_strategy_region
 from .backend import GenerationBackend
 
 
@@ -90,12 +90,16 @@ FORBIDDEN_BEHAVIOR_PATTERNS = (
     ("network_import", r"\bimport\s+java\.(?:net|nio\.channels)\b"),
     ("file_io_import", r"\bimport\s+java\.(?:io|nio\.file)\b"),
     ("network_api", r"\b(?:URL|URI|Socket|HttpClient|URLConnection)\b"),
-    ("file_io_api", r"\b(?:File|Files|FileInputStream|FileOutputStream|RandomAccessFile)\b"),
+    ("file_io_api", r"\b(?:File|Files|FileInputStream|FileOutputStream|RandomAccessFile|PrintWriter|BufferedReader|BufferedWriter|InputStream|OutputStream|Paths)\b"),
     ("process_creation", r"\b(?:ProcessBuilder|Runtime\.getRuntime)\b"),
     ("environment_access", r"\bSystem\.(?:getenv|getProperty|setProperty)\s*\("),
     ("process_control", r"\bSystem\.(?:exit|load|loadLibrary)\s*\("),
     ("llm_endpoint", r"/v1/chat/completions|\b(?:OpenAI|ChatCompletion)\b"),
+    ("reflection_api", r"\b(?:setAccessible|MethodHandles|Unsafe)\b"),
+    ("class_loading_api", r"\b(?:ClassLoader|URLClassLoader)\b"),
 )
+
+ALLOWED_IMPORT_PREFIXES = ("ai.", "rts.", "util.", "java.util.", "java.lang.")
 
 
 def generate_java_agent(candidate: Candidate, backend: GenerationBackend, workspace_dir: Path, *, template_paths: JavaTemplatePaths | None = None) -> GeneratedJavaAgent:
@@ -106,9 +110,7 @@ def generate_java_agent(candidate: Candidate, backend: GenerationBackend, worksp
 
 
 def generate_java_agent_result(candidate: Candidate, backend: GenerationBackend, workspace_dir: Path, *, template_paths: JavaTemplatePaths | None = None) -> JavaAgentGenerationResult:
-    paths = template_paths or JavaTemplatePaths()
     try:
-        load_java_template(paths)
         raw = backend.generate(candidate, "CandidateAgent")
     except (RuntimeError, OSError, ValueError) as exc:
         reason = str(exc)
@@ -186,7 +188,11 @@ def validate_generated_java_source(source: str, class_name: str) -> ValidationRe
     check("constructors", constructor_one is not None and constructor_two is not None, "both required constructors are required")
     methods_ok = all(re.search(pattern, source) is not None for pattern in (r"\bpublic\s+PlayerAction\s+getAction\s*\(\s*int\s+\w+\s*,\s*GameState\s+\w+\s*\)", r"\bpublic\s+void\s+reset\s*\(\s*\)", r"\bpublic\s+AI\s+clone\s*\(\s*\)"))
     check("callable_methods", methods_ok, "public getAction, reset, and clone methods are required")
+    imports = re.findall(r"(?m)^\s*import\s+(?:static\s+)?([\w]+(?:\.[\w]+)*)", source)
+    unavailable_imports = sorted(name for name in imports if not any(name == prefix.rstrip(".") or name.startswith(prefix) for prefix in ALLOWED_IMPORT_PREFIXES))
     forbidden = [name for name, pattern in FORBIDDEN_BEHAVIOR_PATTERNS if re.search(pattern, source)]
+    if unavailable_imports:
+        forbidden.append(f"unavailable_dependencies:{','.join(unavailable_imports)}")
     check("forbidden_behaviors", not forbidden, f"forbidden runtime behavior: {', '.join(forbidden)}")
     runtime_contract_ok = bool(package_match and public_class and superclass and constructor_one and constructor_two and methods_ok)
     check("runtime_contract", runtime_contract_ok, "the complete external MicroRTS runtime contract is not satisfied")

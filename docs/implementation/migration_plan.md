@@ -43,7 +43,7 @@ Phase 2A Reflection Framework, Phase 2B Prompt Rewrite, and Phase 2C Full Mutati
 
 Closes the Phase 2 mutation pipeline portion of G-03, EVO-06-EVO-13, ART-02/ART-03, and TEST-02. G-04, G-12, and G-13 retain only the later evaluation/stage portions documented in the gap table.
 
-## Phase 4: Java boundary and stage classification
+## Phase 3: Java boundary and stage classification (complete)
 
 1. Separate seed-template validation from generated-candidate validation.
 2. Implement the resolved external Java runtime/security contract.
@@ -51,9 +51,12 @@ Closes the Phase 2 mutation pipeline portion of G-03, EVO-06-EVO-13, ART-02/ART-
 4. Add explicit MicroRTS integration checks and typed terminal stages.
 5. Test every failure boundary before running matches.
 
-Closes: G-08, G-09, G-10, integration part of G-11.
+Closes: G-09, G-10, and the integration portion of G-11. G-08 scoring hierarchy remains for the later objectives milestone.
 
-## Phase 5: 10-match LightRush evaluation
+Exit satisfied: source validation accepts arbitrary valid internals while enforcing the external identity/security contract; compilation emits structured deduplicated diagnostics; integration persists seven ordered checks and stops before matches on failure. Validation, compilation, and integration result/timing artifacts remain inspectable on every terminal path.
+
+
+## Phase 4: 10-match LightRush evaluation
 
 1. Enforce `matches_per_candidate = 10` and LightRush in architecture configs.
 2. Resolve map/cycles/seeds into runtime configuration.
@@ -63,7 +66,7 @@ Closes: G-08, G-09, G-10, integration part of G-11.
 
 Closes: G-05 and G-11.
 
-## Phase 6: objectives
+## Phase 5: objectives
 
 1. Implement and version the bounded `game_performance` formula.
 2. Implement warning, capability, and independent Strategy Alignment components.
@@ -73,7 +76,7 @@ Closes: G-05 and G-11.
 
 Closes: G-06, G-07, remaining G-08, active portion of G-16.
 
-## Phase 7: artifact and timing completion
+## Phase 6: artifact and timing completion
 
 1. Write the canonical run/generation/candidate/stage/match hierarchy.
 2. Add atomic writes, schema versions, hashes, attempt records, and unified timing.
@@ -82,7 +85,7 @@ Closes: G-06, G-07, remaining G-08, active portion of G-16.
 
 Closes: G-12, G-13, G-15.
 
-## Phase 8: operations, tests, and legacy removal
+## Phase 7: operations, tests, and legacy removal
 
 1. Update all checked-in configs and CLI help.
 2. Update analysis/plot/GUI tools for the current schema and fixed `CandidateAgent` boundary.

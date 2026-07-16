@@ -56,6 +56,8 @@ class Phase3ValidationTests(unittest.TestCase):
         self.assertIn("runtime_contract", result.passed_checks)
         self.assertEqual(result.failed_checks, ())
         self.assertEqual(result.blocked_checks, ())
+        wildcard = validate_generated_java_source(VALID_SOURCE.replace("import java.util.Collections;", "import java.util.*;"), "CandidateAgent")
+        self.assertTrue(wildcard.ok)
 
     def test_invalid_package_is_a_structured_validation_failure(self):
         result = validate_assembled_java(VALID_SOURCE.replace("ai.generated", "ai.invalid", 1), "CandidateAgent")
@@ -100,6 +102,19 @@ class Phase3ValidationTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("forbidden_behaviors", {item["check"] for item in result.failed_checks})
 
+    def test_unavailable_dependency_is_rejected(self):
+        source = VALID_SOURCE.replace("import java.util.Collections;", "import com.example.missing.Dependency;")
+        result = validate_assembled_java(source, "CandidateAgent")
+        self.assertFalse(result.ok)
+        self.assertIn("unavailable_dependencies", result.failed_checks[0]["reason"])
+
+    def test_forbidden_file_network_and_reflection_behaviors_are_rejected(self):
+        for snippet in ('new File("x");', 'new URL("http://x");', 'setAccessible(true);'):
+            with self.subTest(snippet=snippet):
+                source = VALID_SOURCE.replace("private void differentlyNamedInternalMethod() {}", f"private void differentlyNamedInternalMethod() {{ {snippet} }}")
+                result = validate_assembled_java(source, "CandidateAgent")
+                self.assertFalse(result.ok)
+                self.assertIn("forbidden_behaviors", {item["check"] for item in result.failed_checks})
     def test_generation_failure_blocks_validation_checks(self):
         result = validate_assembled_java("", "CandidateAgent")
         self.assertFalse(result.ok)
@@ -130,11 +145,21 @@ class Phase3ValidationTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
+            timing = json.loads((root / "candidates" / "invalid-package" / "timing.json").read_text(encoding="utf-8"))
+            compilation = json.loads((root / "candidates" / "invalid-package" / "compilation" / "compilation_result.json").read_text(encoding="utf-8"))
+            integration = json.loads((root / "candidates" / "invalid-package" / "integration" / "integration_result.json").read_text(encoding="utf-8"))
 
         self.assertEqual(payload["status"], "failed")
         self.assertIn("package", {item["check"] for item in payload["failed_checks"]})
         self.assertIn("passed_checks", payload)
         self.assertIn("blocked_checks", payload)
+        self.assertIsNotNone(payload["timing"])
+        self.assertEqual(compilation["status"], "blocked")
+        self.assertEqual(compilation["failure_stage"], "validation")
+        self.assertEqual(integration["status"], "blocked")
+        self.assertEqual(integration["failure_stage"], "validation")
+        self.assertEqual(timing["validation"]["status"], "failed")
+        self.assertGreaterEqual(timing["validation_duration_seconds"], 0.0)
 
 
 if __name__ == "__main__":

@@ -265,7 +265,7 @@ population_size: 3
             self.assertIn("package ai.generated;", agent.source)
             self.assertIn("extends AbstractionLayerAI", agent.source)
             self.assertIn("public PlayerAction getAction", agent.source)
-            self.assertIn(f"return new {agent.class_name}(utt, pf);", agent.source)
+            self.assertIn(f"return new {agent.class_name}(utt, new AStarPathFinding());", agent.source)
             self.assertIn("private void economy", agent.source)
             self.assertIn("private Unit selectTarget", agent.source)
             self.assertIn("private boolean commandMove", agent.source)
@@ -273,7 +273,7 @@ population_size: 3
             self.assertEqual(agent.source_paths, (agent.source_path,))
             self.assertTrue(agent.strategy_region)
 
-    def test_missing_java_strategy_marker_fails_before_compile_or_matches(self) -> None:
+    def test_missing_java_strategy_marker_is_not_a_runtime_contract_requirement(self) -> None:
         class StaticGenerationBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 source = load_java_template(JavaTemplatePaths())
@@ -292,12 +292,13 @@ population_size: 3
                 mock=True,
                 ordinal=0,
             )
-        self.assertIsNone(evaluation.agent)
-        self.assertIsNone(evaluation.compile_result)
-        self.assertEqual(evaluation.match_results, [])
-        self.assertEqual(evaluation.candidate.status, "failed")
-        self.assertEqual(evaluation.result.failure_category, "Java validation failure")
-        self.assertFalse(evaluation.code_quality_breakdown.compile_success)
+        self.assertIsNotNone(evaluation.agent)
+        self.assertTrue(evaluation.compile_result and evaluation.compile_result.ok)
+        self.assertTrue(evaluation.integration_result and evaluation.integration_result.ok)
+        self.assertEqual(len(evaluation.match_results), 1)
+        self.assertEqual(evaluation.candidate.status, "evaluated")
+        self.assertIsNone(evaluation.result.failure_category)
+        self.assertTrue(evaluation.code_quality_breakdown.compile_success)
         self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
 
     def test_empty_java_response_fails_before_compile_or_matches(self) -> None:
@@ -406,7 +407,7 @@ population_size: 3
             self.assertTrue(agent.source_path.exists())
 
     def test_validate_java_agent_source_rejects_non_java_output(self) -> None:
-        with self.assertRaisesRegex(ValueError, "missing required content"):
+        with self.assertRaisesRegex(ValueError, "package must be ai.generated"):
             validate_java_agent_source("Here is a strategy explanation with no Java.", "GeneratedAgent_test")
 
     def test_game_metrics_use_resource_difference(self) -> None:
@@ -753,7 +754,7 @@ population_size: 3
         self.assertEqual(evaluation.match_results, [])
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
-        self.assertIn("EAGLE_AGENT_STRATEGY_START", evaluation.result.failure_reason or "")
+        self.assertIn("package must be ai.generated", evaluation.result.failure_reason or "")
         self.assertEqual(evaluation.candidate.compile_status, "not_run")
         self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
         self.assertEqual(evaluation.candidate.failure_stage, "validation")
