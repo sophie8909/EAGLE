@@ -13,6 +13,7 @@ from evaluation.microrts_runner import DEFAULT_MAP_PATH, INTEGRATION_CHECK_NAMES
 from generation.java_agent_generator import ValidationResult
 
 from .candidate import Candidate
+from .llm_profiles import LLMProfile
 from .config import ExperimentConfig
 
 if TYPE_CHECKING:
@@ -236,6 +237,9 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         "failure_category": result.failure_category,
         "failure_reason": result.failure_reason,
         "validation_result": validation_to_dict(result.validation_result),
+        "stage": "generation",
+        "llm_profile": (evaluation.generation_timing or {}).get("llm_profile"),
+        "model": (evaluation.generation_timing or {}).get("model"),
         "attempts": (evaluation.generation_timing or {}).get("attempts", []),
     })
 
@@ -284,7 +288,7 @@ def write_failed_candidate_debug(run_dir: Path, evaluation: CandidateEvaluation)
     })
 
 
-def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool) -> None:
+def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool, profiles: dict[str, LLMProfile] | None = None) -> None:
     """Write actual post-default and post-override runtime values."""
 
     llm_backend = "mock" if mock else config.generation_backend
@@ -318,6 +322,12 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         },
         "strategy_alignment_backend": "mock" if mock else config.alignment_backend,
         "strategy_alignment_model": None if mock else config.llm_model,
+        "endpoint_config_path": str(config.endpoint_config_path),
+        "stage_routing": {
+            "reflection": None if profiles is None else profiles["general"].to_dict(),
+            "rewrite": None if profiles is None else profiles["general"].to_dict(),
+            "generation": None if profiles is None else profiles["coder"].to_dict(),
+        },
         "prompt_version": None,
         "git_commit_hash": git_commit_hash(),
         "unsupported": {

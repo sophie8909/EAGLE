@@ -49,6 +49,7 @@ class RewriteResult:
     error: str | None = None
     model: str | None = None
     backend: str | None = None
+    llm_profile: str | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -67,6 +68,7 @@ class RewriteResult:
             "error": self.error,
             "model": self.model,
             "backend": self.backend,
+            "llm_profile": self.llm_profile,
         }
 
 
@@ -88,6 +90,7 @@ class PromptRewriteStage:
         self.max_attempts = max_attempts
         self.logger = logger
         self.model = model
+        self.llm_profile = getattr(backend, "llm_profile", None)
         self.backend_name = backend_name or type(backend).__name__
 
     def run(
@@ -127,7 +130,7 @@ class PromptRewriteStage:
                     finished_at=finished_at,
                     duration_seconds=max(0.0, time.monotonic() - monotonic_started),
                     status=status,
-                    error=error,
+                    error=error
                 )
             )
             if artifact_dir is not None:
@@ -148,6 +151,7 @@ class PromptRewriteStage:
                     module_name=rewrite_type,
                     attempt=attempt_number,
                     error=error,
+                    metadata={"llm_profile": self.llm_profile},
                 )
             if status == "success":
                 return RewriteResult(
@@ -160,6 +164,7 @@ class PromptRewriteStage:
                     attempts=tuple(attempts),
                     model=self.model,
                     backend=self.backend_name,
+                    llm_profile=self.llm_profile,
                 )
             time.sleep(0)
         if artifact_dir is not None:
@@ -176,6 +181,7 @@ class PromptRewriteStage:
             error=last_error or "Rewrite stage failed.",
             model=self.model,
             backend=self.backend_name,
+            llm_profile=self.llm_profile,
         )
 
 
@@ -299,7 +305,9 @@ class PromptRewriteMutation:
             "applied": applied,
             "type": self.mutation_type,
             "reflection_model": reflection.model,
+            "reflection_profile": reflection.llm_profile,
             "rewrite_model": None if rewrite is None else rewrite.model,
+            "rewrite_profile": None if rewrite is None else rewrite.llm_profile,
             "reflection_attempts": len(reflection.attempts),
             "rewrite_attempts": 0 if rewrite is None else len(rewrite.attempts),
             "reflection_status": reflection.status,

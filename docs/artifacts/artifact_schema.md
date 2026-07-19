@@ -132,3 +132,6 @@ failures do not remove the earlier mutation evidence.
 ## Phase 4 implementation note
 
 Evaluation artifacts use `artifact_schema_version = phase4-v1`. Each candidate writes one directory per match plus canonical `strategy_alignment/` and `evaluation/` payloads for game performance, Function Capability, Code Quality, objective values, evaluation summary, and runtime failure evidence. Existing flat candidate files remain temporary compatibility aliases for current readers and are tracked for removal in the migration plan.
+## LLM stage identity
+
+Each Reflection, Rewrite, and Generation stage artifact records stage, the logical llm_profile (general or coder), and the configured model alias. The alias is the launcher --alias value, not a filename inferred from .gguf or an arbitrary /v1/models response. The resolved configuration records the centralized routing: Reflection and Rewrite use general; Generation uses coder.

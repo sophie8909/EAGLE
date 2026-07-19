@@ -139,6 +139,9 @@ def evaluate_candidate(
     )
     generation_finished_at = _utc_now()
     generation_timing = {
+        "stage": "generation",
+        "llm_profile": getattr(backend, "llm_profile", None),
+        "model": getattr(backend, "model", None),
         "started_at": generation_started_at,
         "finished_at": generation_finished_at,
         "duration_seconds": max(0.0, time.monotonic() - generation_monotonic_started),

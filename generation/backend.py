@@ -40,9 +40,10 @@ class MockGenerationBackend(GenerationBackend):
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
 
-    def __init__(self, base_url: str, model: str, timeout_sec: int = 120, max_retries: int = 2, logger: LLMCallLogger | None = None) -> None:
+    def __init__(self, base_url: str, model: str, timeout_sec: int = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, llm_profile: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.llm_profile = llm_profile
         self.timeout_sec = timeout_sec
         self.max_retries = max_retries
         self.logger = logger
@@ -156,7 +157,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             module_name=module_name,
             attempt=attempt,
             error=error,
-            metadata={"class_name": generated_class_name(candidate.id), "url": self.chat_completions_url},
+            metadata={"class_name": generated_class_name(candidate.id), "url": self.chat_completions_url, "llm_profile": self.llm_profile},
         )
 
 
@@ -189,9 +190,10 @@ def build_generation_backend(
     base_url: str = "http://localhost:8080",
     model: str = "local-model",
     logger: LLMCallLogger | None = None,
+    llm_profile: str | None = None,
 ) -> GenerationBackend:
     if name == "mock":
         return MockGenerationBackend()
     if name in {"openai", "llama_cpp"}:
-        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger)
+        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, llm_profile=llm_profile)
     raise ValueError(f"Unknown generation backend: {name}")

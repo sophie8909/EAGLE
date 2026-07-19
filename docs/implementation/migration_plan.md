@@ -103,3 +103,17 @@ Closes: G-17, G-18, remaining G-16.
 - Artifact schema/readback validation passes where affected.
 - No historical compatibility path overrides active contracts.
 - Chinese overview updated only when architecture/formulas/state/protocol/schema/docs structure changed.
+## Initial dual-host LLM deployment assignment
+
+The initial deployment uses two logical profiles and one centralized endpoint handoff file. Machine A runs only the coder model and exposes it over the private LAN; Machine B runs the general model locally and runs EAGLE.
+
+- Reflection -> general / qwen3.5-9b on Machine B.
+- Rewrite -> general / qwen3.5-9b on Machine B.
+- Generation -> coder / qwen2.5-coder-7b on Machine A.
+- General defaults to http://127.0.0.1:8080/v1; coder defaults to port 8081 and publishes Machine A's detected private address.
+- Both profiles default to context size 32768, with launcher overrides for hardware and quantization differences.
+- scripts/llama_launcher.py requests the actual .gguf path, uses the explicitly configured alias, does not download models or rebuild llama.cpp, and atomically updates only the selected section of config/llm_endpoints.toml.
+- The repository config contains no model paths, server paths, API keys, or placeholder Machine A address. The launcher stores machine-local settings under ~/.config/eagle-llm/ with restrictive permissions.
+- Stage code depends on general and coder, not on these initial model names. Future replacement is a launcher/configuration change.
+
+The operational workflow and artifact metadata contract are documented in [../operations/dual_host_llm.md](../operations/dual_host_llm.md).

@@ -18,6 +18,7 @@ from .crossover import Crossover, CrossoverContext
 from .evaluation import evaluate_population
 from .mutation import MutationContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
+from .llm_profiles import LLMProfile, load_endpoint_profiles
 from .offspring import normalize_prompt
 from .rewrite import PromptRewriteMutation
 from .selection import (
@@ -55,8 +56,15 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
 
     llm_logger = LLMCallLogger(run_dir / "llm_logs")
     backend_name = "mock" if mock else config.generation_backend
-    generation_backend = build_generation_backend(backend_name, base_url=config.llm_base_url, model=config.llm_model, logger=llm_logger)
-    reflection_backend = build_reflection_backend(backend_name, base_url=config.llm_base_url, model=config.llm_model)
+    if mock:
+        general_profile = LLMProfile("general", config.llm_base_url, config.llm_model)
+        coder_profile = LLMProfile("coder", config.llm_base_url, config.llm_model)
+    else:
+        profiles = load_endpoint_profiles(config.endpoint_config_path, allow_coder_loopback=config.allow_coder_loopback)
+        general_profile = profiles["general"]
+        coder_profile = profiles["coder"]
+    generation_backend = build_generation_backend(backend_name, base_url=coder_profile.base_url, model=coder_profile.model, logger=llm_logger, llm_profile="coder")
+    reflection_backend = build_reflection_backend(backend_name, base_url=general_profile.base_url, model=general_profile.model, llm_profile="general")
     strategy_mutation = PromptRewriteMutation(
         config,
         mutation_type="strategy",
@@ -73,7 +81,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         artifact_root=candidates_dir,
         logger=llm_logger,
     )
-    write_resolved_config(run_dir, config, mock=mock)
+    write_resolved_config(run_dir, config, mock=mock, profiles={"general": general_profile, "coder": coder_profile})
     results_path = run_dir / "results.jsonl"
 
     population = initialize_population(config)

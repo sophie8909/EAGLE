@@ -11,6 +11,7 @@ from typing import Any
 from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH, get_seed_prompt_template
 
 from .candidate import DEFAULT_GENERATION_PROMPT
+from .llm_profiles import DEFAULT_ENDPOINT_CONFIG_PATH
 
 
 TRAINING_OPPONENT = "ai.abstraction.LightRush"
@@ -40,6 +41,8 @@ class ExperimentConfig:
     alignment_backend: str = "mock"
     llm_base_url: str = "http://localhost:8080"
     llm_model: str = "local-model"
+    endpoint_config_path: Path = DEFAULT_ENDPOINT_CONFIG_PATH
+    allow_coder_loopback: bool = False
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
@@ -90,6 +93,8 @@ class ExperimentConfig:
             alignment_backend=str(payload.get("alignment_backend", payload.get("generation_backend", "mock"))),
             llm_base_url=str(payload.get("llm_base_url", "http://localhost:8080")),
             llm_model=str(payload.get("llm_model", "local-model")),
+            endpoint_config_path=_repository_path(payload.get("endpoint_config_path"), DEFAULT_ENDPOINT_CONFIG_PATH),
+            allow_coder_loopback=bool(payload.get("allow_coder_loopback", False)),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),

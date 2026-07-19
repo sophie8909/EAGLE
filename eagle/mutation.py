@@ -106,6 +106,7 @@ class ReflectionResult:
     error: str | None = None
     model: str | None = None
     backend: str | None = None
+    llm_profile: str | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -124,6 +125,7 @@ class ReflectionResult:
             "error": self.error,
             "model": self.model,
             "backend": self.backend,
+            "llm_profile": self.llm_profile,
         }
 
 
@@ -160,9 +162,10 @@ class OpenAICompatibleReflectionBackend:
     and artifact record.
     """
 
-    def __init__(self, base_url: str, model: str, *, timeout_sec: int = 120) -> None:
+    def __init__(self, base_url: str, model: str, *, timeout_sec: int = 120, llm_profile: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.llm_profile = llm_profile
         self.timeout_sec = timeout_sec
 
     @property
@@ -204,11 +207,12 @@ def build_reflection_backend(
     *,
     base_url: str = "http://localhost:8080",
     model: str = "local-model",
+    llm_profile: str | None = None,
 ) -> ReflectionBackend:
     if name == "mock":
         return MockReflectionBackend()
     if name in {"openai", "llama_cpp"}:
-        return OpenAICompatibleReflectionBackend(base_url, model)
+        return OpenAICompatibleReflectionBackend(base_url, model, llm_profile=llm_profile)
     raise ValueError(f"Unknown mutation backend: {name}")
 
 
@@ -230,6 +234,7 @@ class ReflectionStage:
         self.max_attempts = max_attempts
         self.logger = logger
         self.model = model
+        self.llm_profile = getattr(backend, "llm_profile", None)
         self.backend_name = backend_name or type(backend).__name__
 
     def run(
@@ -271,7 +276,7 @@ class ReflectionStage:
                     finished_at=finished_at,
                     duration_seconds=duration,
                     status=status,
-                    error=error,
+                    error=error
                 )
             )
             if artifact_dir is not None:
@@ -295,6 +300,7 @@ class ReflectionStage:
                     module_name=reflection_type,
                     attempt=attempt_number,
                     error=error,
+                    metadata={"llm_profile": self.llm_profile},
                 )
             if status == "success":
                 return ReflectionResult(
@@ -307,6 +313,7 @@ class ReflectionStage:
                     attempts=tuple(attempts),
                     model=self.model,
                     backend=self.backend_name,
+                    llm_profile=self.llm_profile,
                 )
             time.sleep(0)
 
@@ -324,6 +331,7 @@ class ReflectionStage:
             error=last_error or "Reflection stage failed.",
             model=self.model,
             backend=self.backend_name,
+            llm_profile=self.llm_profile,
         )
 
 
@@ -400,6 +408,7 @@ class Mutation:
             "type": self.mutation_type,
             "stage": "reflection",
             "reflection_model": result.model,
+            "reflection_profile": result.llm_profile,
             "reflection_attempts": len(result.attempts),
             "reflection_status": result.status,
             "reflection_error": result.error,
