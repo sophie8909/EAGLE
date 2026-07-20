@@ -117,3 +117,6 @@ The initial deployment uses two logical profiles and one centralized endpoint ha
 - Stage code depends on general and coder, not on these initial model names. Future replacement is a launcher/configuration change.
 
 The operational workflow and artifact metadata contract are documented in [../operations/dual_host_llm.md](../operations/dual_host_llm.md).
+## General-only topology variant
+
+The same profile abstraction also supports a single-machine Machine B run. Set llm_topology: "general_only" in configs/eagle_general_only.yaml; only [general] is required, and Reflection, Rewrite, Strategy Alignment, and final Generation all resolve to the general endpoint. This mode does not require Machine A or a coder endpoint.

@@ -46,17 +46,18 @@ def load_endpoint_profiles(
     path: str | Path,
     *,
     allow_coder_loopback: bool = False,
+    required_profiles: tuple[str, ...] = ("general", "coder"),
 ) -> dict[str, LLMProfile]:
-    """Load and validate both logical profiles from one repository config."""
+    """Load and validate the requested logical profiles from one repository config."""
 
     config_path = Path(path)
     if not config_path.exists():
         raise EndpointConfigError(
-            f"LLM endpoint config is missing: {config_path}. Run the profile launcher on both machines first."
+            f"LLM endpoint config is missing: {config_path}. Run the required profile launcher first."
         )
     sections = _read_toml_sections(config_path)
     profiles: dict[str, LLMProfile] = {}
-    for name in ("general", "coder"):
+    for name in required_profiles:
         values = sections.get(name)
         if not values:
             raise EndpointConfigError(f"LLM endpoint config must contain [{name}].")

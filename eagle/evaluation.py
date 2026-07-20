@@ -97,6 +97,7 @@ def evaluate_population(
     candidates_dir: Path,
     results_path: Path,
     mock: bool,
+    alignment_profile: object | None = None,
 ) -> list[Candidate]:
     evaluated = []
     for index, candidate in enumerate(population):
@@ -109,6 +110,7 @@ def evaluate_population(
             classes_dir=classes_dir,
             match_artifacts_dir=candidates_dir / candidate.id / "matches",
             mock=mock,
+            alignment_profile=alignment_profile,
             ordinal=index,
         )
         write_candidate_artifacts(candidates_dir, evaluation)
@@ -126,6 +128,7 @@ def evaluate_candidate(
     generated_agents_dir: Path,
     classes_dir: Path,
     mock: bool,
+    alignment_profile: object | None = None,
     ordinal: int,
     match_artifacts_dir: Path | None = None,
 ) -> CandidateEvaluation:
@@ -257,8 +260,8 @@ def evaluate_candidate(
         capability_result = evaluate_function_capability(generation.assembled_java, matches)
         alignment_backend = build_strategy_alignment_backend(
             "mock" if mock else config.alignment_backend,
-            base_url=config.llm_base_url,
-            model=config.llm_model,
+            base_url=getattr(alignment_profile, "base_url", config.llm_base_url),
+            model=getattr(alignment_profile, "model", config.llm_model),
         )
         alignment_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent / "strategy_alignment"
         alignment_result = evaluate_strategy_alignment(

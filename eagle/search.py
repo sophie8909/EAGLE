@@ -56,16 +56,36 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
 
     llm_logger = LLMCallLogger(run_dir / "llm_logs")
     backend_name = "mock" if mock else config.generation_backend
+    general_only = config.llm_topology == "general_only"
     if mock:
         general_profile = LLMProfile("general", config.llm_base_url, config.llm_model)
-        coder_profile = LLMProfile("coder", config.llm_base_url, config.llm_model)
+        coder_profile = general_profile if general_only else LLMProfile("coder", config.llm_base_url, config.llm_model)
     else:
-        profiles = load_endpoint_profiles(config.endpoint_config_path, allow_coder_loopback=config.allow_coder_loopback)
+        required_profiles = ("general",) if general_only else ("general", "coder")
+        profiles = load_endpoint_profiles(
+            config.endpoint_config_path,
+            allow_coder_loopback=config.allow_coder_loopback,
+            required_profiles=required_profiles,
+        )
         general_profile = profiles["general"]
-        coder_profile = profiles["coder"]
-    generation_backend = build_generation_backend(backend_name, base_url=coder_profile.base_url, model=coder_profile.model, logger=llm_logger, llm_profile="coder")
-    reflection_backend = build_reflection_backend(backend_name, base_url=general_profile.base_url, model=general_profile.model, llm_profile="general")
+        coder_profile = general_profile if general_only else profiles["coder"]
+    generation_profile_name = "general" if general_only else "coder"
+    generation_profile = general_profile if general_only else coder_profile
+    generation_backend = build_generation_backend(
+        backend_name,
+        base_url=generation_profile.base_url,
+        model=generation_profile.model,
+        logger=llm_logger,
+        llm_profile=generation_profile_name,
+    )
+    reflection_backend = build_reflection_backend(
+        backend_name,
+        base_url=general_profile.base_url,
+        model=general_profile.model,
+        llm_profile="general",
+    )
     strategy_mutation = PromptRewriteMutation(
+
         config,
         mutation_type="strategy",
         reflection_backend=reflection_backend,
@@ -81,7 +101,13 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         artifact_root=candidates_dir,
         logger=llm_logger,
     )
-    write_resolved_config(run_dir, config, mock=mock, profiles={"general": general_profile, "coder": coder_profile})
+    write_resolved_config(
+        run_dir,
+        config,
+        mock=mock,
+        profiles={"general": general_profile, "coder": coder_profile},
+        stage_routing={"reflection": "general", "rewrite": "general", "generation": generation_profile_name, "strategy_alignment": "general"},
+    )
     results_path = run_dir / "results.jsonl"
 
     population = initialize_population(config)
@@ -95,6 +121,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         candidates_dir=candidates_dir,
         results_path=results_path,
         mock=mock,
+        alignment_profile=general_profile,
     )
 
     for generation in range(1, config.generations):
@@ -119,6 +146,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             candidates_dir=candidates_dir,
             results_path=results_path,
             mock=mock,
+            alignment_profile=general_profile,
         )
         evaluated_population = select_next_generation(evaluated_population, evaluated_offspring, population_size=config.population_size)
         write_generation_manifest(run_dir, generation, evaluated_population)

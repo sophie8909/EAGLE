@@ -28,6 +28,13 @@ class LLMProfileTests(unittest.TestCase):
             profiles = load_endpoint_profiles(path, allow_coder_loopback=True)
             self.assertEqual(profiles["coder"].profile, "coder")
 
+    def test_general_only_requires_and_returns_only_general_profile(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "llm_endpoints.toml"
+            update_endpoint_profile(path, LLMProfile("general", "http://127.0.0.1:8080/v1", "qwen3.5-9b"))
+            profiles = load_endpoint_profiles(path, required_profiles=("general",))
+            self.assertEqual(set(profiles), {"general"})
+            self.assertEqual(profiles["general"].model, "qwen3.5-9b")
     def test_stage_factories_use_logical_profiles_and_distinct_aliases(self):
         general = build_reflection_backend("llama_cpp", base_url="http://127.0.0.1:8080/v1", model="qwen3.5-9b", llm_profile="general")
         coder = build_generation_backend("llama_cpp", base_url="http://192.168.1.20:8081/v1", model="qwen2.5-coder-7b", llm_profile="coder")

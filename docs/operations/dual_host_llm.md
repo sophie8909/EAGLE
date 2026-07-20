@@ -37,3 +37,6 @@ The committed endpoint file contains only profile, base URL, port, and configure
 The launcher prints the detected coder LAN address and asks for correction when multiple private interfaces exist. Machine A must remain powered on, and its firewall must allow Machine B to reach the coder port. If DHCP changes the address, rerun the coder launcher and push the non-sensitive endpoint update. The two aliases and ports may differ; EAGLE sends the explicitly configured alias and does not infer identity from `/v1/models` or a GGUF filename.
 
 Run artifacts record `llm_profile` and the configured alias for each Reflection, Rewrite, and Generation stage. The resolved run configuration records the centralized stage routing. No API key is written to endpoint config, artifacts, logs, or Git.
+## Single-machine alternative
+
+For a Machine B-only run, use [general_only_llm.md](general_only_llm.md) and configs/eagle_general_only.yaml. This routes every LLM stage, including final Java Generation, to the local general endpoint and does not require [coder].

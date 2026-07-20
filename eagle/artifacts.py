@@ -288,11 +288,12 @@ def write_failed_candidate_debug(run_dir: Path, evaluation: CandidateEvaluation)
     })
 
 
-def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool, profiles: dict[str, LLMProfile] | None = None) -> None:
+def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool, profiles: dict[str, LLMProfile] | None = None, stage_routing: dict[str, str] | None = None) -> None:
     """Write actual post-default and post-override runtime values."""
 
     llm_backend = "mock" if mock else config.generation_backend
     is_mock_backend = llm_backend == "mock"
+    resolved_stage_routing = stage_routing or {"reflection": "general", "rewrite": "general", "generation": "coder", "strategy_alignment": "general"}
     payload = {
         "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "objective_formula_version": OBJECTIVE_FORMULA_VERSION,
@@ -323,10 +324,10 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "strategy_alignment_backend": "mock" if mock else config.alignment_backend,
         "strategy_alignment_model": None if mock else config.llm_model,
         "endpoint_config_path": str(config.endpoint_config_path),
+        "llm_topology": config.llm_topology,
         "stage_routing": {
-            "reflection": None if profiles is None else profiles["general"].to_dict(),
-            "rewrite": None if profiles is None else profiles["general"].to_dict(),
-            "generation": None if profiles is None else profiles["coder"].to_dict(),
+            stage: None if profiles is None else profiles[profile_name].to_dict()
+            for stage, profile_name in resolved_stage_routing.items()
         },
         "prompt_version": None,
         "git_commit_hash": git_commit_hash(),
