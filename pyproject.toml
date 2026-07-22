@@ -9,7 +9,8 @@ description = "Evolutionary prompt search for generated Java MicroRTS agents"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "nicegui>=2.0,<4",
 ]
 
 [tool.setuptools.packages.find]
-include = ["eagle*", "generation*", "agents*", "evaluation*", "scripts*"]
+include = ["eagle*", "eagle_ui*", "generation*", "agents*", "evaluation*", "scripts*"]
