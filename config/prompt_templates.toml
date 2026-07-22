@@ -1,0 +1,175 @@
+# Canonical LLM-stage templates. GUI edits update only the selected template body.
+
+[templates.strategy_reflection]
+role = "reflector"
+stages = ["strategy_reflection"]
+required_variables = ["strategy_prompt", "parent_java", "opponent", "match_summary", "per_match_results", "wins", "draws", "losses", "game_performance", "final_player_resources", "final_enemy_resources", "final_resource_difference", "resource_breakdown", "unit_material_statistics", "survival_statistics", "round_state_summary", "temporal_summary", "behavior_summary"]
+template = """EAGLE Strategy Reflection stage.
+
+Analyze the complete strategy using the evidence below. Return reflection text only.
+Do not rewrite either prompt. Do not generate Java, a patch, a diff, or a code block.
+
+Current strategy_prompt:
+$strategy_prompt
+
+Parent generated_java:
+$parent_java
+
+Opponent identity: $opponent
+Complete 10-match summary: $match_summary
+Per-match results: $per_match_results
+Wins: $wins; draws: $draws; losses: $losses
+Game performance: $game_performance
+Final player resources: $final_player_resources
+Final enemy resources: $final_enemy_resources
+Final resource difference: $final_resource_difference
+Resource evidence: $resource_breakdown
+Unit material statistics: $unit_material_statistics
+Survival statistics: $survival_statistics
+Round-state summary: $round_state_summary
+Temporal summary: $temporal_summary
+Behavior summary: $behavior_summary
+
+Discuss effective and failed strategic behavior, implementation alignment, and concrete
+requirements for a later Strategy Prompt Rewrite. The output must remain reflection only."""
+
+[templates.code_reflection]
+role = "reflector"
+stages = ["code_reflection"]
+required_variables = ["strategy_prompt", "generation_prompt", "parent_java", "latest_java", "raw_generation_response", "validation_result", "compilation_result", "compiler_errors", "compiler_warnings", "integration_result", "runtime_result", "completed_match_count", "function_capability_score", "strategy_alignment_score", "failure_stage", "failure_category", "failure_reason"]
+template = """EAGLE Code Reflection stage.
+
+Analyze the complete-file generation outcome using the evidence below. Return reflection
+text only. Do not rewrite either prompt and do not generate replacement Java, a patch, a
+diff, JSON, or a code block.
+
+strategy_prompt:
+$strategy_prompt
+
+current generation_prompt:
+$generation_prompt
+
+parent generated_java:
+$parent_java
+
+latest generated child Java, if available:
+$latest_java
+
+raw generation response:
+$raw_generation_response
+
+source validation result: $validation_result
+compilation result: $compilation_result
+compiler errors: $compiler_errors
+compiler warnings: $compiler_warnings
+MicroRTS integration result: $integration_result
+runtime result: $runtime_result
+completed-match count: $completed_match_count
+function capability score: $function_capability_score
+strategy alignment score: $strategy_alignment_score
+failure stage: $failure_stage
+failure category: $failure_category
+failure reason: $failure_reason
+
+Analyze complete-file validity, API/constructor compatibility, diagnostics, runtime or
+match behavior, missing capabilities, strategy alignment, and constraints for a later
+Generation Prompt Rewrite. Keep the output as reflection only."""
+
+[templates.strategy_rewrite]
+role = "rewriter"
+stages = ["strategy_rewrite"]
+required_variables = ["strategy_prompt", "reflection", "parent_java", "game_summary"]
+template = """EAGLE Strategy Prompt Rewrite stage.
+
+Return only the revised strategy_prompt. Do not return analysis, Java, JSON, a patch, or
+Markdown fences. Preserve effective strategy elements and make concrete changes supported
+by the Reflection.
+
+Original strategy_prompt:
+$strategy_prompt
+
+strategy_reflection:
+$reflection
+
+Parent generated_java:
+$parent_java
+
+Game evaluation summary:
+$game_summary
+
+Output only the new strategy prompt."""
+
+[templates.code_rewrite]
+role = "rewriter"
+stages = ["generation_prompt_rewrite"]
+required_variables = ["generation_prompt", "reflection", "strategy_prompt", "parent_java", "code_quality_summary"]
+template = """EAGLE Generation Prompt Rewrite stage.
+
+Return only the revised generation_prompt for full-file regeneration. Do not return Java,
+analysis, JSON, a patch, a diff, or Markdown fences. Preserve valid MicroRTS constraints,
+address confirmed failures, remove contradictions, and keep historical error text bounded.
+
+Original generation_prompt:
+$generation_prompt
+
+code_reflection:
+$reflection
+
+strategy_prompt:
+$strategy_prompt
+
+Parent generated_java:
+$parent_java
+
+Code-quality summary:
+$code_quality_summary
+
+Output only the new generation prompt."""
+
+[templates.java_generation]
+role = "generator"
+stages = ["seed_generation", "mutation_generation", "crossover_generation"]
+required_variables = ["strategy_prompt", "action_api_guide", "generation_prompt", "current_source"]
+template = """Generate the complete Java source file for CandidateAgent.
+
+Overall strategy:
+$strategy_prompt
+
+The editable strategy implementation is the single region between the
+EAGLE_AGENT_STRATEGY_START and EAGLE_AGENT_STRATEGY_END comments.
+You may freely add, remove, or reorganize strategy helper methods inside that region.
+Use the fixed action helpers marked by EAGLE_ACTION_HELPERS_START and
+EAGLE_ACTION_HELPERS_END to operate the Agent.
+
+$action_api_guide
+
+Generation requirements:
+$generation_prompt
+
+Start from this complete known-good source. Return the complete revised Java file, including every unchanged section:
+
+```java
+$current_source
+```
+FINAL OUTPUT CONTRACT (highest priority):
+Your response must contain one complete CandidateAgent.java file and nothing else.
+The first non-whitespace text must be package ai.generated; and the final non-whitespace character must be the class closing brace.
+Never return JSON, a functions object, individual method bodies, a patch, an explanation, or Markdown fences."""
+
+[templates.strategy_alignment]
+role = "reflector"
+stages = ["strategy_alignment"]
+required_variables = ["strategy_prompt", "generated_java", "behavior_summary"]
+template = """Evaluate how well the generated MicroRTS Java implements the intended strategy.
+Return only one JSON object with exactly:
+{"score": <number from 0 to 10>, "reason": "<concise evidence-based reason>"}
+
+Strategy prompt:
+$strategy_prompt
+
+Generated CandidateAgent.java:
+$generated_java
+
+Optional behavior summary:
+$behavior_summary
+"""

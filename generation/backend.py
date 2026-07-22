@@ -40,13 +40,15 @@ class MockGenerationBackend(GenerationBackend):
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
 
-    def __init__(self, base_url: str, model: str, timeout_sec: int = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, llm_profile: str | None = None) -> None:
+    def __init__(self, base_url: str, model: str, timeout_sec: float = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, llm_profile: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.llm_profile = llm_profile
         self.timeout_sec = timeout_sec
         self.max_retries = max_retries
         self.logger = logger
+        self.temperature = temperature
+        self.max_output_tokens = max_output_tokens
 
     @property
     def chat_completions_url(self) -> str:
@@ -60,8 +62,10 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.2,
+            "temperature": self.temperature,
         }
+        if self.max_output_tokens is not None:
+            payload["max_tokens"] = self.max_output_tokens
         request = urllib.request.Request(
             self.chat_completions_url,
             data=json.dumps(payload).encode("utf-8"),
@@ -191,9 +195,12 @@ def build_generation_backend(
     model: str = "local-model",
     logger: LLMCallLogger | None = None,
     llm_profile: str | None = None,
+    timeout_sec: float = 120,
+    temperature: float = 0.2,
+    max_output_tokens: int | None = None,
 ) -> GenerationBackend:
     if name == "mock":
         return MockGenerationBackend()
     if name in {"openai", "llama_cpp"}:
-        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, llm_profile=llm_profile)
+        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, llm_profile=llm_profile, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
     raise ValueError(f"Unknown generation backend: {name}")

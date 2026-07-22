@@ -207,6 +207,11 @@ def parse_minimal_yaml(raw: str) -> dict[str, Any]:
 
 def _parse_scalar(value: str) -> Any:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        if value[0] == '"':
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                pass
         return value[1:-1]
     lowered = value.lower()
     if lowered == "true":

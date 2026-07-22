@@ -162,11 +162,13 @@ class OpenAICompatibleReflectionBackend:
     and artifact record.
     """
 
-    def __init__(self, base_url: str, model: str, *, timeout_sec: int = 120, llm_profile: str | None = None) -> None:
+    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, llm_profile: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.llm_profile = llm_profile
         self.timeout_sec = timeout_sec
+        self.temperature = temperature
+        self.max_output_tokens = max_output_tokens
 
     @property
     def chat_completions_url(self) -> str:
@@ -178,8 +180,10 @@ class OpenAICompatibleReflectionBackend:
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.2,
+            "temperature": self.temperature,
         }
+        if self.max_output_tokens is not None:
+            payload["max_tokens"] = self.max_output_tokens
         request = urllib.request.Request(
             self.chat_completions_url,
             data=json.dumps(payload).encode("utf-8"),
@@ -208,11 +212,14 @@ def build_reflection_backend(
     base_url: str = "http://localhost:8080",
     model: str = "local-model",
     llm_profile: str | None = None,
+    timeout_sec: float = 120,
+    temperature: float = 0.2,
+    max_output_tokens: int | None = None,
 ) -> ReflectionBackend:
     if name == "mock":
         return MockReflectionBackend()
     if name in {"openai", "llama_cpp"}:
-        return OpenAICompatibleReflectionBackend(base_url, model, llm_profile=llm_profile)
+        return OpenAICompatibleReflectionBackend(base_url, model, llm_profile=llm_profile, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
     raise ValueError(f"Unknown mutation backend: {name}")
 
 
@@ -424,77 +431,55 @@ class Mutation:
 
 
 def build_strategy_reflection_prompt(candidate: Candidate, context: MutationContext) -> str:
+    from .prompts import render_prompt
+
     parent_java = candidate.generated_java or candidate.previous_code
-    return f"""EAGLE Strategy Reflection stage.
-
-Analyze the complete strategy using the evidence below. Return reflection text only.
-Do not rewrite either prompt. Do not generate Java, a patch, a diff, or a code block.
-
-Current strategy_prompt:
-{candidate.strategy_prompt}
-
-Parent generated_java:
-{parent_java}
-
-Opponent identity: {context.opponent}
-Complete 10-match summary: {context.match_summary or {}}
-Per-match results: {list(context.per_match_results)}
-Wins: {context.wins}; draws: {context.draws}; losses: {context.losses}
-Game performance: {context.game_performance}
-Final player resources: {context.final_player_resources or {}}
-Final enemy resources: {context.final_enemy_resources or {}}
-Final resource difference: {context.final_resource_difference}
-Resource evidence: {context.resource_breakdown or {}}
-Unit material statistics: {context.unit_material_statistics or {}}
-Survival statistics: {context.survival_statistics or {}}
-Round-state summary: {context.round_state_summary or {}}
-Temporal summary: {context.temporal_summary or {}}
-Behavior summary: {context.behavior_summary or {}}
-
-Discuss effective and failed strategic behavior, implementation alignment, and concrete
-requirements for a later Strategy Prompt Rewrite. The output must remain reflection only."""
+    return render_prompt("strategy_reflection", {
+        "strategy_prompt": candidate.strategy_prompt,
+        "parent_java": parent_java,
+        "opponent": context.opponent,
+        "match_summary": context.match_summary or {},
+        "per_match_results": list(context.per_match_results),
+        "wins": context.wins,
+        "draws": context.draws,
+        "losses": context.losses,
+        "game_performance": context.game_performance,
+        "final_player_resources": context.final_player_resources or {},
+        "final_enemy_resources": context.final_enemy_resources or {},
+        "final_resource_difference": context.final_resource_difference,
+        "resource_breakdown": context.resource_breakdown or {},
+        "unit_material_statistics": context.unit_material_statistics or {},
+        "survival_statistics": context.survival_statistics or {},
+        "round_state_summary": context.round_state_summary or {},
+        "temporal_summary": context.temporal_summary or {},
+        "behavior_summary": context.behavior_summary or {},
+    })
 
 
 def build_code_reflection_prompt(candidate: Candidate, context: MutationContext) -> str:
+    from .prompts import render_prompt
+
     parent_java = candidate.generated_java or candidate.previous_code
     latest_java = context.latest_child_java or candidate.generated_java
-    return f"""EAGLE Code Reflection stage.
-
-Analyze the complete-file generation outcome using the evidence below. Return reflection
-text only. Do not rewrite either prompt and do not generate replacement Java, a patch, a
-diff, JSON, or a code block.
-
-strategy_prompt:
-{candidate.strategy_prompt}
-
-current generation_prompt:
-{candidate.generation_prompt}
-
-parent generated_java:
-{parent_java}
-
-latest generated child Java, if available:
-{latest_java}
-
-raw generation response:
-{context.raw_generation_response}
-
-source validation result: {context.validation_result or {}}
-compilation result: {context.compilation_result or {}}
-compiler errors: {list(context.compiler_errors)}
-compiler warnings: {list(context.compiler_warnings)}
-MicroRTS integration result: {context.integration_result or {}}
-runtime result: {context.runtime_result or {}}
-completed-match count: {context.completed_match_count}
-function capability score: {context.function_capability_score}
-strategy alignment score: {context.strategy_alignment_score}
-failure stage: {context.error_category or context.error_message}
-failure category: {context.error_category}
-failure reason: {context.error_message}
-
-Analyze complete-file validity, API/constructor compatibility, diagnostics, runtime or
-match behavior, missing capabilities, strategy alignment, and constraints for a later
-Generation Prompt Rewrite. Keep the output as reflection only."""
+    return render_prompt("code_reflection", {
+        "strategy_prompt": candidate.strategy_prompt,
+        "generation_prompt": candidate.generation_prompt,
+        "parent_java": parent_java,
+        "latest_java": latest_java,
+        "raw_generation_response": context.raw_generation_response,
+        "validation_result": context.validation_result or {},
+        "compilation_result": context.compilation_result or {},
+        "compiler_errors": list(context.compiler_errors),
+        "compiler_warnings": list(context.compiler_warnings),
+        "integration_result": context.integration_result or {},
+        "runtime_result": context.runtime_result or {},
+        "completed_match_count": context.completed_match_count,
+        "function_capability_score": context.function_capability_score,
+        "strategy_alignment_score": context.strategy_alignment_score,
+        "failure_stage": context.error_category or context.error_message,
+        "failure_category": context.error_category,
+        "failure_reason": context.error_message,
+    })
 
 
 def _validate_reflection(response: str) -> None:

@@ -7,9 +7,14 @@ from pathlib import Path
 from nicegui import app, ui
 
 from eagle_ui.controllers.run_controller import RunController
+from eagle_ui.controllers.llm_controller import LLMConfigController
+from eagle_ui.controllers.prompt_controller import InitialPromptController, MetaPromptController
 from eagle_ui.state import AppState
 from eagle_ui.theme import CARD_CLASS, install_theme
+from eagle_ui.views.llm_view import build_llm_view
+from eagle_ui.views.prompt_view import build_prompt_view
 from eagle_ui.views.run_view import build_run_view
+from eagle.prompts import DEFAULT_PROMPT_TEMPLATE_PATH
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,9 +40,11 @@ def build_layout() -> None:
     with ui.tab_panels(tabs, value=run_tab).classes("w-full"):
         with ui.tab_panel(run_tab):
             build_run_view(STATE, RUN_CONTROLLER)
+        with ui.tab_panel(llm_tab):
+            build_llm_view(LLMConfigController(ROOT), ROOT)
+        with ui.tab_panel(prompt_tab):
+            build_prompt_view(ROOT, InitialPromptController(), MetaPromptController(DEFAULT_PROMPT_TEMPLATE_PATH))
         for tab, message in (
-            (llm_tab, "LLM role configuration"),
-            (prompt_tab, "Initial and meta-prompt configuration"),
             (browser_tab, "Run and candidate inspection"),
             (analysis_tab, "Multi-objective analysis"),
             (error_tab, "Error analysis"),

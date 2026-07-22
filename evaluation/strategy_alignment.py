@@ -50,10 +50,12 @@ class MockStrategyAlignmentBackend(StrategyAlignmentBackend):
 
 
 class OpenAICompatibleStrategyAlignmentBackend(StrategyAlignmentBackend):
-    def __init__(self, base_url: str, model: str, *, timeout_seconds: float = 120.0) -> None:
+    def __init__(self, base_url: str, model: str, *, timeout_seconds: float = 120.0, temperature: float = 0.0, max_output_tokens: int | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout_seconds = timeout_seconds
+        self.temperature = temperature
+        self.max_output_tokens = max_output_tokens
 
     @property
     def url(self) -> str:
@@ -64,9 +66,11 @@ class OpenAICompatibleStrategyAlignmentBackend(StrategyAlignmentBackend):
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": request_text}],
-            "temperature": 0.0,
+            "temperature": self.temperature,
             "response_format": {"type": "json_object"},
         }
+        if self.max_output_tokens is not None:
+            payload["max_tokens"] = self.max_output_tokens
         request = urllib.request.Request(
             self.url,
             data=json.dumps(payload).encode("utf-8"),
@@ -89,11 +93,14 @@ def build_strategy_alignment_backend(
     *,
     base_url: str = "http://localhost:8080",
     model: str = "local-model",
+    timeout_seconds: float = 120.0,
+    temperature: float = 0.0,
+    max_output_tokens: int | None = None,
 ) -> StrategyAlignmentBackend:
     if name == "mock":
         return MockStrategyAlignmentBackend()
     if name in {"openai", "llama_cpp"}:
-        return OpenAICompatibleStrategyAlignmentBackend(base_url, model)
+        return OpenAICompatibleStrategyAlignmentBackend(base_url, model, timeout_seconds=timeout_seconds, temperature=temperature, max_output_tokens=max_output_tokens)
     raise ValueError(f"Unknown Strategy Alignment backend: {name}")
 
 
@@ -159,20 +166,14 @@ def build_alignment_request(
     generated_java: str,
     behavior_summary: dict[str, Any] | None,
 ) -> str:
+    from eagle.prompts import render_prompt
+
     behavior = json.dumps(behavior_summary or {}, ensure_ascii=False, sort_keys=True)
-    return f"""Evaluate how well the generated MicroRTS Java implements the intended strategy.
-Return only one JSON object with exactly:
-{{"score": <number from 0 to 10>, "reason": "<concise evidence-based reason>"}}
-
-Strategy prompt:
-{strategy_prompt}
-
-Generated CandidateAgent.java:
-{generated_java}
-
-Optional behavior summary:
-{behavior}
-"""
+    return render_prompt("strategy_alignment", {
+        "strategy_prompt": strategy_prompt,
+        "generated_java": generated_java,
+        "behavior_summary": behavior,
+    })
 
 
 def parse_strategy_alignment_response(raw_response: str) -> dict[str, Any]:

@@ -345,50 +345,26 @@ class PromptRewriteMutation:
 
 
 def build_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult, context: MutationContext) -> str:
-    return f"""EAGLE Strategy Prompt Rewrite stage.
+    from .prompts import render_prompt
 
-Return only the revised strategy_prompt. Do not return analysis, Java, JSON, a patch, or
-Markdown fences. Preserve effective strategy elements and make concrete changes supported
-by the Reflection.
-
-Original strategy_prompt:
-{candidate.strategy_prompt}
-
-strategy_reflection:
-{reflection.reflection}
-
-Parent generated_java:
-{candidate.generated_java or candidate.previous_code}
-
-Game evaluation summary:
-{context.match_summary or context.performance_breakdown or {}}
-
-Output only the new strategy prompt."""
+    return render_prompt("strategy_rewrite", {
+        "strategy_prompt": candidate.strategy_prompt,
+        "reflection": reflection.reflection,
+        "parent_java": candidate.generated_java or candidate.previous_code,
+        "game_summary": context.match_summary or context.performance_breakdown or {},
+    })
 
 
 def build_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult, context: MutationContext) -> str:
-    return f"""EAGLE Generation Prompt Rewrite stage.
+    from .prompts import render_prompt
 
-Return only the revised generation_prompt for full-file regeneration. Do not return Java,
-analysis, JSON, a patch, a diff, or Markdown fences. Preserve valid MicroRTS constraints,
-address confirmed failures, remove contradictions, and keep historical error text bounded.
-
-Original generation_prompt:
-{candidate.generation_prompt}
-
-code_reflection:
-{reflection.reflection}
-
-strategy_prompt:
-{candidate.strategy_prompt}
-
-Parent generated_java:
-{candidate.generated_java or candidate.previous_code}
-
-Code-quality summary:
-{context.compilation_result or context.static_metrics or {}}
-
-Output only the new generation prompt."""
+    return render_prompt("code_rewrite", {
+        "generation_prompt": candidate.generation_prompt,
+        "reflection": reflection.reflection,
+        "strategy_prompt": candidate.strategy_prompt,
+        "parent_java": candidate.generated_java or candidate.previous_code,
+        "code_quality_summary": context.compilation_result or context.static_metrics or {},
+    })
 
 
 def _validate_rewritten_prompt(response: str) -> None:

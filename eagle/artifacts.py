@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -14,6 +15,7 @@ from generation.java_agent_generator import ValidationResult
 
 from .candidate import Candidate
 from .llm_profiles import LLMProfile
+from .prompts import DEFAULT_PROMPT_TEMPLATE_PATH, load_prompt_templates
 from .config import ExperimentConfig
 
 if TYPE_CHECKING:
@@ -293,7 +295,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
 
     llm_backend = "mock" if mock else config.generation_backend
     is_mock_backend = llm_backend == "mock"
-    resolved_stage_routing = stage_routing or {"reflection": "general", "rewrite": "general", "generation": "coder", "strategy_alignment": "general"}
+    resolved_stage_routing = stage_routing or {"reflection": "reflector", "rewrite": "rewriter", "generation": "generator", "strategy_alignment": "reflector"}
     payload = {
         "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "objective_formula_version": OBJECTIVE_FORMULA_VERSION,
@@ -330,12 +332,39 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
             for stage, profile_name in resolved_stage_routing.items()
         },
         "prompt_version": None,
+        "prompt_template_sha256": prompt_template_digest(),
         "git_commit_hash": git_commit_hash(),
         "unsupported": {
-            "prompt_version": "The current configurable generation prompt is not versioned.",
+            "prompt_version": "Prompt content is snapshotted and hashed but has no semantic version label.",
         },
     }
     write_json(run_dir / "resolved_config.json", payload)
+
+
+def write_prompt_snapshot(run_dir: Path, config: ExperimentConfig) -> None:
+    """Persist the exact initial and meta-prompt inputs used by a run."""
+    templates = load_prompt_templates(DEFAULT_PROMPT_TEMPLATE_PATH)
+    write_json(run_dir / "prompt_snapshot.json", {
+        "seed_prompts": list(config.seed_prompts),
+        "generation_prompt": config.generation_prompt,
+        "agent_template_path": str(config.agent_template_path),
+        "agent_template_sha256": hashlib.sha256(config.agent_template_path.read_bytes()).hexdigest(),
+        "meta_prompt_source": str(DEFAULT_PROMPT_TEMPLATE_PATH),
+        "meta_prompt_sha256": prompt_template_digest(),
+        "meta_prompts": {
+            prompt_id: {
+                "role": item.role,
+                "stages": list(item.stages),
+                "required_variables": list(item.required_variables),
+                "template": item.template,
+            }
+            for prompt_id, item in templates.items()
+        },
+    })
+
+
+def prompt_template_digest() -> str:
+    return hashlib.sha256(DEFAULT_PROMPT_TEMPLATE_PATH.read_bytes()).hexdigest()
 
 
 def git_commit_hash() -> str | None:

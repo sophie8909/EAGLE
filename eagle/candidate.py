@@ -108,31 +108,17 @@ class Candidate:
             current_source = previous_source
         else:
             current_source = load_java_template(JavaTemplatePaths())
-        return f"""Generate the complete Java source file for CandidateAgent.
+        from .prompts import render_prompt
 
-Overall strategy:
-{self.strategy_prompt.strip()}
-
-The editable strategy implementation is the single region between the
-EAGLE_AGENT_STRATEGY_START and EAGLE_AGENT_STRATEGY_END comments.
-You may freely add, remove, or reorganize strategy helper methods inside that region.
-Use the fixed action helpers marked by EAGLE_ACTION_HELPERS_START and
-EAGLE_ACTION_HELPERS_END to operate the Agent.
-
-{ACTION_API_GUIDE}
-
-Generation requirements:
-{self.generation_prompt.strip()}
-
-Start from this complete known-good source. Return the complete revised Java file, including every unchanged section:
-
-```java
-{current_source}
-```
-FINAL OUTPUT CONTRACT (highest priority):
-Your response must contain one complete CandidateAgent.java file and nothing else.
-The first non-whitespace text must be package ai.generated; and the final non-whitespace character must be the class closing brace.
-Never return JSON, a functions object, individual method bodies, a patch, an explanation, or Markdown fences."""
+        return render_prompt(
+            "java_generation",
+            {
+                "strategy_prompt": self.strategy_prompt.strip(),
+                "action_api_guide": ACTION_API_GUIDE,
+                "generation_prompt": self.generation_prompt.strip(),
+                "current_source": current_source,
+            },
+        )
 
     def to_json_dict(self) -> dict[str, Any]:
         payload = asdict(self)

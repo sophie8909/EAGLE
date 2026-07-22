@@ -262,6 +262,9 @@ def evaluate_candidate(
             "mock" if mock else config.alignment_backend,
             base_url=getattr(alignment_profile, "base_url", config.llm_base_url),
             model=getattr(alignment_profile, "model", config.llm_model),
+            timeout_seconds=getattr(alignment_profile, "timeout_seconds", 120.0),
+            temperature=getattr(alignment_profile, "temperature", 0.0),
+            max_output_tokens=getattr(alignment_profile, "max_output_tokens", None),
         )
         alignment_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent / "strategy_alignment"
         alignment_result = evaluate_strategy_alignment(

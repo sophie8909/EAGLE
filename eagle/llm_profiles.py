@@ -33,9 +33,27 @@ class LLMProfile:
     profile: str
     base_url: str
     model: str
+    enabled: bool = True
+    timeout_seconds: float = 120.0
+    context_size: int | None = None
+    temperature: float = 0.2
+    max_output_tokens: int | None = None
+    server_label: str = ""
+    server_profile: str = ""
 
-    def to_dict(self) -> dict[str, str]:
-        return {"profile": self.profile, "base_url": self.base_url, "model": self.model}
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "profile": self.profile,
+            "enabled": self.enabled,
+            "base_url": self.base_url,
+            "model": self.model,
+            "timeout_seconds": self.timeout_seconds,
+            "context_size": self.context_size,
+            "temperature": self.temperature,
+            "max_output_tokens": self.max_output_tokens,
+            "server_label": self.server_label,
+            "server_profile": self.server_profile,
+        }
 
 
 class EndpointConfigError(ValueError):
@@ -71,6 +89,66 @@ def load_endpoint_profiles(
             raise EndpointConfigError(f"[{name}].model must be a configured model alias.")
         profiles[name] = LLMProfile(profile=name, base_url=base_url, model=model)
     return profiles
+
+
+def load_role_profiles(
+    path: str | Path,
+    *,
+    general_only: bool = False,
+    allow_coder_loopback: bool = False,
+    require_enabled: bool = True,
+) -> dict[str, LLMProfile]:
+    """Load reflector/rewriter/generator roles with legacy profile fallback."""
+    config_path = Path(path)
+    if not config_path.exists():
+        raise EndpointConfigError(f"LLM endpoint config is missing: {config_path}.")
+    sections = _read_toml_sections(config_path)
+    role_names = ("reflector", "rewriter", "generator")
+    role_sections = {name: sections.get(f"roles.{name}") or sections.get(name) for name in role_names}
+    if all(role_sections.values()):
+        profiles: dict[str, LLMProfile] = {}
+        for name, values in role_sections.items():
+            assert values is not None
+            profile = _role_from_values(name, values, allow_coder_loopback=allow_coder_loopback)
+            if require_enabled and not profile.enabled:
+                raise EndpointConfigError(f"LLM role {name!r} is disabled.")
+            profiles[name] = profile
+        return profiles
+
+    required = ("general",) if general_only else ("general", "coder")
+    legacy = load_endpoint_profiles(
+        config_path,
+        allow_coder_loopback=allow_coder_loopback,
+        required_profiles=required,
+    )
+    general = legacy["general"]
+    generator = general if general_only else legacy["coder"]
+    return {
+        "reflector": _as_role("reflector", general),
+        "rewriter": _as_role("rewriter", general),
+        "generator": _as_role("generator", generator),
+    }
+
+
+def save_role_profiles(path: str | Path, profiles: dict[str, LLMProfile]) -> None:
+    """Update role sections and preserve unrelated sections and comments."""
+    missing = sorted({"reflector", "rewriter", "generator"} - set(profiles))
+    if missing:
+        raise EndpointConfigError(f"Missing LLM roles: {', '.join(missing)}")
+    config_path = Path(path)
+    raw = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    for role_name in ("reflector", "rewriter", "generator"):
+        profile = profiles[role_name]
+        if profile.profile != role_name:
+            raise EndpointConfigError(f"Role profile must be named {role_name!r}.")
+        _validate_url(profile.server_profile or role_name, profile.base_url, allow_coder_loopback=True)
+        if not profile.model.strip():
+            raise EndpointConfigError(f"{role_name}: model must not be empty.")
+        if profile.timeout_seconds <= 0 or not 0 <= profile.temperature <= 2:
+            raise EndpointConfigError(f"{role_name}: timeout must be positive and temperature must be in [0, 2].")
+        raw = _replace_toml_section(raw, f"roles.{role_name}", profile.to_dict())
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(raw.rstrip() + "\n", encoding="utf-8")
 
 
 def update_endpoint_profile(path: str | Path, profile: LLMProfile) -> None:
@@ -181,4 +259,59 @@ def _render_toml_sections(sections: dict[str, dict[str, object]]) -> str:
             if key not in {"profile", "base_url", "model"}:
                 lines.append(f"{key} = {json.dumps(value, ensure_ascii=False)}")
         lines.append("")
+    return "\n".join(lines)
+
+
+def _role_from_values(name: str, values: dict[str, object], *, allow_coder_loopback: bool) -> LLMProfile:
+    base_url = str(values.get("base_url", "")).strip()
+    model = str(values.get("model", "")).strip()
+    server_profile = str(values.get("server_profile", name)).strip()
+    _validate_url(server_profile, base_url, allow_coder_loopback=allow_coder_loopback)
+    if not model or _is_placeholder(model):
+        raise EndpointConfigError(f"[roles.{name}].model must be a configured model alias.")
+    return LLMProfile(
+        profile=name,
+        enabled=bool(values.get("enabled", True)),
+        base_url=base_url,
+        model=model,
+        timeout_seconds=float(values.get("timeout_seconds", 120.0)),
+        context_size=int(values["context_size"]) if values.get("context_size") is not None else None,
+        temperature=float(values.get("temperature", 0.2)),
+        max_output_tokens=int(values["max_output_tokens"]) if values.get("max_output_tokens") is not None else None,
+        server_label=str(values.get("server_label", "")),
+        server_profile=server_profile,
+    )
+
+
+def _as_role(name: str, profile: LLMProfile) -> LLMProfile:
+    return LLMProfile(
+        profile=name,
+        base_url=profile.base_url,
+        model=profile.model,
+        enabled=True,
+        timeout_seconds=profile.timeout_seconds,
+        context_size=profile.context_size,
+        temperature=profile.temperature,
+        max_output_tokens=profile.max_output_tokens,
+        server_label=profile.server_label,
+        server_profile=profile.profile,
+    )
+
+
+def _replace_toml_section(raw: str, section_name: str, values: dict[str, object]) -> str:
+    rendered = [f"[{section_name}]"]
+    for key in (
+        "profile", "enabled", "base_url", "model", "timeout_seconds", "context_size",
+        "temperature", "max_output_tokens", "server_label", "server_profile",
+    ):
+        value = values.get(key)
+        if value is not None:
+            rendered.append(f"{key} = {json.dumps(value, ensure_ascii=False)}")
+    lines = raw.splitlines()
+    start = next((index for index, line in enumerate(lines) if line.strip() == f"[{section_name}]"), None)
+    if start is None:
+        block = "\n".join(rendered)
+        return (raw.rstrip() + "\n\n" + block + "\n").lstrip("\n")
+    end = next((index for index in range(start + 1, len(lines)) if lines[index].strip().startswith("[")), len(lines))
+    lines[start:end] = rendered + ([""] if end < len(lines) else [])
     return "\n".join(lines)
