@@ -69,3 +69,7 @@ When code and the specification differ, preserve the specification and update [`
 - Any change to architecture, objective formulas, Candidate state transitions, mutation flow, evaluation protocol, artifact schemas, or documentation structure must also update `architeture_specification_zh.md`.
 - Pure implementation fixes that do not alter documented behavior do not require rewriting the Chinese overview.
 - Any added, removed, or renamed active documentation file must update the documentation map in `architeture_specification_zh.md`.
+
+## Champion Final Test
+
+Post-evolution champion comparison is owned by [`evaluation/final_test.md`](evaluation/final_test.md). It is separate from LightRush Evolution Evaluation and must be read for opponent setup, candidate selection, final-test scheduling/execution, artifacts, aggregation, analysis, or reproduction work.

@@ -259,3 +259,10 @@ This index proves that every normative specification section is represented with
 Update this matrix whenever an architecture contract, implementation path, test, artifact schema, gap status, migration dependency, or active documentation file changes. A row moves to `✅ Implemented` only after implementation, required tests, artifacts/configuration, and affected canonical documentation agree.
 
 Normal implementation tasks do not use `docs/architeture_specification_zh.md` as a source. Any architecture, formula, Candidate transition, mutation/evaluation protocol, artifact schema, or documentation-structure change must update the Chinese overview. Adding, removing, or renaming an active documentation file must also update its Documentation Map.
+
+## Post-evolution Final Test traceability (2026-07-22)
+
+| Contract | Implementation | Tests | Artifact | Status |
+| --- | --- | --- | --- | --- |
+| Champion dependencies are pinned, source-built, class-detected, hashed, and class-load verified | `eagle/final_test/opponents.py`; `scripts/setup_final_test_opponents.py`; `third_party/final_test_opponents/manifest.toml` | `tests/test_final_test.py` | `resolved_manifest.json`; `opponents.json` | Implemented; real preparation requires a working JDK |
+| Selection precedes matches and final-test execution cannot affect evolution | `eagle/final_test/selection.py`; `schedule.py`; `runner.py`; `aggregation.py`; `artifacts.py` | `tests/test_final_test.py` | `selection.json`; `resolved_config.json`; `results.jsonl`; `summary.json`; `failures.json`; `timing.json` | Implemented; bounded real champion smoke remains environment-dependent |

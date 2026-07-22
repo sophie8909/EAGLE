@@ -2088,3 +2088,12 @@ Implement in this order:
 ```
 
 Do not refactor unrelated modules before these contracts are implemented and tested.
+# 31. Post-Evolution Champion Final Test
+
+EAGLE has exactly two evaluation contexts. Evolution Evaluation remains the ten-match LightRush fitness protocol. Final Test is a post-run, gameplay-only comparison against pinned TMA, Mayari, and COAC agents; it never changes an evolutionary objective.
+
+Final-test candidate selection uses completed-run evolution artifacts before matches begin. It reuses canonical generated Java without LLM, regeneration, repair, Reflection, Rewrite, mutation, crossover, or NSGA-II calls; compiles each source once; tests deterministic vendored maps/seeds on both player sides; never substitutes an unavailable champion; and writes a separate versioned `final_tests/<final_test_id>/` tree.
+
+There is no training/validation/test split and no validation selection stage. Compilation, integration, and champion class-load checks are operational prerequisites only. Final-test results cannot flow back to selection, variation, fitness, or survivor selection. A formal final test succeeds only when every configured match completes validly.
+
+Final-test competition score is distinct from evolution `game_performance`. The detailed opponent pins, selectors, schedule, artifacts, formulas, licensing status, and reproduction commands are owned by [`evaluation/final_test.md`](evaluation/final_test.md).

@@ -63,3 +63,9 @@ flowchart TD
 - Persistence: [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md)
 - Current discrepancies: [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md)
 
+
+## Post-evolution boundary
+
+After a run completes, the optional champion Final Test selects already evaluated canonical Java from evolution artifacts and compares it with pinned TMA, Mayari, and COAC agents. This branch is terminal analysis: it has no path back to fitness, NSGA-II, crossover, mutation, generation, or any LLM.
+
+The LightRush Evolution Evaluation above remains unchanged. See [`../evaluation/final_test.md`](../evaluation/final_test.md) for the final-test selectors, both-side schedule, artifact tree, and reproducibility contract.
