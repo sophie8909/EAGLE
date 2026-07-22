@@ -226,7 +226,7 @@ def execute_final_test(
             "finished_at": finished_at,
             "duration_seconds": max(0.0, time.monotonic() - started),
             "candidate_compilation_seconds": {
-                item.candidate_id: item.compile_duration_seconds
+                item.selected.candidate_id: item.compile_duration_seconds
                 for item in compiled.values()
             },
             "match_durations_seconds": [float(item.get("duration_seconds") or 0.0) for item in records],
