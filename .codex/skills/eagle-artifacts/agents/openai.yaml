@@ -1,0 +1,4 @@
+interface:
+  display_name: "EAGLE Artifacts"
+  short_description: "Maintain EAGLE artifact and timing schemas"
+  default_prompt: "Use $eagle-artifacts to change EAGLE artifacts, lineage, or timing."

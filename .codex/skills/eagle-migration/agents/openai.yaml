@@ -1,0 +1,4 @@
+interface:
+  display_name: "EAGLE Migration"
+  short_description: "Migrate EAGLE toward its architecture"
+  default_prompt: "Use $eagle-migration to close an EAGLE architecture gap safely."

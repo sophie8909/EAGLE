@@ -1,0 +1,4 @@
+interface:
+  display_name: "EAGLE Architecture"
+  short_description: "Route EAGLE model and pipeline changes"
+  default_prompt: "Use $eagle-architecture to implement an EAGLE Candidate or pipeline contract change."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "EAGLE Evaluation"
+  short_description: "Implement EAGLE evaluation and scoring"
+  default_prompt: "Use $eagle-evaluation to change EAGLE MicroRTS evaluation or objectives."

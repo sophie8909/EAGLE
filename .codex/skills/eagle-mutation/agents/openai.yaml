@@ -1,0 +1,4 @@
+interface:
+  display_name: "EAGLE Mutation"
+  short_description: "Implement EAGLE mutation contracts safely"
+  default_prompt: "Use $eagle-mutation to change EAGLE Strategy or Code Mutation."

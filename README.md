@@ -1,41 +1,30 @@
 # EAGLE
 
-EAGLE evolves prompts that generate Java MicroRTS agents. The generated Java source is compiled, evaluated in MicroRTS, scored, and fed back into the evolutionary loop.
+EAGLE (Evolutionary Algorithm for Game-playing with LLM-Enabled Agents) evolves a three-part Candidate genotype that generates one complete Java MicroRTS agent. The target architecture compiles that Java once, evaluates it in 10 matches against LightRush, and optimizes `game_performance` plus `code_quality` with NSGA-II.
 
-The old design where a Java agent called an LLM during a match has been archived under `archive/legacy_runtime/`.
+Start with [`docs/README.md`](docs/README.md). It routes Codex and maintainers to the authoritative architecture specification, responsibility-focused contracts, current implementation status, architecture gaps, migration plan, and operational guidance.
 
-## Quick Start
+Historical runtime-LLM, surrogate, split-Java, fixed function-body, and legacy objective artifacts are not active implementation contracts.
 
-Run the minimal mock experiment:
+## Current smoke command
 
-```bash
-python scripts/run_eagle.py --config configs/eagle_minimal.yaml --mock
-```
-
-The mock path writes generated Java source, mock compile results, mock MicroRTS match results, `results.jsonl`, and `summary.json` under `runs/<run_id>/`.
-
-## GUI
-
-Install the project and launch the restored NiceGUI interface:
+Run from WSL:
 
 ```bash
-python3 -m pip install -e .
-python3 -m eagle_ui
+cd /mnt/d/Project/EAGLE
+python3 scripts/run_eagle.py --config configs/eagle_minimal.yaml --mock
 ```
 
-See [`docs/gui.md`](docs/gui.md) for LLM role configuration, prompt editing, run/candidate inspection, objective analysis, error analysis, and current limitations.
+This validates the current mock pipeline only. The current implementation and checked-in configs do not yet satisfy every target architecture contract; see [`docs/implementation/current_status.md`](docs/implementation/current_status.md) and [`docs/implementation/architecture_gaps.md`](docs/implementation/architecture_gaps.md).
 
-## Repository Map
+## Repository map
 
 ```text
-eagle/        candidate representation, config loading, search loop, selection, mutation
-generation/   generation backend interface, LLM-compatible backend, Java output parsing and validation
-agents/       generated Java agent workspace helpers
-evaluation/   Java compilation, MicroRTS match adapter, fitness calculation
-configs/      experiment configs
-scripts/      runnable entry points
-docs/         architecture and handoff documentation
-archive/      old runtime LLM-agent code and previous framework surfaces
+eagle/        Candidate, evolutionary orchestration, operators, selection, artifacts
+generation/   LLM transport, Java extraction, validation, and template support
+evaluation/   Java compilation, MicroRTS execution, telemetry, and objective code
+configs/      current experiment input configurations
+scripts/      run, analysis, plotting, and manual GUI entry points
+tests/        current unit and pipeline-contract tests
+docs/         normative, canonical, implementation-status, and operations documentation
 ```
-
-Read `docs/ARCHITECTURE.md`, `docs/HANDOFF.md`, and `docs/TERMINOLOGY.md` before extending the system.
