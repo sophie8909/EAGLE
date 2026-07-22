@@ -15,7 +15,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from .game_performance import (
     GamePerformanceBreakdown,
@@ -57,6 +57,7 @@ class MatchResult:
     telemetry: MatchTelemetry | None = None
     performance_breakdown: GamePerformanceBreakdown | None = None
     replay_path: str | None = None
+    round_state_path: str | None = None
     telemetry_path: str | None = None
     summary_path: str | None = None
     persistence_error: str | None = None
@@ -127,6 +128,7 @@ class MatchResult:
             "stderr": self.stderr,
             "command": self.command,
             "replay_path": self.replay_path,
+            "round_state_path": self.round_state_path,
             "telemetry_path": self.telemetry_path,
             "performance_breakdown_path": self.summary_path,
             "persistence_error": self.persistence_error,
@@ -160,6 +162,9 @@ def run_microrts_match(
     candidate_id: str | None = None,
     source_hash: str | None = None,
     class_hash: str | None = None,
+    candidate_player: int = 0,
+    extra_classpath_entries: Iterable[Path] = (),
+    match_output_dir: Path | None = None,
 ) -> MatchResult:
     """Run one bounded match and persist its independent evidence immediately."""
 
@@ -167,8 +172,10 @@ def run_microrts_match(
     classes_dir = classes_dir.resolve()
     scoring_config = scoring_config or GamePerformanceConfig()
     root = (match_artifacts_dir or classes_dir).resolve()
-    match_dir = match_directory(root, match_index=match_index)
+    match_dir = (match_output_dir or match_directory(root, match_index=match_index)).resolve()
     match_dir.mkdir(parents=True, exist_ok=True)
+    if candidate_player not in {0, 1}:
+        raise ValueError("candidate_player must be 0 or 1.")
     round_state_dir = match_dir / "round_states"
     round_state_dir.mkdir(exist_ok=True)
     raw_result_path = match_dir / "raw_result.json"
@@ -176,13 +183,19 @@ def run_microrts_match(
     telemetry_path = match_dir / "telemetry.json"
     breakdown_path = match_dir / "performance_breakdown.json"
     seed_value = match_index if seed is None else int(seed)
+    additional_classpath = [str(Path(value).resolve()) for value in extra_classpath_entries]
+    classpath = os.pathsep.join(
+        [str(classes_dir), *additional_classpath, str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]
+    )
+    ai1 = agent_class if candidate_player == 0 else opponent
+    ai2 = opponent if candidate_player == 0 else agent_class
     command = [
         "java",
         f"-Deagle.match.seed={seed_value}",
         f"-Dmicrorts.trace.path={replay_path}",
         f"-Dmicrorts.round_state_dir={round_state_dir}",
         "-cp",
-        os.pathsep.join([str(classes_dir), str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]),
+        classpath,
         "rts.MicroRTS",
         "-l",
         "STANDALONE",
@@ -195,9 +208,9 @@ def run_microrts_match(
         "-i",
         "0",
         "--ai1",
-        agent_class,
+        ai1,
         "--ai2",
-        opponent,
+        ai2,
         "--result-json",
         str(raw_result_path),
     ]
@@ -208,8 +221,9 @@ def run_microrts_match(
         raw_result = _mock_result(
             score=mock_score,
             tick_limit=tick_limit,
-            agent_class=agent_class,
-            opponent=opponent,
+            ai1=ai1,
+            ai2=ai2,
+            candidate_player=candidate_player,
             seed=seed_value,
         )
         raw_result_path.write_text(json.dumps(raw_result, indent=2), encoding="utf-8")
@@ -217,8 +231,8 @@ def run_microrts_match(
         write_mock_round_state(
             round_state_dir,
             tick=tick_limit,
-            p0_resource=50.0 + mock_score,
-            p1_resource=50.0,
+            p0_resource=50.0 + (mock_score if candidate_player == 0 else 0.0),
+            p1_resource=50.0 + (mock_score if candidate_player == 1 else 0.0),
         )
         replay_path.write_text("<mock-replay />\n", encoding="utf-8")
         return _finish_match(
@@ -239,6 +253,7 @@ def run_microrts_match(
             candidate_id=candidate_id,
             match_index=match_index,
             opponent=opponent,
+            candidate_player=candidate_player,
             map_path=map_path,
             seed=seed_value,
             tick_limit=tick_limit,
@@ -275,6 +290,7 @@ def run_microrts_match(
             candidate_id=candidate_id,
             match_index=match_index,
             opponent=opponent,
+            candidate_player=candidate_player,
             map_path=map_path,
             seed=seed_value,
             tick_limit=tick_limit,
@@ -302,6 +318,7 @@ def run_microrts_match(
         candidate_id=candidate_id,
         match_index=match_index,
         opponent=opponent,
+        candidate_player=candidate_player,
         map_path=map_path,
         seed=seed_value,
         tick_limit=tick_limit,
@@ -330,6 +347,7 @@ def _finish_match(
     candidate_id: str | None,
     match_index: int,
     opponent: str,
+    candidate_player: int,
     map_path: str,
     seed: int,
     tick_limit: int,
@@ -346,6 +364,7 @@ def _finish_match(
         tick_limit=tick_limit,
         agent_class=agent_class,
         opponent=opponent,
+        candidate_player=candidate_player,
     )
     telemetry: MatchTelemetry | None = None
     persistence_error: str | None = None
@@ -355,8 +374,8 @@ def _finish_match(
                 raw_result=raw_result,
                 round_state_dir=round_state_dir,
                 max_tick=tick_limit,
-                player_index=0,
-                opponent_index=1,
+                player_index=candidate_player,
+                opponent_index=1 - candidate_player,
                 replay_path=str(replay_path.name),
                 scoring_config=scoring_config,
             )
@@ -374,7 +393,7 @@ def _finish_match(
         except OSError as exc:
             persistence_error = f"failed to persist match telemetry: {exc}"
 
-    values = final_match_values(raw_result)
+    values = final_match_values(raw_result, candidate_player=candidate_player)
     performance = None if telemetry is None else telemetry.performance
     score = 0.0 if performance is None else performance.total_performance
     duration = max(0.0, time.monotonic() - started)
@@ -392,11 +411,13 @@ def _finish_match(
         telemetry=telemetry,
         performance_breakdown=performance,
         replay_path=str(replay_path) if replay_path.exists() else None,
+        round_state_path=str(round_state_dir) if round_state_dir.exists() else None,
         telemetry_path=str(telemetry_path),
         summary_path=str(breakdown_path),
         persistence_error=persistence_error,
         candidate_id=candidate_id,
         match_index=match_index,
+        candidate_player=candidate_player,
         opponent=opponent,
         map_path=map_path,
         seed=seed,
@@ -426,6 +447,7 @@ def classify_runtime_failure(
     tick_limit: int,
     agent_class: str,
     opponent: str,
+    candidate_player: int = 0,
 ) -> tuple[str, str] | None:
     combined = f"{stdout}\n{stderr}".lower()
     if returncode != 0:
@@ -443,6 +465,7 @@ def classify_runtime_failure(
         tick_limit=tick_limit,
         agent_class=agent_class,
         opponent=opponent,
+        candidate_player=candidate_player,
     )
     if validation_error:
         return "invalid_match_result", validation_error
@@ -455,6 +478,7 @@ def validate_match_result(
     tick_limit: int,
     agent_class: str,
     opponent: str,
+    candidate_player: int = 0,
 ) -> str | None:
     required = ("winner", "result", "final_tick", "max_cycles", "players")
     missing = [name for name in required if name not in payload]
@@ -474,10 +498,14 @@ def validate_match_result(
         return f"final_tick must be in [0, {tick_limit}]"
     if max_cycles != tick_limit:
         return f"max_cycles must equal configured tick limit {tick_limit}"
-    if payload.get("ai1") not in (None, agent_class):
-        return "result candidate identity does not match the generated agent"
-    if payload.get("ai2") not in (None, opponent):
-        return "result opponent identity does not match LightRush"
+    if candidate_player not in {0, 1}:
+        return "candidate_player must be 0 or 1"
+    expected_ai1 = agent_class if candidate_player == 0 else opponent
+    expected_ai2 = opponent if candidate_player == 0 else agent_class
+    if payload.get("ai1") not in (None, expected_ai1):
+        return "result player 0 identity does not match the configured match"
+    if payload.get("ai2") not in (None, expected_ai2):
+        return "result player 1 identity does not match the configured match"
     players = payload.get("players")
     if not isinstance(players, dict):
         return "players must be an object"
@@ -512,8 +540,8 @@ def _persist_result(match_dir: Path, result: MatchResult) -> None:
         return
 
 
-def _mock_result(*, score: float, tick_limit: int, agent_class: str, opponent: str, seed: int) -> dict[str, Any]:
-    winner = 0 if score >= 0 else 1
+def _mock_result(*, score: float, tick_limit: int, ai1: str, ai2: str, candidate_player: int, seed: int) -> dict[str, Any]:
+    winner = candidate_player if score >= 0 else 1 - candidate_player
     return {
         "gameover": True,
         "winner": winner,
@@ -523,30 +551,30 @@ def _mock_result(*, score: float, tick_limit: int, agent_class: str, opponent: s
         "max_cycles": tick_limit,
         "tick_timeout": False,
         "termination_reason": "gameover",
-        "ai1": agent_class,
-        "ai2": opponent,
+        "ai1": ai1,
+        "ai2": ai2,
         "match_seed": seed,
         "players": {
             "p0": {
                 "unit_count": 1,
-                "player_resources": 50.0 + score,
+                "player_resources": 50.0 + (score if candidate_player == 0 else 0.0),
                 "carried_resources": 0.0,
-                "resource_total": 50.0 + score,
+                "resource_total": 50.0 + (score if candidate_player == 0 else 0.0),
                 "material_total": 10.0,
                 "unit_types": {"Base": 1},
             },
             "p1": {
                 "unit_count": 1,
-                "player_resources": 50.0,
+                "player_resources": 50.0 + (score if candidate_player == 1 else 0.0),
                 "carried_resources": 0.0,
-                "resource_total": 50.0,
+                "resource_total": 50.0 + (score if candidate_player == 1 else 0.0),
                 "material_total": 10.0,
                 "unit_types": {"Base": 1},
             },
         },
         "final_scoreboard": {
-            "p0_resources": 50.0 + score,
-            "p1_resources": 50.0,
+            "p0_resources": 50.0 + (score if candidate_player == 0 else 0.0),
+            "p1_resources": 50.0 + (score if candidate_player == 1 else 0.0),
             "p0_eval": 10.0,
             "p1_eval": 10.0,
         },
@@ -588,14 +616,16 @@ def read_result_json(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def final_match_values(payload: dict[str, Any]) -> dict[str, float | int | None]:
+def final_match_values(payload: dict[str, Any], *, candidate_player: int = 0) -> dict[str, float | int | None]:
     players = payload.get("players") if isinstance(payload.get("players"), dict) else {}
     p0 = players.get("p0") if isinstance(players.get("p0"), dict) else {}
     p1 = players.get("p1") if isinstance(players.get("p1"), dict) else {}
-    p0_resource = float_or_none(p0.get("resource_total"))
-    p1_resource = float_or_none(p1.get("resource_total"))
-    p0_material = float_or_none(p0.get("material_total"))
-    p1_material = float_or_none(p1.get("material_total"))
+    candidate = p0 if candidate_player == 0 else p1
+    opponent = p1 if candidate_player == 0 else p0
+    p0_resource = float_or_none(candidate.get("resource_total"))
+    p1_resource = float_or_none(opponent.get("resource_total"))
+    p0_material = float_or_none(candidate.get("material_total"))
+    p1_material = float_or_none(opponent.get("material_total"))
     return {
         "player0_resource": p0_resource,
         "player1_resource": p1_resource,
