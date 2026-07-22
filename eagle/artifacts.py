@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from evaluation.compiler import CompileResult
 from evaluation.code_quality import analyze_compilation
+from evaluation.nsga2_objectives import OBJECTIVE_DIRECTIONS
 from evaluation.microrts_runner import DEFAULT_MAP_PATH, INTEGRATION_CHECK_NAMES, IntegrationResult, MatchResult
 from generation.java_agent_generator import ValidationResult
 
@@ -306,6 +307,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "mutation_selection_policy": "failed_game_to_code_otherwise_seeded_random",
         "matches_per_candidate": config.matches_per_candidate,
         "opponent": config.opponent,
+        "objective_directions": OBJECTIVE_DIRECTIONS,
         "map": config.map_path,
         "max_cycles": config.tick_limit,
         "ea_random_seed": config.random_seed,

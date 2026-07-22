@@ -8,6 +8,7 @@ from nicegui import app, ui
 
 from eagle_ui.controllers.run_controller import RunController
 from eagle_ui.controllers.artifact_controller import ArtifactController
+from eagle_ui.controllers.analysis_controller import AnalysisController
 from eagle_ui.controllers.llm_controller import LLMConfigController
 from eagle_ui.controllers.prompt_controller import InitialPromptController, MetaPromptController
 from eagle_ui.state import AppState
@@ -16,6 +17,7 @@ from eagle_ui.views.llm_view import build_llm_view
 from eagle_ui.views.prompt_view import build_prompt_view
 from eagle_ui.views.run_view import build_run_view
 from eagle_ui.views.candidate_view import build_candidate_view
+from eagle_ui.views.analysis_view import build_analysis_view
 from eagle.prompts import DEFAULT_PROMPT_TEMPLATE_PATH
 
 
@@ -48,8 +50,9 @@ def build_layout() -> None:
             build_prompt_view(ROOT, InitialPromptController(), MetaPromptController(DEFAULT_PROMPT_TEMPLATE_PATH))
         with ui.tab_panel(browser_tab):
             build_candidate_view(ArtifactController(ROOT / "runs"))
+        with ui.tab_panel(analysis_tab):
+            build_analysis_view(AnalysisController(), STATE)
         for tab, message in (
-            (analysis_tab, "Multi-objective analysis"),
             (error_tab, "Error analysis"),
         ):
             with ui.tab_panel(tab):

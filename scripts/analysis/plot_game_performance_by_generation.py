@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import math
 import os
 import sys
@@ -23,7 +22,7 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 from matplotlib import pyplot as plt
 
-from scripts.analyze_run import read_json
+from eagle.analysis.records import load_candidate_records
 
 
 def main() -> int:
@@ -57,41 +56,14 @@ def main() -> int:
 
 
 def read_candidate_records(run_dir: Path) -> list[dict[str, Any]]:
-    records = read_results_jsonl_records(run_dir)
-    if records:
-        return records
-    return read_individual_records(run_dir)
-
-
-def read_results_jsonl_records(run_dir: Path) -> list[dict[str, Any]]:
-    path = run_dir / "results.jsonl"
-    if not path.exists():
-        return []
-
-    records: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            payload = json.loads(line)
-            candidate = payload.get("candidate") or {}
-            records.append(record_from_candidate(candidate))
-    return sorted_records(records)
-
-
-def read_individual_records(run_dir: Path) -> list[dict[str, Any]]:
-    records = [
-        record_from_candidate(read_json(path))
-        for path in sorted((run_dir / "candidates").glob("*/individual.json"))
+    return [
+        {
+            "generation": record.generation,
+            "candidate_id": record.candidate_id,
+            "game_performance": float_or_nan(record.objectives.get("game_performance")),
+        }
+        for record in load_candidate_records(run_dir)
     ]
-    return sorted_records(records)
-
-
-def record_from_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
-    objectives = candidate.get("fitness_objectives") or {}
-    return {
-        "generation": int(candidate.get("generation", 0)),
-        "candidate_id": str(candidate.get("id", "")),
-        "game_performance": float_or_nan(objectives.get("game_performance")),
-    }
 
 
 def sorted_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
