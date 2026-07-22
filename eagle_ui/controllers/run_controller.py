@@ -7,11 +7,13 @@ import re
 import subprocess
 import sys
 import threading
+import tempfile
 from pathlib import Path
 from typing import Callable
 from datetime import datetime
 
 from eagle.config import ExperimentConfig
+from eagle_ui.controllers.config_controller import update_minimal_yaml
 
 from eagle_ui.state import RunState
 
@@ -38,6 +40,43 @@ class RunController:
         config = ExperimentConfig.from_file(path)
         config.validate()
         return config
+
+    def load_fields(self, path: Path) -> dict[str, object]:
+        config = ExperimentConfig.from_file(path)
+        return {
+            "population_size": config.population_size,
+            "generations": config.generations,
+            "random_seed": config.random_seed,
+            "opponent": config.opponent,
+            "map_path": config.map_path,
+            "runs_dir": str(config.runs_dir),
+        }
+
+    def save_fields(self, path: Path, values: dict[str, object]) -> ExperimentConfig:
+        """Atomically save supported CLI config fields after canonical validation."""
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix=f".{path.name}.",
+            suffix=path.suffix,
+            dir=path.parent,
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(path.read_text(encoding="utf-8"))
+        try:
+            update_minimal_yaml(temporary, values)
+            config = ExperimentConfig.from_file(temporary)
+            config.validate()
+            temporary.replace(path)
+            return ExperimentConfig.from_file(path)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+
+    def map_choices(self) -> list[str]:
+        maps_root = self.repository_root / "third_party" / "microrts"
+        return sorted(str(path.relative_to(maps_root)) for path in (maps_root / "maps").rglob("*.xml"))
 
     def start(self, config_path: Path, *, mock: bool = False) -> None:
         if self._process is not None and self._process.poll() is None:
