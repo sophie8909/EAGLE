@@ -4,9 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from eagle.analysis.errors import compile_root_cause as shared_compile_root_cause
+from eagle.analysis.errors import first_javac_error as shared_first_javac_error
+from eagle.analysis.errors import normalize_failure_category
 
 
 def main() -> None:
@@ -122,18 +131,9 @@ def migrate_legacy_objectives(objectives: object) -> object:
 
 
 def category_from_legacy_record(candidate: dict[str, Any], error: str) -> str:
-    lowered = error.lower()
-    if "timed out" in lowered or "timeout" in lowered:
-        return "Timeout"
-    if candidate.get("compile_status") == "failed":
-        return "Java compile failure"
-    if candidate.get("compile_status") == "not_run":
-        if "backend" in lowered or "http error" in lowered:
-            return "Backend request failure"
-        if "generated java" in lowered or "java source" in lowered or "must not" in lowered:
-            return "Java validation failure"
-        return "Other"
-    return "Other"
+    stage = "compilation" if candidate.get("compile_status") == "failed" else None
+    category = normalize_failure_category(None, error, stage)
+    return "Other" if category == "Unknown failure" else category
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -150,32 +150,11 @@ def compile_root_cause(record: dict[str, Any]) -> str:
     stderr = str(compile_result.get("stderr") or "")
     if not stderr:
         return ""
-    message = first_javac_error(stderr)
-    lowered = message.lower()
-    if "cannot find symbol" in lowered:
-        return "cannot find symbol"
-    if "incompatible types" in lowered or "cannot be converted" in lowered:
-        return "incompatible types"
-    if " is already defined" in lowered:
-        if "method " in lowered:
-            return "duplicate method"
-        if "variable " in lowered:
-            return "duplicate variable"
-        return "duplicate definition"
-    if "missing return" in lowered:
-        return "missing return"
-    if "illegal character" in lowered:
-        return "illegal character"
-    if any(token in lowered for token in ("; expected", ") expected", "illegal start of", "not a statement")):
-        return "syntax error"
-    return "other compile error"
+    return shared_compile_root_cause(stderr)
 
 
 def first_javac_error(stderr: str) -> str:
-    for line in stderr.splitlines():
-        if ": error:" in line:
-            return line.split(": error:", 1)[1].strip()
-    return stderr.splitlines()[0] if stderr.splitlines() else ""
+    return shared_first_javac_error(stderr)
 
 
 def format_report(summary: dict[str, Any]) -> str:
