@@ -1,0 +1,27 @@
+final_test_schema_version: eagle-final-test-v1
+opponent_ids:
+  - tma
+  - mayari
+  - coac
+deterministic_seeds:
+  - 104729
+  - 130363
+  - 155921
+maps:
+  - maps/8x8/basesWorkers8x8.xml
+  - maps/16x16/basesWorkers16x16.xml
+  - maps/24x24/basesWorkers24x24.xml
+cycles_per_map:
+  - 3000
+  - 4000
+  - 5000
+subprocess_timeout_seconds: 300
+matches_per_opponent_map_side: 3
+player_sides:
+  - 0
+  - 1
+player_side_policy: both_player_sides
+output_directory: final_tests
+failure_policy: complete_all_then_fail
+microrts_dir: third_party/microrts
+resolved_opponents_manifest: third_party/final_test_opponents/resolved_manifest.json
