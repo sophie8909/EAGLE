@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
 from eagle.analysis.errors import compile_root_cause as shared_compile_root_cause
 from eagle.analysis.errors import first_javac_error as shared_first_javac_error
 from eagle.analysis.errors import normalize_failure_category
+from eagle.analysis.final_tests import load_final_test_summaries
 
 
 def main() -> None:
@@ -64,6 +65,7 @@ def analyze_run(run_dir: Path) -> dict[str, Any]:
         "compile_root_cause_counts": compile_counts,
         "validation_failure_counts": validation_counts,
         "representatives": representatives,
+        "final_tests": load_final_test_summaries(run_dir),
     }
 
 
@@ -180,6 +182,11 @@ def format_report(summary: dict[str, Any]) -> str:
             lines.append(f"- {category}: {path}")
     else:
         lines.append("- none")
+    lines.extend(("", "Final tests:"))
+    if not summary["final_tests"]:
+        lines.append("- none")
+    for item in summary["final_tests"]:
+        lines.append(f"- {item.final_test_id}: {item.status} {item.completed_matches}/{item.expected_matches} path={item.path}")
     return "\n".join(lines)
 
 

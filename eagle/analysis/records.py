@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
+from .final_tests import FinalTestSummary, load_final_test_summaries
+
 
 CANDIDATE_ARTIFACT_PATHS = {
     "individual": "individual.json",
@@ -46,6 +48,8 @@ class RunSummary:
     candidate_count: int
     success_count: int
     failure_count: int
+    final_test_count: int = 0
+    final_test_candidate_ids: tuple[str, ...] = ()
     config_summary: dict[str, Any] = field(default_factory=dict)
 
 
@@ -82,6 +86,7 @@ class CandidateArtifacts:
     timing: dict[str, Any] | None
     mutation: dict[str, Any] | None
     artifact_paths: dict[str, Path]
+    final_tests: tuple[FinalTestSummary, ...] = ()
 
 
 def discover_runs(runs_dir: Path) -> list[RunSummary]:
@@ -126,6 +131,11 @@ def load_candidate(run_dir: Path, candidate_id: str) -> CandidateArtifacts:
         rewrite = mutation.get("rewrite")
         if isinstance(rewrite, dict) and rewrite.get("rewritten_prompt"):
             rewritten = str(rewrite["rewritten_prompt"])
+    final_tests = tuple(
+        summary
+        for summary in load_final_test_summaries(run_dir)
+        if candidate_id in summary.tested_candidate_ids
+    )
     return CandidateArtifacts(
         record=record,
         rewritten_prompt=rewritten,
@@ -140,6 +150,7 @@ def load_candidate(run_dir: Path, candidate_id: str) -> CandidateArtifacts:
         timing=_as_dict(_read_json(paths["timing"])),
         mutation=_as_dict(mutation),
         artifact_paths={name: path for name, path in paths.items() if path.exists()},
+        final_tests=final_tests,
     )
 
 
@@ -150,6 +161,8 @@ def _summarize_run(run_dir: Path) -> RunSummary:
     generations = {record.generation for record in records}
     failed = sum(record.status == "failed" or bool(record.failure_reason) for record in records)
     status = "complete" if summary is not None else "running" if records else "incomplete"
+    final_tests = load_final_test_summaries(run_dir)
+    tested_ids = tuple(sorted({candidate_id for item in final_tests for candidate_id in item.tested_candidate_ids}))
     return RunSummary(
         run_id=run_dir.name,
         path=run_dir,
@@ -159,6 +172,8 @@ def _summarize_run(run_dir: Path) -> RunSummary:
         candidate_count=len(records),
         success_count=len(records) - failed,
         failure_count=failed,
+        final_test_count=len(final_tests),
+        final_test_candidate_ids=tested_ids,
         config_summary={
             key: resolved.get(key)
             for key in ("population_size", "generation_count", "opponent", "map", "llm_backend", "llm_topology")

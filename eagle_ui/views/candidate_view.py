@@ -25,6 +25,7 @@ def build_candidate_view(controller: ArtifactController) -> None:
         java_tab = ui.tab("Java")
         diagnostics_tab = ui.tab("Diagnostics")
         matches_tab = ui.tab("Matches")
+        final_tests_tab = ui.tab("Final Tests")
         timing_tab = ui.tab("Timing & paths")
     with ui.tab_panels(details, value=prompt_tab).classes("w-full"):
         with ui.tab_panel(prompt_tab):
@@ -38,6 +39,8 @@ def build_candidate_view(controller: ArtifactController) -> None:
             diagnostics = _viewer("Compilation, validation, integration, and failure", 520)
         with ui.tab_panel(matches_tab):
             matches = _viewer("Match results", 520)
+        with ui.tab_panel(final_tests_tab):
+            final_tests = _viewer("Saved final-test summaries", 520)
         with ui.tab_panel(timing_tab):
             timing = _viewer("Timing and artifact paths", 520)
 
@@ -69,7 +72,8 @@ def build_candidate_view(controller: ArtifactController) -> None:
         if summary:
             run_summary.set_text(
                 f"{summary.run_id} | {summary.status} | generations={summary.generation_count} | "
-                f"success={summary.success_count} failure={summary.failure_count} | config={summary.config_summary}"
+                f"success={summary.success_count} failure={summary.failure_count} | "
+                f"final_tests={summary.final_test_count} tested={summary.final_test_candidate_ids} | config={summary.config_summary}"
             )
 
     async def select_candidate() -> None:
@@ -97,11 +101,26 @@ def build_candidate_view(controller: ArtifactController) -> None:
             "failure": item.failure,
         }, ensure_ascii=False, indent=2)
         matches.value = json.dumps(item.match_results, ensure_ascii=False, indent=2)
+        final_tests.value = json.dumps([
+            {
+                "final_test_id": summary.final_test_id,
+                "status": summary.status,
+                "formal": summary.formal,
+                "selector": summary.selector,
+                "completed_matches": summary.completed_matches,
+                "expected_matches": summary.expected_matches,
+                "candidate": summary.for_candidate(record.candidate_id),
+                "artifact_paths": {
+                    name: str(path) for name, path in summary.artifact_paths.items()
+                },
+            }
+            for summary in item.final_tests
+        ], ensure_ascii=False, indent=2)
         timing.value = json.dumps({
             "timing": item.timing,
             "artifact_paths": {name: str(path) for name, path in item.artifact_paths.items()},
         }, ensure_ascii=False, indent=2)
-        for control in (strategy, rewritten, raw, extracted, assembled, diagnostics, matches, timing):
+        for control in (strategy, rewritten, raw, extracted, assembled, diagnostics, matches, final_tests, timing):
             control.update()
 
     with ui.row().classes("gap-2"):
