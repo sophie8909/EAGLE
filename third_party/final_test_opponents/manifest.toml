@@ -1,0 +1,42 @@
+schema_version = "eagle-final-test-opponents-v1"
+
+[[opponents]]
+id = "tma"
+display_name = "TMA"
+competition_year = 2024
+upstream_repository = "https://github.com/MazzaAlessandro/TMA.git"
+pinned_commit = "7eee64e20deceaa19a65d06b7935a7c1ec7cffa6"
+expected_class = "ai.tma.TMA"
+build_method = "javac-source"
+jar_path = "third_party/final_test_opponents/jars/tma.jar"
+source_globs = ["tma/**/*.java"]
+provided_jar = "TMA.jar"
+required_classpath_entries = ["third_party/microrts/bin", "third_party/microrts/lib/*"]
+license_status = "No upstream LICENSE/COPYING file detected at the pinned revision; fetch and local source build only, no EAGLE redistribution."
+
+[[opponents]]
+id = "mayari"
+display_name = "Mayari"
+competition_year = 2021
+upstream_repository = "https://github.com/barvazkrav/mayariBot.git"
+pinned_commit = "df5de837032e251323d11a2113d2e0179f83fe90"
+expected_class = "mayariBot.mayari"
+build_method = "javac-source"
+jar_path = "third_party/final_test_opponents/jars/mayari.jar"
+source_globs = ["mayari.java"]
+provided_jar = "mayariBot.jar"
+required_classpath_entries = ["third_party/microrts/bin", "third_party/microrts/lib/*"]
+license_status = "No upstream LICENSE/COPYING file detected at the pinned revision; fetch and local source build only, no EAGLE redistribution."
+
+[[opponents]]
+id = "coac"
+display_name = "COAC"
+competition_year = 2020
+upstream_repository = "https://github.com/Coac/coac-ai-microrts.git"
+pinned_commit = "0c992fd1aa0d59867dfbd4ad8fe445c62e733f62"
+expected_class = "ai.coac.CoacAI"
+build_method = "javac-source"
+jar_path = "third_party/final_test_opponents/jars/coac.jar"
+source_globs = ["src/**/*.java"]
+required_classpath_entries = ["third_party/microrts/bin", "third_party/microrts/lib/*"]
+license_status = "No upstream LICENSE/COPYING file detected at the pinned revision; fetch and local source build only, no EAGLE redistribution."
