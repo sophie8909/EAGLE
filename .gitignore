@@ -14,6 +14,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .pycache_verify/
+*.egg-info/
 
 # Local test scratch directories
 /.codex_tmp_prompt_test/
@@ -61,7 +62,15 @@ tournament/traces/*.xml
 /models/
 /vendor/llama.cpp/
 /key/uf_token
-/experiment_env/model/
+/experiment_env/model/*
+!/experiment_env/model/README.md
 /experiment_env/models/
 /experiment_env/vendor/llama.cpp/
 /experiment_env/key/uf_token
+/experiment_env/model/model_registry.local.json
+/experiment_env/model/*/*.gguf
+/experiment_env/model/*/model.gguf
+/experiment_env/model/*/mmproj.gguf
+/experiment_env/runtime/logs/
+/experiment_env/runtime/pids/
+/experiment_env/runtime/runtime_state.local.json

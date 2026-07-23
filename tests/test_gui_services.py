@@ -1,7 +1,9 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -26,12 +28,22 @@ from eagle.candidate import Candidate
 from eagle.llm_profiles import LLMProfile, load_role_profiles, save_role_profiles
 from eagle.prompts import PromptTemplateError, load_prompt_templates, save_prompt_template
 from eagle_ui.controllers.prompt_controller import InitialPromptController
+from eagle_ui.runtime import DEFAULT_GUI_PORT, GUI_PORT_ENV, resolve_gui_port
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
 class LLMRoleConfigTests(unittest.TestCase):
+    def test_gui_port_defaults_away_from_llm_endpoint_and_allows_override(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(resolve_gui_port(), DEFAULT_GUI_PORT)
+        with patch.dict(os.environ, {GUI_PORT_ENV: "8090"}, clear=True):
+            self.assertEqual(resolve_gui_port(), 8090)
+        with patch.dict(os.environ, {GUI_PORT_ENV: "not-a-port"}, clear=True):
+            with self.assertRaises(ValueError):
+                resolve_gui_port()
+
     def test_role_config_load_save_round_trip_preserves_unrelated_content(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "endpoints.toml"

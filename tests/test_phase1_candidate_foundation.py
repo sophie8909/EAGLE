@@ -391,6 +391,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertEqual(payload["generation_count"], 4)
         self.assertEqual(payload["crossover_rate"], 0.25)
         self.assertEqual(payload["mutation_rate"], 0.5)
+        self.assertEqual(payload["front0_stagnation_generations"], 5)
         self.assertEqual(payload["matches_per_candidate"], 10)
         self.assertEqual(payload["opponent"], "ai.abstraction.LightRush")
         self.assertEqual(payload["max_cycles"], 345)

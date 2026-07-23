@@ -305,6 +305,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "crossover_rate": config.crossover_rate,
         "mutation_rate": config.mutation_rate,
         "mutation_selection_policy": "failed_game_to_code_otherwise_seeded_random",
+        "front0_stagnation_generations": config.front0_stagnation_generations,
         "matches_per_candidate": config.matches_per_candidate,
         "opponent": config.opponent,
         "objective_directions": OBJECTIVE_DIRECTIONS,
@@ -328,6 +329,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "strategy_alignment_backend": "mock" if mock else config.alignment_backend,
         "strategy_alignment_model": None if mock else config.llm_model,
         "endpoint_config_path": str(config.endpoint_config_path),
+        "llm_role_topology_path": str(config.llm_role_topology_path),
         "llm_topology": config.llm_topology,
         "stage_routing": {
             stage: None if profiles is None else profiles[profile_name].to_dict()
@@ -384,10 +386,22 @@ def write_generation_manifest(run_dir: Path, generation: int, population: list[C
     write_json(run_dir / f"generation_{generation:03d}_population.json", [candidate.to_json_dict() for candidate in population])
 
 
-def write_summary(run_dir: Path, *, config: ExperimentConfig, final_population: list[Candidate], best_candidate: Candidate | None, pareto_fronts: list[list[Candidate]], mock: bool) -> None:
+def write_summary(
+    run_dir: Path,
+    *,
+    config: ExperimentConfig,
+    final_population: list[Candidate],
+    best_candidate: Candidate | None,
+    pareto_fronts: list[list[Candidate]],
+    mock: bool,
+    completed_generation: int | None = None,
+    stop_reason: str | None = None,
+) -> None:
     write_json(run_dir / "summary.json", {
         "mock": mock,
         "generations": config.generations,
+        "completed_generation": completed_generation,
+        "stop_reason": stop_reason,
         "population_size": config.population_size,
         "objectives": ["game_performance", "code_quality"],
         "best_candidate": None if best_candidate is None else best_candidate.to_json_dict(),

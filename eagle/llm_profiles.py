@@ -6,11 +6,13 @@ import json
 import os
 import tempfile
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from urllib.parse import urlparse
 
 
 DEFAULT_ENDPOINT_CONFIG_PATH = Path("config/llm_endpoints.toml")
+DEFAULT_ROLE_TOPOLOGY_PATH = Path("experiment_env/config/llm_topology.json")
 DEFAULT_CONTEXT_SIZE = 32768
 DEFAULT_PROFILES = {
     "general": {
@@ -24,6 +26,15 @@ DEFAULT_PROFILES = {
         "bind_host": "0.0.0.0",
     },
 }
+SEMANTIC_LLM_ROLES = ("reflector", "rewriter", "generator")
+
+
+class LLMRole(StrEnum):
+    """Semantic LLM roles used by the EAGLE pipeline."""
+
+    REFLECTOR = "reflector"
+    REWRITER = "rewriter"
+    GENERATOR = "generator"
 
 
 @dataclass(frozen=True)
@@ -60,6 +71,134 @@ class EndpointConfigError(ValueError):
     """Raised when the repository endpoint handoff is incomplete or unsafe."""
 
 
+def load_role_profiles(
+    path: str | Path,
+    *,
+    required_roles: tuple[str, ...] = SEMANTIC_LLM_ROLES,
+    general_only: bool = False,
+    allow_coder_loopback: bool = False,
+    require_enabled: bool = True,
+) -> dict[str, LLMProfile]:
+    """Load semantic roles from JSON topology or legacy endpoint TOML."""
+
+    config_path = Path(path)
+    if not config_path.exists():
+        raise EndpointConfigError(f"LLM role config is missing: {config_path}")
+    raw = config_path.read_text(encoding="utf-8")
+    if config_path.suffix.lower() == ".json" or raw.lstrip().startswith("{"):
+        return _load_topology_role_profiles(config_path, required_roles=required_roles)
+    return _load_toml_role_profiles(
+        config_path,
+        general_only=general_only,
+        allow_coder_loopback=allow_coder_loopback,
+        require_enabled=require_enabled,
+    )
+
+
+def _load_topology_role_profiles(
+    path: str | Path,
+    *,
+    required_roles: tuple[str, ...] = SEMANTIC_LLM_ROLES,
+) -> dict[str, LLMProfile]:
+    """Load semantic role routing from the experiment environment topology."""
+
+    config_path = Path(path)
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise EndpointConfigError(f"LLM role topology is invalid JSON: {config_path}") from exc
+    servers = payload.get("servers")
+    roles = payload.get("roles")
+    if not isinstance(servers, dict) or not isinstance(roles, dict):
+        raise EndpointConfigError("LLM role topology must contain object-valued 'servers' and 'roles'.")
+
+    profiles: dict[str, LLMProfile] = {}
+    for role in required_roles:
+        if role not in SEMANTIC_LLM_ROLES:
+            raise EndpointConfigError(f"Unknown LLM role requested: {role}")
+        role_entry = roles.get(role)
+        if not isinstance(role_entry, dict):
+            raise EndpointConfigError(f"LLM role topology has no assignment for required role: {role}")
+        server_id = str(role_entry.get("server_id", "")).strip()
+        if not server_id:
+            raise EndpointConfigError(f"LLM role topology role {role!r} must define server_id.")
+        server = servers.get(server_id)
+        if not isinstance(server, dict):
+            raise EndpointConfigError(f"LLM role {role!r} references unknown server_id: {server_id}")
+        base_url = str(server.get("base_url", "")).strip()
+        model = str(server.get("model_id") or server.get("model") or "").strip()
+        _validate_url(role, base_url, allow_coder_loopback=True)
+        if not model or _is_placeholder(model):
+            raise EndpointConfigError(f"LLM role {role!r} server {server_id!r} must define a model_id.")
+        profiles[role] = LLMProfile(
+            profile=role,
+            base_url=base_url,
+            model=model,
+            enabled=bool(role_entry.get("enabled", server.get("enabled", True))),
+            timeout_seconds=float(role_entry.get("timeout_seconds", server.get("timeout_seconds", 120.0))),
+            context_size=(
+                int(role_entry.get("context_size", server.get("context_size")))
+                if role_entry.get("context_size", server.get("context_size")) is not None
+                else None
+            ),
+            temperature=float(role_entry.get("temperature", server.get("temperature", 0.2))),
+            max_output_tokens=(
+                int(role_entry.get("max_output_tokens", server.get("max_output_tokens")))
+                if role_entry.get("max_output_tokens", server.get("max_output_tokens")) is not None
+                else None
+            ),
+            server_label=str(server.get("label") or server_id),
+            server_profile=server_id,
+        )
+    return profiles
+
+
+def load_effective_role_profiles(
+    *,
+    role_topology_path: str | Path = DEFAULT_ROLE_TOPOLOGY_PATH,
+    endpoint_config_path: str | Path = DEFAULT_ENDPOINT_CONFIG_PATH,
+    llm_topology: str = "dual_host",
+    allow_coder_loopback: bool = False,
+) -> tuple[dict[str, LLMProfile], dict[str, str]]:
+    """Resolve semantic roles, falling back to the legacy general/coder handoff."""
+
+    role_path = Path(role_topology_path)
+    if role_path.exists():
+        try:
+            role_payload = json.loads(role_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise EndpointConfigError(f"LLM role topology is invalid JSON: {role_path}") from exc
+        configured_roles = role_payload.get("roles")
+        if isinstance(configured_roles, dict) and configured_roles:
+            profiles = _load_topology_role_profiles(role_path)
+            return profiles, {
+                "reflection": "reflector",
+                "rewrite": "rewriter",
+                "generation": "generator",
+                "strategy_alignment": "reflector",
+            }
+
+    general_only = llm_topology == "general_only"
+    required_profiles = ("general",) if general_only else ("general", "coder")
+    legacy_profiles = load_endpoint_profiles(
+        endpoint_config_path,
+        allow_coder_loopback=allow_coder_loopback,
+        required_profiles=required_profiles,
+    )
+    general = legacy_profiles["general"]
+    generator = general if general_only else legacy_profiles["coder"]
+    return {
+        "reflector": _as_role("reflector", general),
+        "rewriter": _as_role("rewriter", general),
+        "generator": _as_role("generator", generator),
+    }, {
+        "reflection": "reflector",
+        "rewrite": "rewriter",
+        "generation": "generator",
+        "strategy_alignment": "reflector",
+    }
+
+
 def load_endpoint_profiles(
     path: str | Path,
     *,
@@ -91,14 +230,14 @@ def load_endpoint_profiles(
     return profiles
 
 
-def load_role_profiles(
+def _load_toml_role_profiles(
     path: str | Path,
     *,
     general_only: bool = False,
     allow_coder_loopback: bool = False,
     require_enabled: bool = True,
 ) -> dict[str, LLMProfile]:
-    """Load reflector/rewriter/generator roles with legacy profile fallback."""
+    """Load reflector/rewriter/generator roles from legacy endpoint TOML."""
     config_path = Path(path)
     if not config_path.exists():
         raise EndpointConfigError(f"LLM endpoint config is missing: {config_path}.")

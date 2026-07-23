@@ -3,6 +3,7 @@ set -euo pipefail
 
 ENV_NAME="eagle"
 INSTALL_MODE=true
+GUI_PORT="${EAGLE_GUI_PORT:-8082}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -57,4 +58,5 @@ fi
 
 echo "[3/3] Launching NiceGUI dashboard..."
 
-python -m eagle_ui
+echo "GUI URL: http://127.0.0.1:${GUI_PORT}"
+EAGLE_GUI_PORT="$GUI_PORT" python -m eagle_ui

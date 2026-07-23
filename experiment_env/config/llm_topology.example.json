@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "servers": {
+    "model-host-8080-qwen3-8b-example": {
+      "hostname": "model-host",
+      "advertised_ip": "192.168.1.20",
+      "port": 8080,
+      "base_url": "http://192.168.1.20:8080/v1",
+      "model_id": "qwen3-8b-q5-k-m",
+      "model_display_name": "Qwen3-8B Q5_K_M",
+      "roles": [
+        "reflector",
+        "rewriter"
+      ],
+      "protocol": "openai-compatible",
+      "health_path": "/health"
+    },
+    "local-8081-coder-example": {
+      "hostname": "ea-host",
+      "advertised_ip": "127.0.0.1",
+      "port": 8081,
+      "base_url": "http://127.0.0.1:8081/v1",
+      "model_id": "coder-local-model",
+      "model_display_name": "Coder Local Model",
+      "roles": [
+        "generator"
+      ],
+      "protocol": "openai-compatible",
+      "health_path": "/health"
+    }
+  },
+  "roles": {
+    "reflector": {
+      "server_id": "model-host-8080-qwen3-8b-example"
+    },
+    "rewriter": {
+      "server_id": "model-host-8080-qwen3-8b-example"
+    },
+    "generator": {
+      "server_id": "local-8081-coder-example"
+    }
+  }
+}

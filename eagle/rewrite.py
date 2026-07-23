@@ -197,6 +197,9 @@ class PromptRewriteMutation:
         rewrite_backend: RewriteBackend,
         artifact_root: Path | None = None,
         logger: Any | None = None,
+        reflection_model: str | None = None,
+        rewrite_model: str | None = None,
+        backend_name: str | None = None,
     ) -> None:
         if mutation_type not in {"strategy", "code"}:
             raise ValueError(f"Unknown mutation type: {mutation_type}")
@@ -209,13 +212,15 @@ class PromptRewriteMutation:
             backend=reflection_backend,
             artifact_root=artifact_root,
             logger=logger,
+            model=reflection_model,
+            backend_name=backend_name,
         )
         self.rewrite = PromptRewriteStage(
             rewrite_backend,
             max_attempts=config.mutation_max_attempts,
             logger=logger,
-            model=None if config.generation_backend == "mock" else config.llm_model,
-            backend_name=config.generation_backend,
+            model=rewrite_model if rewrite_model is not None else (None if config.generation_backend == "mock" else config.llm_model),
+            backend_name=backend_name or config.generation_backend,
         )
 
     def mutate(

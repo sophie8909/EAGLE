@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from types import SimpleNamespace
 from pathlib import Path
+from unittest.mock import patch
 
 from eagle.artifacts import write_candidate_artifacts
 from eagle.candidate import Candidate
@@ -15,7 +16,7 @@ from eagle.crossover import Crossover, CrossoverContext
 from eagle.evaluation import evaluate_candidate, print_progress
 from eagle.mutation import Mutation, MutationContext
 from eagle.offspring import normalize_prompt
-from eagle.search import choose_mutation, run_search
+from eagle.search import choose_mutation, front_zero_signature, run_search
 from eagle.selection import Selection, SelectionContext, dominates
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_performance import (
@@ -408,6 +409,63 @@ population_size: 3
             self.assertTrue((candidate_dir / "candidate_result.json").exists())
             individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
             self.assertNotIn("prompt_length", individual["fitness_objectives"])
+
+    def test_front_zero_signature_tracks_objectives_not_candidate_ids(self) -> None:
+        first = [
+            Candidate(id="front-a", fitness_objectives={"game_performance": 10.0, "code_quality": 20.0}),
+            Candidate(id="dominated-a", fitness_objectives={"game_performance": 1.0, "code_quality": 2.0}),
+        ]
+        second = [
+            Candidate(id="front-b", fitness_objectives={"game_performance": 10.0, "code_quality": 20.0}),
+            Candidate(id="dominated-b", fitness_objectives={"game_performance": 1.0, "code_quality": 2.0}),
+        ]
+
+        self.assertEqual(front_zero_signature(first), front_zero_signature(second))
+
+    def test_search_stops_when_front_zero_stagnates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = root / "config.yaml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "seed_prompts:",
+                        '  - "seed"',
+                        "generations: 10",
+                        "population_size: 1",
+                        'generation_backend: "mock"',
+                        'alignment_backend: "mock"',
+                        "front0_stagnation_generations: 2",
+                        f'runs_dir: "{(root / "runs").as_posix()}"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            config = ExperimentConfig.from_file(config_path)
+
+            def fake_evaluate_population(population, *, generation, **kwargs):
+                return [
+                    Candidate(
+                        id=f"evaluated-{generation}",
+                        generation=generation,
+                        fitness_objectives={"game_performance": 10.0, "code_quality": 20.0},
+                    )
+                ]
+
+            with patch("eagle.search.evaluate_population", side_effect=fake_evaluate_population) as evaluate, patch(
+                "eagle.search.create_offspring",
+                return_value=[Candidate(generation=1)],
+            ):
+                result = run_search(config, config_path=config_path, mock=True, run_id="stagnation_run")
+
+            self.assertEqual(evaluate.call_count, 3)
+            self.assertEqual(result.completed_generation, 2)
+            self.assertEqual(result.stop_reason, "front0_stagnation_2_generations")
+            summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["completed_generation"], 2)
+            self.assertEqual(summary["stop_reason"], "front0_stagnation_2_generations")
+            self.assertTrue((result.run_dir / "generation_002_population.json").exists())
+            self.assertFalse((result.run_dir / "generation_003_population.json").exists())
 
     def test_generate_java_agent_uses_stable_template_class_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -18,7 +18,7 @@ from .crossover import Crossover, CrossoverContext
 from .evaluation import evaluate_population
 from .mutation import MutationContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
-from .llm_profiles import LLMProfile, load_role_profiles
+from .llm_profiles import LLMProfile, load_effective_role_profiles
 from .offspring import normalize_prompt
 from .rewrite import PromptRewriteMutation
 from .selection import (
@@ -35,6 +35,8 @@ class SearchResult:
     run_dir: Path
     final_population: list[Candidate]
     best_candidate: Candidate | None
+    completed_generation: int = 0
+    stop_reason: str | None = None
 
 
 def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = False, run_id: str | None = None) -> SearchResult:
@@ -56,20 +58,28 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
 
     llm_logger = LLMCallLogger(run_dir / "llm_logs")
     backend_name = "mock" if mock else config.generation_backend
-    general_only = config.llm_topology == "general_only"
     if mock:
-        reflector_profile = LLMProfile("reflector", config.llm_base_url, config.llm_model)
-        rewriter_profile = LLMProfile("rewriter", config.llm_base_url, config.llm_model)
-        generator_profile = LLMProfile("generator", config.llm_base_url, config.llm_model)
+        role_profiles = {
+            "reflector": LLMProfile("reflector", config.llm_base_url, config.llm_model),
+            "rewriter": LLMProfile("rewriter", config.llm_base_url, config.llm_model),
+            "generator": LLMProfile("generator", config.llm_base_url, config.llm_model),
+        }
+        stage_routing = {
+            "reflection": "reflector",
+            "rewrite": "rewriter",
+            "generation": "generator",
+            "strategy_alignment": "reflector",
+        }
     else:
-        profiles = load_role_profiles(
-            config.endpoint_config_path,
-            general_only=general_only,
+        role_profiles, stage_routing = load_effective_role_profiles(
+            role_topology_path=config.llm_role_topology_path,
+            endpoint_config_path=config.endpoint_config_path,
+            llm_topology=config.llm_topology,
             allow_coder_loopback=config.allow_coder_loopback,
         )
-        reflector_profile = profiles["reflector"]
-        rewriter_profile = profiles["rewriter"]
-        generator_profile = profiles["generator"]
+    reflector_profile = role_profiles["reflector"]
+    rewriter_profile = role_profiles["rewriter"]
+    generator_profile = role_profiles["generator"]
     generation_backend = build_generation_backend(
         backend_name,
         base_url=generator_profile.base_url,
@@ -106,6 +116,9 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         rewrite_backend=rewrite_backend,
         artifact_root=candidates_dir,
         logger=llm_logger,
+        reflection_model=None if backend_name == "mock" else reflector_profile.model,
+        rewrite_model=None if backend_name == "mock" else rewriter_profile.model,
+        backend_name=backend_name,
     )
     code_mutation = PromptRewriteMutation(
         config,
@@ -114,13 +127,16 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         rewrite_backend=rewrite_backend,
         artifact_root=candidates_dir,
         logger=llm_logger,
+        reflection_model=None if backend_name == "mock" else reflector_profile.model,
+        rewrite_model=None if backend_name == "mock" else rewriter_profile.model,
+        backend_name=backend_name,
     )
     write_resolved_config(
         run_dir,
         config,
         mock=mock,
-        profiles={"reflector": reflector_profile, "rewriter": rewriter_profile, "generator": generator_profile},
-        stage_routing={"reflection": "reflector", "rewrite": "rewriter", "generation": "generator", "strategy_alignment": "reflector"},
+        profiles=role_profiles,
+        stage_routing=stage_routing,
     )
     write_prompt_snapshot(run_dir, config)
     results_path = run_dir / "results.jsonl"
@@ -138,6 +154,11 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         mock=mock,
         alignment_profile=reflector_profile,
     )
+
+    front0_signature = front_zero_signature(evaluated_population)
+    front0_stagnation_count = 0
+    completed_generation = 0
+    stop_reason: str | None = None
 
     for generation in range(1, config.generations):
         assign_rank_and_crowding(evaluated_population)
@@ -164,13 +185,54 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             alignment_profile=reflector_profile,
         )
         evaluated_population = select_next_generation(evaluated_population, evaluated_offspring, population_size=config.population_size)
+        current_front0_signature = front_zero_signature(evaluated_population)
+        if current_front0_signature == front0_signature:
+            front0_stagnation_count += 1
+        else:
+            front0_signature = current_front0_signature
+            front0_stagnation_count = 0
         write_generation_manifest(run_dir, generation, evaluated_population)
+        completed_generation = generation
+        if (
+            config.front0_stagnation_generations > 0
+            and front0_stagnation_count >= config.front0_stagnation_generations
+        ):
+            stop_reason = f"front0_stagnation_{config.front0_stagnation_generations}_generations"
+            break
 
     assign_rank_and_crowding(evaluated_population)
     best = best_candidate(evaluated_population)
     final_fronts = assign_rank_and_crowding(evaluated_population)
-    write_summary(run_dir, config=config, final_population=evaluated_population, best_candidate=best, pareto_fronts=final_fronts, mock=mock)
-    return SearchResult(run_dir=run_dir, final_population=evaluated_population, best_candidate=best)
+    write_summary(
+        run_dir,
+        config=config,
+        final_population=evaluated_population,
+        best_candidate=best,
+        pareto_fronts=final_fronts,
+        mock=mock,
+        completed_generation=completed_generation,
+        stop_reason=stop_reason,
+    )
+    return SearchResult(
+        run_dir=run_dir,
+        final_population=evaluated_population,
+        best_candidate=best,
+        completed_generation=completed_generation,
+        stop_reason=stop_reason,
+    )
+
+
+def front_zero_signature(population: list[Candidate]) -> tuple[tuple[float, ...], ...]:
+    """Return a stable signature for the objective values in Pareto front 0."""
+
+    fronts = assign_rank_and_crowding(population)
+    if not fronts:
+        return ()
+    return tuple(sorted(_objective_signature(candidate) for candidate in fronts[0]))
+
+
+def _objective_signature(candidate: Candidate) -> tuple[float, ...]:
+    return tuple(round(float(value), 12) for value in candidate.objective_vector())
 
 
 def initialize_population(config: ExperimentConfig) -> list[Candidate]:

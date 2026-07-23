@@ -11,7 +11,7 @@ from typing import Any
 from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH, get_seed_prompt_template
 
 from .candidate import DEFAULT_GENERATION_PROMPT
-from .llm_profiles import DEFAULT_ENDPOINT_CONFIG_PATH
+from .llm_profiles import DEFAULT_ENDPOINT_CONFIG_PATH, DEFAULT_ROLE_TOPOLOGY_PATH
 
 
 TRAINING_OPPONENT = "ai.abstraction.LightRush"
@@ -42,6 +42,7 @@ class ExperimentConfig:
     llm_base_url: str = "http://localhost:8080"
     llm_model: str = "local-model"
     endpoint_config_path: Path = DEFAULT_ENDPOINT_CONFIG_PATH
+    llm_role_topology_path: Path = DEFAULT_ROLE_TOPOLOGY_PATH
     allow_coder_loopback: bool = False
     llm_topology: str = "dual_host"
     microrts_dir: Path = Path("third_party/microrts")
@@ -64,6 +65,7 @@ class ExperimentConfig:
     material_scale: float = 10.0
     resource_scale: float = 10.0
     unit_material_values: tuple[tuple[str, float], ...] = DEFAULT_UNIT_MATERIAL_VALUES
+    front0_stagnation_generations: int = 5
     raw_config: str = ""
 
     @classmethod
@@ -95,6 +97,7 @@ class ExperimentConfig:
             llm_base_url=str(payload.get("llm_base_url", "http://localhost:8080")),
             llm_model=str(payload.get("llm_model", "local-model")),
             endpoint_config_path=_repository_path(payload.get("endpoint_config_path"), DEFAULT_ENDPOINT_CONFIG_PATH),
+            llm_role_topology_path=_repository_path(payload.get("llm_role_topology_path"), DEFAULT_ROLE_TOPOLOGY_PATH),
             allow_coder_loopback=bool(payload.get("allow_coder_loopback", False)),
             llm_topology=str(payload.get("llm_topology", payload.get("deployment_mode", "dual_host"))),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
@@ -117,6 +120,7 @@ class ExperimentConfig:
             material_scale=float(payload.get("material_scale", 10.0)),
             resource_scale=float(payload.get("resource_scale", 10.0)),
             unit_material_values=_parse_unit_material_values(payload.get("unit_material_values")),
+            front0_stagnation_generations=int(payload.get("front0_stagnation_generations", 5)),
             raw_config=raw_config,
         )
 
@@ -131,6 +135,8 @@ class ExperimentConfig:
             raise ValueError("mutation_rate must be in [0, 1].")
         if self.mutation_max_attempts < 1:
             raise ValueError("mutation_max_attempts must be at least 1.")
+        if self.front0_stagnation_generations < 0:
+            raise ValueError("front0_stagnation_generations must be at least 0.")
         if self.tick_limit < 1:
             raise ValueError("tick_limit must be at least 1.")
         if self.llm_topology not in {"dual_host", "general_only"}:

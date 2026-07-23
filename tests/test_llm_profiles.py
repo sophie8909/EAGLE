@@ -2,7 +2,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from eagle.llm_profiles import EndpointConfigError, LLMProfile, load_endpoint_profiles, update_endpoint_profile
+from eagle.llm_profiles import (
+    EndpointConfigError,
+    LLMProfile,
+    load_effective_role_profiles,
+    load_endpoint_profiles,
+    load_role_profiles,
+    update_endpoint_profile,
+)
 from eagle.mutation import build_reflection_backend
 from generation.backend import build_generation_backend
 
@@ -52,6 +59,55 @@ class LLMProfileTests(unittest.TestCase):
             )
             with self.assertRaises(EndpointConfigError):
                 load_endpoint_profiles(path)
+
+    def test_role_topology_resolves_semantic_roles(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "llm_topology.json"
+            path.write_text(
+                """
+{
+  "version": 1,
+  "servers": {
+    "general-server": {
+      "base_url": "http://127.0.0.1:8080/v1",
+      "model_id": "qwen3-8b",
+      "roles": ["reflector", "rewriter"]
+    },
+    "coder-server": {
+      "base_url": "http://192.168.1.20:8081/v1",
+      "model_id": "qwen-coder-7b",
+      "roles": ["generator"]
+    }
+  },
+  "roles": {
+    "reflector": {"server_id": "general-server"},
+    "rewriter": {"server_id": "general-server"},
+    "generator": {"server_id": "coder-server"}
+  }
+}
+""",
+                encoding="utf-8",
+            )
+            profiles = load_role_profiles(path)
+            self.assertEqual(profiles["reflector"].model, "qwen3-8b")
+            self.assertEqual(profiles["rewriter"].base_url, "http://127.0.0.1:8080/v1")
+            self.assertEqual(profiles["generator"].model, "qwen-coder-7b")
+
+    def test_empty_role_topology_falls_back_to_legacy_profiles(self):
+        with tempfile.TemporaryDirectory() as temp:
+            topology = Path(temp) / "llm_topology.json"
+            endpoints = Path(temp) / "llm_endpoints.toml"
+            topology.write_text('{"version": 1, "servers": {}, "roles": {}}\n', encoding="utf-8")
+            update_endpoint_profile(endpoints, LLMProfile("general", "http://127.0.0.1:8080/v1", "qwen3.5-9b"))
+            profiles, routing = load_effective_role_profiles(
+                role_topology_path=topology,
+                endpoint_config_path=endpoints,
+                llm_topology="general_only",
+            )
+            self.assertEqual(profiles["reflector"].model, "qwen3.5-9b")
+            self.assertEqual(profiles["rewriter"].model, "qwen3.5-9b")
+            self.assertEqual(profiles["generator"].model, "qwen3.5-9b")
+            self.assertEqual(routing["generation"], "generator")
 
 
 if __name__ == "__main__":

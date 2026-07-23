@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -121,6 +123,161 @@ def read_results_jsonl(run_dir: Path) -> list[dict[str, Any]]:
                 }
             )
     return records
+
+
+def read_objective_scatter_records(run_dir: Path) -> list[dict[str, Any]]:
+    records = read_results_jsonl_objective_records(run_dir)
+    if not records:
+        records = read_individual_objective_records(run_dir)
+    if not records:
+        records = read_generation_manifest_objective_records(run_dir)
+    if not records:
+        records = read_candidate_result_objective_records(run_dir)
+    return sorted_objective_records(dedupe_objective_records(records))
+
+
+def read_results_jsonl_objective_records(run_dir: Path) -> list[dict[str, Any]]:
+    path = run_dir / "results.jsonl"
+    if not path.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            payload = json.loads(line)
+            candidate = payload.get("candidate") or {}
+            record = objective_record_from_candidate(candidate)
+            if record is not None:
+                records.append(record)
+    return records
+
+
+def read_individual_objective_records(run_dir: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for path in sorted((run_dir / "candidates").glob("*/individual.json")):
+        candidate = read_json(path)
+        result_path = path.parent / "candidate_result.json"
+        final_score = read_json(result_path).get("final_score") if result_path.exists() else None
+        record = objective_record_from_candidate(candidate, final_score=final_score)
+        if record is not None:
+            records.append(record)
+    return records
+
+
+def read_generation_manifest_objective_records(run_dir: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for path in sorted(run_dir.glob("generation_*_population.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, list):
+            continue
+        manifest_generation = generation_from_manifest_path(path)
+        for candidate in payload:
+            if not isinstance(candidate, dict):
+                continue
+            record = objective_record_from_candidate(candidate)
+            if record is None:
+                continue
+            record["manifest_generation"] = manifest_generation
+            records.append(record)
+    return records
+
+
+def read_candidate_result_objective_records(run_dir: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for path in sorted((run_dir / "candidates").glob("*/candidate_result.json")):
+        payload = read_json(path)
+        record = objective_record_from_candidate_result(payload, candidate_id=path.parent.name)
+        if record is not None:
+            records.append(record)
+    return records
+
+
+def objective_record_from_candidate(
+    candidate: dict[str, Any],
+    *,
+    final_score: object | None = None,
+) -> dict[str, Any] | None:
+    objectives = objective_payload(candidate, final_score=final_score)
+    if not objectives:
+        return None
+    candidate_id = str(candidate.get("id") or candidate.get("candidate_id") or "")
+    return {
+        "generation": int_or_zero(candidate.get("generation")),
+        "candidate_id": candidate_id,
+        "code_quality": float_or_nan(objectives.get("code_quality")),
+        "game_performance": float_or_nan(objectives.get("game_performance")),
+        "source": "candidate",
+    }
+
+
+def objective_record_from_candidate_result(
+    payload: dict[str, Any],
+    *,
+    candidate_id: str,
+) -> dict[str, Any] | None:
+    objectives = migrate_legacy_objectives(payload.get("final_score"))
+    if not isinstance(objectives, dict):
+        return None
+    return {
+        "generation": int_or_zero(payload.get("generation")),
+        "candidate_id": str(payload.get("candidate_id") or candidate_id),
+        "code_quality": float_or_nan(objectives.get("code_quality")),
+        "game_performance": float_or_nan(objectives.get("game_performance")),
+        "source": "candidate_result",
+    }
+
+
+def objective_payload(candidate: dict[str, Any], *, final_score: object | None = None) -> dict[str, Any]:
+    for value in (
+        final_score,
+        candidate.get("fitness_objectives"),
+        candidate.get("objectives"),
+        candidate.get("final_score"),
+    ):
+        migrated = migrate_legacy_objectives(value)
+        if isinstance(migrated, dict):
+            return migrated
+    return {}
+
+
+def dedupe_objective_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_id: dict[str, dict[str, Any]] = {}
+    anonymous: list[dict[str, Any]] = []
+    for index, record in enumerate(records):
+        candidate_id = record.get("candidate_id") or ""
+        if not candidate_id:
+            anonymous.append({**record, "candidate_id": f"candidate_{index:04d}"})
+            continue
+        existing = by_id.get(candidate_id)
+        if existing is None or objective_record_completeness(record) > objective_record_completeness(existing):
+            by_id[candidate_id] = record
+    return [*by_id.values(), *anonymous]
+
+
+def objective_record_completeness(record: dict[str, Any]) -> int:
+    return sum(not math.isnan(record[key]) for key in ("code_quality", "game_performance"))
+
+
+def sorted_objective_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(records, key=lambda record: (record["generation"], record["candidate_id"]))
+
+
+def generation_from_manifest_path(path: Path) -> int:
+    match = re.search(r"generation_(\d+)_population\.json$", path.name)
+    return int(match.group(1)) if match else 0
+
+
+def int_or_zero(value: object) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def float_or_nan(value: object) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return math.nan
 
 
 def migrate_legacy_objectives(objectives: object) -> object:
