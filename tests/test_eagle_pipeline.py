@@ -207,6 +207,47 @@ population_size: 3
         selected = choose_mutation(failed_parent, (strategy_mutation, code_mutation), random.Random(1))
         self.assertIs(selected, code_mutation)
 
+    def test_high_code_quality_favors_strategy_mutation(self) -> None:
+        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+        strategy_mutation = Mutation(config, method="strategy_reflection")
+        code_mutation = Mutation(config, method="code_generation_reflection")
+        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 501.0})
+
+        self.assertIs(
+            choose_mutation(parent, (strategy_mutation, code_mutation), random.Random(1)),
+            strategy_mutation,
+        )
+
+    def test_high_code_quality_uses_code_mutation_for_ten_percent_tail(self) -> None:
+        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+        strategy_mutation = Mutation(config, method="strategy_reflection")
+        code_mutation = Mutation(config, method="code_generation_reflection")
+        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 501.0})
+
+        class TailRandom:
+            def random(self) -> float:
+                return 0.95
+
+        self.assertIs(
+            choose_mutation(parent, (strategy_mutation, code_mutation), TailRandom()),
+            code_mutation,
+        )
+
+    def test_code_quality_threshold_is_strictly_greater_than_500(self) -> None:
+        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+        strategy_mutation = Mutation(config, method="strategy_reflection")
+        code_mutation = Mutation(config, method="code_generation_reflection")
+        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 500.0})
+
+        class ChoiceRandom:
+            def choice(self, values):
+                return values[1]
+
+        self.assertIs(
+            choose_mutation(parent, (strategy_mutation, code_mutation), ChoiceRandom()),
+            code_mutation,
+        )
+
     def test_unknown_mutation_method_raises_value_error(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
         with self.assertRaisesRegex(ValueError, "Unknown mutation method"):
