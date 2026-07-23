@@ -7,6 +7,13 @@ deterministic_seeds:
   - 104729
   - 130363
   - 155921
+  - 181081
+  - 196613
+  - 214669
+  - 233009
+  - 253231
+  - 271811
+  - 291181
 maps:
   - maps/8x8/basesWorkers8x8.xml
   - maps/16x16/basesWorkers16x16.xml
@@ -16,7 +23,7 @@ cycles_per_map:
   - 4000
   - 5000
 subprocess_timeout_seconds: 300
-matches_per_opponent_map_side: 3
+matches_per_opponent: 10
 player_sides:
   - 0
   - 1

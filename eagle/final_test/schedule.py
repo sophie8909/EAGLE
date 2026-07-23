@@ -41,21 +41,21 @@ def build_schedule(
     schedule: list[FinalTestMatch] = []
     for candidate in candidates:
         for opponent_id in config.opponent_ids:
-            for map_config in config.maps:
-                for side in config.player_sides:
-                    for seed in config.seeds:
-                        schedule.append(
-                            FinalTestMatch(
-                                match_index=len(schedule),
-                                candidate_id=candidate.candidate_id,
-                                opponent_id=opponent_id,
-                                map_id=map_config.map_id,
-                                map_path=map_config.path,
-                                max_cycles=map_config.max_cycles,
-                                candidate_player=side,
-                                seed=seed,
-                            )
-                        )
+            for match_ordinal in range(config.matches_per_opponent):
+                map_config = config.maps[match_ordinal % len(config.maps)]
+                side = config.player_sides[match_ordinal % len(config.player_sides)]
+                schedule.append(
+                    FinalTestMatch(
+                        match_index=len(schedule),
+                        candidate_id=candidate.candidate_id,
+                        opponent_id=opponent_id,
+                        map_id=map_config.map_id,
+                        map_path=map_config.path,
+                        max_cycles=map_config.max_cycles,
+                        candidate_player=side,
+                        seed=config.seeds[match_ordinal],
+                    )
+                )
     expected = exact_match_count(len(candidates), config)
     if len(schedule) != expected:
         raise AssertionError(f"Schedule contains {len(schedule)} matches; expected {expected}.")
@@ -66,8 +66,6 @@ def exact_match_count(candidate_count: int, config: FinalTestConfig) -> int:
     return (
         candidate_count
         * len(config.opponent_ids)
-        * len(config.maps)
-        * len(config.player_sides)
-        * config.matches_per_opponent_map_side
+        * config.matches_per_opponent
     )
 

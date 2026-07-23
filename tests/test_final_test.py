@@ -220,8 +220,12 @@ class FinalTestScheduleAndRuntimeTests(unittest.TestCase):
             selected = SelectedCandidate("candidate", 1, 3.0, 4.0, source, individual)
             schedule = build_schedule((selected,), config)
         self.assertEqual(len(schedule), exact_match_count(1, config))
-        self.assertEqual(len(schedule), 54)
+        self.assertEqual(len(schedule), 30)
         self.assertEqual({item.candidate_player for item in schedule}, {0, 1})
+        for opponent_id in config.opponent_ids:
+            opponent_matches = [item for item in schedule if item.opponent_id == opponent_id]
+            self.assertEqual(len(opponent_matches), 10)
+            self.assertEqual({item.candidate_player for item in opponent_matches}, {0, 1})
 
     def test_canonical_match_launcher_supports_champion_jar_and_player_one(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -335,7 +339,7 @@ class FinalTestExecutionTests(unittest.TestCase):
                     verify_opponents=False,
                 )
             self.assertTrue(outcome.success)
-            self.assertEqual(calls, {"compile": 1, "match": 54})
+            self.assertEqual(calls, {"compile": 1, "match": 30})
             rows = [json.loads(line) for line in (outcome.final_test_dir / "results.jsonl").read_text(encoding="utf-8").splitlines()]
             self.assertEqual(len({item["candidate_source_sha256"] for item in rows}), 1)
             self.assertEqual(len({item["candidate_class_sha256"] for item in rows}), 1)
@@ -383,8 +387,8 @@ class FinalTestAnalysisReaderTests(unittest.TestCase):
                 "status": "complete",
                 "selector": "best-game-performance",
                 "tested_candidate_ids": ["chosen"],
-                "expected_total_matches": 54,
-                "completed_total_matches": 54,
+                "expected_total_matches": 30,
+                "completed_total_matches": 30,
                 "incomplete_total_matches": 0,
                 "candidates": {"chosen": {"aggregate": {"wins": 20, "draws": 10, "losses": 24, "final_test_competition_score": 0.46296}}},
                 "artifact_paths": {"results": "results.jsonl"},

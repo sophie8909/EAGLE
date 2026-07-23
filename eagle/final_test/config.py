@@ -29,7 +29,7 @@ class FinalTestConfig:
     seeds: tuple[int, ...]
     maps: tuple[FinalTestMap, ...]
     subprocess_timeout_seconds: float
-    matches_per_opponent_map_side: int
+    matches_per_opponent: int
     player_sides: tuple[int, ...]
     player_side_policy: str
     output_directory: str
@@ -63,7 +63,7 @@ class FinalTestConfig:
             seeds=tuple(int(value) for value in payload.get("deterministic_seeds", ())),
             maps=tuple(FinalTestMap(path, cycle) for path, cycle in zip(map_paths, cycles)),
             subprocess_timeout_seconds=float(payload.get("subprocess_timeout_seconds", 300.0)),
-            matches_per_opponent_map_side=int(payload.get("matches_per_opponent_map_side", 0)),
+            matches_per_opponent=int(payload.get("matches_per_opponent", 0)),
             player_sides=tuple(int(value) for value in payload.get("player_sides", ())),
             player_side_policy=str(payload.get("player_side_policy", "")),
             output_directory=str(payload.get("output_directory", "final_tests")),
@@ -88,10 +88,10 @@ class FinalTestConfig:
             raise ValueError("Final tests must use exactly tma, mayari, and coac in that order.")
         if not self.seeds or len(self.seeds) != len(set(self.seeds)):
             raise ValueError("deterministic_seeds must be a non-empty list of distinct integers.")
-        if self.matches_per_opponent_map_side != len(self.seeds):
-            raise ValueError(
-                "matches_per_opponent_map_side must equal the deterministic seed count."
-            )
+        if self.matches_per_opponent != 10:
+            raise ValueError("Final tests must run exactly 10 matches per opponent.")
+        if len(self.seeds) != self.matches_per_opponent:
+            raise ValueError("deterministic_seeds must contain one seed per opponent match.")
         if not self.maps or any(item.max_cycles < 1 for item in self.maps):
             raise ValueError("At least one map with a positive cycle limit is required.")
         map_ids = [item.map_id for item in self.maps]
@@ -122,9 +122,9 @@ class FinalTestConfig:
 
         return replace(
             self,
-            seeds=self.seeds[:1],
+            seeds=self.seeds[:2],
             maps=self.maps[:1],
-            matches_per_opponent_map_side=1,
+            matches_per_opponent=2,
         )
 
     def to_resolved_dict(self, *, formal: bool) -> dict[str, Any]:
@@ -138,7 +138,7 @@ class FinalTestConfig:
                 for item in self.maps
             ],
             "subprocess_timeout_seconds": self.subprocess_timeout_seconds,
-            "matches_per_opponent_map_side": self.matches_per_opponent_map_side,
+            "matches_per_opponent": self.matches_per_opponent,
             "player_sides": list(self.player_sides),
             "player_side_policy": self.player_side_policy,
             "output_directory": self.output_directory,

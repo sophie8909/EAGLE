@@ -48,7 +48,7 @@ Selection completes before any final-test match and reads only `summary.json`, `
 - `maps/16x16/basesWorkers16x16.xml`, 4000 cycles;
 - `maps/24x24/basesWorkers24x24.xml`, 5000 cycles.
 
-Seeds are `104729`, `130363`, and `155921`. Every selected candidate plays every champion, map, and seed as both player 0 and player 1. This produces `3 opponents * 3 maps * 3 seeds * 2 sides = 54` matches per candidate. The same schedule is used for every compared method/run.
+The configuration contains ten deterministic seeds. Every selected candidate plays each champion exactly 10 times. The schedule rotates through the three maps and alternates player 0/player 1, so each opponent receives five matches on each side while all maps remain represented. This produces `3 opponents * 10 = 30` matches per candidate. The same schedule is used for every compared method/run.
 
 The selected canonical Java source is copied with hash verification, compiled once into final-test-specific classes, and integration-checked once. Every match reuses the same source/class hashes and the canonical MicroRTS process launcher, result validation, telemetry parser, replay/round-state handling, timing, and terminal failure classification. Formal execution continues through its schedule to preserve all evidence, then exits non-zero if any match is incomplete or invalid.
 
