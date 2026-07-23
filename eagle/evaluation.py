@@ -559,6 +559,16 @@ def match_failure_category(reason: str) -> str:
 def print_progress(*, generation: int, index: int, population_size: int, evaluation: CandidateEvaluation) -> None:
     candidate = evaluation.candidate
     quality = evaluation.code_quality_breakdown
+    game_metrics = evaluation.game_metrics
+    match_scores = [] if game_metrics is None else [
+        summary.get("performance")
+        for summary in game_metrics.match_summaries
+        if summary.get("performance") is not None
+    ]
+    game_performance_detail = (
+        f" game_performance_matches={match_scores}"
+        f" game_performance_fitness={candidate.fitness_objectives.get('game_performance')}"
+    )
     detail = ""
     if evaluation.error:
         detail = f" error={evaluation.error}"
@@ -569,6 +579,7 @@ def print_progress(*, generation: int, index: int, population_size: int, evaluat
         f"[gen {generation} cand {index + 1}/{population_size}] "
         f"{candidate.id} status={candidate.status} "
         f"objectives={candidate.fitness_objectives} "
+        f"{game_performance_detail} "
         f"code_quality_total={quality.code_quality} "
         f"code_quality_components=("
         f"successful_base={quality.successful_base} + "

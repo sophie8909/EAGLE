@@ -84,6 +84,12 @@ class EaglePipelineTests(unittest.TestCase):
             ),
             error=None,
             compile_result=None,
+            game_metrics=SimpleNamespace(
+                match_summaries=[
+                    {"performance": 100.0},
+                    {"performance": -90.0},
+                ],
+            ),
             code_quality_breakdown=quality,
         )
         output = StringIO()
@@ -97,6 +103,8 @@ class EaglePipelineTests(unittest.TestCase):
         text = output.getvalue()
         self.assertIn("code_quality_total=605.0", text)
         self.assertIn("successful_base=500.0 + compilation=0.0 + function=100.0 + strategy_alignment=5.0 = 605.0", text)
+        self.assertIn("game_performance_matches=[100.0, -90.0]", text)
+        self.assertIn("game_performance_fitness=1.0", text)
     def test_parse_minimal_yaml(self) -> None:
         payload = parse_minimal_yaml(
             """
