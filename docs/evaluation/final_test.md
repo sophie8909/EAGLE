@@ -6,14 +6,14 @@ This document owns the post-evolution final-test contract. It does not alter the
 
 EAGLE has exactly two evaluation contexts:
 
-1. **Evolution Evaluation** runs inside the EA, uses the fixed ten-match `ai.abstraction.LightRush` protocol, produces `game_performance` and `code_quality`, and may affect selection and variation.
+1. **Evolution Evaluation** runs inside the EA, uses the ten-opponent roster: 3 external agents, 5 vendored basic agents, and 2 historical self agents, produces `game_performance` and `code_quality`, and may affect selection and variation.
 2. **Final Test** runs only after a completed EA run, selects already evaluated Java using evolution artifacts alone, and measures gameplay against external champions.
 
 There is no validation split or validation stage. Final Test never invokes an LLM, generation, repair, Reflection, Rewrite, crossover, mutation, or NSGA-II. Its results are descriptive and cannot affect candidate selection or evolutionary fitness. Operational source compilation and class-loading checks are prerequisites, not a model-selection stage.
 
 ## Opponent provenance
 
-The committed manifest `third_party/final_test_opponents/manifest.toml` pins exactly:
+The committed manifest `third_party/final_test_opponents/manifest.toml` pins the three external agents. Final Test also includes five vendored basic agents: RandomAI, RandomBiasedAI, PassiveAI, LightRush, and HeavyRush.
 
 | ID | Competition reference | Upstream | Pinned commit | Detected class | Prepared JAR |
 | --- | --- | --- | --- | --- | --- |
@@ -48,7 +48,7 @@ Selection completes before any final-test match and reads only `summary.json`, `
 - `maps/16x16/basesWorkers16x16.xml`, 4000 cycles;
 - `maps/24x24/basesWorkers24x24.xml`, 5000 cycles.
 
-The configuration contains ten deterministic seeds. Every selected candidate plays each champion exactly 10 times. The schedule rotates through the three maps and alternates player 0/player 1, so each opponent receives five matches on each side while all maps remain represented. This produces `3 opponents * 10 = 30` matches per candidate. The same schedule is used for every compared method/run.
+The configuration contains ten deterministic seeds. Every selected candidate plays each champion exactly 10 times. The schedule rotates through the three maps and alternates player 0/player 1, so each opponent receives five matches on each side while all maps remain represented. This produces `8 opponents * 10 = 80` matches per candidate. The same schedule is used for every compared method/run.
 
 The selected canonical Java source is copied with hash verification, compiled once into final-test-specific classes, and integration-checked once. Every match reuses the same source/class hashes and the canonical MicroRTS process launcher, result validation, telemetry parser, replay/round-state handling, timing, and terminal failure classification. Formal execution continues through its schedule to preserve all evidence, then exits non-zero if any match is incomplete or invalid.
 
@@ -106,4 +106,4 @@ python3 scripts/run_final_test.py \
   --smoke
 ```
 
-The smoke flag produces six matches and is not a formal final test. A successful real smoke requires all six Java matches to complete; mock-only tests are not compatibility proof. Saved summaries are readable through `scripts/analyze_run.py` and the existing Runs & Candidates GUI Final Tests tab.
+The smoke flag produces sixteen matches and is not a formal final test. A successful real smoke requires all six Java matches to complete; mock-only tests are not compatibility proof. Saved summaries are readable through `scripts/analyze_run.py` and the existing Runs & Candidates GUI Final Tests tab.

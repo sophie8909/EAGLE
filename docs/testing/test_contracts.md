@@ -1,4 +1,4 @@
-﻿# Test contracts
+# Test contracts
 
 Tests must prove the normative architecture, not preserve accidental current structure. Read the canonical document for every changed responsibility.
 
@@ -26,7 +26,7 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, and no fixed internal layout |
 | Compilation | isolated output; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; `passed`/`failed`/`blocked`; no match execution |
-| Matches | compile once; same source/class hash; exactly 10 LightRush matches; distinct directories/seeds; no regeneration |
+| Matches | compile once; same source/class hash; exactly 10 roster matches (3 external, 5 basic, 2 historical self); distinct directories/seeds; no regeneration |
 | Final Test | pinned revision and interrupted-checkout recovery; explicit adapter hashes; selection before matches; both sides; exact counts; compile once; stable hashes; no LLM/evolutionary operators; aggregation and incomplete rejection; real three-champion smoke |
 | Game Performance | exact canonical component math, clamps, bands, aggregation, partial-batch failure |
 | Code Quality | selected `+500` base, `[0,610]` range, warning/capability/alignment components, formula version, and failure ordering |

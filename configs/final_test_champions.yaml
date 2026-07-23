@@ -3,6 +3,11 @@ opponent_ids:
   - tma
   - mayari
   - coac
+  - random
+  - random_biased
+  - passive
+  - light_rush
+  - heavy_rush
 deterministic_seeds:
   - 104729
   - 130363

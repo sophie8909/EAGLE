@@ -17,7 +17,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Evaluate already generated Java from a completed EAGLE run against pinned "
-            "TMA, Mayari, and COAC opponents. No LLM or evolutionary operator is used."
+            "external and vendored basic opponents. No LLM or evolutionary operator is used."
         )
     )
     parser.add_argument("--run-dir", type=Path, required=True, help="Completed runs/<run_id> directory")
@@ -37,7 +37,7 @@ def main() -> int:
     parser.add_argument(
         "--smoke",
         action="store_true",
-        help="Run all three opponents on the first map/seed and both player sides (6 matches)",
+        help="Run all eight opponents on the first map/seed and both player sides (16 matches)",
     )
     args = parser.parse_args()
     try:

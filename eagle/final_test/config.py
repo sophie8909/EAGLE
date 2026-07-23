@@ -10,6 +10,7 @@ from typing import Any
 from eagle.config import parse_minimal_yaml
 
 from . import FINAL_TEST_SCHEMA_VERSION
+from eagle.opponents import FINAL_TEST_ROSTER
 
 
 @dataclass(frozen=True)
@@ -84,8 +85,8 @@ class FinalTestConfig:
     def validate(self, *, repository_root: Path) -> None:
         if self.schema_version != FINAL_TEST_SCHEMA_VERSION:
             raise ValueError(f"final_test_schema_version must be {FINAL_TEST_SCHEMA_VERSION}.")
-        if self.opponent_ids != ("tma", "mayari", "coac"):
-            raise ValueError("Final tests must use exactly tma, mayari, and coac in that order.")
+        if self.opponent_ids != tuple(item.opponent_id for item in FINAL_TEST_ROSTER):
+            raise ValueError("Final tests must use exactly the external and basic opponent roster in order.")
         if not self.seeds or len(self.seeds) != len(set(self.seeds)):
             raise ValueError("deterministic_seeds must be a non-empty list of distinct integers.")
         if self.matches_per_opponent != 10:

@@ -15,6 +15,7 @@ from evaluation.microrts_runner import DEFAULT_MAP_PATH, INTEGRATION_CHECK_NAMES
 from generation.java_agent_generator import ValidationResult
 
 from .candidate import Candidate
+from .opponents import EVALUATION_ROSTER
 from .llm_profiles import LLMProfile
 from .prompts import DEFAULT_PROMPT_TEMPLATE_PATH, load_prompt_templates
 from .config import ExperimentConfig
@@ -307,6 +308,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "mutation_selection_policy": "failed_game_to_code_otherwise_seeded_random",
         "matches_per_candidate": config.matches_per_candidate,
         "opponent": config.opponent,
+        "evaluation_opponents": [item.__dict__ for item in EVALUATION_ROSTER],
         "objective_directions": OBJECTIVE_DIRECTIONS,
         "map": config.map_path,
         "max_cycles": config.tick_limit,

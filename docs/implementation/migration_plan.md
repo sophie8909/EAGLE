@@ -64,7 +64,7 @@ Exit satisfied: source validation accepts arbitrary valid internals while enforc
 4. Prove one source hash/compile serves all 10 matches with no generation calls.
 5. Retain partial match evidence and runtime-progress classification.
 
-Closes: G-04 through G-08 and G-11. Exit satisfied: exactly 10 seeded LightRush matches reuse one source/class set; runtime failures are typed; canonical Game Performance and Code Quality (including Function Capability and Strategy Alignment) feed exactly two objectives; evaluation artifacts and timing pass focused and full-suite tests.
+Closes: G-04 through G-08 and G-11. Exit satisfied: exactly 10 seeded roster matches (3 external, 5 basic, 2 historical self) reuse one source/class set; runtime failures are typed; canonical Game Performance and Code Quality (including Function Capability and Strategy Alignment) feed exactly two objectives; evaluation artifacts and timing pass focused and full-suite tests.
 
 ## Phase 5: objectives (completed inside the Phase 4 Evaluation Layer milestone)
 

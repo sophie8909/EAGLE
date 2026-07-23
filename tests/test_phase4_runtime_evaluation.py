@@ -10,6 +10,7 @@ from unittest.mock import patch
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, MATCHES_PER_CANDIDATE, TRAINING_OPPONENT
 from eagle.evaluation import evaluate_matches
+from eagle.opponents import EVALUATION_ROSTER
 from evaluation.microrts_runner import MatchResult, run_microrts_match
 from generation.java_agent_generator import GeneratedJavaAgent
 
@@ -73,6 +74,8 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(len(results), 10)
         self.assertEqual([item["match_index"] for item in observed], list(range(10)))
+        self.assertEqual([item["opponent"] for item in observed[:8]], [item.class_name for item in EVALUATION_ROSTER])
+        self.assertEqual([item.opponent_id for item in results[8:]], ["historical_self_1", "historical_self_2"])
         self.assertEqual([item["seed"] for item in observed], list(config.resolved_match_seeds))
         self.assertEqual(len({item["source_hash"] for item in observed}), 1)
         self.assertEqual(len({item["class_hash"] for item in observed}), 1)

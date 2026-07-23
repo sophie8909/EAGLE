@@ -37,6 +37,7 @@ from .opponents import (
 )
 from .schedule import FinalTestMatch, build_schedule, exact_match_count
 from .selection import SelectedCandidate, select_final_test_candidates
+from eagle.opponents import BASIC_OPPONENTS, EXTERNAL_OPPONENTS
 
 
 CompileFunction = Callable[..., CompileResult]
@@ -103,8 +104,9 @@ def execute_final_test(
     )
     opponents = load_resolved_opponents(
         config.resolved_opponents_manifest,
-        expected_ids=config.opponent_ids,
+        expected_ids=tuple(item.opponent_id for item in EXTERNAL_OPPONENTS),
     )
+    opponents.update(_builtin_final_test_opponents())
     active_id = final_test_id or _default_final_test_id(selection.selector, smoke=smoke)
     final_test_dir = create_final_test_directory(run_dir, config.output_directory, active_id)
     copy_input_config(config_path, final_test_dir)
@@ -137,7 +139,7 @@ def execute_final_test(
             final_test_dir / "opponent_probe",
             config.microrts_dir,
         )
-        for opponent_id in config.opponent_ids:
+        for opponent_id in (item.opponent_id for item in EXTERNAL_OPPONENTS):
             verify_resolved_opponent(
                 opponents[opponent_id],
                 repository_root=repository_root,
@@ -315,7 +317,7 @@ def _run_one_match(
     match_function: MatchFunction,
 ) -> dict[str, Any]:
     output_dir = final_test_dir / match.artifact_relative_path
-    jar_path = (repository_root / opponent.jar_path).resolve()
+    jar_path = None if not opponent.jar_path else (repository_root / opponent.jar_path).resolve()
     try:
         result = match_function(
             microrts_dir=config.microrts_dir,
@@ -333,7 +335,7 @@ def _run_one_match(
             source_hash=candidate.source_hash,
             class_hash=candidate.class_hash,
             candidate_player=match.candidate_player,
-            extra_classpath_entries=(jar_path,),
+            extra_classpath_entries=() if jar_path is None else (jar_path,),
             match_output_dir=output_dir,
         )
         record = result.to_json_dict()
@@ -448,3 +450,26 @@ def _default_final_test_id(selector: str, *, smoke: bool) -> str:
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+
+
+def _builtin_final_test_opponents() -> dict[str, ResolvedOpponent]:
+    return {
+        item.opponent_id: ResolvedOpponent(
+            opponent_id=item.opponent_id,
+            display_name=item.display_name,
+            competition_year=0,
+            upstream_repository="vendored-microrts",
+            pinned_commit="0" * 40,
+            class_name=item.class_name,
+            build_method="vendored-runtime",
+            jar_path="",
+            required_classpath_entries=(),
+            jar_sha256="builtin",
+            source_sha256="builtin",
+            detected_ai_classes=(item.class_name,),
+            class_load_verified=True,
+            license_status="vendored MicroRTS runtime",
+            detected_license_files=(),
+        )
+        for item in BASIC_OPPONENTS
+    }

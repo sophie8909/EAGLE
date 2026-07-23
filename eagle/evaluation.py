@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+import json
+import re
 import time
 from pathlib import Path
 
@@ -42,6 +44,7 @@ from generation.java_agent_generator import (
 from .artifacts import append_result, write_candidate_artifacts, write_candidate_inputs
 from .candidate import Candidate
 from .config import ExperimentConfig
+from .opponents import EVALUATION_ROSTER, rooted_jar_path
 
 
 @dataclass(frozen=True)
@@ -447,40 +450,73 @@ def compile_agent_source(agent: GeneratedJavaAgent, *, config: ExperimentConfig,
 
 
 def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int) -> tuple[list[MatchResult], str | None]:
+    """Run one match for each of the ten configured evaluation opponents."""
     match_results: list[MatchResult] = []
     source_hash = hash_file(agent.source_path)
     candidate_classes_dir = classes_dir / candidate.id
     class_hash = hash_class_directory(candidate_classes_dir)
+    self_opponents = _prepare_historical_self_opponents(candidate=candidate, agent=agent, config=config, classes_dir=classes_dir, match_artifacts_dir=match_artifacts_dir, mock=mock)
+    opponents = [(item.opponent_id, item.class_name, rooted_jar_path(Path.cwd(), item)) for item in EVALUATION_ROSTER] + self_opponents
     seeds = config.resolved_match_seeds
     try:
-        for match_index in range(10):
+        for match_index, (opponent_id, opponent_class, opponent_jar) in enumerate(opponents):
             result = run_microrts_match(
-                microrts_dir=config.microrts_dir,
-                classes_dir=candidate_classes_dir,
-                agent_class=agent.qualified_class_name,
-                opponent=config.opponent,
-                tick_limit=config.tick_limit,
-                match_index=match_index,
+                microrts_dir=config.microrts_dir, classes_dir=candidate_classes_dir,
+                agent_class=agent.qualified_class_name, opponent=opponent_class,
+                tick_limit=config.tick_limit, match_index=match_index,
                 match_artifacts_dir=match_artifacts_dir,
-                scoring_config=scoring_config_from_experiment(config),
-                mock=mock,
+                scoring_config=scoring_config_from_experiment(config), mock=mock,
                 mock_score=config.mock_score_base + config.mock_score_step * (ordinal + match_index),
-                seed=seeds[match_index],
-                timeout_seconds=config.match_timeout_seconds,
-                map_path=config.map_path,
-                candidate_id=candidate.id,
-                source_hash=source_hash,
-                class_hash=class_hash,
+                seed=seeds[match_index], timeout_seconds=config.match_timeout_seconds,
+                map_path=config.map_path, candidate_id=candidate.id,
+                source_hash=source_hash, class_hash=class_hash,
+                extra_classpath_entries=() if opponent_jar is None else (opponent_jar,),
             )
-            match_results.append(result)
+            match_results.append(replace(result, opponent_id=opponent_id))
             if not result.ok:
                 return match_results, match_error_message(result)
     except (RuntimeError, OSError) as exc:
         return match_results, str(exc)
-
-    if len(match_results) != 10:
-        return match_results, f"partial evaluation: completed {len(match_results)} of 10 matches"
+    if len(match_results) != len(opponents):
+        return match_results, f"partial evaluation: completed {len(match_results)} of {len(opponents)} matches"
     return match_results, None
+
+
+def _prepare_historical_self_opponents(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool) -> list[tuple[str, str, Path | None]]:
+    prepared: list[tuple[str, str, Path | None]] = []
+    for index, source in enumerate(_historical_self_sources(candidate, agent, match_artifacts_dir), start=1):
+        class_name = f"HistoricalSelf{index}"
+        source_dir = (match_artifacts_dir or classes_dir) / "historical_self"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        source_path = source_dir / f"{class_name}.java"
+        transformed = source.replace("CandidateAgent", class_name).replace("package ai.generated;", "package ai.historical;")
+        source_path.write_text(transformed, encoding="utf-8")
+        result = compile_generated_agent(source_path, microrts_dir=config.microrts_dir, output_dir=classes_dir / candidate.id / f"historical_self_{index}", mock=mock)
+        if not result.ok:
+            prepared.append((f"historical_self_{index}", f"ai.historical.{class_name}", None))
+            continue
+        prepared.append((f"historical_self_{index}", f"ai.historical.{class_name}", None))
+    return prepared
+
+
+def _historical_self_sources(candidate: Candidate, agent: GeneratedJavaAgent, match_artifacts_dir: Path | None) -> tuple[str, str]:
+    current = agent.source
+    run_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent.parent
+    historical: list[str] = []
+    for generation in (candidate.generation - 1, candidate.generation - 2):
+        if run_dir is None or generation < 0:
+            continue
+        try:
+            population = json.loads((run_dir / f"generation_{generation:03d}_population.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        valid = [item for item in population if item.get("generated_java")]
+        valid.sort(key=lambda item: (-float((item.get("fitness_objectives") or {}).get("game_performance", -1000)), -float((item.get("fitness_objectives") or {}).get("code_quality", -1000)), str(item.get("id", item.get("candidate_id", "")))))
+        if valid:
+            historical.append(str(valid[0]["generated_java"]))
+    while len(historical) < 2:
+        historical.append(current)
+    return historical[:2]
 
 
 def scoring_config_from_experiment(config: ExperimentConfig) -> GamePerformanceConfig:

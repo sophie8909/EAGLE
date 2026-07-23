@@ -68,7 +68,7 @@ The specification calls this layout recommended while making the underlying evid
 
 ## Run-level contracts
 
-`config.yaml` preserves the supplied configuration. `resolved_config.json` records actual runtime values, including population/generation sizes, operator rates/policy, 10-match LightRush protocol, map/cycles/seeds, LLM/retry/prompt versions, objective/artifact versions, and Git commit. `run_summary.json` records completion state, selected population, Pareto fronts, objective names, and failure counts.
+`config.yaml` preserves the supplied configuration. `resolved_config.json` records actual runtime values, including population/generation sizes, operator rates/policy, 10-opponent evaluation protocol, map/cycles/seeds, LLM/retry/prompt versions, objective/artifact versions, and Git commit. `run_summary.json` records completion state, selected population, Pareto fronts, objective names, and failure counts.
 
 Never silently override an input without writing the resolved value.
 
@@ -95,7 +95,7 @@ Each `match_<index>/` contains `result.json`, `replay.xml`, `round_states/`, `st
 
 Required metadata:
 
-- `candidate_id`, `match_index`, `candidate_player`, `opponent`;
+- `candidate_id`, `match_index`, `candidate_player`, `opponent`, `opponent_id`;
 - `map`, `seed`, `max_cycles`, `final_tick`, `winner`;
 - player/enemy final resources and `unit_material_trace`;
 - return code, duration, status, and failure reason.

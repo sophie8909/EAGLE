@@ -26,7 +26,7 @@ Persist all seven ordered check results. A failed prerequisite marks downstream 
 ## MicroRTS protocol
 
 - Candidate: generated Java, always evaluated as the configured candidate player.
-- Opponent: `ai.abstraction.LightRush`.
+- Opponents: one match each against 3 external agents, 5 vendored basic agents, and 2 historical self agents (10 matches total).
 - Match count: exactly 10.
 - Compilation count: once per generated source.
 - Java generation count during evaluation: zero.
@@ -74,7 +74,7 @@ Current code does not yet respect these boundaries fully. See gaps `G-05` throug
 - Verify the stage order and that downstream stages do not run after terminal failure.
 - Verify exactly one compile and 10 match calls per successful candidate.
 - Verify the same source hash and class directory are used for all matches.
-- Verify LightRush and distinct match directories/seeds.
+- Verify the ten-opponent roster and distinct match directories/seeds.
 - Verify a nine-match partial batch fails while retaining all nine results.
 - Verify each pipeline stage maps to the correct failure classification.
 
