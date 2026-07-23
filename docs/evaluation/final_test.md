@@ -27,7 +27,7 @@ The setup command clones only these pinned revisions, rebuilds source with the v
 python3 scripts/setup_final_test_opponents.py
 ```
 
-The pinned upstream revisions contain no repository-level `LICENSE`, `COPYING`, or `NOTICE` file. Champion source and generated JARs therefore remain ignored local dependencies and are not redistributed by EAGLE. The resolved manifest records detected license files and any inspected upstream prebuilt JAR hash. TMA and COAC are source-built; Mayari is also source-built even though its upstream revision contains a prebuilt JAR. RAISocketAI is intentionally excluded because it requires a separate Python/PyTorch/model runtime. An unavailable champion is a setup failure and is never replaced with a baseline.
+The pinned upstream revisions contain no repository-level `LICENSE`, `COPYING`, or `NOTICE` file. Champion source and generated JARs therefore remain ignored local dependencies and are not redistributed by EAGLE. The resolved manifest records detected license files and any inspected upstream prebuilt JAR hash. COAC and Mayari are source-built directly; Mayari's upstream prebuilt JAR is hashed but not selected. TMA is source-built from its unchanged entrypoint and README-designated active `strategiesV2` sources. A committed behavior-free package marker satisfies TMA's stale wildcard import of the README-deprecated `strategies` package; its path and hash are explicit in the resolved manifest. RAISocketAI is intentionally excluded because it requires a separate Python/PyTorch/model runtime. An unavailable champion is a setup failure and is never replaced with a baseline.
 
 ## Candidate selection
 

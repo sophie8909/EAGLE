@@ -48,3 +48,9 @@ The most recent complete saved population run (`runs/20260712_154209_634218`) us
 - `scripts/play_candidate_gui.py` retains transitional generated-class discovery and defaults to `ai.PassiveAI`; it is a manual viewer, not the evaluation protocol.
 
 See [`architecture_gaps.md`](architecture_gaps.md) for required changes and [`migration_plan.md`](migration_plan.md) for dependency order.
+
+## Final Test compatibility evidence (2026-07-23)
+
+Pinned TMA, Mayari, and COAC sources build locally with Temurin 17, and all three expected classes pass the vendored MicroRTS load/constructor probe. TMA uses its unchanged entrypoint and active `strategiesV2` sources plus an explicit behavior-free package marker for a stale import; the adapter path and SHA-256 are persisted.
+
+A real bounded smoke selected candidate `1ed41153d0c4` from completed mock-evolution run `20260723_092713_386247`, compiled it once, and completed six of six real MicroRTS matches on `basesWorkers8x8` (one seed, all three champions, both sides). The candidate lost all six matches; compatibility, evidence completeness, and stable source/class identity passed. The smoke is runtime proof, not performance evidence and not a formal 54-match Final Test.

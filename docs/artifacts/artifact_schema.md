@@ -135,3 +135,9 @@ Evaluation artifacts use `artifact_schema_version = phase4-v1`. Each candidate w
 ## LLM stage identity
 
 Each Reflection, Rewrite, and Generation stage artifact records stage, the logical llm_profile (general or coder), and the configured model alias. The alias is the launcher --alias value, not a filename inferred from .gguf or an arbitrary /v1/models response. The resolved configuration records the centralized routing: Reflection and Rewrite use general; Generation uses coder.
+
+## Post-evolution Final Test artifacts
+
+Final Test writes only beneath `runs/<run_id>/final_tests/<final_test_id>/` and never overwrites Evolution Evaluation evidence. Schema `eagle-final-test-v1` owns copied/resolved configuration, pre-match selection proof, opponent commits/classes/JAR hashes/adapter hashes, compile-once source/class identity, one evidence directory per scheduled match, JSONL results, failure inventory, aggregation, and timing.
+
+Unknown final-test schemas are rejected by the UI-independent reader. The complete tree and field ownership are defined in [`../evaluation/final_test.md`](../evaluation/final_test.md).

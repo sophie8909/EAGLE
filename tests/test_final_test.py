@@ -1,11 +1,13 @@
 import ast
 import hashlib
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import eagle.final_test.opponents as opponent_module
 from eagle.analysis.final_tests import FinalTestReadError, load_final_test_summaries
 from eagle.analysis.records import discover_runs, load_candidate
 from eagle.final_test import FINAL_TEST_SCHEMA_VERSION
@@ -39,6 +41,10 @@ class FinalTestOpponentTests(unittest.TestCase):
             ["ai.tma.TMA", "mayariBot.mayari", "ai.coac.CoacAI"],
         )
         self.assertTrue(all(len(item.pinned_commit) == 40 for item in specs))
+        self.assertEqual(
+            specs[0].adapter_sources,
+            ("adapters/tma/ai/tma/strategies/CompatibilityMarker.java",),
+        )
 
     def test_manifest_rejects_non_full_pinned_revision(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -75,6 +81,54 @@ class FinalTestOpponentTests(unittest.TestCase):
                     probe_classes=root / "probe",
                 )
             probe.assert_called_once()
+
+    def test_interrupted_no_checkout_clone_is_materialized_idempotently(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            upstream = root / "upstream"
+            upstream.mkdir()
+            subprocess.run(["git", "init", str(upstream)], check=True, capture_output=True)
+            subprocess.run(
+                ["git", "-C", str(upstream), "config", "user.email", "test@example.invalid"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(upstream), "config", "user.name", "Final Test"],
+                check=True,
+            )
+            (upstream / "Agent.java").write_text("public class Agent {}\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(upstream), "add", "Agent.java"], check=True)
+            subprocess.run(["git", "-C", str(upstream), "commit", "-m", "seed"], check=True, capture_output=True)
+            commit = subprocess.run(
+                ["git", "-C", str(upstream), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            source = root / "source"
+            upstream_url = upstream.as_posix()
+            subprocess.run(
+                ["git", "clone", "--no-checkout", upstream_url, str(source)],
+                check=True,
+                capture_output=True,
+            )
+            spec = opponent_module.OpponentSpec(
+                opponent_id="tma",
+                display_name="TMA",
+                competition_year=2024,
+                upstream_repository=upstream_url,
+                pinned_commit=commit,
+                expected_class="ai.tma.TMA",
+                build_method="javac-source",
+                jar_path="third_party/final_test_opponents/jars/tma.jar",
+                source_globs=("*.java",),
+                adapter_sources=(),
+                required_classpath_entries=(),
+                license_status="test",
+            )
+            opponent_module._ensure_checkout(spec, source)
+            self.assertTrue((source / "Agent.java").is_file())
+            self.assertEqual(opponent_module._git(source, "status", "--porcelain"), "")
 
     @staticmethod
     def _resolved(opponent_id: str, *, jar_hash: str = "a" * 64) -> ResolvedOpponent:

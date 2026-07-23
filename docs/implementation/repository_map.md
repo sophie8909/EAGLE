@@ -21,6 +21,9 @@ This file maps active repository paths to responsibilities. It is descriptive, n
 | `generation/parsing.py` | Secondary output parser; currently bypassed by active generator | [`current_status.md`](current_status.md) |
 | `evaluation/compiler.py` | `javac` invocation | [`../architecture/java_generation.md`](../architecture/java_generation.md), [`../evaluation/code_quality.md`](../evaluation/code_quality.md) |
 | `evaluation/microrts_runner.py` | Process command, per-match execution, telemetry persistence | [`../evaluation/evaluation_pipeline.md`](../evaluation/evaluation_pipeline.md), [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md) |
+| `eagle/final_test/` | Post-evolution selection, champion resolution, scheduling, execution, aggregation, artifacts, and configuration | [`../evaluation/final_test.md`](../evaluation/final_test.md) |
+| `scripts/setup_final_test_opponents.py`, `scripts/run_final_test.py` | Reproducible champion preparation and final-test CLI entrypoint | [`../evaluation/final_test.md`](../evaluation/final_test.md) |
+| `third_party/final_test_opponents/` | Pinned external manifests, legally redistributable adapters, ignored sources/builds/JARs, and resolved provenance | [`../evaluation/final_test.md`](../evaluation/final_test.md) |
 | `evaluation/game_performance.py`, `evaluation/game_metrics.py` | Current telemetry and gameplay aggregation | [`../evaluation/game_performance.md`](../evaluation/game_performance.md) |
 | `evaluation/code_quality.py` | Current deterministic scoring | [`../evaluation/code_quality.md`](../evaluation/code_quality.md), [`../evaluation/failure_classification.md`](../evaluation/failure_classification.md) |
 | `evaluation/nsga2_objectives.py` | Current two-value objective dictionary | objective and failure docs |

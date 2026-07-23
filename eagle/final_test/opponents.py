@@ -65,6 +65,7 @@ class OpponentSpec:
     jar_path: str
     source_globs: tuple[str, ...]
     required_classpath_entries: tuple[str, ...]
+    adapter_sources: tuple[str, ...]
     license_status: str
     provided_jar: str | None = None
 
@@ -87,6 +88,8 @@ class ResolvedOpponent:
     license_status: str
     detected_license_files: tuple[str, ...]
     provided_jar_path: str | None = None
+    adapter_sources: tuple[str, ...] = ()
+    adapter_source_sha256: str | None = None
     provided_jar_sha256: str | None = None
     provided_jar_contains_classes: bool | None = None
 
@@ -95,6 +98,7 @@ class ResolvedOpponent:
         payload["required_classpath_entries"] = list(self.required_classpath_entries)
         payload["detected_ai_classes"] = list(self.detected_ai_classes)
         payload["detected_license_files"] = list(self.detected_license_files)
+        payload["adapter_sources"] = list(self.adapter_sources)
         return payload
 
 
@@ -129,6 +133,7 @@ def load_opponent_manifest(path: Path) -> tuple[OpponentSpec, ...]:
             required_classpath_entries=tuple(
                 str(value) for value in item.get("required_classpath_entries", ())
             ),
+            adapter_sources=tuple(str(value) for value in item.get("adapter_sources", ())),
             license_status=str(item["license_status"]),
             provided_jar=str(item["provided_jar"]) if item.get("provided_jar") else None,
         )
@@ -177,6 +182,8 @@ def load_resolved_opponents(
             license_status=str(item["license_status"]),
             detected_license_files=tuple(item.get("detected_license_files", ())),
             provided_jar_path=item.get("provided_jar_path"),
+            adapter_sources=tuple(item.get("adapter_sources", ())),
+            adapter_source_sha256=item.get("adapter_source_sha256"),
             provided_jar_sha256=item.get("provided_jar_sha256"),
             provided_jar_contains_classes=item.get("provided_jar_contains_classes"),
         )
@@ -278,6 +285,10 @@ def _validate_spec(spec: OpponentSpec) -> None:
         raise ValueError(f"Unsupported build method for {spec.opponent_id}: {spec.build_method}")
     if not spec.source_globs:
         raise ValueError(f"Opponent {spec.opponent_id} has no source globs.")
+    for value in spec.adapter_sources:
+        path = Path(value)
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError(f"Opponent {spec.opponent_id} has an unsafe adapter source path: {value}")
 
 
 def _prepare_one(
@@ -292,6 +303,17 @@ def _prepare_one(
     java_sources = _source_files(source_dir, spec.source_globs)
     if not java_sources:
         raise OpponentSetupError(f"No Java sources matched for {spec.opponent_id}.")
+    adapter_sources = tuple((opponent_root / value).resolve() for value in spec.adapter_sources)
+    for path in adapter_sources:
+        if opponent_root not in path.parents:
+            raise OpponentSetupError(
+                f"Adapter source path escapes the dedicated opponent area: {path}"
+            )
+        if not path.is_file():
+            raise OpponentSetupError(
+                f"Configured adapter source is missing for {spec.opponent_id}: {path}"
+            )
+    compile_sources = (*java_sources, *adapter_sources)
     classes_dir = opponent_root / "build" / spec.opponent_id / "classes"
     _reset_generated_directory(classes_dir, opponent_root / "build")
     command = [
@@ -301,7 +323,7 @@ def _prepare_one(
         _runtime_classpath(microrts_dir),
         "-d",
         str(classes_dir),
-        *(str(path) for path in java_sources),
+        *(str(path) for path in compile_sources),
     ]
     completed = subprocess.run(command, cwd=source_dir, capture_output=True, text=True, check=False)
     if completed.returncode != 0:
@@ -353,6 +375,8 @@ def _prepare_one(
         jar_sha256=_sha256_file(jar_path),
         source_sha256=_hash_sources(source_dir, java_sources),
         detected_ai_classes=detected,
+        adapter_sources=spec.adapter_sources,
+        adapter_source_sha256=_hash_sources(opponent_root, adapter_sources) if adapter_sources else None,
         class_load_verified=True,
         license_status=spec.license_status,
         detected_license_files=license_files,
@@ -363,6 +387,7 @@ def _prepare_one(
 
 
 def _ensure_checkout(spec: OpponentSpec, source_dir: Path) -> None:
+    newly_cloned = False
     if not source_dir.exists():
         source_dir.parent.mkdir(parents=True, exist_ok=True)
         completed = subprocess.run(
@@ -376,10 +401,14 @@ def _ensure_checkout(spec: OpponentSpec, source_dir: Path) -> None:
                 f"Cannot clone {spec.opponent_id} from {spec.upstream_repository}: "
                 f"{(completed.stderr or completed.stdout).strip()}"
             )
+        newly_cloned = True
     if not (source_dir / ".git").exists():
         raise OpponentSetupError(f"Existing source directory is not a Git checkout: {source_dir}")
     dirty = _git(source_dir, "status", "--porcelain")
-    if dirty:
+    unmaterialized = bool(dirty) and not any(
+        path.name != ".git" for path in source_dir.iterdir()
+    )
+    if dirty and not unmaterialized:
         raise OpponentSetupError(
             f"Opponent checkout has local changes and will not be modified: {source_dir}"
         )
@@ -406,9 +435,13 @@ def _ensure_checkout(spec: OpponentSpec, source_dir: Path) -> None:
                 f"Cannot fetch pinned commit {spec.pinned_commit} for {spec.opponent_id}: "
                 f"{(fetched.stderr or fetched.stdout).strip()}"
             )
-    if _git(source_dir, "rev-parse", "HEAD") != spec.pinned_commit:
+    if newly_cloned or unmaterialized or _git(source_dir, "rev-parse", "HEAD") != spec.pinned_commit:
+        checkout_args = ["git", "-C", str(source_dir), "checkout", "--detach"]
+        if newly_cloned or unmaterialized:
+            checkout_args.append("--force")
+        checkout_args.append(spec.pinned_commit)
         checkout = subprocess.run(
-            ["git", "-C", str(source_dir), "checkout", "--detach", spec.pinned_commit],
+            checkout_args,
             capture_output=True,
             text=True,
             check=False,

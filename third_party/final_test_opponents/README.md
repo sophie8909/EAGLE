@@ -20,6 +20,14 @@ upstream repository contains both source and a prebuilt JAR. COAC contains sourc
 only. EAGLE therefore rebuilds all three from source and records available upstream
 archive hashes for comparison.
 
+
+The pinned TMA README identifies its original `strategies` folder as outdated and
+instructs users to remove it when the bot does not work. The manifest therefore
+builds the unchanged `TMA.java` entrypoint and active `strategiesV2` sources. TMA's
+entrypoint retains a stale wildcard import of the old package, so EAGLE supplies the
+behavior-free `adapters/tma/ai/tma/strategies/CompatibilityMarker.java` solely to
+make that package resolvable by `javac`. The adapter does not participate in TMA's
+runtime strategy and its path and hash are recorded in the resolved manifest.
 At the pinned revisions, none of the three repositories contains a repository-level
 `LICENSE`, `COPYING`, or `NOTICE` file. Their source and generated JARs are consequently
 downloaded for local evaluation only and are ignored by Git. EAGLE does not
