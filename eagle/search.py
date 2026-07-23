@@ -218,10 +218,19 @@ def parent_for_component(parent_id: str | None, parents: tuple[Candidate, Candid
 
 
 def choose_mutation(feedback_parent: Candidate, mutations: tuple[PromptRewriteMutation, PromptRewriteMutation], rng: random.Random) -> PromptRewriteMutation:
+    """Choose a mutation type from the parent's latest evaluation.
+
+    A failed game still takes the code-mutation path so the generated agent
+    can address implementation-level failures. Once code quality is above
+    500, the code is considered strong enough to favor strategy exploration:
+    90% strategy mutation and 10% code mutation. All other successful
+    candidates retain the default 50/50 split.
+    """
     if number_or_none(feedback_parent.fitness_objectives.get("game_performance")) == FAILED_GAME_PERFORMANCE:
         return mutations[1]
+    if (number_or_none(feedback_parent.fitness_objectives.get("code_quality")) or 0.0) > 500:
+        return mutations[0] if rng.random() < 0.9 else mutations[1]
     return rng.choice(mutations)
-
 
 def mutation_context_from_candidate(candidate: Candidate, *, generation: int, index: int) -> MutationContext:
     game = candidate.game_eval_result or {}
