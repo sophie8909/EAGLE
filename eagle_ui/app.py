@@ -20,6 +20,7 @@ from eagle_ui.views.run_view import build_run_view
 from eagle_ui.views.candidate_view import build_candidate_view
 from eagle_ui.views.analysis_view import build_analysis_view
 from eagle_ui.views.error_view import build_error_view
+from eagle_ui.runtime import resolve_gui_port
 from eagle.prompts import DEFAULT_PROMPT_TEMPLATE_PATH
 
 
@@ -67,7 +68,7 @@ app.on_shutdown(_shutdown)
 
 def main() -> None:
     build_layout()
-    ui.run(title="EAGLE", reload=False, show=True)
+    ui.run(title="EAGLE", reload=False, show=True, port=resolve_gui_port())
 
 
 if __name__ in {"__main__", "__mp_main__"}:

@@ -10,7 +10,7 @@ from evaluation.code_quality import (
     evaluate_agent_strategy_region,
 )
 from evaluation.compiler import CompileResult
-from scripts.analyze_run import read_candidate_results
+from scripts.analyze_run import read_candidate_results, read_objective_scatter_records
 
 
 class CodeQualityTests(unittest.TestCase):
@@ -193,6 +193,45 @@ class CodeQualityTests(unittest.TestCase):
             record["final_score"],
             {"game_performance": 1, "code_quality": 0.5},
         )
+
+    def test_objective_scatter_records_read_results_jsonl(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "results.jsonl"
+            rows = [
+                {
+                    "candidate": {
+                        "id": "b",
+                        "generation": 1,
+                        "fitness_objectives": {
+                            "game_performance": 2,
+                            "code_quality": 20,
+                        },
+                    }
+                },
+                {
+                    "candidate": {
+                        "id": "a",
+                        "generation": 0,
+                        "fitness_objectives": {
+                            "game_performance": 1,
+                            "strategy_alignment": 10,
+                        },
+                    }
+                },
+            ]
+            path.write_text(
+                "\n".join(json.dumps(row) for row in rows),
+                encoding="utf-8",
+            )
+
+            records = read_objective_scatter_records(Path(temp))
+
+        self.assertEqual([record["candidate_id"] for record in records], ["a", "b"])
+        self.assertEqual(records[0]["generation"], 0)
+        self.assertEqual(records[0]["code_quality"], 10.0)
+        self.assertEqual(records[0]["game_performance"], 1.0)
 
 
 if __name__ == "__main__":

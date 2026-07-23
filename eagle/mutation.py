@@ -353,6 +353,8 @@ class Mutation:
         backend: ReflectionBackend | None = None,
         artifact_root: Path | None = None,
         logger: Any | None = None,
+        model: str | None = None,
+        backend_name: str | None = None,
     ) -> None:
         if method not in {"strategy_reflection", "code_generation_reflection"}:
             raise ValueError(f"Unknown mutation method: {method}")
@@ -368,8 +370,8 @@ class Mutation:
             self.backend,
             max_attempts=config.mutation_max_attempts,
             logger=logger,
-            model=None if config.generation_backend == "mock" else config.llm_model,
-            backend_name=config.generation_backend,
+            model=model if model is not None else (None if config.generation_backend == "mock" else config.llm_model),
+            backend_name=backend_name or config.generation_backend,
         )
 
     @property
