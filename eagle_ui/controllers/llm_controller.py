@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+
 import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
-from eagle.llm_profiles import LLMProfile, load_role_profiles, save_role_profiles
+from eagle.llm_profiles import DEFAULT_ROLE_TOPOLOGY_PATH, LLMProfile, load_role_profiles, save_role_profiles
 from eagle.runtime.server_manager import LLMServerManager, ServerSpec, ServerStatus
 
 
@@ -55,7 +56,22 @@ class LLMConfigController:
             context_size=context_size,
             roles=roles,
         )
-        return self.server_manager.start(spec)
+        status = self.server_manager.start(spec)
+        self._sync_server_topology(spec)
+        return status
+
+    def _sync_server_topology(self, spec: ServerSpec) -> None:
+        """Make the Servers form the authoritative EA endpoint/model source."""
+        path = self.repository_root / DEFAULT_ROLE_TOPOLOGY_PATH
+        payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"version": 1, "servers": {}, "roles": {}}
+        servers = payload.setdefault("servers", {})
+        roles = payload.setdefault("roles", {})
+        servers[spec.server_id] = {"base_url": spec.endpoint, "model_id": spec.model_id, "model_display_name": spec.model_id, "hostname": spec.host, "port": spec.port, "roles": list(spec.roles), "protocol": "openai-compatible", "health_path": "/health", "enabled": True}
+        for role in spec.roles:
+            roles[role] = {"server_id": spec.server_id, "enabled": True}
+        payload["version"] = int(payload.get("version", 1))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     def stop_server(self, server_id: str) -> ServerStatus:
         return self.server_manager.stop(server_id)
