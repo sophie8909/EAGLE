@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from eagle.candidate import Candidate
+from eagle.timing import utc_now
 
 
 
@@ -49,6 +50,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         self.logger = logger
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
+        self._active_request_started_at: str | None = None
+        self._active_request_started_monotonic: float | None = None
 
     @property
     def chat_completions_url(self) -> str:
@@ -74,6 +77,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         )
         for attempt_index in range(self.max_retries + 1):
             attempt = attempt_index + 1
+            self._active_request_started_at = utc_now()
+            self._active_request_started_monotonic = time.monotonic()
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
                     response_text = response.read().decode("utf-8")
@@ -161,7 +166,16 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             module_name=module_name,
             attempt=attempt,
             error=error,
-            metadata={"class_name": generated_class_name(candidate.id), "url": self.chat_completions_url, "llm_profile": self.llm_profile},
+            metadata={
+                "class_name": generated_class_name(candidate.id),
+                "url": self.chat_completions_url,
+                "endpoint": self.base_url,
+                "llm_profile": self.llm_profile,
+                "operation_type": "mutation" if candidate.operator in {"mutation", "crossover+mutation"} else "crossover" if candidate.operator == "crossover" else None,
+            },
+            started_at=self._active_request_started_at,
+            finished_at=utc_now(),
+            duration_seconds=None if self._active_request_started_monotonic is None else max(0.0, time.monotonic() - self._active_request_started_monotonic),
         )
 
 

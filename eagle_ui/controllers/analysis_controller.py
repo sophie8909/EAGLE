@@ -1,10 +1,11 @@
-"""Multi-objective analysis controller."""
+"""Objective and persisted timing analysis controller."""
 
 from pathlib import Path
 
 from eagle.analysis.objectives import ObjectiveFilters, available_objectives, filter_objective_frame, generation_statistics, load_objective_directions, pareto_frame, prepare_objective_frame
 from eagle.analysis.plots import generation_distribution_options, objective_scatter_options
 from eagle.analysis.records import load_candidate_records
+from eagle.analysis.timing import plot_payloads, summarize_run_timing
 
 
 class AnalysisController:
@@ -31,3 +32,9 @@ class AnalysisController:
 
     def scatter_plot(self, frame, x_objective: str, y_objective: str, pareto_ids: set[str]) -> dict:
         return objective_scatter_options(frame, x_objective, y_objective, pareto_ids=pareto_ids)
+
+    def timing(self, run_dir: Path) -> dict:
+        return summarize_run_timing(run_dir)
+
+    def timing_plots(self, run_dir: Path) -> dict[str, dict]:
+        return plot_payloads(self.timing(run_dir))

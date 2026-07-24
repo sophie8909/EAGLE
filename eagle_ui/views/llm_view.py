@@ -1,10 +1,11 @@
-"""LLM role configuration page."""
+"""Servers view for local and configured remote EAGLE LLM endpoints."""
 
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 from pathlib import Path
-from urllib.parse import urlparse
 
 from nicegui import ui
 
@@ -14,98 +15,109 @@ from eagle_ui.theme import BUTTON_CLASS, CARD_CLASS, INPUT_CLASS
 
 
 def build_llm_view(controller: LLMConfigController, repository_root: Path) -> None:
-    role_controls: dict[str, dict[str, object]] = {}
-    loaded: dict[str, LLMProfile] = {}
-    config_path = ui.input(
-        "Configuration source file",
-        value=str(repository_root / "config" / "llm_endpoints.toml"),
-    ).classes(f"{INPUT_CLASS} w-full")
-    result = ui.textarea("Connection result").props("readonly").classes("w-full h-44 font-mono")
+    model_choices = controller.server_models()
+    model_options = {str(path): path.name for path in model_choices}
+    if not model_options:
+        model_options = {"": "No .gguf models discovered"}
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("Servers").classes("text-h6")
+        ui.label("One GUI-owned local server lifecycle; remote endpoints are inspected and assigned, not launched here.").classes("text-caption")
+        with ui.grid(columns=4).classes("w-full gap-3"):
+            server_id = ui.input("Server identifier", value="local-llm").classes(INPUT_CLASS)
+            location = ui.select({"local": "Current EA machine", "remote": "Configured LAN machine"}, label="Location", value="local").classes(INPUT_CLASS)
+            model_path = ui.select(model_options, label="Discovered .gguf model", with_input=True).classes(INPUT_CLASS)
+            model_id = ui.input("Model identifier", value="local-model").classes(INPUT_CLASS)
+            server_path = ui.input("llama-server executable (empty uses PATH)").classes(INPUT_CLASS)
+            host = ui.input("Bind host", value="127.0.0.1").classes(INPUT_CLASS)
+            port = ui.number("Port", value=8080, min=1, max=65535).classes(INPUT_CLASS)
+            context_size = ui.number("Context size", value=32768, min=1).classes(INPUT_CLASS)
+            roles = ui.select(["reflector", "rewriter", "generator"], label="Assigned roles", multiple=True, value=["reflector", "rewriter", "generator"]).classes(f"{INPUT_CLASS} w-full")
+        with ui.row().classes("gap-2"):
+            start_button = ui.button("Start server").classes(BUTTON_CLASS)
+            stop_button = ui.button("Stop server").classes(BUTTON_CLASS)
+            restart_button = ui.button("Restart server").classes(BUTTON_CLASS)
+            refresh_button = ui.button("Refresh status").classes(BUTTON_CLASS)
+        status = ui.textarea("Server status and captured output").props("readonly").classes("w-full h-48 font-mono")
 
-    with ui.row().classes("gap-2"):
-        load_button = ui.button("Load configuration").classes(BUTTON_CLASS)
-        save_button = ui.button("Save configuration").classes(BUTTON_CLASS)
-        reload_button = ui.button("Reload").classes(BUTTON_CLASS)
-    container = ui.row().classes("w-full gap-3 items-start")
+    async def refresh_status() -> None:
+        try:
+            items = await asyncio.to_thread(controller.server_statuses)
+        except RuntimeError:
+            items = []
+        status.value = json.dumps([item.__dict__ for item in items], ensure_ascii=False, indent=2)
+        status.update()
 
-    def render(profiles: dict[str, LLMProfile]) -> None:
-        loaded.clear()
-        loaded.update(profiles)
-        role_controls.clear()
-        container.clear()
-        with container:
-            models = controller.discovered_models(profiles)
-            for role in ("reflector", "rewriter", "generator"):
-                profile = profiles[role]
-                with ui.column().classes(f"{CARD_CLASS} min-w-[320px] flex-1 gap-2"):
-                    ui.label(role).classes("text-h6")
-                    controls = {
-                        "enabled": ui.checkbox("Enabled", value=profile.enabled),
-                        "host": ui.input("Endpoint host", value=urlparse(profile.base_url).hostname or "").props("readonly").classes(f"{INPUT_CLASS} w-full"),
-                        "port": ui.number("Endpoint port", value=urlparse(profile.base_url).port).props("readonly").classes(f"{INPUT_CLASS} w-full"),
-                        "base_url": ui.input("Base URL", value=profile.base_url).classes(f"{INPUT_CLASS} w-full"),
-                        "model": ui.select(
-                            models or [profile.model],
-                            label="Model identifier",
-                            value=profile.model,
-                            with_input=True,
-                            new_value_mode="add-unique",
-                        ).classes(f"{INPUT_CLASS} w-full"),
-                        "timeout": ui.number("Request timeout", value=profile.timeout_seconds, min=1),
-                        "context": ui.number("Context size", value=profile.context_size, min=1),
-                        "temperature": ui.number("Temperature", value=profile.temperature, min=0, max=2, step=0.05),
-                        "max_tokens": ui.number("Maximum output tokens", value=profile.max_output_tokens, min=1),
-                        "server_label": ui.input("Server / computer label", value=profile.server_label),
-                        "server_profile": ui.input("Launcher server profile", value=profile.server_profile),
-                    }
-                    ui.button("Test connection", on_click=lambda _, role_name=role: test(role_name)).classes(BUTTON_CLASS)
-                    role_controls[role] = controls
+    def spec_values() -> dict[str, object]:
+        selected_model = str(model_path.value or "")
+        if not selected_model:
+            raise ValueError("Select an existing .gguf model before starting a local server.")
+        if location.value == "remote":
+            raise ValueError("Remote servers must be configured through their endpoint and tested from the GUI.")
+        return {
+            "server_id": str(server_id.value or "").strip(),
+            "model_path": Path(selected_model),
+            "server_path": str(server_path.value or "").strip() or None,
+            "model_id": str(model_id.value or "").strip(),
+            "host": str(host.value or "127.0.0.1").strip(),
+            "port": int(port.value or 0),
+            "context_size": int(context_size.value or 0),
+            "roles": tuple(str(item) for item in (roles.value or ())),
+        }
 
-    def collect() -> dict[str, LLMProfile]:
-        profiles: dict[str, LLMProfile] = {}
-        for role, controls in role_controls.items():
-            value = lambda key: controls[key].value  # type: ignore[attr-defined]
-            profiles[role] = LLMProfile(
-                profile=role,
-                enabled=bool(value("enabled")),
-                base_url=str(value("base_url") or ""),
-                model=str(value("model") or ""),
-                timeout_seconds=float(value("timeout") or 120),
-                context_size=int(value("context")) if value("context") is not None else None,
-                temperature=float(value("temperature") or 0),
-                max_output_tokens=int(value("max_tokens")) if value("max_tokens") is not None else None,
-                server_label=str(value("server_label") or ""),
-                server_profile=str(value("server_profile") or ""),
-            )
-        return profiles
+    async def start() -> None:
+        try:
+            values = spec_values()
+            item = await asyncio.to_thread(controller.start_server, **values)
+        except (OSError, ValueError, RuntimeError) as exc:
+            status.value = f"Start failed: {exc}"
+            status.update()
+            return
+        status.value = json.dumps(item.__dict__, ensure_ascii=False, indent=2)
+        status.update()
+
+    async def stop() -> None:
+        try:
+            item = await asyncio.to_thread(controller.stop_server, str(server_id.value or "").strip())
+        except (OSError, ValueError, RuntimeError) as exc:
+            status.value = f"Stop failed: {exc}"
+            status.update()
+            return
+        status.value = json.dumps(item.__dict__, ensure_ascii=False, indent=2)
+        status.update()
+
+    async def restart() -> None:
+        try:
+            values = spec_values()
+            item = await asyncio.to_thread(controller.stop_server, str(values["server_id"]))
+            item = await asyncio.to_thread(controller.start_server, **values)
+        except (OSError, ValueError, RuntimeError) as exc:
+            status.value = f"Restart failed: {exc}"
+            status.update()
+            return
+        status.value = json.dumps(item.__dict__, ensure_ascii=False, indent=2)
+        status.update()
+
+    start_button.on_click(start)
+    stop_button.on_click(stop)
+    restart_button.on_click(restart)
+    refresh_button.on_click(refresh_status)
+    ui.timer(0.5, refresh_status)
+
+
+def build_profile_configuration(controller: LLMConfigController, repository_root: Path) -> None:
+    """Keep endpoint assignment editing in the same Servers surface."""
+    path = ui.input("Role endpoint configuration", value=str(repository_root / "experiment_env" / "config" / "llm_topology.json")).classes(f"{INPUT_CLASS} w-full")
+    result = ui.textarea("Role assignment status").props("readonly").classes("w-full h-32 font-mono")
+    load_button = ui.button("Load role assignments").classes(BUTTON_CLASS)
 
     async def load() -> None:
         try:
-            profiles = await asyncio.to_thread(controller.load, Path(str(config_path.value)))
+            profiles = await asyncio.to_thread(controller.load, Path(str(path.value)), allow_coder_loopback=True)
         except (OSError, ValueError) as exc:
-            ui.notify(f"Cannot load LLM configuration {config_path.value}: {exc}", type="negative")
-            return
-        render(profiles)
-
-    async def save() -> None:
-        try:
-            await asyncio.to_thread(controller.save, Path(str(config_path.value)), collect())
-        except (OSError, ValueError) as exc:
-            ui.notify(f"Cannot save LLM configuration {config_path.value}: {exc}", type="negative")
-            return
-        ui.notify(f"Saved {config_path.value}", type="positive")
-
-    async def test(role: str) -> None:
-        try:
-            payload = await asyncio.to_thread(controller.test_connection, collect()[role])
-        except (OSError, ValueError, RuntimeError) as exc:
-            result.value = f"{role}: {exc}"
+            result.value = f"Cannot load role assignments: {exc}"
             result.update()
             return
-        import json
-        result.value = json.dumps(payload, ensure_ascii=False, indent=2)
+        result.value = json.dumps({role: profile.to_dict() for role, profile in profiles.items()}, ensure_ascii=False, indent=2)
         result.update()
 
     load_button.on_click(load)
-    reload_button.on_click(load)
-    save_button.on_click(save)

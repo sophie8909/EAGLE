@@ -9,11 +9,13 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from eagle.llm_profiles import LLMProfile, load_role_profiles, save_role_profiles
+from eagle.runtime.server_manager import LLMServerManager, ServerSpec, ServerStatus
 
 
 class LLMConfigController:
     def __init__(self, repository_root: Path) -> None:
         self.repository_root = repository_root
+        self.server_manager = LLMServerManager(repository_root)
 
     def load(self, path: Path, *, allow_coder_loopback: bool = True) -> dict[str, LLMProfile]:
         return load_role_profiles(path, allow_coder_loopback=allow_coder_loopback, require_enabled=False)
@@ -28,6 +30,41 @@ class LLMConfigController:
                 aliases.update(path.stem for path in root.rglob("*.gguf"))
         return sorted(aliases)
 
+    def server_models(self) -> list[Path]:
+        return self.server_manager.discover_models()
+
+    def start_server(
+        self,
+        *,
+        server_id: str,
+        model_path: Path,
+        server_path: Path | str,
+        model_id: str,
+        host: str,
+        port: int,
+        context_size: int,
+        roles: tuple[str, ...],
+    ) -> ServerStatus:
+        spec = ServerSpec(
+            server_id=server_id,
+            model_path=model_path,
+            server_path=self.server_manager.resolve_server_path(server_path),
+            model_id=model_id,
+            host=host,
+            port=port,
+            context_size=context_size,
+            roles=roles,
+        )
+        return self.server_manager.start(spec)
+
+    def stop_server(self, server_id: str) -> ServerStatus:
+        return self.server_manager.stop(server_id)
+
+    def restart_server(self, spec: ServerSpec) -> ServerStatus:
+        return self.server_manager.restart(spec)
+
+    def server_statuses(self) -> list[ServerStatus]:
+        return self.server_manager.statuses()
     def test_connection(self, profile: LLMProfile) -> dict[str, object]:
         parsed = urlparse(profile.base_url)
         api_root = profile.base_url.rstrip("/")

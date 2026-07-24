@@ -385,6 +385,26 @@ def evaluate_candidate(
             "error": None,
         },
     }
+    mutation_generation = timing.get("mutation", {}).get("generation_only_duration_seconds", 0.0)
+    crossover_generation = timing.get("crossover", {}).get("generation_only_duration_seconds", 0.0)
+    validation_duration = timing["validation"].get("duration_seconds") or 0.0
+    compilation_duration_value = timing["compilation"].get("duration_seconds") or 0.0
+    evaluation_duration_value = timing["evaluation"].get("duration_seconds") or 0.0
+    operation_generation = float(mutation_generation or 0.0) + float(crossover_generation or 0.0)
+    timing["mutation_generation"] = timing.get("mutation") if timing.get("mutation") else None
+    timing["crossover_generation"] = timing.get("crossover") if timing.get("crossover") else None
+    timing["child_generation"] = {
+        "operation_type": candidate.operator,
+        "started_at": (timing.get("mutation") or timing.get("crossover") or {}).get("started_at"),
+        "finished_at": (timing.get("mutation") or timing.get("crossover") or {}).get("finished_at"),
+        "duration_seconds": operation_generation,
+    }
+    timing["child_total"] = {
+        "duration_seconds": operation_generation + validation_duration + compilation_duration_value + float(timing["integration"].get("duration_seconds") or 0.0) + evaluation_duration_value,
+        "includes": ["mutation_generation", "crossover_generation", "validation", "compilation", "integration", "evaluation"],
+        "status": "failed" if failure_stage else "success",
+        "failure_stage": failure_stage,
+    }
     evaluated_candidate = Candidate(
         id=candidate.id,
         generation=candidate.generation,

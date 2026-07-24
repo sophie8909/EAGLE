@@ -98,4 +98,39 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
 
     run_select.on_value_change(lambda _: load_run())
     pareto_candidates.on_value_change(lambda event: setattr(state.selection, "candidate_id", str(event.value) if event.value else None))
+    with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
+        ui.label("Timing Analysis").classes("text-h6")
+        timing_status = ui.label("Select a run to inspect persisted timing.")
+        with ui.grid(columns=2).classes("w-full gap-3"):
+            generation_timing_chart = ui.echart({}).classes("w-full h-[320px]")
+            operation_timing_chart = ui.echart({}).classes("w-full h-[320px]")
+            llm_stage_chart = ui.echart({}).classes("w-full h-[320px]")
+            llm_model_chart = ui.echart({}).classes("w-full h-[320px]")
+        timing_table = ui.table(
+            columns=[{"name": name, "label": name, "field": name} for name in ("candidate_id", "operation", "duration_seconds", "status")],
+            rows=[],
+            row_key="candidate_id",
+        ).classes("w-full")
+
+    async def load_timing() -> None:
+        if not run_select.value:
+            return
+        run_dir = Path(str(run_select.value))
+        try:
+            summary = await asyncio.to_thread(controller.timing, run_dir)
+            plots = await asyncio.to_thread(controller.timing_plots, run_dir)
+        except (OSError, ValueError) as exc:
+            timing_status.set_text(f"Cannot load timing artifacts: {exc}")
+            return
+        timing_status.set_text(f"Run duration: {summary['total_run_duration_seconds']:.4f}s | Requests: {len(summary['llm_requests'])}")
+        generation_timing_chart.options = plots["generation_duration"]
+        operation_timing_chart.options = plots["operation_breakdown"]
+        llm_stage_chart.options = plots["llm_by_stage"]
+        llm_model_chart.options = plots["llm_by_model"]
+        for chart in (generation_timing_chart, operation_timing_chart, llm_stage_chart, llm_model_chart):
+            chart.update()
+        timing_table.rows = summary["operation_records"][:20]
+        timing_table.update()
+
+    run_select.on_value_change(lambda _: load_timing())
     ui.timer(0.1, refresh_runs, once=True)

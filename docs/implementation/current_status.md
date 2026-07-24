@@ -54,3 +54,7 @@ See [`architecture_gaps.md`](architecture_gaps.md) for required changes and [`mi
 Pinned TMA, Mayari, and COAC sources build locally with Temurin 17, and all three expected classes pass the vendored MicroRTS load/constructor probe. TMA uses its unchanged entrypoint and active `strategiesV2` sources plus an explicit behavior-free package marker for a stale import; the adapter path and SHA-256 are persisted.
 
 A real bounded smoke selected candidate `1ed41153d0c4` from completed mock-evolution run `20260723_092713_386247`, compiled it once, and completed six of six real MicroRTS matches on `basesWorkers8x8` (one seed, all three champions, both sides). The candidate lost all six matches; compatibility, evidence completeness, and stable source/class identity passed. The smoke is runtime proof, not performance evidence and not a formal 80-match Final Test.
+
+## Canonical runtime update (2026-07-24)
+
+The user-facing runtime is now ./run.sh, which starts the NiceGUI application and eagle.runtime.watchdog. The GUI has Servers, Experiment, and Analysis surfaces. Local LLM lifecycle is owned by eagle.runtime.server_manager.LLMServerManager; the removed shell launchers and standalone tmux/network-reset workflows are not active paths. Run timing is persisted in candidate timing.json files and append-only timing.jsonl, with mutation, crossover, child-pipeline, generation, and LLM request records.

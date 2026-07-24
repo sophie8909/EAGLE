@@ -93,3 +93,9 @@ when Java extraction or validation fails after Reflection and Rewrite have compl
 ## Phase 4 implementation note
 
 Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 10 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
+
+## Canonical runtime timing additions
+
+Run-level timing.jsonl contains event=generation and event=llm_request records. Generation records include generation boundaries, mutation/crossover counts and aggregates, aggregate request/validation/compilation/evaluation durations, and the generation duration. Request records include run_id, generation, candidate_id, operation_type, operation_stage, server_or_endpoint, model_id, request_started_at, request_finished_at, duration_seconds, status, failure_category, token counts when supplied, and request_correlation_id.
+
+Candidate timing.json contains operation-specific mutation and crossover generation-only spans, the shared child_generation span, separate validation/compilation/integration/evaluation spans, and child_total. Durations use a monotonic clock; UTC fields are display timestamps.

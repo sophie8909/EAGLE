@@ -1,4 +1,4 @@
-"""Restored NiceGUI application shell for the current EAGLE architecture."""
+"""Canonical EAGLE GUI lifecycle and three top-level control surfaces."""
 
 from __future__ import annotations
 
@@ -6,22 +6,17 @@ from pathlib import Path
 
 from nicegui import app, ui
 
-from eagle_ui.controllers.run_controller import RunController
-from eagle_ui.controllers.artifact_controller import ArtifactController
 from eagle_ui.controllers.analysis_controller import AnalysisController
-from eagle_ui.controllers.error_controller import ErrorAnalysisController
+from eagle_ui.controllers.artifact_controller import ArtifactController
 from eagle_ui.controllers.llm_controller import LLMConfigController
-from eagle_ui.controllers.prompt_controller import InitialPromptController, MetaPromptController
+from eagle_ui.controllers.run_controller import RunController
 from eagle_ui.state import AppState
 from eagle_ui.theme import CARD_CLASS, install_theme
-from eagle_ui.views.llm_view import build_llm_view
-from eagle_ui.views.prompt_view import build_prompt_view
-from eagle_ui.views.run_view import build_run_view
-from eagle_ui.views.candidate_view import build_candidate_view
 from eagle_ui.views.analysis_view import build_analysis_view
-from eagle_ui.views.error_view import build_error_view
+from eagle_ui.views.candidate_view import build_candidate_view
+from eagle_ui.views.experiment_view import build_experiment_view
+from eagle_ui.views.llm_view import build_llm_view, build_profile_configuration
 from eagle_ui.runtime import resolve_gui_port
-from eagle.prompts import DEFAULT_PROMPT_TEMPLATE_PATH
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,25 +33,22 @@ def build_layout() -> None:
         ui.button("Close GUI", on_click=app.shutdown)
 
     with ui.tabs().classes(f"{CARD_CLASS} w-full") as tabs:
-        run_tab = ui.tab("Run")
-        llm_tab = ui.tab("LLM Roles")
-        prompt_tab = ui.tab("Prompts")
-        browser_tab = ui.tab("Runs & Candidates")
-        analysis_tab = ui.tab("Objectives")
-        error_tab = ui.tab("Errors")
-    with ui.tab_panels(tabs, value=run_tab).classes("w-full"):
-        with ui.tab_panel(run_tab):
-            build_run_view(STATE, RUN_CONTROLLER)
-        with ui.tab_panel(llm_tab):
-            build_llm_view(LLMConfigController(ROOT), ROOT)
-        with ui.tab_panel(prompt_tab):
-            build_prompt_view(ROOT, InitialPromptController(), MetaPromptController(DEFAULT_PROMPT_TEMPLATE_PATH))
-        with ui.tab_panel(browser_tab):
-            build_candidate_view(ArtifactController(ROOT / "runs"))
+        servers_tab = ui.tab("Servers")
+        experiment_tab = ui.tab("Experiment")
+        analysis_tab = ui.tab("Analysis")
+    llm_controller = LLMConfigController(ROOT)
+    with ui.tab_panels(tabs, value=servers_tab).classes("w-full"):
+        with ui.tab_panel(servers_tab):
+            build_llm_view(llm_controller, ROOT)
+            ui.separator()
+            build_profile_configuration(llm_controller, ROOT)
+        with ui.tab_panel(experiment_tab):
+            build_experiment_view(STATE, RUN_CONTROLLER, ROOT)
         with ui.tab_panel(analysis_tab):
             build_analysis_view(AnalysisController(), STATE)
-        with ui.tab_panel(error_tab):
-            build_error_view(ErrorAnalysisController(), STATE)
+            ui.separator()
+            ui.label("Candidate artifacts").classes("text-h6")
+            build_candidate_view(ArtifactController(ROOT / "runs"))
 
 
 def _shutdown() -> None:

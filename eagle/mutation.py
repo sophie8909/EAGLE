@@ -307,7 +307,10 @@ class ReflectionStage:
                     module_name=reflection_type,
                     attempt=attempt_number,
                     error=error,
-                    metadata={"llm_profile": self.llm_profile},
+                    metadata={"llm_profile": self.llm_profile, "operation_type": "mutation"},
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_seconds=max(0.0, time.monotonic() - monotonic_started),
                 )
             if status == "success":
                 return ReflectionResult(

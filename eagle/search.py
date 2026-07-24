@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from shutil import copy2
@@ -18,6 +19,7 @@ from .crossover import Crossover, CrossoverContext
 from .evaluation import evaluate_population, preflight_evaluation_opponents
 from .mutation import MutationContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
+from .timing import Stopwatch, append_event, build_generation_event, utc_now
 from .llm_profiles import LLMProfile, load_effective_role_profiles
 from .offspring import normalize_prompt
 from .rewrite import PromptRewriteMutation
@@ -57,7 +59,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     classes_dir.mkdir()
     copy2(config_path, run_dir / "config.yaml")
 
-    llm_logger = LLMCallLogger(run_dir / "llm_logs")
+    llm_logger = LLMCallLogger(run_dir / "llm_logs", run_id=active_run_id, timing_path=run_dir / "timing.jsonl")
     backend_name = "mock" if mock else config.generation_backend
     if mock:
         role_profiles = {
@@ -143,6 +145,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     results_path = run_dir / "results.jsonl"
 
     population = initialize_population(config)
+    generation_span = Stopwatch.start()
     evaluated_population = evaluate_population(
         population,
         generation=0,
@@ -155,6 +158,12 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         mock=mock,
         alignment_profile=reflector_profile,
     )
+    append_event(run_dir / "timing.jsonl", build_generation_event(
+        run_id=active_run_id,
+        generation=0,
+        candidates=evaluated_population,
+        span=generation_span.finish(),
+    ))
 
     front0_signature = front_zero_signature(evaluated_population)
     front0_stagnation_count = 0
@@ -173,6 +182,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             selection=selection,
             artifact_root=candidates_dir,
         )
+        generation_span = Stopwatch.start()
         evaluated_offspring = evaluate_population(
             offspring,
             generation=generation,
@@ -185,6 +195,12 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             mock=mock,
             alignment_profile=reflector_profile,
         )
+        append_event(run_dir / "timing.jsonl", build_generation_event(
+            run_id=active_run_id,
+            generation=generation,
+            candidates=evaluated_offspring,
+            span=generation_span.finish(),
+        ))
         evaluated_population = select_next_generation(evaluated_population, evaluated_offspring, population_size=config.population_size)
         current_front0_signature = front_zero_signature(evaluated_population)
         if current_front0_signature == front0_signature:
@@ -248,10 +264,27 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
     offspring: list[Candidate] = []
     while len(offspring) < config.population_size:
         context_index = len(offspring)
+        parent_selection_started = time.monotonic()
         parent_a = selection.select(population, 1, SelectionContext(rng=rng))[0]
         parent_b = selection.select(population, 1, SelectionContext(rng=rng))[0]
+        parent_selection_duration = max(0.0, time.monotonic() - parent_selection_started)
         if len(population) > 1 and rng.random() < config.crossover_rate:
+            crossover_started_at = utc_now()
+            crossover_started = time.monotonic()
             child = crossover.crossover(parent_a, parent_b, CrossoverContext(generation=generation, index=context_index, rng=rng))
+            crossover_duration = max(0.0, time.monotonic() - crossover_started)
+            child = replace(child, timing={
+                **child.timing,
+                "crossover": {
+                    "operation_type": "crossover",
+                    "started_at": crossover_started_at,
+                    "finished_at": utc_now(),
+                    "generation_only_duration_seconds": crossover_duration,
+                    "parent_selection_duration_seconds": parent_selection_duration,
+                    "status": "success",
+                    "error": None,
+                },
+            })
         else:
             child = Candidate(
                 generation=generation,
@@ -268,7 +301,21 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
         if rng.random() < config.mutation_rate:
             feedback_parent = parent_for_component(child.strategy_parent_id, (parent_a, parent_b))
             mutation = choose_mutation(feedback_parent, mutations, rng)
+            mutation_started_at = utc_now()
+            mutation_started = time.monotonic()
             child = mutation.mutate(child, mutation_context_from_candidate(feedback_parent, generation=generation, index=context_index), artifact_dir=(artifact_root / child.id) if artifact_root is not None else None)
+            child = replace(child, timing={
+                **child.timing,
+                "mutation": {
+                    "operation_type": "mutation",
+                    "started_at": mutation_started_at,
+                    "finished_at": utc_now(),
+                    "generation_only_duration_seconds": max(0.0, time.monotonic() - mutation_started),
+                    "parent_selection_duration_seconds": parent_selection_duration,
+                    "status": "success",
+                    "error": None,
+                },
+            })
         offspring.append(child)
     return offspring
 

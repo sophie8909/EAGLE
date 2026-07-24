@@ -1,30 +1,21 @@
 # EAGLE
 
-EAGLE (Evolutionary Algorithm for Game-playing with LLM-Enabled Agents) evolves a three-part Candidate genotype that generates one complete Java MicroRTS agent. The target architecture compiles that Java once, evaluates it in 10 matches against LightRush, and optimizes `game_performance` plus `code_quality` with NSGA-II.
+EAGLE (Evolutionary Algorithm for Game-playing with LLM-Enabled Agents) evolves a three-part Candidate genotype into complete Java MicroRTS agents. NSGA-II persists canonical objective values and run artifacts for reproducible analysis.
 
-Start with [`docs/README.md`](docs/README.md). It routes Codex and maintainers to the authoritative architecture specification, responsibility-focused contracts, current implementation status, architecture gaps, migration plan, and operational guidance.
+## Run
 
-Historical runtime-LLM, surrogate, split-Java, fixed function-body, and legacy objective artifacts are not active implementation contracts.
+The normal entrypoint is:
 
-## Current smoke command
+\`\`\`bash
+./run.sh
+\`\`\`
 
-Run from WSL:
+\`run.sh\` prepares the \`eagle\` environment, starts the GUI, and starts the GUI liveness watchdog. Use the GUI’s Servers section for local LLM lifecycle and role assignment, Experiment for configuration/prompts/execution, and Analysis for multi-objective and timing inspection.
 
-```bash
-cd /mnt/d/Project/EAGLE
+For a deterministic local validation run without the GUI:
+
+\`\`\`bash
 python3 scripts/run_eagle.py --config configs/eagle_minimal.yaml --mock
-```
+\`\`\`
 
-This validates the current mock pipeline only. The current implementation and checked-in configs do not yet satisfy every target architecture contract; see [`docs/implementation/current_status.md`](docs/implementation/current_status.md) and [`docs/implementation/architecture_gaps.md`](docs/implementation/architecture_gaps.md).
-
-## Repository map
-
-```text
-eagle/        Candidate, evolutionary orchestration, operators, selection, artifacts
-generation/   LLM transport, Java extraction, validation, and template support
-evaluation/   Java compilation, MicroRTS execution, telemetry, and objective code
-configs/      current experiment input configurations
-scripts/      run, analysis, plotting, and manual GUI entry points
-tests/        current unit and pipeline-contract tests
-docs/         normative, canonical, implementation-status, and operations documentation
-```
+See [\`docs/architecture/EAGLE_RUNTIME.md\`](docs/architecture/EAGLE_RUNTIME.md) for ownership and artifact flow.

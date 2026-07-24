@@ -112,11 +112,11 @@ The initial deployment uses two logical profiles and one centralized endpoint ha
 - Generation -> coder / qwen2.5-coder-7b on Machine A.
 - General defaults to http://127.0.0.1:8080/v1; coder defaults to port 8081 and publishes Machine A's detected private address.
 - Both profiles default to context size 32768, with launcher overrides for hardware and quantization differences.
-- scripts/llama_launcher.py requests the actual .gguf path, uses the explicitly configured alias, does not download models or rebuild llama.cpp, and atomically updates only the selected section of config/llm_endpoints.toml.
+- The canonical GUI server service discovers local .gguf files, constructs the llama-server command, waits for /health, and owns process lifecycle; no launcher script is retained.
 - The repository config contains no model paths, server paths, API keys, or placeholder Machine A address. The launcher stores machine-local settings under ~/.config/eagle-llm/ with restrictive permissions.
 - Stage code depends on general and coder, not on these initial model names. Future replacement is a launcher/configuration change.
 
-The operational workflow and artifact metadata contract are documented in [../operations/dual_host_llm.md](../operations/dual_host_llm.md).
+The canonical operational workflow and artifact metadata contract are documented in [../operations/running_eagle.md](../operations/running_eagle.md) and [../architecture/EAGLE_RUNTIME.md](../architecture/EAGLE_RUNTIME.md).
 ## General-only topology variant
 
 The same profile abstraction also supports a single-machine Machine B run. Set llm_topology: "general_only" in configs/eagle_general_only.yaml; only [general] is required, and Reflection, Rewrite, Strategy Alignment, and final Generation all resolve to the general endpoint. This mode does not require Machine A or a coder endpoint.
