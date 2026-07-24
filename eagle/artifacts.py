@@ -53,7 +53,7 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
             crossover_dir / "provenance.json",
             {
                 "lineage_schema_version": candidate.lineage_to_json_dict()["lineage_schema_version"],
-                "candidate_id": candidate.candidate_id,
+                "candidate_id": candidate.id,
                 "strategy_parent_id": candidate.strategy_parent_id,
                 "previous_code_parent_id": candidate.previous_code_parent_id,
                 "generation_prompt_parent_id": candidate.generation_prompt_parent_id,
@@ -103,7 +103,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     mutation_record = evaluation.candidate.metadata.get("mutation")
     if mutation_record is not None:
         write_json(candidate_dir / "mutation" / "metadata.json", mutation_record)
-        _write_canonical_mutation_artifacts(candidate_dir, mutation_record)
+        _write_mutation_artifacts(candidate_dir, mutation_record)
     write_json(candidate_dir / "timing.json", evaluation.candidate.timing)
     _write_evaluation_artifacts(candidate_dir, evaluation)
     write_json(candidate_dir / "prompt.json", {
@@ -113,22 +113,9 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     })
     compile_log = "" if evaluation.compile_result is None else evaluation.compile_result.stdout + evaluation.compile_result.stderr
     (candidate_dir / "compile.log").write_text(compile_log, encoding="utf-8")
-    write_json(candidate_dir / "compile_result.json", compile_to_dict(evaluation.compile_result))
-    write_json(candidate_dir / "raw_microrts_result.json", [match_to_dict(result) for result in evaluation.match_results])
-    write_json(candidate_dir / "game_metrics.json", evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else {})
-    write_json(candidate_dir / "code_quality.json", {
-        "code_quality": evaluation.code_quality_breakdown.code_quality,
-        "code_quality_breakdown": evaluation.code_quality_breakdown.to_json_dict(),
-        "strategy_consistency": evaluation.strategy_consistency_result.to_json_dict() if evaluation.strategy_consistency_result else None,
-        "function_capability": None if evaluation.function_capability_result is None else evaluation.function_capability_result.to_json_dict(),
-        "strategy_alignment": None if evaluation.strategy_alignment_result is None else evaluation.strategy_alignment_result.to_json_dict(),
-    })
-    write_json(candidate_dir / "objectives.json", evaluation.candidate.fitness_objectives)
+
     write_json(candidate_dir / "individual.json", evaluation.candidate.to_json_dict())
     write_json(candidate_dir / "candidate_result.json", candidate_result_to_dict(evaluation.result))
-    write_json(candidate_dir / "result.json", candidate_result_to_dict(evaluation.result))
-    if evaluation.result.failure_category is not None:
-        write_failed_candidate_debug(candidates_dir.parent, evaluation)
 
 
 def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvaluation) -> None:
@@ -181,6 +168,7 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         "objective_names": ["game_performance", "code_quality"],
     }
     write_json(evaluation_dir / "game_performance.json", game_payload)
+    write_json(evaluation_dir / "matches.json", [match_to_dict(result) for result in evaluation.match_results])
     write_json(evaluation_dir / "function_capability.json", capability_payload)
     write_json(evaluation_dir / "code_quality.json", code_quality_payload)
     write_json(evaluation_dir / "objectives.json", objectives_payload)
@@ -222,6 +210,27 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         )
 
 
+def _write_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> None:
+    """Persist reflector and rewriter evidence from the canonical mutation record."""
+
+    mutation_dir = candidate_dir / "mutation"
+    reflection = mutation_record.get("reflection") or {}
+    if reflection:
+        (mutation_dir / "reflector_request.txt").write_text(
+            str(reflection.get("request") or ""), encoding="utf-8"
+        )
+        (mutation_dir / "reflector_response_raw.txt").write_text(
+            str(reflection.get("raw_response") or ""), encoding="utf-8"
+        )
+    rewrite = mutation_record.get("rewrite")
+    if rewrite:
+        (mutation_dir / "rewriter_request.txt").write_text(
+            str(rewrite.get("request") or ""), encoding="utf-8"
+        )
+        (mutation_dir / "rewriter_response_raw.txt").write_text(
+            str(rewrite.get("raw_response") or ""), encoding="utf-8"
+        )
+
 def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvaluation) -> None:
     """Persist the complete final Java-generation request and response envelope."""
 
@@ -248,56 +257,11 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     })
 
 
-def _write_canonical_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> None:
-    """Expose stage-independent names required by the mutation artifact schema."""
-
-    mutation_dir = candidate_dir / "mutation"
-    reflection = mutation_record.get("reflection") or {}
-    if reflection:
-        (mutation_dir / "reflection_request.txt").write_text(
-            str(reflection.get("request") or ""), encoding="utf-8"
-        )
-        (mutation_dir / "reflection_response_raw.txt").write_text(
-            str(reflection.get("raw_response") or ""), encoding="utf-8"
-        )
-    rewrite = mutation_record.get("rewrite")
-    if rewrite:
-        (mutation_dir / "rewrite_request.txt").write_text(
-            str(rewrite.get("request") or ""), encoding="utf-8"
-        )
-        (mutation_dir / "rewrite_response_raw.txt").write_text(
-            str(rewrite.get("raw_response") or ""), encoding="utf-8"
-        )
-
-
-def write_failed_candidate_debug(run_dir: Path, evaluation: CandidateEvaluation) -> None:
-    """Save raw stage outputs for a failed candidate."""
-
-    debug_dir = run_dir / "failed_candidates" / evaluation.candidate.id
-    debug_dir.mkdir(parents=True, exist_ok=True)
-    result = evaluation.result
-    (debug_dir / "raw_llm_output.txt").write_text(result.raw_llm_output or "", encoding="utf-8")
-    (debug_dir / "extracted_code.java").write_text(result.extracted_code or "", encoding="utf-8")
-    (debug_dir / "assembled_java.java").write_text(result.assembled_java or "", encoding="utf-8")
-    write_json(debug_dir / "failure.json", {
-        "failure_category": result.failure_category,
-        "failure_reason": result.failure_reason,
-        "validation_result": validation_to_dict(result.validation_result),
-        "compile_result": compile_to_dict(result.compile_result),
-        "strategy_region_validation": result.strategy_region_validation or {},
-        "strategy_consistency": result.strategy_consistency,
-        "code_quality": (result.final_score or {}).get("code_quality"),
-        "code_quality_breakdown": result.code_quality_breakdown,
-        "game_metrics": result.game_metrics,
-    })
-
-
-def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool, profiles: dict[str, LLMProfile] | None = None, stage_routing: dict[str, str] | None = None) -> None:
+def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool, profiles: dict[str, LLMProfile] | None = None) -> None:
     """Write actual post-default and post-override runtime values."""
 
     llm_backend = "mock" if mock else config.generation_backend
     is_mock_backend = llm_backend == "mock"
-    resolved_stage_routing = stage_routing or {"reflection": "reflector", "rewrite": "rewriter", "generation": "generator", "strategy_alignment": "reflector"}
     payload = {
         "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "objective_formula_version": OBJECTIVE_FORMULA_VERSION,
@@ -330,13 +294,8 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         },
         "strategy_alignment_backend": "mock" if mock else config.alignment_backend,
         "strategy_alignment_model": None if mock else config.llm_model,
-        "endpoint_config_path": str(config.endpoint_config_path),
         "llm_role_topology_path": str(config.llm_role_topology_path),
-        "llm_topology": config.llm_topology,
-        "stage_routing": {
-            stage: None if profiles is None else profiles[profile_name].to_dict()
-            for stage, profile_name in resolved_stage_routing.items()
-        },
+        "llm_roles": None if profiles is None else {name: profile.to_dict() for name, profile in profiles.items()},
         "prompt_version": None,
         "prompt_template_sha256": prompt_template_digest(),
         "git_commit_hash": git_commit_hash(),

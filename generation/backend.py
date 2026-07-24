@@ -215,6 +215,6 @@ def build_generation_backend(
 ) -> GenerationBackend:
     if name == "mock":
         return MockGenerationBackend()
-    if name in {"openai", "llama_cpp"}:
+    if name in {"openai", "openai"}:
         return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, llm_profile=llm_profile, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
     raise ValueError(f"Unknown generation backend: {name}")

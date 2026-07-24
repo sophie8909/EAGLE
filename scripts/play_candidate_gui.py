@@ -63,11 +63,7 @@ def main() -> int:
     opponent = args.opponent
     max_cycles = args.max_cycles or (config.tick_limit if config is not None else 100)
     microrts_dir = config.microrts_dir if config is not None else Path("third_party/microrts")
-    class_name = (
-        generated_class_name(args.candidate_id)
-        if source_path.name == "generated_java_source.java"
-        else source_path.stem
-    )
+    class_name = "CandidateAgent" if source_path.name == "normalized_candidate.java" else source_path.stem
     agent_class = f"ai.generated.{class_name}"
 
     print(f"run_id={run_dir.name}")
@@ -83,7 +79,7 @@ def main() -> int:
     # The --opponent option only replaces player 1; candidate side swapping is not supported here.
     with tempfile.TemporaryDirectory(prefix=f"eagle_gui_{args.candidate_id}_") as temp_dir:
         source_for_compile = source_path
-        if source_path.name == "generated_java_source.java":
+        if source_path.name == "normalized_candidate.java":
             source_for_compile = copy_artifact_source_for_compile(source_path, Path(temp_dir), class_name)
 
         classes_dir = Path(temp_dir) / "classes"
@@ -132,9 +128,6 @@ def find_generated_agent_source(run_dir: Path, candidate_id: str) -> Path | None
     artifact_source = candidate_dir / "generation" / "normalized_candidate.java"
     if artifact_source.exists():
         return artifact_source
-    legacy_source = candidate_dir / "generated_java_source.java"
-    if legacy_source.exists():
-        return legacy_source
     return None
 
 

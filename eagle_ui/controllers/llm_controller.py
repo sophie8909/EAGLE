@@ -17,8 +17,8 @@ class LLMConfigController:
         self.repository_root = repository_root
         self.server_manager = LLMServerManager(repository_root)
 
-    def load(self, path: Path, *, allow_coder_loopback: bool = True) -> dict[str, LLMProfile]:
-        return load_role_profiles(path, allow_coder_loopback=allow_coder_loopback, require_enabled=False)
+    def load(self, path: Path) -> dict[str, LLMProfile]:
+        return load_role_profiles(path, require_enabled=False)
 
     def save(self, path: Path, profiles: dict[str, LLMProfile]) -> None:
         save_role_profiles(path, profiles)

@@ -1,4 +1,5 @@
 import json
+import json
 import os
 import tempfile
 import unittest
@@ -44,40 +45,22 @@ class LLMRoleConfigTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 resolve_gui_port()
 
-    def test_role_config_load_save_round_trip_preserves_unrelated_content(self):
+    def test_role_config_load_save_round_trip_uses_json_topology(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "endpoints.toml"
-            path.write_text(
-                "# keep this comment\n"
-                "[general]\nprofile = \"general\"\nbase_url = \"http://127.0.0.1:8080/v1\"\nmodel = \"general-real\"\n\n"
-                "[coder]\nprofile = \"coder\"\nbase_url = \"http://127.0.0.1:8081/v1\"\nmodel = \"coder-real\"\n\n"
-                "[extra]\nunknown = \"preserve\"\n",
-                encoding="utf-8",
-            )
-            roles = load_role_profiles(path, allow_coder_loopback=True)
-            self.assertEqual(roles["reflector"].model, "general-real")
-            self.assertEqual(roles["generator"].model, "coder-real")
+            path = Path(directory) / "topology.json"
+            path.write_text(json.dumps({
+                "version": 1,
+                "servers": {"server": {"base_url": "http://127.0.0.1:8080/v1", "model_id": "general-real"}},
+                "roles": {role: {"server_id": "server"} for role in ("reflector", "rewriter", "generator")},
+            }), encoding="utf-8")
+            roles = load_role_profiles(path)
             updated = {
-                name: LLMProfile(
-                    profile=name,
-                    base_url=profile.base_url,
-                    model=profile.model,
-                    timeout_seconds=45,
-                    context_size=32768,
-                    temperature=0.35,
-                    max_output_tokens=4096,
-                    server_label="machine-a" if name == "generator" else "machine-b",
-                    server_profile=profile.server_profile,
-                )
+                name: LLMProfile(profile=name, base_url=profile.base_url, model="updated-model", server_profile=profile.server_profile)
                 for name, profile in roles.items()
             }
             save_role_profiles(path, updated)
-            reloaded = load_role_profiles(path, allow_coder_loopback=True)
-            self.assertEqual(reloaded["rewriter"].timeout_seconds, 45)
-            self.assertEqual(reloaded["generator"].max_output_tokens, 4096)
-            raw = path.read_text(encoding="utf-8")
-            self.assertIn("# keep this comment", raw)
-            self.assertIn('[extra]\nunknown = "preserve"', raw)
+            reloaded = load_role_profiles(path)
+            self.assertEqual(reloaded["generator"].model, "updated-model")
 
 
 class PromptServiceTests(unittest.TestCase):

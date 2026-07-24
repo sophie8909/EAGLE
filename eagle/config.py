@@ -11,7 +11,7 @@ from typing import Any
 from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH, get_seed_prompt_template
 
 from .candidate import DEFAULT_GENERATION_PROMPT
-from .llm_profiles import DEFAULT_ENDPOINT_CONFIG_PATH, DEFAULT_ROLE_TOPOLOGY_PATH
+from .llm_profiles import DEFAULT_ROLE_TOPOLOGY_PATH
 
 
 TRAINING_OPPONENT = "ai.abstraction.LightRush"
@@ -41,10 +41,7 @@ class ExperimentConfig:
     alignment_backend: str = "mock"
     llm_base_url: str = "http://localhost:8080"
     llm_model: str = "local-model"
-    endpoint_config_path: Path = DEFAULT_ENDPOINT_CONFIG_PATH
     llm_role_topology_path: Path = DEFAULT_ROLE_TOPOLOGY_PATH
-    allow_coder_loopback: bool = False
-    llm_topology: str = "dual_host"
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
@@ -96,10 +93,7 @@ class ExperimentConfig:
             alignment_backend=str(payload.get("alignment_backend", payload.get("generation_backend", "mock"))),
             llm_base_url=str(payload.get("llm_base_url", "http://localhost:8080")),
             llm_model=str(payload.get("llm_model", "local-model")),
-            endpoint_config_path=_repository_path(payload.get("endpoint_config_path"), DEFAULT_ENDPOINT_CONFIG_PATH),
             llm_role_topology_path=_repository_path(payload.get("llm_role_topology_path"), DEFAULT_ROLE_TOPOLOGY_PATH),
-            allow_coder_loopback=bool(payload.get("allow_coder_loopback", False)),
-            llm_topology=str(payload.get("llm_topology", payload.get("deployment_mode", "dual_host"))),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
@@ -139,10 +133,8 @@ class ExperimentConfig:
             raise ValueError("front0_stagnation_generations must be at least 0.")
         if self.tick_limit < 1:
             raise ValueError("tick_limit must be at least 1.")
-        if self.llm_topology not in {"dual_host", "general_only"}:
-            raise ValueError("llm_topology must be dual_host or general_only.")
-        if self.alignment_backend not in {"mock", "openai", "llama_cpp"}:
-            raise ValueError("alignment_backend must be mock, openai, or llama_cpp.")
+        if self.alignment_backend not in {"mock", "openai"}:
+            raise ValueError("alignment_backend must be mock or openai.")
         if self.matches_per_candidate != MATCHES_PER_CANDIDATE:
             raise ValueError(f"matches_per_candidate must be exactly {MATCHES_PER_CANDIDATE}.")
         if self.match_timeout_seconds <= 0:

@@ -99,7 +99,7 @@ def build_strategy_alignment_backend(
 ) -> StrategyAlignmentBackend:
     if name == "mock":
         return MockStrategyAlignmentBackend()
-    if name in {"openai", "llama_cpp"}:
+    if name in {"openai"}:
         return OpenAICompatibleStrategyAlignmentBackend(base_url, model, timeout_seconds=timeout_seconds, temperature=temperature, max_output_tokens=max_output_tokens)
     raise ValueError(f"Unknown Strategy Alignment backend: {name}")
 

@@ -4,8 +4,8 @@ population_size: 10
 crossover_rate: 0.75
 mutation_rate: 0.85
 random_seed: 7
-generation_backend: "llama_cpp"
-alignment_backend: "llama_cpp"
+generation_backend: "openai"
+alignment_backend: "openai"
 llm_base_url: "http://localhost:8080"
 llm_model: "local-model"
 microrts_dir: "third_party/microrts"

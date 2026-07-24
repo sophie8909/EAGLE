@@ -112,7 +112,7 @@ def build_profile_configuration(controller: LLMConfigController, repository_root
 
     async def load() -> None:
         try:
-            profiles = await asyncio.to_thread(controller.load, Path(str(path.value)), allow_coder_loopback=True)
+            profiles = await asyncio.to_thread(controller.load, Path(str(path.value)))
         except (OSError, ValueError) as exc:
             result.value = f"Cannot load role assignments: {exc}"
             result.update()
