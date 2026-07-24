@@ -8,6 +8,7 @@ external server records and are tested, not launched, by this process.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import socket
@@ -22,6 +23,7 @@ from urllib.parse import urlparse
 
 
 SEMANTIC_ROLES = ("reflector", "rewriter", "generator")
+SUPPORTED_LOCAL_MODELS = ("qwen3", "qwen3.5", "llama3.1")
 
 
 class ServerLifecycleError(RuntimeError):
@@ -76,8 +78,21 @@ class LLMServerManager:
 
     def discover_models(self) -> list[Path]:
         roots = (self.repository_root / "experiment_env" / "model", self.repository_root / "models")
-        models = {path.resolve() for root in roots if root.exists() for path in root.rglob("*.gguf") if path.is_file()}
-        return sorted(models, key=lambda path: str(path).lower())
+        discovered: dict[str, Path] = {}
+        for root in roots:
+            if not root.exists():
+                continue
+            for path in root.rglob("*.gguf"):
+                if not path.is_file() or "llama.cpp" in path.parts:
+                    continue
+                model_id = canonical_local_model_id(path)
+                if model_id is None:
+                    continue
+                candidate = path.absolute()
+                current = discovered.get(model_id)
+                if current is None or _model_path_priority(candidate) < _model_path_priority(current):
+                    discovered[model_id] = candidate
+        return [discovered[model_id] for model_id in SUPPORTED_LOCAL_MODELS if model_id in discovered]
 
     def resolve_server_path(self, configured: Path | str | None = None) -> Path:
         if configured:
@@ -89,6 +104,25 @@ class LLMServerManager:
         candidate = shutil.which(configured_env or "llama-server")
         if candidate:
             return Path(candidate)
+        for candidate_path in (
+            self.repository_root / "experiment_env" / "model" / "llama.cpp" / "llama.cpp" / "build-eagle" / "bin" / "llama-server",
+            self.repository_root / "experiment_env" / "model" / "llama.cpp" / "llama.cpp" / "build" / "bin" / "llama-server",
+            self.repository_root / "experiment_env" / "model" / "llama.cpp" / "build" / "bin" / "llama-server",
+        ):
+            if candidate_path.is_file():
+                return candidate_path
+        registry = self.repository_root / "experiment_env" / "model" / "model_registry.local.json"
+        if registry.is_file():
+            try:
+                configured_path = json.loads(registry.read_text(encoding="utf-8")).get("llama_server_binary")
+            except (OSError, json.JSONDecodeError):
+                configured_path = None
+            if configured_path:
+                path = Path(str(configured_path)).expanduser()
+                if not path.is_absolute():
+                    path = self.repository_root / path
+                if path.is_file():
+                    return path
         raise ServerLifecycleError("llama-server was not found; select an executable or set LLAMA_SERVER_BIN.")
 
     @staticmethod
@@ -214,3 +248,24 @@ class LLMServerManager:
                 last_error = str(exc) or type(exc).__name__
             time.sleep(0.25)
         raise ServerLifecycleError(f"server readiness timed out at {health_url}: {last_error}")
+
+
+def canonical_local_model_id(path: Path) -> str | None:
+    """Return one stable UI ID for a supported local model, or reject it."""
+
+    name = path.name.lower().replace(".", "-")
+    parent = path.parent.name.lower().replace(".", "-")
+    value = f"{parent}-{name}"
+    if "qwen3-5" in value or "qwen35" in value:
+        return "qwen3.5"
+    if "qwen3" in value:
+        return "qwen3"
+    if "llama-3-1" in value or "llama3-1" in value:
+        return "llama3.1"
+    return None
+
+
+def _model_path_priority(path: Path) -> tuple[int, int, str]:
+    """Prefer organized model files and then the shortest duplicate path."""
+
+    return (0 if path.name == "model.gguf" else 1, len(str(path)), str(path).lower())

@@ -11,12 +11,16 @@ from nicegui import ui
 
 from eagle.llm_profiles import LLMProfile
 from eagle_ui.controllers.llm_controller import LLMConfigController
+from eagle.runtime.server_manager import canonical_local_model_id
 from eagle_ui.theme import BUTTON_CLASS, CARD_CLASS, INPUT_CLASS
 
 
 def build_llm_view(controller: LLMConfigController, repository_root: Path) -> None:
     model_choices = controller.server_models()
-    model_options = {str(path): path.name for path in model_choices}
+    model_options = {
+        str(path): canonical_local_model_id(path) or path.name
+        for path in model_choices
+    }
     if not model_options:
         model_options = {"": "No .gguf models discovered"}
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
@@ -25,8 +29,7 @@ def build_llm_view(controller: LLMConfigController, repository_root: Path) -> No
         with ui.grid(columns=4).classes("w-full gap-3"):
             server_id = ui.input("Server identifier", value="local-llm").classes(INPUT_CLASS)
             location = ui.select({"local": "Current EA machine", "remote": "Configured LAN machine"}, label="Location", value="local").classes(INPUT_CLASS)
-            model_path = ui.select(model_options, label="Discovered .gguf model", with_input=True).classes(INPUT_CLASS)
-            model_id = ui.input("Model identifier", value="local-model").classes(INPUT_CLASS)
+            model_path = ui.select(model_options, label="Local model", with_input=False).classes(INPUT_CLASS)
             server_path = ui.input("llama-server executable (empty uses PATH)").classes(INPUT_CLASS)
             host = ui.input("Bind host", value="127.0.0.1").classes(INPUT_CLASS)
             port = ui.number("Port", value=8080, min=1, max=65535).classes(INPUT_CLASS)
@@ -57,7 +60,7 @@ def build_llm_view(controller: LLMConfigController, repository_root: Path) -> No
             "server_id": str(server_id.value or "").strip(),
             "model_path": Path(selected_model),
             "server_path": str(server_path.value or "").strip() or None,
-            "model_id": str(model_id.value or "").strip(),
+            "model_id": canonical_local_model_id(Path(selected_model)) or Path(selected_model).stem,
             "host": str(host.value or "127.0.0.1").strip(),
             "port": int(port.value or 0),
             "context_size": int(context_size.value or 0),

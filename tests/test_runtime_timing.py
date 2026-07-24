@@ -14,6 +14,30 @@ class RuntimeTimingTests(unittest.TestCase):
         )
         self.assertEqual(command[-6:], ["--ctx-size", "32768", "--host", "127.0.0.1", "--port", "8080"])
 
+    def test_model_discovery_returns_only_unique_supported_models(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_root = root / "experiment_env" / "model"
+            for name in (
+                "qwen3-8b-q4-k-m/model.gguf",
+                "qwen3-8b-q4-k-m-duplicate/model.gguf",
+                "qwen3-5-9b/model.gguf",
+                "meta-llama-3-1-8b/model.gguf",
+                "llama.cpp/models/ggml-vocab-qwen35.gguf",
+                "llama3-2/model.gguf",
+            ):
+                target = model_root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.touch()
+
+            discovered = LLMServerManager(root).discover_models()
+
+            self.assertEqual([path.parent.name for path in discovered], [
+                "qwen3-8b-q4-k-m",
+                "qwen3-5-9b",
+                "meta-llama-3-1-8b",
+            ])
+
     def test_timing_analysis_reads_generation_and_operation_records(self):
         with tempfile.TemporaryDirectory() as directory:
             run_dir = Path(directory)

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd -- "$(dirname -- "\${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ENV_NAME="eagle"
 INSTALL_MODE=true
-GUI_PORT="\${EAGLE_GUI_PORT:-8082}"
+GUI_PORT="${EAGLE_GUI_PORT:-8082}"
 
 for arg in "$@"; do
     case "$arg" in
@@ -63,7 +63,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "EAGLE GUI: http://127.0.0.1:\${GUI_PORT}"
+echo "EAGLE GUI: http://127.0.0.1:${GUI_PORT}"
 EAGLE_GUI_PORT="$GUI_PORT" python -m eagle_ui &
 GUI_PID=$!
 python -m eagle.runtime.watchdog --pid "$GUI_PID" &

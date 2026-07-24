@@ -116,6 +116,10 @@ class RunController:
 
     def shutdown(self) -> None:
         """Ensure GUI shutdown cannot leave a hidden child process alive."""
+        self.stop()
+
+    def stop(self) -> None:
+        """Stop the active EA child process from the GUI."""
         process = self._process
         if process is not None and process.poll() is None:
             process.terminate()

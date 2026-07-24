@@ -7,6 +7,7 @@ from pathlib import Path
 
 from nicegui import ui
 
+from eagle.opponents import EVALUATION_ROSTER
 from eagle_ui.components.log_panel import create_log_panel
 from eagle_ui.controllers.run_controller import RunController
 from eagle_ui.state import AppState
@@ -27,7 +28,10 @@ def build_run_view(state: AppState, controller: RunController) -> None:
             population = ui.number("Population size", min=1).classes(INPUT_CLASS)
             generations_input = ui.number("Generation count", min=1).classes(INPUT_CLASS)
             seed = ui.number("Seed", min=0).classes(INPUT_CLASS)
-            opponent = ui.input("Evaluation opponent").props("readonly").classes(INPUT_CLASS)
+            roster = ui.textarea(
+                "Evaluation roster (10 matches)",
+                value=_evaluation_roster_text(),
+            ).props("readonly").classes(f"{INPUT_CLASS} h-40")
             map_path = ui.select(controller.map_choices(), label="MicroRTS map").classes(INPUT_CLASS)
             runs_dir_input = ui.input("Output run directory").classes(INPUT_CLASS)
         effective_config = ui.label("Effective configuration: not loaded").classes("text-caption")
@@ -37,8 +41,9 @@ def build_run_view(state: AppState, controller: RunController) -> None:
             validate_button = ui.button("Validate edits").classes(BUTTON_CLASS)
             save_button = ui.button("Save canonical configuration").classes(BUTTON_CLASS)
             start_button = ui.button("Start EA run").classes(BUTTON_CLASS)
+            stop_button = ui.button("Stop EA run").classes(BUTTON_CLASS)
             status = ui.badge("idle")
-        ui.label("Stop is not exposed because the current EA runner has no checkpoint-safe termination API.").classes("text-caption")
+        ui.label("Stop terminates the active EA process; completed artifacts remain available.").classes("text-caption")
         with ui.grid(columns=3).classes("w-full gap-3"):
             generation = _status_field("Current generation", "—")
             candidate = _status_field("Current candidate", "—")
@@ -54,6 +59,14 @@ def build_run_view(state: AppState, controller: RunController) -> None:
             await asyncio.to_thread(controller.start, selected, mock=bool(mock.value))
         except (OSError, ValueError, RuntimeError) as exc:
             ui.notify(f"Cannot start EA run: {exc}", type="negative")
+            return
+        refresh()
+
+    async def stop() -> None:
+        try:
+            await asyncio.to_thread(controller.stop)
+        except (OSError, RuntimeError) as exc:
+            ui.notify(f"Cannot stop EA run: {exc}", type="negative")
             return
         refresh()
 
@@ -77,11 +90,10 @@ def build_run_view(state: AppState, controller: RunController) -> None:
         population.value = values["population_size"]
         generations_input.value = values["generations"]
         seed.value = values["random_seed"]
-        opponent.value = values["opponent"]
         map_path.value = values["map_path"]
         runs_dir_input.value = values["runs_dir"]
         effective_config.set_text(f"Effective configuration: {config_select.value}")
-        for control in (population, generations_input, seed, opponent, map_path, runs_dir_input):
+        for control in (population, generations_input, seed, roster, map_path, runs_dir_input):
             control.update()
 
     async def validate_edits() -> None:
@@ -117,8 +129,10 @@ def build_run_view(state: AppState, controller: RunController) -> None:
         log.value = "\n".join(state.run.log_lines[-2000:])
         log.update()
         start_button.set_enabled(not state.run.running)
+        stop_button.set_enabled(state.run.running)
 
     start_button.on_click(start)
+    stop_button.on_click(stop)
     load_button.on_click(load_config)
     validate_button.on_click(validate_edits)
     save_button.on_click(save_config)
@@ -131,3 +145,12 @@ def _status_field(label: str, value: str):
     with ui.column().classes("gap-0"):
         ui.label(label).classes("text-caption")
         return ui.label(value).classes("font-mono break-all")
+
+
+def _evaluation_roster_text() -> str:
+    """Render the fixed ten-opponent evolution roster for the GUI."""
+
+    lines = []
+    for index, opponent in enumerate(EVALUATION_ROSTER, start=1):
+        lines.append(f"{index}. {opponent.kind}: {opponent.opponent_id} ({opponent.class_name})")
+    return "\n".join(lines)
