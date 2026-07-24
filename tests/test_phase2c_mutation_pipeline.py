@@ -95,8 +95,8 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             write_candidate_artifacts(root / "candidates", evaluation)
             candidate_dir = root / "candidates" / candidate.id
             self.assertEqual(evaluation.candidate.status, "failed")
-            self.assertTrue((candidate_dir / "mutation" / "reflection_response_raw.txt").exists())
-            self.assertTrue((candidate_dir / "mutation" / "rewrite_response_raw.txt").exists())
+            self.assertTrue((candidate_dir / "mutation" / "reflector_response_raw.txt").exists())
+            self.assertTrue((candidate_dir / "mutation" / "rewriter_response_raw.txt").exists())
             self.assertTrue((candidate_dir / "generation" / "response_raw.txt").exists())
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
             self.assertEqual(timing["generation_llm"]["attempts"][0]["status"], "error")
@@ -155,10 +155,10 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             mutation_dir = candidate_dir / "mutation"
             generation_dir = candidate_dir / "generation"
             for name in (
-                "reflection_request.txt",
-                "reflection_response_raw.txt",
-                "rewrite_request.txt",
-                "rewrite_response_raw.txt",
+                "reflector_request.txt",
+                "reflector_response_raw.txt",
+                "rewriter_request.txt",
+                "rewriter_response_raw.txt",
                 "metadata.json",
             ):
                 self.assertTrue((mutation_dir / name).exists(), name)
@@ -181,7 +181,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             )
 
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
-            for stage in ("reflection_llm", "rewrite_llm", "generation_llm"):
+            for stage in ("reflector_llm", "rewriter_llm", "generation_llm"):
                 self.assertEqual(len(timing[stage]["attempts"]), 1)
                 self.assertGreaterEqual(timing[stage]["attempts"][0]["duration_seconds"], 0)
             self.assertEqual(timing["generation_llm"]["attempts"][0]["status"], "success")

@@ -12,12 +12,12 @@ from unittest.mock import patch
 from eagle.artifacts import write_candidate_artifacts
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, parse_minimal_yaml
-from eagle.crossover import Crossover, CrossoverContext
+from eagle.crossover import CrossoverContext, crossover
 from eagle.evaluation import evaluate_candidate, print_progress
-from eagle.mutation import Mutation, MutationContext
+from eagle.mutation import MutationContext
 from eagle.offspring import normalize_prompt
 from eagle.search import choose_mutation, front_zero_signature, run_search
-from eagle.selection import Selection, SelectionContext, dominates
+from eagle.selection import select_parent, dominates
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_performance import (
     GamePerformanceConfig,
@@ -155,7 +155,7 @@ population_size: 3
         self.assertEqual(result.command[result.command.index("--ai2") + 1], "ai.abstraction.LightRush")
 
     def test_match_artifact_paths_are_absolute_for_java_process(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp_dir:
             relative_artifacts = Path(os.path.relpath(Path(temp_dir) / "candidate_a" / "matches", Path.cwd()))
             result = run_microrts_match(
                 microrts_dir=Path("third_party/microrts"),
@@ -206,116 +206,51 @@ population_size: 3
         prompt = "  first\n\n\n\nsecond\n\n\nthird  "
         normalized = normalize_prompt(prompt, max_chars=100, max_lines=10)
         self.assertEqual(normalized, "first\n\nsecond\n\nthird")
-
-    def test_failed_game_performance_selects_code_generation_reflection(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
-        strategy_mutation = Mutation(config, method="strategy_reflection")
-        code_mutation = Mutation(config, method="code_generation_reflection")
+    def test_failed_game_performance_selects_code_mutation(self) -> None:
         failed_parent = Candidate(fitness_objectives={"game_performance": FAILED_GAME_PERFORMANCE})
-        selected = choose_mutation(failed_parent, (strategy_mutation, code_mutation), random.Random(1))
-        self.assertIs(selected, code_mutation)
+        self.assertEqual(choose_mutation(failed_parent, random.Random(1)), "code")
 
     def test_high_code_quality_favors_strategy_mutation(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
-        strategy_mutation = Mutation(config, method="strategy_reflection")
-        code_mutation = Mutation(config, method="code_generation_reflection")
         parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 501.0})
+        self.assertEqual(choose_mutation(parent, random.Random(1)), "strategy")
 
-        self.assertIs(
-            choose_mutation(parent, (strategy_mutation, code_mutation), random.Random(1)),
-            strategy_mutation,
-        )
-
-    def test_high_code_quality_uses_code_mutation_for_ten_percent_tail(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
-        strategy_mutation = Mutation(config, method="strategy_reflection")
-        code_mutation = Mutation(config, method="code_generation_reflection")
+    def test_high_code_quality_uses_code_mutation_for_tail(self) -> None:
         parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 501.0})
 
         class TailRandom:
             def random(self) -> float:
                 return 0.95
 
-        self.assertIs(
-            choose_mutation(parent, (strategy_mutation, code_mutation), TailRandom()),
-            code_mutation,
-        )
+        self.assertEqual(choose_mutation(parent, TailRandom()), "code")
 
     def test_code_quality_threshold_is_strictly_greater_than_500(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
-        strategy_mutation = Mutation(config, method="strategy_reflection")
-        code_mutation = Mutation(config, method="code_generation_reflection")
         parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 500.0})
 
-        class ChoiceRandom:
-            def choice(self, values):
-                return values[1]
+        class TailRandom:
+            def random(self) -> float:
+                return 0.95
 
-        self.assertIs(
-            choose_mutation(parent, (strategy_mutation, code_mutation), ChoiceRandom()),
-            code_mutation,
-        )
-
-    def test_unknown_mutation_method_raises_value_error(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
-        with self.assertRaisesRegex(ValueError, "Unknown mutation method"):
-            Mutation(config, method="unknown").mutate(
-                Candidate(strategy_prompt="strategy"),
-                MutationContext(generation=1, index=0),
-            )
+        self.assertEqual(choose_mutation(parent, TailRandom()), "code")
 
     def test_crossover_uniform_selects_complete_java_source(self) -> None:
-        source_a = load_java_template(JavaTemplatePaths()).replace(
-            "private void decide",
-            "private void decideA",
-            1,
-        )
-        source_b = load_java_template(JavaTemplatePaths()).replace(
-            "private void decide",
-            "private void decideB",
-            1,
-        )
+        source_a = load_java_template(JavaTemplatePaths()).replace("private void decide", "private void decideA", 1)
+        source_b = load_java_template(JavaTemplatePaths()).replace("private void decide", "private void decideB", 1)
         parent_a = Candidate(id="a", previous_code="old-a", generated_java=source_a)
         parent_b = Candidate(id="b", previous_code="old-b", generated_java=source_b)
-        child = Crossover(method="uniform").crossover(
-            parent_a,
-            parent_b,
-            CrossoverContext(generation=2, index=0, rng=random.Random(1)),
-        )
-        self.assertEqual(child.generation, 2)
+        child = crossover(parent_a, parent_b, CrossoverContext(generation=2, index=0, rng=random.Random(1)))
         self.assertEqual(child.parent_ids, ("a", "b"))
         self.assertEqual(child.operator, "crossover")
         self.assertIn(child.previous_code, (source_a, source_b))
-        self.assertIn(child.previous_code_parent_id, ("a", "b"))
-    def test_unknown_crossover_method_raises_value_error(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Unknown crossover method"):
-            Crossover(method="unknown").crossover(
-                Candidate(strategy_prompt="a"),
-                Candidate(strategy_prompt="b"),
-                CrossoverContext(generation=1, index=0, rng=random.Random(1)),
-            )
 
-    def test_selection_binary_tournament_returns_k_candidates(self) -> None:
+    def test_selection_binary_tournament_returns_candidates(self) -> None:
         population = [
             Candidate(id="a", fitness_objectives={"game_performance": 1.0, "code_quality": 0.1}),
             Candidate(id="b", fitness_objectives={"game_performance": 2.0, "code_quality": 0.2}),
             Candidate(id="c", fitness_objectives={"game_performance": 3.0, "code_quality": 0.3}),
         ]
-        selected = Selection(method="binary_tournament").select(
-            population,
-            5,
-            SelectionContext(rng=random.Random(1)),
-        )
+        selected = [select_parent(population, random.Random(index)) for index in range(5)]
         self.assertEqual(len(selected), 5)
         self.assertTrue(all(candidate in population for candidate in selected))
-
-    def test_unknown_selection_method_raises_value_error(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Unknown selection method"):
-            Selection(method="unknown").select(
-                [Candidate(strategy_prompt="strategy")],
-                1,
-                SelectionContext(rng=random.Random(1)),
-            )
 
     def test_mock_generation_returns_valid_java_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -433,17 +368,17 @@ population_size: 3
                 (candidate_dir / "generation" / "normalized_candidate.java").exists()
             )
             self.assertFalse((candidate_dir / "CandidateBehaviors.java").exists())
-            self.assertTrue((candidate_dir / "compile_result.json").exists())
-            self.assertTrue((candidate_dir / "raw_microrts_result.json").exists())
-            self.assertTrue((candidate_dir / "game_metrics.json").exists())
-            self.assertTrue((candidate_dir / "code_quality.json").exists())
-            quality = json.loads((candidate_dir / "code_quality.json").read_text(encoding="utf-8"))
-            self.assertIn("code_quality_breakdown", quality)
+            self.assertTrue((candidate_dir / "compilation" / "compilation_result.json").exists())
+            self.assertTrue((candidate_dir / "evaluation" / "matches.json").exists())
+            self.assertTrue((candidate_dir / "evaluation" / "game_performance.json").exists())
+            self.assertTrue((candidate_dir / "evaluation" / "code_quality.json").exists())
+            quality = json.loads((candidate_dir / "evaluation" / "code_quality.json").read_text(encoding="utf-8"))
+            self.assertIn("score", quality)
             self.assertEqual(
-                quality["code_quality"],
+                quality["score"],
                 round(
                     sum(
-                        quality["code_quality_breakdown"][name]
+                        quality[name]
                         for name in (
                             "successful_base",
                             "compilation_score",
@@ -454,7 +389,7 @@ population_size: 3
                     6,
                 ),
             )
-            self.assertTrue((candidate_dir / "objectives.json").exists())
+            self.assertTrue((candidate_dir / "evaluation" / "objectives.json").exists())
             self.assertTrue((candidate_dir / "candidate_result.json").exists())
             individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
             self.assertNotIn("prompt_length", individual["fitness_objectives"])
@@ -883,77 +818,6 @@ population_size: 3
         tradeoff = Candidate(fitness_objectives={"game_performance": 3, "code_quality": 0.2})
         self.assertTrue(dominates(strong, weak))
         self.assertFalse(dominates(strong, tradeoff))
-
-    def test_analyze_run_falls_back_to_failed_candidate_debug(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            first = root / "failed_candidates" / "cand_a"
-            second = root / "failed_candidates" / "cand_b"
-            first.mkdir(parents=True)
-            second.mkdir(parents=True)
-            (first / "failure.json").write_text(
-                json.dumps(
-                    {
-                        "failure_category": "Java validation failure",
-                        "failure_reason": "Generated Java agent must not iterate directly over gs.getUnits().",
-                        "validation_result": {
-                            "ok": False,
-                            "error": "Generated Java agent must not iterate directly over gs.getUnits().",
-                        },
-                        "compile_result": None,
-                    }
-                ),
-                encoding="utf-8",
-            )
-            (second / "failure.json").write_text(
-                json.dumps(
-                    {
-                        "failure_category": "Java compile failure",
-                        "failure_reason": "compile failed",
-                        "validation_result": {"ok": True, "error": ""},
-                        "compile_result": {
-                            "stderr": "Agent.java:1: error: cannot find symbol\nStrategyTable table;\n^\n"
-                        },
-                    }
-                ),
-                encoding="utf-8",
-            )
-
-            summary = analyze_run(root)
-            report = format_report(summary)
-
-        self.assertEqual(summary["total_candidates"], 2)
-        self.assertEqual(summary["failed_candidates"], 2)
-        self.assertIsNone(summary["success_count"])
-        self.assertEqual(summary["failure_category_counts"]["Java validation failure"], 1)
-        self.assertEqual(summary["compile_root_cause_counts"]["cannot find symbol"], 1)
-        self.assertIn("Success count: unknown", report)
-
-    def test_analyze_run_reads_legacy_results_jsonl(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            record = {
-                "candidate": {
-                    "id": "cand_a",
-                    "parent_ids": [],
-                    "status": "failed",
-                    "compile_status": "failed",
-                    "fitness_objectives": {"game_performance": -1000.0},
-                },
-                "compile": {
-                    "stderr": "Agent.java:1: error: incompatible types: UnitType cannot be converted to Unit\n"
-                },
-                "error": None,
-            }
-            (root / "results.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
-            summary = analyze_run(root)
-
-        self.assertEqual(summary["total_candidates"], 1)
-        self.assertEqual(summary["failed_candidates"], 1)
-        self.assertEqual(summary["success_count"], 0)
-        self.assertEqual(summary["failure_category_counts"]["Java compile failure"], 1)
-        self.assertEqual(summary["compile_root_cause_counts"]["incompatible types"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

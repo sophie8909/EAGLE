@@ -1,4 +1,9 @@
-"""Candidate evaluation with explicit generation, validation, compilation, and integration boundaries."""
+"""Shared child pipeline for generated-agent evaluation.
+
+This module owns validation, compilation, MicroRTS evaluation, objective construction,
+and candidate artifact persistence. Search owns operator selection and population
+updates; this module does not choose parents or survivors.
+"""
 
 from __future__ import annotations
 

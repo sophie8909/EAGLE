@@ -1,4 +1,4 @@
-"""LLM-backed Reflection stages for EAGLE mutation.
+"""Canonical reflector stage for EAGLE mutation.
 
 Prompt rewriting is intentionally owned by the next migration stage. This
 module currently provides typed evidence, a transport abstraction, retry
@@ -136,9 +136,6 @@ class ReflectionBackend(Protocol):
         """Return the raw backend response for a single attempt."""
 
 
-# Compatibility for callers that supplied a simple ``generate(prompt)`` fake.
-MutationBackend = ReflectionBackend
-
 
 class MockReflectionBackend:
     """Deterministic Reflection backend used by tests and mock searches."""
@@ -218,7 +215,7 @@ def build_reflection_backend(
 ) -> ReflectionBackend:
     if name == "mock":
         return MockReflectionBackend()
-    if name in {"openai", "llama_cpp"}:
+    if name in {"openai", "openai"}:
         return OpenAICompatibleReflectionBackend(base_url, model, llm_profile=llm_profile, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
     raise ValueError(f"Unknown mutation backend: {name}")
 
@@ -247,15 +244,14 @@ class ReflectionStage:
     def run(
         self,
         *,
-        stage: str,
         reflection_type: str,
         candidate: Candidate,
         request: str,
         artifact_dir: Path | None = None,
     ) -> ReflectionResult:
+        stage = "reflector"
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
-            _write_text(artifact_dir / "mutation" / "reflection_request.txt", request)
 
         attempts: list[ReflectionAttempt] = []
         last_response = ""
@@ -270,7 +266,7 @@ class ReflectionStage:
                 response = self.backend.generate(request)
                 last_response = response
                 _validate_reflection(response)
-            except Exception as exc:  # noqa: BLE001 - persisted as stage failure
+            except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
                 status = "error"
                 error = str(exc) or type(exc).__name__
                 last_error = error
@@ -293,7 +289,6 @@ class ReflectionStage:
                 )
                 if response:
                     _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", response)
-                    _write_text(artifact_dir / "mutation" / "reflection_response_raw.txt", response)
             if self.logger is not None:
                 self.logger.write(
                     stage=stage,
@@ -329,7 +324,6 @@ class ReflectionStage:
 
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", last_response)
-            _write_text(artifact_dir / "mutation" / "reflection_response_raw.txt", last_response)
         return ReflectionResult(
             stage=stage,
             reflection_type=reflection_type,
@@ -343,96 +337,6 @@ class ReflectionStage:
             backend=self.backend_name,
             llm_profile=self.llm_profile,
         )
-
-
-class Mutation:
-    """Reflection-only mutation facade used during Phase 2A."""
-
-    def __init__(
-        self,
-        config: ExperimentConfig,
-        *,
-        method: str = "strategy_reflection",
-        backend: ReflectionBackend | None = None,
-        artifact_root: Path | None = None,
-        logger: Any | None = None,
-        model: str | None = None,
-        backend_name: str | None = None,
-    ) -> None:
-        if method not in {"strategy_reflection", "code_generation_reflection"}:
-            raise ValueError(f"Unknown mutation method: {method}")
-        self.config = config
-        self.method = method
-        self.backend = backend or build_reflection_backend(
-            config.generation_backend,
-            base_url=config.llm_base_url,
-            model=config.llm_model,
-        )
-        self.artifact_root = artifact_root
-        self.stage = ReflectionStage(
-            self.backend,
-            max_attempts=config.mutation_max_attempts,
-            logger=logger,
-            model=model if model is not None else (None if config.generation_backend == "mock" else config.llm_model),
-            backend_name=backend_name or config.generation_backend,
-        )
-
-    @property
-    def mutation_type(self) -> str:
-        return "strategy" if self.method == "strategy_reflection" else "code"
-
-    def reflect(
-        self,
-        candidate: Candidate,
-        context: MutationContext,
-        *,
-        artifact_dir: Path | None = None,
-    ) -> ReflectionResult:
-        stage = self.method
-        reflection_type = "strategy_reflection" if self.mutation_type == "strategy" else "code_reflection"
-        request = (
-            build_strategy_reflection_prompt(candidate, context)
-            if self.mutation_type == "strategy"
-            else build_code_reflection_prompt(candidate, context)
-        )
-        target_dir = artifact_dir or (self.artifact_root / candidate.id if self.artifact_root else None)
-        return self.stage.run(
-            stage=stage,
-            reflection_type=reflection_type,
-            candidate=candidate,
-            request=request,
-            artifact_dir=target_dir,
-        )
-
-    def mutate(
-        self,
-        candidate: Candidate,
-        context: MutationContext,
-        *,
-        artifact_dir: Path | None = None,
-    ) -> Candidate:
-        """Run Reflection while deliberately preserving the candidate genotype."""
-
-        result = self.reflect(candidate, context, artifact_dir=artifact_dir)
-        record = {
-            "schema_version": REFLECTION_SCHEMA_VERSION,
-            "applied": False,
-            "type": self.mutation_type,
-            "stage": "reflection",
-            "reflection_model": result.model,
-            "reflection_profile": result.llm_profile,
-            "reflection_attempts": len(result.attempts),
-            "reflection_status": result.status,
-            "reflection_error": result.error,
-            "reflection": result.to_dict(),
-        }
-        timing = dict(candidate.timing)
-        timing["reflection_llm"] = _timing_payload(result.attempts)
-        metadata = dict(candidate.metadata)
-        metadata["mutation"] = record
-        # The existing child identity already belongs to this offspring. A
-        # Reflection-only stage must not create a second lineage node.
-        return replace(candidate, mutation_type=self.mutation_type, timing=timing, metadata=metadata)
 
 
 def build_strategy_reflection_prompt(candidate: Candidate, context: MutationContext) -> str:

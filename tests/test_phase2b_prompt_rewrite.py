@@ -4,7 +4,7 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.mutation import MutationContext
+from eagle.mutation import MutationContext, ReflectionStage, build_strategy_reflection_prompt
 from eagle.rewrite import (
     PromptRewriteMutation,
     PromptRewriteStage,
@@ -76,15 +76,13 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertEqual(child.previous_code, self.candidate.previous_code)
         self.assertEqual(child.generation_prompt, "new generation prompt")
         self.assertEqual(child.mutation_type, "code")
-
     def test_rewrite_prompt_builders_include_reflection_and_original_component(self):
         backend = ScriptedRewriteBackend(("reflection",))
-        reflection = PromptRewriteMutation(
-            self.config,
-            mutation_type="strategy",
-            reflection_backend=backend,
-            rewrite_backend=backend,
-        ).reflection.reflect(self.candidate, self.context)
+        reflection = ReflectionStage(backend, max_attempts=1).run(
+            reflection_type="strategy",
+            candidate=self.candidate,
+            request=build_strategy_reflection_prompt(self.candidate, self.context),
+        )
         strategy_prompt = build_strategy_rewrite_prompt(self.candidate, reflection, self.context)
         code_prompt = build_code_rewrite_prompt(self.candidate, reflection, self.context)
         self.assertIn("old strategy", strategy_prompt)
@@ -95,7 +93,6 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
     def test_rewrite_output_rejects_java_and_retries(self):
         backend = ScriptedRewriteBackend(("package ai.generated; class CandidateAgent {}", "usable revised prompt"))
         result = PromptRewriteStage(backend, max_attempts=2).run(
-            stage="strategy_rewrite",
             rewrite_type="strategy_prompt_rewrite",
             candidate=self.candidate,
             request="rewrite request",
@@ -117,10 +114,10 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
             mutation_dir = Path(temp) / "mutation"
             self.assertFalse(child.metadata["mutation"]["applied"])
             self.assertEqual(child.strategy_prompt, self.candidate.strategy_prompt)
-            self.assertTrue((mutation_dir / "strategy_reflection_request.txt").exists())
-            self.assertTrue((mutation_dir / "strategy_reflection_response_raw.txt").exists())
-            self.assertTrue((mutation_dir / "strategy_rewrite_request.txt").exists())
-            self.assertTrue((mutation_dir / "strategy_rewrite_response_raw.txt").exists())
+            self.assertTrue((mutation_dir / "reflector_request.txt").exists())
+            self.assertTrue((mutation_dir / "reflector_response_raw.txt").exists())
+            self.assertTrue((mutation_dir / "rewriter_request.txt").exists())
+            self.assertTrue((mutation_dir / "rewriter_response_raw.txt").exists())
             self.assertTrue((mutation_dir / "original_strategy_prompt.txt").exists())
             self.assertTrue((Path(temp) / "timing.json").exists())
 

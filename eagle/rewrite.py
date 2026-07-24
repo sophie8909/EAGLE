@@ -16,11 +16,13 @@ from .candidate import Candidate
 from .config import ExperimentConfig
 from .mutation import (
     REFLECTION_SCHEMA_VERSION,
-    Mutation,
     MutationContext,
     ReflectionAttempt,
     ReflectionBackend,
     ReflectionResult,
+    ReflectionStage,
+    build_code_reflection_prompt,
+    build_strategy_reflection_prompt,
     _timing_payload,
     utc_now,
 )
@@ -96,15 +98,14 @@ class PromptRewriteStage:
     def run(
         self,
         *,
-        stage: str,
         rewrite_type: str,
         candidate: Candidate,
         request: str,
         artifact_dir: Path | None = None,
     ) -> RewriteResult:
+        stage = "rewriter"
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
-            _write_text(artifact_dir / "mutation" / "rewrite_request.txt", request)
         attempts: list[ReflectionAttempt] = []
         last_response = ""
         last_error: str | None = None
@@ -118,7 +119,7 @@ class PromptRewriteStage:
                 response = self.backend.generate(request)
                 last_response = response
                 _validate_rewritten_prompt(response)
-            except Exception as exc:  # noqa: BLE001 - retained in stage evidence
+            except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
                 status = "error"
                 error = str(exc) or type(exc).__name__
                 last_error = error
@@ -137,7 +138,6 @@ class PromptRewriteStage:
                 _write_text(artifact_dir / "mutation" / f"{stage}_attempt_{attempt_number:03d}_response_raw.txt", response)
                 if response:
                     _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", response)
-                    _write_text(artifact_dir / "mutation" / "rewrite_response_raw.txt", response)
             if self.logger is not None:
                 self.logger.write(
                     stage=stage,
@@ -172,7 +172,6 @@ class PromptRewriteStage:
             time.sleep(0)
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", last_response)
-            _write_text(artifact_dir / "mutation" / "rewrite_response_raw.txt", last_response)
         return RewriteResult(
             stage=stage,
             rewrite_type=rewrite_type,
@@ -209,14 +208,12 @@ class PromptRewriteMutation:
         self.config = config
         self.mutation_type = mutation_type
         self.artifact_root = artifact_root
-        self.reflection = Mutation(
-            config,
-            method="strategy_reflection" if mutation_type == "strategy" else "code_generation_reflection",
-            backend=reflection_backend,
-            artifact_root=artifact_root,
+        self.reflection = ReflectionStage(
+            reflection_backend,
+            max_attempts=config.mutation_max_attempts,
             logger=logger,
-            model=reflection_model,
-            backend_name=backend_name,
+            model=reflection_model if reflection_model is not None else (None if config.generation_backend == "mock" else config.llm_model),
+            backend_name=backend_name or config.generation_backend,
         )
         self.rewrite = PromptRewriteStage(
             rewrite_backend,
@@ -236,7 +233,17 @@ class PromptRewriteMutation:
         target_dir = artifact_dir or (self.artifact_root / candidate.id if self.artifact_root else None)
         original_strategy = candidate.strategy_prompt
         original_generation = candidate.generation_prompt
-        reflection = self.reflection.reflect(candidate, context, artifact_dir=target_dir)
+        reflection_request = (
+            build_strategy_reflection_prompt(candidate, context)
+            if self.mutation_type == "strategy"
+            else build_code_reflection_prompt(candidate, context)
+        )
+        reflection = self.reflection.run(
+            reflection_type=self.mutation_type,
+            candidate=candidate,
+            request=reflection_request,
+            artifact_dir=target_dir,
+        )
         if not reflection.succeeded:
             return self._result_candidate(
                 candidate,
@@ -255,10 +262,8 @@ class PromptRewriteMutation:
             if self.mutation_type == "strategy"
             else build_code_rewrite_prompt(candidate, reflection, context)
         )
-        rewrite_stage = "strategy_rewrite" if self.mutation_type == "strategy" else "generation_prompt_rewrite"
         rewrite_type = "strategy_prompt_rewrite" if self.mutation_type == "strategy" else "generation_prompt_rewrite"
         rewrite = self.rewrite.run(
-            stage=rewrite_stage,
             rewrite_type=rewrite_type,
             candidate=candidate,
             request=request,
@@ -328,8 +333,8 @@ class PromptRewriteMutation:
             "rewrite": None if rewrite is None else rewrite.to_dict(),
         }
         timing = dict(candidate.timing)
-        timing["reflection_llm"] = _timing_payload(reflection.attempts)
-        timing["rewrite_llm"] = (
+        timing["reflector_llm"] = _timing_payload(reflection.attempts)
+        timing["rewriter_llm"] = (
             {"started_at": None, "finished_at": None, "duration_seconds": None, "attempts": []}
             if rewrite is None
             else _timing_payload(rewrite.attempts)

@@ -6,7 +6,6 @@ from pathlib import Path
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.mutation import (
-    Mutation,
     MutationContext,
     ReflectionStage,
     build_code_reflection_prompt,
@@ -112,7 +111,6 @@ class Phase2AReflectionTests(unittest.TestCase):
         backend = ScriptedBackend(("```java\nclass CandidateAgent {}\n```", "Useful reflection text."))
         stage = ReflectionStage(backend, max_attempts=2)
         result = stage.run(
-            stage="strategy_reflection",
             reflection_type="strategy_reflection",
             candidate=self.candidate,
             request="request",
@@ -127,7 +125,6 @@ class Phase2AReflectionTests(unittest.TestCase):
         backend = ScriptedBackend(("", ""))
         with tempfile.TemporaryDirectory() as temp:
             result = ReflectionStage(backend, max_attempts=2).run(
-                stage="code_generation_reflection",
                 reflection_type="code_reflection",
                 candidate=self.candidate,
                 request="full request",
@@ -136,27 +133,10 @@ class Phase2AReflectionTests(unittest.TestCase):
             mutation_dir = Path(temp) / "mutation"
             self.assertEqual(result.status, "failed")
             self.assertEqual(len(result.attempts), 2)
-            self.assertTrue((mutation_dir / "code_generation_reflection_request.txt").exists())
-            self.assertTrue((mutation_dir / "code_generation_reflection_response_raw.txt").exists())
-            self.assertTrue((mutation_dir / "code_generation_reflection_attempt_002_response_raw.txt").exists())
+            self.assertTrue((mutation_dir / "reflector_request.txt").exists())
+            self.assertTrue((mutation_dir / "reflector_response_raw.txt").exists())
+            self.assertTrue((mutation_dir / "reflector_attempt_002_response_raw.txt").exists())
             self.assertIsNotNone(result.error)
-
-    def test_reflection_only_mutation_does_not_change_genotype(self):
-        backend = ScriptedBackend(("Reflection text",))
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"], "mutation_max_attempts": 1})
-        with tempfile.TemporaryDirectory() as temp:
-            child = Mutation(config, backend=backend).mutate(
-                self.candidate,
-                self.context,
-                artifact_dir=Path(temp),
-            )
-        self.assertEqual(child.id, self.candidate.id)
-        self.assertEqual(child.strategy_prompt, self.candidate.strategy_prompt)
-        self.assertEqual(child.previous_code, self.candidate.previous_code)
-        self.assertEqual(child.generation_prompt, self.candidate.generation_prompt)
-        self.assertEqual(child.metadata["mutation"]["applied"], False)
-        self.assertEqual(child.metadata["mutation"]["reflection"]["reflection"], "Reflection text")
-        self.assertEqual(len(child.timing["reflection_llm"]["attempts"]), 1)
 
 
 if __name__ == "__main__":

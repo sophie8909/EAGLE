@@ -64,24 +64,6 @@ class Candidate:
     timing: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    @property
-    def candidate_id(self) -> str:
-        """Canonical candidate identity while internal callers migrate from id."""
-
-        return self.id
-
-    @property
-    def generated_java_agent_path(self) -> str | None:
-        """Compatibility alias for the pre-Phase-1 field name."""
-
-        return self.generated_java_path
-
-    @property
-    def inheritable_previous_code(self) -> str:
-        """Return the evaluated phenotype used as a child's Previous Code."""
-
-        return self.generated_java
-
     def objective_vector(self) -> tuple[float, ...]:
         if not self.fitness_objectives:
             return (0.0, 0.0)
@@ -122,7 +104,7 @@ class Candidate:
 
     def to_json_dict(self) -> dict[str, Any]:
         payload = asdict(self)
-        payload["candidate_id"] = self.candidate_id
+        payload["candidate_id"] = self.id
         payload["parent_ids"] = list(self.parent_ids)
         payload["source_candidate_ids"] = list(self.resolved_source_candidate_ids())
         return payload
@@ -147,7 +129,7 @@ class Candidate:
 
         return {
             "lineage_schema_version": LINEAGE_SCHEMA_VERSION,
-            "candidate_id": self.candidate_id,
+            "candidate_id": self.id,
             "generation": self.generation,
             "parent_ids": list(self.parent_ids),
             "operator": self.operator,

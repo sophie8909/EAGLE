@@ -14,7 +14,7 @@ from eagle.artifacts import (
 )
 from eagle.candidate import Candidate, LINEAGE_SCHEMA_VERSION
 from eagle.config import ExperimentConfig
-from eagle.crossover import Crossover, CrossoverContext
+from eagle.crossover import CrossoverContext, crossover
 from eagle.evaluation import evaluate_candidate
 from eagle.search import initialize_population, run_search
 from generation.backend import MockGenerationBackend
@@ -74,7 +74,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             ),
         )
 
-        child = Crossover().crossover(
+        child = crossover(
             *parents,
             CrossoverContext(1, 0, random.Random(3)),
         )
@@ -99,7 +99,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             generation_prompt="prompt-b",
         )
 
-        child = Crossover().crossover(
+        child = crossover(
             parent_a,
             parent_b,
             CrossoverContext(2, 0, random.Random(11)),
@@ -125,12 +125,12 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             generation_prompt="prompt-b",
         )
 
-        first = Crossover().crossover(
+        first = crossover(
             parent_a,
             parent_b,
             CrossoverContext(1, 0, random.Random(19)),
         )
-        second = Crossover().crossover(
+        second = crossover(
             parent_a,
             parent_b,
             CrossoverContext(1, 0, random.Random(19)),
@@ -175,7 +175,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
 
         observed = set()
         for choices in product((0, 1), repeat=3):
-            child = Crossover().crossover(
+            child = crossover(
                 parent_a,
                 parent_b,
                 CrossoverContext(1, 0, ChoiceSequence(choices)),

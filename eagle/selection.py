@@ -1,35 +1,21 @@
-"""NSGA-II parent and survivor selection helpers."""
+"""NSGA-II parent selection and survivor population update.
+
+This module owns ranking, crowding, and survival. It does not calculate or
+repair objectives; candidates arrive with canonical persisted objective values.
+"""
 
 from __future__ import annotations
 
 import math
 import random
-from dataclasses import dataclass
 
 from .candidate import Candidate
 
 
-@dataclass(frozen=True)
-class SelectionContext:
-    rng: random.Random
 
-
-class Selection:
-    """Select candidates using one configured selection method."""
-
-    def __init__(self, *, method: str = "binary_tournament") -> None:
-        self.method = method
-
-    def select(self, population: list[Candidate], k: int, context: SelectionContext) -> list[Candidate]:
-        if self.method == "binary_tournament":
-            return [tournament_select(population, context.rng) for _ in range(k)]
-        raise ValueError(f"Unknown selection method: {self.method}")
-
-
-def tournament_select(population: list[Candidate], rng: random.Random) -> Candidate:
+def select_parent(population: list[Candidate], rng: random.Random) -> Candidate:
     """Pick a parent by comparing two random candidates."""
 
-    # Tournament selection uses the better of two random candidates as a parent.
     if len(population) == 1:
         return population[0]
     first, second = rng.sample(population, 2)
@@ -96,7 +82,6 @@ def dominates(first: Candidate, second: Candidate) -> bool:
 def non_dominated_sort(population: list[Candidate]) -> list[list[Candidate]]:
     """Group candidates into Pareto fronts, best front first."""
 
-    # Pareto sorting puts non-dominated candidates in the first front.
     if not population:
         return []
     domination_count = [0] * len(population)
@@ -126,7 +111,6 @@ def non_dominated_sort(population: list[Candidate]) -> list[list[Candidate]]:
 def crowding_distance(front: list[Candidate]) -> list[float]:
     """Score how isolated each candidate is within one Pareto front."""
 
-    # Crowding distance preserves spread along each objective.
     if not front:
         return []
     if len(front) <= 2:

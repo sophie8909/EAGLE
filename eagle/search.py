@@ -1,4 +1,9 @@
-"""NSGA-II search loop for prompt-generated Java MicroRTS agents."""
+"""Canonical evolutionary search for prompt-generated Java MicroRTS agents.
+
+This module owns experiment lifecycle, offspring orchestration, and population
+updates. Evaluation owns the shared child pipeline; final-test execution is a
+separate post-evolution protocol. The canonical entrypoint is ``run_search``.
+"""
 
 from __future__ import annotations
 
@@ -15,17 +20,16 @@ from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE
 from .artifacts import write_generation_manifest, write_prompt_snapshot, write_resolved_config, write_summary
 from .candidate import Candidate
 from .config import ExperimentConfig
-from .crossover import Crossover, CrossoverContext
+from .crossover import CrossoverContext, crossover
 from .evaluation import evaluate_population, preflight_evaluation_opponents
 from .mutation import MutationContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
-from .llm_profiles import LLMProfile, load_effective_role_profiles
+from .llm_profiles import LLMProfile, load_role_profiles
 from .offspring import normalize_prompt
 from .rewrite import PromptRewriteMutation
 from .selection import (
-    Selection,
-    SelectionContext,
+    select_parent,
     assign_rank_and_crowding,
     best_candidate,
     select_next_generation,
@@ -42,11 +46,10 @@ class SearchResult:
 
 
 def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = False, run_id: str | None = None) -> SearchResult:
+    """Prepare a run, evolve generations, persist state, and finalize the run."""
     config.validate()
     preflight_evaluation_opponents(config, mock=mock)
     rng = random.Random(config.random_seed)
-    crossover = Crossover(method="uniform")
-    selection = Selection(method="binary_tournament")
 
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = config.runs_dir / active_run_id
@@ -67,19 +70,8 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             "rewriter": LLMProfile("rewriter", config.llm_base_url, config.llm_model),
             "generator": LLMProfile("generator", config.llm_base_url, config.llm_model),
         }
-        stage_routing = {
-            "reflection": "reflector",
-            "rewrite": "rewriter",
-            "generation": "generator",
-            "strategy_alignment": "reflector",
-        }
     else:
-        role_profiles, stage_routing = load_effective_role_profiles(
-            role_topology_path=config.llm_role_topology_path,
-            endpoint_config_path=config.endpoint_config_path,
-            llm_topology=config.llm_topology,
-            allow_coder_loopback=config.allow_coder_loopback,
-        )
+        role_profiles = load_role_profiles(config.llm_role_topology_path)
     reflector_profile = role_profiles["reflector"]
     rewriter_profile = role_profiles["rewriter"]
     generator_profile = role_profiles["generator"]
@@ -139,12 +131,12 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         config,
         mock=mock,
         profiles=role_profiles,
-        stage_routing=stage_routing,
     )
     write_prompt_snapshot(run_dir, config)
     results_path = run_dir / "results.jsonl"
 
     population = initialize_population(config)
+    # Generation zero enters the same evaluation boundary as every offspring so objective and failure records have one shape.
     generation_span = Stopwatch.start()
     evaluated_population = evaluate_population(
         population,
@@ -172,17 +164,17 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
 
     for generation in range(1, config.generations):
         assign_rank_and_crowding(evaluated_population)
+        # Operators produce only child genotypes; evaluation starts at the shared boundary below.
         offspring = create_offspring(
             evaluated_population,
             config=config,
             generation=generation,
             rng=rng,
-            mutations=(strategy_mutation, code_mutation),
-            crossover=crossover,
-            selection=selection,
+            mutations={"strategy": strategy_mutation, "code": code_mutation},
             artifact_root=candidates_dir,
         )
         generation_span = Stopwatch.start()
+        # Validation, compilation, runtime evaluation, objectives, and candidate artifacts stay centralized in evaluation.
         evaluated_offspring = evaluate_population(
             offspring,
             generation=generation,
@@ -201,6 +193,8 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             candidates=evaluated_offspring,
             span=generation_span.finish(),
         ))
+        # Survival selection is the only population update boundary and consumes
+        # the objectives already persisted by evaluate_population.
         evaluated_population = select_next_generation(evaluated_population, evaluated_offspring, population_size=config.population_size)
         current_front0_signature = front_zero_signature(evaluated_population)
         if current_front0_signature == front0_signature:
@@ -260,18 +254,18 @@ def initialize_population(config: ExperimentConfig) -> list[Candidate]:
     return population[: config.population_size]
 
 
-def create_offspring(population: list[Candidate], *, config: ExperimentConfig, generation: int, rng: random.Random, mutations: tuple[PromptRewriteMutation, PromptRewriteMutation], crossover: Crossover, selection: Selection, artifact_root: Path | None = None) -> list[Candidate]:
+def create_offspring(population: list[Candidate], *, config: ExperimentConfig, generation: int, rng: random.Random, mutations: dict[str, PromptRewriteMutation], artifact_root: Path | None = None) -> list[Candidate]:
     offspring: list[Candidate] = []
     while len(offspring) < config.population_size:
         context_index = len(offspring)
         parent_selection_started = time.monotonic()
-        parent_a = selection.select(population, 1, SelectionContext(rng=rng))[0]
-        parent_b = selection.select(population, 1, SelectionContext(rng=rng))[0]
+        parent_a = select_parent(population, rng)
+        parent_b = select_parent(population, rng)
         parent_selection_duration = max(0.0, time.monotonic() - parent_selection_started)
         if len(population) > 1 and rng.random() < config.crossover_rate:
             crossover_started_at = utc_now()
             crossover_started = time.monotonic()
-            child = crossover.crossover(parent_a, parent_b, CrossoverContext(generation=generation, index=context_index, rng=rng))
+            child = crossover(parent_a, parent_b, CrossoverContext(generation=generation, index=context_index, rng=rng))
             crossover_duration = max(0.0, time.monotonic() - crossover_started)
             child = replace(child, timing={
                 **child.timing,
@@ -290,7 +284,7 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
                 generation=generation,
                 parent_ids=(parent_a.id,),
                 strategy_prompt=normalize_prompt(parent_a.strategy_prompt, max_chars=config.max_prompt_chars, max_lines=config.max_prompt_lines),
-                previous_code=parent_a.inheritable_previous_code,
+                previous_code=parent_a.generated_java,
                 generation_prompt=parent_a.generation_prompt,
                 operator="copy",
                 strategy_parent_id=parent_a.id,
@@ -300,10 +294,14 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
             )
         if rng.random() < config.mutation_rate:
             feedback_parent = parent_for_component(child.strategy_parent_id, (parent_a, parent_b))
-            mutation = choose_mutation(feedback_parent, mutations, rng)
+            mutation_name = choose_mutation(feedback_parent, rng)
+            mutation = mutations[mutation_name]
             mutation_started_at = utc_now()
             mutation_started = time.monotonic()
             child = mutation.mutate(child, mutation_context_from_candidate(feedback_parent, generation=generation, index=context_index), artifact_dir=(artifact_root / child.id) if artifact_root is not None else None)
+            mutation_record = child.metadata.get("mutation") or {}
+            mutation_applied = bool(mutation_record.get("applied"))
+            mutation_error = mutation_record.get("reflection_error") or mutation_record.get("rewrite_error")
             child = replace(child, timing={
                 **child.timing,
                 "mutation": {
@@ -312,8 +310,8 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
                     "finished_at": utc_now(),
                     "generation_only_duration_seconds": max(0.0, time.monotonic() - mutation_started),
                     "parent_selection_duration_seconds": parent_selection_duration,
-                    "status": "success",
-                    "error": None,
+                    "status": "success" if mutation_applied else "failed",
+                    "error": mutation_error,
                 },
             })
         offspring.append(child)
@@ -327,7 +325,7 @@ def parent_for_component(parent_id: str | None, parents: tuple[Candidate, Candid
     raise ValueError(f"Recorded component parent {parent_id!r} is not a direct parent.")
 
 
-def choose_mutation(feedback_parent: Candidate, mutations: tuple[PromptRewriteMutation, PromptRewriteMutation], rng: random.Random) -> PromptRewriteMutation:
+def choose_mutation(feedback_parent: Candidate, rng: random.Random) -> str:
     """Choose a mutation type from the parent's latest evaluation.
 
     A failed game still takes the code-mutation path so the generated agent
@@ -337,10 +335,10 @@ def choose_mutation(feedback_parent: Candidate, mutations: tuple[PromptRewriteMu
     candidates retain the default 50/50 split.
     """
     if number_or_none(feedback_parent.fitness_objectives.get("game_performance")) == FAILED_GAME_PERFORMANCE:
-        return mutations[1]
+        return "code"
     if (number_or_none(feedback_parent.fitness_objectives.get("code_quality")) or 0.0) > 500:
-        return mutations[0] if rng.random() < 0.9 else mutations[1]
-    return rng.choice(mutations)
+        return "strategy" if rng.random() < 0.9 else "code"
+    return "strategy" if rng.random() < 0.5 else "code"
 
 def mutation_context_from_candidate(candidate: Candidate, *, generation: int, index: int) -> MutationContext:
     game = candidate.game_eval_result or {}

@@ -6,8 +6,8 @@ from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.crossover import Crossover, CrossoverContext
-from eagle.mutation import Mutation, MutationContext
+from eagle.crossover import CrossoverContext, crossover
+from eagle.mutation import MutationContext
 from evaluation.compiler import compile_generated_agent
 from generation.agent_template import (
     ACTION_HELPER_METHODS,
@@ -91,20 +91,8 @@ class CompleteJavaGenerationTests(unittest.TestCase):
         template = load_java_template(JavaTemplatePaths())
         source_a = template.replace("private void decide", "private void decideA", 1)
         source_b = template.replace("private void decide", "private void decideB", 1)
-        child = Crossover().crossover(Candidate(id="a", previous_code="old-a", generated_java=source_a), Candidate(id="b", previous_code="old-b", generated_java=source_b), CrossoverContext(1, 0, random.Random(2)))
+        child = crossover(Candidate(id="a", previous_code="old-a", generated_java=source_a), Candidate(id="b", previous_code="old-b", generated_java=source_b), CrossoverContext(1, 0, random.Random(2)))
         self.assertIn(child.previous_code, (source_a, source_b))
-
-    def test_strategy_reflection_preserves_complete_previous_java_without_rewriting(self):
-        class Backend:
-            def generate(self, prompt):
-                return "reflection"
-
-        source = load_java_template(JavaTemplatePaths())
-        parent = Candidate(id="parent", strategy_prompt="old strategy", previous_code=source)
-        child = Mutation(ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}), backend=Backend()).mutate(parent, MutationContext(1, 0))
-        self.assertEqual(child.strategy_prompt, "old strategy")
-        self.assertEqual(child.previous_code, source)
-        self.assertEqual(child.metadata["mutation"]["reflection"]["reflection"], "reflection")
 
     @unittest.skipUnless(shutil.which("javac"), "javac is required for the real template compile test")
     def test_complete_marked_template_compiles(self):
