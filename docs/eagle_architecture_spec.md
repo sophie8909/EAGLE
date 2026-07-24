@@ -1642,10 +1642,10 @@ runs/<run_id>/
 │               │   └── provenance.json
 │               ├── mutation/
 │               │   ├── metadata.json
-│               │   ├── reflection_request.txt
-│               │   ├── reflection_response_raw.txt
-│               │   ├── rewrite_request.txt
-│               │   └── rewrite_response_raw.txt
+│               │   ├── reflector_request.txt
+│               │   ├── reflector_response_raw.txt
+│               │   ├── rewriter_request.txt
+│               │   └── rewriter_response_raw.txt
 │               ├── generation/
 │               │   ├── request.txt
 │               │   ├── response_raw.txt
@@ -1686,10 +1686,10 @@ For every mutated candidate, persist both mutation LLM interactions.
 Required files:
 
 ```text
-reflection_request.txt
-reflection_response_raw.txt
-rewrite_request.txt
-rewrite_response_raw.txt
+reflector_request.txt
+reflector_response_raw.txt
+rewriter_request.txt
+rewriter_response_raw.txt
 ```
 
 Required metadata:

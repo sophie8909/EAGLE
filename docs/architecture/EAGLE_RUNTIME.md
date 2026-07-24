@@ -18,7 +18,11 @@ The GUI owns the user-facing lifecycle. `RunController` owns one experiment subp
 
 ## Evolution ownership
 
-`eagle.search.run_search` owns population lifecycle and generation boundaries. `eagle.search.create_offspring` owns parent selection, mutation selection, and direct crossover/mutation orchestration. `eagle.crossover.Crossover` owns uniform component crossover. `eagle.rewrite.PromptRewriteMutation` owns mutation reflection/rewrite stages. `eagle.evaluation.evaluate_candidate` owns the shared child pipeline: complete Java generation, validation, compilation, MicroRTS integration, matches, and objective calculation.
+`eagle.search.run_search` owns population lifecycle and generation boundaries. `eagle.search.create_offspring` owns parent selection, mutation selection, and direct crossover/mutation orchestration. `eagle.crossover.crossover` owns component crossover. `eagle.rewrite.PromptRewriteMutation` owns mutation reflection/rewrite stages. `eagle.evaluation.evaluate_candidate` owns the shared child pipeline: complete Java generation, validation, compilation, MicroRTS integration, matches, and objective calculation.
+
+## Algorithm lifecycle
+
+The canonical generation lifecycle, mutation path, crossover path, shared child pipeline, population update, timing semantics, and post-evolution final evaluation are documented in [`EAGLE_SEARCH.md`](EAGLE_SEARCH.md).
 
 ## Timing artifacts
 

@@ -18,4 +18,4 @@ For a deterministic local validation run without the GUI:
 python3 scripts/run_eagle.py --config configs/eagle_minimal.yaml --mock
 ```
 
-See [`docs/architecture/EAGLE_RUNTIME.md`](docs/architecture/EAGLE_RUNTIME.md) for ownership and artifact flow.
+See [`docs/architecture/EAGLE_RUNTIME.md`](docs/architecture/EAGLE_RUNTIME.md) for runtime ownership and [`docs/architecture/EAGLE_SEARCH.md`](docs/architecture/EAGLE_SEARCH.md) for the evolutionary lifecycle.

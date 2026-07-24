@@ -19,13 +19,13 @@ This is the canonical owner of candidate and LLM-attempt timing fields. Normativ
   "total_duration_seconds": 0.0,
   "selection_duration_seconds": 0.0,
   "crossover_duration_seconds": 0.0,
-  "reflection_llm": {
+  "reflector_llm": {
     "started_at": null,
     "finished_at": null,
     "duration_seconds": null,
     "attempts": []
   },
-  "rewrite_llm": {
+  "rewriter_llm": {
     "started_at": null,
     "finished_at": null,
     "duration_seconds": null,
@@ -85,7 +85,7 @@ Each match-level `timing.json` records at least start, finish, duration, process
 
 ## Phase 2C implementation note
 
-timing.json now includes independent reflection_llm, rewrite_llm, and generation_llm
+timing.json now includes independent reflector_llm, rewriter_llm, and generation_llm
 records for the mutation path. Each record has UTC start/finish timestamps, a monotonic
 duration, and one-based attempt records. The generation record is closed and retained
 when Java extraction or validation fails after Reflection and Rewrite have completed.

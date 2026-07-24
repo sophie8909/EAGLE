@@ -18,13 +18,13 @@ it.
 | Compilation | `evaluation.compiler` | `compile_generated_agent` | `microrts_dir`, Java toolchain | Archived Java runners and precompile helpers. |
 | Runtime evaluation | `evaluation.microrts_runner`, `eagle.evaluation` | `run_microrts_match`, `evaluate_candidate` | 10-match fixed-roster evolution protocol | RandomAI/one-match legacy evaluators. |
 | Objective calculation | `evaluation.game_performance`, `evaluation.game_metrics`, `evaluation.code_quality`, `evaluation.nsga2_objectives` | Canonical formula dataclasses and `build_objectives` | resolved experiment values and formula version | Legacy objective aliases are analysis-only and version-fenced. |
-| Artifact persistence | `eagle.artifacts`, `eagle.final_test.artifacts` | versioned candidate/run/final-test writers | `resolved_config.json` and schema versions | Flat/old readers remain only where explicitly documented for historical analysis. |
-| Configuration loading | `eagle.config`, `eagle.llm_profiles` | `ExperimentConfig.from_file`, role profile loading | YAML experiment config and TOML role endpoints | Equivalent config keys are not added; endpoint-to-role fallback is tracked for migration. |
-| LLM role routing | `eagle.llm_profiles`, `generation.backend` | `LLMProfile`, `load_role_profiles`, stage-specific backend builders | `config/llm_endpoints.toml` and `llm_topology` | Archived Ollama/proxy launchers and split runtime LLM agents. |
+| Artifact persistence | `eagle.artifacts`, `eagle.final_test.artifacts` | versioned candidate/run/final-test writers | `resolved_config.json` and schema versions | Current readers consume only the versioned canonical tree; historical runs are outside active runtime support. |
+| Configuration loading | `eagle.config`, `eagle.llm_profiles` | `ExperimentConfig.from_file`, role profile loading | YAML experiment config and JSON role topology | Equivalent config keys and endpoint fallbacks are not supported. |
+| LLM role routing | `eagle.llm_profiles`, `generation.backend` | `LLMProfile`, `load_role_profiles`, stage-specific backend builders | `experiment_env/config/llm_topology.json` | Archived Ollama/proxy launchers and split runtime LLM agents. |
 | Application plugin loading | `eagle.config` boundary plus `evaluation.microrts_runner` | Explicit MicroRTS paths and runner boundary | `microrts_dir`, opponent, map, cycles | MicroRTS implementation is not moved into framework modules. |
 | GUI execution | `eagle_ui.app`, `eagle_ui.__main__` | NiceGUI application entrypoint | GUI controllers read experiment config | Removed Tk/duplicate GUI trees in Git history. |
 | GUI data access | `eagle.analysis.records`, controllers/views | `discover_runs`, `load_candidate_records`, `load_candidate` | canonical artifact schema | GUI-local readers and stale adapters are not added. |
-| Analysis and plotting | `eagle.analysis.*`, `scripts/analysis/*` | shared records/objectives/errors plus plotting entrypoints | run artifact schema | Historical analysis fallback remains explicitly scoped for migration. |
+| Analysis and plotting | `eagle.analysis.*`, `scripts/analysis/*` | shared records/objectives/errors plus plotting entrypoints | run artifact schema | Analysis reads current canonical artifacts directly. |
 | Experiment launch | `scripts/run_eagle.py`, `scripts/run_final_test.py`, `run.sh` | Python entrypoints; shell wrapper only for environment setup | checked-in configs and CLI overrides | Obsolete archived launchers and copied wrappers. |
 
 ## Consolidation rule

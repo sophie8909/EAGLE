@@ -30,9 +30,9 @@ When code and the specification differ, preserve the specification and update [`
 | Modify configuration | [running EAGLE](operations/running_eagle.md) + affected canonical contracts + [current status](implementation/current_status.md) |
 | Add or update tests | [test contracts](testing/test_contracts.md) + affected canonical contract |
 | Analyze or debug a run | [inspecting runs](operations/inspecting_runs.md) + [artifact schema](artifacts/artifact_schema.md) + [failure classification](evaluation/failure_classification.md) |
-| Clean legacy code or migrate implementation | [current status](implementation/current_status.md) + [architecture gaps](implementation/architecture_gaps.md) + [migration plan](implementation/migration_plan.md) |
-| Track architecture implementation or choose the next gap | [architecture traceability matrix](implementation/architecture_traceability_matrix.md) + [architecture gaps](implementation/architecture_gaps.md) + [migration plan](implementation/migration_plan.md) |
-| Change repository ownership or docs structure | [repository map](implementation/repository_map.md) + this index + [migration plan](implementation/migration_plan.md) |
+| Clean legacy code or migrate implementation | [current status](implementation/current_status.md) + [architecture gaps](implementation/architecture_gaps.md) |
+| Track architecture implementation or choose the next gap | [architecture traceability matrix](implementation/architecture_traceability_matrix.md) + [architecture gaps](implementation/architecture_gaps.md) |
+| Change repository ownership or docs structure | [repository map](implementation/repository_map.md) + this index |
 
 ## Canonical ownership
 
@@ -55,7 +55,7 @@ When code and the specification differ, preserve the specification and update [`
 | Current implementation | [`implementation/current_status.md`](implementation/current_status.md) |
 | Contract discrepancies and ambiguities | [`implementation/architecture_gaps.md`](implementation/architecture_gaps.md) |
 | Contract-to-code/test/artifact status and implementation checklist | [`implementation/architecture_traceability_matrix.md`](implementation/architecture_traceability_matrix.md) |
-| Migration order | [`implementation/migration_plan.md`](implementation/migration_plan.md) |
+| Architecture status and gaps | [`implementation/architecture_gaps.md`](implementation/architecture_gaps.md) |
 | Run commands and configuration checks | [`operations/running_eagle.md`](operations/running_eagle.md) |
 | Run analysis and candidate debugging | [`operations/inspecting_runs.md`](operations/inspecting_runs.md) |
 | Required tests | [`testing/test_contracts.md`](testing/test_contracts.md) |

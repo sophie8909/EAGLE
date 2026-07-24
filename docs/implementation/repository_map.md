@@ -28,7 +28,7 @@ This file maps active repository paths to responsibilities. It is descriptive, n
 | `evaluation/code_quality.py` | Current deterministic scoring | [`../evaluation/code_quality.md`](../evaluation/code_quality.md), [`../evaluation/failure_classification.md`](../evaluation/failure_classification.md) |
 | `evaluation/nsga2_objectives.py` | Current two-value objective dictionary | objective and failure docs |
 | `scripts/run_eagle.py` | CLI entry point | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
-| `scripts/analyze_run.py` | Failure summary and legacy objective read compatibility | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
+| `scripts/analyze_run.py` | Canonical failure summary and objective plots | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
 | `scripts/analysis/plot_game_performance_by_generation.py` | Gameplay plotting/CSV export | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
 | `scripts/play_candidate_gui.py` | Manual GUI playback of an existing candidate | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
 | `tests/` | Current unit/integration-contract tests | [`../testing/test_contracts.md`](../testing/test_contracts.md) |
@@ -51,7 +51,7 @@ Scoring modules should return data and not own process execution. Artifact write
 ## Legacy boundaries
 
 - `runs/`, `logs/`, ignored generated Java, compiled MicroRTS classes, and archived caches are evidence only.
-- `scripts/analyze_run.py` may read old `strategy_alignment` artifacts, but compatibility must not leak that name into active optimizer output.
+- `scripts/analyze_run.py` reads only current per-candidate results and persisted `game_performance`/`code_quality` objectives.
 - Current marker/helper scaffolding is implementation state, not a normative internal Java architecture.
 - Do not restore surrogate or runtime-LLM components while migrating this contract.
 

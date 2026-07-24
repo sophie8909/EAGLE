@@ -18,7 +18,7 @@ Snapshot: 2026-07-16 after the complete Phase 4 Evaluation Layer. This file desc
 | `game_performance` | Canonical +100/0/-100 result scoring plus bounded tanh material/resource and survival shaping is aggregated across exactly 10 valid matches with full statistics. | Implemented by `evaluation/canonical_game_performance.py` and `evaluation/canonical_game_metrics.py`; partial/invalid batches yield -1000. |
 | `code_quality` | Successful evaluation uses `500 + compilation_score + function_score + strategy_alignment_score`; failures use the canonical stage hierarchy. | Implemented with range [0,610], deterministic five-capability evidence, and independent 0-10 Strategy Alignment. |
 | Failure handling | Runtime exception, illegal action, timeout, deadlock, crash, invalid/missing result, and partial evaluation are classified with retained match evidence and runtime-progress fitness. | Generation/validation/compilation/integration/runtime ordering is implemented and all failures receive `game_performance = -1000`. |
-| Artifacts | Candidates persist canonical Phase 4 evaluation summaries, per-match artifacts, runtime failures, capability evidence, Strategy Alignment request/raw/parsed result, objective values, and schema/formula versions. | Evaluation-layer persistence is implemented; broader run-layout migration and compatibility cleanup remain later work. |
+| Artifacts | Candidates persist canonical Phase 4 evaluation summaries, per-match artifacts, runtime failures, capability evidence, Strategy Alignment request/raw/parsed result, objective values, and schema/formula versions. | Evaluation-layer persistence and the active canonical candidate layout are implemented. |
 | LLM logging | Final-generation, Reflection, Rewrite, and Strategy Alignment calls retain raw responses and UTC/monotonic attempt timing. | Phase 4 alignment plus evaluation/match/objective timing are active; candidate-total and selection/crossover timing remain broader artifact work. |
 
 ## Active configuration
@@ -26,7 +26,7 @@ Snapshot: 2026-07-16 after the complete Phase 4 Evaluation Layer. This file desc
 - `ExperimentConfig.matches_per_candidate` is fixed at `10`; every checked-in YAML resolves to the same value.
 - The fixed Evolution Evaluation roster, map, cycles, timeout, material/resource scales, unit values, and ten distinct deterministic or explicit seeds are resolved and persisted.
 - The parser keeps legacy `opponent` input compatible, while `resolved_config.json` records the actual fixed roster used for runtime evaluation.
-- `alignment_backend` is active (`mock`, `openai`, or `llama_cpp`) and is independent from the generation call while sharing configured endpoint/model values when applicable.
+- `alignment_backend` is active (`mock`, `openai`, or `openai`) and is independent from the generation call while sharing configured endpoint/model values when applicable.
 - Resolved configuration records `artifact_schema_version = phase4-v1` and `objective_formula_version = eagle-objectives-phase4-v1`.
 - Only `game_performance` and `code_quality` are active optimizer objectives; Strategy Alignment is a Code Quality component.
 
@@ -38,7 +38,7 @@ The full WSL unit suite passes. A bounded real seven-check Integration probe exi
 
 ## Recent run evidence
 
-The most recent complete saved population run (`runs/20260712_154209_634218`) uses an obsolete split/function-body schema and `strategy_alignment` objective. `contract-smoke-*` and `code_quality_smoke` also predate the current complete-file boundary. Analysis tools may read them for migration testing, but no retained run is proof of current architecture compliance.
+The most recent complete saved population run (`runs/20260712_154209_634218`) uses an obsolete split/function-body schema and `strategy_alignment` objective. `contract-smoke-*` and `code_quality_smoke` also predate the current complete-file boundary. Historical runs are not active-runtime evidence and are intentionally outside current analysis readers.
 
 ## Operational state
 
@@ -47,7 +47,7 @@ The most recent complete saved population run (`runs/20260712_154209_634218`) us
 - WSL is the project default for Python/Java/MicroRTS commands.
 - `scripts/play_candidate_gui.py` retains transitional generated-class discovery and defaults to `ai.PassiveAI`; it is a manual viewer, not the evaluation protocol.
 
-See [`architecture_gaps.md`](architecture_gaps.md) for required changes and [`migration_plan.md`](migration_plan.md) for dependency order.
+See [`architecture_gaps.md`](architecture_gaps.md) for the remaining implementation status.
 
 ## Final Test compatibility evidence (2026-07-23)
 

@@ -32,10 +32,10 @@ runs/<run_id>/
                 │   └── provenance.json
                 ├── mutation/
                 │   ├── metadata.json
-                │   ├── reflection_request.txt
-                │   ├── reflection_response_raw.txt
-                │   ├── rewrite_request.txt
-                │   └── rewrite_response_raw.txt
+                │   ├── reflector_request.txt
+                │   ├── reflector_response_raw.txt
+                │   ├── rewriter_request.txt
+                │   └── rewriter_response_raw.txt
                 ├── generation/
                 │   ├── request.txt
                 │   ├── response_raw.txt
@@ -122,19 +122,19 @@ Required metadata:
 ## Phase 2C implementation note
 
 The active mutation artifact schema version is phase2c-v1. For each mutated candidate,
-mutation/ contains canonical reflection_request.txt, reflection_response_raw.txt,
-rewrite_request.txt, and rewrite_response_raw.txt, plus metadata.json; stage-specific
-attempt files remain available for compatibility and retry inspection. The final
+mutation/ contains canonical reflector_request.txt, reflector_response_raw.txt,
+rewriter_request.txt, and rewriter_response_raw.txt, plus metadata.json; stage-specific
+attempt files remain available for retry inspection. The final
 Java-generation stage owns generation/request.txt, response_raw.txt,
 extracted_candidate.java, normalized_candidate.java, and result.json. Final generation
 failures do not remove the earlier mutation evidence.
 
 ## Phase 4 implementation note
 
-Evaluation artifacts use `artifact_schema_version = phase4-v1`. Each candidate writes one directory per match plus canonical `strategy_alignment/` and `evaluation/` payloads for game performance, Function Capability, Code Quality, objective values, evaluation summary, and runtime failure evidence. Existing flat candidate files remain temporary compatibility aliases for current readers and are tracked for removal in the migration plan.
+Evaluation artifacts use `artifact_schema_version = phase4-v1`. Each candidate writes one directory per match plus canonical `strategy_alignment/` and `evaluation/` payloads for game performance, Function Capability, Code Quality, objective values, evaluation summary, and runtime failure evidence. All active readers consume the versioned canonical candidate tree directly.
 ## LLM stage identity
 
-Each Reflection, Rewrite, and Generation stage artifact records stage, the logical llm_profile (general or coder), and the configured model alias. The alias is the launcher --alias value, not a filename inferred from .gguf or an arbitrary /v1/models response. The resolved configuration records the centralized routing: Reflection and Rewrite use general; Generation uses coder.
+Each Reflection, Rewrite, and Generation stage artifact records stage, the logical llm_profile (reflector, rewriter, or generator), and the configured model alias. The alias is the launcher --alias value, not a filename inferred from .gguf or an arbitrary /v1/models response. The resolved configuration records the centralized routing: Reflector, Rewriter, and Generator use their resolved semantic role profiles.
 
 ## Post-evolution Final Test artifacts
 

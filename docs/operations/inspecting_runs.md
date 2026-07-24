@@ -1,6 +1,6 @@
 # Inspecting runs and debugging candidates
 
-Read [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md) and [`../evaluation/failure_classification.md`](../evaluation/failure_classification.md) first. Old saved runs may use incompatible layouts and objective names.
+Read [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md) and [`../evaluation/failure_classification.md`](../evaluation/failure_classification.md) first. The active reader accepts only the current versioned artifact layout and objective names.
 
 ## Current failure summary
 
@@ -9,7 +9,7 @@ cd /mnt/d/Project/EAGLE
 python3 scripts/analyze_run.py runs/<run_id>
 ```
 
-The current reader prefers per-candidate results, falls back to `results.jsonl`, then failure debug directories. It contains legacy `strategy_alignment` read migration; that compatibility is analysis-only and must not be interpreted as the active objective contract.
+The analysis CLI and GUI read canonical per-candidate results and objective values. Missing or malformed current artifacts are reported; historical schemas are outside the active runtime.
 
 ## Current gameplay plot
 
@@ -32,7 +32,7 @@ The script writes plot and CSV outputs under the selected run. Use only when cre
 8. Recompute objective components from persisted inputs using the recorded formula version.
 9. Compare candidate timing/attempt count with request/response artifacts.
 
-If the run uses the current flat layout rather than the canonical schema, consult [`../implementation/current_status.md`](../implementation/current_status.md) and document missing evidence. Do not fill missing fields by assumption.
+If a run is missing canonical evidence, consult [`../implementation/current_status.md`](../implementation/current_status.md) and document the missing artifact. Do not fill missing fields by assumption.
 
 ## Failure triage
 
@@ -55,10 +55,10 @@ python3 scripts/play_candidate_gui.py runs/<run_id> <candidate_id> --opponent ai
 
 This is a manual visualization path. It may recompile an existing artifact and allows alternate opponents; it is not the evolutionary evaluation protocol and must not modify stored fitness.
 
-## Legacy safety
+## Artifact boundary
 
-- Runs containing `module_bodies`, `CandidateBehaviors.java`, `GeneratedAgent_*`, or objective `strategy_alignment` are historical/superseded formats.
+- Runs containing `module_bodies`, `CandidateBehaviors.java`, `GeneratedAgent_*`, or objective `strategy_alignment` are outside the active schema and are not readable by the current analysis runtime.
 - Runs with one match, RandomAI, or unversioned formulas are not architecture-compliance evidence.
 - Never copy historical prompts, schemas, or scoring into active code without checking the normative spec.
-- Migration tools must preserve original files and write an explicit target schema/version.
+- New analysis code must consume the versioned canonical schema directly.
 
