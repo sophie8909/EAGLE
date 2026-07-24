@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from eagle.runtime.process_logs import ProcessLogBuffer
+
 
 @dataclass
 class RunState:
@@ -17,7 +19,7 @@ class RunState:
     current_candidate: str | None = None
     completed_candidates: int = 0
     failed_candidates: int = 0
-    log_lines: list[str] = field(default_factory=list)
+    logs: ProcessLogBuffer = field(default_factory=ProcessLogBuffer)
 
 
 @dataclass

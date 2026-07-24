@@ -45,10 +45,10 @@ def build_run_view(state: AppState, controller: RunController) -> None:
             status = ui.badge("idle")
         ui.label("Stop terminates the active EA process; completed artifacts remain available.").classes("text-caption")
         with ui.grid(columns=3).classes("w-full gap-3"):
-            generation = _status_field("Current generation", "—")
-            candidate = _status_field("Current candidate", "—")
+            generation = _status_field("Current generation", "unknown")
+            candidate = _status_field("Current candidate", "unknown")
             counts = _status_field("Completed / failed", "0 / 0")
-        run_dir = _status_field("Current run directory", "—")
+        run_dir = _status_field("Current run directory", "unknown")
         log = create_log_panel()
 
     async def start() -> None:
@@ -122,12 +122,11 @@ def build_run_view(state: AppState, controller: RunController) -> None:
 
     def refresh() -> None:
         status.set_text("running" if state.run.running else f"exit {state.run.returncode}" if state.run.returncode is not None else "idle")
-        generation.set_text("—" if state.run.current_generation is None else str(state.run.current_generation))
-        candidate.set_text(state.run.current_candidate or "—")
+        generation.set_text("unknown" if state.run.current_generation is None else str(state.run.current_generation))
+        candidate.set_text(state.run.current_candidate or "unknown")
         counts.set_text(f"{state.run.completed_candidates} / {state.run.failed_candidates}")
-        run_dir.set_text(str(state.run.effective_run_dir or "—"))
-        log.value = "\n".join(state.run.log_lines[-2000:])
-        log.update()
+        run_dir.set_text(str(state.run.effective_run_dir or "unknown"))
+        log.set_buffer(state.run.logs)
         start_button.set_enabled(not state.run.running)
         stop_button.set_enabled(state.run.running)
 

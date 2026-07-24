@@ -65,6 +65,9 @@ class LLMConfigController:
 
     def server_statuses(self) -> list[ServerStatus]:
         return self.server_manager.statuses()
+    def clear_server_logs(self, server_id: str) -> None:
+        self.server_manager.clear_logs(server_id)
+
     def test_connection(self, profile: LLMProfile) -> dict[str, object]:
         parsed = urlparse(profile.base_url)
         api_root = profile.base_url.rstrip("/")

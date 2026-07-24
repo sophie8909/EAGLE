@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .process_logs import ProcessLogBuffer, ProcessLogRecord
+
 
 SEMANTIC_ROLES = ("reflector", "rewriter", "generator")
 SUPPORTED_LOCAL_MODELS = ("qwen3", "qwen3.5", "llama3.1")
@@ -57,6 +59,7 @@ class ServerStatus:
     command: tuple[str, ...] = ()
     pid: int | None = None
     output: tuple[str, ...] = ()
+    logs: tuple[ProcessLogRecord, ...] = ()
     error: str | None = None
 
 
@@ -64,8 +67,8 @@ class ServerStatus:
 class _ManagedServer:
     spec: ServerSpec
     process: subprocess.Popen[str]
-    output: list[str] = field(default_factory=list)
-    reader: threading.Thread | None = None
+    logs: ProcessLogBuffer = field(default_factory=ProcessLogBuffer)
+    readers: list[threading.Thread] = field(default_factory=list)
 
 
 class LLMServerManager:
@@ -153,14 +156,16 @@ class LLMServerManager:
                 command,
                 cwd=self.repository_root,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
             )
             managed = _ManagedServer(spec=spec, process=process)
+            managed.logs.append(ProcessLogRecord.create(source="server", stream="system", process=spec.server_id, message="launch: " + " ".join(command)))
             self._servers[spec.server_id] = managed
-            managed.reader = threading.Thread(target=self._capture_output, args=(managed,), daemon=True)
-            managed.reader.start()
+            managed.readers = [threading.Thread(target=self._capture_stream, args=(managed, process.stdout, "stdout"), daemon=True), threading.Thread(target=self._capture_stream, args=(managed, process.stderr, "stderr"), daemon=True)]
+            for reader in managed.readers:
+                reader.start()
         try:
             self._wait_for_health(spec.endpoint, process, readiness_timeout)
         except ServerLifecycleError:
@@ -179,6 +184,7 @@ class LLMServerManager:
             except subprocess.TimeoutExpired:
                 managed.process.kill()
                 managed.process.wait(timeout=5)
+        managed.logs.append(ProcessLogRecord.create(source="server", stream="system", process=server_id, message=f"process exited with code {managed.process.returncode}" , severity="error" if managed.process.returncode else "info"))
         return self.status(server_id)
 
     def restart(self, spec: ServerSpec, *, readiness_timeout: float = 30.0) -> ServerStatus:
@@ -209,18 +215,25 @@ class LLMServerManager:
             roles=managed.spec.roles,
             command=tuple(self.build_command(managed.spec)),
             pid=managed.process.pid,
-            output=tuple(managed.output[-200:]),
+            output=tuple(record.display() for record in managed.logs.snapshot()),
+            logs=managed.logs.snapshot(),
             error=None if process_state == "running" else "server process exited",
         )
 
     def statuses(self) -> list[ServerStatus]:
         return [self.status(server_id) for server_id in sorted(self._servers)]
 
-    def _capture_output(self, managed: _ManagedServer) -> None:
-        assert managed.process.stdout is not None
-        for line in managed.process.stdout:
-            managed.output.append(line.rstrip())
+    def clear_logs(self, server_id: str) -> None:
+        managed = self._servers.get(server_id)
+        if managed is None:
+            raise ServerLifecycleError(f"unknown managed server: {server_id}")
+        managed.logs.clear()
 
+    def _capture_stream(self, managed: _ManagedServer, stream, name: str) -> None:
+        if stream is None:
+            return
+        for line in stream:
+            managed.logs.append(ProcessLogRecord.create(source="server", stream=name, process=managed.spec.server_id, message=line.rstrip("\r\n")))
     @staticmethod
     def _validate_port_available(port: int, server_id: str) -> None:
         if not 1 <= port <= 65535:

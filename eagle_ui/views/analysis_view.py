@@ -31,8 +31,8 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
     with ui.row().classes("gap-2"):
         ui.button("Refresh runs", on_click=lambda: refresh_runs()).classes(BUTTON_CLASS)
         ui.button("Apply filters", on_click=lambda: render()).classes(BUTTON_CLASS)
-    distribution = ui.echart({}).classes("w-full h-[440px]")
-    scatter = ui.echart({}).classes("w-full h-[440px]")
+    distribution = ui.echart({"title": {"text": "Load a run to view objective distribution", "textStyle": {"color": "var(--eagle-text-muted)"}}}).classes("eagle-empty w-full h-[440px]")
+    scatter = ui.echart({"title": {"text": "Load a run to view objective scatter", "textStyle": {"color": "var(--eagle-text-muted)"}}}).classes("eagle-empty w-full h-[440px]")
     pareto_candidates = ui.select({}, label="Pareto candidate inspection").classes(f"{INPUT_CLASS} w-full")
     summary = ui.table(
         columns=[{"name": name, "label": name, "field": name} for name in ("generation", "min", "max", "mean", "median", "success_count", "failure_count")],
@@ -42,7 +42,7 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
 
     async def refresh_runs() -> None:
         runs = await asyncio.to_thread(discover_runs, state.repository_root / "runs")
-        run_select.options = {str(item.path): f"{item.run_id} · {item.status}" for item in runs}
+        run_select.options = {str(item.path): f"{item.run_id} 繚 {item.status}" for item in runs}
         run_select.update()
 
     async def load_run() -> None:
@@ -102,10 +102,10 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
         ui.label("Timing Analysis").classes("text-h6")
         timing_status = ui.label("Select a run to inspect persisted timing.")
         with ui.grid(columns=2).classes("w-full gap-3"):
-            generation_timing_chart = ui.echart({}).classes("w-full h-[320px]")
-            operation_timing_chart = ui.echart({}).classes("w-full h-[320px]")
-            llm_stage_chart = ui.echart({}).classes("w-full h-[320px]")
-            llm_model_chart = ui.echart({}).classes("w-full h-[320px]")
+            generation_timing_chart = ui.echart({"title": {"text": "No timing data loaded", "textStyle": {"color": "var(--eagle-text-muted)"}}}).classes("eagle-empty w-full h-[320px]")
+            operation_timing_chart = ui.echart({"title": {"text": "No operation timing data", "textStyle": {"color": "var(--eagle-text-muted)"}}}).classes("eagle-empty w-full h-[320px]")
+            llm_stage_chart = ui.echart({"title": {"text": "No LLM stage timing data", "textStyle": {"color": "var(--eagle-text-muted)"}}}).classes("eagle-empty w-full h-[320px]")
+            llm_model_chart = ui.echart({"title": {"text": "No LLM model timing data", "textStyle": {"color": "var(--eagle-text-muted)"}}}).classes("eagle-empty w-full h-[320px]")
         timing_table = ui.table(
             columns=[{"name": name, "label": name, "field": name} for name in ("candidate_id", "operation", "duration_seconds", "status")],
             rows=[],

@@ -6,6 +6,8 @@ import hashlib
 
 import pandas as pd
 
+from eagle_ui.theme import COLORS
+
 
 def generation_distribution_options(frame: pd.DataFrame, objective: str, *, include_median: bool = True) -> dict:
     points = []
@@ -14,7 +16,7 @@ def generation_distribution_options(frame: pd.DataFrame, objective: str, *, incl
         points.append({
             "name": str(row["candidate_id"]),
             "value": [float(row["generation"]) + jitter, float(row[objective])],
-            "itemStyle": {"opacity": 0.45, "color": "#ef4444" if bool(row["failed"]) else "#38bdf8"},
+            "itemStyle": {"opacity": 0.45, "color": COLORS["error"] if bool(row["failed"]) else COLORS["sky_blue"]},
         })
     grouped = frame.dropna(subset=[objective]).groupby("generation")[objective]
     mean = [[int(generation), float(value)] for generation, value in grouped.mean().items()]
@@ -38,19 +40,19 @@ def objective_scatter_options(frame: pd.DataFrame, x_objective: str, y_objective
             "value": [float(row[x_objective]), float(row[y_objective]), int(row["generation"]), str(row["status"])],
             "symbol": "diamond" if failed else "circle",
             "symbolSize": 16 if candidate_id in pareto_ids else 9,
-            "itemStyle": {"color": "#ef4444" if failed else "#b08d57" if candidate_id in pareto_ids else "#38bdf8", "opacity": 0.75},
+            "itemStyle": {"color": COLORS["error"] if failed else COLORS["bronze"] if candidate_id in pareto_ids else COLORS["sky_blue"], "opacity": 0.75},
         })
     return _base_xy(x_objective, y_objective, [{"name": "candidates", "type": "scatter", "data": points}])
 
 
 def _base_xy(x_name: str, y_name: str, series: list[dict]) -> dict:
     return {
-        "backgroundColor": "transparent",
-        "tooltip": {"trigger": "item"},
-        "legend": {"textStyle": {"color": "#e5e7eb"}},
-        "xAxis": {"type": "value", "name": x_name, "nameTextStyle": {"color": "#e5e7eb"}, "axisLabel": {"color": "#94a3b8"}},
-        "yAxis": {"type": "value", "name": y_name, "nameTextStyle": {"color": "#e5e7eb"}, "axisLabel": {"color": "#94a3b8"}},
-        "series": series,
+        "backgroundColor": COLORS["surface"],
+        "tooltip": {"trigger": "item", "backgroundColor": COLORS["surface_alt"], "borderColor": COLORS["border"], "textStyle": {"color": COLORS["text"]}},
+        "legend": {"textStyle": {"color": COLORS["text"]}},
+        "xAxis": {"type": "value", "name": x_name, "nameTextStyle": {"color": COLORS["text"]}, "axisLabel": {"color": COLORS["muted"]}},
+        "yAxis": {"type": "value", "name": y_name, "nameTextStyle": {"color": COLORS["text"]}, "axisLabel": {"color": COLORS["muted"]}},
+        "series": series, "grid": {"left": "8%", "right": "4%", "bottom": "12%", "containLabel": True},
     }
 
 

@@ -16,6 +16,7 @@ from eagle.config import ExperimentConfig
 from eagle_ui.controllers.config_controller import update_minimal_yaml
 
 from eagle_ui.state import RunState
+from eagle.runtime.process_logs import ProcessLogRecord
 
 
 PROGRESS_PATTERN = re.compile(r"\[gen\s+(?P<generation>\d+)\s+cand\s+(?P<index>\d+)/(?P<total>\d+)\]\s+(?P<candidate>\S+)\s+status=(?P<status>\S+)")
@@ -29,7 +30,7 @@ class RunController:
         self.repository_root = repository_root
         self.state = state
         self._process: subprocess.Popen[str] | None = None
-        self._reader: threading.Thread | None = None
+        self._readers: list[threading.Thread] = []
         self._lock = threading.Lock()
         self._listeners: list[Callable[[], None]] = []
 
@@ -98,18 +99,21 @@ class RunController:
         self.state.failed_candidates = 0
         runs_dir = config.runs_dir if config.runs_dir.is_absolute() else self.repository_root / config.runs_dir
         self.state.effective_run_dir = runs_dir / run_id
-        self.state.log_lines.clear()
+        self.state.logs.clear()
+        self.state.logs.append(ProcessLogRecord.create(source="experiment", stream="system", process="eagle", message="launch: " + " ".join(command)))
         self._process = subprocess.Popen(
             command,
             cwd=self.repository_root,
             env=environment,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
         )
-        self._reader = threading.Thread(target=self._read_output, name="eagle-gui-run-reader")
-        self._reader.start()
+        self._readers = [threading.Thread(target=self._read_stream, args=(self._process.stdout, "stdout"), name="eagle-gui-run-stdout"), threading.Thread(target=self._read_stream, args=(self._process.stderr, "stderr"), name="eagle-gui-run-stderr")]
+        for reader in self._readers:
+            reader.start()
+        threading.Thread(target=self._wait_for_exit, name="eagle-gui-run-wait", daemon=True).start()
 
     def add_listener(self, listener: Callable[[], None]) -> None:
         self._listeners.append(listener)
@@ -128,26 +132,32 @@ class RunController:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=5)
-        reader = self._reader
-        if reader is not None and reader.is_alive():
-            reader.join(timeout=2)
+        for reader in self._readers:
+            if reader.is_alive():
+                reader.join(timeout=2)
 
-    def _read_output(self) -> None:
+    def _read_stream(self, stream, name: str) -> None:
         process = self._process
-        if process is None or process.stdout is None:
+        if process is None or stream is None:
             return
-        for raw_line in process.stdout:
-            line = raw_line.rstrip("\n")
+        for raw_line in stream:
+            line = raw_line.rstrip("\r\n")
             with self._lock:
-                self.state.log_lines.append(line)
-                self._apply_progress(line)
+                self.state.logs.append(ProcessLogRecord.create(source="experiment", stream=name, process="eagle", message=line))
+                if name == "stdout":
+                    self._apply_progress(line)
             self._notify()
+
+    def _wait_for_exit(self) -> None:
+        process = self._process
+        if process is None:
+            return
         returncode = process.wait()
         with self._lock:
             self.state.returncode = returncode
             self.state.running = False
+            self.state.logs.append(ProcessLogRecord.create(source="experiment", stream="system", process="eagle", message=f"process exited with code {returncode}", severity="error" if returncode else "info"))
         self._notify()
-
     def _apply_progress(self, line: str) -> None:
         match = PROGRESS_PATTERN.search(line)
         if match:
