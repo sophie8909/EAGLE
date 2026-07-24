@@ -6,16 +6,16 @@ EAGLE (Evolutionary Algorithm for Game-playing with LLM-Enabled Agents) evolves 
 
 The normal entrypoint is:
 
-\`\`\`bash
+```bash
 ./run.sh
-\`\`\`
+```
 
-\`run.sh\` prepares the \`eagle\` environment, starts the GUI, and starts the GUI liveness watchdog. Use the GUI’s Servers section for local LLM lifecycle and role assignment, Experiment for configuration/prompts/execution, and Analysis for multi-objective and timing inspection.
+`run.sh` prepares the `eagle` environment, starts the GUI, and starts the GUI liveness watchdog. Use the GUI’s Servers section for local LLM lifecycle and role assignment, Experiment for configuration/prompts/execution, and Analysis for multi-objective and timing inspection.
 
 For a deterministic local validation run without the GUI:
 
-\`\`\`bash
+```bash
 python3 scripts/run_eagle.py --config configs/eagle_minimal.yaml --mock
-\`\`\`
+```
 
-See [\`docs/architecture/EAGLE_RUNTIME.md\`](docs/architecture/EAGLE_RUNTIME.md) for ownership and artifact flow.
+See [`docs/architecture/EAGLE_RUNTIME.md`](docs/architecture/EAGLE_RUNTIME.md) for ownership and artifact flow.
