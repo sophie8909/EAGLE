@@ -9,14 +9,15 @@ from unittest.mock import patch
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, MATCHES_PER_CANDIDATE, TRAINING_OPPONENT
-from eagle.evaluation import evaluate_matches
+from eagle.evaluation import preflight_evaluation_opponents, evaluate_matches
+from eagle.final_test.opponents import OpponentSetupError
 from eagle.opponents import EVALUATION_ROSTER
 from evaluation.microrts_runner import MatchResult, run_microrts_match
 from generation.java_agent_generator import GeneratedJavaAgent
 
 
 class Phase4RuntimeEvaluationTests(unittest.TestCase):
-    def test_config_resolves_exact_ten_lightrush_matches_and_distinct_seeds(self):
+    def test_config_resolves_exact_ten_roster_matches_and_distinct_seeds(self):
         config = ExperimentConfig.from_mapping(
             {
                 "seed_prompts": ["seed"],
@@ -74,12 +75,23 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(len(results), 10)
         self.assertEqual([item["match_index"] for item in observed], list(range(10)))
-        self.assertEqual([item["opponent"] for item in observed[:8]], [item.class_name for item in EVALUATION_ROSTER])
-        self.assertEqual([item.opponent_id for item in results[8:]], ["historical_self_1", "historical_self_2"])
+        self.assertEqual([item["opponent"] for item in observed], [item.class_name for item in EVALUATION_ROSTER])
+        self.assertEqual([item.opponent_id for item in results], [item.opponent_id for item in EVALUATION_ROSTER])
+        self.assertTrue(str(observed[0]["extra_classpath_entries"][0]).endswith("tma.jar"))
+        self.assertTrue(str(observed[1]["extra_classpath_entries"][0]).endswith("mayari.jar"))
+        self.assertTrue(str(observed[2]["extra_classpath_entries"][0]).endswith("coac.jar"))
+        self.assertTrue(all(item.get("extra_classpath_entries", ()) == () for item in observed[3:8]))
+        self.assertTrue(all(str(item.get("extra_classpath_entries", ())[0]).endswith("_classes") for item in observed[8:]))
         self.assertEqual([item["seed"] for item in observed], list(config.resolved_match_seeds))
         self.assertEqual(len({item["source_hash"] for item in observed}), 1)
         self.assertEqual(len({item["class_hash"] for item in observed}), 1)
         self.assertEqual(len({str(item["classes_dir"]) for item in observed}), 1)
+
+    def test_real_mode_preflight_requires_resolved_external_manifest(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+            with self.assertRaisesRegex(OpponentSetupError, "setup_final_test_opponents"):
+                preflight_evaluation_opponents(config, mock=False, repository_root=Path(temp_dir))
 
     def test_partial_runtime_failure_retains_completed_matches(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -113,7 +125,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     config=config,
                     classes_dir=root / "classes",
                     match_artifacts_dir=root / "matches",
-                    mock=False,
+                    mock=True,
                     ordinal=0,
                 )
 

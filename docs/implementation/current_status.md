@@ -14,7 +14,7 @@ Snapshot: 2026-07-16 after the complete Phase 4 Evaluation Layer. This file desc
 | Validation | Checks exact `ai.generated.CandidateAgent` identity, both constructors, `getAction`/`reset`/`clone`, forbidden capabilities, and unavailable imports with structured passed/failed/blocked results. | External runtime/security contract is implemented without fixed helper names, markers, or internal layout. |
 | Compilation | Runs `javac -Xlint:all` in an isolated candidate directory with the MicroRTS classpath and persists stdout/stderr/command. | Structured, deduplicated diagnostics with severity/code/file/line/column are implemented; objective scoring remains a later milestone. |
 | Integration | Runs a standalone seven-check MicroRTS probe (load, inheritance, constructors, reset, clone, getAction, PlayerAction) before matches, with fail-fast routing and timing/artifacts. | Implemented for mock and bounded real runtime probes; 10-match execution remains outside this milestone. |
-| Match protocol | After standalone Integration, one source/class hash pair runs exactly 10 independently seeded, bounded matches against `ai.abstraction.LightRush`; each match persists complete result, telemetry, logs, replay/round-state references, failure, and timing. | Phase 4 protocol is implemented; no generation, mutation, validation, compilation, or integration work occurs inside the match batch. |
+| Match protocol | After standalone Integration, one source/class hash pair runs exactly 10 independently seeded, bounded matches against the fixed Evolution Evaluation roster; each match persists complete result, telemetry, logs, replay/round-state references, failure, and timing. | Phase 4 protocol is implemented; no generation, mutation, validation, compilation, or integration work occurs inside the match batch. |
 | `game_performance` | Canonical +100/0/-100 result scoring plus bounded tanh material/resource and survival shaping is aggregated across exactly 10 valid matches with full statistics. | Implemented by `evaluation/canonical_game_performance.py` and `evaluation/canonical_game_metrics.py`; partial/invalid batches yield -1000. |
 | `code_quality` | Successful evaluation uses `500 + compilation_score + function_score + strategy_alignment_score`; failures use the canonical stage hierarchy. | Implemented with range [0,610], deterministic five-capability evidence, and independent 0-10 Strategy Alignment. |
 | Failure handling | Runtime exception, illegal action, timeout, deadlock, crash, invalid/missing result, and partial evaluation are classified with retained match evidence and runtime-progress fitness. | Generation/validation/compilation/integration/runtime ordering is implemented and all failures receive `game_performance = -1000`. |
@@ -24,15 +24,15 @@ Snapshot: 2026-07-16 after the complete Phase 4 Evaluation Layer. This file desc
 ## Active configuration
 
 - `ExperimentConfig.matches_per_candidate` is fixed at `10`; every checked-in YAML resolves to the same value.
-- `ai.abstraction.LightRush`, map, cycles, timeout, material/resource scales, unit values, and ten distinct deterministic or explicit seeds are resolved and persisted.
-- The parser forces `ai.abstraction.LightRush` even if YAML names another opponent. `config.yaml` preserves the input, while `resolved_config.json` records the actual forced opponent.
+- The fixed Evolution Evaluation roster, map, cycles, timeout, material/resource scales, unit values, and ten distinct deterministic or explicit seeds are resolved and persisted.
+- The parser keeps legacy `opponent` input compatible, while `resolved_config.json` records the actual fixed roster used for runtime evaluation.
 - `alignment_backend` is active (`mock`, `openai`, or `llama_cpp`) and is independent from the generation call while sharing configured endpoint/model values when applicable.
 - Resolved configuration records `artifact_schema_version = phase4-v1` and `objective_formula_version = eagle-objectives-phase4-v1`.
 - Only `game_performance` and `code_quality` are active optimizer objectives; Strategy Alignment is a Code Quality component.
 
 ## Active tests
 
-The suite now covers Phase 2C mutation, Phase 3 validation/compilation/integration, and Phase 4 runtime evaluation, canonical Game Performance, failure-aware Code Quality, Function Capability, Strategy Alignment, objective aggregation, artifacts, and timing. Focused Phase 4 tests prove exactly 10 seeded LightRush calls, one source/class set, no regeneration, timeout/invalid/partial failures, formula boundaries, successful and partial end-to-end persistence, and two-objective output.
+The suite now covers Phase 2C mutation, Phase 3 validation/compilation/integration, and Phase 4 runtime evaluation, canonical Game Performance, failure-aware Code Quality, Function Capability, Strategy Alignment, objective aggregation, artifacts, and timing. Focused Phase 4 tests prove exactly 10 seeded fixed-roster calls, one source/class set, no regeneration, timeout/invalid/partial failures, formula boundaries, successful and partial end-to-end persistence, and two-objective output.
 
 The full WSL unit suite passes. A bounded real seven-check Integration probe exists from Phase 3; no real 10-match Java/MicroRTS batch was run for this implementation turn, so real-runtime gameplay remains unverified here.
 
@@ -43,7 +43,7 @@ The most recent complete saved population run (`runs/20260712_154209_634218`) us
 ## Operational state
 
 - `python scripts/run_eagle.py --config configs/eagle_minimal.yaml --mock` exercises the contract-shaped 10-match evaluation pipeline, but mock execution is not real MicroRTS proof.
-- Real mode requires the local generation endpoint, `javac`, and vendored MicroRTS runtime.
+- Real mode requires the local generation endpoint, `javac`, vendored MicroRTS runtime, and prepared external opponent JARs.
 - WSL is the project default for Python/Java/MicroRTS commands.
 - `scripts/play_candidate_gui.py` retains transitional generated-class discovery and defaults to `ai.PassiveAI`; it is a manual viewer, not the evaluation protocol.
 

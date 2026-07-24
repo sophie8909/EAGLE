@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-import json
 import re
+import tempfile
 import time
 from pathlib import Path
+from typing import Iterable
 
 from evaluation.code_quality import (
     CodeQualityBreakdown,
@@ -44,7 +45,17 @@ from generation.java_agent_generator import (
 from .artifacts import append_result, write_candidate_artifacts, write_candidate_inputs
 from .candidate import Candidate
 from .config import ExperimentConfig
-from .opponents import EVALUATION_ROSTER, rooted_jar_path
+from .final_test.opponents import (
+    OpponentSetupError,
+    ResolvedOpponent,
+    compile_opponent_probe,
+    load_resolved_opponents,
+    verify_resolved_opponent,
+)
+from .opponents import EVALUATION_ROSTER, EXTERNAL_OPPONENTS, HISTORICAL_SELF_OPPONENTS, OpponentSpec, rooted_jar_path
+
+
+RESOLVED_EXTERNAL_OPPONENTS_MANIFEST = Path("third_party/final_test_opponents/resolved_manifest.json")
 
 
 @dataclass(frozen=True)
@@ -63,6 +74,13 @@ class CandidateEvaluation:
     function_capability_result: FunctionCapabilityResult | None = None
     strategy_alignment_result: StrategyAlignmentResult | None = None
     generation_timing: dict[str, object] | None = None
+
+
+@dataclass(frozen=True)
+class EvaluationOpponent:
+    opponent_id: str
+    class_name: str
+    classpath_entries: tuple[Path, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -449,20 +467,49 @@ def compile_agent_source(agent: GeneratedJavaAgent, *, config: ExperimentConfig,
     )
 
 
+def preflight_evaluation_opponents(
+    config: ExperimentConfig,
+    *,
+    mock: bool,
+    repository_root: Path | None = None,
+) -> None:
+    """Fail early when real evolution needs unavailable external opponents."""
+
+    if mock:
+        return
+    repository_root = (repository_root or _repository_root()).resolve()
+    resolved = _load_resolved_external_opponents(repository_root)
+    _verify_external_opponent_classes(resolved.values(), config=config, repository_root=repository_root)
+
+
 def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int) -> tuple[list[MatchResult], str | None]:
-    """Run one match for each of the ten configured evaluation opponents."""
+    """Run the ten-match evolution protocol against the fixed evaluation roster."""
     match_results: list[MatchResult] = []
     source_hash = hash_file(agent.source_path)
     candidate_classes_dir = classes_dir / candidate.id
     class_hash = hash_class_directory(candidate_classes_dir)
-    self_opponents = _prepare_historical_self_opponents(candidate=candidate, agent=agent, config=config, classes_dir=classes_dir, match_artifacts_dir=match_artifacts_dir, mock=mock)
-    opponents = [(item.opponent_id, item.class_name, rooted_jar_path(Path.cwd(), item)) for item in EVALUATION_ROSTER] + self_opponents
     seeds = config.resolved_match_seeds
     try:
-        for match_index, (opponent_id, opponent_class, opponent_jar) in enumerate(opponents):
+        opponents = [
+            *_resolved_static_evaluation_opponents(config, mock=mock),
+            *_prepare_historical_self_opponents(
+                candidate=candidate,
+                agent=agent,
+                config=config,
+                classes_dir=classes_dir,
+                match_artifacts_dir=match_artifacts_dir,
+                mock=mock,
+            ),
+        ]
+        if len(opponents) != config.matches_per_candidate:
+            return match_results, (
+                f"evaluation roster has {len(opponents)} opponents; "
+                f"expected {config.matches_per_candidate}"
+            )
+        for match_index, opponent in enumerate(opponents):
             result = run_microrts_match(
                 microrts_dir=config.microrts_dir, classes_dir=candidate_classes_dir,
-                agent_class=agent.qualified_class_name, opponent=opponent_class,
+                agent_class=agent.qualified_class_name, opponent=opponent.class_name,
                 tick_limit=config.tick_limit, match_index=match_index,
                 match_artifacts_dir=match_artifacts_dir,
                 scoring_config=scoring_config_from_experiment(config), mock=mock,
@@ -470,53 +517,148 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                 seed=seeds[match_index], timeout_seconds=config.match_timeout_seconds,
                 map_path=config.map_path, candidate_id=candidate.id,
                 source_hash=source_hash, class_hash=class_hash,
-                extra_classpath_entries=() if opponent_jar is None else (opponent_jar,),
+                extra_classpath_entries=opponent.classpath_entries,
             )
-            match_results.append(replace(result, opponent_id=opponent_id))
+            result = replace(result, opponent_id=opponent.opponent_id)
+            match_results.append(result)
             if not result.ok:
                 return match_results, match_error_message(result)
     except (RuntimeError, OSError) as exc:
         return match_results, str(exc)
-    if len(match_results) != len(opponents):
-        return match_results, f"partial evaluation: completed {len(match_results)} of {len(opponents)} matches"
+    if len(match_results) != config.matches_per_candidate:
+        return match_results, f"partial evaluation: completed {len(match_results)} of {config.matches_per_candidate} matches"
     return match_results, None
 
 
-def _prepare_historical_self_opponents(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool) -> list[tuple[str, str, Path | None]]:
-    prepared: list[tuple[str, str, Path | None]] = []
-    for index, source in enumerate(_historical_self_sources(candidate, agent, match_artifacts_dir), start=1):
-        class_name = f"HistoricalSelf{index}"
-        source_dir = (match_artifacts_dir or classes_dir) / "historical_self"
-        source_dir.mkdir(parents=True, exist_ok=True)
-        source_path = source_dir / f"{class_name}.java"
-        transformed = source.replace("CandidateAgent", class_name).replace("package ai.generated;", "package ai.historical;")
-        source_path.write_text(transformed, encoding="utf-8")
-        result = compile_generated_agent(source_path, microrts_dir=config.microrts_dir, output_dir=classes_dir / candidate.id / f"historical_self_{index}", mock=mock)
-        if not result.ok:
-            prepared.append((f"historical_self_{index}", f"ai.historical.{class_name}", None))
+def _resolved_static_evaluation_opponents(
+    config: ExperimentConfig,
+    *,
+    mock: bool,
+    repository_root: Path | None = None,
+) -> tuple[EvaluationOpponent, ...]:
+    repository_root = (repository_root or _repository_root()).resolve()
+    if mock:
+        return tuple(
+            EvaluationOpponent(
+                item.opponent_id,
+                item.class_name,
+                () if item.kind != "external" else _mock_external_classpath(repository_root, item),
+            )
+            for item in EVALUATION_ROSTER
+            if item.kind != "historical_self"
+        )
+
+    resolved = _load_resolved_external_opponents(repository_root)
+    opponents: list[EvaluationOpponent] = []
+    for item in EVALUATION_ROSTER:
+        if item.kind == "historical_self":
             continue
-        prepared.append((f"historical_self_{index}", f"ai.historical.{class_name}", None))
-    return prepared
+        if item.kind == "external":
+            external = resolved[item.opponent_id]
+            jar_path = (repository_root / external.jar_path).resolve()
+            if not jar_path.is_file():
+                raise OpponentSetupError(
+                    f"Opponent JAR is missing for evolution evaluation: {jar_path}. "
+                    "Run python3 scripts/setup_final_test_opponents.py first."
+                )
+            opponents.append(EvaluationOpponent(item.opponent_id, external.class_name, (jar_path,)))
+        else:
+            opponents.append(EvaluationOpponent(item.opponent_id, item.class_name))
+    return tuple(opponents)
 
 
-def _historical_self_sources(candidate: Candidate, agent: GeneratedJavaAgent, match_artifacts_dir: Path | None) -> tuple[str, str]:
-    current = agent.source
-    run_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent.parent
-    historical: list[str] = []
-    for generation in (candidate.generation - 1, candidate.generation - 2):
-        if run_dir is None or generation < 0:
-            continue
-        try:
-            population = json.loads((run_dir / f"generation_{generation:03d}_population.json").read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        valid = [item for item in population if item.get("generated_java")]
-        valid.sort(key=lambda item: (-float((item.get("fitness_objectives") or {}).get("game_performance", -1000)), -float((item.get("fitness_objectives") or {}).get("code_quality", -1000)), str(item.get("id", item.get("candidate_id", "")))))
-        if valid:
-            historical.append(str(valid[0]["generated_java"]))
-    while len(historical) < 2:
-        historical.append(current)
-    return historical[:2]
+def _load_resolved_external_opponents(repository_root: Path) -> dict[str, ResolvedOpponent]:
+    return load_resolved_opponents(
+        repository_root / RESOLVED_EXTERNAL_OPPONENTS_MANIFEST,
+        expected_ids=tuple(item.opponent_id for item in EXTERNAL_OPPONENTS),
+    )
+
+
+def _verify_external_opponent_classes(
+    opponents: Iterable[ResolvedOpponent],
+    *,
+    config: ExperimentConfig,
+    repository_root: Path,
+) -> None:
+    with tempfile.TemporaryDirectory(prefix="eagle-opponent-probe-") as probe_dir:
+        probe_classes = compile_opponent_probe(
+            Path(probe_dir) / "classes",
+            _resolved_config_path(repository_root, config.microrts_dir),
+        )
+        for opponent in opponents:
+            verify_resolved_opponent(
+                opponent,
+                repository_root=repository_root,
+                microrts_dir=_resolved_config_path(repository_root, config.microrts_dir),
+                probe_classes=probe_classes,
+            )
+
+
+def _mock_external_classpath(repository_root: Path, opponent: OpponentSpec) -> tuple[Path, ...]:
+    jar_path = rooted_jar_path(repository_root, opponent)
+    return () if jar_path is None else (jar_path,)
+
+
+def _prepare_historical_self_opponents(
+    *,
+    candidate: Candidate,
+    agent: GeneratedJavaAgent,
+    config: ExperimentConfig,
+    classes_dir: Path,
+    match_artifacts_dir: Path | None,
+    mock: bool,
+) -> tuple[EvaluationOpponent, ...]:
+    source_root = (
+        match_artifacts_dir.parent / "historical_self_sources"
+        if match_artifacts_dir is not None
+        else classes_dir / candidate.id / "historical_self_sources"
+    )
+    source_root.mkdir(parents=True, exist_ok=True)
+    source_candidates = _historical_self_sources(candidate, agent)
+    opponents: list[EvaluationOpponent] = []
+    for index, spec in enumerate(HISTORICAL_SELF_OPPONENTS):
+        class_name = spec.class_name.rsplit(".", 1)[-1]
+        source_path = source_root / f"{class_name}.java"
+        source_path.write_text(
+            _retarget_candidate_source(source_candidates[index], package_name="ai.historical", class_name=class_name),
+            encoding="utf-8",
+        )
+        output_dir = classes_dir / candidate.id / f"{spec.opponent_id}_classes"
+        compile_result = compile_generated_agent(
+            source_path,
+            microrts_dir=config.microrts_dir,
+            output_dir=output_dir,
+            mock=mock,
+        )
+        if not compile_result.ok:
+            raise RuntimeError(
+                f"historical self opponent {spec.opponent_id} compile failed: "
+                f"{compile_error_message(compile_result)}"
+            )
+        opponents.append(EvaluationOpponent(spec.opponent_id, spec.class_name, (output_dir,)))
+    return tuple(opponents)
+
+
+def _historical_self_sources(candidate: Candidate, agent: GeneratedJavaAgent) -> tuple[str, str]:
+    parent_source = candidate.previous_code.strip()
+    if parent_source:
+        return parent_source, agent.source
+    return agent.source, agent.source
+
+
+def _retarget_candidate_source(source: str, *, package_name: str, class_name: str) -> str:
+    retargeted = re.sub(r"^\s*package\s+ai\.generated\s*;", f"package {package_name};", source, count=1, flags=re.MULTILINE)
+    if retargeted == source:
+        retargeted = f"package {package_name};\n" + source
+    return re.sub(r"\bCandidateAgent\b", class_name, retargeted)
+
+
+def _repository_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _resolved_config_path(repository_root: Path, path: Path) -> Path:
+    return path.resolve() if path.is_absolute() else (repository_root / path).resolve()
 
 
 def scoring_config_from_experiment(config: ExperimentConfig) -> GamePerformanceConfig:

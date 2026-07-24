@@ -72,4 +72,4 @@ When code and the specification differ, preserve the specification and update [`
 
 ## Champion Final Test
 
-Post-evolution champion comparison is owned by [`evaluation/final_test.md`](evaluation/final_test.md). It is separate from LightRush Evolution Evaluation and must be read for opponent setup, candidate selection, final-test scheduling/execution, artifacts, aggregation, analysis, or reproduction work.
+Post-evolution champion comparison is owned by [`evaluation/final_test.md`](evaluation/final_test.md). It is separate from Evolution Evaluation fitness and must be read for opponent setup, candidate selection, final-test scheduling/execution, artifacts, aggregation, analysis, or reproduction work.

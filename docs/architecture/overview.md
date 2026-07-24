@@ -14,7 +14,7 @@ In scope:
 - `Strategy Prompt`, latest evaluated `Previous Code`, and `Code Generation Prompt`;
 - Uniform Crossover and two-stage Strategy/Code Mutation;
 - full-file `CandidateAgent.java` generation;
-- exactly 10 matches against `ai.abstraction.LightRush`;
+- exactly 10 matches against the fixed Evolution Evaluation roster;
 - `game_performance` and `code_quality` as the only NSGA-II objectives;
 - failure-aware fitness, lineage, artifacts, and timing.
 
@@ -36,7 +36,7 @@ flowchart TD
     M -->|Strategy| SR["Strategy Reflection LLM"] --> SW["Strategy Rewrite LLM"] --> G
     M -->|Code| CR["Code Reflection LLM"] --> CW["Generation Prompt Rewrite LLM"] --> G
     G --> V["Source validation"] --> C["Compile once"] --> I["MicroRTS integration"]
-    I --> E["10 matches vs LightRush; no regeneration"]
+    I --> E["10 matches vs fixed roster; no regeneration"]
     E --> O["game_performance and code_quality"]
     O --> N["NSGA-II survivor selection"] --> P
 ```
@@ -68,4 +68,4 @@ flowchart TD
 
 After a run completes, the optional champion Final Test selects already evaluated canonical Java from evolution artifacts and compares it with pinned TMA, Mayari, and COAC agents. This branch is terminal analysis: it has no path back to fitness, NSGA-II, crossover, mutation, generation, or any LLM.
 
-The LightRush Evolution Evaluation above remains unchanged. See [`../evaluation/final_test.md`](../evaluation/final_test.md) for the final-test selectors, both-side schedule, artifact tree, and reproducibility contract.
+Evolution Evaluation uses pinned TMA, Mayari, COAC, five vendored basic agents, and two historical-self agents for fitness. Final Test remains a separate post-run protocol; see [`../evaluation/final_test.md`](../evaluation/final_test.md) for selectors, both-side schedule, artifact tree, and reproducibility contract.

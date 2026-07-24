@@ -1,4 +1,4 @@
-"""Canonical opponent rosters shared by evolution evaluation and final tests."""
+"""Canonical opponent identities for evolution evaluation and final tests."""
 
 from __future__ import annotations
 
@@ -29,12 +29,17 @@ BASIC_OPPONENTS = (
     OpponentSpec("heavy_rush", "HeavyRush", "ai.abstraction.HeavyRush", "basic"),
 )
 
-EVALUATION_ROSTER = EXTERNAL_OPPONENTS + BASIC_OPPONENTS
+HISTORICAL_SELF_OPPONENTS = (
+    OpponentSpec("historical_self_1", "Historical Self 1", "ai.historical.HistoricalSelf1", "historical_self"),
+    OpponentSpec("historical_self_2", "Historical Self 2", "ai.historical.HistoricalSelf2", "historical_self"),
+)
+
+EVALUATION_ROSTER = EXTERNAL_OPPONENTS + BASIC_OPPONENTS + HISTORICAL_SELF_OPPONENTS
 FINAL_TEST_ROSTER = EXTERNAL_OPPONENTS + BASIC_OPPONENTS
 
 
 def opponent_by_id(opponent_id: str) -> OpponentSpec:
-    for item in EVALUATION_ROSTER:
+    for item in EVALUATION_ROSTER + FINAL_TEST_ROSTER:
         if item.opponent_id == opponent_id:
             return item
     raise KeyError(opponent_id)

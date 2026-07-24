@@ -13,7 +13,7 @@ Before changing or launching architecture-relevant work:
 1. Read [`../README.md`](../README.md) and the routed canonical contracts.
 2. Check [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md).
 3. Confirm the run is a smoke/current-state probe or a contract-conformant experiment.
-4. Verify resolved values will include 10 matches, LightRush, map/cycles/seeds, LLM/retry versions, objective formula version, artifact schema version, and Git commit.
+4. Verify resolved values will include 10 matches, the fixed Evolution Evaluation roster, map/cycles/seeds, LLM/retry versions, objective formula version, artifact schema version, and Git commit.
 
 The checked-in configs currently specify one or three matches and therefore are not contract-conformant experiment configs.
 
@@ -42,6 +42,7 @@ Preconditions:
 - configured OpenAI-compatible generation endpoint and model are reachable;
 - WSL `python3`, `java`, and `javac` are available;
 - `third_party/microrts/bin` and required JARs exist;
+- pinned external opponents have been prepared with `python3 scripts/setup_final_test_opponents.py`;
 - the selected config is reviewed against the architecture contract;
 - the output run ID/path does not collide.
 
@@ -52,7 +53,7 @@ Do not launch a large experiment merely to validate documentation or a local ser
 | Concern | Required resolved value |
 | --- | --- |
 | Evolution | population, generations, crossover/mutation rates and selection policy, EA seed |
-| Evaluation | 10 matches, `ai.abstraction.LightRush`, map, cycles, per-match seeds |
+| Evaluation | 10 matches, fixed opponent roster, map, cycles, per-match seeds |
 | Generation | backend, model, endpoint identity, temperature, retry policy, prompt version |
 | Objectives | formula version plus all material/resource scale values |
 | Persistence | artifact schema version and Git commit |
@@ -63,11 +64,10 @@ Input `config.yaml` and `resolved_config.json` have distinct roles. Never treat 
 
 - Every candidate has lineage, genotype, generation, stage, evaluation, objective, and timing artifacts.
 - Every successful candidate has exactly 10 match directories.
-- Commands name LightRush and the expected source/class hash.
+- Commands name the resolved opponent and expected source/class hash.
 - No Java-generation LLM attempt occurs inside the match batch.
 - Objective payloads name only `game_performance` and `code_quality`.
 - Schema/formula versions are present and supported by analysis tools.
 - Partial or failed runs are classified by terminal stage.
 
 Until the migration gaps close, state explicitly which of these checks cannot pass.
-

@@ -394,6 +394,21 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertEqual(payload["front0_stagnation_generations"], 5)
         self.assertEqual(payload["matches_per_candidate"], 10)
         self.assertEqual(payload["opponent"], "ai.abstraction.LightRush")
+        self.assertEqual(
+            [item["class_name"] for item in payload["evaluation_opponents"]],
+            [
+                "ai.tma.TMA",
+                "mayariBot.mayari",
+                "ai.coac.CoacAI",
+                "ai.RandomAI",
+                "ai.RandomBiasedAI",
+                "ai.PassiveAI",
+                "ai.abstraction.LightRush",
+                "ai.abstraction.HeavyRush",
+                "ai.historical.HistoricalSelf1",
+                "ai.historical.HistoricalSelf2",
+            ],
+        )
         self.assertEqual(payload["max_cycles"], 345)
         self.assertEqual(payload["ea_random_seed"], 41)
         self.assertEqual(payload["llm_backend"], "mock")

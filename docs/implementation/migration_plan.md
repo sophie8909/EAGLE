@@ -58,7 +58,7 @@ Exit satisfied: source validation accepts arbitrary valid internals while enforc
 
 ## Phase 4: complete Evaluation Layer (complete 2026-07-16)
 
-1. Enforce `matches_per_candidate = 10` and LightRush in architecture configs.
+1. Enforce `matches_per_candidate = 10` and the fixed Evolution Evaluation roster in architecture configs.
 2. Resolve map/cycles/seeds into runtime configuration.
 3. Add process timeouts and strict result validation.
 4. Prove one source hash/compile serves all 10 matches with no generation calls.

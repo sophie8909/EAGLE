@@ -53,7 +53,7 @@ flowchart TD
     M -->|Strategy Mutation| SR["Strategy Reflection LLM"] --> SW["Strategy Prompt Rewrite LLM"] --> G
     M -->|Code Mutation| CR["Code Reflection LLM"] --> CW["Code Generation Prompt Rewrite LLM"] --> G
     G --> V["Source Validation"] --> C["Compile once"] --> I["MicroRTS Integration Check"]
-    I --> E["10 matches vs LightRush; no regeneration"]
+    I --> E["10 matches vs fixed evaluation roster; no regeneration"]
     E --> O["game_performance + code_quality"]
     O --> N["NSGA-II Survivor Selection"] --> P
 ```
@@ -104,7 +104,7 @@ Reflection ?芾?鞎砍???Prompt Rewrite ?芾撓?箄◤?孵神??Prompt嚗?�
 ### 6.1 Strategy Mutation
 
 Strategy Mutation ?芯耨??`Strategy Prompt`嚗???`Previous Code` ??`Code Generation Prompt`??
-Strategy Reflection LLM 霈???Strategy?arent Generated Java?? LightRush ????10-match evidence???渡??in/Draw/Loss?esource/material/survival/round-state ??behavior summary嚗撓??`strategy_reflection`??
+Strategy Reflection LLM 霈???Strategy?arent Generated Java?? fixed evaluation roster ????10-match evidence???渡??in/Draw/Loss?esource/material/survival/round-state ??behavior summary嚗撓??`strategy_reflection`??
 Strategy Prompt Rewrite LLM 霈??憪?Strategy?eflection?arent Java ??Game Evaluation summary嚗頛詨?啁? Strategy Prompt??
 摰 state transition嚗?
 ```text
@@ -169,7 +169,7 @@ LLM 銝?閬??摰?helper ?迂?摰?helper ?賊??摰?str
 
 瘥????? Java Candidate 敹?嚗?
 1. Source Validation嚗?2. compile 銝甈∴?
-3. MicroRTS Integration Check嚗?4. 雿輻??隞?source ??銝蝯?compiled classes嚗? `ai.abstraction.LightRush` ?瑁? 10 ??Match??
+3. MicroRTS Integration Check嚗?4. 雿輻??隞?source ??銝蝯?compiled classes嚗? fixed evaluation roster ?瑁? 10 ??Match??
 Integration Check ?芸銵?餈唬???load/type/constructor/method/result 撽?嚗???摰 Match?????券?嚗??? 10 ??Evaluation??
 10 ?港???
 
@@ -298,7 +298,7 @@ Compile ??敺? class loading?onstructor?uperclass?ethod signature
 
 瘥?Run 敹??賡?撱綽?Candidate Genotype?enerated Java?rossover?utation????LLM calls?alidation?ompilation?ntegration??0 Matches?bjectives?ineage ??Timing??
 ??閬?嚗?
-- ??parsing ??摮???raw LLM responses嚗?- ??靽? pre-generation `previous_code` ?????Java嚗?- Mutation ??Reflection/Rewrite request?aw response?odel?ttempts ??error ?券靽?嚗?- Final Java Generation 雿輻?函? request/response artifacts嚗?- 瘥?Match ?蝡?`result.json`?replay.xml`?round_states/`?tdout/stderr?elemetry?erformance breakdown ??timing嚗?- `lineage.json` 靽? Parent IDs?perator?utation type ????component source IDs嚗?- `timing.json` 雿輻 UTC timestamp嚗???selection?rossover?eflection LLM?ewrite LLM?eneration LLM?alidation?ompilation?ntegration?trategy Alignment LLM????Match ????retry attempts嚗?- `resolved_config.json` 閮?撖阡? population/generation?perator rates??0-match LightRush protocol?ap/cycles/seeds?LM/model/temperature/retry?rompt version?bjective formula version?rtifact schema version ??Git commit嚗?- schema ??formula 敹? versioned嚗??質?頛詨 YAML ?祕??runtime behavior ??銝??氬?
+- ??parsing ??摮???raw LLM responses嚗?- ??靽? pre-generation `previous_code` ?????Java嚗?- Mutation ??Reflection/Rewrite request?aw response?odel?ttempts ??error ?券靽?嚗?- Final Java Generation 雿輻?函? request/response artifacts嚗?- 瘥?Match ?蝡?`result.json`?replay.xml`?round_states/`?tdout/stderr?elemetry?erformance breakdown ??timing嚗?- `lineage.json` 靽? Parent IDs?perator?utation type ????component source IDs嚗?- `timing.json` 雿輻 UTC timestamp嚗???selection?rossover?eflection LLM?ewrite LLM?eneration LLM?alidation?ompilation?ntegration?trategy Alignment LLM????Match ????retry attempts嚗?- `resolved_config.json` 閮?撖阡? population/generation?perator rates??10-match fixed evaluation roster protocol?ap/cycles/seeds?LM/model/temperature/retry?rompt version?bjective formula version?rtifact schema version ??Git commit嚗?- schema ??formula 敹? versioned嚗??質?頛詨 YAML ?祕??runtime behavior ??銝??氬?
 摰 path tree ??雿?梯??canonical artifact documents ??嚗?辣銝?銴雁霅瑟璉?tree??
 ## 13. ?辣蝬剛風閬?
 
@@ -315,7 +315,7 @@ Compile ??敺? class loading?onstructor?uperclass?ethod signature
 | `docs/architecture/crossover.md` | Uniform Crossover input/output?rovenance?ests??| Crossover ??component inheritance 撌乩???| Crossover/provenance contract ?寡???|
 | `docs/architecture/mutation.md` | Strategy/Code Mutation????LLM calls?eedback ??state transitions??| 隞颱? Mutation?rompt?eedback?ogging 撌乩???| Mutation flow?nputs/outputs/state ?寡???|
 | `docs/architecture/java_generation.md` | Full-file generation?alidation?ompilation?untime/security boundary??| Java generation?arser?alidator?ompiler?ntegration 撌乩???| Java output/runtime/compile contract ?寡???|
-| `docs/evaluation/evaluation_pipeline.md` | Evaluation stages ??10-match LightRush protocol??| Runner?tage orchestration?atch protocol 撌乩???| Evaluation stage/order/protocol ?寡???|
+| `docs/evaluation/evaluation_pipeline.md` | Evaluation stages ??10-match fixed roster protocol??| Runner?tage orchestration?atch protocol 撌乩???| Evaluation stage/order/protocol ?寡???|
 | `docs/evaluation/game_performance.md` | `game_performance` ?銝 canonical formula??| Gameplay scoring?elemetry?ggregation 撌乩???| 閰?Objective ?撘撓?交???寡???|
 | `docs/evaluation/code_quality.md` | ???瑁??摰? `+500` `code_quality` formula?omponents ??`[0,610]` 蝭???| Code quality?arning?apability?lignment 撌乩???| ???砍??omponents?ange ??formula version ?寡???|
 | `docs/evaluation/failure_classification.md` | Failure stages??憿? failure fitness??| Failure routing?ntegration/runtime?enalty 撌乩???| Failure stage??憿??砍??寡???|
@@ -338,6 +338,6 @@ Compile ??敺? class loading?onstructor?uperclass?ethod signature
 
 ## 最終測試邊界
 
-EAGLE 只有兩種評估情境：演化期間固定使用 LightRush 的 Evolution Evaluation，以及演化完成後才執行的 Final Test。Final Test 只讀取已完成 run 的演化 artifacts，選定既有 Java，對固定版本的 TMA、Mayari、COAC 在多張既有地圖、固定 seeds、雙方 player side 上比賽；結果不得回流 fitness、selection、crossover、mutation、NSGA-II，也不得呼叫 LLM 或重新生成、修復候選者。此架構沒有 validation split 或 validation selection stage。
+EAGLE 只有兩種評估情境：演化期間固定使用 10-opponent roster 的 Evolution Evaluation（TMA、Mayari、COAC、五個 basic agent、兩個 historical self），以及演化完成後才執行的 Final Test。Final Test 只讀取已完成 run 的演化 artifacts，選定既有 Java，對固定版本的 TMA、Mayari、COAC 在多張既有地圖、固定 seeds、雙方 player side 上比賽；結果不得回流 fitness、selection、crossover、mutation、NSGA-II，也不得呼叫 LLM 或重新生成、修復候選者。此架構沒有 validation split 或 validation selection stage。
 
 完整 opponent pins、selector、artifact schema、計分與重現指令由 `docs/evaluation/final_test.md` 管理；該文件已加入 active documentation map。

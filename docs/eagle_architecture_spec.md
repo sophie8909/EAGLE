@@ -22,7 +22,7 @@ An LLM converts that genotype into a complete:
 CandidateAgent.java
 ```
 
-The generated Java agent is compiled once and evaluated across 10 MicroRTS matches against `LightRush` without regenerating the program.
+The generated Java agent is compiled once and evaluated across a fixed 10-opponent MicroRTS roster without regenerating the program.
 
 The optimizer uses two objectives:
 
@@ -213,7 +213,7 @@ Compilation
 MicroRTS Integration
         │
         ▼
-10 Matches vs LightRush
+10 Matches vs Evaluation Roster
         │
         ▼
 Game Performance
@@ -439,7 +439,7 @@ opponent identity
 Opponent:
 
 ```text
-ai.abstraction.LightRush
+fixed evaluation roster
 ```
 
 ### Output
@@ -456,7 +456,7 @@ The reflection should analyze:
 - resource allocation quality
 - production timing
 - attack timing
-- defense against LightRush
+- defense across the fixed evaluation roster
 - target selection
 - unit composition
 - behavior that should be preserved
@@ -802,7 +802,7 @@ Each generated Java candidate is:
 1. validated
 2. compiled once
 3. integrated with MicroRTS
-4. evaluated in 10 matches against LightRush
+4. evaluated in 10 matches against the fixed Evolution Evaluation roster
 
 The Java source must not be regenerated between the 10 matches.
 
@@ -810,8 +810,20 @@ Configuration:
 
 ```text
 matches_per_candidate = 10
-opponent = ai.abstraction.LightRush
+evaluation_opponents =
+  tma
+  mayari
+  coac
+  random
+  random_biased
+  passive
+  light_rush
+  heavy_rush
+  historical_self_1
+  historical_self_2
 ```
+
+The first eight opponents are fixed pinned agents: TMA, Mayari, COAC, RandomAI, RandomBiasedAI, PassiveAI, LightRush, and HeavyRush. TMA, Mayari, and COAC are external Java agents and must be prepared from the pinned manifest before any real evolution run. The two historical-self opponents are compiled from prior evaluated candidate Java when available; generation zero may use the current candidate source as the historical-self bootstrap. An unavailable external opponent is an experiment setup failure, not a candidate runtime failure and not a signal to substitute another baseline.
 
 Across the 10 matches:
 
@@ -821,6 +833,7 @@ Across the 10 matches:
 - do not mutate the candidate
 - write separate artifacts per match
 - use distinct game seeds where supported
+- persist the resolved opponent identity and any external classpath artifact per match
 
 ------
 
@@ -1927,7 +1940,7 @@ Required values:
 
 ```text
 matches_per_candidate = 10
-opponent = ai.abstraction.LightRush
+evaluation_opponents = fixed 10-opponent roster
 ```
 
 The resolved configuration must reflect actual runtime behavior.
@@ -2039,7 +2052,7 @@ The implementation must always satisfy:
 11. The generated Java is compiled once.
 12. The same compiled Java is evaluated for 10 matches.
 13. The Java is not regenerated between matches.
-14. The opponent is `LightRush`.
+14. The opponents are the fixed 10-opponent Evolution Evaluation roster.
 15. The optimizer uses exactly two objectives: `game_performance` and `code_quality`.
 16. All failed evaluations receive `game_performance = -1000`.
 17. `code_quality` distinguishes failure stages.
@@ -2076,7 +2089,7 @@ Implement in this order:
 7. Runtime-contract validation
 8. Compilation and warning diagnostics
 9. MicroRTS integration classification
-10. 10-match LightRush evaluation
+10. 10-match fixed-roster evaluation
 11. Game Performance formula
 12. Failure-aware Code Quality
 13. Function Capability Score
@@ -2090,7 +2103,7 @@ Implement in this order:
 Do not refactor unrelated modules before these contracts are implemented and tested.
 # 31. Post-Evolution Champion Final Test
 
-EAGLE has exactly two evaluation contexts. Evolution Evaluation remains the ten-match LightRush fitness protocol. Final Test is a post-run, gameplay-only comparison against pinned TMA, Mayari, and COAC agents; it never changes an evolutionary objective.
+EAGLE has exactly two evaluation contexts. Evolution Evaluation is the ten-match fitness protocol against the fixed roster: pinned TMA, Mayari, COAC, five vendored basic agents, and two historical-self agents. Final Test is a post-run, gameplay-only comparison over selected completed-run candidates; it never changes an evolutionary objective.
 
 Final-test candidate selection uses completed-run evolution artifacts before matches begin. It reuses canonical generated Java without LLM, regeneration, repair, Reflection, Rewrite, mutation, crossover, or NSGA-II calls; compiles each source once; tests deterministic vendored maps/seeds on both player sides; never substitutes an unavailable champion; and writes a separate versioned `final_tests/<final_test_id>/` tree.
 

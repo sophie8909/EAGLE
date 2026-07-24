@@ -15,7 +15,7 @@ from .artifacts import write_generation_manifest, write_prompt_snapshot, write_r
 from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import Crossover, CrossoverContext
-from .evaluation import evaluate_population
+from .evaluation import evaluate_population, preflight_evaluation_opponents
 from .mutation import MutationContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
 from .llm_profiles import LLMProfile, load_effective_role_profiles
@@ -41,6 +41,7 @@ class SearchResult:
 
 def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = False, run_id: str | None = None) -> SearchResult:
     config.validate()
+    preflight_evaluation_opponents(config, mock=mock)
     rng = random.Random(config.random_seed)
     crossover = Crossover(method="uniform")
     selection = Selection(method="binary_tournament")
