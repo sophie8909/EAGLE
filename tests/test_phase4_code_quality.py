@@ -1,6 +1,9 @@
 import json
 import unittest
+import urllib.error
+from unittest.mock import patch
 
+from eagle.llm_errors import LLMServerError
 from evaluation.code_quality import (
     analyze_compilation,
     build_failure_code_quality,
@@ -14,6 +17,7 @@ from evaluation.function_capability import (
 )
 from evaluation.microrts_runner import MatchResult
 from evaluation.strategy_alignment import (
+    OpenAICompatibleStrategyAlignmentBackend,
     StrategyAlignmentBackend,
     StrategyAlignmentResult,
     evaluate_strategy_alignment,
@@ -59,6 +63,24 @@ def capability_result(score_per_capability):
 
 
 class Phase4CodeQualityTests(unittest.TestCase):
+    def test_strategy_alignment_connection_error_aborts_the_ea(self):
+        backend = OpenAICompatibleStrategyAlignmentBackend(
+            "http://127.0.0.1:8080/v1",
+            "qwen3.5",
+        )
+
+        with patch(
+            "evaluation.strategy_alignment.urllib.request.urlopen",
+            side_effect=urllib.error.URLError("server stopped"),
+        ):
+            with self.assertRaisesRegex(LLMServerError, "llm server error"):
+                evaluate_strategy_alignment(
+                    strategy_prompt="strategy",
+                    generated_java="public class CandidateAgent {}",
+                    behavior_summary={},
+                    backend=backend,
+                )
+
     def test_compilation_warning_penalty_deduplicates_and_caps(self):
         repeated = "A.java:1: warning: [unchecked] duplicate\n" * 2
         compiler = analyze_compilation(CompileResult(True, [], stderr=repeated))

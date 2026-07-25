@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio, json
 from pathlib import Path
+from urllib.parse import urlparse
 from nicegui import ui
 from eagle.llm_profiles import LLMProfile
 from eagle_ui.components.log_panel import create_log_panel
@@ -49,8 +50,10 @@ def build_llm_view(controller: LLMConfigController, repository_root: Path) -> No
             status.value="No managed servers. Start a local server to see its output."; status.update()
 
     async def start():
-        try: await asyncio.to_thread(controller.start_server, **spec_values())
+        try: item = await asyncio.to_thread(controller.start_server, **spec_values())
         except (OSError,ValueError,RuntimeError) as exc: status.value=f"Start failed: {exc}"; status.update(); return
+        port.value = int(urlparse(item.endpoint).port or port.value or 0)
+        port.update()
         await refresh_status()
     async def stop():
         try: await asyncio.to_thread(controller.stop_server, str(server_id.value or "").strip())

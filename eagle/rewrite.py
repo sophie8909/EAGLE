@@ -14,6 +14,7 @@ from typing import Any, Protocol
 
 from .candidate import Candidate
 from .config import ExperimentConfig
+from .llm_errors import LLMServerError
 from .mutation import (
     REFLECTION_SCHEMA_VERSION,
     MutationContext,
@@ -119,6 +120,8 @@ class PromptRewriteStage:
                 response = self.backend.generate(request)
                 last_response = response
                 _validate_rewritten_prompt(response)
+            except LLMServerError:
+                raise
             except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
                 status = "error"
                 error = str(exc) or type(exc).__name__

@@ -127,6 +127,11 @@ def evaluate_population(
 ) -> list[Candidate]:
     evaluated = []
     for index, candidate in enumerate(population):
+        print(
+            f"[gen {generation} cand {index + 1}/{len(population)}] "
+            f"{candidate.id} stage=generation status=started",
+            flush=True,
+        )
         write_candidate_inputs(candidates_dir, candidate)
         evaluation = evaluate_candidate(
             candidate,

@@ -11,7 +11,10 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from eagle.candidate import Candidate
+from eagle.llm_errors import LLMServerError
 from eagle.timing import utc_now
+from eagle.llm_progress import llm_request_progress
+from eagle.llm_transport import read_chat_completion_content
 
 
 
@@ -24,7 +27,7 @@ class GenerationBackend(ABC):
     def generate(self, candidate: Candidate, class_name: str) -> str:
         """Return Java source code for a candidate prompt."""
 
-class GenerationBackendUnavailable(RuntimeError):
+class GenerationBackendUnavailable(LLMServerError):
     """Raised when the configured generation service cannot be reached."""
 
 
@@ -66,6 +69,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": self.temperature,
+            "chat_template_kwargs": {"enable_thinking": False},
+            "stream": True,
         }
         if self.max_output_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
@@ -80,10 +85,14 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             self._active_request_started_at = utc_now()
             self._active_request_started_monotonic = time.monotonic()
             try:
-                with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
-                    response_text = response.read().decode("utf-8")
-                body = json.loads(response_text)
-                content = str(body["choices"][0]["message"]["content"])
+                with llm_request_progress(
+                    stage="generation",
+                    endpoint=self.chat_completions_url,
+                    model=self.model,
+                    candidate_id=candidate.id,
+                ):
+                    with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
+                        content = read_chat_completion_content(response)
                 self._log_call(
                     candidate=candidate,
                     module_name=module_name,
@@ -111,9 +120,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                     attempt=attempt,
                     error=message,
                 )
-                if exc.code == 400 or attempt_index >= self.max_retries:
-                    raise GenerationBackendUnavailable(message) from exc
-                time.sleep(2**attempt_index)
+                raise LLMServerError(f"llm server error: {message}") from exc
             except (urllib.error.URLError, TimeoutError) as exc:
                 message = f"Generation backend request failed: {exc}"
                 self._log_call(
@@ -124,10 +131,8 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                     attempt=attempt,
                     error=message,
                 )
-                if attempt_index >= self.max_retries:
-                    raise GenerationBackendUnavailable(message) from exc
-                time.sleep(2**attempt_index)
-            except (json.JSONDecodeError, KeyError, TypeError) as exc:
+                raise LLMServerError(f"llm server error: {message}") from exc
+            except (json.JSONDecodeError, KeyError, TypeError, UnicodeDecodeError) as exc:
                 message = f"Generation backend returned invalid JSON: {exc}"
                 self._log_call(
                     candidate=candidate,
@@ -139,7 +144,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                     error=message,
                 )
                 raise RuntimeError(message) from exc
-        raise GenerationBackendUnavailable("Generation backend returned no response.")
+        raise LLMServerError("llm server error: Generation backend returned no response.")
 
     def _log_call(
         self,

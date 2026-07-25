@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import shutil
 import socket
 import subprocess
@@ -26,6 +27,7 @@ from .process_logs import ProcessLogBuffer, ProcessLogRecord
 
 SEMANTIC_ROLES = ("reflector", "rewriter", "generator")
 SUPPORTED_LOCAL_MODELS = ("qwen3", "qwen3.5", "llama3.1")
+RUNTIME_STATE_PATH = Path("experiment_env/runtime/runtime_state.local.json")
 
 
 class ServerLifecycleError(RuntimeError):
@@ -75,9 +77,13 @@ class LLMServerManager:
     """Manage the actual local llama-server processes used by GUI roles."""
 
     def __init__(self, repository_root: Path) -> None:
-        self.repository_root = repository_root
+        self.repository_root = repository_root.resolve()
         self._servers: dict[str, _ManagedServer] = {}
         self._lock = threading.Lock()
+
+    @property
+    def runtime_state_path(self) -> Path:
+        return self.repository_root / RUNTIME_STATE_PATH
 
     def discover_models(self) -> list[Path]:
         roots = (self.repository_root / "experiment_env" / "model", self.repository_root / "models")
@@ -129,15 +135,36 @@ class LLMServerManager:
         raise ServerLifecycleError("llama-server was not found; select an executable or set LLAMA_SERVER_BIN.")
 
     @staticmethod
+    def find_available_port(preferred: int = 8080, *, attempts: int = 100) -> int:
+        """Find a free local port, starting at the GUI's preferred port."""
+
+        if not 1 <= preferred <= 65535:
+            preferred = 8080
+        last_port = min(65535, preferred + attempts - 1)
+        for port in range(preferred, last_port + 1):
+            with socket.socket() as sock:
+                try:
+                    sock.bind(("127.0.0.1", port))
+                except OSError:
+                    continue
+                return port
+        raise ServerLifecycleError(f"no available local server port found from {preferred}.")
+
+    @staticmethod
     def build_command(spec: ServerSpec) -> list[str]:
         if not 1 <= spec.port <= 65535:
             raise ValueError("server port must be between 1 and 65535")
         if spec.context_size < 1:
             raise ValueError("server context size must be positive")
+        generation_threads = max(1, min(8, os.cpu_count() or 1))
         return [
             str(spec.server_path),
             "--model", str(spec.model_path),
             "--alias", spec.model_id,
+            "--reasoning", "off",
+            "--parallel", "1",
+            "--threads", str(generation_threads),
+            "--threads-batch", str(generation_threads),
             "--ctx-size", str(spec.context_size),
             "--host", spec.host,
             "--port", str(spec.port),
@@ -171,6 +198,7 @@ class LLMServerManager:
         except ServerLifecycleError:
             self.stop(spec.server_id)
             raise
+        self._write_runtime_state(managed)
         return self.status(spec.server_id)
 
     def stop(self, server_id: str) -> ServerStatus:
@@ -185,7 +213,60 @@ class LLMServerManager:
                 managed.process.kill()
                 managed.process.wait(timeout=5)
         managed.logs.append(ProcessLogRecord.create(source="server", stream="system", process=server_id, message=f"process exited with code {managed.process.returncode}" , severity="error" if managed.process.returncode else "info"))
+        self._clear_runtime_state(managed.process.pid)
         return self.status(server_id)
+
+    def stop_all(self) -> None:
+        """Stop every server owned by this manager instance."""
+
+        for server_id in tuple(self._servers):
+            managed = self._servers[server_id]
+            if managed.process.poll() is None:
+                self.stop(server_id)
+
+    def shutdown(self) -> None:
+        """Release local LLM processes during a normal GUI shutdown."""
+
+        self.stop_all()
+
+    def discover_project_server_pids(self, *, proc_root: Path = Path("/proc")) -> tuple[int, ...]:
+        """Find llama-server processes whose executable and model belong to this repo."""
+
+        if not proc_root.is_dir():
+            return ()
+        managed_pids = {
+            managed.process.pid
+            for managed in self._servers.values()
+            if managed.process.poll() is None
+        }
+        discovered: list[int] = []
+        for process_dir in proc_root.iterdir():
+            if not process_dir.name.isdigit():
+                continue
+            pid = int(process_dir.name)
+            if pid == os.getpid() or pid in managed_pids:
+                continue
+            try:
+                command = tuple(
+                    part.decode("utf-8", errors="surrogateescape")
+                    for part in (process_dir / "cmdline").read_bytes().split(b"\0")
+                    if part
+                )
+            except (OSError, PermissionError):
+                continue
+            if self._is_project_llama_server_command(command):
+                discovered.append(pid)
+        return tuple(sorted(discovered))
+
+    def reclaim_project_servers(self, *, timeout: float = 5.0) -> tuple[int, ...]:
+        """Terminate orphaned llama-server processes launched from this repo."""
+
+        pids = self.discover_project_server_pids()
+        for pid in pids:
+            self._terminate_project_pid(pid, timeout=timeout)
+        if pids:
+            self._clear_runtime_state()
+        return pids
 
     def restart(self, spec: ServerSpec, *, readiness_timeout: float = 30.0) -> ServerStatus:
         if spec.server_id in self._servers:
@@ -234,6 +315,90 @@ class LLMServerManager:
             return
         for line in stream:
             managed.logs.append(ProcessLogRecord.create(source="server", stream=name, process=managed.spec.server_id, message=line.rstrip("\r\n")))
+
+    def _is_project_llama_server_command(self, command: tuple[str, ...]) -> bool:
+        if not command:
+            return False
+        executable = Path(command[0]).expanduser()
+        if executable.name != "llama-server" or not executable.is_absolute():
+            return False
+        try:
+            executable.resolve().relative_to(self.repository_root)
+        except (OSError, ValueError):
+            return False
+        try:
+            model_index = command.index("--model") + 1
+            model_path = Path(command[model_index]).expanduser()
+        except (ValueError, IndexError):
+            return False
+        if not model_path.is_absolute():
+            return False
+        normalized_model_path = Path(os.path.abspath(model_path))
+        try:
+            normalized_model_path.relative_to(self.repository_root)
+        except ValueError:
+            return False
+        return True
+
+    def _terminate_project_pid(self, pid: int, *, timeout: float) -> None:
+        if not self._pid_is_project_server(pid):
+            return
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if not self._pid_is_project_server(pid):
+                return
+            time.sleep(0.1)
+        if self._pid_is_project_server(pid):
+            os.kill(pid, signal.SIGKILL)
+
+    def _pid_is_project_server(self, pid: int) -> bool:
+        try:
+            command = tuple(
+                part.decode("utf-8", errors="surrogateescape")
+                for part in Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+                if part
+            )
+        except (OSError, PermissionError):
+            return False
+        return self._is_project_llama_server_command(command)
+
+    def _write_runtime_state(self, managed: _ManagedServer) -> None:
+        payload = {
+            "version": 1,
+            "pid": managed.process.pid,
+            "server_id": managed.spec.server_id,
+            "endpoint": managed.spec.endpoint,
+            "model_id": managed.spec.model_id,
+            "model_path": str(managed.spec.model_path.resolve()),
+            "server_path": str(Path(managed.spec.server_path).resolve()),
+            "roles": list(managed.spec.roles),
+        }
+        path = self.runtime_state_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(f"{path.suffix}.tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(path)
+
+    def _clear_runtime_state(self, pid: int | None = None) -> None:
+        path = self.runtime_state_path
+        if not path.exists():
+            return
+        if pid is not None:
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                payload = {}
+            if payload.get("pid") != pid:
+                return
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
     @staticmethod
     def _validate_port_available(port: int, server_id: str) -> None:
         if not 1 <= port <= 65535:

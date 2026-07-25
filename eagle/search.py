@@ -7,12 +7,16 @@ separate post-evolution protocol. The canonical entrypoint is ``run_search``.
 
 from __future__ import annotations
 
+import json
 import random
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from shutil import copy2
+from urllib.parse import urlparse
 
 from generation.backend import build_generation_backend
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE
@@ -26,6 +30,7 @@ from .mutation import MutationContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
 from .llm_profiles import LLMProfile, load_role_profiles
+from .llm_errors import LLMServerError
 from .offspring import normalize_prompt
 from .rewrite import PromptRewriteMutation
 from .selection import (
@@ -51,6 +56,17 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     preflight_evaluation_opponents(config, mock=mock)
     rng = random.Random(config.random_seed)
 
+    backend_name = "mock" if mock else config.generation_backend
+    if mock:
+        role_profiles = {
+            "reflector": LLMProfile("reflector", config.llm_base_url, config.llm_model),
+            "rewriter": LLMProfile("rewriter", config.llm_base_url, config.llm_model),
+            "generator": LLMProfile("generator", config.llm_base_url, config.llm_model),
+        }
+    else:
+        role_profiles = load_role_profiles(config.llm_role_topology_path)
+        _preflight_llm_endpoints(role_profiles)
+
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = config.runs_dir / active_run_id
     candidates_dir = run_dir / "candidates"
@@ -63,15 +79,6 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     copy2(config_path, run_dir / "config.yaml")
 
     llm_logger = LLMCallLogger(run_dir / "llm_logs", run_id=active_run_id, timing_path=run_dir / "timing.jsonl")
-    backend_name = "mock" if mock else config.generation_backend
-    if mock:
-        role_profiles = {
-            "reflector": LLMProfile("reflector", config.llm_base_url, config.llm_model),
-            "rewriter": LLMProfile("rewriter", config.llm_base_url, config.llm_model),
-            "generator": LLMProfile("generator", config.llm_base_url, config.llm_model),
-        }
-    else:
-        role_profiles = load_role_profiles(config.llm_role_topology_path)
     reflector_profile = role_profiles["reflector"]
     rewriter_profile = role_profiles["rewriter"]
     generator_profile = role_profiles["generator"]
@@ -231,6 +238,113 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         completed_generation=completed_generation,
         stop_reason=stop_reason,
     )
+
+
+def _preflight_llm_endpoints(role_profiles: dict[str, LLMProfile]) -> None:
+    """Verify health, model identity, and chat completion before creating a run."""
+
+    checked: dict[str, dict[str, object]] = {}
+    for role, profile in role_profiles.items():
+        parsed = urlparse(profile.base_url)
+        api_root = profile.base_url.rstrip("/")
+        if not api_root.endswith("/v1"):
+            api_root = f"{api_root}/v1"
+        item = checked.setdefault(
+            api_root,
+            {
+                "server_name": profile.server_profile or profile.server_label or api_root,
+                "roles": [],
+                "models": [],
+                "health_url": f"{parsed.scheme}://{parsed.netloc}/health",
+            },
+        )
+        item["roles"].append(role)
+        item["models"].append(profile.model)
+
+    for api_root, item in checked.items():
+        roles = tuple(item["roles"])
+        models = tuple(dict.fromkeys(item["models"]))
+        server_name = str(item["server_name"])
+        health_url = str(item["health_url"])
+        phase = health_url
+        try:
+            with urllib.request.urlopen(health_url, timeout=min(5.0, profile_timeout(role_profiles, roles))) as response:
+                if not 200 <= response.status < 300:
+                    raise RuntimeError(f"HTTP {response.status}")
+            phase = f"{api_root}/models"
+            with urllib.request.urlopen(phase, timeout=min(5.0, profile_timeout(role_profiles, roles))) as response:
+                model_payload = json.loads(response.read().decode("utf-8"))
+            available_models = _available_model_ids(model_payload)
+            missing_models = sorted(set(models) - available_models)
+            if missing_models:
+                raise RuntimeError(
+                    f"configured model(s) {', '.join(missing_models)} not served; "
+                    f"available={', '.join(sorted(available_models)) or 'none'}"
+                )
+
+            phase = f"{api_root}/chat/completions"
+            probe = urllib.request.Request(
+                phase,
+                data=json.dumps(
+                    {
+                        "model": models[0],
+                        "messages": [{"role": "user", "content": "Reply OK."}],
+                        "temperature": 0,
+                        "max_tokens": 1,
+                        "chat_template_kwargs": {"enable_thinking": False},
+                    }
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            print(
+                f"[llm preflight] server={server_name} roles={','.join(roles)} "
+                f"endpoint={api_root} models={','.join(models)} status=started",
+                flush=True,
+            )
+            with urllib.request.urlopen(
+                probe,
+                timeout=min(15.0, profile_timeout(role_profiles, roles)),
+            ) as response:
+                completion_payload = json.loads(response.read().decode("utf-8"))
+            if not isinstance(completion_payload.get("choices"), list):
+                raise RuntimeError("response has no choices array")
+            print(
+                f"[llm preflight] server={server_name} endpoint={api_root} status=passed",
+                flush=True,
+            )
+        except (OSError, urllib.error.URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
+            role_text = ", ".join(roles)
+            raise LLMServerError(
+                f"llm server error: server {server_name!r} for roles [{role_text}] failed preflight at "
+                f"{phase}: {exc}. Start or restart the server from the GUI before starting the EA run."
+            ) from exc
+
+
+def _available_model_ids(payload: object) -> set[str]:
+    if not isinstance(payload, dict):
+        return set()
+    records: list[object] = []
+    for key in ("data", "models"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            records.extend(value)
+    model_ids: set[str] = set()
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        for key in ("id", "name", "model"):
+            value = record.get(key)
+            if isinstance(value, str) and value.strip():
+                model_ids.add(value.strip())
+        aliases = record.get("aliases")
+        if isinstance(aliases, list):
+            model_ids.update(str(alias).strip() for alias in aliases if str(alias).strip())
+    return model_ids
+
+
+def profile_timeout(role_profiles: dict[str, LLMProfile], roles: tuple[str, ...]) -> float:
+    return min(role_profiles[role].timeout_seconds for role in roles)
 
 
 def front_zero_signature(population: list[Candidate]) -> tuple[tuple[float, ...], ...]:

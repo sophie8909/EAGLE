@@ -17,6 +17,7 @@ class RunState:
     returncode: int | None = None
     current_generation: int | None = None
     current_candidate: str | None = None
+    best_candidate_id: str | None = None
     completed_candidates: int = 0
     failed_candidates: int = 0
     logs: ProcessLogBuffer = field(default_factory=ProcessLogBuffer)

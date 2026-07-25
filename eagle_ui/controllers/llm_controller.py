@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from eagle.llm_profiles import DEFAULT_ROLE_TOPOLOGY_PATH, LLMProfile, load_role_profiles, save_role_profiles
+from eagle.llm_profiles import DEFAULT_MAX_OUTPUT_TOKENS
 from eagle.runtime.server_manager import LLMServerManager, ServerSpec, ServerStatus
 
 
@@ -46,10 +47,14 @@ class LLMConfigController:
         context_size: int,
         roles: tuple[str, ...],
     ) -> ServerStatus:
+        resolved_server_path = self.server_manager.resolve_server_path(server_path)
+        self.server_manager.stop_all()
+        self.server_manager.reclaim_project_servers()
+        port = self.server_manager.find_available_port(port)
         spec = ServerSpec(
             server_id=server_id,
             model_path=model_path,
-            server_path=self.server_manager.resolve_server_path(server_path),
+            server_path=resolved_server_path,
             model_id=model_id,
             host=host,
             port=port,
@@ -66,9 +71,25 @@ class LLMConfigController:
         payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"version": 1, "servers": {}, "roles": {}}
         servers = payload.setdefault("servers", {})
         roles = payload.setdefault("roles", {})
-        servers[spec.server_id] = {"base_url": spec.endpoint, "model_id": spec.model_id, "model_display_name": spec.model_id, "hostname": spec.host, "port": spec.port, "roles": list(spec.roles), "protocol": "openai-compatible", "health_path": "/health", "enabled": True}
+        servers[spec.server_id] = {
+            "base_url": spec.endpoint,
+            "model_id": spec.model_id,
+            "model_display_name": spec.model_id,
+            "hostname": spec.host,
+            "port": spec.port,
+            "roles": list(spec.roles),
+            "protocol": "openai-compatible",
+            "health_path": "/health",
+            "enabled": True,
+            "timeout_seconds": 300,
+            "context_size": spec.context_size,
+        }
         for role in spec.roles:
-            roles[role] = {"server_id": spec.server_id, "enabled": True}
+            roles[role] = {
+                "server_id": spec.server_id,
+                "enabled": True,
+                "max_output_tokens": DEFAULT_MAX_OUTPUT_TOKENS[role],
+            }
         payload["version"] = int(payload.get("version", 1))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -81,6 +102,10 @@ class LLMConfigController:
 
     def server_statuses(self) -> list[ServerStatus]:
         return self.server_manager.statuses()
+
+    def shutdown(self) -> None:
+        self.server_manager.shutdown()
+
     def clear_server_logs(self, server_id: str) -> None:
         self.server_manager.clear_logs(server_id)
 
