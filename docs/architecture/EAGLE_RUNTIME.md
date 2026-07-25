@@ -6,6 +6,10 @@
 
 The GUI owns the user-facing lifecycle. `RunController` owns one experiment subprocess and shuts it down on GUI exit. `LLMServerManager` owns local LLM command construction, process identity, readiness, status, output, stop, restart, and role association. Configured LAN servers are endpoint records tested from the GUI; they are not launched by this machine.
 
+`LLMServerManager` resolves one specification for both launch and connection. It contains the local/remote location type, executable and model paths where applicable, bind and client hosts, port, base URL, API/health endpoints, roles, GPU policy, additional arguments, environment overrides, and working directory. The topology saved for EA roles is written from that resolved specification. A configured port is never silently replaced.
+
+Server lifecycle states are `STOPPED`, `STARTING`, `READY`, `FAILED`, and `STOPPING`. A local process remains `STARTING` while the model loads and becomes `READY` only when the process is alive, the client port accepts connections, `/health` succeeds, and `/v1/models` exposes the configured model alias. Remote records use the same endpoint checks without creating a local process. Failure retains the exit code, concrete reason, recent output, and combined log under `experiment_env/runtime/servers/<server_id>/server.log`. Stop signals and reaps only the owned process group.
+
 ## GUI functions
 
 - **Servers**: discover `.gguf` models, choose a local model/server/port, assign `reflector`, `rewriter`, and `generator`, start/stop/restart local servers, and inspect endpoint/process output.
@@ -33,3 +37,11 @@ Mutation and crossover records contain generation-only duration and parent-selec
 ## Removed entrypoints
 
 The old interactive `experiment_env` server launch menu, role-specific shell launchers, generated launcher helpers, standalone `tmux_services.sh`, and network-reset watchdog are removed. There is one normal startup path: `./run.sh`.
+
+Configured server diagnostics are available without opening the GUI:
+
+```bash
+python -m eagle.runtime.server_manager --diagnose
+```
+
+The report validates configuration, resolved paths, process/port/endpoint state, and GPU expectation/backend evidence without launching a server.

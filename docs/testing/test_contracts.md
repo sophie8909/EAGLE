@@ -34,6 +34,7 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Timing | UTC fields, monotonic durations, attempts, optional null stages, 10 match durations |
 | NSGA-II | exactly two maximized objectives; failure candidates retained; rank/crowding survivor behavior |
 | Operations | readers reject/migrate unsupported schema versions; legacy names never leak into active output |
+| LLM server lifecycle | missing executable/model; immediate exit; bounded loading/readiness; occupied port; bind/client host separation; local/remote launch ownership; durable stdout/stderr; useful failure state; process-group stop; topology/client URL identity; no READY on process creation |
 
 ## Failure fixtures
 
