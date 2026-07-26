@@ -67,6 +67,8 @@ class ServerSpec:
     additional_args: tuple[str, ...] = ()
     environment_overrides: tuple[tuple[str, str], ...] = ()
     working_directory: Path | str | None = None
+    backend: str | None = None
+    fit_to_vram: bool = False
 
     @property
     def bind_host(self) -> str:
@@ -108,11 +110,20 @@ class ServerSpec:
 
     @property
     def expects_gpu(self) -> bool:
+        return self.execution_backend == "cuda"
+
+    @property
+    def execution_backend(self) -> str:
+        """Return the explicit backend, retaining legacy inference for old configs."""
+        if self.location_type == "remote":
+            return "remote"
+        if self.backend is not None:
+            return str(self.backend).strip().lower()
         if self.gpu_required:
-            return True
-        if self.gpu_layers is None:
-            return False
-        return str(self.gpu_layers).strip().lower() not in {"", "0", "none", "off"}
+            return "cuda"
+        if self.gpu_layers is not None:
+            return "cuda" if str(self.gpu_layers).strip().lower() not in {"", "0", "none", "off"} else "cpu"
+        return "cpu"
 
 
 @dataclass
@@ -145,6 +156,10 @@ class ServerStatus:
     gpu_expected: bool = False
     gpu_backend_available: bool | None = None
     cuda_evidence: bool = False
+    backend: str = "cpu"
+    detected_devices: tuple[str, ...] = ()
+    executable_version: str | None = None
+    offloaded_layers: int | None = None
 
 
 @dataclass
@@ -172,7 +187,7 @@ class LLMServerManager:
         self._servers: dict[str, _ManagedServer] = {}
         self._lock = threading.Lock()
         self._supported_options: dict[Path, frozenset[str]] = {}
-        self._gpu_support: dict[Path, bool] = {}
+        self._capabilities: dict[Path, dict[str, Any]] = {}
 
     @property
     def runtime_state_path(self) -> Path:
@@ -203,7 +218,9 @@ class LLMServerManager:
             if model_id in discovered
         ]
 
-    def resolve_server_path(self, configured: Path | str | None = None) -> Path:
+    def resolve_server_path(
+        self, configured: Path | str | None = None, *, prefer_cuda: bool = False
+    ) -> Path:
         if configured:
             expanded = os.path.expandvars(os.path.expanduser(str(configured).strip()))
             configured_path = Path(expanded)
@@ -226,14 +243,16 @@ class LLMServerManager:
         candidate = shutil.which("llama-server")
         if candidate:
             return self._validate_executable(Path(candidate).resolve())
-        for candidate_path in (
-            self.repository_root
-            / "experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server",
-            self.repository_root
-            / "experiment_env/model/llama.cpp/llama.cpp/build/bin/llama-server",
-            self.repository_root
-            / "experiment_env/model/llama.cpp/build/bin/llama-server",
-        ):
+        candidate_paths = (
+            self.repository_root / "experiment_env/model/llama.cpp/llama.cpp/build-eagle-cuda-128/bin/llama-server",
+            self.repository_root / "experiment_env/model/llama.cpp/llama.cpp/build-eagle-cuda/bin/llama-server",
+            self.repository_root / "experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server",
+            self.repository_root / "experiment_env/model/llama.cpp/llama.cpp/build/bin/llama-server",
+            self.repository_root / "experiment_env/model/llama.cpp/build/bin/llama-server",
+        )
+        if not prefer_cuda:
+            candidate_paths = candidate_paths[2:]
+        for candidate_path in candidate_paths:
             if candidate_path.is_file():
                 return self._validate_executable(candidate_path.resolve())
         registry = self.repository_root / "experiment_env/model/model_registry.local.json"
@@ -264,6 +283,11 @@ class LLMServerManager:
             raise ServerLifecycleError(f"unknown LLM roles: {', '.join(invalid_roles)}")
         if spec.location_type not in {"local", "remote"}:
             raise ServerLifecycleError("server location_type must be 'local' or 'remote'")
+        backend = spec.execution_backend
+        if backend not in {"cpu", "cuda", "remote"}:
+            raise ServerLifecycleError("server backend must be 'cpu', 'cuda', or 'remote'")
+        if spec.location_type == "remote" and backend != "remote":
+            backend = "remote"
         if not spec.model_id.strip():
             raise ServerLifecycleError("server model identity must not be empty")
         if not 1 <= int(spec.port) <= 65535:
@@ -295,6 +319,7 @@ class LLMServerManager:
                 roles=tuple(dict.fromkeys(spec.roles)),
                 environment_overrides=environment,
                 working_directory=workdir,
+                backend="remote",
             )
 
         if not spec.bind_host.strip():
@@ -308,7 +333,31 @@ class LLMServerManager:
             )
         if not os.access(model_path, os.R_OK):
             raise ServerLifecycleError(f"model file is not readable: {model_path}")
-        server_path = self.resolve_server_path(spec.server_path)
+        server_path = self.resolve_server_path(
+            spec.server_path, prefer_cuda=backend == "cuda"
+        )
+        gpu_layers = spec.gpu_layers
+        fit_to_vram = bool(spec.fit_to_vram)
+        if isinstance(gpu_layers, str):
+            legacy_layers = gpu_layers.strip().lower()
+            if legacy_layers in {"", "none", "off", "0"}:
+                gpu_layers = None
+            elif legacy_layers == "auto":
+                gpu_layers = None
+                fit_to_vram = True
+            elif legacy_layers == "all":
+                gpu_layers = None
+            else:
+                raise ServerLifecycleError(
+                    "gpu_layers must be a positive integer; use fit_to_vram for automatic fitting"
+                )
+        if gpu_layers == 0:
+            gpu_layers = None
+        if gpu_layers is not None:
+            if isinstance(gpu_layers, bool) or not isinstance(gpu_layers, int) or gpu_layers < 1:
+                raise ServerLifecycleError("gpu_layers must be a positive integer")
+        if backend == "cpu" and (spec.gpu_required or gpu_layers is not None or fit_to_vram):
+            raise ServerLifecycleError("CPU backend cannot use GPU layer or VRAM-fit settings")
         resolved = replace(
             spec,
             server_id=server_id,
@@ -320,14 +369,17 @@ class LLMServerManager:
             roles=tuple(dict.fromkeys(spec.roles)),
             environment_overrides=environment,
             working_directory=workdir,
+            backend=backend,
+            gpu_layers=gpu_layers,
+            fit_to_vram=fit_to_vram,
         )
-        self._validate_command_compatibility(resolved)
-        gpu_available = self.detect_gpu_backend(server_path)
-        if resolved.gpu_required and not gpu_available:
+        capabilities = self.binary_capabilities(server_path)
+        if resolved.execution_backend == "cuda" and not capabilities["cuda_backend_available"]:
             raise ServerLifecycleError(
-                f"GPU offloading is required, but {server_path} reports no usable GPU backend; "
-                "this binary is CPU-only or the GPU runtime is unavailable"
+                f"CUDA backend was selected, but {server_path} reports no usable GPU backend or CUDA device; "
+                "select a CUDA-enabled binary and verify NVIDIA visibility"
             )
+        self._validate_command_compatibility(resolved)
         return resolved
 
     @staticmethod
@@ -374,9 +426,15 @@ class LLMServerManager:
             "--ctx-size",
             str(spec.context_size),
         ]
-        if spec.gpu_layers is not None:
-            command.extend(("--gpu-layers", str(spec.gpu_layers)))
-        if spec.device:
+        backend = spec.execution_backend
+        if backend == "cuda":
+            if spec.gpu_layers is not None:
+                command.extend(("--gpu-layers", str(spec.gpu_layers)))
+            else:
+                command.extend(("--gpu-layers", "auto" if spec.fit_to_vram else "all"))
+            if spec.fit_to_vram:
+                command.extend(("--fit", "on"))
+        if spec.device and backend == "cuda":
             command.extend(("--device", spec.device))
         command.extend(("--host", spec.bind_host, "--port", str(spec.port)))
         command.extend(spec.additional_args)
@@ -608,6 +666,12 @@ class LLMServerManager:
             and "gpu" in record.message.lower()
             for record in records
         )
+        offloaded_layers = _offloaded_layer_count(records)
+        capabilities = (
+            self.binary_capabilities(Path(str(managed.spec.server_path)))
+            if managed.spec.server_path is not None
+            else {"version": None, "devices": ()}
+        )
         return ServerStatus(
             server_id=server_id,
             state=managed.state,
@@ -637,6 +701,10 @@ class LLMServerManager:
             gpu_expected=managed.spec.expects_gpu,
             gpu_backend_available=managed.gpu_backend_available,
             cuda_evidence=cuda_evidence,
+            backend=managed.spec.execution_backend,
+            detected_devices=tuple(capabilities.get("devices", ())),
+            executable_version=capabilities.get("version"),
+            offloaded_layers=offloaded_layers,
         )
 
     def statuses(self) -> list[ServerStatus]:
@@ -657,11 +725,27 @@ class LLMServerManager:
         managed.logs.clear()
 
     def detect_gpu_backend(self, executable: Path) -> bool:
+        return bool(self.binary_capabilities(executable)["cuda_backend_available"])
+
+    def binary_capabilities(self, executable: Path) -> dict[str, Any]:
+        """Inspect version and device capabilities without assuming GPU CLI flags work."""
         executable = executable.resolve()
-        cached = self._gpu_support.get(executable)
+        cached = self._capabilities.get(executable)
         if cached is not None:
             return cached
+        version = None
+        devices: tuple[str, ...] = ()
         try:
+            version_result = subprocess.run(
+                [str(executable), "--version"],
+                cwd=self.repository_root,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+            version_text = version_result.stdout + "\n" + version_result.stderr
+            version = next((line.strip() for line in version_text.splitlines() if line.strip()), None)
             result = subprocess.run(
                 [str(executable), "--list-devices"],
                 cwd=self.repository_root,
@@ -670,16 +754,16 @@ class LLMServerManager:
                 check=False,
                 timeout=5,
             )
-            lines = [
-                line.strip()
-                for line in (result.stdout + "\n" + result.stderr).splitlines()
-                if line.strip() and not line.lower().startswith("available devices")
-            ]
-            available = result.returncode == 0 and bool(lines)
+            devices = tuple(_parse_device_lines(result.stdout + "\n" + result.stderr))
         except (OSError, subprocess.SubprocessError):
-            available = False
-        self._gpu_support[executable] = available
-        return available
+            pass
+        capabilities = {
+            "version": version,
+            "devices": devices,
+            "cuda_backend_available": bool(devices),
+        }
+        self._capabilities[executable] = capabilities
+        return capabilities
 
     def diagnose_spec(self, spec: ServerSpec, *, timeout: float = 2.0) -> dict[str, Any]:
         """Return a credential-free, non-mutating diagnostic report."""
@@ -696,6 +780,9 @@ class LLMServerManager:
             "endpoint_state": "unknown",
             "gpu_expected": spec.expects_gpu,
             "gpu_backend_available": None,
+            "backend": spec.execution_backend,
+            "detected_devices": [],
+            "executable_version": None,
             "cuda_startup_evidence": False,
             "error": None,
         }
@@ -721,9 +808,11 @@ class LLMServerManager:
                 report["executable"] = str(resolved.server_path)
                 report["model_path"] = str(resolved.model_path)
                 report["command"] = self.build_command(resolved)
-                report["gpu_backend_available"] = self.detect_gpu_backend(
-                    Path(str(resolved.server_path))
-                )
+                capabilities = self.binary_capabilities(Path(str(resolved.server_path)))
+                report["gpu_backend_available"] = capabilities["cuda_backend_available"]
+                report["detected_devices"] = list(capabilities["devices"])
+                report["executable_version"] = capabilities["version"]
+                report["backend"] = resolved.execution_backend
             listening, detail = _port_listening(
                 resolved.connection_host, resolved.port, timeout=timeout
             )
@@ -1258,6 +1347,32 @@ def _recent_relevant_lines(records: tuple[ProcessLogRecord, ...], limit: int = 8
     return " | ".join(lines[-limit:])
 
 
+def _parse_device_lines(text: str) -> list[str]:
+    """Parse llama.cpp's device listing, excluding its heading and CPU row."""
+    devices: list[str] = []
+    for raw in text.splitlines():
+        line = ANSI_ESCAPE.sub("", raw).strip()
+        if not line or line.lower().startswith("available devices"):
+            continue
+        if re.match(r"(?:CUDA|GPU)\d+\s*:", line, re.IGNORECASE):
+            devices.append(line)
+    return devices
+
+
+def _offloaded_layer_count(records: tuple[ProcessLogRecord, ...]) -> int | None:
+    patterns = (
+        re.compile(r"offload(?:ed|ing)?\D+(\d+)\s+layers", re.IGNORECASE),
+        re.compile(r"offloaded\s+(\d+)/(\d+)\s+layers", re.IGNORECASE),
+    )
+    for record in reversed(records):
+        message = ANSI_ESCAPE.sub("", record.message)
+        for pattern in patterns:
+            match = pattern.search(message)
+            if match:
+                return int(match.group(1))
+    return None
+
+
 def _specs_from_topology(path: Path, repository_root: Path) -> list[ServerSpec]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     servers = payload.get("servers")
@@ -1291,6 +1406,8 @@ def _specs_from_topology(path: Path, repository_root: Path) -> list[ServerSpec]:
                 gpu_layers=item.get("gpu_layers"),
                 gpu_required=bool(item.get("gpu_required", False)),
                 device=item.get("device"),
+                backend=item.get("backend"),
+                fit_to_vram=bool(item.get("fit_to_vram", False)),
                 additional_args=tuple(item.get("additional_args") or ()),
                 environment_overrides=tuple(
                     (str(key), str(value))

@@ -51,6 +51,8 @@ class LLMConfigController:
         gpu_layers: int | str | None = None,
         gpu_required: bool = False,
         device: str | None = None,
+        backend: str | None = None,
+        fit_to_vram: bool = False,
         environment_overrides: tuple[tuple[str, str], ...] = (),
     ) -> ServerStatus:
         spec = ServerSpec(
@@ -67,6 +69,8 @@ class LLMConfigController:
             gpu_layers=gpu_layers,
             gpu_required=gpu_required,
             device=device,
+            backend=backend,
+            fit_to_vram=fit_to_vram,
             environment_overrides=environment_overrides,
         )
         status = self.server_manager.start(spec)
@@ -98,6 +102,8 @@ class LLMConfigController:
             "model_path": str(spec.model_path) if spec.model_path is not None else None,
             "gpu_layers": spec.gpu_layers,
             "gpu_required": spec.gpu_required,
+            "backend": spec.execution_backend,
+            "fit_to_vram": spec.fit_to_vram,
             "device": spec.device,
             "additional_args": list(spec.additional_args),
             "environment_overrides": dict(spec.environment_overrides),

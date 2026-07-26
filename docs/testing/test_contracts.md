@@ -66,4 +66,6 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
 When tests reveal a code/spec discrepancy, update [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md). When documented behavior changes by explicit decision, update the authoritative/canonical docs and the Chinese overview according to [`../README.md`](../README.md).
 ## Dual-host LLM deployment
 
+Server-management tests must cover explicit CPU/CUDA/remote backend resolution, capability rejection of CPU-only binaries in CUDA mode, device-list parsing, logical GPU-layer/VRAM-fit argument mapping, and the invariant that CPU commands contain no GPU-specific arguments.
+
 Focused tests must prove that coder-profile updates preserve the general section, general-profile updates preserve the coder section, updates are atomic, placeholder or unsafe coder URLs are rejected, aliases and ports may differ, and stage identity records Reflection/Rewrite as general and Generation as coder. Single-machine tests must opt into coder loopback explicitly.

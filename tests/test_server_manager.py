@@ -402,6 +402,29 @@ class ServerManagerTests(unittest.TestCase):
         self.assertEqual(status.state, "FAILED")
         self.assertIsNone(status.pid)
 
+    def test_cpu_backend_emits_no_gpu_arguments(self):
+        command = self.manager.build_command(self.spec(backend="cpu"))
+        self.assertNotIn("--gpu-layers", command)
+        self.assertNotIn("--fit", command)
+        self.assertNotIn("--device", command)
+
+    def test_cuda_backend_maps_logical_fit_setting_to_versioned_arguments(self):
+        command = self.manager.build_command(
+            self.spec(backend="cuda", gpu_required=True, fit_to_vram=True)
+        )
+        self.assertIn(["--gpu-layers", "auto"], [command[index:index + 2] for index in range(len(command) - 1)])
+        self.assertIn(["--fit", "on"], [command[index:index + 2] for index in range(len(command) - 1)])
+
+    def test_binary_capability_check_parses_cuda_device_list(self):
+        with patch.dict(os.environ, {"FAKE_GPU": "1"}):
+            capabilities = self.manager.binary_capabilities(self.executable)
+        self.assertTrue(capabilities["cuda_backend_available"])
+        self.assertEqual(capabilities["devices"], ("CUDA0: fake GPU",))
+
+    def test_explicit_cpu_backend_rejects_gpu_settings(self):
+        with self.assertRaisesRegex(ServerLifecycleError, "CPU backend cannot"):
+            self.manager.resolve_spec(self.spec(backend="cpu", fit_to_vram=True))
+
     def test_diagnostic_reports_resolved_endpoint_and_gpu_state(self):
         spec = self.spec(gpu_layers=0)
         report = self.manager.diagnose_spec(spec, timeout=0.05)

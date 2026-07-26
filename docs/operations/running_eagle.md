@@ -16,6 +16,8 @@ python -m eagle.runtime.server_manager --diagnose
 
 This command does not launch a server. It reports configuration and path validity, managed process state when available, port and endpoint state, and GPU expectation/backend evidence.
 
+Local managed servers use the logical backend settings in the topology: `backend: cpu` emits no GPU flags, while `backend: cuda` requires a CUDA-capable executable and maps `fit_to_vram: true` to the llama.cpp version-compatible `--gpu-layers auto --fit on` arguments. Remote records are validated without spawning a process.
+
 For a deterministic headless check, use:
 
 ```bash

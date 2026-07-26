@@ -41,6 +41,11 @@ def build_llm_view(
                 label="Server type",
                 value="local",
             ).classes(INPUT_CLASS)
+            backend = ui.select(
+                {"cpu": "CPU", "cuda": "CUDA"},
+                label="Execution backend",
+                value="cuda",
+            ).classes(INPUT_CLASS)
             model_path = ui.select(
                 display_options,
                 label="Local model",
@@ -71,11 +76,9 @@ def build_llm_view(
                 "Context size", value=32768, min=1
             ).classes(INPUT_CLASS)
             gpu_layers = ui.input(
-                "GPU layers (0, count, or auto)", value="auto"
+                "GPU layers (blank = automatic fit, positive integer = explicit)", value=""
             ).classes(INPUT_CLASS)
-            gpu_required = ui.checkbox(
-                "Require usable GPU backend", value=False
-            )
+            fit_to_vram = ui.checkbox("Fit CUDA execution to VRAM", value=True)
             device = ui.input(
                 "llama.cpp device (optional)"
             ).classes(INPUT_CLASS)
@@ -127,13 +130,13 @@ def build_llm_view(
                 "Select an existing .gguf model before starting a local server."
             )
         raw_gpu_layers = str(gpu_layers.value or "").strip()
-        parsed_gpu_layers: int | str | None
+        parsed_gpu_layers: int | None
         if not raw_gpu_layers:
             parsed_gpu_layers = None
-        elif raw_gpu_layers.lstrip("-").isdigit():
+        elif raw_gpu_layers.isdigit() and int(raw_gpu_layers) > 0:
             parsed_gpu_layers = int(raw_gpu_layers)
         else:
-            parsed_gpu_layers = raw_gpu_layers
+            raise ValueError("GPU layers must be blank or a positive integer.")
         environment = ()
         cuda_value = str(cuda_visible_devices.value or "").strip()
         if cuda_value:
@@ -149,8 +152,10 @@ def build_llm_view(
             "context_size": int(context_size.value or 0),
             "roles": tuple(str(item) for item in (roles.value or ())),
             "location_type": location_type,
+            "backend": str(backend.value or "cpu"),
             "gpu_layers": parsed_gpu_layers,
-            "gpu_required": bool(gpu_required.value),
+            "gpu_required": str(backend.value or "cpu") == "cuda",
+            "fit_to_vram": bool(fit_to_vram.value) and str(backend.value or "cpu") == "cuda",
             "device": str(device.value or "").strip() or None,
             "environment_overrides": environment,
         }
@@ -191,7 +196,11 @@ def build_llm_view(
                     "startup_elapsed_seconds": selected.elapsed_startup_seconds,
                     "last_health_check": selected.last_health_check,
                     "gpu_expected": selected.gpu_expected,
+                    "backend": selected.backend,
                     "gpu_backend_available": selected.gpu_backend_available,
+                    "detected_devices": selected.detected_devices,
+                    "executable_version": selected.executable_version,
+                    "offloaded_layers": selected.offloaded_layers,
                     "cuda_startup_evidence": selected.cuda_evidence,
                     "working_directory": selected.working_directory,
                     "environment_overrides": selected.environment_overrides,

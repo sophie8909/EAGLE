@@ -2,11 +2,14 @@
   "version": 1,
   "servers": {
     "local-llm": {
-      "base_url": "http://127.0.0.1:8084/v1",
+      "base_url": "http://127.0.0.1:8080/v1",
       "model_id": "qwen3.5",
       "model_display_name": "qwen3.5",
+      "location_type": "local",
       "hostname": "127.0.0.1",
-      "port": 8084,
+      "bind_host": "127.0.0.1",
+      "client_host": "127.0.0.1",
+      "port": 8080,
       "roles": [
         "reflector",
         "rewriter",
@@ -16,7 +19,17 @@
       "health_path": "/health",
       "enabled": true,
       "timeout_seconds": 300,
-      "context_size": 32768
+      "context_size": 32768,
+      "executable": "/home/mhlab/EAGLE/experiment_env/model/llama.cpp/llama.cpp/build-eagle-cuda-128/bin/llama-server",
+      "model_path": "/home/mhlab/EAGLE/experiment_env/model/qwen3-5-9b-ud-q4-k-xl-bbcc0f54/model.gguf",
+      "backend": "cuda",
+      "gpu_layers": null,
+      "gpu_required": true,
+      "fit_to_vram": true,
+      "device": null,
+      "additional_args": [],
+      "environment_overrides": {},
+      "working_directory": "/home/mhlab/EAGLE"
     }
   },
   "roles": {
