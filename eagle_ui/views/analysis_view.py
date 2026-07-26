@@ -14,6 +14,10 @@ from eagle_ui.state import AppState
 from eagle_ui.theme import BUTTON_CLASS, CARD_CLASS, INPUT_CLASS
 
 
+def _run_option_label(run_id: str, status: str) -> str:
+    return f"{run_id} · {status}"
+
+
 def build_analysis_view(controller: AnalysisController, state: AppState) -> None:
     frame = None
     directions: dict[str, str] = {}
@@ -42,7 +46,10 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
 
     async def refresh_runs() -> None:
         runs = await asyncio.to_thread(discover_runs, state.repository_root / "runs")
-        run_select.options = {str(item.path): f"{item.run_id} 繚 {item.status}" for item in runs}
+        run_select.options = {
+            str(item.path): _run_option_label(item.run_id, item.status)
+            for item in runs
+        }
         run_select.update()
 
     async def load_run() -> None:
@@ -51,10 +58,12 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
             return
         run_dir = Path(str(run_select.value))
         try:
-            frame = await asyncio.to_thread(controller.load, run_dir)
-            directions = await asyncio.to_thread(controller.directions, run_dir)
+            frame, directions, timing_summary, timing_plots = await asyncio.to_thread(
+                controller.load_run,
+                run_dir,
+            )
         except (OSError, ValueError) as exc:
-            ui.notify(f"Cannot load objective artifacts from {run_dir}: {exc}", type="negative")
+            ui.notify(f"Cannot load analysis artifacts from {run_dir}: {exc}", type="negative")
             return
         state.selection.run_dir = run_dir
         names = controller.objectives(frame)
@@ -72,6 +81,7 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
         for control in (objective, x_objective, y_objective, statuses, operators, failures, generation_min, generation_max):
             control.update()
         render()
+        render_timing(timing_summary, timing_plots)
 
     def render() -> None:
         if frame is None or not objective.value or not x_objective.value or not y_objective.value:
@@ -96,7 +106,6 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
         summary.rows = stats.round(4).to_dict(orient="records")
         summary.update()
 
-    run_select.on_value_change(lambda _: load_run())
     pareto_candidates.on_value_change(lambda event: setattr(state.selection, "candidate_id", str(event.value) if event.value else None))
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
         ui.label("Timing Analysis").classes("text-h6")
@@ -112,25 +121,19 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
             row_key="candidate_id",
         ).classes("w-full")
 
-    async def load_timing() -> None:
-        if not run_select.value:
-            return
-        run_dir = Path(str(run_select.value))
-        try:
-            summary = await asyncio.to_thread(controller.timing, run_dir)
-            plots = await asyncio.to_thread(controller.timing_plots, run_dir)
-        except (OSError, ValueError) as exc:
-            timing_status.set_text(f"Cannot load timing artifacts: {exc}")
-            return
-        timing_status.set_text(f"Run duration: {summary['total_run_duration_seconds']:.4f}s | Requests: {len(summary['llm_requests'])}")
-        generation_timing_chart.options = plots["generation_duration"]
-        operation_timing_chart.options = plots["operation_breakdown"]
-        llm_stage_chart.options = plots["llm_by_stage"]
-        llm_model_chart.options = plots["llm_by_model"]
+    def render_timing(timing_summary: dict, timing_plots: dict[str, dict]) -> None:
+        timing_status.set_text(
+            f"Run duration: {timing_summary['total_run_duration_seconds']:.4f}s"
+            f" | Requests: {len(timing_summary['llm_requests'])}"
+        )
+        generation_timing_chart.options = timing_plots["generation_duration"]
+        operation_timing_chart.options = timing_plots["operation_breakdown"]
+        llm_stage_chart.options = timing_plots["llm_by_stage"]
+        llm_model_chart.options = timing_plots["llm_by_model"]
         for chart in (generation_timing_chart, operation_timing_chart, llm_stage_chart, llm_model_chart):
             chart.update()
-        timing_table.rows = summary["operation_records"][:20]
+        timing_table.rows = timing_summary["operation_records"][:20]
         timing_table.update()
 
-    run_select.on_value_change(lambda _: load_timing())
+    run_select.on_value_change(lambda _: load_run())
     ui.timer(0.1, refresh_runs, once=True)

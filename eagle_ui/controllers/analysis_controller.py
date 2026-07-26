@@ -9,6 +9,12 @@ from eagle.analysis.timing import plot_payloads, summarize_run_timing
 
 
 class AnalysisController:
+    def load_run(self, run_dir: Path) -> tuple:
+        frame = self.load(run_dir)
+        directions = self.directions(run_dir)
+        timing = self.timing(run_dir)
+        return frame, directions, timing, plot_payloads(timing)
+
     def load(self, run_dir: Path):
         return prepare_objective_frame(load_candidate_records(run_dir))
 

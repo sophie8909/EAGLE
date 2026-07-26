@@ -28,8 +28,10 @@ from eagle.analysis.records import discover_runs, load_candidate, load_candidate
 from eagle.candidate import Candidate
 from eagle.llm_profiles import LLMProfile, load_role_profiles, save_role_profiles
 from eagle.prompts import PromptTemplateError, load_prompt_templates, save_prompt_template
+from eagle_ui.controllers.analysis_controller import AnalysisController
 from eagle_ui.controllers.prompt_controller import InitialPromptController
 from eagle_ui.runtime import DEFAULT_GUI_PORT, GUI_PORT_ENV, resolve_gui_port
+from eagle_ui.views.analysis_view import _run_option_label
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -168,6 +170,18 @@ class ArtifactAndAnalysisTests(unittest.TestCase):
         self.assertEqual(int(stats.iloc[1]["failure_count"]), 1)
         filtered = filter_objective_frame(frame, ObjectiveFilters(generation_min=1, operators=("mutation",)))
         self.assertEqual(list(filtered["candidate_id"]), ["bad"])
+
+    def test_analysis_run_selection_loads_all_chart_inputs(self):
+        frame, directions, timing, plots = AnalysisController().load_run(self.run)
+
+        self.assertEqual(set(frame["candidate_id"]), {"good", "bad"})
+        self.assertEqual(directions["code_quality"], "minimize")
+        self.assertEqual(timing["run_id"], self.run.name)
+        self.assertEqual(
+            set(plots),
+            {"generation_duration", "operation_breakdown", "llm_by_stage", "llm_by_model"},
+        )
+        self.assertEqual(_run_option_label(self.run.name, "complete"), f"{self.run.name} · complete")
 
     def test_failure_normalization_summary_grouping_and_filtered_export(self):
         self.assertEqual(normalize_failure_category("Backend request failure", "request exceeds the available context size"), "Context-size overflow")
