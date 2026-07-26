@@ -28,6 +28,7 @@ from .mutation import (
     utc_now,
 )
 from .offspring import normalize_prompt
+from .llm_transport import truncate_prompt
 
 
 REWRITE_SCHEMA_VERSION = "phase2b-v1"
@@ -105,6 +106,7 @@ class PromptRewriteStage:
         artifact_dir: Path | None = None,
     ) -> RewriteResult:
         stage = "rewriter"
+        request = truncate_prompt(request)
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
         attempts: list[ReflectionAttempt] = []

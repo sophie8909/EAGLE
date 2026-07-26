@@ -14,7 +14,7 @@ from eagle.candidate import Candidate
 from eagle.llm_errors import LLMServerError
 from eagle.timing import utc_now
 from eagle.llm_progress import llm_request_progress
-from eagle.llm_transport import read_chat_completion_content
+from eagle.llm_transport import read_chat_completion_content, truncate_prompt
 
 
 
@@ -63,7 +63,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         return f"{self.base_url}/v1/chat/completions"
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
-        prompt = candidate.generation_input(class_name=class_name)
+        prompt = truncate_prompt(candidate.generation_input(class_name=class_name))
         module_name = "complete_java_agent"
         payload = {
             "model": self.model,

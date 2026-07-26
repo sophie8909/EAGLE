@@ -14,7 +14,7 @@ from typing import Any
 
 from eagle.llm_errors import LLMServerError
 from eagle.llm_progress import llm_request_progress
-from eagle.llm_transport import read_chat_completion_content
+from eagle.llm_transport import read_chat_completion_content, truncate_prompt
 
 
 @dataclass(frozen=True)
@@ -122,6 +122,7 @@ def evaluate_strategy_alignment(
     artifact_dir: Path | None = None,
 ) -> StrategyAlignmentResult:
     request = build_alignment_request(strategy_prompt, generated_java, behavior_summary)
+    request = truncate_prompt(request)
     started_at = _utc_now()
     started = time.monotonic()
     raw_response = ""

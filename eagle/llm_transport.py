@@ -6,6 +6,29 @@ import json
 from typing import BinaryIO
 
 
+# llama.cpp context includes both prompt and generated output.  Keeping the
+# request below this bound leaves room for the configured response budget on a
+# 32K context server while still retaining substantially more than the normal
+# EAGLE prompts.  Large raw telemetry remains persisted in run artifacts.
+DEFAULT_MAX_PROMPT_CHARS = 60_000
+
+
+def truncate_prompt(prompt: str, *, max_chars: int = DEFAULT_MAX_PROMPT_CHARS) -> str:
+    """Hard-limit an LLM prompt while preserving instructions and latest evidence."""
+    if max_chars < 256:
+        raise ValueError("max_chars must be at least 256")
+    if len(prompt) <= max_chars:
+        return prompt
+    marker = (
+        "\n\n[ EAGLE: prompt truncated to fit the server context; "
+        "raw evidence remains in artifacts ]\n\n"
+    )
+    available = max_chars - len(marker)
+    head = available * 2 // 3
+    tail = available - head
+    return prompt[:head] + marker + prompt[-tail:]
+
+
 def read_chat_completion_content(response: BinaryIO) -> str:
     """Read either an SSE streaming response or one JSON completion response."""
 

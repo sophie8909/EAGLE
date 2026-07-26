@@ -20,7 +20,7 @@ from .candidate import Candidate
 from .config import ExperimentConfig
 from .llm_errors import LLMServerError
 from .llm_progress import llm_request_progress
-from .llm_transport import read_chat_completion_content
+from .llm_transport import read_chat_completion_content, truncate_prompt
 
 
 REFLECTION_SCHEMA_VERSION = "phase2a-v1"
@@ -259,6 +259,7 @@ class ReflectionStage:
         artifact_dir: Path | None = None,
     ) -> ReflectionResult:
         stage = "reflector"
+        request = truncate_prompt(request)
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
 

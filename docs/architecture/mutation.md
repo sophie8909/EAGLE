@@ -1,5 +1,11 @@
 # Mutation
 
+Reflection and Rewrite requests are hard-limited before transport. The shared LLM
+transport keeps the beginning (instructions) and end (latest evidence) of an oversized
+request, inserts an explicit truncation marker, and sends at most 60,000 characters.
+Full telemetry and raw evidence remain in candidate artifacts; they are not silently
+discarded from persistence or allowed to overflow the llama.cpp context.
+
 ## Normative source
 
 See specification sections 7 through 10 and state-transition examples 28.2 and 28.3. Mutation persistence is owned by [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md); LLM timing is owned by [`../artifacts/timing_schema.md`](../artifacts/timing_schema.md).
