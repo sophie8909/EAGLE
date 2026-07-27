@@ -78,6 +78,26 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_POST(self):
+        if self.path != "/v1/chat/completions":
+            self.send_response(404)
+            body = b'{}'
+        else:
+            length = int(self.headers.get("Content-Length", "0"))
+            request = json.loads(self.rfile.read(length))
+            if request.get("model") != args.alias:
+                self.send_response(400)
+                body = b'{"error":"wrong model"}'
+            else:
+                self.send_response(200)
+                body = json.dumps({
+                    "choices": [{"message": {"content": "OK"}}]
+                }).encode()
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def log_message(self, *_):
         pass
 
@@ -168,6 +188,7 @@ class ServerManagerTests(unittest.TestCase):
         self.assertEqual(status.state, "FAILED")
         self.assertIsNone(status.pid)
         self.assertIn("executable", status.error)
+        self.assertEqual(status.failure_category, "executable_not_found")
         self.assertTrue(Path(status.log_path).is_file())
 
     def test_missing_model_is_a_retained_failed_state(self):
@@ -175,6 +196,21 @@ class ServerManagerTests(unittest.TestCase):
         with self.assertRaisesRegex(ServerLifecycleError, "model path"):
             self.manager.start(spec)
         self.assertEqual(self.manager.status("local").state, "FAILED")
+        self.assertEqual(
+            self.manager.status("local").failure_category,
+            "model_not_found",
+        )
+
+    def test_command_construction_uses_resolved_absolute_paths(self):
+        resolved = self.manager.resolve_spec(
+            self.spec(
+                model_path=Path("models/model.gguf"),
+                server_path=Path("bin/llama-server"),
+            )
+        )
+        command = self.manager.build_command(resolved)
+        self.assertTrue(Path(command[0]).is_absolute())
+        self.assertTrue(Path(command[command.index("--model") + 1]).is_absolute())
 
     def test_model_registry_symlink_keeps_gguf_identity(self):
         blob = self.root / "cache" / "content-addressed-blob"
@@ -198,6 +234,7 @@ class ServerManagerTests(unittest.TestCase):
         status = self.manager.status("local")
         self.assertEqual(status.state, "FAILED")
         self.assertEqual(status.exit_code, 7)
+        self.assertEqual(status.failure_category, "process_exited")
         self.assertIn("synthetic startup failure", status.error)
         persisted = Path(status.log_path).read_text(encoding="utf-8")
         self.assertIn("synthetic startup failure", persisted)
@@ -210,6 +247,7 @@ class ServerManagerTests(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 3)
         status = self.manager.status("local")
         self.assertEqual(status.state, "FAILED")
+        self.assertEqual(status.failure_category, "health_timeout")
         self.assertIsNone(status.pid)
         self.assertIsNotNone(status.exit_code)
 
@@ -251,6 +289,7 @@ class ServerManagerTests(unittest.TestCase):
         status = self.manager.status("local")
         self.assertEqual(status.port, port)
         self.assertEqual(status.state, "FAILED")
+        self.assertEqual(status.failure_category, "port_in_use")
 
     def test_bind_host_and_client_host_have_one_canonical_local_url(self):
         spec = self.spec(host="0.0.0.0", client_host="127.0.0.1")
@@ -346,6 +385,18 @@ class ServerManagerTests(unittest.TestCase):
         persisted = Path(status.log_path).read_text(encoding="utf-8")
         self.assertIn("STDOUT", persisted)
         self.assertIn("STDERR", persisted)
+        lifecycle = Path(status.lifecycle_log_path).read_text(encoding="utf-8")
+        self.assertIn('"event": "process_output"', lifecycle)
+        self.assertIn('"event": "health_check"', lifecycle)
+
+    def test_connection_exercises_health_models_and_minimal_inference(self):
+        status = self.manager.start(self.spec(), readiness_timeout=3)
+        result = self.manager.test_connection(status.server_id, timeout=2)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["health_status"], 200)
+        self.assertEqual(result["models_status"], 200)
+        self.assertEqual(result["inference_status"], 200)
+        self.assertGreaterEqual(result["latency_ms"], 0)
 
     def test_stop_reaps_only_the_managed_process(self):
         unrelated = subprocess.Popen(
@@ -452,9 +503,25 @@ class ServerManagerTests(unittest.TestCase):
             encoding="utf-8",
         )
         report = self.manager.diagnose_spec(spec, timeout=0.05)
-        self.assertEqual(report["process_state"], "running")
-        self.assertEqual(report["pid"], os.getpid())
+        self.assertEqual(report["process_state"], "stale")
+        self.assertIsNone(report["pid"])
         self.assertTrue(report["cuda_startup_evidence"])
+
+    def test_diagnostic_report_contains_reproduction_and_log_tails(self):
+        spec = self.spec(
+            environment_overrides=(
+                ("FAKE_MODE", "exit"),
+                ("FAKE_EXIT_CODE", "7"),
+            )
+        )
+        with self.assertRaises(ServerLifecycleError):
+            self.manager.start(spec, readiness_timeout=2)
+        report = self.manager.diagnostic_report("local")
+        self.assertIn("command:", report)
+        self.assertIn("endpoint:", report)
+        self.assertIn("exit_code: 7", report)
+        self.assertIn("stderr_tail:", report)
+        self.assertIn("synthetic startup failure", report)
 
 
 if __name__ == "__main__":

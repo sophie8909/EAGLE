@@ -33,6 +33,61 @@ class ServerTopologySyncTests(unittest.TestCase):
             self.assertEqual(payload["roles"]["generator"]["max_output_tokens"], 4096)
             self.assertEqual(payload["roles"]["reflector"]["max_output_tokens"], 1024)
 
+    def test_roles_retain_independent_server_endpoints(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            topology = root / "experiment_env/config/llm_topology.json"
+            topology.parent.mkdir(parents=True)
+            topology.write_text(
+                json.dumps({"version": 1, "servers": {}, "roles": {}}),
+                encoding="utf-8",
+            )
+            controller = LLMConfigController(root)
+            controller._sync_server_topology(
+                ServerSpec(
+                    "reflection-server",
+                    None,
+                    None,
+                    "reflection-model",
+                    "lan-a",
+                    9001,
+                    roles=("reflector",),
+                    location_type="remote",
+                    client_host="10.0.0.10",
+                )
+            )
+            controller._sync_server_topology(
+                ServerSpec(
+                    "generation-server",
+                    None,
+                    None,
+                    "generation-model",
+                    "lan-b",
+                    9002,
+                    roles=("rewriter", "generator"),
+                    location_type="remote",
+                    client_host="10.0.0.11",
+                )
+            )
+
+            payload = json.loads(topology.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["servers"]["reflection-server"]["base_url"],
+                "http://10.0.0.10:9001/v1",
+            )
+            self.assertEqual(
+                payload["servers"]["generation-server"]["base_url"],
+                "http://10.0.0.11:9002/v1",
+            )
+            self.assertEqual(
+                payload["roles"]["reflector"]["server_id"],
+                "reflection-server",
+            )
+            self.assertEqual(
+                payload["roles"]["generator"]["server_id"],
+                "generation-server",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

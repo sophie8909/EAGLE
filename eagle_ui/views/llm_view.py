@@ -17,11 +17,32 @@ from eagle_ui.theme import BUTTON_CLASS, CARD_CLASS, INPUT_CLASS
 def build_llm_view(
     controller: LLMConfigController, repository_root: Path
 ) -> None:
+    try:
+        configured_specs = controller.configured_server_specs()
+    except (OSError, ValueError, RuntimeError):
+        configured_specs = []
+    configured = next(
+        (
+            item
+            for item in configured_specs
+            if item.server_id == "local-llm"
+        ),
+        configured_specs[0] if configured_specs else None,
+    )
     model_options = {
         str(path): canonical_local_model_id(path) or path.name
         for path in controller.server_models()
     }
-    default_model = next(iter(model_options), None)
+    configured_model_path = (
+        str(configured.model_path)
+        if configured is not None and configured.model_path is not None
+        else None
+    )
+    if configured_model_path and configured_model_path not in model_options:
+        model_options[configured_model_path] = (
+            configured.model_id if configured is not None else "Configured model"
+        )
+    default_model = configured_model_path or next(iter(model_options), None)
     display_options = model_options or {"": "No .gguf models discovered"}
 
     with ui.column().classes(f"{CARD_CLASS} w-full gap-3"):
@@ -31,7 +52,8 @@ def build_llm_view(
         ).classes("text-caption")
         with ui.grid(columns=4).classes("w-full gap-3"):
             server_id = ui.input(
-                "Server identifier", value="local-llm"
+                "Server identifier",
+                value=configured.server_id if configured else "local-llm",
             ).classes(INPUT_CLASS)
             location = ui.select(
                 {
@@ -39,12 +61,16 @@ def build_llm_view(
                     "remote": "Remote",
                 },
                 label="Server type",
-                value="local",
+                value=configured.location_type if configured else "local",
             ).classes(INPUT_CLASS)
             backend = ui.select(
                 {"cpu": "CPU", "cuda": "CUDA"},
                 label="Execution backend",
-                value="cuda",
+                value=(
+                    configured.execution_backend
+                    if configured and configured.location_type == "local"
+                    else "cuda"
+                ),
             ).classes(INPUT_CLASS)
             model_path = ui.select(
                 display_options,
@@ -55,32 +81,61 @@ def build_llm_view(
             model_id = ui.input(
                 "Served model ID",
                 value=(
-                    canonical_local_model_id(Path(default_model))
+                    configured.model_id
+                    if configured
+                    else canonical_local_model_id(Path(default_model))
                     if default_model
                     else ""
                 ),
             ).classes(INPUT_CLASS)
             server_path = ui.input(
-                "llama-server executable (empty uses PATH)"
+                "llama-server executable (empty uses PATH)",
+                value=(
+                    str(configured.server_path)
+                    if configured and configured.server_path is not None
+                    else ""
+                ),
             ).classes(INPUT_CLASS)
-            bind_host = ui.input("Bind host", value="127.0.0.1").classes(
+            bind_host = ui.input(
+                "Bind host",
+                value=configured.bind_host if configured else "127.0.0.1",
+            ).classes(
                 INPUT_CLASS
             )
             client_host = ui.input(
-                "Client host", value="127.0.0.1"
+                "Client host",
+                value=(
+                    configured.connection_host
+                    if configured
+                    else "127.0.0.1"
+                ),
             ).classes(INPUT_CLASS)
             port = ui.number(
-                "Port", value=8080, min=1, max=65535
+                "Port",
+                value=configured.port if configured else 8080,
+                min=1,
+                max=65535,
             ).classes(INPUT_CLASS)
             context_size = ui.number(
-                "Context size", value=32768, min=1
+                "Context size",
+                value=configured.context_size if configured else 32768,
+                min=1,
             ).classes(INPUT_CLASS)
             gpu_layers = ui.input(
-                "GPU layers (blank = automatic fit, positive integer = explicit)", value=""
+                "GPU layers (blank = automatic fit, positive integer = explicit)",
+                value=(
+                    str(configured.gpu_layers)
+                    if configured and configured.gpu_layers is not None
+                    else ""
+                ),
             ).classes(INPUT_CLASS)
-            fit_to_vram = ui.checkbox("Fit CUDA execution to VRAM", value=True)
+            fit_to_vram = ui.checkbox(
+                "Fit CUDA execution to VRAM",
+                value=configured.fit_to_vram if configured else True,
+            )
             device = ui.input(
-                "llama.cpp device (optional)"
+                "llama.cpp device (optional)",
+                value=configured.device if configured else "",
             ).classes(INPUT_CLASS)
             cuda_visible_devices = ui.input(
                 "CUDA_VISIBLE_DEVICES (optional)"
@@ -89,13 +144,29 @@ def build_llm_view(
                 ["reflector", "rewriter", "generator"],
                 label="Assigned roles",
                 multiple=True,
-                value=["reflector", "rewriter", "generator"],
+                value=list(configured.roles)
+                if configured
+                else ["reflector", "rewriter", "generator"],
             ).classes(f"{INPUT_CLASS} w-full")
         with ui.row().classes("gap-2"):
             start_button = ui.button("Start / validate").classes(BUTTON_CLASS)
             stop_button = ui.button("Stop").classes(BUTTON_CLASS)
             restart_button = ui.button("Restart").classes(BUTTON_CLASS)
             refresh_button = ui.button("Refresh status").classes(BUTTON_CLASS)
+            test_button = ui.button("Test connection").classes(BUTTON_CLASS)
+            diagnostic_button = ui.button("Copy diagnostic report").classes(
+                BUTTON_CLASS
+            )
+        with ui.grid(columns=3).classes("w-full gap-3"):
+            role_status = {}
+            for role in ("reflector", "rewriter", "generator"):
+                with ui.column().classes(
+                    "eagle-card min-w-0 w-full gap-1"
+                ):
+                    ui.label(role.title()).classes("text-subtitle2")
+                    role_status[role] = ui.label(
+                        "stopped · no managed server"
+                    ).classes("text-caption whitespace-pre-wrap break-all")
         server_select = ui.select(
             {}, label="Selected server"
         ).classes(f"{INPUT_CLASS} w-full")
@@ -108,6 +179,9 @@ def build_llm_view(
                 str(server_select.value or "")
             ),
         )
+        connection_result = ui.textarea("Connection test").props(
+            "readonly autogrow=false"
+        ).classes(f"{INPUT_CLASS} w-full h-40")
 
     def update_model_id(event) -> None:
         selected = str(event.value or "")
@@ -182,6 +256,8 @@ def build_llm_view(
                     "server_type": selected.location_type,
                     "state": selected.state,
                     "pid": selected.pid,
+                    "process_alive": selected.process_alive,
+                    "readiness_ready": selected.readiness_ready,
                     "exit_code": selected.exit_code,
                     "executable": selected.executable,
                     "model_id": selected.model_id,
@@ -194,6 +270,7 @@ def build_llm_view(
                     "api_endpoint": selected.api_endpoint,
                     "health_url": selected.health_url,
                     "startup_elapsed_seconds": selected.elapsed_startup_seconds,
+                    "startup_time": selected.startup_time,
                     "last_health_check": selected.last_health_check,
                     "gpu_expected": selected.gpu_expected,
                     "backend": selected.backend,
@@ -206,6 +283,9 @@ def build_llm_view(
                     "environment_overrides": selected.environment_overrides,
                     "log_path": selected.log_path,
                     "failure_reason": selected.error,
+                    "failure_category": selected.failure_category,
+                    "stdout_tail": selected.stdout_tail,
+                    "stderr_tail": selected.stderr_tail,
                     "command": selected.command,
                 },
                 ensure_ascii=False,
@@ -225,6 +305,38 @@ def build_llm_view(
                 "endpoint to see its lifecycle and output."
             )
             status.update()
+        try:
+            configured = await asyncio.to_thread(
+                controller.load,
+                repository_root
+                / "experiment_env"
+                / "config"
+                / "llm_topology.json",
+            )
+        except (OSError, ValueError):
+            configured = {}
+        for role, label in role_status.items():
+            managed = next(
+                (item for item in items if role in item.roles), None
+            )
+            if managed is not None:
+                label.text = (
+                    f"{managed.state.lower()}\n"
+                    f"{managed.model_id}\n"
+                    f"{managed.base_url}\n"
+                    f"PID {managed.pid or '—'} · "
+                    f"alive={managed.process_alive} · "
+                    f"ready={managed.readiness_ready}"
+                )
+            elif role in configured:
+                profile = configured[role]
+                label.text = (
+                    f"stopped · configured\n{profile.model}\n"
+                    f"{profile.base_url}\nPID — · alive=False · ready=False"
+                )
+            else:
+                label.text = "stopped · unconfigured"
+            label.update()
 
     async def start() -> None:
         try:
@@ -251,10 +363,53 @@ def build_llm_view(
         await stop()
         await start()
 
+    async def test_connection() -> None:
+        selected_id = str(
+            server_select.value or server_id.value or ""
+        ).strip()
+        try:
+            result = await asyncio.to_thread(
+                controller.test_server_connection, selected_id
+            )
+        except (OSError, ValueError, RuntimeError) as exc:
+            result = {
+                "ok": False,
+                "server_id": selected_id,
+                "error_body": str(exc),
+            }
+        connection_result.value = json.dumps(
+            result, ensure_ascii=False, indent=2
+        )
+        connection_result.update()
+        ui.notify(
+            "Connection test passed"
+            if result.get("ok")
+            else "Connection test failed",
+            type="positive" if result.get("ok") else "negative",
+        )
+
+    async def copy_diagnostic() -> None:
+        selected_id = str(
+            server_select.value or server_id.value or ""
+        ).strip()
+        try:
+            report = await asyncio.to_thread(
+                controller.diagnostic_report, selected_id
+            )
+        except (OSError, ValueError, RuntimeError) as exc:
+            ui.notify(f"Cannot build diagnostic report: {exc}", type="negative")
+            return
+        await ui.run_javascript(
+            f"navigator.clipboard.writeText({json.dumps(report)})"
+        )
+        ui.notify("Diagnostic report copied", type="positive")
+
     start_button.on_click(start)
     stop_button.on_click(stop)
     restart_button.on_click(restart)
     refresh_button.on_click(refresh_status)
+    test_button.on_click(test_connection)
+    diagnostic_button.on_click(copy_diagnostic)
     server_select.on_value_change(lambda _: refresh_status())
     ui.timer(0.5, refresh_status)
 

@@ -22,6 +22,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -160,6 +161,14 @@ class ServerStatus:
     detected_devices: tuple[str, ...] = ()
     executable_version: str | None = None
     offloaded_layers: int | None = None
+    process_alive: bool = False
+    readiness_ready: bool = False
+    startup_time: str | None = None
+    failure_category: str | None = None
+    failure_message: str | None = None
+    stdout_tail: tuple[str, ...] = ()
+    stderr_tail: tuple[str, ...] = ()
+    lifecycle_log_path: str | None = None
 
 
 @dataclass
@@ -177,6 +186,15 @@ class _ManagedServer:
     gpu_backend_available: bool | None = None
     exit_recorded: bool = False
     log_lock: threading.Lock = field(default_factory=threading.Lock)
+    startup_time: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(
+            timespec="milliseconds"
+        )
+    )
+    failure_category: str | None = None
+    lifecycle_log_path: Path | None = None
+    health_attempts: int = 0
+    startup_elapsed_seconds: float | None = None
 
 
 class LLMServerManager:
@@ -192,6 +210,21 @@ class LLMServerManager:
     @property
     def runtime_state_path(self) -> Path:
         return self.repository_root / RUNTIME_STATE_PATH
+
+    def load_topology_specs(
+        self, path: Path | None = None
+    ) -> list[ServerSpec]:
+        topology = (
+            path
+            if path is not None
+            else self.repository_root
+            / "experiment_env"
+            / "config"
+            / "llm_topology.json"
+        )
+        if not topology.is_absolute():
+            topology = self.repository_root / topology
+        return _specs_from_topology(topology, self.repository_root)
 
     def discover_models(self) -> list[Path]:
         roots = (
@@ -464,6 +497,9 @@ class LLMServerManager:
                 state="STARTING",
                 started_monotonic=time.monotonic(),
                 log_path=self._server_log_path(resolved.server_id),
+                lifecycle_log_path=self._server_lifecycle_log_path(
+                    resolved.server_id
+                ),
             )
             if resolved.location_type == "local":
                 managed.gpu_backend_available = self.detect_gpu_backend(
@@ -471,6 +507,31 @@ class LLMServerManager:
                 )
             self._servers[resolved.server_id] = managed
             self._initialize_log(managed)
+            self._append_lifecycle_event(
+                managed,
+                "startup_attempt",
+                command=(
+                    self.build_command(resolved)
+                    if resolved.location_type == "local"
+                    else []
+                ),
+                cwd=str(resolved.workdir or ""),
+                environment_summary=_redacted_environment(
+                    resolved.env_overrides
+                ),
+                executable=(
+                    str(resolved.server_path)
+                    if resolved.server_path is not None
+                    else None
+                ),
+                model_path=(
+                    str(resolved.model_path)
+                    if resolved.model_path is not None
+                    else None
+                ),
+                previous_state="STOPPED",
+                new_state="STARTING",
+            )
 
         if resolved.location_type == "remote":
             self._append_log(
@@ -485,7 +546,17 @@ class LLMServerManager:
                 self._mark_failed(managed, str(exc))
                 raise
             managed.state = "READY"
+            managed.startup_elapsed_seconds = max(
+                0.0,
+                time.monotonic() - (managed.started_monotonic or time.monotonic()),
+            )
             self._append_log(managed, "system", "remote endpoint is ready")
+            self._append_lifecycle_event(
+                managed,
+                "state_transition",
+                previous_state="STARTING",
+                new_state="READY",
+            )
             return self.status(resolved.server_id)
 
         try:
@@ -510,6 +581,9 @@ class LLMServerManager:
             )
             managed.process = process
             self._append_log(managed, "system", f"created process PID {process.pid}")
+            self._append_lifecycle_event(
+                managed, "process_created", pid=process.pid
+            )
             managed.readers = [
                 threading.Thread(
                     target=self._capture_stream,
@@ -531,9 +605,19 @@ class LLMServerManager:
             self._mark_failed(managed, str(exc), terminate=True)
             raise ServerLifecycleError(str(exc)) from exc
 
+        managed.startup_elapsed_seconds = max(
+            0.0,
+            time.monotonic() - (managed.started_monotonic or time.monotonic()),
+        )
         managed.state = "READY"
         managed.failure_reason = None
         self._append_log(managed, "system", f"server ready at {resolved.endpoint}")
+        self._append_lifecycle_event(
+            managed,
+            "state_transition",
+            previous_state="STARTING",
+            new_state="READY",
+        )
         self._write_runtime_state(managed)
         return self.status(resolved.server_id)
 
@@ -543,8 +627,15 @@ class LLMServerManager:
             raise ServerLifecycleError(f"unknown managed server: {server_id}")
         if managed.state == "STOPPED":
             return self.status(server_id)
+        previous_state = managed.state
         managed.state = "STOPPING"
         self._append_log(managed, "system", "stopping server")
+        self._append_lifecycle_event(
+            managed,
+            "state_transition",
+            previous_state=previous_state,
+            new_state="STOPPING",
+        )
         self._terminate_managed(managed)
         managed.state = "STOPPED"
         managed.failure_reason = None
@@ -552,6 +643,13 @@ class LLMServerManager:
             managed.process.pid if managed.process is not None else None
         )
         self._append_log(managed, "system", "server stopped and process reaped")
+        self._append_lifecycle_event(
+            managed,
+            "state_transition",
+            previous_state="STOPPING",
+            new_state="STOPPED",
+            exit_code=managed.exit_code,
+        )
         return self.status(server_id)
 
     def stop_all(self) -> None:
@@ -639,8 +737,8 @@ class LLMServerManager:
         elapsed = (
             max(0.0, time.monotonic() - managed.started_monotonic)
             if managed.started_monotonic is not None
-            and managed.state in {"STARTING", "READY"}
-            else None
+            and managed.state == "STARTING"
+            else managed.startup_elapsed_seconds
         )
         command: tuple[str, ...] = ()
         if managed.spec.location_type == "local":
@@ -649,6 +747,12 @@ class LLMServerManager:
             except ValueError:
                 command = ()
         records = managed.logs.snapshot()
+        stdout_tail = tuple(
+            record.message for record in records if record.stream == "stdout"
+        )[-20:]
+        stderr_tail = tuple(
+            record.message for record in records if record.stream == "stderr"
+        )[-20:]
         executable = (
             str(managed.spec.server_path)
             if managed.spec.server_path is not None
@@ -705,6 +809,20 @@ class LLMServerManager:
             detected_devices=tuple(capabilities.get("devices", ())),
             executable_version=capabilities.get("version"),
             offloaded_layers=offloaded_layers,
+            process_alive=(
+                process is not None and process.poll() is None
+            ),
+            readiness_ready=managed.state == "READY",
+            startup_time=managed.startup_time,
+            failure_category=managed.failure_category,
+            failure_message=managed.failure_reason,
+            stdout_tail=stdout_tail,
+            stderr_tail=stderr_tail,
+            lifecycle_log_path=(
+                str(managed.lifecycle_log_path)
+                if managed.lifecycle_log_path is not None
+                else None
+            ),
         )
 
     def statuses(self) -> list[ServerStatus]:
@@ -717,6 +835,131 @@ class LLMServerManager:
         if managed is None:
             raise ServerLifecycleError(f"unknown managed server: {server_id}")
         return managed.spec
+
+    def diagnostic_report(self, server_id: str) -> str:
+        """Return a credential-free plain-text report suitable for bug reports."""
+
+        status = self.status(server_id)
+        command = shlex.join(status.command) if status.command else "(remote)"
+        stdout_tail = "\n".join(status.stdout_tail) or "(empty)"
+        stderr_tail = "\n".join(status.stderr_tail) or "(empty)"
+        return "\n".join(
+            (
+                "EAGLE LLM server diagnostic",
+                f"server_id: {status.server_id}",
+                f"roles: {', '.join(status.roles) or '(none)'}",
+                f"state: {status.state}",
+                f"failure_category: {status.failure_category or '(none)'}",
+                f"failure_message: {status.failure_message or '(none)'}",
+                f"command: {command}",
+                f"working_directory: {status.working_directory}",
+                f"executable: {status.executable or '(remote)'}",
+                f"model_path: {status.model_path or '(remote)'}",
+                f"model_id: {status.model_id}",
+                f"bind_host: {status.bind_host}",
+                f"client_host: {status.client_host}",
+                f"port: {status.port}",
+                f"endpoint: {status.base_url}",
+                f"health_url: {status.health_url}",
+                f"pid: {status.pid}",
+                f"process_alive: {status.process_alive}",
+                f"readiness_ready: {status.readiness_ready}",
+                f"exit_code: {status.exit_code}",
+                f"backend: {status.backend}",
+                f"gpu_backend_available: {status.gpu_backend_available}",
+                f"detected_devices: {', '.join(status.detected_devices) or '(none)'}",
+                f"startup_time: {status.startup_time}",
+                f"log_path: {status.log_path}",
+                f"lifecycle_log_path: {status.lifecycle_log_path}",
+                "stdout_tail:",
+                stdout_tail,
+                "stderr_tail:",
+                stderr_tail,
+            )
+        )
+
+    def test_connection(
+        self, server_id: str, *, timeout: float = 10.0
+    ) -> dict[str, object]:
+        """Exercise the exact configured endpoint without launching an EA run."""
+
+        spec = self.server_spec(server_id)
+        started = time.monotonic()
+        result: dict[str, object] = {
+            "server_id": server_id,
+            "endpoint": spec.endpoint,
+            "model": spec.model_id,
+            "ok": False,
+            "health_status": None,
+            "models_status": None,
+            "inference_status": None,
+            "latency_ms": None,
+            "error_body": None,
+            "response_excerpt": None,
+        }
+        phase = "health"
+        try:
+            result["health_status"], _ = _http_request(
+                spec.health_url, timeout=timeout
+            )
+            phase = "models"
+            models_status, models_body = _http_request(
+                spec.models_url, timeout=timeout
+            )
+            result["models_status"] = models_status
+            available = _available_model_ids(
+                json.loads(models_body.decode("utf-8"))
+            )
+            if spec.model_id not in available:
+                raise ServerLifecycleError(
+                    f"configured model {spec.model_id!r} is not served; "
+                    f"available={','.join(sorted(available)) or 'none'}"
+                )
+            request_body = json.dumps(
+                {
+                    "model": spec.model_id,
+                    "messages": [{"role": "user", "content": "Reply with OK."}],
+                    "max_tokens": 2,
+                    "temperature": 0,
+                    "stream": False,
+                    "chat_template_kwargs": {"enable_thinking": False},
+                }
+            ).encode("utf-8")
+            phase = "inference"
+            inference_status, inference_body = _http_request(
+                spec.chat_completions_url,
+                timeout=timeout,
+                data=request_body,
+            )
+            result["inference_status"] = inference_status
+            result["response_excerpt"] = inference_body.decode(
+                "utf-8", errors="replace"
+            )[:500]
+            payload = json.loads(inference_body.decode("utf-8"))
+            choices = payload.get("choices") if isinstance(payload, dict) else None
+            if not isinstance(choices, list) or not choices:
+                raise ServerLifecycleError(
+                    "chat completions response has no choices"
+                )
+            result["ok"] = True
+        except urllib.error.HTTPError as exc:
+            result[f"{phase}_status"] = exc.code
+            result["error_body"] = exc.read().decode(
+                "utf-8", errors="replace"
+            )[:1000]
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            ServerLifecycleError,
+        ) as exc:
+            result["error_body"] = str(exc)
+        result["latency_ms"] = round(
+            (time.monotonic() - started) * 1000, 2
+        )
+        return result
 
     def clear_logs(self, server_id: str) -> None:
         managed = self._servers.get(server_id)
@@ -831,7 +1074,7 @@ class LLMServerManager:
                 runtime = self._read_runtime_state(resolved.server_id)
                 if runtime is not None:
                     pid = runtime.get("pid")
-                    alive = _pid_exists(pid)
+                    alive = self._runtime_pid_matches(runtime)
                     report["process_state"] = "running" if alive else "stale"
                     report["pid"] = pid if alive else None
                     report["log_path"] = runtime.get("log_path")
@@ -847,6 +1090,35 @@ class LLMServerManager:
         except (OSError, ValueError, ServerLifecycleError) as exc:
             report["error"] = str(exc)
         return report
+
+    def _runtime_pid_matches(self, runtime: dict[str, Any]) -> bool:
+        """Reject dead or reused PIDs from a previous GUI process."""
+
+        try:
+            pid = int(runtime.get("pid"))
+        except (TypeError, ValueError):
+            return False
+        if pid < 1:
+            return False
+        try:
+            command = tuple(
+                part.decode("utf-8", errors="surrogateescape")
+                for part in Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+                if part
+            )
+        except (OSError, PermissionError):
+            return False
+        if not self._is_project_llama_server_command(command):
+            return False
+        expected_server = str(runtime.get("server_path") or "")
+        expected_model = str(runtime.get("model_path") or "")
+        if expected_server and command[0] != expected_server:
+            return False
+        try:
+            actual_model = command[command.index("--model") + 1]
+        except (ValueError, IndexError):
+            return False
+        return not expected_model or actual_model == expected_model
 
     def _resolve_path(self, value: Path | str) -> Path:
         expanded = Path(os.path.expandvars(os.path.expanduser(str(value))))
@@ -904,21 +1176,36 @@ class LLMServerManager:
             spec=spec,
             state="FAILED",
             failure_reason=reason,
+            failure_category=_classify_startup_failure(reason),
             log_path=self._server_log_path(server_id),
+            lifecycle_log_path=self._server_lifecycle_log_path(server_id),
         )
         self._servers[server_id] = managed
         self._initialize_log(managed)
         self._append_log(managed, "system", f"pre-launch validation failed: {reason}", "error")
+        self._append_lifecycle_event(
+            managed,
+            "startup_failure",
+            previous_state="STOPPED",
+            new_state="FAILED",
+            failure_category=managed.failure_category,
+            failure_message=reason,
+        )
 
     def _server_log_path(self, server_id: str) -> Path:
         safe_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", server_id).strip("._") or "server"
         return self.repository_root / SERVER_LOG_ROOT / safe_id / "server.log"
+
+    def _server_lifecycle_log_path(self, server_id: str) -> Path:
+        return self._server_log_path(server_id).with_name("lifecycle.jsonl")
 
     def _initialize_log(self, managed: _ManagedServer) -> None:
         if managed.log_path is None:
             return
         managed.log_path.parent.mkdir(parents=True, exist_ok=True)
         managed.log_path.touch(exist_ok=True)
+        if managed.lifecycle_log_path is not None:
+            managed.lifecycle_log_path.touch(exist_ok=True)
 
     def _append_log(
         self,
@@ -942,6 +1229,42 @@ class LLMServerManager:
                     handle.write(
                         f"{record.timestamp} [{record.stream.upper()}] {record.message}\n"
                     )
+        self._append_lifecycle_event(
+            managed,
+            "process_output",
+            stream=record.stream,
+            severity=record.severity,
+            message=record.message,
+        )
+
+    def _append_lifecycle_event(
+        self, managed: _ManagedServer, event: str, **details: object
+    ) -> None:
+        path = managed.lifecycle_log_path
+        if path is None:
+            return
+        payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat(
+                timespec="milliseconds"
+            ),
+            "event": event,
+            "server_id": managed.spec.server_id,
+            "role": list(managed.spec.roles),
+            "model": managed.spec.model_id,
+            "state": managed.state,
+            "pid": (
+                managed.process.pid if managed.process is not None else None
+            ),
+            "bind_host": managed.spec.bind_host,
+            "client_host": managed.spec.connection_host,
+            "port": managed.spec.port,
+            **details,
+        }
+        with managed.log_lock:
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(payload, ensure_ascii=False, default=str) + "\n"
+                )
 
     def _capture_stream(self, managed: _ManagedServer, stream, name: str) -> None:
         if stream is None:
@@ -965,6 +1288,7 @@ class LLMServerManager:
         deadline = time.monotonic() + max(0.01, timeout)
         last_error = "endpoint did not respond"
         while time.monotonic() < deadline:
+            managed.health_attempts += 1
             process = managed.process
             if process is not None and process.poll() is not None:
                 managed.exit_code = process.returncode
@@ -980,10 +1304,24 @@ class LLMServerManager:
             if not listening:
                 last_error = port_detail
                 managed.last_health_check = f"waiting for port: {port_detail}"
+                self._append_lifecycle_event(
+                    managed,
+                    "health_check",
+                    attempt=managed.health_attempts,
+                    ready=False,
+                    detail=managed.last_health_check,
+                )
                 time.sleep(0.1)
                 continue
             ready, detail = self._probe_endpoint(managed.spec, timeout=1.0)
             managed.last_health_check = detail
+            self._append_lifecycle_event(
+                managed,
+                "health_check",
+                attempt=managed.health_attempts,
+                ready=ready,
+                detail=detail,
+            )
             if ready:
                 return
             last_error = detail
@@ -1031,9 +1369,25 @@ class LLMServerManager:
             self._terminate_managed(managed)
         managed.state = "FAILED"
         managed.failure_reason = reason
+        if managed.started_monotonic is not None:
+            managed.startup_elapsed_seconds = max(
+                0.0, time.monotonic() - managed.started_monotonic
+            )
+        managed.failure_category = _classify_startup_failure(
+            reason, managed.logs.snapshot()
+        )
         if managed.process is not None and managed.process.poll() is not None:
             managed.exit_code = managed.process.returncode
         self._append_log(managed, "system", f"startup failed: {reason}", "error")
+        self._append_lifecycle_event(
+            managed,
+            "startup_failure",
+            previous_state="STARTING",
+            new_state="FAILED",
+            exit_code=managed.exit_code,
+            failure_category=managed.failure_category,
+            failure_message=reason,
+        )
         self._clear_runtime_state(
             managed.process.pid if managed.process is not None else None
         )
@@ -1071,6 +1425,9 @@ class LLMServerManager:
         if managed.state in {"STARTING", "READY"}:
             managed.state = "FAILED"
             managed.failure_reason = f"server process exited with code {returncode}"
+            managed.failure_category = _classify_startup_failure(
+                managed.failure_reason, managed.logs.snapshot()
+            )
         if not managed.exit_recorded:
             self._append_log(
                 managed,
@@ -1079,6 +1436,12 @@ class LLMServerManager:
                 "error" if returncode else "info",
             )
             managed.exit_recorded = True
+            self._append_lifecycle_event(
+                managed,
+                "process_exit",
+                exit_code=returncode,
+                failure_category=managed.failure_category,
+            )
         self._clear_runtime_state(process.pid)
 
     def _is_project_llama_server_command(self, command: tuple[str, ...]) -> bool:
@@ -1288,6 +1651,84 @@ def _available_model_ids(payload: object) -> set[str]:
             if isinstance(aliases, list):
                 values.update(str(value) for value in aliases if value)
     return values
+
+
+def _http_request(
+    url: str, *, timeout: float, data: bytes | None = None
+) -> tuple[int, bytes]:
+    headers = {"Accept": "application/json"}
+    method = "GET"
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+        method = "POST"
+    request = urllib.request.Request(
+        url, data=data, headers=headers, method=method
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        body = response.read()
+        if not 200 <= response.status < 300:
+            raise ServerLifecycleError(
+                f"{method} {url} returned HTTP {response.status}: "
+                f"{body.decode('utf-8', errors='replace')[:500]}"
+            )
+        return response.status, body
+
+
+def _classify_startup_failure(
+    reason: str, records: tuple[ProcessLogRecord, ...] = ()
+) -> str:
+    text = " ".join(
+        [reason, *(record.message for record in records[-200:])]
+    ).lower()
+    if "executable" in text and (
+        "does not exist" in text
+        or "not found" in text
+        or "not executable" in text
+    ):
+        return "executable_not_found"
+    if "model path" in text and (
+        "does not exist" in text or "must be an existing" in text
+    ):
+        return "model_not_found"
+    if "already occupied" in text or "address already in use" in text:
+        return "port_in_use"
+    if (
+        "out of memory" in text
+        or "cuda_error_out_of_memory" in text
+        or "failed to allocate" in text
+    ):
+        return "gpu_out_of_memory"
+    if (
+        "no usable gpu backend" in text
+        or "cuda backend was selected" in text
+        or "failed to initialize cuda" in text
+        or "no cuda-capable device" in text
+    ):
+        return "cuda_unavailable"
+    if (
+        "unknown argument" in text
+        or "invalid argument" in text
+        or "does not support generated argument" in text
+        or "unrecognized option" in text
+    ):
+        return "invalid_argument"
+    if (
+        "failed to load model" in text
+        or "error loading model" in text
+        or "model load" in text
+    ):
+        return "model_load_failure"
+    if (
+        "not served" in text
+        or "incompatible api" in text
+        or "models endpoint returned" in text
+    ):
+        return "api_mismatch"
+    if "readiness deadline" in text or "readiness timed out" in text:
+        return "health_timeout"
+    if "process exited" in text or "exited during startup" in text:
+        return "process_exited"
+    return "unknown_startup_failure"
 
 
 def _port_listening(host: str, port: int, *, timeout: float) -> tuple[bool, str]:

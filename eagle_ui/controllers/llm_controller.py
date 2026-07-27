@@ -35,6 +35,9 @@ class LLMConfigController:
     def server_models(self) -> list[Path]:
         return self.server_manager.discover_models()
 
+    def configured_server_specs(self) -> list[ServerSpec]:
+        return self.server_manager.load_topology_specs()
+
     def start_server(
         self,
         *,
@@ -138,6 +141,14 @@ class LLMConfigController:
 
     def clear_server_logs(self, server_id: str) -> None:
         self.server_manager.clear_logs(server_id)
+
+    def diagnostic_report(self, server_id: str) -> str:
+        return self.server_manager.diagnostic_report(server_id)
+
+    def test_server_connection(
+        self, server_id: str, *, timeout: float = 10.0
+    ) -> dict[str, object]:
+        return self.server_manager.test_connection(server_id, timeout=timeout)
 
     def test_connection(self, profile: LLMProfile) -> dict[str, object]:
         parsed = urlparse(profile.base_url)
