@@ -167,6 +167,30 @@ class ArtifactAndAnalysisTests(unittest.TestCase):
         self.assertIsNone(candidate.validation)
         self.assertEqual(set(candidate.artifact_paths), {"individual"})
 
+    def test_corrupt_results_stream_recovers_from_candidate_individuals(self):
+        (self.run / "results.jsonl").write_text("not-json\n", encoding="utf-8")
+
+        records = load_candidate_records(self.run)
+
+        self.assertEqual({record.candidate_id for record in records}, {"good", "bad"})
+
+    def test_unreadable_run_does_not_block_other_run_discovery(self):
+        unreadable = self.root / "20260705_120743_724529"
+        (unreadable / "candidates" / "broken").mkdir(parents=True)
+        (unreadable / "results.jsonl").write_text("not-json\n", encoding="utf-8")
+        (unreadable / "candidates" / "broken" / "individual.json").write_text(
+            "not-json",
+            encoding="utf-8",
+        )
+
+        runs = discover_runs(self.root)
+        summaries = {run.run_id: run for run in runs}
+
+        self.assertEqual(set(summaries), {self.run.name, unreadable.name})
+        self.assertEqual(summaries[self.run.name].status, "complete")
+        self.assertEqual(summaries[unreadable.name].status, "unreadable")
+        self.assertTrue(summaries[unreadable.name].read_error)
+
     def test_objective_directions_pareto_and_generation_statistics(self):
         records = load_candidate_records(self.run)
         frame = prepare_objective_frame(records)

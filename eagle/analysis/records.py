@@ -51,6 +51,7 @@ class RunSummary:
     final_test_count: int = 0
     final_test_candidate_ids: tuple[str, ...] = ()
     config_summary: dict[str, Any] = field(default_factory=dict)
+    read_error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -93,15 +94,34 @@ def discover_runs(runs_dir: Path) -> list[RunSummary]:
     """Discover run directories without modifying them."""
     if not runs_dir.exists():
         return []
-    summaries = [_summarize_run(path) for path in runs_dir.iterdir() if path.is_dir()]
+    summaries: list[RunSummary] = []
+    for path in runs_dir.iterdir():
+        if not path.is_dir():
+            continue
+        try:
+            summaries.append(_summarize_run(path))
+        except (OSError, TypeError, ValueError, OverflowError) as exc:
+            summaries.append(_unreadable_run_summary(path, exc))
     return sorted(summaries, key=lambda item: (item.start_time, item.run_id), reverse=True)
 
 
 def load_candidate_records(run_dir: Path) -> list[CandidateRecord]:
-    """Stream canonical `results.jsonl`, tolerating only a partial final line."""
+    """Read results, recovering from per-candidate records when the stream is damaged."""
     results_path = run_dir / "results.jsonl"
     if not results_path.exists():
         return _records_from_candidate_dirs(run_dir)
+    try:
+        return _records_from_results(results_path)
+    except (OSError, TypeError, ValueError) as exc:
+        recovered = _records_from_candidate_dirs(run_dir)
+        if recovered:
+            return recovered
+        raise ArtifactReadError(
+            f"Cannot recover candidate records for {run_dir} after {results_path} failed: {exc}"
+        ) from exc
+
+
+def _records_from_results(results_path: Path) -> list[CandidateRecord]:
     records: list[CandidateRecord] = []
     with results_path.open(encoding="utf-8") as handle:
         for index, line in enumerate(handle, 1):
@@ -113,6 +133,10 @@ def load_candidate_records(run_dir: Path) -> list[CandidateRecord]:
                 if not line.endswith("\n") and handle.read(1) == "":
                     break
                 raise ArtifactReadError(f"Cannot parse {results_path} line {index}: {exc}") from exc
+            if not isinstance(payload, dict):
+                raise ArtifactReadError(
+                    f"Result must be an object in {results_path} line {index}"
+                )
             records.append(_record_from_result(payload, results_path))
     return records
 
@@ -229,9 +253,24 @@ def _records_from_candidate_dirs(run_dir: Path) -> list[CandidateRecord]:
     records: list[CandidateRecord] = []
     for path in sorted(candidates_dir.glob("*/individual.json")):
         payload = _read_json(path, required=True)
-        assert isinstance(payload, dict)
+        if not isinstance(payload, dict):
+            raise ArtifactReadError(f"Candidate artifact must be an object: {path}")
         records.append(_record_from_candidate(payload, path))
     return records
+
+
+def _unreadable_run_summary(run_dir: Path, error: Exception) -> RunSummary:
+    return RunSummary(
+        run_id=run_dir.name,
+        path=run_dir,
+        start_time=_run_start_time(run_dir),
+        status="unreadable",
+        generation_count=0,
+        candidate_count=0,
+        success_count=0,
+        failure_count=0,
+        read_error=str(error),
+    )
 
 
 def _read_json(path: Path, *, required: bool = False) -> Any:

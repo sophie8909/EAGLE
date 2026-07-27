@@ -11,6 +11,17 @@ python3 scripts/analyze_run.py runs/<run_id>
 
 The analysis CLI and GUI read canonical per-candidate results and objective values. Missing or malformed current artifacts are reported; historical schemas are outside the active runtime.
 
+### Read-only recovery
+
+If a run's `results.jsonl` is malformed, the analysis reader attempts to reconstruct
+its candidate list from existing `candidates/*/individual.json` artifacts. The
+reader does not write to the run or infer missing fields. Run discovery isolates
+unrecoverable directories and labels them `unreadable`, so one damaged run does
+not hide the other local runs.
+
+This recovery path does not make historical objective or Java schemas active
+runtime evidence; the artifact boundary below still applies.
+
 ## Current gameplay plot
 
 ```bash
