@@ -10,6 +10,7 @@ from nicegui import ui
 
 from eagle.analysis.records import discover_runs
 from eagle_ui.controllers.error_controller import ErrorAnalysisController
+from eagle_ui.components.echart import replace_chart_options
 from eagle_ui.state import AppState
 from eagle_ui.theme import BUTTON_CLASS, CARD_CLASS, INPUT_CLASS, TEXTAREA_CLASS
 
@@ -83,13 +84,13 @@ def build_error_view(controller: ErrorAnalysisController, state: AppState) -> No
         series = []
         for category, group in trend.groupby("category") if not trend.empty else []:
             series.append({"name": str(category), "type": "line", "data": [[int(row["generation"]), float(row[metric])] for _, row in group.iterrows()]})
-        trend_chart.options = {
+        replace_chart_options(trend_chart, {
             "tooltip": {"trigger": "axis"},
             "legend": {"textStyle": {"color": "#e5e7eb"}},
             "xAxis": {"type": "value", "name": "Generation"},
             "yAxis": {"type": "value", "name": metric},
             "series": series,
-        }
+        })
         trend_chart.update()
         detail_select.options = {str(value): str(value) for value in filtered["candidate_id"].astype(str)}
         detail_select.update()

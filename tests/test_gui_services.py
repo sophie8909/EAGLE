@@ -29,6 +29,7 @@ from eagle.candidate import Candidate
 from eagle.llm_profiles import LLMProfile, load_role_profiles, save_role_profiles
 from eagle.prompts import PromptTemplateError, load_prompt_templates, save_prompt_template
 from eagle_ui.controllers.prompt_controller import InitialPromptController
+from eagle_ui.components.echart import replace_chart_options
 from eagle_ui.runtime import DEFAULT_GUI_PORT, GUI_PORT_ENV, resolve_gui_port
 
 
@@ -44,6 +45,14 @@ class LLMRoleConfigTests(unittest.TestCase):
         with patch.dict(os.environ, {GUI_PORT_ENV: "not-a-port"}, clear=True):
             with self.assertRaises(ValueError):
                 resolve_gui_port()
+
+    def test_echart_options_are_replaced_in_place(self):
+        class FakeChart:
+            options = {"old": True}
+
+        chart = FakeChart()
+        replace_chart_options(chart, {"series": [{"data": [1, 2]}]})
+        self.assertEqual(chart.options, {"series": [{"data": [1, 2]}]})
 
     def test_role_config_load_save_round_trip_uses_json_topology(self):
         with tempfile.TemporaryDirectory() as directory:
