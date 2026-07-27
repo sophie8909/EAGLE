@@ -1,7 +1,8 @@
-"""Objective and persisted timing analysis controller."""
+"""Canonical analysis controller used by the GUI."""
 
 from pathlib import Path
 
+from eagle.analysis.dashboard import AnalysisDataLoader, AnalysisViewModel
 from eagle.analysis.objectives import available_objectives, generation_statistics, load_objective_directions, pareto_frame, prepare_objective_frame
 from eagle.analysis.plots import generation_distribution_options, objective_scatter_options
 from eagle.analysis.records import load_candidate_records
@@ -9,6 +10,15 @@ from eagle.analysis.timing import plot_payloads, summarize_run_timing
 
 
 class AnalysisController:
+    def __init__(self, loader: AnalysisDataLoader | None = None) -> None:
+        self.loader = loader or AnalysisDataLoader()
+
+    def load_dashboard(self, selected_path: Path) -> AnalysisViewModel:
+        return self.loader.load(selected_path)
+
+    def discover_sources(self, root: Path):
+        return self.loader.discover_sources(root)
+
     def load_run(self, run_dir: Path) -> tuple:
         frame = self.load(run_dir)
         directions = self.directions(run_dir)
@@ -17,7 +27,6 @@ class AnalysisController:
 
     def load(self, run_dir: Path):
         return prepare_objective_frame(load_candidate_records(run_dir))
-
 
     def objectives(self, frame) -> list[str]:
         return available_objectives(frame)
