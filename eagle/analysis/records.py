@@ -38,6 +38,12 @@ class ArtifactReadError(ValueError):
     """An existing canonical artifact could not be decoded."""
 
 
+# Run result lines contain complete telemetry and can be gigabytes in size.
+# Discovery only needs enough metadata to populate the GUI selector; defer the
+# full record read until the user explicitly selects a run.
+DISCOVERY_RESULT_SIZE_LIMIT = 10 * 1024 * 1024
+
+
 @dataclass(frozen=True)
 class RunSummary:
     run_id: str
@@ -179,6 +185,9 @@ def load_candidate(run_dir: Path, candidate_id: str) -> CandidateArtifacts:
 
 
 def _summarize_run(run_dir: Path) -> RunSummary:
+    results_path = run_dir / "results.jsonl"
+    if results_path.exists() and results_path.stat().st_size > DISCOVERY_RESULT_SIZE_LIMIT:
+        return _summarize_large_run(run_dir)
     records = load_candidate_records(run_dir)
     resolved = _as_dict(_read_json(run_dir / "resolved_config.json")) or {}
     summary = _as_dict(_read_json(run_dir / "summary.json"))
@@ -198,6 +207,29 @@ def _summarize_run(run_dir: Path) -> RunSummary:
         failure_count=failed,
         final_test_count=len(final_tests),
         final_test_candidate_ids=tested_ids,
+        config_summary={
+            key: resolved.get(key)
+            for key in ("population_size", "generation_count", "opponent", "map", "llm_backend", "llm_topology")
+            if key in resolved
+        },
+    )
+
+
+def _summarize_large_run(run_dir: Path) -> RunSummary:
+    """Summarize a telemetry-heavy run without parsing its multi-GB log."""
+    resolved = _as_dict(_read_json(run_dir / "resolved_config.json")) or {}
+    candidate_count = sum(1 for path in (run_dir / "candidates").glob("*/") if path.is_dir())
+    generation_count = sum(1 for path in run_dir.glob("generation_*_population.json") if path.is_file())
+    status = "complete" if (run_dir / "summary.json").exists() else "running"
+    return RunSummary(
+        run_id=run_dir.name,
+        path=run_dir,
+        start_time=_run_start_time(run_dir),
+        status=status,
+        generation_count=generation_count or int(resolved.get("generation_count", 0)),
+        candidate_count=candidate_count,
+        success_count=candidate_count,
+        failure_count=0,
         config_summary={
             key: resolved.get(key)
             for key in ("population_size", "generation_count", "opponent", "map", "llm_backend", "llm_topology")
