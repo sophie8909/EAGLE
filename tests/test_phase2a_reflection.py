@@ -11,6 +11,7 @@ from eagle.mutation import (
     build_code_reflection_prompt,
     build_strategy_reflection_prompt,
 )
+from eagle.llm_transport import truncate_prompt
 
 
 class ScriptedBackend:
@@ -137,6 +138,27 @@ class Phase2AReflectionTests(unittest.TestCase):
             self.assertTrue((mutation_dir / "reflector_response_raw.txt").exists())
             self.assertTrue((mutation_dir / "reflector_attempt_002_response_raw.txt").exists())
             self.assertIsNotNone(result.error)
+
+    def test_oversized_reflection_request_is_truncated_before_backend_call(self):
+        backend = ScriptedBackend(("bounded reflection",))
+        request = "BEGIN INSTRUCTIONS\n" + ("x" * 100_000) + "\nLATEST EVIDENCE"
+        result = ReflectionStage(backend, max_attempts=1).run(
+            reflection_type="strategy_reflection",
+            candidate=self.candidate,
+            request=request,
+        )
+        self.assertTrue(result.succeeded)
+        self.assertLessEqual(len(backend.calls[0]), 60_000)
+        self.assertIn("BEGIN INSTRUCTIONS", backend.calls[0])
+        self.assertIn("LATEST EVIDENCE", backend.calls[0])
+        self.assertIn("prompt truncated", backend.calls[0])
+
+    def test_prompt_truncation_is_deterministic_and_keeps_short_prompts(self):
+        short = "short prompt"
+        self.assertEqual(truncate_prompt(short), short)
+        oversized = "a" * 1_000 + "TAIL"
+        self.assertEqual(truncate_prompt(oversized, max_chars=256), truncate_prompt(oversized, max_chars=256))
+        self.assertLessEqual(len(truncate_prompt(oversized, max_chars=256)), 256)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from typing import Any, Protocol
 
 from .candidate import Candidate
 from .config import ExperimentConfig
+from .llm_errors import LLMServerError
 from .mutation import (
     REFLECTION_SCHEMA_VERSION,
     MutationContext,
@@ -27,6 +28,7 @@ from .mutation import (
     utc_now,
 )
 from .offspring import normalize_prompt
+from .llm_transport import truncate_prompt
 
 
 REWRITE_SCHEMA_VERSION = "phase2b-v1"
@@ -104,6 +106,7 @@ class PromptRewriteStage:
         artifact_dir: Path | None = None,
     ) -> RewriteResult:
         stage = "rewriter"
+        request = truncate_prompt(request)
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
         attempts: list[ReflectionAttempt] = []
@@ -119,6 +122,8 @@ class PromptRewriteStage:
                 response = self.backend.generate(request)
                 last_response = response
                 _validate_rewritten_prompt(response)
+            except LLMServerError:
+                raise
             except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
                 status = "error"
                 error = str(exc) or type(exc).__name__

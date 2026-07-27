@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from eagle.candidate import Candidate
+from eagle.llm_errors import LLMServerError
 from evaluation.code_quality import StrategyRegionScoreResult, evaluate_agent_strategy_region
 from .agent_template import JavaTemplatePaths, extract_strategy_region
 from .backend import GenerationBackend
@@ -112,6 +113,8 @@ def generate_java_agent(candidate: Candidate, backend: GenerationBackend, worksp
 def generate_java_agent_result(candidate: Candidate, backend: GenerationBackend, workspace_dir: Path, *, template_paths: JavaTemplatePaths | None = None) -> JavaAgentGenerationResult:
     try:
         raw = backend.generate(candidate, "CandidateAgent")
+    except LLMServerError:
+        raise
     except (RuntimeError, OSError, ValueError) as exc:
         reason = str(exc)
         blocked = blocked_validation_result("Source validation was blocked because Java generation failed.")

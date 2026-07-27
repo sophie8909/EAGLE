@@ -10,6 +10,11 @@ from urllib.parse import urlparse
 
 DEFAULT_ROLE_TOPOLOGY_PATH = Path("experiment_env/config/llm_topology.json")
 REQUIRED_LLM_ROLES = ("reflector", "rewriter", "generator")
+DEFAULT_MAX_OUTPUT_TOKENS = {
+    "reflector": 1024,
+    "rewriter": 1024,
+    "generator": 4096,
+}
 
 
 @dataclass(frozen=True)
@@ -93,7 +98,12 @@ def load_role_profiles(
             timeout_seconds=float(role_entry.get("timeout_seconds", server.get("timeout_seconds", 120.0))),
             context_size=_optional_int(role_entry.get("context_size", server.get("context_size"))),
             temperature=float(role_entry.get("temperature", server.get("temperature", 0.2))),
-            max_output_tokens=_optional_int(role_entry.get("max_output_tokens", server.get("max_output_tokens"))),
+            max_output_tokens=_optional_int(
+                role_entry.get(
+                    "max_output_tokens",
+                    server.get("max_output_tokens", DEFAULT_MAX_OUTPUT_TOKENS[role]),
+                )
+            ),
             server_label=str(server.get("label") or server.get("model_display_name") or server_id),
             server_profile=server_id,
         )

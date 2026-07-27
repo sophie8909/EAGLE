@@ -9,6 +9,7 @@ from nicegui import ui
 
 from eagle.analysis.records import discover_runs
 from eagle_ui.controllers.analysis_controller import AnalysisController
+from eagle_ui.components.echart import replace_chart_options
 from eagle_ui.state import AppState
 from eagle_ui.theme import BUTTON_CLASS, CARD_CLASS, INPUT_CLASS
 
@@ -65,8 +66,8 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
         y_objective = names[min(1, len(names) - 1)]
         pareto = controller.pareto(frame, (x_objective, y_objective), directions)
         pareto_ids = set(pareto["candidate_id"].astype(str))
-        distribution.options = controller.distribution_plot(frame, objective)
-        scatter.options = controller.scatter_plot(frame, x_objective, y_objective, pareto_ids)
+        replace_chart_options(distribution, controller.distribution_plot(filtered, str(objective.value)))
+        replace_chart_options(scatter, controller.scatter_plot(filtered, str(x_objective.value), str(y_objective.value), pareto_ids))
         distribution.update()
         scatter.update()
         pareto_candidates.options = {candidate: candidate for candidate in sorted(pareto_ids)}
@@ -90,15 +91,24 @@ def build_analysis_view(controller: AnalysisController, state: AppState) -> None
             row_key="candidate_id",
         ).classes("w-full")
 
-    def render_timing(timing_summary: dict, timing_plots: dict[str, dict]) -> None:
+    async def load_timing() -> None:
+        if not run_select.value:
+            return
+        run_dir = Path(str(run_select.value))
+        try:
+            timing_summary = await asyncio.to_thread(controller.timing, run_dir)
+            timing_plots = await asyncio.to_thread(controller.timing_plots, run_dir)
+        except (OSError, ValueError) as exc:
+            timing_status.set_text(f"Cannot load timing artifacts: {exc}")
+            return
         timing_status.set_text(
             f"Run duration: {timing_summary['total_run_duration_seconds']:.4f}s"
             f" | Requests: {len(timing_summary['llm_requests'])}"
         )
-        generation_timing_chart.options = timing_plots["generation_duration"]
-        operation_timing_chart.options = timing_plots["operation_breakdown"]
-        llm_stage_chart.options = timing_plots["llm_by_stage"]
-        llm_model_chart.options = timing_plots["llm_by_model"]
+        replace_chart_options(generation_timing_chart, timing_plots["generation_duration"])
+        replace_chart_options(operation_timing_chart, timing_plots["operation_breakdown"])
+        replace_chart_options(llm_stage_chart, timing_plots["llm_by_stage"])
+        replace_chart_options(llm_model_chart, timing_plots["llm_by_model"])
         for chart in (generation_timing_chart, operation_timing_chart, llm_stage_chart, llm_model_chart):
             chart.update()
         timing_table.rows = timing_summary["operation_records"][:20]

@@ -73,4 +73,6 @@ tournament/traces/*.xml
 /experiment_env/model/*/mmproj.gguf
 /experiment_env/runtime/logs/
 /experiment_env/runtime/pids/
+/experiment_env/runtime/servers/
 /experiment_env/runtime/runtime_state.local.json
+experiment_env/config/llm_topology.json

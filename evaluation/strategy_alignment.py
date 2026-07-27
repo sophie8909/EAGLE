@@ -12,6 +12,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from eagle.llm_errors import LLMServerError
+from eagle.llm_progress import llm_request_progress
+from eagle.llm_transport import read_chat_completion_content, truncate_prompt
+
 
 @dataclass(frozen=True)
 class StrategyAlignmentResult:
@@ -68,6 +72,8 @@ class OpenAICompatibleStrategyAlignmentBackend(StrategyAlignmentBackend):
             "messages": [{"role": "user", "content": request_text}],
             "temperature": self.temperature,
             "response_format": {"type": "json_object"},
+            "chat_template_kwargs": {"enable_thinking": False},
+            "stream": True,
         }
         if self.max_output_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
@@ -78,13 +84,16 @@ class OpenAICompatibleStrategyAlignmentBackend(StrategyAlignmentBackend):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-                body = json.loads(response.read().decode("utf-8"))
+            with llm_request_progress(
+                stage="strategy_alignment",
+                endpoint=self.url,
+                model=self.model,
+            ):
+                with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                    return read_chat_completion_content(response)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"Strategy Alignment backend failed: {exc}") from exc
-        try:
-            return str(body["choices"][0]["message"]["content"])
-        except (KeyError, IndexError, TypeError) as exc:
+            raise LLMServerError(f"llm server error: Strategy Alignment backend failed: {exc}") from exc
+        except (KeyError, IndexError, TypeError, UnicodeDecodeError) as exc:
             raise RuntimeError(f"Strategy Alignment backend returned invalid JSON: {exc}") from exc
 
 
@@ -113,6 +122,7 @@ def evaluate_strategy_alignment(
     artifact_dir: Path | None = None,
 ) -> StrategyAlignmentResult:
     request = build_alignment_request(strategy_prompt, generated_java, behavior_summary)
+    request = truncate_prompt(request)
     started_at = _utc_now()
     started = time.monotonic()
     raw_response = ""
@@ -132,6 +142,8 @@ def evaluate_strategy_alignment(
         if artifact_dir is not None:
             (artifact_dir / "response_raw.txt").write_text(raw_response, encoding="utf-8")
         reason = str(parsed["reason"])
+    except LLMServerError:
+        raise
     except (RuntimeError, ValueError, TypeError) as exc:
         status = "failed"
         error = str(exc)

@@ -35,6 +35,11 @@ def build_run_view(state: AppState, controller: RunController) -> None:
             map_path = ui.select(controller.map_choices(), label="MicroRTS map").classes(INPUT_CLASS)
             runs_dir_input = ui.input("Output run directory").classes(INPUT_CLASS)
         effective_config = ui.label("Effective configuration: not loaded").classes("text-caption")
+        with ui.grid(columns=3).classes("w-full gap-3"):
+            llm_port = _status_field("Current EA LLM port", "not loaded")
+            llm_endpoint = _status_field("Current EA LLM endpoint", "not loaded")
+            llm_model = _status_field("Current EA LLM model", "not loaded")
+        llm_topology = ui.label("LLM topology: not loaded").classes("text-caption font-mono break-all")
         mock = ui.checkbox("Dry run / mock evaluation", value=state.run.mock)
         with ui.row().classes("items-center gap-2"):
             load_button = ui.button("Load configuration").classes(BUTTON_CLASS)
@@ -121,6 +126,7 @@ def build_run_view(state: AppState, controller: RunController) -> None:
         ui.notify(f"Saved {config_select.value}", type="positive")
 
     def refresh() -> None:
+        refresh_llm_connection()
         status.set_text("running" if state.run.running else f"exit {state.run.returncode}" if state.run.returncode is not None else "idle")
         generation.set_text("unknown" if state.run.current_generation is None else str(state.run.current_generation))
         candidate.set_text(state.run.current_candidate or "unknown")
@@ -130,12 +136,32 @@ def build_run_view(state: AppState, controller: RunController) -> None:
         start_button.set_enabled(not state.run.running)
         stop_button.set_enabled(state.run.running)
 
+    def refresh_llm_connection() -> None:
+        try:
+            selected = Path(str(config_select.value))
+            connection = controller.resolve_llm_connection(selected, mock=bool(mock.value))
+        except (OSError, ValueError) as exc:
+            llm_port.set_text("error")
+            llm_endpoint.set_text(str(exc))
+            llm_model.set_text("unknown")
+            llm_topology.set_text("LLM topology: cannot resolve selected configuration")
+            return
+        llm_port.set_text(connection.port_text)
+        llm_endpoint.set_text(connection.endpoint_text)
+        llm_model.set_text(connection.model_text)
+        llm_topology.set_text(
+            "LLM topology: mock mode"
+            if connection.topology_path is None
+            else f"LLM topology: {connection.topology_path}"
+        )
+
     start_button.on_click(start)
     stop_button.on_click(stop)
     load_button.on_click(load_config)
     validate_button.on_click(validate_edits)
     save_button.on_click(save_config)
     config_select.on_value_change(lambda _: load_config())
+    mock.on_value_change(lambda _: refresh_llm_connection())
     ui.timer(0.5, refresh)
     ui.timer(0.1, load_config, once=True)
 

@@ -22,6 +22,7 @@ from eagle_ui.runtime import resolve_gui_port
 ROOT = Path(__file__).resolve().parents[1]
 STATE = AppState(repository_root=ROOT)
 RUN_CONTROLLER = RunController(ROOT, STATE.run)
+LLM_CONTROLLER = LLMConfigController(ROOT)
 
 
 def build_layout() -> None:
@@ -36,12 +37,11 @@ def build_layout() -> None:
         servers_tab = ui.tab("Servers")
         experiment_tab = ui.tab("Experiment")
         analysis_tab = ui.tab("Analysis")
-    llm_controller = LLMConfigController(ROOT)
     with ui.tab_panels(tabs, value=servers_tab).classes("w-full"):
         with ui.tab_panel(servers_tab):
-            build_llm_view(llm_controller, ROOT)
+            build_llm_view(LLM_CONTROLLER, ROOT)
             ui.separator()
-            build_profile_configuration(llm_controller, ROOT)
+            build_profile_configuration(LLM_CONTROLLER, ROOT)
         with ui.tab_panel(experiment_tab):
             build_experiment_view(STATE, RUN_CONTROLLER, ROOT)
         with ui.tab_panel(analysis_tab):
@@ -53,6 +53,7 @@ def build_layout() -> None:
 
 def _shutdown() -> None:
     RUN_CONTROLLER.shutdown()
+    LLM_CONTROLLER.shutdown()
 
 
 app.on_shutdown(_shutdown)

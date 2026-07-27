@@ -34,6 +34,7 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Timing | UTC fields, monotonic durations, attempts, optional null stages, 10 match durations |
 | NSGA-II | exactly two maximized objectives; failure candidates retained; rank/crowding survivor behavior |
 | Operations | readers reject/migrate unsupported schema versions; legacy names never leak into active output |
+| LLM server lifecycle | missing executable/model; immediate exit; bounded loading/readiness; occupied port; bind/client host separation; local/remote launch ownership; durable stdout/stderr; useful failure state; process-group stop; topology/client URL identity; no READY on process creation |
 
 ## Failure fixtures
 
@@ -64,5 +65,7 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
 
 When tests reveal a code/spec discrepancy, update [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md). When documented behavior changes by explicit decision, update the authoritative/canonical docs and the Chinese overview according to [`../README.md`](../README.md).
 ## Dual-host LLM deployment
+
+Server-management tests must cover explicit CPU/CUDA/remote backend resolution, capability rejection of CPU-only binaries in CUDA mode, device-list parsing, logical GPU-layer/VRAM-fit argument mapping, and the invariant that CPU commands contain no GPU-specific arguments.
 
 Focused tests must prove that coder-profile updates preserve the general section, general-profile updates preserve the coder section, updates are atomic, placeholder or unsafe coder URLs are rejected, aliases and ports may differ, and stage identity records Reflection/Rewrite as general and Generation as coder. Single-machine tests must opt into coder loopback explicitly.

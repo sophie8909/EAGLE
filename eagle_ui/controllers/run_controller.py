@@ -8,19 +8,51 @@ import subprocess
 import sys
 import threading
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 from datetime import datetime
+from urllib.parse import urlparse
 
 from eagle.config import ExperimentConfig
+from eagle.llm_profiles import load_role_profiles
 from eagle_ui.controllers.config_controller import update_minimal_yaml
 
 from eagle_ui.state import RunState
 from eagle.runtime.process_logs import ProcessLogRecord
 
 
-PROGRESS_PATTERN = re.compile(r"\[gen\s+(?P<generation>\d+)\s+cand\s+(?P<index>\d+)/(?P<total>\d+)\]\s+(?P<candidate>\S+)\s+status=(?P<status>\S+)")
+PROGRESS_PATTERN = re.compile(
+    r"\[gen\s+(?P<generation>\d+)\s+cand\s+(?P<index>\d+)/(?P<total>\d+)\]\s+"
+    r"(?P<candidate>\S+)\s+(?:stage=(?P<stage>\S+)\s+)?status=(?P<status>\S+)"
+)
 RUN_DIR_PATTERN = re.compile(r"^run_dir=(?P<path>.+)$")
+BEST_PATTERN = re.compile(
+    r"^best_candidate=(?P<candidate>\S+) objectives=\{'game_performance': (?P<game>-?[0-9.eE+]+), 'code_quality': (?P<quality>-?[0-9.eE+]+)\}$"
+)
+
+
+@dataclass(frozen=True)
+class EALLMConnection:
+    """LLM values the selected EA configuration will resolve at startup."""
+
+    mode: str
+    topology_path: Path | None
+    endpoints: tuple[str, ...]
+    ports: tuple[int, ...]
+    models: tuple[str, ...]
+
+    @property
+    def endpoint_text(self) -> str:
+        return "mock" if self.mode == "mock" else ", ".join(self.endpoints)
+
+    @property
+    def port_text(self) -> str:
+        return "mock" if self.mode == "mock" else ", ".join(str(port) for port in self.ports)
+
+    @property
+    def model_text(self) -> str:
+        return "mock" if self.mode == "mock" else ", ".join(self.models)
 
 
 class RunController:
@@ -33,6 +65,8 @@ class RunController:
         self._readers: list[threading.Thread] = []
         self._lock = threading.Lock()
         self._listeners: list[Callable[[], None]] = []
+        self._process_kind = "evolution"
+        self._stop_requested = False
 
     def config_choices(self) -> list[Path]:
         return sorted((self.repository_root / "configs").glob("*.yaml"))
@@ -52,6 +86,36 @@ class RunController:
             "map_path": config.map_path,
             "runs_dir": str(config.runs_dir),
         }
+
+    def resolve_llm_connection(self, path: Path, *, mock: bool = False) -> EALLMConnection:
+        """Resolve the same topology endpoint, port, and model used by the EA."""
+
+        config = ExperimentConfig.from_file(path)
+        if mock or config.generation_backend == "mock":
+            return EALLMConnection(
+                mode="mock",
+                topology_path=None,
+                endpoints=(),
+                ports=(),
+                models=(),
+            )
+        profiles = load_role_profiles(config.llm_role_topology_path)
+        endpoints = tuple(dict.fromkeys(profile.base_url for profile in profiles.values()))
+        ports = tuple(
+            dict.fromkeys(
+                parsed.port
+                for endpoint in endpoints
+                if (parsed := urlparse(endpoint)).port is not None
+            )
+        )
+        models = tuple(dict.fromkeys(profile.model for profile in profiles.values()))
+        return EALLMConnection(
+            mode="openai",
+            topology_path=config.llm_role_topology_path,
+            endpoints=endpoints,
+            ports=ports,
+            models=models,
+        )
 
     def save_fields(self, path: Path, values: dict[str, object]) -> ExperimentConfig:
         """Atomically save supported CLI config fields after canonical validation."""
@@ -95,11 +159,14 @@ class RunController:
         self.state.returncode = None
         self.state.current_generation = None
         self.state.current_candidate = None
+        self.state.best_candidate_id = None
         self.state.completed_candidates = 0
         self.state.failed_candidates = 0
         runs_dir = config.runs_dir if config.runs_dir.is_absolute() else self.repository_root / config.runs_dir
         self.state.effective_run_dir = runs_dir / run_id
         self.state.logs.clear()
+        self._process_kind = "evolution"
+        self._stop_requested = False
         self.state.logs.append(ProcessLogRecord.create(source="experiment", stream="system", process="eagle", message="launch: " + " ".join(command)))
         self._process = subprocess.Popen(
             command,
@@ -124,6 +191,7 @@ class RunController:
 
     def stop(self) -> None:
         """Stop the active EA child process from the GUI."""
+        self._stop_requested = True
         process = self._process
         if process is not None and process.poll() is None:
             process.terminate()
@@ -152,17 +220,75 @@ class RunController:
         process = self._process
         if process is None:
             return
+        process_kind = self._process_kind
         returncode = process.wait()
         with self._lock:
             self.state.returncode = returncode
             self.state.running = False
-            self.state.logs.append(ProcessLogRecord.create(source="experiment", stream="system", process="eagle", message=f"process exited with code {returncode}", severity="error" if returncode else "info"))
+            if returncode == 0 and process_kind == "evolution" and not self._stop_requested:
+                self.state.logs.append(ProcessLogRecord.create(source="experiment", stream="system", process="eagle", message="successful end", severity="info"))
+            self.state.logs.append(ProcessLogRecord.create(source="experiment", stream="system", process=process_kind, message=f"process exited with code {returncode}", severity="error" if returncode else "info"))
+            if process_kind == "evolution" and returncode == 2:
+                self.state.logs.append(ProcessLogRecord.create(source="experiment", stream="system", process="eagle", message="llm server error", severity="error"))
         self._notify()
+        if (
+            process_kind == "evolution"
+            and returncode == 0
+            and not self._stop_requested
+            and not self.state.mock
+            and self.state.effective_run_dir is not None
+            and self.state.best_candidate_id is not None
+        ):
+            self._start_final_test()
+
+    def _start_final_test(self) -> None:
+        assert self.state.effective_run_dir is not None
+        assert self.state.best_candidate_id is not None
+        command = [
+            sys.executable,
+            "scripts/run_final_test.py",
+            "--run-dir",
+            str(self.state.effective_run_dir),
+            "--candidate-id",
+            self.state.best_candidate_id,
+            "--config",
+            str(self.repository_root / "configs" / "final_test_champions.yaml"),
+        ]
+        environment = dict(os.environ)
+        environment["PYTHONUNBUFFERED"] = "1"
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=self.repository_root,
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+        except OSError as exc:
+            self.state.logs.append(ProcessLogRecord.create(source="final_test", stream="system", process="final_test", message=f"launch failed: {exc}", severity="error"))
+            self._notify()
+            return
+        self._process_kind = "final_test"
+        self._process = process
+        self.state.running = True
+        self.state.returncode = None
+        self.state.logs.append(ProcessLogRecord.create(source="final_test", stream="system", process="final_test", message="launch: " + " ".join(command)))
+        self._readers = [
+            threading.Thread(target=self._read_stream, args=(process.stdout, "stdout"), name="final-test-stdout"),
+            threading.Thread(target=self._read_stream, args=(process.stderr, "stderr"), name="final-test-stderr"),
+        ]
+        for reader in self._readers:
+            reader.start()
+        threading.Thread(target=self._wait_for_exit, name="final-test-wait", daemon=True).start()
     def _apply_progress(self, line: str) -> None:
         match = PROGRESS_PATTERN.search(line)
         if match:
             self.state.current_generation = int(match.group("generation"))
             self.state.current_candidate = match.group("candidate")
+            if match.group("status") == "started":
+                return
             if match.group("status") == "failed":
                 self.state.failed_candidates += 1
             else:
@@ -172,6 +298,11 @@ class RunController:
         if run_match:
             path = Path(run_match.group("path"))
             self.state.effective_run_dir = path if path.is_absolute() else self.repository_root / path
+            return
+        best_match = BEST_PATTERN.match(line)
+        if best_match:
+            if float(best_match.group("game")) > -1000.0 and float(best_match.group("quality")) > -1000.0:
+                self.state.best_candidate_id = best_match.group("candidate")
 
     def _notify(self) -> None:
         for listener in tuple(self._listeners):

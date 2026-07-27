@@ -18,6 +18,9 @@ from typing import Any, Protocol
 
 from .candidate import Candidate
 from .config import ExperimentConfig
+from .llm_errors import LLMServerError
+from .llm_progress import llm_request_progress
+from .llm_transport import read_chat_completion_content, truncate_prompt
 
 
 REFLECTION_SCHEMA_VERSION = "phase2a-v1"
@@ -178,6 +181,8 @@ class OpenAICompatibleReflectionBackend:
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": self.temperature,
+            "chat_template_kwargs": {"enable_thinking": False},
+            "stream": True,
         }
         if self.max_output_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
@@ -188,18 +193,22 @@ class OpenAICompatibleReflectionBackend:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
-                body = json.loads(response.read().decode("utf-8"))
-            return str(body["choices"][0]["message"]["content"])
+            with llm_request_progress(
+                stage=self.llm_profile or "reflection",
+                endpoint=self.chat_completions_url,
+                model=self.model,
+            ):
+                with urllib.request.urlopen(request, timeout=self.timeout_sec) as response:
+                    return read_chat_completion_content(response)
         except urllib.error.HTTPError as exc:
             response_body = exc.read().decode("utf-8", errors="replace")[:300]
-            raise RuntimeError(
-                f"Reflection backend HTTP {exc.code}: {exc.reason}; "
+            raise LLMServerError(
+                f"llm server error: Reflection backend HTTP {exc.code}: {exc.reason}; "
                 f"response_body_start={response_body!r}"
             ) from exc
         except (urllib.error.URLError, TimeoutError) as exc:
-            raise RuntimeError(f"Reflection backend request failed: {exc}") from exc
-        except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+            raise LLMServerError(f"llm server error: Reflection backend request failed: {exc}") from exc
+        except (json.JSONDecodeError, KeyError, IndexError, TypeError, UnicodeDecodeError) as exc:
             raise RuntimeError(f"Reflection backend returned invalid JSON: {exc}") from exc
 
 
@@ -250,6 +259,7 @@ class ReflectionStage:
         artifact_dir: Path | None = None,
     ) -> ReflectionResult:
         stage = "reflector"
+        request = truncate_prompt(request)
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
 
@@ -266,6 +276,8 @@ class ReflectionStage:
                 response = self.backend.generate(request)
                 last_response = response
                 _validate_reflection(response)
+            except LLMServerError:
+                raise
             except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
                 status = "error"
                 error = str(exc) or type(exc).__name__

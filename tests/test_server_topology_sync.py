@@ -28,7 +28,10 @@ class ServerTopologySyncTests(unittest.TestCase):
             payload = json.loads(topology.read_text(encoding="utf-8"))
             self.assertEqual(payload["servers"]["local-llm"]["model_id"], "qwen3.5-local")
             self.assertEqual(payload["servers"]["local-llm"]["base_url"], "http://127.0.0.1:8080/v1")
+            self.assertEqual(payload["servers"]["local-llm"]["timeout_seconds"], 300)
             self.assertEqual(payload["roles"]["generator"]["server_id"], "local-llm")
+            self.assertEqual(payload["roles"]["generator"]["max_output_tokens"], 4096)
+            self.assertEqual(payload["roles"]["reflector"]["max_output_tokens"], 1024)
 
 
 if __name__ == "__main__":
