@@ -19,6 +19,8 @@ class ServerArguments:
     parallel: int = 1
     threads: int = 8
     batch_size: int = 512
+    prompt_cache_mib: int = 0
+    reuse_prompt_cache: bool = False
 
 
 @dataclass(frozen=True)
@@ -183,7 +185,8 @@ def _parse_server(name: str, value: object) -> ServerConfig:
         args = ServerArguments(
             _positive_int(raw, "context_size", 32768), int(raw.get("gpu_layers", -1)),
             _positive_int(raw, "parallel", 1), _positive_int(raw, "threads", 8),
-            _positive_int(raw, "batch_size", 512),
+            _positive_int(raw, "batch_size", 512), _nonnegative_int(raw, "prompt_cache_mib", 0),
+            bool(raw.get("reuse_prompt_cache", False)),
         )
     return ServerConfig(
         name, bool(value.get("enabled", False)), mode, _required_text(value, "client_host"),
@@ -236,6 +239,16 @@ def _positive_int(payload: dict[str, Any], key: str, default: int | None = None)
         raise ValueError(f"Runtime config field {key!r} must be an integer.") from exc
     if result <= 0:
         raise ValueError(f"Runtime config field {key!r} must be positive.")
+    return result
+
+
+def _nonnegative_int(payload: dict[str, Any], key: str, default: int = 0) -> int:
+    try:
+        result = int(payload.get(key, default))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Runtime config field {key!r} must be an integer.") from exc
+    if result < 0:
+        raise ValueError(f"Runtime config field {key!r} must be nonnegative.")
     return result
 
 

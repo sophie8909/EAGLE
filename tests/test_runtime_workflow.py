@@ -39,6 +39,7 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 "coder": {
                     "enabled": True, "mode": "local", "host": "0.0.0.0",
                     "client_host": "127.0.0.1", "port": 8081, "model": str(coder),
+                    "model_id": "coder-model",
                     "roles": ["generator"], "arguments": {},
                 },
                 "general": {
@@ -68,6 +69,10 @@ class RuntimeWorkflowTests(unittest.TestCase):
             command = build_server_command(runtime, runtime.local_servers()[0])
             self.assertIn("--ctx-size", command)
             self.assertIn("--n-gpu-layers", command)
+            self.assertIn("--cache-ram", command)
+            self.assertEqual(command[command.index("--cache-ram") + 1], "0")
+            self.assertIn("--no-cache-prompt", command)
+            self.assertEqual(command[-2:], ["--alias", "coder-model"])
 
     def test_unknown_schema_duplicate_local_port_and_missing_model(self):
         with tempfile.TemporaryDirectory() as directory:

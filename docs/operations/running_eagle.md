@@ -32,6 +32,12 @@ exact configured command. Remote servers are checked but never launched or
 stopped. Bind hosts and client hosts remain distinct in `configs/runtime.yaml`.
 Logs and PID files are written beneath its configured `log_root` and
 `pid_root`; resolved role endpoints are written atomically for the EA process.
+Local llama.cpp model aliases are passed explicitly with `--alias` so the
+configured `model_id` matches `/v1/models`. The default
+`prompt_cache_mib: 0` disables llama.cpp's optional cross-request prompt cache;
+`reuse_prompt_cache: false` disables per-slot prompt reuse. Increase or enable
+them only after validating the installed llama.cpp build under repeated
+requests.
 
 Mutation, generation, and Strategy Alignment requests are hard-truncated at the shared
 LLM transport boundary when oversized; the prompt head and latest evidence tail are

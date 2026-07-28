@@ -56,6 +56,7 @@ tournament/traces/*.xml
 /legecy/
 /logs_legacy/
 /logs_legecy/
+/runtime/
 
 # Local model assets and generated llama.cpp outputs
 /model/

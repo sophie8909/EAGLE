@@ -111,7 +111,7 @@ def _write_runtime_topology(runtime, mapping) -> Path:
         server = next(server for server in runtime.enabled_servers() if server.name == item["server"])
         servers[server.name] = {
             "base_url": item["base_url"].rstrip("/") + "/v1",
-            "model_id": server.model_id or (server.model.stem if server.model else server.name),
+            "model_id": server.model_id or (server.model.name if server.model else server.name),
             "enabled": True,
         }
         roles[role] = {"server_id": server.name, "enabled": True}

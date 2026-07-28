@@ -8,34 +8,20 @@ environment:
   pid_root: /home/mhlab/EAGLE/runtime/pids
 
 llama_cpp:
-  server_binary: /home/mhlab/EAGLE/experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
+  server_binary: /home/mhlab/EAGLE/experiment_env/model/llama.cpp/llama.cpp/build-eagle-cuda-128/bin/llama-server
 
 servers:
-  coder:
-    enabled: true
-    mode: local
-    host: 0.0.0.0
-    client_host: 127.0.0.1
-    port: 8081
-    model: /home/mhlab/EAGLE/experiment_env/model/qwen2.5-coder-7b.gguf
-    roles:
-      - generator
-    arguments:
-      context_size: 32768
-      gpu_layers: -1
-      parallel: 1
-      threads: 8
-      batch_size: 512
-
   general:
     enabled: true
     mode: local
     host: 0.0.0.0
     client_host: 127.0.0.1
     port: 8082
-    model: /home/mhlab/EAGLE/experiment_env/model/qwen3.5-9b.gguf
+    model: /home/mhlab/EAGLE/experiment_env/model/qwen3-5-9b-ud-q4-k-xl-bbcc0f54/model.gguf
+    model_id: qwen3.5
     roles:
       - reflector
+      - generator
       - rewriter
     arguments:
       context_size: 32768
@@ -43,6 +29,8 @@ servers:
       parallel: 1
       threads: 8
       batch_size: 512
+      prompt_cache_mib: 0
+      reuse_prompt_cache: false
 
 watchdog:
   enabled: true

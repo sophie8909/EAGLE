@@ -26,12 +26,17 @@ def build_server_command(runtime: RuntimeConfig, server: ServerConfig) -> list[s
     if server.mode != "local" or server.model is None or server.host is None:
         raise ValueError(f"Cannot build a local command for {server.name}.")
     args = server.arguments
-    return [
+    command = [
         str(runtime.server_binary), "--host", server.host, "--port", str(server.port),
         "--model", str(server.model), "--ctx-size", str(args.context_size),
         "--n-gpu-layers", str(args.gpu_layers), "--parallel", str(args.parallel),
         "--threads", str(args.threads), "--batch-size", str(args.batch_size),
+        "--cache-ram", str(args.prompt_cache_mib),
+        "--cache-prompt" if args.reuse_prompt_cache else "--no-cache-prompt",
     ]
+    if server.model_id:
+        command.extend(["--alias", server.model_id])
+    return command
 
 
 class RuntimeManager:

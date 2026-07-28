@@ -65,6 +65,12 @@ The user-facing workflow is now exactly `./run_env.sh`, `./run.sh`, and `./analy
 
 LLM transport now hard-truncates oversized generation, mutation, and Strategy Alignment prompts to preserve llama.cpp context headroom. The truncation marker and bounded request are persisted/logged, while full match telemetry remains in run artifacts.
 
+The local launcher passes configured model IDs through llama.cpp `--alias`, so
+strict `/v1/models` preflight and inference use the same identifier. The
+checked-in local profile also disables both RAM and per-slot prompt caches
+because the installed CUDA build aborts while reusing an identical one-token
+preflight prompt; two consecutive real preflights now pass on one stable PID.
+
 ## Canonical offline analysis update (2026-07-28)
 
 `./analyze.sh` and `python -m eagle analyze` resolve either one explicit
