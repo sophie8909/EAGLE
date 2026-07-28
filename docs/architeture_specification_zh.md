@@ -328,7 +328,7 @@ Compile ??敺? class loading?onstructor?uperclass?ethod signature
 | `docs/implementation/architecture_traceability_matrix.md` | Architecture contract?mplementation?ests?rtifact?tatus?riority ??migration dependency ?蜓閬蕭頩斤???| ?豢?銝???architecture gap????migration ??霅?contract coverage ??| Contract?mplementation path?est?rtifact?tatus?riority?ependency ??active docs 蝯??寡???|
 | `docs/implementation/architecture_gaps.md` | 靘?dependency ???蝘駁?畾萸?| Legacy cleanup?ap closure?楊璅∠? refactor??| Dependency/order/gap status ?寡???|
 | `docs/operations/running_eagle.md` | WSL-first command?onfig preflight ??run acceptance??| ?瑁? smoke/real mode ? CLI/config ??| Commands?nvironment?onfig/run checks ?寡???|
-| `docs/operations/inspecting_runs.md` | Run analysis?andidate debugging?UI ??legacy safety??| ?? artifact?ebug failure?炎閬?Candidate ??| Analysis/GUI/schema-reading workflow ?寡???|
+| `docs/operations/inspecting_runs.md` | 執行結果與離線分析 | 讀取 canonical compact artifacts | 靜態分析、明確路徑與 legacy migration 規則 |
 | `docs/testing/test_contracts.md` | Contract matrix?ixtures ??WSL validation??| ?啣?/靽格 tests ?遙雿?contract behavior??| Required coverage?ixtures ??validation command ?寡???|
 
 ??Documentation Map 敹?????active English documentation files?銵冽??`docs/` 撖阡?蝯?銝??湛???靽格迤銵冽??`docs/README.md`嚗?摰??賊?霈??

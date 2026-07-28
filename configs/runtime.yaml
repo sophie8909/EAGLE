@@ -1,0 +1,64 @@
+schema_version: runtime-v1
+
+environment:
+  conda_env: eagle
+  project_root: /home/mhlab/EAGLE
+  run_root: /home/mhlab/EAGLE/runs
+  log_root: /home/mhlab/EAGLE/runtime/logs
+  pid_root: /home/mhlab/EAGLE/runtime/pids
+
+llama_cpp:
+  server_binary: /home/mhlab/EAGLE/experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
+
+servers:
+  coder:
+    enabled: true
+    mode: local
+    host: 0.0.0.0
+    client_host: 127.0.0.1
+    port: 8081
+    model: /home/mhlab/EAGLE/experiment_env/model/qwen2.5-coder-7b.gguf
+    roles:
+      - generator
+    arguments:
+      context_size: 32768
+      gpu_layers: -1
+      parallel: 1
+      threads: 8
+      batch_size: 512
+
+  general:
+    enabled: true
+    mode: local
+    host: 0.0.0.0
+    client_host: 127.0.0.1
+    port: 8082
+    model: /home/mhlab/EAGLE/experiment_env/model/qwen3.5-9b.gguf
+    roles:
+      - reflector
+      - rewriter
+    arguments:
+      context_size: 32768
+      gpu_layers: -1
+      parallel: 1
+      threads: 8
+      batch_size: 512
+
+watchdog:
+  enabled: true
+  interval_seconds: 10
+  startup_timeout_seconds: 120
+  health_timeout_seconds: 5
+  restart_delay_seconds: 5
+  max_consecutive_restarts: 5
+  restart_window_seconds: 600
+
+health_check:
+  path: /health
+  fallback_path: /v1/models
+  retries: 3
+  retry_delay_seconds: 2
+
+analysis:
+  output_directory_name: analysis
+  latest_run_strategy: modified_time

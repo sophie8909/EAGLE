@@ -42,10 +42,10 @@ The most recent complete saved population run (`runs/20260712_154209_634218`) us
 
 ## Operational state
 
-- `python scripts/run_eagle.py --config configs/eagle_minimal.yaml --mock` exercises the contract-shaped 10-match evaluation pipeline, but mock execution is not real MicroRTS proof.
+- `python -m eagle run --config configs/experiments/microrts.yaml --runtime-config configs/runtime.yaml --mock` exercises the contract-shaped 10-match evaluation pipeline, but mock execution is not real MicroRTS proof.
 - Real mode requires the local generation endpoint, `javac`, vendored MicroRTS runtime, and prepared external opponent JARs.
 - WSL is the project default for Python/Java/MicroRTS commands.
-- `scripts/play_candidate_gui.py` retains transitional generated-class discovery and defaults to `ai.PassiveAI`; it is a manual viewer, not the evaluation protocol.
+- Candidate inspection is artifact-only; the obsolete manual viewer has been removed.
 
 See [`architecture_gaps.md`](architecture_gaps.md) for the remaining implementation status.
 
@@ -57,28 +57,23 @@ A real bounded smoke selected candidate `1ed41153d0c4` from completed mock-evolu
 
 ## Canonical runtime update (2026-07-24)
 
-The user-facing runtime is now ./run.sh, which starts the NiceGUI application and eagle.runtime.watchdog. The GUI has Servers, Experiment, and Analysis surfaces. Local LLM lifecycle is owned by eagle.runtime.server_manager.LLMServerManager; the removed shell launchers and standalone tmux/network-reset workflows are not active paths. The Experiment surface displays the endpoint, port, model, and topology path resolved from the selected EA configuration. EAGLE-owned local servers disable reasoning mode, use one sequential slot with bounded CPU threads, and apply bounded role-specific output-token defaults. OpenAI-compatible stages consume streaming responses, so the configured timeout measures transport inactivity instead of total generation duration, while start/waiting/terminal stdout telemetry remains visible. Run timing is persisted in candidate timing.json files and append-only timing.jsonl, with mutation, crossover, child-pipeline, generation, and LLM request records.
+The user-facing workflow is now exactly `./run_env.sh`, `./run.sh`, and `./analyze.sh`. Runtime process ownership, EA execution, and static analysis are separate. Every completed generation writes an atomic surviving-population snapshot, compact objective metrics, and an updated `eagle-run-v1` manifest.
 
 ## LLM server lifecycle update (2026-07-25)
 
-The existing `LLMServerManager` now owns one resolved local/remote server specification shared by command construction, readiness, GUI status, topology persistence, diagnostics, and EA role profiles. Lifecycle states distinguish process creation from API readiness; process output is continuously drained to a retained per-server log; failures preserve the exit code, reason, command, and recent output; configured ports are not silently changed; and stop targets only the owned process group. Explicit CPU/CUDA/remote backend selection is enforced: CUDA requires a device-detecting binary, CPU emits no GPU flags, and logical VRAM-fit settings map to the verified llama.cpp arguments. Remote records perform endpoint validation without spawning a local child. `python -m eagle.runtime.server_manager --diagnose` performs non-GUI configuration/path/port/endpoint/GPU checks. Focused fake-process and loopback HTTP tests cover the lifecycle without loading a model or requiring a GPU.
+`configs/runtime.yaml` (`runtime-v1`) is the single runtime source of truth. `eagle.runtime.processes.RuntimeManager` launches and stops only command-line-validated managed local servers, while remote servers are health-checked but never launched or restarted. One watchdog monitors all enabled local servers and enforces the configured restart window and limit.
 
 LLM transport now hard-truncates oversized generation, mutation, and Strategy Alignment prompts to preserve llama.cpp context headroom. The truncation marker and bounded request are persisted/logged, while full match telemetry remains in run artifacts.
 
-## Analysis dashboard update (2026-07-27)
+## Canonical offline analysis update (2026-07-28)
 
-The NiceGUI Analysis surface now loads a selected canonical run or experiment
-folder immediately through one `AnalysisDataLoader` boundary. An experiment
-selection exposes its direct runs, selects the most recently modified readable
-run, and preserves the run selector while switching. The resulting
-`AnalysisViewModel` owns overview, objective history, final-population
-Pareto/ranking data, distributions, generic operator/evaluator metrics, timing,
-errors, candidate inspection, final-test summaries, and resolved configuration;
-chart components do not reopen result artifacts.
+`./analyze.sh` and `python -m eagle analyze` resolve either one explicit
+canonical run or the newest valid direct child of the configured run root.
+`eagle.analysis.loader` reads only versioned compact manifests, generation
+metrics, final populations, timing, and error artifacts. It never reads
+`results.jsonl`.
 
-Partial runs remain readable. Missing optional evidence produces section-local
-unavailable states, malformed optional timing records remain visible warnings,
-and an unsupported artifact schema remains a fatal load error. The GUI uses
-monotonic load tokens so a slow older folder load cannot replace a newer
-selection. Large result streams use canonical per-candidate summaries rather
-than deserializing duplicated telemetry from `results.jsonl`.
+Analysis writes derived Markdown, JSON, CSV, and static Matplotlib output under
+the run's configured analysis directory. Partial initialized/running runs
+remain analyzable, unsupported schemas fail explicitly, and historical layouts
+require the explicit `migrate-run` boundary.

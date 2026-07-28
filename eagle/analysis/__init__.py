@@ -1,15 +1,12 @@
-"""Read-only analysis services shared by CLI tools and the GUI."""
+"""Read-only canonical compact-artifact analysis."""
 
-from .dashboard import AnalysisDataLoader, AnalysisViewModel
-from .records import CandidateArtifacts, CandidateRecord, RunSummary, discover_runs, load_candidate, load_candidate_records
+from .loader import RunData, load_run, resolve_explicit_run, resolve_latest_run
+from .report import generate_analysis
 
 __all__ = [
-    "AnalysisDataLoader",
-    "AnalysisViewModel",
-    "CandidateArtifacts",
-    "CandidateRecord",
-    "RunSummary",
-    "discover_runs",
-    "load_candidate",
-    "load_candidate_records",
+    "RunData",
+    "generate_analysis",
+    "load_run",
+    "resolve_explicit_run",
+    "resolve_latest_run",
 ]

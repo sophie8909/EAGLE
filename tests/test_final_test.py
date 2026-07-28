@@ -373,7 +373,7 @@ class FinalTestExecutionTests(unittest.TestCase):
 
 
 class FinalTestAnalysisReaderTests(unittest.TestCase):
-    def test_versioned_summary_readback_and_gui_models(self):
+    def test_versioned_summary_readback_and_candidate_models(self):
         with tempfile.TemporaryDirectory() as directory:
             runs = Path(directory)
             run = runs / "20260722_120000_000001"
@@ -401,8 +401,6 @@ class FinalTestAnalysisReaderTests(unittest.TestCase):
             self.assertEqual((discovered.final_test_count, discovered.final_test_candidate_ids), (1, ("chosen",)))
             candidate = load_candidate(run, "chosen")
             self.assertEqual(candidate.final_tests[0].final_test_id, "formal_1")
-            gui_source = (REPOSITORY_ROOT / "eagle_ui" / "views" / "candidate_view.py").read_text(encoding="utf-8")
-            self.assertIn('ui.tab("Final Tests")', gui_source)
 
     def test_reader_rejects_unknown_schema(self):
         with tempfile.TemporaryDirectory() as directory:

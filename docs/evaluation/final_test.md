@@ -106,4 +106,4 @@ python3 scripts/run_final_test.py \
   --smoke
 ```
 
-The smoke flag produces sixteen matches and is not a formal final test. A successful real smoke requires all six Java matches to complete; mock-only tests are not compatibility proof. Saved summaries are readable through `scripts/analyze_run.py` and the existing Runs & Candidates GUI Final Tests tab.
+The smoke flag produces sixteen matches and is not a formal final test. A successful real smoke requires all six Java matches to complete; mock-only tests are not compatibility proof. Saved summaries remain canonical run artifacts available to offline analysis.

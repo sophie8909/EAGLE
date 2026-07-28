@@ -1,90 +1,59 @@
-# Inspecting runs and debugging candidates
+# Inspecting EAGLE runs
 
-Read [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md) and [`../evaluation/failure_classification.md`](../evaluation/failure_classification.md) first. The active reader accepts only the current versioned artifact layout and objective names.
-
-## Current failure summary
-
-```bash
-cd /mnt/d/Project/EAGLE
-python3 scripts/analyze_run.py runs/<run_id>
-```
-
-The analysis CLI and GUI read canonical per-candidate results and objective values. Missing or malformed current artifacts are reported; historical schemas are outside the active runtime.
-
-## Analysis GUI
-
-Launch the canonical GUI with `./run.sh`, open **Analysis**, then select a
-discovered run/experiment or enter its folder path. Selection immediately shows
-a loading state and renders all recorded dashboard sections; no Analyze or
-Generate action is required. Experiment folders expose only their direct
-canonical run children and initially load the most recently modified readable
-run. **Refresh active run** rereads an in-progress run without changing the
-selection.
-
-The dashboard distinguishes fatal folder/schema errors, malformed partial
-evidence, and normal absence of optional artifacts. Failure sentinels are
-excluded from valid objective distributions. Timing-heavy current runs are read
-from the canonical per-candidate summaries so duplicated telemetry in a large
-`results.jsonl` does not block the GUI.
-
-### Read-only recovery
-
-If a run's `results.jsonl` is malformed, the analysis reader attempts to reconstruct
-its candidate list from existing `candidates/*/individual.json` artifacts. The
-reader does not write to the run or infer missing fields. Run discovery isolates
-unrecoverable directories and labels them `unreadable`, so one damaged run does
-not hide the other local runs.
-
-This recovery path does not make historical objective or Java schemas active
-runtime evidence; the artifact boundary below still applies.
-
-## Current gameplay plot
+Use `./analyze.sh` to select the latest valid direct child of the configured
+run root, or pass one explicit relative or absolute canonical run folder:
 
 ```bash
-cd /mnt/d/Project/EAGLE
-python3 scripts/analysis/plot_game_performance_by_generation.py --run-dir runs/<run_id>
+./analyze.sh
+./analyze.sh runs/20260728_143000_eagle
+./analyze.sh /home/mhlab/EAGLE/runs/20260728_143000_eagle
 ```
 
-The script writes plot and CSV outputs under the selected run. Use only when creating analysis artifacts is intended. Confirm schema compatibility before comparing runs across artifact/objective versions.
+A canonical run is identified by a supported `manifest.json`, a supported
+resolved configuration, and either a completed generation or an initialized
+run status. Latest selection prefers `manifest.last_update_time` and falls
+back to directory mtime.
+
+Derived Markdown, JSON, CSV, and static Matplotlib plots are written under
+`RUN_DIR/analysis/`. The canonical loader reads compact generation, final
+population, timing, and error artifacts. It never reads `results.jsonl`.
+
+Historical layouts are rejected. They require an explicit migration command:
+
+```bash
+python -m eagle migrate-run RUN_DIR
+```
 
 ## Candidate debugging order
 
-1. Read `candidate_result.json` only as an index; follow its stage artifact references.
-2. Confirm lineage and the exact pre-generation genotype.
-3. Compare final generation request, raw response, extracted source, and normalized source.
-4. Read source-validation checks and terminal stage.
-5. Read compiler command and structured diagnostics.
-6. Read integration checks before interpreting match failures.
-7. Count match directories/results and verify identical source/class hashes.
+1. Confirm the manifest and resolved configuration schema versions.
+2. Inspect the compact generation record and final-population entry.
+3. Follow the candidate's lineage and stage artifact references.
+4. Compare generation request, raw response, extracted source, and normalized source.
+5. Read validation and compiler diagnostics before integration or match failures.
+6. Verify all integration checks before interpreting runtime evidence.
+7. Count match results and verify that source and class hashes remain stable.
 8. Recompute objective components from persisted inputs using the recorded formula version.
-9. Compare candidate timing/attempt count with request/response artifacts.
+9. Compare timing and attempt counts with the corresponding request/response artifacts.
 
-If a run is missing canonical evidence, consult [`../implementation/current_status.md`](../implementation/current_status.md) and document the missing artifact. Do not fill missing fields by assumption.
+Missing evidence must remain missing. Analysis must not infer fields or silently
+activate a historical artifact layout.
 
 ## Failure triage
 
 | Symptom | Inspect first | Do not misclassify as |
 | --- | --- | --- |
-| no backend response or extractable Java | generation attempts/raw responses | validation or compilation |
+| no backend response or extractable Java | generation attempts and raw responses | validation or compilation |
 | complete source rejected before `javac` | validation result | generation transport failure |
-| `javac` nonzero | compiler diagnostics | integration |
-| class/constructor/method cannot load | integration checks | compilation or runtime match |
-| process starts but result is missing/partial | match stdout/stderr/result/timing | valid loss/draw |
+| `javac` returns nonzero | compiler diagnostics | integration |
+| class, constructor, or method cannot load | integration checks | compilation or runtime match |
+| process starts but result is missing or partial | match output, result, and timing | valid loss or draw |
 | fewer than 10 valid matches | completed match evidence | successful aggregate |
-| objective looks inconsistent | formula/schema versions and component payload | NSGA-II bug before recomputation |
-
-## Manual GUI inspection
-
-```bash
-cd /mnt/d/Project/EAGLE
-python3 scripts/play_candidate_gui.py runs/<run_id> <candidate_id> --opponent ai.abstraction.LightRush
-```
-
-This is a manual visualization path. It may recompile an existing artifact and allows alternate opponents; it is not the evolutionary evaluation protocol and must not modify stored fitness.
+| objective looks inconsistent | formula/schema versions and component payload | NSGA-II before recomputation |
 
 ## Artifact boundary
 
-- Runs containing `module_bodies`, `CandidateBehaviors.java`, `GeneratedAgent_*`, or objective `strategy_alignment` are outside the active schema and are not readable by the current analysis runtime.
-- Runs with one match, RandomAI, or unversioned formulas are not architecture-compliance evidence.
-- Never copy historical prompts, schemas, or scoring into active code without checking the normative spec.
-- New analysis code must consume the versioned canonical schema directly.
+- Canonical analysis consumes only versioned compact artifacts.
+- Runs with legacy Java layouts, objective names, or unversioned formulas require explicit migration.
+- Old runs are not architecture-compliance evidence.
+- Analysis outputs are derived evidence and never feed back into evolution.

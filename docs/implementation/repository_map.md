@@ -15,8 +15,6 @@ This file maps active repository paths to responsibilities. It is descriptive, n
 | `eagle/evaluation.py` | Candidate stage orchestration | [`../evaluation/evaluation_pipeline.md`](../evaluation/evaluation_pipeline.md), [`../evaluation/failure_classification.md`](../evaluation/failure_classification.md) |
 | `eagle/artifacts.py` | Current run/candidate serialization | [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md), timing/lineage docs |
 | `eagle/llm_logging.py` | Current generation-attempt JSON logging | [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md), [`../artifacts/timing_schema.md`](../artifacts/timing_schema.md) |
-| `eagle/analysis/` | Canonical read-only run normalization, derived analysis statistics, and artifact-compatible candidate/error/timing inspection | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md), [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md) |
-| `eagle_ui/views/analysis_view.py`, `eagle_ui/controllers/analysis_controller.py` | Automatic folder/run loading and rendering of the normalized Analysis dashboard | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
 | `generation/backend.py` | Mock and OpenAI-compatible final-generation transport | [`../architecture/java_generation.md`](../architecture/java_generation.md) |
 | `generation/java_agent_generator.py` | Full-source extraction, validation, and file writing | [`../architecture/java_generation.md`](../architecture/java_generation.md) |
 | `generation/agent_template.py` | Current template and marker validation | [`../architecture/java_generation.md`](../architecture/java_generation.md) |
@@ -29,12 +27,11 @@ This file maps active repository paths to responsibilities. It is descriptive, n
 | `evaluation/game_performance.py`, `evaluation/game_metrics.py` | Current telemetry and gameplay aggregation | [`../evaluation/game_performance.md`](../evaluation/game_performance.md) |
 | `evaluation/code_quality.py` | Current deterministic scoring | [`../evaluation/code_quality.md`](../evaluation/code_quality.md), [`../evaluation/failure_classification.md`](../evaluation/failure_classification.md) |
 | `evaluation/nsga2_objectives.py` | Current two-value objective dictionary | objective and failure docs |
-| `scripts/run_eagle.py` | CLI entry point | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
-| `scripts/analyze_run.py` | Canonical failure summary and objective plots | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
+| `eagle/analysis/loader.py`, `eagle/analysis/report.py` | Canonical compact-artifact loading and static reports | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
 | `scripts/analysis/plot_game_performance_by_generation.py` | Gameplay plotting/CSV export | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
-| `scripts/play_candidate_gui.py` | Manual GUI playback of an existing candidate | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
+| `run_env.sh`, `run.sh`, `analyze.sh` | Canonical runtime, experiment, and offline-analysis entrypoints | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
 | `tests/` | Current unit/integration-contract tests | [`../testing/test_contracts.md`](../testing/test_contracts.md) |
-| `configs/` | Input configurations; currently non-conformant to the 10-match contract | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
+| `configs/runtime.yaml`, `configs/experiments/` | Canonical runtime and experiment configuration | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
 | `eagle/java_templates/CandidateAgent.java` | Current known-good complete-file seed/template | [`../architecture/java_generation.md`](../architecture/java_generation.md) |
 | `third_party/microrts/` | Vendored runtime, maps, libraries, and Java entry points | [`../evaluation/evaluation_pipeline.md`](../evaluation/evaluation_pipeline.md) |
 
@@ -53,6 +50,6 @@ Scoring modules should return data and not own process execution. Artifact write
 ## Legacy boundaries
 
 - `runs/`, `logs/`, ignored generated Java, compiled MicroRTS classes, and archived caches are evidence only.
-- `scripts/analyze_run.py` reads only current per-candidate results and persisted `game_performance`/`code_quality` objectives.
+- `eagle/analysis/loader.py` reads only supported compact canonical artifacts and never opens `results.jsonl`.
 - Current marker/helper scaffolding is implementation state, not a normative internal Java architecture.
 - Do not restore surrogate or runtime-LLM components while migrating this contract.

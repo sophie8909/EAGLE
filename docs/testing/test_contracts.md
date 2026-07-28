@@ -34,7 +34,7 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Timing | UTC fields, monotonic durations, attempts, optional null stages, 10 match durations |
 | NSGA-II | exactly two maximized objectives; failure candidates retained; rank/crowding survivor behavior |
 | Operations | readers reject/migrate unsupported schema versions; legacy names never leak into active output |
-| Analysis GUI | folder selection triggers one normalized load; experiment run selection is deterministic; missing optional artifacts remain section-local; objective direction, Pareto/ranking, failure exclusion, timing statistics, filters, stale-load tokens, and dark chart colors are deterministic |
+| Offline analysis | explicit/latest run resolution is deterministic; only direct canonical children are eligible; partial runs produce derived outputs; unsupported or historical schemas fail explicitly; `results.jsonl` is never read |
 | LLM server lifecycle | missing executable/model; immediate exit; bounded loading/readiness; occupied port; bind/client host separation; local/remote launch ownership; durable stdout/stderr; useful failure state; process-group stop; topology/client URL identity; no READY on process creation |
 
 ## Failure fixtures

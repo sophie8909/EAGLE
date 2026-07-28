@@ -1,0 +1,24 @@
+schema_version: experiment-v1
+algorithm: nsga2
+application: microrts
+objectives:
+  game_performance: maximize
+  code_quality: maximize
+required_llm_roles:
+  - generator
+  - reflector
+  - rewriter
+seed_prompt_template: microrts_blank_strategy_agent
+generations: 3
+population_size: 4
+generation_backend: openai
+alignment_backend: openai
+mutation_max_attempts: 3
+crossover_rate: 0.75
+mutation_rate: 0.85
+random_seed: 7
+microrts_dir: third_party/microrts
+tick_limit: 100
+map_path: maps/8x8/basesWorkers8x8.xml
+match_timeout_seconds: 120
+front0_stagnation_generations: 5
