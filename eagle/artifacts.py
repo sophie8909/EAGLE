@@ -16,7 +16,7 @@ from generation.java_agent_generator import ValidationResult
 
 from .candidate import Candidate
 from .opponents import EVALUATION_ROSTER
-from .llm_profiles import LLMProfile
+from .llm_profiles import LLMClient
 from .prompts import DEFAULT_PROMPT_TEMPLATE_PATH, load_prompt_templates
 from .config import ExperimentConfig
 
@@ -257,7 +257,7 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     })
 
 
-def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool, profiles: dict[str, LLMProfile] | None = None) -> None:
+def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool, client: LLMClient | None = None) -> None:
     """Write actual post-default and post-override runtime values."""
 
     llm_backend = "mock" if mock else config.generation_backend
@@ -294,7 +294,11 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         },
         "strategy_alignment_backend": "mock" if mock else config.alignment_backend,
         "strategy_alignment_model": None if mock else config.llm_model,
-        "llm_endpoint": None if profiles is None else profiles["generator"].to_dict(),
+        "llm": None if client is None else {
+            "model": client.model,
+            "base_url": client.base_url,
+            "timeout_seconds": client.timeout_seconds,
+        },
         "prompt_version": None,
         "prompt_template_sha256": prompt_template_digest(),
         "git_commit_hash": git_commit_hash(),
@@ -464,4 +468,3 @@ def write_json(path: Path, payload: object) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(path)
-

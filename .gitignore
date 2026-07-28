@@ -68,7 +68,6 @@ tournament/traces/*.xml
 /experiment_env/models/
 /experiment_env/vendor/llama.cpp/
 /experiment_env/key/uf_token
-/experiment_env/model/model_registry.local.json
 /experiment_env/model/*/*.gguf
 /experiment_env/model/*/model.gguf
 /experiment_env/model/*/mmproj.gguf
@@ -76,4 +75,3 @@ tournament/traces/*.xml
 /experiment_env/runtime/pids/
 /experiment_env/runtime/servers/
 /experiment_env/runtime/runtime_state.local.json
-experiment_env/config/llm_topology.json

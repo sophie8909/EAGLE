@@ -61,7 +61,10 @@ The user-facing workflow is now exactly `./run_env.sh`, `./run.sh`, and `./analy
 
 ## LLM server lifecycle update (2026-07-25)
 
-`configs/runtime.yaml` (`runtime-v1`) is the single runtime source of truth. `eagle.runtime.processes.RuntimeManager` launches and stops only command-line-validated managed local servers, while remote servers are health-checked but never launched or restarted. One watchdog monitors all enabled local servers and enforces the configured restart window and limit.
+`configs/runtime.yaml` (`runtime-v1`) is the single runtime source of truth. The
+active runtime supports exactly one local Qwen3.5-9B llama-server process on
+127.0.0.1:8080. The process manager validates its PID command line, performs a
+two-path health check, and never starts a watchdog or a remote server.
 
 LLM transport now hard-truncates oversized generation, mutation, and Strategy Alignment prompts to preserve llama.cpp context headroom. The truncation marker and bounded request are persisted/logged, while full match telemetry remains in run artifacts.
 

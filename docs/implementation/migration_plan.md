@@ -3,7 +3,7 @@
 ## Canonical shell workflow (completed 2026-07-28)
 
 - `runtime-v1` centralizes Conda, paths, local/remote endpoints, roles, model
-  paths, ports, llama.cpp arguments, health checks, logs, PIDs, and watchdog.
+  paths, ports, llama.cpp arguments, health checks, logs, and one PID.
 - `run_env.sh` owns runtime processes only.
 - `run.sh` owns experiment validation, execution, and resume only.
 - `analyze.sh` owns static compact-artifact analysis only.

@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH, get_seed_prompt_template
 
 from .candidate import DEFAULT_GENERATION_PROMPT
@@ -40,6 +42,8 @@ class ExperimentConfig:
     alignment_backend: str = "mock"
     llm_base_url: str = "http://localhost:8080"
     llm_model: str = "local-model"
+    llm_temperature: float = 0.2
+    llm_max_tokens: int | None = None
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
@@ -67,12 +71,14 @@ class ExperimentConfig:
     def from_file(cls, path: str | Path) -> "ExperimentConfig":
         config_path = Path(path)
         raw_config = config_path.read_text(encoding="utf-8")
-        payload = json.loads(raw_config) if config_path.suffix.lower() == ".json" else parse_minimal_yaml(raw_config)
+        payload = json.loads(raw_config) if config_path.suffix.lower() == ".json" else yaml.safe_load(raw_config)
+        if not isinstance(payload, dict):
+            raise ValueError("Experiment config must contain a YAML mapping.")
         return cls.from_mapping(payload, raw_config=raw_config)
 
     @classmethod
     def from_mapping(cls, payload: dict[str, Any], *, raw_config: str = "") -> "ExperimentConfig":
-        forbidden = {"llm_base_url", "llm_model", "llm_role_topology_path", "servers", "role_mapping", "endpoints"}
+        forbidden = {"llm_base_url", "llm_role_topology_path", "servers", "role_mapping", "endpoints"}
         found = sorted(forbidden.intersection(payload))
         if found:
             raise ValueError("Experiment config cannot define runtime endpoint fields: " + ", ".join(found))
@@ -82,6 +88,10 @@ class ExperimentConfig:
             seed_prompts = (get_seed_prompt_template(str(template_name)), *seed_prompts)
         if not seed_prompts:
             raise ValueError("Experiment config must define at least one seed prompt or seed_prompt_template.")
+        llm_settings = payload.get("llm", {})
+        if not isinstance(llm_settings, dict):
+            raise ValueError("Experiment llm settings must be a mapping.")
+        max_tokens = llm_settings.get("max_tokens")
         return cls(
             seed_prompts=seed_prompts,
             generations=int(payload.get("generations", 1)),
@@ -95,6 +105,8 @@ class ExperimentConfig:
             alignment_backend=str(payload.get("alignment_backend", payload.get("generation_backend", "mock"))),
             llm_base_url=str(payload.get("llm_base_url", "http://localhost:8080")),
             llm_model=str(payload.get("llm_model", "local-model")),
+            llm_temperature=float(llm_settings.get("temperature", 0.2)),
+            llm_max_tokens=None if max_tokens is None else int(max_tokens),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
@@ -140,6 +152,10 @@ class ExperimentConfig:
             raise ValueError(f"matches_per_candidate must be exactly {MATCHES_PER_CANDIDATE}.")
         if self.match_timeout_seconds <= 0:
             raise ValueError("match_timeout_seconds must be greater than zero.")
+        if self.llm_temperature < 0:
+            raise ValueError("llm.temperature must not be negative.")
+        if self.llm_max_tokens is not None and self.llm_max_tokens < 1:
+            raise ValueError("llm.max_tokens must be positive.")
         if len(self.resolved_match_seeds) != MATCHES_PER_CANDIDATE:
             raise ValueError(f"match_seeds must contain exactly {MATCHES_PER_CANDIDATE} values.")
         if len(set(self.resolved_match_seeds)) != MATCHES_PER_CANDIDATE:
@@ -225,4 +241,3 @@ def _parse_scalar(value: str) -> Any:
         return float(value)
     except ValueError:
         return value
-

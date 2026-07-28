@@ -1,4 +1,4 @@
-﻿"""Typed loading and validation for the single-endpoint runtime contract."""
+"""Canonical local Qwen3.5 runtime configuration."""
 from __future__ import annotations
 
 import ipaddress
@@ -11,155 +11,163 @@ from typing import Any
 import yaml
 
 RUNTIME_SCHEMA_VERSION = "runtime-v1"
+LEGACY_RUNTIME_ERROR = (
+    "Unsupported legacy multi-model runtime configuration.\n"
+    "EAGLE now supports only the Qwen3.5-9B model configured in configs/runtime.yaml.\n"
+    "Remove server lists, role mappings, and per-operation endpoints."
+)
 
 
 @dataclass(frozen=True)
 class ServerArguments:
-    context_size: int = 32768
-    gpu_layers: int = -1
-    parallel: int = 1
-    threads: int = 8
-    batch_size: int = 512
+    context_size: int
+    gpu_layers: int
+    parallel: int
+    threads: int
+    batch_size: int
 
 
 @dataclass(frozen=True)
 class LLMConfig:
-    mode: str
-    host: str | None
-    client_host: str
+    model_name: str
+    model_path: Path
+    server_binary: Path
+    host: str
     port: int
-    model: Path | None
-    server_binary: Path | None
-    arguments: ServerArguments
+    context_size: int
+    gpu_layers: int
+    parallel: int
+    threads: int
+    batch_size: int
+    startup_timeout_seconds: float
+    health_timeout_seconds: float
 
     @property
     def base_url(self) -> str:
-        host = f"[{self.client_host}]" if ":" in self.client_host else self.client_host
+        host = f"[{self.host}]" if ":" in self.host else self.host
         return f"http://{host}:{self.port}"
 
-
-@dataclass(frozen=True)
-class WatchdogConfig:
-    enabled: bool
-    interval_seconds: float
-    startup_timeout_seconds: float
-    health_timeout_seconds: float
-    restart_delay_seconds: float
-    max_consecutive_restarts: int
-    restart_window_seconds: float
-
-
-@dataclass(frozen=True)
-class HealthCheckConfig:
-    path: str
-    fallback_path: str
-    retries: int
-    retry_delay_seconds: float
+    @property
+    def arguments(self) -> ServerArguments:
+        return ServerArguments(
+            self.context_size,
+            self.gpu_layers,
+            self.parallel,
+            self.threads,
+            self.batch_size,
+        )
 
 
 @dataclass(frozen=True)
 class RuntimeConfig:
     source_path: Path
-    conda_env: str
     project_root: Path
-    run_root: Path
-    log_root: Path
-    pid_root: Path
+    conda_env: str
     llm: LLMConfig
-    watchdog: WatchdogConfig
-    health_check: HealthCheckConfig
-    analysis_output_directory_name: str
-    latest_run_strategy: str
+    log_path: Path
+    pid_path: Path
+
+    @property
+    def run_root(self) -> Path:
+        return self.project_root / "runs"
+
+    @property
+    def log_root(self) -> Path:
+        return self.log_path.parent
+
+    @property
+    def pid_root(self) -> Path:
+        return self.pid_path.parent
 
     @property
     def runtime_root(self) -> Path:
         return self.log_root.parent
 
     @property
-    def resolved_endpoint_path(self) -> Path:
-        return self.runtime_root / "resolved_endpoint.json"
+    def analysis_output_directory_name(self) -> str:
+        return "analysis"
 
 
-def load_runtime_config(path: str | Path, *, create_directories: bool = True, validate_files: bool = True) -> RuntimeConfig:
+def load_runtime_config(
+    path: str | Path,
+    *,
+    create_directories: bool = True,
+    validate_files: bool = True,
+) -> RuntimeConfig:
     source = Path(path).expanduser().resolve()
     try:
-        payload = yaml.safe_load(source.read_text(encoding="utf-8"))
+        payload = yaml.safe_load(source.read_text(encoding="utf-8-sig"))
     except yaml.YAMLError as exc:
         raise ValueError(f"Invalid runtime YAML {source}: {exc}") from exc
     if not isinstance(payload, dict):
         raise ValueError("Runtime config must contain a YAML mapping.")
     if payload.get("schema_version") != RUNTIME_SCHEMA_VERSION:
-        raise ValueError(f"Unsupported runtime schema version {payload.get('schema_version')!r}; expected {RUNTIME_SCHEMA_VERSION!r}.")
-    obsolete = {"servers", "roles", "role_mapping", "endpoints", "reflector", "rewriter", "generator", "coder", "general"}
-    found = sorted(obsolete.intersection(payload))
-    if found:
-        raise ValueError("Legacy multi-endpoint runtime fields are not supported: " + ", ".join(found) + ". Move one endpoint into llm.")
-    env = _mapping(payload, "environment")
-    project_root = _absolute_path(env, "project_root")
-    run_root = _absolute_path(env, "run_root")
-    log_root = _absolute_path(env, "log_root")
-    pid_root = _absolute_path(env, "pid_root")
-    if not project_root.is_dir():
-        raise ValueError(f"Configured project root does not exist: {project_root}")
+        raise ValueError(
+            f"Unsupported runtime schema version {payload.get('schema_version')!r}; "
+            f"expected {RUNTIME_SCHEMA_VERSION!r}."
+        )
+    if _contains_legacy_runtime_key(payload):
+        raise ValueError(LEGACY_RUNTIME_ERROR)
+
+    project_root = source.parent.parent
+    conda_env = _required_text(payload, "conda_env")
+    llm = _parse_llm(_mapping(payload, "llm"), project_root, validate_files=validate_files)
+    runtime = _mapping(payload, "runtime")
+    log_path = _runtime_path(runtime, "log_path", project_root)
+    pid_path = _runtime_path(runtime, "pid_path", project_root)
+    result = RuntimeConfig(source, project_root, conda_env, llm, log_path, pid_path)
     if create_directories:
-        for directory in (run_root, log_root, pid_root):
+        for directory in (result.log_root, result.pid_root):
             directory.mkdir(parents=True, exist_ok=True)
-    llm = _parse_llm(_mapping(payload, "llm"), validate_files=validate_files)
-    analysis = _mapping(payload, "analysis")
-    return RuntimeConfig(
-        source, _required_text(env, "conda_env"), project_root, run_root, log_root, pid_root, llm,
-        _parse_watchdog(_mapping(payload, "watchdog")), _parse_health(_mapping(payload, "health_check")),
-        _required_text(analysis, "output_directory_name"), _required_text(analysis, "latest_run_strategy"),
-    )
+    return result
 
 
 def read_conda_env(path: str | Path) -> str:
-    payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(payload, dict) or payload.get("schema_version") != RUNTIME_SCHEMA_VERSION:
-        raise ValueError(f"Unsupported or missing runtime schema in {path}.")
-    return _required_text(_mapping(payload, "environment"), "conda_env")
+    return load_runtime_config(path, create_directories=False, validate_files=False).conda_env
 
 
-def _parse_llm(value: dict[str, Any], *, validate_files: bool) -> LLMConfig:
-    mode = _required_text(value, "mode")
-    if mode not in {"local", "remote"}:
-        raise ValueError("llm.mode must be local or remote.")
-    client_host = _required_text(value, "client_host")
-    _validate_host(client_host, "llm.client_host")
-    port = _positive_int(value, "port")
-    if port > 65535:
+def _parse_llm(value: dict[str, Any], project_root: Path, *, validate_files: bool) -> LLMConfig:
+    model_name = _required_text(value, "model_name")
+    if model_name != "qwen3.5-9b":
+        raise ValueError("llm.model_name must be exactly 'qwen3.5-9b'.")
+    model_path = _path(value, "model_path", project_root)
+    server_binary = _path(value, "server_binary", project_root)
+    if validate_files:
+        if not model_path.is_file():
+            raise ValueError(f"llm.model_path does not exist or is not a file: {model_path}")
+        if not server_binary.is_file() or not os.access(server_binary, os.X_OK):
+            raise ValueError(
+                "llm.server_binary does not exist or is not executable: "
+                f"{server_binary}"
+            )
+    host = _required_text(value, "host")
+    _validate_host(host, "llm.host")
+    port = _integer(value, "port")
+    if not 1 <= port <= 65535:
         raise ValueError("llm.port must be between 1 and 65535.")
-    host = model = binary = None
-    if mode == "local":
-        host = _required_text(value, "host")
-        _validate_host(host, "llm.host")
-        model = _absolute_path(value, "model")
-        binary = _absolute_path(value, "server_binary")
-        if validate_files:
-            if not binary.is_file() or not os.access(binary, os.X_OK):
-                raise ValueError(f"llm.server_binary does not exist or is not executable: {binary}")
-            if not model.is_file():
-                raise ValueError(f"llm.model does not exist or is not a file: {model}")
-    raw = value.get("arguments", {})
-    if not isinstance(raw, dict):
-        raise ValueError("llm.arguments must be a mapping.")
-    args = ServerArguments(
-        _positive_int(raw, "context_size", 32768), int(raw.get("gpu_layers", -1)),
-        _positive_int(raw, "parallel", 1), _positive_int(raw, "threads", 8), _positive_int(raw, "batch_size", 512),
+    context_size = _positive_int(value, "context_size")
+    gpu_layers = _integer(value, "gpu_layers")
+    parallel = _positive_int(value, "parallel")
+    threads = _positive_int(value, "threads")
+    batch_size = _positive_int(value, "batch_size")
+    startup = _positive_number(value, "startup_timeout_seconds")
+    health = _positive_number(value, "health_timeout_seconds")
+    return LLMConfig(
+        model_name, model_path, server_binary, host, port, context_size, gpu_layers,
+        parallel, threads, batch_size, startup, health,
     )
-    return LLMConfig(mode, host, client_host, port, model, binary, args)
 
 
-def _parse_watchdog(value: dict[str, Any]) -> WatchdogConfig:
-    return WatchdogConfig(bool(value.get("enabled", False)), _positive_number(value, "interval_seconds"), _positive_number(value, "startup_timeout_seconds"), _positive_number(value, "health_timeout_seconds"), _positive_number(value, "restart_delay_seconds"), _positive_int(value, "max_consecutive_restarts"), _positive_number(value, "restart_window_seconds"))
-
-
-def _parse_health(value: dict[str, Any]) -> HealthCheckConfig:
-    path = _required_text(value, "path")
-    fallback = _required_text(value, "fallback_path")
-    if not path.startswith("/") or not fallback.startswith("/"):
-        raise ValueError("Health-check paths must start with '/'.")
-    return HealthCheckConfig(path, fallback, _positive_int(value, "retries"), _positive_number(value, "retry_delay_seconds"))
+def _contains_legacy_runtime_key(payload: dict[str, Any]) -> bool:
+    keys = {
+        "mode", "client_host", "remote", "servers", "endpoints", "roles", "role_mapping",
+        "reflector", "rewriter", "generator", "coder", "general", "watchdog",
+        "resolved_endpoint", "fallback", "models", "health_check", "environment",
+    }
+    return bool(keys.intersection(payload)) or any(
+        key in payload.get("llm", {}) if isinstance(payload.get("llm"), dict) else False
+        for key in keys
+    )
 
 
 def _mapping(payload: dict[str, Any], key: str) -> dict[str, Any]:
@@ -176,26 +184,36 @@ def _required_text(payload: dict[str, Any], key: str) -> str:
     return value
 
 
-def _absolute_path(payload: dict[str, Any], key: str) -> Path:
-    path = Path(_required_text(payload, key)).expanduser()
-    if not path.is_absolute():
-        raise ValueError(f"Runtime config field {key!r} must be an absolute path: {path}")
-    return path
+def _path(payload: dict[str, Any], key: str, project_root: Path) -> Path:
+    value = Path(_required_text(payload, key)).expanduser()
+    return value if value.is_absolute() else (project_root / value).resolve()
 
 
-def _positive_int(payload: dict[str, Any], key: str, default: int | None = None) -> int:
+def _runtime_path(payload: dict[str, Any], key: str, project_root: Path) -> Path:
+    return _path(payload, key, project_root)
+
+
+def _integer(payload: dict[str, Any], key: str) -> int:
+    value = payload.get(key)
+    if isinstance(value, bool):
+        raise ValueError(f"Runtime config field {key!r} must be an integer.")
     try:
-        result = int(payload.get(key, default))
+        return int(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Runtime config field {key!r} must be an integer.") from exc
+
+
+def _positive_int(payload: dict[str, Any], key: str) -> int:
+    result = _integer(payload, key)
     if result <= 0:
         raise ValueError(f"Runtime config field {key!r} must be positive.")
     return result
 
 
 def _positive_number(payload: dict[str, Any], key: str) -> float:
+    value = payload.get(key)
     try:
-        result = float(payload.get(key))
+        result = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Runtime config field {key!r} must be numeric.") from exc
     if result <= 0:
@@ -215,4 +233,3 @@ def _validate_host(host: str, field: str) -> None:
         socket.getaddrinfo(host, None)
     except socket.gaierror as exc:
         raise ValueError(f"{field} is not a valid host: {host!r}") from exc
-

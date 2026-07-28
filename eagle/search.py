@@ -16,9 +16,8 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from shutil import copy2
-from urllib.parse import urlparse
 
-from generation.backend import build_generation_backend
+from generation.backend import MockGenerationBackend, build_generation_backend
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE
 
 from .artifacts import write_generation_manifest, write_prompt_snapshot, write_resolved_config, write_summary
@@ -30,7 +29,7 @@ from .evaluation import evaluate_population, preflight_evaluation_opponents
 from .mutation import MutationContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
-from .llm_profiles import LLMProfile
+from .llm_profiles import LLMClient
 from .llm_errors import LLMServerError
 from .offspring import normalize_prompt
 from .rewrite import PromptRewriteMutation
@@ -58,16 +57,10 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     rng = random.Random(config.random_seed)
 
     backend_name = "mock" if mock else config.generation_backend
-    if mock:
-        role_profiles = {
-            "reflector": LLMProfile("reflector", config.llm_base_url, config.llm_model),
-            "rewriter": LLMProfile("rewriter", config.llm_base_url, config.llm_model),
-            "generator": LLMProfile("generator", config.llm_base_url, config.llm_model),
-        }
-    else:
-        shared_profile = LLMProfile("shared", config.llm_base_url, config.llm_model)
-        role_profiles = {"reflector": shared_profile, "rewriter": shared_profile, "generator": shared_profile}
-        _preflight_llm_endpoints(role_profiles)
+    client = LLMClient(config.llm_base_url, config.llm_model, temperature=config.llm_temperature, max_output_tokens=config.llm_max_tokens)
+    shared_profile = client.profile
+    if not mock:
+        _preflight_llm_endpoint(client)
 
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = config.runs_dir / active_run_id
@@ -82,37 +75,13 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     initialize_run_manifest(run_dir, config_path=config_path)
 
     llm_logger = LLMCallLogger(run_dir / "llm_logs", run_id=active_run_id, timing_path=run_dir / "timing.jsonl")
-    reflector_profile = role_profiles["reflector"]
-    rewriter_profile = role_profiles["rewriter"]
-    generator_profile = role_profiles["generator"]
-    generation_backend = build_generation_backend(
-        backend_name,
-        base_url=generator_profile.base_url,
-        model=generator_profile.model,
-        logger=llm_logger,
-        llm_profile="generator",
-        timeout_sec=generator_profile.timeout_seconds,
-        temperature=generator_profile.temperature,
-        max_output_tokens=generator_profile.max_output_tokens,
-    )
-    reflection_backend = build_reflection_backend(
-        backend_name,
-        base_url=reflector_profile.base_url,
-        model=reflector_profile.model,
-        llm_profile="reflector",
-        timeout_sec=reflector_profile.timeout_seconds,
-        temperature=reflector_profile.temperature,
-        max_output_tokens=reflector_profile.max_output_tokens,
-    )
-    rewrite_backend = build_reflection_backend(
-        backend_name,
-        base_url=rewriter_profile.base_url,
-        model=rewriter_profile.model,
-        llm_profile="rewriter",
-        timeout_sec=rewriter_profile.timeout_seconds,
-        temperature=rewriter_profile.temperature,
-        max_output_tokens=rewriter_profile.max_output_tokens,
-    )
+    generation_backend = MockGenerationBackend() if mock else client.generation_backend(logger=llm_logger)
+    if mock:
+        reflection_backend = build_reflection_backend("mock")
+        rewrite_backend = reflection_backend
+    else:
+        reflection_backend = client.prompt_backend(operation="reflection")
+        rewrite_backend = client.prompt_backend(operation="rewrite")
     strategy_mutation = PromptRewriteMutation(
 
         config,
@@ -121,8 +90,8 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         rewrite_backend=rewrite_backend,
         artifact_root=candidates_dir,
         logger=llm_logger,
-        reflection_model=None if backend_name == "mock" else reflector_profile.model,
-        rewrite_model=None if backend_name == "mock" else rewriter_profile.model,
+        reflection_model=None if backend_name == "mock" else client.model,
+        rewrite_model=None if backend_name == "mock" else client.model,
         backend_name=backend_name,
     )
     code_mutation = PromptRewriteMutation(
@@ -132,15 +101,15 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         rewrite_backend=rewrite_backend,
         artifact_root=candidates_dir,
         logger=llm_logger,
-        reflection_model=None if backend_name == "mock" else reflector_profile.model,
-        rewrite_model=None if backend_name == "mock" else rewriter_profile.model,
+        reflection_model=None if backend_name == "mock" else client.model,
+        rewrite_model=None if backend_name == "mock" else client.model,
         backend_name=backend_name,
     )
     write_resolved_config(
         run_dir,
         config,
         mock=mock,
-        profiles=role_profiles,
+        client=client,
     )
     write_prompt_snapshot(run_dir, config)
     results_path = run_dir / "results.jsonl"
@@ -158,7 +127,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         candidates_dir=candidates_dir,
         results_path=results_path,
         mock=mock,
-        alignment_profile=reflector_profile,
+        alignment_profile=shared_profile,
     )
     append_event(run_dir / "timing.jsonl", build_generation_event(
         run_id=active_run_id,
@@ -196,7 +165,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             candidates_dir=candidates_dir,
             results_path=results_path,
             mock=mock,
-            alignment_profile=reflector_profile,
+            alignment_profile=shared_profile,
         )
         append_event(run_dir / "timing.jsonl", build_generation_event(
             run_id=active_run_id,
@@ -246,111 +215,31 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     )
 
 
-def _preflight_llm_endpoints(role_profiles: dict[str, LLMProfile]) -> None:
-    """Verify health, model identity, and chat completion before creating a run."""
-
-    checked: dict[str, dict[str, object]] = {}
-    for role, profile in role_profiles.items():
-        parsed = urlparse(profile.base_url)
-        api_root = profile.base_url.rstrip("/")
-        if not api_root.endswith("/v1"):
-            api_root = f"{api_root}/v1"
-        item = checked.setdefault(
-            api_root,
-            {
-                "server_name": profile.server_profile or profile.server_label or api_root,
-                "roles": [],
-                "models": [],
-                "health_url": f"{parsed.scheme}://{parsed.netloc}/health",
-            },
-        )
-        item["roles"].append(role)
-        item["models"].append(profile.model)
-
-    for api_root, item in checked.items():
-        roles = tuple(item["roles"])
-        models = tuple(dict.fromkeys(item["models"]))
-        server_name = str(item["server_name"])
-        health_url = str(item["health_url"])
-        phase = health_url
-        try:
-            with urllib.request.urlopen(health_url, timeout=min(5.0, profile_timeout(role_profiles, roles))) as response:
-                if not 200 <= response.status < 300:
-                    raise RuntimeError(f"HTTP {response.status}")
-            phase = f"{api_root}/models"
-            with urllib.request.urlopen(phase, timeout=min(5.0, profile_timeout(role_profiles, roles))) as response:
-                model_payload = json.loads(response.read().decode("utf-8"))
-            available_models = _available_model_ids(model_payload)
-            missing_models = sorted(set(models) - available_models)
-            if missing_models:
-                raise RuntimeError(
-                    f"configured model(s) {', '.join(missing_models)} not served; "
-                    f"available={', '.join(sorted(available_models)) or 'none'}"
-                )
-
-            phase = f"{api_root}/chat/completions"
-            probe = urllib.request.Request(
-                phase,
-                data=json.dumps(
-                    {
-                        "model": models[0],
-                        "messages": [{"role": "user", "content": "Reply OK."}],
-                        "temperature": 0,
-                        "max_tokens": 1,
-                        "chat_template_kwargs": {"enable_thinking": False},
-                    }
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            print(
-                f"[llm preflight] server={server_name} roles={','.join(roles)} "
-                f"endpoint={api_root} models={','.join(models)} status=started",
-                flush=True,
-            )
-            with urllib.request.urlopen(
-                probe,
-                timeout=min(15.0, profile_timeout(role_profiles, roles)),
-            ) as response:
-                completion_payload = json.loads(response.read().decode("utf-8"))
-            if not isinstance(completion_payload.get("choices"), list):
-                raise RuntimeError("response has no choices array")
-            print(
-                f"[llm preflight] server={server_name} endpoint={api_root} status=passed",
-                flush=True,
-            )
-        except (OSError, urllib.error.URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
-            role_text = ", ".join(roles)
-            raise LLMServerError(
-                f"llm server error: server {server_name!r} for roles [{role_text}] failed preflight at "
-                f"{phase}: {exc}. Use ./run_env.sh status and restart the configured runtime if needed."
-            ) from exc
-
-
-def _available_model_ids(payload: object) -> set[str]:
-    if not isinstance(payload, dict):
-        return set()
-    records: list[object] = []
-    for key in ("data", "models"):
-        value = payload.get(key)
-        if isinstance(value, list):
-            records.extend(value)
-    model_ids: set[str] = set()
-    for record in records:
-        if not isinstance(record, dict):
-            continue
-        for key in ("id", "name", "model"):
-            value = record.get(key)
-            if isinstance(value, str) and value.strip():
-                model_ids.add(value.strip())
-        aliases = record.get("aliases")
-        if isinstance(aliases, list):
-            model_ids.update(str(alias).strip() for alias in aliases if str(alias).strip())
-    return model_ids
-
-
-def profile_timeout(role_profiles: dict[str, LLMProfile], roles: tuple[str, ...]) -> float:
-    return min(role_profiles[role].timeout_seconds for role in roles)
+def _preflight_llm_endpoint(client: LLMClient) -> None:
+    """Verify the one configured endpoint with one small request."""
+    api_root = client.base_url.rstrip("/")
+    if not api_root.endswith("/v1"):
+        api_root += "/v1"
+    url = f"{api_root}/chat/completions"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps({
+            "model": client.model,
+            "messages": [{"role": "user", "content": "Reply OK."}],
+            "temperature": 0,
+            "max_tokens": 1,
+            "chat_template_kwargs": {"enable_thinking": False},
+        }).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=min(15.0, client.timeout_seconds)) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if not isinstance(payload.get("choices"), list):
+            raise RuntimeError("response has no choices array")
+    except (OSError, urllib.error.URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
+        raise LLMServerError(f"Qwen3.5 endpoint preflight failed at {url}: {exc}") from exc
 
 
 def front_zero_signature(population: list[Candidate]) -> tuple[tuple[float, ...], ...]:
@@ -515,4 +404,3 @@ def number_or_none(value: object) -> float | None:
 
 def _as_int(value: object) -> int | None:
     return int(value) if isinstance(value, int) else None
-

@@ -5,23 +5,18 @@ import random
 import json
 from pathlib import Path
 
-from generation.backend import build_generation_backend
+from generation.backend import MockGenerationBackend
 
 from .artifacts import write_generation_manifest, write_summary
 from .config import ExperimentConfig
 from .crossover import CrossoverContext
 from .evaluation import evaluate_population, preflight_evaluation_opponents
 from .llm_logging import LLMCallLogger
-from .llm_profiles import LLMProfile
+from .llm_profiles import LLMClient
 from .mutation import build_reflection_backend
 from .rewrite import PromptRewriteMutation
 from .run_artifacts import finalize_run, load_resume_population, record_generation
-from .search import (
-    SearchResult,
-    _preflight_llm_endpoints,
-    create_offspring,
-    front_zero_signature,
-)
+from .search import SearchResult, create_offspring, front_zero_signature
 from .selection import assign_rank_and_crowding, best_candidate, select_next_generation
 from .timing import Stopwatch, append_event, build_generation_event
 
@@ -36,35 +31,19 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
         return SearchResult(run_dir, population, best, completed_generation)
 
     backend_name = "mock" if mock else config.generation_backend
-    if mock:
-        from .llm_profiles import LLMProfile
-        profiles = {
-            role: LLMProfile(role, config.llm_base_url, config.llm_model)
-            for role in ("reflector", "rewriter", "generator")
-        }
-    else:
-        shared_profile = LLMProfile("shared", config.llm_base_url, config.llm_model)
-        profiles = {"reflector": shared_profile, "rewriter": shared_profile, "generator": shared_profile}
-        _preflight_llm_endpoints(profiles)
+    client = LLMClient(config.llm_base_url, config.llm_model, temperature=config.llm_temperature, max_output_tokens=config.llm_max_tokens)
+    shared_profile = client.profile
+    if not mock:
+        from .search import _preflight_llm_endpoint
+        _preflight_llm_endpoint(client)
     logger = LLMCallLogger(run_dir / "llm_logs", run_id=run_dir.name, timing_path=run_dir / "timing.jsonl")
-    generator = profiles["generator"]
-    reflector = profiles["reflector"]
-    rewriter = profiles["rewriter"]
-    generation_backend = build_generation_backend(
-        backend_name, base_url=generator.base_url, model=generator.model, logger=logger,
-        llm_profile="generator", timeout_sec=generator.timeout_seconds,
-        temperature=generator.temperature, max_output_tokens=generator.max_output_tokens,
-    )
-    reflection_backend = build_reflection_backend(
-        backend_name, base_url=reflector.base_url, model=reflector.model,
-        llm_profile="reflector", timeout_sec=reflector.timeout_seconds,
-        temperature=reflector.temperature, max_output_tokens=reflector.max_output_tokens,
-    )
-    rewrite_backend = build_reflection_backend(
-        backend_name, base_url=rewriter.base_url, model=rewriter.model,
-        llm_profile="rewriter", timeout_sec=rewriter.timeout_seconds,
-        temperature=rewriter.temperature, max_output_tokens=rewriter.max_output_tokens,
-    )
+    generation_backend = MockGenerationBackend() if mock else client.generation_backend(logger=logger)
+    if mock:
+        reflection_backend = build_reflection_backend("mock")
+        rewrite_backend = reflection_backend
+    else:
+        reflection_backend = client.prompt_backend(operation="reflection")
+        rewrite_backend = client.prompt_backend(operation="rewrite")
     candidates_dir = run_dir / "candidates"
     generated_agents_dir = run_dir / "generated_agents"
     classes_dir = run_dir / "classes"
@@ -74,14 +53,14 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
         "strategy": PromptRewriteMutation(
             config, mutation_type="strategy", reflection_backend=reflection_backend,
             rewrite_backend=rewrite_backend, artifact_root=candidates_dir, logger=logger,
-            reflection_model=None if mock else reflector.model,
-            rewrite_model=None if mock else rewriter.model, backend_name=backend_name,
+            reflection_model=None if mock else client.model,
+            rewrite_model=None if mock else client.model, backend_name=backend_name,
         ),
         "code": PromptRewriteMutation(
             config, mutation_type="code", reflection_backend=reflection_backend,
             rewrite_backend=rewrite_backend, artifact_root=candidates_dir, logger=logger,
-            reflection_model=None if mock else reflector.model,
-            rewrite_model=None if mock else rewriter.model, backend_name=backend_name,
+            reflection_model=None if mock else client.model,
+            rewrite_model=None if mock else client.model, backend_name=backend_name,
         ),
     }
     rng = random.Random(f"{config.random_seed}:{completed_generation}")
@@ -99,7 +78,7 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
             offspring, generation=generation, config=config, backend=generation_backend,
             generated_agents_dir=generated_agents_dir, classes_dir=classes_dir,
             candidates_dir=candidates_dir, results_path=run_dir / "results.jsonl",
-            mock=mock, alignment_profile=reflector,
+            mock=mock, alignment_profile=shared_profile,
         )
         append_event(
             run_dir / "timing.jsonl",
@@ -150,4 +129,3 @@ def _validate_resume_config(config: ExperimentConfig, run_dir: Path) -> None:
     ]
     if mismatches:
         raise ValueError("Resume config does not match the run: " + "; ".join(mismatches))
-
