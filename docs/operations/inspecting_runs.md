@@ -11,6 +11,22 @@ python3 scripts/analyze_run.py runs/<run_id>
 
 The analysis CLI and GUI read canonical per-candidate results and objective values. Missing or malformed current artifacts are reported; historical schemas are outside the active runtime.
 
+## Analysis GUI
+
+Launch the canonical GUI with `./run.sh`, open **Analysis**, then select a
+discovered run/experiment or enter its folder path. Selection immediately shows
+a loading state and renders all recorded dashboard sections; no Analyze or
+Generate action is required. Experiment folders expose only their direct
+canonical run children and initially load the most recently modified readable
+run. **Refresh active run** rereads an in-progress run without changing the
+selection.
+
+The dashboard distinguishes fatal folder/schema errors, malformed partial
+evidence, and normal absence of optional artifacts. Failure sentinels are
+excluded from valid objective distributions. Timing-heavy current runs are read
+from the canonical per-candidate summaries so duplicated telemetry in a large
+`results.jsonl` does not block the GUI.
+
 ### Read-only recovery
 
 If a run's `results.jsonl` is malformed, the analysis reader attempts to reconstruct
@@ -72,4 +88,3 @@ This is a manual visualization path. It may recompile an existing artifact and a
 - Runs with one match, RandomAI, or unversioned formulas are not architecture-compliance evidence.
 - Never copy historical prompts, schemas, or scoring into active code without checking the normative spec.
 - New analysis code must consume the versioned canonical schema directly.
-

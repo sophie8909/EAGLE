@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
@@ -116,6 +116,17 @@ def load_candidate_records(run_dir: Path) -> list[CandidateRecord]:
     results_path = run_dir / "results.jsonl"
     if not results_path.exists():
         return _records_from_candidate_dirs(run_dir)
+    # Current result envelopes intentionally retain complete telemetry and source
+    # evidence, so a small population can still produce a multi-gigabyte stream.
+    # The canonical per-candidate summaries contain the same analysis fields and
+    # are the bounded read path used by the GUI for telemetry-heavy runs.
+    if (
+        results_path.stat().st_size > DISCOVERY_RESULT_SIZE_LIMIT
+        and (run_dir / "candidates").is_dir()
+    ):
+        recovered = _records_from_candidate_dirs(run_dir)
+        if recovered:
+            return recovered
     try:
         return _records_from_results(results_path)
     except (OSError, TypeError, ValueError) as exc:
@@ -249,7 +260,23 @@ def _record_from_result(payload: dict[str, Any], source: Path) -> CandidateRecor
             if result.get(key) is not None:
                 merged[key] = result[key]
         candidate = merged
-    return _record_from_candidate(candidate, source)
+    record = _record_from_candidate(candidate, source)
+    # Preserve the complete already-parsed result envelope for evaluation and
+    # candidate inspection. This avoids chart components reopening artifacts.
+    raw = dict(record.raw)
+    raw["_result_envelope"] = payload
+    for key in (
+        "game_metrics",
+        "code_quality",
+        "function_capability",
+        "strategy_alignment",
+        "matches",
+        "generation_timing",
+        "error",
+    ):
+        if key in payload and key not in raw:
+            raw[key] = payload[key]
+    return replace(record, raw=raw)
 
 
 def _record_from_candidate(candidate: dict[str, Any], source: Path) -> CandidateRecord:

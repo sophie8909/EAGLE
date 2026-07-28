@@ -64,3 +64,21 @@ The user-facing runtime is now ./run.sh, which starts the NiceGUI application an
 The existing `LLMServerManager` now owns one resolved local/remote server specification shared by command construction, readiness, GUI status, topology persistence, diagnostics, and EA role profiles. Lifecycle states distinguish process creation from API readiness; process output is continuously drained to a retained per-server log; failures preserve the exit code, reason, command, and recent output; configured ports are not silently changed; and stop targets only the owned process group. Explicit CPU/CUDA/remote backend selection is enforced: CUDA requires a device-detecting binary, CPU emits no GPU flags, and logical VRAM-fit settings map to the verified llama.cpp arguments. Remote records perform endpoint validation without spawning a local child. `python -m eagle.runtime.server_manager --diagnose` performs non-GUI configuration/path/port/endpoint/GPU checks. Focused fake-process and loopback HTTP tests cover the lifecycle without loading a model or requiring a GPU.
 
 LLM transport now hard-truncates oversized generation, mutation, and Strategy Alignment prompts to preserve llama.cpp context headroom. The truncation marker and bounded request are persisted/logged, while full match telemetry remains in run artifacts.
+
+## Analysis dashboard update (2026-07-27)
+
+The NiceGUI Analysis surface now loads a selected canonical run or experiment
+folder immediately through one `AnalysisDataLoader` boundary. An experiment
+selection exposes its direct runs, selects the most recently modified readable
+run, and preserves the run selector while switching. The resulting
+`AnalysisViewModel` owns overview, objective history, final-population
+Pareto/ranking data, distributions, generic operator/evaluator metrics, timing,
+errors, candidate inspection, final-test summaries, and resolved configuration;
+chart components do not reopen result artifacts.
+
+Partial runs remain readable. Missing optional evidence produces section-local
+unavailable states, malformed optional timing records remain visible warnings,
+and an unsupported artifact schema remains a fatal load error. The GUI uses
+monotonic load tokens so a slow older folder load cannot replace a newer
+selection. Large result streams use canonical per-candidate summaries rather
+than deserializing duplicated telemetry from `results.jsonl`.

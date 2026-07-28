@@ -15,6 +15,8 @@ This file maps active repository paths to responsibilities. It is descriptive, n
 | `eagle/evaluation.py` | Candidate stage orchestration | [`../evaluation/evaluation_pipeline.md`](../evaluation/evaluation_pipeline.md), [`../evaluation/failure_classification.md`](../evaluation/failure_classification.md) |
 | `eagle/artifacts.py` | Current run/candidate serialization | [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md), timing/lineage docs |
 | `eagle/llm_logging.py` | Current generation-attempt JSON logging | [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md), [`../artifacts/timing_schema.md`](../artifacts/timing_schema.md) |
+| `eagle/analysis/` | Canonical read-only run normalization, derived analysis statistics, and artifact-compatible candidate/error/timing inspection | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md), [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md) |
+| `eagle_ui/views/analysis_view.py`, `eagle_ui/controllers/analysis_controller.py` | Automatic folder/run loading and rendering of the normalized Analysis dashboard | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
 | `generation/backend.py` | Mock and OpenAI-compatible final-generation transport | [`../architecture/java_generation.md`](../architecture/java_generation.md) |
 | `generation/java_agent_generator.py` | Full-source extraction, validation, and file writing | [`../architecture/java_generation.md`](../architecture/java_generation.md) |
 | `generation/agent_template.py` | Current template and marker validation | [`../architecture/java_generation.md`](../architecture/java_generation.md) |
@@ -54,4 +56,3 @@ Scoring modules should return data and not own process execution. Artifact write
 - `scripts/analyze_run.py` reads only current per-candidate results and persisted `game_performance`/`code_quality` objectives.
 - Current marker/helper scaffolding is implementation state, not a normative internal Java architecture.
 - Do not restore surrogate or runtime-LLM components while migrating this contract.
-

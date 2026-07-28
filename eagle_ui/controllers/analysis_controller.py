@@ -1,12 +1,26 @@
 """Canonical analysis controller used by the GUI."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from eagle.analysis.dashboard import AnalysisDataLoader, AnalysisViewModel
 from eagle.analysis.objectives import available_objectives, generation_statistics, load_objective_directions, pareto_frame, prepare_objective_frame
-from eagle.analysis.plots import generation_distribution_options, objective_scatter_options
 from eagle.analysis.records import load_candidate_records
 from eagle.analysis.timing import plot_payloads, summarize_run_timing
+
+
+@dataclass
+class AnalysisLoadCoordinator:
+    """Monotonic tokens prevent a completed stale worker from updating the page."""
+
+    version: int = 0
+
+    def begin(self) -> int:
+        self.version += 1
+        return self.version
+
+    def is_current(self, token: int) -> bool:
+        return token == self.version
 
 
 class AnalysisController:
@@ -41,9 +55,13 @@ class AnalysisController:
         return generation_statistics(frame, objective)
 
     def distribution_plot(self, frame, objective: str) -> dict:
+        from eagle.analysis.plots import generation_distribution_options
+
         return generation_distribution_options(frame, objective)
 
     def scatter_plot(self, frame, x_objective: str, y_objective: str, pareto_ids: set[str]) -> dict:
+        from eagle.analysis.plots import objective_scatter_options
+
         return objective_scatter_options(frame, x_objective, y_objective, pareto_ids=pareto_ids)
 
     def timing(self, run_dir: Path) -> dict:

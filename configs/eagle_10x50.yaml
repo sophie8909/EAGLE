@@ -1,5 +1,5 @@
 seed_prompt_template: "microrts_blank_strategy_agent"
-generations: 50
+generations: 20
 population_size: 10
 crossover_rate: 0.75
 mutation_rate: 0.85
@@ -14,3 +14,5 @@ matches_per_candidate: 10
 match_timeout_seconds: 120
 mock_score_base: 10
 mock_score_step: 1
+
+map_path: "maps/8x8/basesWorkers8x8.xml"

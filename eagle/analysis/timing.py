@@ -13,18 +13,34 @@ def read_timing_events(run_dir: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     events: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    warnings: list[str] = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if line.strip():
-            payload = json.loads(line)
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as exc:
+                warnings.append(f"timing.jsonl line {line_number}: {exc}")
+                continue
             if isinstance(payload, dict):
                 events.append(payload)
+            else:
+                warnings.append(f"timing.jsonl line {line_number} is not an object")
+    if warnings:
+        events.append({"event": "_reader_warnings", "warnings": warnings})
     return events
 
 
 def read_candidate_timings(run_dir: Path) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for path in sorted((run_dir / "candidates").glob("*/timing.json")):
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            records.append({
+                "candidate_id": path.parent.name,
+                "_reader_warning": f"{path}: {exc}",
+            })
+            continue
         if isinstance(payload, dict):
             records.append({"candidate_id": path.parent.name, **payload})
     return records
@@ -33,17 +49,36 @@ def read_candidate_timings(run_dir: Path) -> list[dict[str, Any]]:
 def summarize_run_timing(run_dir: Path) -> dict[str, Any]:
     events = read_timing_events(run_dir)
     candidates = read_candidate_timings(run_dir)
+    warnings = [
+        warning
+        for event in events
+        for warning in event.get("warnings", [])
+        if event.get("event") == "_reader_warnings"
+    ]
+    warnings.extend(
+        str(record["_reader_warning"])
+        for record in candidates
+        if record.get("_reader_warning")
+    )
     generations = [event for event in events if event.get("event") == "generation"]
     requests = [event for event in events if event.get("event") == "llm_request"]
     operations: list[dict[str, Any]] = []
     stage_totals: defaultdict[str, float] = defaultdict(float)
     for record in candidates:
-        for name in ("mutation", "crossover", "child_generation", "validation", "compilation", "evaluation"):
+        for name in (
+            "mutation",
+            "crossover",
+            "child_generation",
+            "validation",
+            "compilation",
+            "integration",
+            "evaluation",
+        ):
             value = record.get(name)
             if isinstance(value, dict):
                 seconds = _number(value.get("generation_only_duration_seconds", value.get("duration_seconds")))
                 stage_totals[name] += seconds
-                if name in {"mutation", "crossover", "child_generation"} and seconds:
+                if seconds:
                     operations.append({"candidate_id": record["candidate_id"], "operation": name, "duration_seconds": seconds, "status": value.get("status")})
     operations.sort(key=lambda item: item["duration_seconds"], reverse=True)
     return {
@@ -54,6 +89,7 @@ def summarize_run_timing(run_dir: Path) -> dict[str, Any]:
         "operation_records": operations,
         "llm_requests": requests,
         "slowest_requests": sorted(requests, key=lambda item: _number(item.get("duration_seconds")), reverse=True)[:20],
+        "warnings": warnings,
     }
 
 

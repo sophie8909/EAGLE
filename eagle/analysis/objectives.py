@@ -118,16 +118,15 @@ def generation_statistics(frame: pd.DataFrame, objective: str) -> pd.DataFrame:
         return pd.DataFrame(columns=columns)
     rows: list[dict[str, object]] = []
     for generation, group in frame.groupby("generation", sort=True):
-        values = [float(value) for value in group[objective].dropna()]
-        if not values:
-            continue
+        valid = group.loc[~group["failed"].astype(bool), objective].dropna()
+        values = [float(value) for value in valid if float(value) != -1000.0]
         failed = int(group["failed"].astype(bool).sum())
         rows.append({
             "generation": int(generation),
-            "min": min(values),
-            "max": max(values),
-            "mean": sum(values) / len(values),
-            "median": median(values),
+            "min": min(values) if values else None,
+            "max": max(values) if values else None,
+            "mean": sum(values) / len(values) if values else None,
+            "median": median(values) if values else None,
             "success_count": len(group) - failed,
             "failure_count": failed,
         })
@@ -138,6 +137,8 @@ def _dominates(left: pd.Series, right: pd.Series, objectives: tuple[str, ...], d
     no_worse = True
     strictly_better = False
     for objective in objectives:
+        if objective not in directions:
+            raise ValueError(f"Objective direction is not recorded for {objective!r}")
         direction = _validate_direction(directions[objective])
         left_value = float(left[objective])
         right_value = float(right[objective])
