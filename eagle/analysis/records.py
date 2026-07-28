@@ -39,7 +39,7 @@ class ArtifactReadError(ValueError):
 
 
 # Run result lines contain complete telemetry and can be gigabytes in size.
-# Discovery only needs enough metadata to populate the GUI selector; defer the
+# Discovery only needs enough metadata to populate a run selector; defer the
 # full record read until the user explicitly selects a run.
 DISCOVERY_RESULT_SIZE_LIMIT = 10 * 1024 * 1024
 

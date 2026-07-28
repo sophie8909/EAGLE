@@ -1,4 +1,4 @@
-# Canonical LLM-stage templates. GUI edits update only the selected template body.
+# Canonical LLM-stage templates consumed by experiment execution.
 
 [templates.strategy_reflection]
 role = "reflector"

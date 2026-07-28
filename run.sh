@@ -2,75 +2,22 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ENV_NAME="eagle"
-INSTALL_MODE=true
-GUI_PORT="${EAGLE_GUI_PORT:-8082}"
+RUNTIME_CONFIG="$ROOT_DIR/configs/runtime.yaml"
+cd "$ROOT_DIR"
 
-for arg in "$@"; do
-    case "$arg" in
-        --gui|--skip-install)
-            INSTALL_MODE=false
-            ;;
-        --setup|--install)
-            INSTALL_MODE=true
-            ;;
-        *)
-            echo "Unknown option: $arg" >&2
-            exit 2
-            ;;
-    esac
-done
+command -v conda >/dev/null 2>&1 || { echo "ERROR: conda is required and was not found in PATH." >&2; exit 1; }
+eval "$(conda shell.bash hook)"
+CONDA_ENV="$(awk '/^[[:space:]]*conda_env:/ {sub(/^[^:]*:[[:space:]]*/, ""); print; exit}' "$RUNTIME_CONFIG")"
+[[ -n "$CONDA_ENV" ]] || { echo "ERROR: environment.conda_env is missing from $RUNTIME_CONFIG." >&2; exit 1; }
+conda activate "$CONDA_ENV"
 
-if ! command -v conda >/dev/null 2>&1; then
-    for conda_root in "$HOME/miniconda3" "$HOME/anaconda3" "$HOME/miniforge3"; do
-        if [ -f "$conda_root/etc/profile.d/conda.sh" ]; then
-            # shellcheck disable=SC1090
-            source "$conda_root/etc/profile.d/conda.sh"
-            break
-        fi
-    done
-fi
-if ! command -v conda >/dev/null 2>&1; then
-    echo "ERROR: conda is required for the EAGLE runtime." >&2
-    exit 1
-fi
-source "$(conda info --base)/etc/profile.d/conda.sh"
-
-if ! conda env list | awk 'NF && $1 !~ /^#/ {print $1}' | grep -qx "$ENV_NAME"; then
-    conda env create --file "$ROOT_DIR/environment.yml"
-fi
-conda activate "$ENV_NAME"
-
-if [ "$INSTALL_MODE" = true ]; then
-    python -m pip install --upgrade pip
-    python -m pip install -e "$ROOT_DIR"
+if [[ $# -eq 0 ]]; then
+    mapfile -t CONFIGS < <(find "$ROOT_DIR/configs/experiments" -maxdepth 1 -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)
+    [[ ${#CONFIGS[@]} -gt 0 ]] || { echo "ERROR: no experiment configs found." >&2; exit 1; }
+    for index in "${!CONFIGS[@]}"; do printf '%d) %s\n' "$((index + 1))" "${CONFIGS[$index]#$ROOT_DIR/}"; done
+    read -r -p "Select experiment: " SELECTION
+    [[ "$SELECTION" =~ ^[0-9]+$ ]] && (( SELECTION >= 1 && SELECTION <= ${#CONFIGS[@]} )) || { echo "ERROR: invalid selection." >&2; exit 2; }
+    set -- "${CONFIGS[$((SELECTION - 1))]}"
 fi
 
-GUI_PID=""
-WATCHDOG_PID=""
-cleanup() {
-    local status=$?
-    trap - EXIT INT TERM
-    if [ -n "$WATCHDOG_PID" ] && kill -0 "$WATCHDOG_PID" 2>/dev/null; then
-        kill "$WATCHDOG_PID" 2>/dev/null || true
-    fi
-    if [ -n "$GUI_PID" ] && kill -0 "$GUI_PID" 2>/dev/null; then
-        kill "$GUI_PID" 2>/dev/null || true
-    fi
-    wait "$WATCHDOG_PID" 2>/dev/null || true
-    wait "$GUI_PID" 2>/dev/null || true
-    exit "$status"
-}
-trap cleanup EXIT INT TERM
-
-echo "EAGLE GUI: http://127.0.0.1:${GUI_PORT}"
-EAGLE_GUI_PORT="$GUI_PORT" python -m eagle_ui &
-GUI_PID=$!
-python -m eagle.runtime.watchdog --pid "$GUI_PID" &
-WATCHDOG_PID=$!
-
-set +e
-wait "$GUI_PID"
-GUI_STATUS=$?
-set -e
-exit "$GUI_STATUS"
+python -m eagle run --config "$1" --runtime-config "$RUNTIME_CONFIG" "${@:2}"

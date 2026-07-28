@@ -1,7 +1,7 @@
 """Canonical timing records for EAGLE runs.
 
 This module owns wall-clock event timestamps, monotonic durations, and the
-append-only run timing stream. Evolutionary operators and GUI analysis consume
+append-only run timing stream. Evolutionary operators and offline analysis consume
 these records; neither layer recomputes request durations independently.
 """
 

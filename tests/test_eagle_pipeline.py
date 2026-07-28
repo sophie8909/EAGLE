@@ -45,7 +45,6 @@ from generation.java_agent_generator import (
     normalize_java_agent_source,
     validate_java_agent_source,
 )
-from scripts.analyze_run import analyze_run, format_report
 
 
 class RecordingMutationBackend:

@@ -22,6 +22,7 @@ from generation.backend import build_generation_backend
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE
 
 from .artifacts import write_generation_manifest, write_prompt_snapshot, write_resolved_config, write_summary
+from .run_artifacts import finalize_run, initialize_run_manifest, record_generation
 from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import CrossoverContext, crossover
@@ -77,6 +78,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     generated_agents_dir.mkdir()
     classes_dir.mkdir()
     copy2(config_path, run_dir / "config.yaml")
+    initialize_run_manifest(run_dir, config_path=config_path)
 
     llm_logger = LLMCallLogger(run_dir / "llm_logs", run_id=active_run_id, timing_path=run_dir / "timing.jsonl")
     reflector_profile = role_profiles["reflector"]
@@ -163,6 +165,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         candidates=evaluated_population,
         span=generation_span.finish(),
     ))
+    record_generation(run_dir, 0, evaluated_population)
 
     front0_signature = front_zero_signature(evaluated_population)
     front0_stagnation_count = 0
@@ -210,6 +213,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             front0_signature = current_front0_signature
             front0_stagnation_count = 0
         write_generation_manifest(run_dir, generation, evaluated_population)
+        record_generation(run_dir, generation, evaluated_population)
         completed_generation = generation
         if (
             config.front0_stagnation_generations > 0
@@ -231,6 +235,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         completed_generation=completed_generation,
         stop_reason=stop_reason,
     )
+    finalize_run(run_dir, evaluated_population, stop_reason=stop_reason)
     return SearchResult(
         run_dir=run_dir,
         final_population=evaluated_population,
@@ -317,7 +322,7 @@ def _preflight_llm_endpoints(role_profiles: dict[str, LLMProfile]) -> None:
             role_text = ", ".join(roles)
             raise LLMServerError(
                 f"llm server error: server {server_name!r} for roles [{role_text}] failed preflight at "
-                f"{phase}: {exc}. Start or restart the server from the GUI before starting the EA run."
+                f"{phase}: {exc}. Use ./run_env.sh status and restart the configured runtime if needed."
             ) from exc
 
 

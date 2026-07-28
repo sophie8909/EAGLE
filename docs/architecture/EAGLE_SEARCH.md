@@ -34,7 +34,7 @@ compiles, evaluates, or calculates objectives.
 Known generation, validation, compilation, integration, and runtime failures
 become one failed candidate result with stage, details, timing, and artifact
 references. Unexpected programming errors propagate. Population update consumes
-the objective values produced by this boundary; GUI and analysis read those
+the objective values produced by this boundary; offline analysis reads those
 persisted values instead of recomputing them.
 
 ## Timing semantics

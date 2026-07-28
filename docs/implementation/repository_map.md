@@ -28,9 +28,9 @@ This file maps active repository paths to responsibilities. It is descriptive, n
 | `evaluation/code_quality.py` | Current deterministic scoring | [`../evaluation/code_quality.md`](../evaluation/code_quality.md), [`../evaluation/failure_classification.md`](../evaluation/failure_classification.md) |
 | `evaluation/nsga2_objectives.py` | Current two-value objective dictionary | objective and failure docs |
 | `scripts/run_eagle.py` | CLI entry point | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
-| `scripts/analyze_run.py` | Canonical failure summary and objective plots | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
+| `eagle/analysis/loader.py`, `eagle/analysis/report.py` | Canonical compact-artifact loading and static reports | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
 | `scripts/analysis/plot_game_performance_by_generation.py` | Gameplay plotting/CSV export | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
-| `scripts/play_candidate_gui.py` | Manual GUI playback of an existing candidate | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
+| `run_env.sh`, `run.sh`, `analyze.sh` | Canonical runtime, experiment, and offline-analysis entrypoints | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
 | `tests/` | Current unit/integration-contract tests | [`../testing/test_contracts.md`](../testing/test_contracts.md) |
 | `configs/` | Input configurations; currently non-conformant to the 10-match contract | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
 | `eagle/java_templates/CandidateAgent.java` | Current known-good complete-file seed/template | [`../architecture/java_generation.md`](../architecture/java_generation.md) |
@@ -51,7 +51,7 @@ Scoring modules should return data and not own process execution. Artifact write
 ## Legacy boundaries
 
 - `runs/`, `logs/`, ignored generated Java, compiled MicroRTS classes, and archived caches are evidence only.
-- `scripts/analyze_run.py` reads only current per-candidate results and persisted `game_performance`/`code_quality` objectives.
+- `eagle/analysis/loader.py` reads only supported compact canonical artifacts and never opens `results.jsonl`.
 - Current marker/helper scaffolding is implementation state, not a normative internal Java architecture.
 - Do not restore surrogate or runtime-LLM components while migrating this contract.
 

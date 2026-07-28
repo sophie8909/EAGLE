@@ -10,7 +10,6 @@ from evaluation.code_quality import (
     evaluate_agent_strategy_region,
 )
 from evaluation.compiler import CompileResult
-from scripts.analyze_run import read_candidate_results, read_objective_scatter_records
 
 
 class CodeQualityTests(unittest.TestCase):
