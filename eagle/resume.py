@@ -1,4 +1,4 @@
-"""Resume the canonical EA from the latest surviving-population snapshot."""
+﻿"""Resume the canonical EA from the latest surviving-population snapshot."""
 from __future__ import annotations
 
 import random
@@ -12,7 +12,7 @@ from .config import ExperimentConfig
 from .crossover import CrossoverContext
 from .evaluation import evaluate_population, preflight_evaluation_opponents
 from .llm_logging import LLMCallLogger
-from .llm_profiles import load_role_profiles
+from .llm_profiles import LLMProfile
 from .mutation import build_reflection_backend
 from .rewrite import PromptRewriteMutation
 from .run_artifacts import finalize_run, load_resume_population, record_generation
@@ -43,7 +43,8 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
             for role in ("reflector", "rewriter", "generator")
         }
     else:
-        profiles = load_role_profiles(config.llm_role_topology_path)
+        shared_profile = LLMProfile("shared", config.llm_base_url, config.llm_model)
+        profiles = {"reflector": shared_profile, "rewriter": shared_profile, "generator": shared_profile}
         _preflight_llm_endpoints(profiles)
     logger = LLMCallLogger(run_dir / "llm_logs", run_id=run_dir.name, timing_path=run_dir / "timing.jsonl")
     generator = profiles["generator"]
@@ -149,3 +150,4 @@ def _validate_resume_config(config: ExperimentConfig, run_dir: Path) -> None:
     ]
     if mismatches:
         raise ValueError("Resume config does not match the run: " + "; ".join(mismatches))
+

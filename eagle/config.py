@@ -1,4 +1,4 @@
-"""Experiment configuration for the generated-agent EAGLE pipeline."""
+﻿"""Experiment configuration for the generated-agent EAGLE pipeline."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from typing import Any
 from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH, get_seed_prompt_template
 
 from .candidate import DEFAULT_GENERATION_PROMPT
-from .llm_profiles import DEFAULT_ROLE_TOPOLOGY_PATH
 
 
 TRAINING_OPPONENT = "ai.abstraction.LightRush"
@@ -41,7 +40,6 @@ class ExperimentConfig:
     alignment_backend: str = "mock"
     llm_base_url: str = "http://localhost:8080"
     llm_model: str = "local-model"
-    llm_role_topology_path: Path = DEFAULT_ROLE_TOPOLOGY_PATH
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
@@ -74,6 +72,10 @@ class ExperimentConfig:
 
     @classmethod
     def from_mapping(cls, payload: dict[str, Any], *, raw_config: str = "") -> "ExperimentConfig":
+        forbidden = {"llm_base_url", "llm_model", "llm_role_topology_path", "servers", "role_mapping", "endpoints"}
+        found = sorted(forbidden.intersection(payload))
+        if found:
+            raise ValueError("Experiment config cannot define runtime endpoint fields: " + ", ".join(found))
         seed_prompts = tuple(str(item) for item in payload.get("seed_prompts", []))
         template_name = payload.get("seed_prompt_template")
         if template_name:
@@ -93,7 +95,6 @@ class ExperimentConfig:
             alignment_backend=str(payload.get("alignment_backend", payload.get("generation_backend", "mock"))),
             llm_base_url=str(payload.get("llm_base_url", "http://localhost:8080")),
             llm_model=str(payload.get("llm_model", "local-model")),
-            llm_role_topology_path=_repository_path(payload.get("llm_role_topology_path"), DEFAULT_ROLE_TOPOLOGY_PATH),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
@@ -224,3 +225,4 @@ def _parse_scalar(value: str) -> Any:
         return float(value)
     except ValueError:
         return value
+

@@ -1,4 +1,4 @@
-# EAGLE
+﻿# EAGLE
 
 EAGLE is the **Evolutionary Algorithm for Game-playing with LLM-Enabled Agents**.
 It evolves prompts that generate complete Java MicroRTS agents. The canonical
@@ -43,7 +43,7 @@ the only source of truth for:
 - the `llama-server` binary;
 - local model paths, bind hosts, client hosts, ports, and llama.cpp arguments;
 - remote endpoint hosts and ports;
-- role assignments (`generator`, `reflector`, and `rewriter`);
+- one shared endpoint for all logical pipeline stages;
 - watchdog restart policy and health-check paths;
 - analysis output naming and latest-run strategy.
 
@@ -57,15 +57,15 @@ Runtime state is separate from runs:
 
 ```text
 runtime/
-├─ logs/
-│  ├─ coder.log
-│  ├─ general.log
+?? logs/
+│  ├─ llm-server.log
 │  └─ watchdog.log
-├─ pids/
-│  ├─ coder.pid
-│  ├─ general.pid
+?? ?? watchdog.log
+?? pids/
+│  ├─ llm-server.pid
 │  └─ watchdog.pid
-└─ resolved_endpoints.json
+?? ?? watchdog.pid
+└─ resolved_endpoint.json
 ```
 
 PID files are written atomically. Stop validates each managed command line and
@@ -77,15 +77,15 @@ Each completed generation records the population that survived selection:
 
 ```text
 RUN_DIR/
-├─ manifest.json
-├─ resolved_config.json
-├─ generation_metrics.jsonl
-├─ generations/generation_0000.json
-├─ candidates/
-├─ errors.jsonl
-├─ timing.jsonl
-├─ final_population.json
-└─ final_test/
+?? manifest.json
+?? resolved_config.json
+?? generation_metrics.jsonl
+?? generations/generation_0000.json
+?? candidates/
+?? errors.jsonl
+?? timing.jsonl
+?? final_population.json
+?? final_test/
 ```
 
 Objective statistics exclude the `-1000` game-failure sentinel. Snapshots and
@@ -114,3 +114,4 @@ python -m eagle migrate-run RUN_DIR
 
 No legacy schema is enabled unless a migration implementation is added and
 tested explicitly.
+

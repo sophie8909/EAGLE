@@ -1,4 +1,4 @@
-"""Run artifact writers for EAGLE searches."""
+﻿"""Run artifact writers for EAGLE searches."""
 
 from __future__ import annotations
 
@@ -294,8 +294,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         },
         "strategy_alignment_backend": "mock" if mock else config.alignment_backend,
         "strategy_alignment_model": None if mock else config.llm_model,
-        "llm_role_topology_path": str(config.llm_role_topology_path),
-        "llm_roles": None if profiles is None else {name: profile.to_dict() for name, profile in profiles.items()},
+        "llm_endpoint": None if profiles is None else profiles["generator"].to_dict(),
         "prompt_version": None,
         "prompt_template_sha256": prompt_template_digest(),
         "git_commit_hash": git_commit_hash(),
@@ -465,3 +464,4 @@ def write_json(path: Path, payload: object) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(path)
+

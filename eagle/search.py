@@ -1,4 +1,4 @@
-"""Canonical evolutionary search for prompt-generated Java MicroRTS agents.
+﻿"""Canonical evolutionary search for prompt-generated Java MicroRTS agents.
 
 This module owns experiment lifecycle, offspring orchestration, and population
 updates. Evaluation owns the shared child pipeline; final-test execution is a
@@ -30,7 +30,7 @@ from .evaluation import evaluate_population, preflight_evaluation_opponents
 from .mutation import MutationContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
-from .llm_profiles import LLMProfile, load_role_profiles
+from .llm_profiles import LLMProfile
 from .llm_errors import LLMServerError
 from .offspring import normalize_prompt
 from .rewrite import PromptRewriteMutation
@@ -65,7 +65,8 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             "generator": LLMProfile("generator", config.llm_base_url, config.llm_model),
         }
     else:
-        role_profiles = load_role_profiles(config.llm_role_topology_path)
+        shared_profile = LLMProfile("shared", config.llm_base_url, config.llm_model)
+        role_profiles = {"reflector": shared_profile, "rewriter": shared_profile, "generator": shared_profile}
         _preflight_llm_endpoints(role_profiles)
 
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -514,3 +515,4 @@ def number_or_none(value: object) -> float | None:
 
 def _as_int(value: object) -> int | None:
     return int(value) if isinstance(value, int) else None
+

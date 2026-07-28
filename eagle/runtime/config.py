@@ -1,7 +1,8 @@
-"""Typed loading and validation for the canonical runtime configuration."""
+﻿"""Typed loading and validation for the single-endpoint runtime contract."""
 from __future__ import annotations
 
 import ipaddress
+import os
 import socket
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,22 +20,17 @@ class ServerArguments:
     parallel: int = 1
     threads: int = 8
     batch_size: int = 512
-    prompt_cache_mib: int = 0
-    reuse_prompt_cache: bool = False
 
 
 @dataclass(frozen=True)
-class ServerConfig:
-    name: str
-    enabled: bool
+class LLMConfig:
     mode: str
+    host: str | None
     client_host: str
     port: int
-    roles: tuple[str, ...]
-    host: str | None = None
-    model: Path | None = None
-    arguments: ServerArguments = ServerArguments()
-    model_id: str = ""
+    model: Path | None
+    server_binary: Path | None
+    arguments: ServerArguments
 
     @property
     def base_url(self) -> str:
@@ -69,8 +65,7 @@ class RuntimeConfig:
     run_root: Path
     log_root: Path
     pid_root: Path
-    server_binary: Path
-    servers: tuple[ServerConfig, ...]
+    llm: LLMConfig
     watchdog: WatchdogConfig
     health_check: HealthCheckConfig
     analysis_output_directory_name: str
@@ -81,17 +76,8 @@ class RuntimeConfig:
         return self.log_root.parent
 
     @property
-    def resolved_endpoints_path(self) -> Path:
-        return self.runtime_root / "resolved_endpoints.json"
-
-    def enabled_servers(self) -> tuple[ServerConfig, ...]:
-        return tuple(server for server in self.servers if server.enabled)
-
-    def local_servers(self) -> tuple[ServerConfig, ...]:
-        return tuple(server for server in self.enabled_servers() if server.mode == "local")
-
-    def roles(self) -> dict[str, ServerConfig]:
-        return {role: server for server in self.enabled_servers() for role in server.roles}
+    def resolved_endpoint_path(self) -> Path:
+        return self.runtime_root / "resolved_endpoint.json"
 
 
 def load_runtime_config(path: str | Path, *, create_directories: bool = True, validate_files: bool = True) -> RuntimeConfig:
@@ -103,51 +89,27 @@ def load_runtime_config(path: str | Path, *, create_directories: bool = True, va
     if not isinstance(payload, dict):
         raise ValueError("Runtime config must contain a YAML mapping.")
     if payload.get("schema_version") != RUNTIME_SCHEMA_VERSION:
-        raise ValueError(
-            f"Unsupported runtime schema version {payload.get('schema_version')!r}; "
-            f"expected {RUNTIME_SCHEMA_VERSION!r}."
-        )
+        raise ValueError(f"Unsupported runtime schema version {payload.get('schema_version')!r}; expected {RUNTIME_SCHEMA_VERSION!r}.")
+    obsolete = {"servers", "roles", "role_mapping", "endpoints", "reflector", "rewriter", "generator", "coder", "general"}
+    found = sorted(obsolete.intersection(payload))
+    if found:
+        raise ValueError("Legacy multi-endpoint runtime fields are not supported: " + ", ".join(found) + ". Move one endpoint into llm.")
     env = _mapping(payload, "environment")
     project_root = _absolute_path(env, "project_root")
     run_root = _absolute_path(env, "run_root")
     log_root = _absolute_path(env, "log_root")
     pid_root = _absolute_path(env, "pid_root")
-    server_binary = _absolute_path(_mapping(payload, "llama_cpp"), "server_binary")
     if not project_root.is_dir():
         raise ValueError(f"Configured project root does not exist: {project_root}")
     if create_directories:
         for directory in (run_root, log_root, pid_root):
-            try:
-                directory.mkdir(parents=True, exist_ok=True)
-            except OSError as exc:
-                raise ValueError(f"Runtime directory is not creatable: {directory}: {exc}") from exc
-    servers = tuple(_parse_server(str(name), item) for name, item in _mapping(payload, "servers").items())
-    ports: dict[int, str] = {}
-    roles: dict[str, str] = {}
-    for server in (item for item in servers if item.enabled):
-        _validate_host(server.client_host, f"servers.{server.name}.client_host")
-        if server.mode == "local":
-            assert server.host is not None
-            _validate_host(server.host, f"servers.{server.name}.host")
-            if server.port in ports:
-                raise ValueError(f"Duplicate local port {server.port}: {ports[server.port]} and {server.name}.")
-            ports[server.port] = server.name
-            if validate_files:
-                if not server_binary.is_file():
-                    raise ValueError(f"llama-server binary does not exist: {server_binary}")
-                if server.model is None or not server.model.is_file():
-                    raise ValueError(f"Model file for enabled local server {server.name!r} does not exist: {server.model}")
-        for role in server.roles:
-            if role in roles:
-                raise ValueError(f"LLM role {role!r} is assigned to both {roles[role]!r} and {server.name!r}.")
-            roles[role] = server.name
+            directory.mkdir(parents=True, exist_ok=True)
+    llm = _parse_llm(_mapping(payload, "llm"), validate_files=validate_files)
     analysis = _mapping(payload, "analysis")
     return RuntimeConfig(
-        source, _required_text(env, "conda_env"), project_root, run_root, log_root,
-        pid_root, server_binary, servers, _parse_watchdog(_mapping(payload, "watchdog")),
-        _parse_health(_mapping(payload, "health_check")),
-        _required_text(analysis, "output_directory_name"),
-        _required_text(analysis, "latest_run_strategy"),
+        source, _required_text(env, "conda_env"), project_root, run_root, log_root, pid_root, llm,
+        _parse_watchdog(_mapping(payload, "watchdog")), _parse_health(_mapping(payload, "health_check")),
+        _required_text(analysis, "output_directory_name"), _required_text(analysis, "latest_run_strategy"),
     )
 
 
@@ -158,49 +120,38 @@ def read_conda_env(path: str | Path) -> str:
     return _required_text(_mapping(payload, "environment"), "conda_env")
 
 
-def _parse_server(name: str, value: object) -> ServerConfig:
-    if not isinstance(value, dict):
-        raise ValueError(f"servers.{name} must be a mapping.")
+def _parse_llm(value: dict[str, Any], *, validate_files: bool) -> LLMConfig:
     mode = _required_text(value, "mode")
     if mode not in {"local", "remote"}:
-        raise ValueError(f"servers.{name}.mode must be local or remote, not {mode!r}.")
+        raise ValueError("llm.mode must be local or remote.")
+    client_host = _required_text(value, "client_host")
+    _validate_host(client_host, "llm.client_host")
     port = _positive_int(value, "port")
     if port > 65535:
-        raise ValueError(f"servers.{name}.port must be between 1 and 65535.")
-    raw_roles = value.get("roles")
-    if not isinstance(raw_roles, list) or not raw_roles:
-        raise ValueError(f"servers.{name}.roles must be a non-empty list.")
-    roles = tuple(str(role).strip() for role in raw_roles)
-    if any(not role for role in roles):
-        raise ValueError(f"servers.{name}.roles contains an empty role.")
-    args = ServerArguments()
-    host = None
-    model = None
+        raise ValueError("llm.port must be between 1 and 65535.")
+    host = model = binary = None
     if mode == "local":
         host = _required_text(value, "host")
+        _validate_host(host, "llm.host")
         model = _absolute_path(value, "model")
-        raw = value.get("arguments", {})
-        if not isinstance(raw, dict):
-            raise ValueError(f"servers.{name}.arguments must be a mapping.")
-        args = ServerArguments(
-            _positive_int(raw, "context_size", 32768), int(raw.get("gpu_layers", -1)),
-            _positive_int(raw, "parallel", 1), _positive_int(raw, "threads", 8),
-            _positive_int(raw, "batch_size", 512), _nonnegative_int(raw, "prompt_cache_mib", 0),
-            bool(raw.get("reuse_prompt_cache", False)),
-        )
-    return ServerConfig(
-        name, bool(value.get("enabled", False)), mode, _required_text(value, "client_host"),
-        port, roles, host, model, args, str(value.get("model_id", "")).strip(),
+        binary = _absolute_path(value, "server_binary")
+        if validate_files:
+            if not binary.is_file() or not os.access(binary, os.X_OK):
+                raise ValueError(f"llm.server_binary does not exist or is not executable: {binary}")
+            if not model.is_file():
+                raise ValueError(f"llm.model does not exist or is not a file: {model}")
+    raw = value.get("arguments", {})
+    if not isinstance(raw, dict):
+        raise ValueError("llm.arguments must be a mapping.")
+    args = ServerArguments(
+        _positive_int(raw, "context_size", 32768), int(raw.get("gpu_layers", -1)),
+        _positive_int(raw, "parallel", 1), _positive_int(raw, "threads", 8), _positive_int(raw, "batch_size", 512),
     )
+    return LLMConfig(mode, host, client_host, port, model, binary, args)
 
 
 def _parse_watchdog(value: dict[str, Any]) -> WatchdogConfig:
-    return WatchdogConfig(
-        bool(value.get("enabled", False)), _positive_number(value, "interval_seconds"),
-        _positive_number(value, "startup_timeout_seconds"), _positive_number(value, "health_timeout_seconds"),
-        _positive_number(value, "restart_delay_seconds"), _positive_int(value, "max_consecutive_restarts"),
-        _positive_number(value, "restart_window_seconds"),
-    )
+    return WatchdogConfig(bool(value.get("enabled", False)), _positive_number(value, "interval_seconds"), _positive_number(value, "startup_timeout_seconds"), _positive_number(value, "health_timeout_seconds"), _positive_number(value, "restart_delay_seconds"), _positive_int(value, "max_consecutive_restarts"), _positive_number(value, "restart_window_seconds"))
 
 
 def _parse_health(value: dict[str, Any]) -> HealthCheckConfig:
@@ -242,16 +193,6 @@ def _positive_int(payload: dict[str, Any], key: str, default: int | None = None)
     return result
 
 
-def _nonnegative_int(payload: dict[str, Any], key: str, default: int = 0) -> int:
-    try:
-        result = int(payload.get(key, default))
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"Runtime config field {key!r} must be an integer.") from exc
-    if result < 0:
-        raise ValueError(f"Runtime config field {key!r} must be nonnegative.")
-    return result
-
-
 def _positive_number(payload: dict[str, Any], key: str) -> float:
     try:
         result = float(payload.get(key))
@@ -274,3 +215,4 @@ def _validate_host(host: str, field: str) -> None:
         socket.getaddrinfo(host, None)
     except socket.gaierror as exc:
         raise ValueError(f"{field} is not a valid host: {host!r}") from exc
+

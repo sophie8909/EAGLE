@@ -1,14 +1,8 @@
-# EAGLE runtime architecture
+﻿# EAGLE runtime architecture
 
-`configs/runtime.yaml` (`runtime-v1`) owns Conda, filesystem roots, local and
-remote server endpoints, model paths, ports, llama.cpp arguments, role
-assignments, health checks, logs, PIDs, and watchdog policy.
+`configs/runtime.yaml` (`runtime-v1`) is the only runtime source of truth. It owns one Conda environment, one LLM endpoint, one optional local model process, health checks, logs, PIDs, and watchdog policy.
 
-`eagle.runtime.config` validates the typed schema. `eagle.runtime.endpoints`
-constructs client URLs and writes `runtime/resolved_endpoints.json`.
-`eagle.runtime.processes` starts and stops only validated managed local
-processes. Remote endpoints are health-checked but never launched or restarted.
-`eagle.runtime.watchdog` is one process monitoring all enabled local servers.
+All LLM-backed operations use this same endpoint. Reflection, rewriting, mutation, crossover, and generation remain logical operation labels only.
 
-The EA reads the resolved role mapping but never owns model processes.
-Analysis reads run artifacts but never owns runtime or EA processes.
+Runtime files: runtime/logs/llm-server.log, runtime/logs/watchdog.log, runtime/pids/llm-server.pid, runtime/pids/watchdog.pid, and runtime/resolved_endpoint.json.
+
