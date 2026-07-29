@@ -16,10 +16,11 @@ Parent generated_java:
 $parent_java
 
 Opponent identity: $opponent
-Complete 10-match summary: $match_summary
-Per-match results: $per_match_results
+Complete 10-match summary; aggregate game performance and ten-opponent feedback: $match_summary
+Per-match results / opponent results (one result for every configured opponent): $per_match_results
 Wins: $wins; draws: $draws; losses: $losses
 Game performance: $game_performance
+The ten-opponent summary includes Strongest matchup, Weakest matchup, and Score consistency.
 Final player resources: $final_player_resources
 Final enemy resources: $final_enemy_resources
 Final resource difference: $final_resource_difference
@@ -29,8 +30,12 @@ Survival statistics: $survival_statistics
 Round-state summary: $round_state_summary
 Temporal summary: $temporal_summary
 Behavior summary: $behavior_summary
-Discuss effective and failed strategic behavior, implementation alignment, and concrete
-requirements for a later Strategy Prompt Rewrite. The output must remain reflection only."""
+Compare behaviour across opponents, identify strategies that work across multiple
+opponents, and identify opponent-specific weaknesses without overfitting to one matchup.
+Use the strongest and weakest matchups and score variance/consistency as evidence. Propose
+one coherent, concise, implementable revised strategy for intended MicroRTS behaviour.
+Focus on strategy only: do not generate Java, code, patches, or diffs. The output must
+remain reflection only."""
 
 [templates.code_reflection]
 role = "reflector"

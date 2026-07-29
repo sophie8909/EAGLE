@@ -165,6 +165,8 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         "candidate_id": evaluation.candidate.id,
         "game_performance": evaluation.candidate.fitness_objectives["game_performance"],
         "code_quality": evaluation.candidate.fitness_objectives["code_quality"],
+        "opponent_scores": list(game_payload.get("opponent_scores") or []),
+        "opponent_results": list(game_payload.get("opponent_results") or []),
         "objective_names": ["game_performance", "code_quality"],
     }
     write_json(evaluation_dir / "game_performance.json", game_payload)
@@ -184,6 +186,8 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
             "failure_reason": evaluation.result.failure_reason,
             "completed_match_count": sum(result.ok for result in evaluation.match_results),
             "match_count": len(evaluation.match_results),
+            "opponent_scores": list(game_payload.get("opponent_scores") or []),
+            "opponent_results": list(game_payload.get("opponent_results") or []),
             "objectives": objectives_payload,
             "artifacts": {
                 "game_performance": "evaluation/game_performance.json",
@@ -275,7 +279,10 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "front0_stagnation_generations": config.front0_stagnation_generations,
         "matches_per_candidate": config.matches_per_candidate,
         "opponent": config.opponent,
-        "evaluation_opponents": [item.__dict__ for item in EVALUATION_ROSTER],
+        "evaluation_opponents": [
+            {"order": order, **item.__dict__}
+            for order, item in enumerate(EVALUATION_ROSTER, start=1)
+        ],
         "objective_directions": OBJECTIVE_DIRECTIONS,
         "map": config.map_path,
         "max_cycles": config.tick_limit,
@@ -385,6 +392,10 @@ def evaluation_to_dict(evaluation: CandidateEvaluation) -> dict:
         "integration": integration_to_dict(evaluation.integration_result),
         "matches": [match_to_dict(result) for result in evaluation.match_results],
         "game_metrics": evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else None,
+        "opponent_scores": [] if evaluation.game_metrics is None else list(evaluation.game_metrics.opponent_scores),
+        "opponent_results": [] if evaluation.game_metrics is None else [
+            item.to_json_dict() for item in evaluation.game_metrics.opponent_results
+        ],
         "code_quality": {"code_quality": evaluation.code_quality_breakdown.code_quality, "code_quality_breakdown": evaluation.code_quality_breakdown.to_json_dict()},
         "strategy_consistency": evaluation.strategy_consistency_result.to_json_dict() if evaluation.strategy_consistency_result else None,
         "function_capability": None if evaluation.function_capability_result is None else evaluation.function_capability_result.to_json_dict(),
@@ -413,6 +424,7 @@ def candidate_result_to_dict(result) -> dict:
         "code_quality_breakdown": result.code_quality_breakdown,
         "match_result": [match_to_dict(item) for item in result.match_result or []],
         "game_metrics": result.game_metrics,
+        "opponent_scores": [] if result.game_metrics is None else list(result.game_metrics.get("opponent_scores") or []),
         "final_score": result.final_score,
         "failure_category": result.failure_category,
         "failure_reason": result.failure_reason,

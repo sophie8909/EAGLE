@@ -27,6 +27,7 @@ from .config import ExperimentConfig
 from .crossover import CrossoverContext, crossover
 from .evaluation import evaluate_population, preflight_evaluation_opponents
 from .mutation import ReflectionContext, build_reflection_backend
+from evaluation.game_metrics import OpponentResult
 from .llm_logging import LLMCallLogger
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
 from .llm_profiles import LLMClient
@@ -377,6 +378,14 @@ def mutation_context_from_candidate(candidate: Candidate, *, generation: int, in
     integration_result = evidence.get("integration") or candidate.metadata.get("integration_result")
     objectives = evidence.get("objectives") or candidate.fitness_objectives
     matches = tuple(game.get("match_results") or game.get("matches") or ())
+    opponent_results = tuple(
+        _opponent_result_from_payload(item)
+        for item in (game.get("opponent_results") or ())
+        if isinstance(item, dict)
+    )
+    scores = tuple(item.score for item in opponent_results)
+    strongest = max(opponent_results, key=lambda item: item.score, default=None)
+    weakest = min(opponent_results, key=lambda item: item.score, default=None)
     return ReflectionContext(
         generation=generation,
         index=index,
@@ -389,7 +398,14 @@ def mutation_context_from_candidate(candidate: Candidate, *, generation: int, in
         game_evidence=game,
         code_quality_evidence=quality_payload,
         generation_evidence=generation_evidence,
-        game_performance=number_or_none(objectives.get("game_performance")),
+        aggregate_game_performance=number_or_none(objectives.get("game_performance")),
+        opponent_results=opponent_results,
+        strongest_opponent=strongest,
+        weakest_opponent=weakest,
+        score_mean=_mean_or_none(scores),
+        score_min=min(scores) if scores else number_or_none(game.get("minimum_match_score")),
+        score_max=max(scores) if scores else number_or_none(game.get("maximum_match_score")),
+        score_stddev=number_or_none(game.get("score_stddev")),
         player_resource=number_or_none(game.get("player0_resource")),
         enemy_resource=number_or_none(game.get("player1_resource")),
         resource_breakdown=game.get("resource_breakdown") or {},
@@ -437,3 +453,26 @@ def number_or_none(value: object) -> float | None:
 
 def _as_int(value: object) -> int | None:
     return int(value) if isinstance(value, int) else None
+
+
+def _mean_or_none(values: tuple[float, ...]) -> float | None:
+    return sum(values) / len(values) if values else None
+
+
+def _opponent_result_from_payload(payload: dict[str, object]) -> OpponentResult:
+    failure = payload.get("failure")
+    return OpponentResult(
+        opponent_id=str(payload.get("opponent_id") or "unknown"),
+        opponent_name=str(payload.get("opponent_name") or payload.get("opponent_id") or "unknown"),
+        score=float(payload.get("score") or 0.0),
+        wins=int(payload.get("wins") or 0),
+        draws=int(payload.get("draws") or 0),
+        losses=int(payload.get("losses") or 0),
+        match_count=int(payload.get("match_count") or 0),
+        player_resource=float(payload.get("player_resource") or 0.0),
+        enemy_resource=float(payload.get("enemy_resource") or 0.0),
+        player_units=int(payload.get("player_units") or 0),
+        enemy_units=int(payload.get("enemy_units") or 0),
+        status=str(payload.get("status") or "unknown"),
+        failure=failure if isinstance(failure, dict) else None,
+    )

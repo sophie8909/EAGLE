@@ -77,11 +77,11 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertEqual([item["match_index"] for item in observed], list(range(10)))
         self.assertEqual([item["opponent"] for item in observed], [item.class_name for item in EVALUATION_ROSTER])
         self.assertEqual([item.opponent_id for item in results], [item.opponent_id for item in EVALUATION_ROSTER])
-        self.assertTrue(str(observed[0]["extra_classpath_entries"][0]).endswith("tma.jar"))
-        self.assertTrue(str(observed[1]["extra_classpath_entries"][0]).endswith("mayari.jar"))
-        self.assertTrue(str(observed[2]["extra_classpath_entries"][0]).endswith("coac.jar"))
-        self.assertTrue(all(item.get("extra_classpath_entries", ()) == () for item in observed[3:8]))
-        self.assertTrue(all(str(item.get("extra_classpath_entries", ())[0]).endswith("_classes") for item in observed[8:]))
+        self.assertTrue(all(item.get("extra_classpath_entries", ()) == () for item in observed[:5]))
+        self.assertEqual(
+            [str(item["extra_classpath_entries"][0]).split("/")[-1] for item in observed[5:]],
+            ["TiamatBot.jar", "Droplet.jar", "Izanagi.jar", "MixedBot.jar", "GRojoA3N.jar"],
+        )
         self.assertEqual([item["seed"] for item in observed], list(config.resolved_match_seeds))
         self.assertEqual(len({item["source_hash"] for item in observed}), 1)
         self.assertEqual(len({item["class_hash"] for item in observed}), 1)
@@ -90,7 +90,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
     def test_real_mode_preflight_requires_resolved_external_manifest(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
-            with self.assertRaisesRegex(OpponentSetupError, "setup_final_test_opponents"):
+            with self.assertRaisesRegex(OpponentSetupError, "Bundled evolution opponent JAR"):
                 preflight_evaluation_opponents(config, mock=False, repository_root=Path(temp_dir))
 
     def test_partial_runtime_failure_retains_completed_matches(self):
@@ -129,9 +129,11 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     ordinal=0,
                 )
 
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 10)
+        self.assertFalse(results[2].ok)
+        self.assertEqual(results[2].opponent_id, EVALUATION_ROSTER[2].opponent_id)
         self.assertEqual(error, "boom")
-        self.assertEqual(sum(item.ok for item in results), 2)
+        self.assertEqual(sum(item.ok for item in results), 9)
 
     def test_runtime_timeout_is_classified_and_persisted(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -21,6 +21,28 @@ OBJECTIVE_FORMULA_VERSION = "eagle-objectives-phase4-v1"
 
 
 @dataclass(frozen=True)
+class OpponentResult:
+    """Lossless one-match summary used by artifacts and Strategy Reflection."""
+
+    opponent_id: str
+    opponent_name: str
+    score: float
+    wins: int
+    draws: int
+    losses: int
+    match_count: int
+    player_resource: float
+    enemy_resource: float
+    player_units: int
+    enemy_units: int
+    status: str
+    failure: dict[str, str] | None = None
+
+    def to_json_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class GameMetrics:
     resource_difference: float
     objective: float
@@ -54,9 +76,12 @@ class GameMetrics:
     unit_material_statistics: dict[str, Any] = field(default_factory=dict)
     survival_statistics: dict[str, Any] = field(default_factory=dict)
     behavior_summary: dict[str, Any] = field(default_factory=dict)
+    opponent_results: list[OpponentResult] = field(default_factory=list)
+    opponent_scores: list[float] = field(default_factory=list)
 
     def to_json_dict(self) -> dict[str, Any]:
         payload = asdict(self)
+        payload["opponent_results"] = [item.to_json_dict() for item in self.opponent_results]
         payload["match_results"] = self.match_summaries
         return payload
 
@@ -68,6 +93,8 @@ def compute_game_metrics(match_results: list[MatchResult]) -> GameMetrics:
         if result.ok
     ]
     summaries = [summarize_match(result) for result in completed]
+    opponent_results = [summarize_opponent_result(result, index=index) for index, result in enumerate(match_results)]
+    opponent_scores = [item.score for item in opponent_results]
     breakdowns = [fallback_performance_breakdown(result, result.raw_result) for result in completed]
     scores = [item.match_score for item in breakdowns]
     wins = sum(_winner(result) == 0 for result in completed)
@@ -137,9 +164,9 @@ def compute_game_metrics(match_results: list[MatchResult]) -> GameMetrics:
         mean_material_score=_mean([item.unit_material_score for item in breakdowns]),
         mean_final_resource_score=_mean([item.final_resource_score for item in breakdowns]),
         mean_survival_score=_mean([item.survival_score for item in breakdowns]),
-        score_stddev=round(statistics.pstdev(scores), 6) if len(scores) > 1 else 0.0,
-        minimum_match_score=min(scores) if scores else None,
-        maximum_match_score=max(scores) if scores else None,
+        score_stddev=round(statistics.pstdev(opponent_scores), 6) if len(opponent_scores) > 1 else 0.0,
+        minimum_match_score=min(opponent_scores) if opponent_scores else None,
+        maximum_match_score=max(opponent_scores) if opponent_scores else None,
         completed_match_count=len(completed),
         final_player_resources=player_resources,
         final_enemy_resources=enemy_resources,
@@ -155,12 +182,16 @@ def compute_game_metrics(match_results: list[MatchResult]) -> GameMetrics:
             "mean_material_difference": _mean(material_differences),
             "mean_survival_ratio": _mean(survival_ratios),
         },
+        opponent_results=opponent_results,
+        opponent_scores=opponent_scores,
     )
 
 
 def summarize_match(result: MatchResult) -> dict[str, Any]:
     breakdown = fallback_performance_breakdown(result, result.raw_result)
     return {
+        "opponent_id": getattr(result, "opponent_id", None),
+        "opponent_name": getattr(result, "opponent_name", None) or getattr(result, "opponent", None),
         "match_index": result.match_index,
         "seed": result.seed,
         "winner": _winner(result),
@@ -175,6 +206,57 @@ def summarize_match(result: MatchResult) -> dict[str, Any]:
         "telemetry_path": result.telemetry_path,
         "summary_path": result.summary_path,
     }
+
+
+def summarize_opponent_result(result: MatchResult, *, index: int) -> OpponentResult:
+    """Summarize every attempted opponent, including failed matches."""
+
+    opponent_id = str(getattr(result, "opponent_id", None) or f"opponent_{index + 1}")
+    opponent_name = str(
+        getattr(result, "opponent_name", None)
+        or getattr(result, "opponent", None)
+        or opponent_id
+    )
+    player_resource, enemy_resource, _ = _player_values(result)
+    players = result.raw_result.get("players") or {}
+    player_units = _unit_count(players.get("p0") or {})
+    enemy_units = _unit_count(players.get("p1") or {})
+    if not result.ok:
+        failure = {
+            "category": str(getattr(result, "failure_category", None) or "runtime_match_failure"),
+            "reason": str(getattr(result, "failure_reason", None) or "match failed"),
+        }
+        return OpponentResult(
+            opponent_id=opponent_id,
+            opponent_name=opponent_name,
+            score=FAILED_GAME_PERFORMANCE,
+            wins=0,
+            draws=0,
+            losses=0,
+            match_count=1,
+            player_resource=player_resource,
+            enemy_resource=enemy_resource,
+            player_units=player_units,
+            enemy_units=enemy_units,
+            status="failed",
+            failure=failure,
+        )
+    breakdown = fallback_performance_breakdown(result, result.raw_result)
+    winner = _winner(result)
+    return OpponentResult(
+        opponent_id=opponent_id,
+        opponent_name=opponent_name,
+        score=float(breakdown.match_score),
+        wins=int(winner == 0),
+        draws=int(winner not in (0, 1)),
+        losses=int(winner == 1),
+        match_count=1,
+        player_resource=player_resource,
+        enemy_resource=enemy_resource,
+        player_units=player_units,
+        enemy_units=enemy_units,
+        status="completed",
+    )
 
 
 def match_to_dict(result: MatchResult) -> dict[str, Any]:
@@ -240,6 +322,17 @@ def _player_values(result: MatchResult) -> tuple[float, float, float]:
     if weighted is None:
         weighted = (player + player_material) - (enemy + enemy_material)
     return player, enemy, float(weighted)
+
+
+def _unit_count(player: dict[str, Any]) -> int:
+    value = player.get("unit_count")
+    if value is not None:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            pass
+    unit_types = player.get("unit_types") or {}
+    return sum(int(value) for value in unit_types.values() if isinstance(value, (int, float)))
 
 
 def _mean(values: list[float] | tuple[float, ...]) -> float:

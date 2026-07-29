@@ -59,8 +59,10 @@ runs/<run_id>/
                 │   └── match_09/
                 ├── evaluation/
                 │   ├── game_performance.json
+                │   ├── matches.json
                 │   ├── code_quality.json
-                │   └── objectives.json
+                │   ├── objectives.json
+                │   └── summary.json
                 ├── timing.json
                 └── candidate_result.json
 ```
@@ -89,6 +91,13 @@ Each stage result JSON records:
 - source/class hashes where applicable.
 
 `candidate_result.json` is an index/summary, not a replacement for stage evidence. It includes identity, lineage reference, status/failure stage, objective values, completed-match count, and artifact references. `mutation/reflection_context.json` is the immutable evidence snapshot used to build the Reflection request; it retains the canonical two-objective values and normalized stage/failure evidence without recalculating fitness.
+
+`evaluation/game_performance.json` and `evaluation/objectives.json` retain both the
+aggregate `game_performance` and ordered `opponent_scores`. The former also contains
+`opponent_results`, with one resource/unit/W-D-L/status/failure record per opponent.
+Generation metrics retain candidate-level ten-score arrays, per-opponent means and
+failure counts, and each candidate's best/worst matchup. Readers treat missing
+`opponent_scores` as legacy evidence and continue loading the aggregate fields.
 
 ## Match directory contract
 

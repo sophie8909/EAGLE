@@ -65,6 +65,7 @@ class MatchResult:
     match_index: int = -1
     candidate_player: int = 0
     opponent: str = "ai.abstraction.LightRush"
+    opponent_name: str | None = None
     opponent_id: str | None = None
     map_path: str = DEFAULT_MAP_PATH
     seed: int | None = None
@@ -97,6 +98,7 @@ class MatchResult:
             "match_index": self.match_index,
             "candidate_player": self.candidate_player,
             "opponent": self.opponent,
+            "opponent_name": self.opponent_name or self.opponent,
             "opponent_id": self.opponent_id,
             "map": self.map_path,
             "seed": self.seed,

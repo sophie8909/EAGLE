@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+from evaluation.game_metrics import OpponentResult
+
 from .candidate import Candidate
 from .config import ExperimentConfig
 from .llm_errors import LLMServerError
@@ -50,7 +52,16 @@ class ReflectionContext:
     game_evidence: dict[str, object] | None = None
     code_quality_evidence: dict[str, object] | None = None
     generation_evidence: dict[str, object] | None = None
+    aggregate_game_performance: float | None = None
+    # Deprecated constructor/read compatibility; canonical code uses the field above.
     game_performance: float | None = None
+    opponent_results: tuple[OpponentResult, ...] = ()
+    strongest_opponent: OpponentResult | None = None
+    weakest_opponent: OpponentResult | None = None
+    score_mean: float | None = None
+    score_min: float | None = None
+    score_max: float | None = None
+    score_stddev: float | None = None
     player_resource: float | None = None
     enemy_resource: float | None = None
     resource_breakdown: dict[str, object] | None = None
@@ -94,6 +105,12 @@ class ReflectionContext:
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
+
+    def __post_init__(self) -> None:
+        if self.aggregate_game_performance is None and self.game_performance is not None:
+            object.__setattr__(self, "aggregate_game_performance", self.game_performance)
+        elif self.game_performance is None and self.aggregate_game_performance is not None:
+            object.__setattr__(self, "game_performance", self.aggregate_game_performance)
 
 
 # Public compatibility name used by the existing mutation/rewrite API.
@@ -375,6 +392,9 @@ def build_strategy_reflection_prompt(candidate: Candidate, context: ReflectionCo
     from .prompts import render_prompt
 
     parent_java = candidate.generated_java or candidate.previous_code
+    opponent_payload = [item.to_json_dict() for item in context.opponent_results]
+    strongest = None if context.strongest_opponent is None else context.strongest_opponent.to_json_dict()
+    weakest = None if context.weakest_opponent is None else context.weakest_opponent.to_json_dict()
     canonical_summary = {
         "candidate_id": context.candidate_id or candidate.id,
         "objectives": context.objectives or {},
@@ -384,13 +404,29 @@ def build_strategy_reflection_prompt(candidate: Candidate, context: ReflectionCo
         "failure_reason": context.failure_reason or context.error_message,
         "game_evidence": context.game_evidence,
         "ten_match_summary": context.match_summary or {},
+        "aggregate_game_performance": context.aggregate_game_performance,
+        "opponent_results": opponent_payload,
+        "strongest_opponent": strongest,
+        "weakest_opponent": weakest,
+        "score_mean": context.score_mean,
+        "score_min": context.score_min,
+        "score_max": context.score_max,
+        "score_stddev": context.score_stddev,
+        "Strongest matchup": strongest,
+        "Weakest matchup": weakest,
+        "Score consistency": {
+            "mean": context.score_mean,
+            "min": context.score_min,
+            "max": context.score_max,
+            "stddev": context.score_stddev,
+        },
     }
     return render_prompt("strategy_reflection", {
         "strategy_prompt": candidate.strategy_prompt,
         "parent_java": parent_java,
         "opponent": context.opponent,
         "match_summary": canonical_summary,
-        "per_match_results": list(context.per_match_results),
+        "per_match_results": opponent_payload or list(context.per_match_results),
         "wins": context.wins,
         "draws": context.draws,
         "losses": context.losses,

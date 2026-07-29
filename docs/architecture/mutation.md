@@ -29,7 +29,11 @@ The final Java Generation LLM is a third call after mutation. Reflection and Rew
 
 Changes only `strategy_prompt`; preserves `previous_code` and `generation_prompt`.
 
-Reflection inputs must include the current strategy, parent generated Java, opponent identity, the complete 10-match summary, per-match results, win/draw/loss counts, final resources, material/survival/round-state evidence, and behavior summary. The response is `strategy_reflection` and must not rewrite prompts or generate Java.
+Reflection inputs must include the current strategy, parent generated Java, the aggregate
+game-performance value, and the typed ten-opponent results. Each result carries its
+stable opponent identity, score, W/D/L, resources, units, status, and failure. The
+context also carries strongest/weakest matchup and score mean/min/max/stddev. The
+response is `strategy_reflection` and must not rewrite prompts or generate Java.
 
 Rewrite inputs are the original strategy, reflection, parent generated Java, and game-evaluation summary. The response is only `new_strategy_prompt`.
 

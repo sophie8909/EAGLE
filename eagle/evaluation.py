@@ -9,11 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-import re
-import tempfile
 import time
 from pathlib import Path
-from typing import Iterable
 
 from evaluation.code_quality import (
     CodeQualityBreakdown,
@@ -50,17 +47,8 @@ from generation.java_agent_generator import (
 from .artifacts import append_result, write_candidate_artifacts, write_candidate_inputs
 from .candidate import Candidate
 from .config import ExperimentConfig
-from .final_test.opponents import (
-    OpponentSetupError,
-    ResolvedOpponent,
-    compile_opponent_probe,
-    load_resolved_opponents,
-    verify_resolved_opponent,
-)
-from .opponents import EVALUATION_ROSTER, EXTERNAL_OPPONENTS, HISTORICAL_SELF_OPPONENTS, OpponentSpec, rooted_jar_path
-
-
-RESOLVED_EXTERNAL_OPPONENTS_MANIFEST = Path("third_party/final_test_opponents/resolved_manifest.json")
+from .final_test.opponents import OpponentSetupError
+from .opponents import EVALUATION_ROSTER, OpponentSpec, rooted_jar_path
 
 
 @dataclass(frozen=True)
@@ -534,13 +522,17 @@ def preflight_evaluation_opponents(
     mock: bool,
     repository_root: Path | None = None,
 ) -> None:
-    """Fail early when real evolution needs unavailable external opponents."""
+    """Fail early when real evolution needs unavailable bundled opponents."""
 
     if mock:
         return
     repository_root = (repository_root or _repository_root()).resolve()
-    resolved = _load_resolved_external_opponents(repository_root)
-    _verify_external_opponent_classes(resolved.values(), config=config, repository_root=repository_root)
+    for item in EVALUATION_ROSTER:
+        if not item.enabled or not item.jar_path:
+            continue
+        jar_path = rooted_jar_path(repository_root, item)
+        if jar_path is not None and not jar_path.is_file():
+            raise OpponentSetupError(f"Bundled evolution opponent JAR is missing: {jar_path}")
 
 
 def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int) -> tuple[list[MatchResult], str | None]:
@@ -550,45 +542,56 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
     candidate_classes_dir = classes_dir / candidate.id
     class_hash = hash_class_directory(candidate_classes_dir)
     seeds = config.resolved_match_seeds
+    first_error: str | None = None
     try:
-        opponents = [
-            *_resolved_static_evaluation_opponents(config, mock=mock),
-            *_prepare_historical_self_opponents(
-                candidate=candidate,
-                agent=agent,
-                config=config,
-                classes_dir=classes_dir,
-                match_artifacts_dir=match_artifacts_dir,
-                mock=mock,
-            ),
-        ]
+        opponents = list(_resolved_static_evaluation_opponents(config, mock=mock))
         if len(opponents) != config.matches_per_candidate:
             return match_results, (
                 f"evaluation roster has {len(opponents)} opponents; "
                 f"expected {config.matches_per_candidate}"
             )
         for match_index, opponent in enumerate(opponents):
-            result = run_microrts_match(
-                microrts_dir=config.microrts_dir, classes_dir=candidate_classes_dir,
-                agent_class=agent.qualified_class_name, opponent=opponent.class_name,
-                tick_limit=config.tick_limit, match_index=match_index,
-                match_artifacts_dir=match_artifacts_dir,
-                scoring_config=scoring_config_from_experiment(config), mock=mock,
-                mock_score=config.mock_score_base + config.mock_score_step * (ordinal + match_index),
-                seed=seeds[match_index], timeout_seconds=config.match_timeout_seconds,
-                map_path=config.map_path, candidate_id=candidate.id,
-                source_hash=source_hash, class_hash=class_hash,
-                extra_classpath_entries=opponent.classpath_entries,
+            try:
+                result = run_microrts_match(
+                    microrts_dir=config.microrts_dir, classes_dir=candidate_classes_dir,
+                    agent_class=agent.qualified_class_name, opponent=opponent.class_name,
+                    tick_limit=config.tick_limit, match_index=match_index,
+                    match_artifacts_dir=match_artifacts_dir,
+                    scoring_config=scoring_config_from_experiment(config), mock=mock,
+                    mock_score=config.mock_score_base + config.mock_score_step * (ordinal + match_index),
+                    seed=seeds[match_index], timeout_seconds=config.match_timeout_seconds,
+                    map_path=config.map_path, candidate_id=candidate.id,
+                    source_hash=source_hash, class_hash=class_hash,
+                    extra_classpath_entries=opponent.classpath_entries,
+                )
+            except (RuntimeError, OSError) as exc:
+                result = MatchResult(
+                    ok=False,
+                    score=0.0,
+                    command=[],
+                    match_index=match_index,
+                    seed=seeds[match_index],
+                    opponent=opponent.class_name,
+                    status="failed",
+                    failure_category="runtime_match_failure",
+                    failure_reason=str(exc),
+                )
+            result = replace(
+                result,
+                opponent_id=opponent.opponent_id,
+                opponent_name=next(
+                    item.display_name for item in EVALUATION_ROSTER
+                    if item.opponent_id == opponent.opponent_id
+                ),
             )
-            result = replace(result, opponent_id=opponent.opponent_id)
             match_results.append(result)
-            if not result.ok:
-                return match_results, match_error_message(result)
+            if not result.ok and first_error is None:
+                first_error = match_error_message(result)
     except (RuntimeError, OSError) as exc:
         return match_results, str(exc)
     if len(match_results) != config.matches_per_candidate:
         return match_results, f"partial evaluation: completed {len(match_results)} of {config.matches_per_candidate} matches"
-    return match_results, None
+    return match_results, first_error
 
 
 def _resolved_static_evaluation_opponents(
@@ -598,120 +601,19 @@ def _resolved_static_evaluation_opponents(
     repository_root: Path | None = None,
 ) -> tuple[EvaluationOpponent, ...]:
     repository_root = (repository_root or _repository_root()).resolve()
-    if mock:
-        return tuple(
-            EvaluationOpponent(
-                item.opponent_id,
-                item.class_name,
-                () if item.kind != "external" else _mock_external_classpath(repository_root, item),
-            )
-            for item in EVALUATION_ROSTER
-            if item.kind != "historical_self"
-        )
-
-    resolved = _load_resolved_external_opponents(repository_root)
     opponents: list[EvaluationOpponent] = []
     for item in EVALUATION_ROSTER:
-        if item.kind == "historical_self":
+        if not item.enabled:
             continue
-        if item.kind == "external":
-            external = resolved[item.opponent_id]
-            jar_path = (repository_root / external.jar_path).resolve()
-            if not jar_path.is_file():
-                raise OpponentSetupError(
-                    f"Opponent JAR is missing for evolution evaluation: {jar_path}. "
-                    "Run python3 scripts/setup_final_test_opponents.py first."
-                )
-            opponents.append(EvaluationOpponent(item.opponent_id, external.class_name, (jar_path,)))
-        else:
-            opponents.append(EvaluationOpponent(item.opponent_id, item.class_name))
+        classpath_entries: tuple[Path, ...] = ()
+        jar_path = rooted_jar_path(repository_root, item)
+        if jar_path is not None:
+            if not mock and not jar_path.is_file():
+                raise OpponentSetupError(f"Bundled evolution opponent JAR is missing: {jar_path}")
+            if jar_path.is_file():
+                classpath_entries = (jar_path,)
+        opponents.append(EvaluationOpponent(item.opponent_id, item.class_name, classpath_entries))
     return tuple(opponents)
-
-
-def _load_resolved_external_opponents(repository_root: Path) -> dict[str, ResolvedOpponent]:
-    return load_resolved_opponents(
-        repository_root / RESOLVED_EXTERNAL_OPPONENTS_MANIFEST,
-        expected_ids=tuple(item.opponent_id for item in EXTERNAL_OPPONENTS),
-    )
-
-
-def _verify_external_opponent_classes(
-    opponents: Iterable[ResolvedOpponent],
-    *,
-    config: ExperimentConfig,
-    repository_root: Path,
-) -> None:
-    with tempfile.TemporaryDirectory(prefix="eagle-opponent-probe-") as probe_dir:
-        probe_classes = compile_opponent_probe(
-            Path(probe_dir) / "classes",
-            _resolved_config_path(repository_root, config.microrts_dir),
-        )
-        for opponent in opponents:
-            verify_resolved_opponent(
-                opponent,
-                repository_root=repository_root,
-                microrts_dir=_resolved_config_path(repository_root, config.microrts_dir),
-                probe_classes=probe_classes,
-            )
-
-
-def _mock_external_classpath(repository_root: Path, opponent: OpponentSpec) -> tuple[Path, ...]:
-    jar_path = rooted_jar_path(repository_root, opponent)
-    return () if jar_path is None else (jar_path,)
-
-
-def _prepare_historical_self_opponents(
-    *,
-    candidate: Candidate,
-    agent: GeneratedJavaAgent,
-    config: ExperimentConfig,
-    classes_dir: Path,
-    match_artifacts_dir: Path | None,
-    mock: bool,
-) -> tuple[EvaluationOpponent, ...]:
-    source_root = (
-        match_artifacts_dir.parent / "historical_self_sources"
-        if match_artifacts_dir is not None
-        else classes_dir / candidate.id / "historical_self_sources"
-    )
-    source_root.mkdir(parents=True, exist_ok=True)
-    source_candidates = _historical_self_sources(candidate, agent)
-    opponents: list[EvaluationOpponent] = []
-    for index, spec in enumerate(HISTORICAL_SELF_OPPONENTS):
-        class_name = spec.class_name.rsplit(".", 1)[-1]
-        source_path = source_root / f"{class_name}.java"
-        source_path.write_text(
-            _retarget_candidate_source(source_candidates[index], package_name="ai.historical", class_name=class_name),
-            encoding="utf-8",
-        )
-        output_dir = classes_dir / candidate.id / f"{spec.opponent_id}_classes"
-        compile_result = compile_generated_agent(
-            source_path,
-            microrts_dir=config.microrts_dir,
-            output_dir=output_dir,
-            mock=mock,
-        )
-        if not compile_result.ok:
-            raise RuntimeError(
-                f"historical self opponent {spec.opponent_id} compile failed: "
-                f"{compile_error_message(compile_result)}"
-            )
-        opponents.append(EvaluationOpponent(spec.opponent_id, spec.class_name, (output_dir,)))
-    return tuple(opponents)
-
-
-def _historical_self_sources(candidate: Candidate, agent: GeneratedJavaAgent) -> tuple[str, str]:
-    parent_source = candidate.previous_code.strip()
-    if parent_source:
-        return parent_source, agent.source
-    return agent.source, agent.source
-
-
-def _retarget_candidate_source(source: str, *, package_name: str, class_name: str) -> str:
-    retargeted = re.sub(r"^\s*package\s+ai\.generated\s*;", f"package {package_name};", source, count=1, flags=re.MULTILINE)
-    if retargeted == source:
-        retargeted = f"package {package_name};\n" + source
-    return re.sub(r"\bCandidateAgent\b", class_name, retargeted)
 
 
 def _repository_root() -> Path:
@@ -763,11 +665,14 @@ def print_progress(*, generation: int, index: int, population_size: int, evaluat
     candidate = evaluation.candidate
     quality = evaluation.code_quality_breakdown
     game_metrics = evaluation.game_metrics
-    match_scores = [] if game_metrics is None else [
-        summary.get("performance")
-        for summary in game_metrics.match_summaries
-        if summary.get("performance") is not None
-    ]
+    match_scores = [] if game_metrics is None else list(
+        getattr(game_metrics, "opponent_scores", ())
+        or [
+            summary.get("performance")
+            for summary in getattr(game_metrics, "match_summaries", ())
+            if summary.get("performance") is not None
+        ]
+    )
     game_performance_detail = (
         f" game_performance_matches={match_scores}"
         f" game_performance_fitness={candidate.fitness_objectives.get('game_performance')}"

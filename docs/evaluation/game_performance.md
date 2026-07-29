@@ -72,6 +72,12 @@ Expected score bands are Win `[+90, +110]`, Draw `[-10, +10]`, and Loss `[-110, 
 game_performance = mean(match_score_1 ... match_score_10)
 ```
 
+Persist the ordered ten-opponent breakdown in addition to the aggregate:
+
+- `opponent_results`: one result for every configured opponent, including failed attempts;
+- `opponent_scores`: the ten canonical scores in roster order;
+- `game_performance`: the candidate-level aggregate used by EA selection.
+
 Persist:
 
 - `wins`, `draws`, `losses`, `win_rate`;
@@ -81,6 +87,8 @@ Persist:
 - all per-match component inputs and outputs.
 
 If `completed_match_count != 10`, the objective is `-1000` regardless of the partial mean.
+An attempted opponent that fails is still retained with score `-1000`; it is never
+removed from the breakdown or reflection evidence.
 
 ## Configuration and versioning
 
@@ -100,4 +108,3 @@ Resolved configuration must contain material values for every supported unit typ
 ## Current mismatch
 
 The active formula uses unbounded state/resource terms and a large unconditional survival reward. It is not an alternative contract. See gap `G-06` in [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md).
-

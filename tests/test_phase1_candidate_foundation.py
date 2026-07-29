@@ -397,16 +397,16 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertEqual(
             [item["class_name"] for item in payload["evaluation_opponents"]],
             [
-                "ai.tma.TMA",
-                "mayariBot.mayari",
-                "ai.coac.CoacAI",
                 "ai.RandomAI",
                 "ai.RandomBiasedAI",
                 "ai.PassiveAI",
                 "ai.abstraction.LightRush",
                 "ai.abstraction.HeavyRush",
-                "ai.historical.HistoricalSelf1",
-                "ai.historical.HistoricalSelf2",
+                "ai.competition.tiamat.Tiamat",
+                "GNS.Droplet",
+                "ai.competition.IzanagiBot.Izanagi",
+                "ai.JZ.MixedBot",
+                "ai.CMAB.GuidedA3NW",
             ],
         )
         self.assertEqual(payload["max_cycles"], 345)

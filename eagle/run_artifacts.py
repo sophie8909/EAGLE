@@ -83,6 +83,9 @@ def finalize_run(run_dir: Path, population: list[Candidate], *, stop_reason: str
 
 def generation_metrics(generation: int, population: list[Candidate]) -> dict[str, Any]:
     objectives: dict[str, Any] = {}
+    opponent_by_candidate: dict[str, Any] = {}
+    opponent_values: dict[str, list[float]] = {}
+    opponent_failures: dict[str, int] = {}
     fronts = assign_rank_and_crowding(population)
     for objective_id, direction in OBJECTIVE_DIRECTIONS.items():
         values = [
@@ -124,6 +127,45 @@ def generation_metrics(generation: int, population: list[Candidate]) -> dict[str
                 "minimum": None, "maximum": None, "standard_deviation": None,
                 "valid_count": 0, "missing_count": missing, "failure_count": failures,
             }
+    for candidate in population:
+        game = candidate.game_eval_result or {}
+        results = game.get("opponent_results") or []
+        if isinstance(results, list) and results:
+            rows = [item for item in results if isinstance(item, dict)]
+            scores = [float(item.get("score") or 0.0) for item in rows]
+            best = max(rows, key=lambda item: float(item.get("score") or 0.0)) if rows else None
+            worst = min(rows, key=lambda item: float(item.get("score") or 0.0)) if rows else None
+            opponent_by_candidate[candidate.id] = {
+                "aggregate_game_performance": candidate.fitness_objectives.get("game_performance"),
+                "opponent_scores": scores,
+                "best_matchup": None if best is None else {
+                    "opponent_id": best.get("opponent_id"), "score": best.get("score")
+                },
+                "worst_matchup": None if worst is None else {
+                    "opponent_id": worst.get("opponent_id"), "score": worst.get("score")
+                },
+            }
+            for item in rows:
+                opponent_id = str(item.get("opponent_id") or "unknown")
+                opponent_values.setdefault(opponent_id, []).append(float(item.get("score") or 0.0))
+                if item.get("status") != "completed" or float(item.get("score") or 0.0) == FAILED_GAME_PERFORMANCE:
+                    opponent_failures[opponent_id] = opponent_failures.get(opponent_id, 0) + 1
+        else:
+            # Older generation snapshots remain valid; they simply have no detail.
+            opponent_by_candidate.setdefault(candidate.id, {
+                "aggregate_game_performance": candidate.fitness_objectives.get("game_performance"),
+                "opponent_scores": list(game.get("opponent_scores") or []),
+                "best_matchup": None,
+                "worst_matchup": None,
+            })
+    opponent_summary = {
+        opponent_id: {
+            "mean_score": statistics.fmean(scores),
+            "failure_count": opponent_failures.get(opponent_id, 0),
+            "sample_count": len(scores),
+        }
+        for opponent_id, scores in sorted(opponent_values.items())
+    }
     return {
         "schema_version": "eagle-generation-metrics-v1",
         "generation": generation,
@@ -131,6 +173,10 @@ def generation_metrics(generation: int, population: list[Candidate]) -> dict[str
         "failure_count": sum(candidate.status == "failed" or candidate.failure_reason is not None for candidate in population),
         "pareto_front_size": len(fronts[0]) if fronts else 0,
         "objectives": objectives,
+        "opponent_scores": {
+            "by_candidate": opponent_by_candidate,
+            "by_opponent": opponent_summary,
+        },
     }
 
 

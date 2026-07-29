@@ -13,6 +13,7 @@ class OpponentSpec:
     class_name: str
     kind: str
     jar_path: str | None = None
+    enabled: bool = True
 
 
 EXTERNAL_OPPONENTS = (
@@ -29,12 +30,17 @@ BASIC_OPPONENTS = (
     OpponentSpec("heavy_rush", "HeavyRush", "ai.abstraction.HeavyRush", "basic"),
 )
 
-HISTORICAL_SELF_OPPONENTS = (
-    OpponentSpec("historical_self_1", "Historical Self 1", "ai.historical.HistoricalSelf1", "historical_self"),
-    OpponentSpec("historical_self_2", "Historical Self 2", "ai.historical.HistoricalSelf2", "historical_self"),
+MICRORTS_BOT_OPPONENTS = (
+    OpponentSpec("tiamat", "Tiamat", "ai.competition.tiamat.Tiamat", "bundled_bot", "third_party/microrts/lib/bots/TiamatBot.jar"),
+    OpponentSpec("droplet", "Droplet", "GNS.Droplet", "bundled_bot", "third_party/microrts/lib/bots/Droplet.jar"),
+    OpponentSpec("izanagi", "Izanagi", "ai.competition.IzanagiBot.Izanagi", "bundled_bot", "third_party/microrts/lib/bots/Izanagi.jar"),
+    OpponentSpec("mixed_bot", "MixedBot", "ai.JZ.MixedBot", "bundled_bot", "third_party/microrts/lib/bots/MixedBot.jar"),
+    OpponentSpec("guided_a3nw", "GuidedA3NW", "ai.CMAB.GuidedA3NW", "bundled_bot", "third_party/microrts/lib/bots/GRojoA3N.jar"),
 )
 
-EVALUATION_ROSTER = EXTERNAL_OPPONENTS + BASIC_OPPONENTS + HISTORICAL_SELF_OPPONENTS
+# This is the only roster used by EA evaluation and Strategy Reflection.  The
+# external competition agents below remain exclusively in FINAL_TEST_ROSTER.
+EVALUATION_ROSTER = BASIC_OPPONENTS + MICRORTS_BOT_OPPONENTS
 FINAL_TEST_ROSTER = EXTERNAL_OPPONENTS + BASIC_OPPONENTS
 
 
