@@ -31,11 +31,25 @@ def utc_now() -> str:
 
 
 @dataclass(frozen=True)
-class MutationContext:
-    """Evidence available to a component-owned mutation stage."""
+class ReflectionContext:
+    """Canonical, typed snapshot passed from evaluation into Reflection.
+
+    The component-specific convenience fields remain for prompt compatibility,
+    but ``*_evidence`` and ``objectives`` are the authoritative payload. They
+    are copied from the evaluated Candidate rather than recalculated here.
+    """
 
     generation: int
     index: int
+    candidate_id: str = ""
+    objectives: dict[str, float] | None = None
+    evaluation_status: str = "unknown"
+    failure_stage: str | None = None
+    failure_category: str | None = None
+    failure_reason: str | None = None
+    game_evidence: dict[str, object] | None = None
+    code_quality_evidence: dict[str, object] | None = None
+    generation_evidence: dict[str, object] | None = None
     game_performance: float | None = None
     player_resource: float | None = None
     enemy_resource: float | None = None
@@ -82,6 +96,10 @@ class MutationContext:
         return asdict(self)
 
 
+# Public compatibility name used by the existing mutation/rewrite API.
+MutationContext = ReflectionContext
+
+
 @dataclass(frozen=True)
 class ReflectionAttempt:
     attempt: int
@@ -110,6 +128,7 @@ class ReflectionResult:
     model: str | None = None
     backend: str | None = None
     llm_profile: str | None = None
+    token_counts: dict[str, int] | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -129,6 +148,7 @@ class ReflectionResult:
             "model": self.model,
             "backend": self.backend,
             "llm_profile": self.llm_profile,
+            "token_counts": self.token_counts,
         }
 
 
@@ -314,7 +334,7 @@ class ReflectionStage:
                     module_name=reflection_type,
                     attempt=attempt_number,
                     error=error,
-                    metadata={"llm_profile": self.llm_profile, "operation_type": "mutation"},
+                    metadata={"llm_profile": self.llm_profile, "operation_type": "mutation", "token_counts": None},
                     started_at=started_at,
                     finished_at=finished_at,
                     duration_seconds=max(0.0, time.monotonic() - monotonic_started),
@@ -351,11 +371,17 @@ class ReflectionStage:
         )
 
 
-def build_strategy_reflection_prompt(candidate: Candidate, context: MutationContext) -> str:
+def build_strategy_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
     from .prompts import render_prompt
 
     parent_java = candidate.generated_java or candidate.previous_code
     return render_prompt("strategy_reflection", {
+        "candidate_id": context.candidate_id or candidate.id,
+        "objectives": context.objectives or {},
+        "evaluation_status": context.evaluation_status,
+        "failure_stage": context.failure_stage or context.error_category,
+        "failure_category": context.failure_category or context.error_category,
+        "failure_reason": context.failure_reason or context.error_message,
         "strategy_prompt": candidate.strategy_prompt,
         "parent_java": parent_java,
         "opponent": context.opponent,
@@ -374,15 +400,22 @@ def build_strategy_reflection_prompt(candidate: Candidate, context: MutationCont
         "round_state_summary": context.round_state_summary or {},
         "temporal_summary": context.temporal_summary or {},
         "behavior_summary": context.behavior_summary or {},
+        "game_evidence": context.game_evidence,
     })
 
 
-def build_code_reflection_prompt(candidate: Candidate, context: MutationContext) -> str:
+def build_code_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
     from .prompts import render_prompt
 
     parent_java = candidate.generated_java or candidate.previous_code
     latest_java = context.latest_child_java or candidate.generated_java
     return render_prompt("code_reflection", {
+        "candidate_id": context.candidate_id or candidate.id,
+        "objectives": context.objectives or {},
+        "evaluation_status": context.evaluation_status,
+        "game_performance": context.game_performance,
+        "code_quality": (context.objectives or {}).get("code_quality"),
+        "code_quality_evidence": context.code_quality_evidence,
         "strategy_prompt": candidate.strategy_prompt,
         "generation_prompt": candidate.generation_prompt,
         "parent_java": parent_java,
@@ -397,7 +430,7 @@ def build_code_reflection_prompt(candidate: Candidate, context: MutationContext)
         "completed_match_count": context.completed_match_count,
         "function_capability_score": context.function_capability_score,
         "strategy_alignment_score": context.strategy_alignment_score,
-        "failure_stage": context.error_category or context.error_message,
+        "failure_stage": context.failure_stage or context.error_category or context.error_message,
         "failure_category": context.error_category,
         "failure_reason": context.error_message,
     })

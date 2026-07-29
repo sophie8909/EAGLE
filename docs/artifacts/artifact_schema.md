@@ -32,6 +32,7 @@ runs/<run_id>/
                 │   └── provenance.json
                 ├── mutation/
                 │   ├── metadata.json
+                │   ├── reflection_context.json
                 │   ├── reflector_request.txt
                 │   ├── reflector_response_raw.txt
                 │   ├── rewriter_request.txt
@@ -87,7 +88,7 @@ Each stage result JSON records:
 - validation checks or compiler/integration diagnostics;
 - source/class hashes where applicable.
 
-`candidate_result.json` is an index/summary, not a replacement for stage evidence. It includes identity, lineage reference, status/failure stage, objective values, completed-match count, and artifact references.
+`candidate_result.json` is an index/summary, not a replacement for stage evidence. It includes identity, lineage reference, status/failure stage, objective values, completed-match count, and artifact references. `mutation/reflection_context.json` is the immutable evidence snapshot used to build the Reflection request; it retains the canonical two-objective values and normalized stage/failure evidence without recalculating fitness.
 
 ## Match directory contract
 
@@ -124,7 +125,8 @@ Required metadata:
 The active mutation artifact schema version is phase2c-v1. For each mutated candidate,
 mutation/ contains canonical reflector_request.txt, reflector_response_raw.txt,
 rewriter_request.txt, and rewriter_response_raw.txt, plus metadata.json; stage-specific
-attempt files remain available for retry inspection. The final
+attempt files remain available for retry inspection. `reflection_context.json` retains
+the exact canonical evidence envelope used by the reflector. The final
 Java-generation stage owns generation/request.txt, response_raw.txt,
 extracted_candidate.java, normalized_candidate.java, and result.json. Final generation
 failures do not remove the earlier mutation evidence.

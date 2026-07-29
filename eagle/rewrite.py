@@ -17,7 +17,7 @@ from .config import ExperimentConfig
 from .llm_errors import LLMServerError
 from .mutation import (
     REFLECTION_SCHEMA_VERSION,
-    MutationContext,
+    ReflectionContext,
     ReflectionAttempt,
     ReflectionBackend,
     ReflectionResult,
@@ -54,6 +54,7 @@ class RewriteResult:
     model: str | None = None
     backend: str | None = None
     llm_profile: str | None = None
+    token_counts: dict[str, int] | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -73,6 +74,7 @@ class RewriteResult:
             "model": self.model,
             "backend": self.backend,
             "llm_profile": self.llm_profile,
+            "token_counts": self.token_counts,
         }
 
 
@@ -156,7 +158,7 @@ class PromptRewriteStage:
                     module_name=rewrite_type,
                     attempt=attempt_number,
                     error=error,
-                    metadata={"llm_profile": self.llm_profile, "operation_type": "mutation"},
+                    metadata={"llm_profile": self.llm_profile, "operation_type": "mutation", "token_counts": None},
                     started_at=started_at,
                     finished_at=finished_at,
                     duration_seconds=max(0.0, time.monotonic() - monotonic_started),
@@ -231,7 +233,7 @@ class PromptRewriteMutation:
     def mutate(
         self,
         candidate: Candidate,
-        context: MutationContext,
+        context: ReflectionContext,
         *,
         artifact_dir: Path | None = None,
     ) -> Candidate:
@@ -252,6 +254,7 @@ class PromptRewriteMutation:
         if not reflection.succeeded:
             return self._result_candidate(
                 candidate,
+                context=context,
                 reflection=reflection,
                 rewrite=None,
                 strategy_prompt=original_strategy,
@@ -277,6 +280,7 @@ class PromptRewriteMutation:
         if not rewrite.succeeded:
             return self._result_candidate(
                 candidate,
+                context=context,
                 reflection=reflection,
                 rewrite=rewrite,
                 strategy_prompt=original_strategy,
@@ -293,6 +297,7 @@ class PromptRewriteMutation:
         )
         return self._result_candidate(
             candidate,
+            context=context,
             reflection=reflection,
             rewrite=rewrite,
             strategy_prompt=rewritten if self.mutation_type == "strategy" else original_strategy,
@@ -307,6 +312,7 @@ class PromptRewriteMutation:
         self,
         candidate: Candidate,
         *,
+        context: ReflectionContext,
         reflection: ReflectionResult,
         rewrite: RewriteResult | None,
         strategy_prompt: str,
@@ -320,8 +326,15 @@ class PromptRewriteMutation:
         mutation_record = {
             "schema_version": REWRITE_SCHEMA_VERSION,
             "reflection_schema_version": REFLECTION_SCHEMA_VERSION,
+            "candidate_id": candidate.id,
+            "feedback_candidate_id": context.candidate_id or candidate.id,
+            "operation": f"{self.mutation_type}_mutation",
             "applied": applied,
             "type": self.mutation_type,
+            "objectives": context.objectives or {},
+            "evaluation_status": context.evaluation_status,
+            "evidence": context.to_dict(),
+            "token_counts": {"reflection": None, "rewrite": None},
             "reflection_model": reflection.model,
             "reflection_profile": reflection.llm_profile,
             "rewrite_model": None if rewrite is None else rewrite.model,
@@ -362,7 +375,7 @@ class PromptRewriteMutation:
         )
 
 
-def build_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult, context: MutationContext) -> str:
+def build_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult, context: ReflectionContext) -> str:
     from .prompts import render_prompt
 
     return render_prompt("strategy_rewrite", {
@@ -373,7 +386,7 @@ def build_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionRe
     })
 
 
-def build_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult, context: MutationContext) -> str:
+def build_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult, context: ReflectionContext) -> str:
     from .prompts import render_prompt
 
     return render_prompt("code_rewrite", {

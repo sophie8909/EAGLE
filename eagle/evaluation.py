@@ -346,6 +346,36 @@ def evaluate_candidate(
         "strategy_alignment": None if alignment_result is None else alignment_result.to_json_dict(),
         "strategy_region_validation": region_score.to_json_dict(),
     }
+    # This is the hand-off consumed by the next generation's Reflection stage.
+    # Keep the exact evaluated values together so mutation never reconstructs
+    # evidence from legacy metadata keys or recalculates an objective.
+    reflection_evidence = {
+        "schema_version": "phase4-reflection-context-v1",
+        "candidate_id": candidate.id,
+        "objectives": dict(objectives),
+        "evaluation_status": "failed" if failure_category else "evaluated",
+        "failure_stage": failure_stage,
+        "failure_category": failure_category,
+        "failure_reason": failure_reason,
+        "generation": {
+            "raw_response": generation.raw_llm_output,
+            "extracted_code": generation.extracted_code,
+            "assembled_java": generation.assembled_java,
+            "validation": generation.validation_result.to_json_dict(),
+            "strategy_region_validation": {
+                key: value.to_json_dict()
+                for key, value in region_score.strategy_region_validation.items()
+            },
+        },
+        "compilation": None if compile_result is None else compile_result.to_json_dict(),
+        "integration": None if integration_result is None else integration_result.to_json_dict(),
+        "game": None if game_metrics is None else game_metrics.to_json_dict(),
+        "matches": [result.to_json_dict() for result in matches],
+        "code_quality_payload": quality_payload,
+        "code_quality": quality.to_json_dict(),
+        "function_capability": None if capability_result is None else capability_result.to_json_dict(),
+        "strategy_alignment": None if alignment_result is None else alignment_result.to_json_dict(),
+    }
     timing = {
         **candidate.timing,
         "generation_llm": generation_timing,
@@ -443,6 +473,7 @@ def evaluate_candidate(
             **candidate.metadata,
             "failure_category": failure_category,
             "failure_reason": failure_reason,
+            "reflection_evidence": reflection_evidence,
         },
     )
     result = CandidateResult(

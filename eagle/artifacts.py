@@ -214,6 +214,8 @@ def _write_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> Non
     """Persist reflector and rewriter evidence from the canonical mutation record."""
 
     mutation_dir = candidate_dir / "mutation"
+    if "evidence" in mutation_record:
+        write_json(mutation_dir / "reflection_context.json", mutation_record["evidence"])
     reflection = mutation_record.get("reflection") or {}
     if reflection:
         (mutation_dir / "reflector_request.txt").write_text(

@@ -6,6 +6,12 @@ request, inserts an explicit truncation marker, and sends at most 60,000 charact
 Full telemetry and raw evidence remain in candidate artifacts; they are not silently
 discarded from persistence or allowed to overflow the llama.cpp context.
 
+The evaluation-to-mutation hand-off is the typed `ReflectionContext` in
+`eagle/mutation.py`. Its authoritative objectives, evaluation status, failure fields,
+and generation/compilation/integration/game/Code Quality evidence are copied from the
+evaluated Candidate snapshot. Reflection does not recompute fitness or infer missing
+stage results from legacy scalar fields.
+
 ## Normative source
 
 See specification sections 7 through 10 and state-transition examples 28.2 and 28.3. Mutation persistence is owned by [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md); LLM timing is owned by [`../artifacts/timing_schema.md`](../artifacts/timing_schema.md).
@@ -63,6 +69,8 @@ next inherited state: A1 + B3 + C2
 ## Persistence checklist
 
 - Save both requests and raw responses even if a later stage fails.
+- Save the versioned `reflection_context.json` evidence snapshot with candidate ID,
+  operation, objectives, evaluation status, failure cause, and stage evidence.
 - Record mutation type, models, attempts, status, and errors.
 - Record that no mutation was applied with explicit `applied: false` metadata.
 - Save the final Java generation request/response separately from mutation calls.

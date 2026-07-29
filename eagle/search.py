@@ -26,7 +26,7 @@ from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import CrossoverContext, crossover
 from .evaluation import evaluate_population, preflight_evaluation_opponents
-from .mutation import MutationContext, build_reflection_backend
+from .mutation import ReflectionContext, build_reflection_backend
 from .llm_logging import LLMCallLogger
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
 from .llm_profiles import LLMClient
@@ -343,20 +343,53 @@ def choose_mutation(feedback_parent: Candidate, rng: random.Random) -> str:
     90% strategy mutation and 10% code mutation. All other successful
     candidates retain the default 50/50 split.
     """
+    evidence = feedback_parent.metadata.get("reflection_evidence") or {}
+    failure_stage = evidence.get("failure_stage") or feedback_parent.failure_stage
+    if failure_stage or feedback_parent.status == "failed":
+        return "code"
     if number_or_none(feedback_parent.fitness_objectives.get("game_performance")) == FAILED_GAME_PERFORMANCE:
+        return "code"
+    game = evidence.get("game") or feedback_parent.game_eval_result or {}
+    if evidence and (
+        int(game.get("completed_match_count") or 0) != 10
+        or number_or_none(feedback_parent.fitness_objectives.get("game_performance")) == FAILED_GAME_PERFORMANCE
+    ):
+        return "code"
+    quality = evidence.get("code_quality") or feedback_parent.code_quality_result.get("code_quality_breakdown") or {}
+    if evidence and (
+        int(quality.get("warning_count") or 0) > 0
+        or (number_or_none(quality.get("function_score")) is not None and number_or_none(quality.get("function_score")) < 50)
+        or (number_or_none(quality.get("strategy_alignment_score")) is not None and number_or_none(quality.get("strategy_alignment_score")) < 5)
+    ):
         return "code"
     if (number_or_none(feedback_parent.fitness_objectives.get("code_quality")) or 0.0) > 500:
         return "strategy" if rng.random() < 0.9 else "code"
     return "strategy" if rng.random() < 0.5 else "code"
 
-def mutation_context_from_candidate(candidate: Candidate, *, generation: int, index: int) -> MutationContext:
-    game = candidate.game_eval_result or {}
-    quality = candidate.code_quality_result.get("code_quality_breakdown") or {}
+def mutation_context_from_candidate(candidate: Candidate, *, generation: int, index: int) -> ReflectionContext:
+    evidence = candidate.metadata.get("reflection_evidence") or {}
+    game = evidence.get("game") or candidate.game_eval_result or {}
+    quality_payload = evidence.get("code_quality_payload") or candidate.code_quality_result or {}
+    quality = evidence.get("code_quality") or quality_payload.get("code_quality_breakdown") or {}
+    generation_evidence = evidence.get("generation") or {}
+    validation_result = generation_evidence.get("validation") or candidate.metadata.get("validation_result")
+    compilation_result = evidence.get("compilation") or candidate.metadata.get("compile_result")
+    integration_result = evidence.get("integration") or candidate.metadata.get("integration_result")
+    objectives = evidence.get("objectives") or candidate.fitness_objectives
     matches = tuple(game.get("match_results") or game.get("matches") or ())
-    return MutationContext(
+    return ReflectionContext(
         generation=generation,
         index=index,
-        game_performance=number_or_none(candidate.fitness_objectives.get("game_performance")),
+        candidate_id=str(evidence.get("candidate_id") or candidate.id),
+        objectives={name: float(value) for name, value in objectives.items() if isinstance(value, int | float)},
+        evaluation_status=str(evidence.get("evaluation_status") or candidate.status),
+        failure_stage=evidence.get("failure_stage") or candidate.failure_stage,
+        failure_category=evidence.get("failure_category") or candidate.metadata.get("failure_category"),
+        failure_reason=evidence.get("failure_reason") or candidate.failure_reason or candidate.metadata.get("failure_reason"),
+        game_evidence=game,
+        code_quality_evidence=quality_payload,
+        generation_evidence=generation_evidence,
+        game_performance=number_or_none(objectives.get("game_performance")),
         player_resource=number_or_none(game.get("player0_resource")),
         enemy_resource=number_or_none(game.get("player1_resource")),
         resource_breakdown=game.get("resource_breakdown") or {},
@@ -369,16 +402,16 @@ def mutation_context_from_candidate(candidate: Candidate, *, generation: int, in
         losses=_as_int(game.get("losses")),
         final_player_resources=game.get("final_player_resources") or {},
         final_enemy_resources=game.get("final_enemy_resources") or {},
-        final_resource_difference=game.get("final_resource_difference"),
+        final_resource_difference=game.get("final_resource_difference", game.get("resource_difference")),
         unit_material_statistics=game.get("unit_material_statistics") or {},
         survival_statistics=game.get("survival_statistics") or {},
         round_state_summary=game.get("round_state_summary") or {},
         behavior_summary=game.get("behavior_summary") or {},
         latest_child_java=candidate.generated_java,
-        raw_generation_response=str(candidate.metadata.get("raw_generation_response") or ""),
-        validation_result=candidate.metadata.get("validation_result") or {},
-        compilation_result=candidate.metadata.get("compile_result") or {},
-        integration_result=candidate.metadata.get("integration_result") or {},
+        raw_generation_response=str(generation_evidence.get("raw_response") or candidate.metadata.get("raw_generation_response") or ""),
+        validation_result=validation_result,
+        compilation_result=compilation_result,
+        integration_result=integration_result,
         runtime_result=game,
         completed_match_count=_as_int(game.get("completed_match_count")),
         function_capability_score=number_or_none(quality.get("function_score")),
@@ -387,14 +420,14 @@ def mutation_context_from_candidate(candidate: Candidate, *, generation: int, in
         compiler_errors=tuple(quality.get("compiler_errors") or []),
         compiler_warnings=tuple(quality.get("compiler_warnings") or []),
         strategy_region_score=number_or_none(quality.get("strategy_region_score")),
-        strategy_region_validation=candidate.code_quality_result.get("strategy_region_validation") or {},
+        strategy_region_validation=quality_payload.get("strategy_region_validation") or {},
         static_quality_score=number_or_none(quality.get("static_quality_score")),
         static_metrics=quality.get("static_metrics") or {},
         compile_success=candidate.compile_status == "success",
-        validation_success=candidate.metadata.get("failure_category") != "Java validation failure",
+        validation_success=None if validation_result is None else bool(validation_result.get("ok")),
         runtime_success=candidate.status == "evaluated",
-        error_category=str(candidate.metadata.get("failure_category") or ""),
-        error_message=str(candidate.metadata.get("failure_reason") or ""),
+        error_category=str(evidence.get("failure_category") or candidate.metadata.get("failure_category") or ""),
+        error_message=str(evidence.get("failure_reason") or candidate.metadata.get("failure_reason") or ""),
     )
 
 
