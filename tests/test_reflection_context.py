@@ -6,7 +6,7 @@ from pathlib import Path
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation import evaluate_candidate
-from eagle.mutation import build_code_reflection_prompt
+from eagle.mutation import build_code_reflection_prompt, build_strategy_reflection_prompt, ReflectionContext
 from eagle.search import choose_mutation, mutation_context_from_candidate
 from generation.backend import MockGenerationBackend
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE
@@ -102,6 +102,23 @@ class ReflectionContextTests(unittest.TestCase):
         self.assertEqual(choose_mutation(candidate_with_quality(8), random.Random(1)), "strategy")
         self.assertEqual(choose_mutation(candidate_with_quality(3), random.Random(1)), "code")
         self.assertEqual(choose_mutation(candidate_with_quality(8, warnings=1), random.Random(1)), "code")
+
+    def test_strategy_template_keeps_canonical_envelope_in_stable_field(self):
+        candidate = Candidate(id="strategy-parent", strategy_prompt="play economy")
+        context = ReflectionContext(
+            generation=1,
+            index=0,
+            candidate_id="feedback-parent",
+            objectives={"game_performance": 12.5, "code_quality": 590.0},
+            evaluation_status="evaluated",
+            game_evidence={"completed_match_count": 10, "objective": 12.5},
+            match_summary={"wins": 6},
+        )
+        prompt = build_strategy_reflection_prompt(candidate, context)
+        self.assertIn("feedback-parent", prompt)
+        self.assertIn("game_performance", prompt)
+        self.assertIn("12.5", prompt)
+        self.assertIn("completed_match_count", prompt)
 
 
 if __name__ == "__main__":

@@ -375,17 +375,21 @@ def build_strategy_reflection_prompt(candidate: Candidate, context: ReflectionCo
     from .prompts import render_prompt
 
     parent_java = candidate.generated_java or candidate.previous_code
-    return render_prompt("strategy_reflection", {
+    canonical_summary = {
         "candidate_id": context.candidate_id or candidate.id,
         "objectives": context.objectives or {},
         "evaluation_status": context.evaluation_status,
         "failure_stage": context.failure_stage or context.error_category,
         "failure_category": context.failure_category or context.error_category,
         "failure_reason": context.failure_reason or context.error_message,
+        "game_evidence": context.game_evidence,
+        "ten_match_summary": context.match_summary or {},
+    }
+    return render_prompt("strategy_reflection", {
         "strategy_prompt": candidate.strategy_prompt,
         "parent_java": parent_java,
         "opponent": context.opponent,
-        "match_summary": context.match_summary or {},
+        "match_summary": canonical_summary,
         "per_match_results": list(context.per_match_results),
         "wins": context.wins,
         "draws": context.draws,
@@ -400,7 +404,6 @@ def build_strategy_reflection_prompt(candidate: Candidate, context: ReflectionCo
         "round_state_summary": context.round_state_summary or {},
         "temporal_summary": context.temporal_summary or {},
         "behavior_summary": context.behavior_summary or {},
-        "game_evidence": context.game_evidence,
     })
 
 
@@ -409,24 +412,26 @@ def build_code_reflection_prompt(candidate: Candidate, context: ReflectionContex
 
     parent_java = candidate.generated_java or candidate.previous_code
     latest_java = context.latest_child_java or candidate.generated_java
-    return render_prompt("code_reflection", {
+    canonical_code_evidence = {
         "candidate_id": context.candidate_id or candidate.id,
         "objectives": context.objectives or {},
         "evaluation_status": context.evaluation_status,
         "game_performance": context.game_performance,
         "code_quality": (context.objectives or {}).get("code_quality"),
         "code_quality_evidence": context.code_quality_evidence,
+    }
+    return render_prompt("code_reflection", {
         "strategy_prompt": candidate.strategy_prompt,
         "generation_prompt": candidate.generation_prompt,
         "parent_java": parent_java,
         "latest_java": latest_java,
         "raw_generation_response": context.raw_generation_response,
         "validation_result": context.validation_result or {},
-        "compilation_result": context.compilation_result or {},
+        "compilation_result": {"canonical_reflection_context": canonical_code_evidence, "compilation": context.compilation_result},
         "compiler_errors": list(context.compiler_errors),
         "compiler_warnings": list(context.compiler_warnings),
         "integration_result": context.integration_result or {},
-        "runtime_result": context.runtime_result or {},
+        "runtime_result": {"canonical_reflection_context": canonical_code_evidence, "runtime": context.runtime_result},
         "completed_match_count": context.completed_match_count,
         "function_capability_score": context.function_capability_score,
         "strategy_alignment_score": context.strategy_alignment_score,

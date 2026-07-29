@@ -3,18 +3,11 @@
 [templates.strategy_reflection]
 role = "reflector"
 stages = ["strategy_reflection"]
-required_variables = ["candidate_id", "strategy_prompt", "parent_java", "opponent", "objectives", "evaluation_status", "failure_stage", "failure_category", "failure_reason", "match_summary", "per_match_results", "wins", "draws", "losses", "game_performance", "final_player_resources", "final_enemy_resources", "final_resource_difference", "resource_breakdown", "unit_material_statistics", "survival_statistics", "round_state_summary", "temporal_summary", "behavior_summary", "game_evidence"]
+required_variables = ["strategy_prompt", "parent_java", "opponent", "match_summary", "per_match_results", "wins", "draws", "losses", "game_performance", "final_player_resources", "final_enemy_resources", "final_resource_difference", "resource_breakdown", "unit_material_statistics", "survival_statistics", "round_state_summary", "temporal_summary", "behavior_summary"]
 template = """EAGLE Strategy Reflection stage.
 
 Analyze the complete strategy using the evidence below. Return reflection text only.
 Do not rewrite either prompt. Do not generate Java, a patch, a diff, or a code block.
-
-Candidate ID: $candidate_id
-Canonical objectives (maximize): $objectives
-Evaluation status: $evaluation_status
-Failure stage: $failure_stage
-Failure category: $failure_category
-Failure reason: $failure_reason
 
 Current strategy_prompt:
 $strategy_prompt
@@ -36,27 +29,18 @@ Survival statistics: $survival_statistics
 Round-state summary: $round_state_summary
 Temporal summary: $temporal_summary
 Behavior summary: $behavior_summary
-Canonical game evidence snapshot: $game_evidence
-
 Discuss effective and failed strategic behavior, implementation alignment, and concrete
 requirements for a later Strategy Prompt Rewrite. The output must remain reflection only."""
 
 [templates.code_reflection]
 role = "reflector"
 stages = ["code_reflection"]
-required_variables = ["candidate_id", "strategy_prompt", "generation_prompt", "parent_java", "latest_java", "raw_generation_response", "validation_result", "compilation_result", "compiler_errors", "compiler_warnings", "integration_result", "runtime_result", "completed_match_count", "objectives", "evaluation_status", "game_performance", "code_quality", "code_quality_evidence", "function_capability_score", "strategy_alignment_score", "failure_stage", "failure_category", "failure_reason"]
+required_variables = ["strategy_prompt", "generation_prompt", "parent_java", "latest_java", "raw_generation_response", "validation_result", "compilation_result", "compiler_errors", "compiler_warnings", "integration_result", "runtime_result", "completed_match_count", "function_capability_score", "strategy_alignment_score", "failure_stage", "failure_category", "failure_reason"]
 template = """EAGLE Code Reflection stage.
 
 Analyze the complete-file generation outcome using the evidence below. Return reflection
 text only. Do not rewrite either prompt and do not generate replacement Java, a patch, a
 diff, JSON, or a code block.
-
-Candidate ID: $candidate_id
-Canonical objectives (maximize): $objectives
-Evaluation status: $evaluation_status
-Canonical game_performance: $game_performance
-Canonical code_quality: $code_quality
-Code-quality evidence: $code_quality_evidence
 
 strategy_prompt:
 $strategy_prompt
