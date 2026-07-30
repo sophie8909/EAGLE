@@ -811,19 +811,19 @@ Configuration:
 ```text
 matches_per_candidate = 10
 evaluation_opponents =
-  tma
-  mayari
-  coac
   random
   random_biased
   passive
   light_rush
   heavy_rush
-  historical_self_1
-  historical_self_2
+  bfs_light_rush
+  greedy_light_rush
+  floodfill_light_rush
+  astar_light_rush
+  bfs_heavy_rush
 ```
 
-The first eight opponents are fixed pinned agents: TMA, Mayari, COAC, RandomAI, RandomBiasedAI, PassiveAI, LightRush, and HeavyRush. TMA, Mayari, and COAC are external Java agents and must be prepared from the pinned manifest before any real evolution run. The two historical-self opponents are compiled from prior evaluated candidate Java when available; generation zero may use the current candidate source as the historical-self bootstrap. An unavailable external opponent is an experiment setup failure, not a candidate runtime failure and not a signal to substitute another baseline.
+The ten Evolution Evaluation opponents are five vendored basic agents—RandomAI, RandomBiasedAI, PassiveAI, LightRush, and HeavyRush—and five deterministic pathfinding variants—BFS LightRush, Greedy LightRush, FloodFill LightRush, AStar LightRush, and BFS HeavyRush. They are compiled against the vendored MicroRTS runtime. External competition agents and historical-self opponents are not part of Evolution Evaluation; the former are reserved for Final Test.
 
 Across the 10 matches:
 
@@ -2103,7 +2103,7 @@ Implement in this order:
 Do not refactor unrelated modules before these contracts are implemented and tested.
 # 31. Post-Evolution Champion Final Test
 
-EAGLE has exactly two evaluation contexts. Evolution Evaluation is the ten-match fitness protocol against the fixed roster: pinned TMA, Mayari, COAC, five vendored basic agents, and two historical-self agents. Final Test is a post-run, gameplay-only comparison over selected completed-run candidates; it never changes an evolutionary objective.
+EAGLE has exactly two evaluation contexts. Evolution Evaluation is the ten-match fitness protocol against five vendored basic agents and five deterministic vendored pathfinding variants. It excludes external competition jars and historical-self agents. Final Test is a post-run, gameplay-only comparison over selected completed-run candidates; it never changes an evolutionary objective.
 
 Final-test candidate selection uses completed-run evolution artifacts before matches begin. It reuses canonical generated Java without LLM, regeneration, repair, Reflection, Rewrite, mutation, crossover, or NSGA-II calls; compiles each source once; tests deterministic vendored maps/seeds on both player sides; never substitutes an unavailable champion; and writes a separate versioned `final_tests/<final_test_id>/` tree.
 

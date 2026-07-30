@@ -30,17 +30,20 @@ BASIC_OPPONENTS = (
     OpponentSpec("heavy_rush", "HeavyRush", "ai.abstraction.HeavyRush", "basic"),
 )
 
-MICRORTS_BOT_OPPONENTS = (
-    OpponentSpec("tiamat", "Tiamat", "ai.competition.tiamat.Tiamat", "bundled_bot", "third_party/microrts/lib/bots/TiamatBot.jar"),
-    OpponentSpec("droplet", "Droplet", "GNS.Droplet", "bundled_bot", "third_party/microrts/lib/bots/Droplet.jar"),
-    OpponentSpec("izanagi", "Izanagi", "ai.competition.IzanagiBot.Izanagi", "bundled_bot", "third_party/microrts/lib/bots/Izanagi.jar"),
-    OpponentSpec("mixed_bot", "MixedBot", "ai.JZ.MixedBot", "bundled_bot", "third_party/microrts/lib/bots/MixedBot.jar"),
-    OpponentSpec("guided_a3nw", "GuidedA3NW", "ai.CMAB.GuidedA3NW", "bundled_bot", "third_party/microrts/lib/bots/GRojoA3N.jar"),
+MICRORTS_VARIANT_OPPONENTS = (
+    OpponentSpec("bfs_light_rush", "BFS LightRush", "ai.abstraction.BFSLightRush", "builtin_variant"),
+    OpponentSpec("greedy_light_rush", "Greedy LightRush", "ai.abstraction.GreedyLightRush", "builtin_variant"),
+    OpponentSpec("floodfill_light_rush", "FloodFill LightRush", "ai.abstraction.FloodFillLightRush", "builtin_variant"),
+    OpponentSpec("astar_light_rush", "AStar LightRush", "ai.abstraction.AStarLightRush", "builtin_variant"),
+    OpponentSpec("bfs_heavy_rush", "BFS HeavyRush", "ai.abstraction.BFSHeavyRush", "builtin_variant"),
 )
 
 # This is the only roster used by EA evaluation and Strategy Reflection.  The
 # external competition agents below remain exclusively in FINAL_TEST_ROSTER.
-EVALUATION_ROSTER = BASIC_OPPONENTS + MICRORTS_BOT_OPPONENTS
+# The variants reuse only implementations and pathfinders shipped by the
+# vendored MicroRTS runtime.  They avoid incompatible external bot jars and
+# keep final-test competition agents outside EA evaluation.
+EVALUATION_ROSTER = BASIC_OPPONENTS + MICRORTS_VARIANT_OPPONENTS
 FINAL_TEST_ROSTER = EXTERNAL_OPPONENTS + BASIC_OPPONENTS
 
 

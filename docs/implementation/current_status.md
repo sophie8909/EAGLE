@@ -43,7 +43,9 @@ The most recent complete saved population run (`runs/20260712_154209_634218`) us
 ## Operational state
 
 - `python -m eagle run --config configs/experiments/microrts.yaml --runtime-config configs/runtime.yaml --mock` exercises the contract-shaped 10-match evaluation pipeline, but mock execution is not real MicroRTS proof.
-- Real mode requires the local generation endpoint, `javac`, vendored MicroRTS runtime, and prepared external opponent JARs.
+- Real EA mode requires the local generation endpoint, `javac`, and the vendored
+  MicroRTS runtime. Final-test external opponent JARs are prepared only for the
+  isolated Final Test workflow.
 - WSL is the project default for Python/Java/MicroRTS commands.
 - Candidate inspection is artifact-only; the obsolete manual viewer has been removed.
 

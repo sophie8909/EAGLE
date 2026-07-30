@@ -120,12 +120,15 @@ def compile_generated_agent(
     output_dir: Path,
     mock: bool = False,
 ) -> CompileResult:
+    microrts_dir = microrts_dir.resolve()
     source_paths = (source_path,) if isinstance(source_path, Path) else source_path
     source_paths = tuple(path.resolve() for path in source_paths)
-    for path in source_paths:
+    opponent_support_dir = Path(__file__).resolve().parents[1] / "eagle/opponent_sources"
+    opponent_support_paths = tuple(sorted(opponent_support_dir.glob("*.java")))
+    all_source_paths = source_paths + opponent_support_paths
+    for path in all_source_paths:
         if "EAGLE_BODY" in path.read_text(encoding="utf-8"):
             raise ValueError(f"Refusing to compile unresolved Java behavior template: {path}")
-    microrts_dir = microrts_dir.resolve()
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     command = [
@@ -135,7 +138,7 @@ def compile_generated_agent(
         os.pathsep.join([str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]),
         "-d",
         str(output_dir),
-        *(str(path) for path in source_paths),
+        *(str(path) for path in all_source_paths),
     ]
     if mock:
         return CompileResult(ok=True, command=command, stdout="mock compile ok")

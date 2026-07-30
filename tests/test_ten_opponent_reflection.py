@@ -19,9 +19,11 @@ class TenOpponentReflectionTests(unittest.TestCase):
         self.assertEqual(len({item.opponent_id for item in EVALUATION_ROSTER}), 10)
         self.assertEqual(
             [item.opponent_id for item in EVALUATION_ROSTER],
-            ["random", "random_biased", "passive", "light_rush", "heavy_rush", "tiamat", "droplet", "izanagi", "mixed_bot", "guided_a3nw"],
+            ["random", "random_biased", "passive", "light_rush", "heavy_rush", "bfs_light_rush", "greedy_light_rush", "floodfill_light_rush", "astar_light_rush", "bfs_heavy_rush"],
         )
         self.assertTrue(set(EXTERNAL_OPPONENTS).isdisjoint(EVALUATION_ROSTER))
+        self.assertFalse(any("self" in item.opponent_id.lower() for item in EVALUATION_ROSTER))
+        self.assertFalse(any("historical" in item.class_name.lower() for item in EVALUATION_ROSTER))
 
     def test_metrics_keep_all_opponents_and_aggregate_valid_scores(self):
         results = [self._match(item.opponent_id, 10.0 + index) for index, item in enumerate(EVALUATION_ROSTER)]

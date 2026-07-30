@@ -26,7 +26,9 @@ Persist all seven ordered check results. A failed prerequisite marks downstream 
 ## MicroRTS protocol
 
 - Candidate: generated Java, always evaluated as the configured candidate player.
-- Opponents: one match each against 3 external agents, 5 vendored basic agents, and 2 historical self agents (10 matches total).
+- Opponents: one match each against 5 vendored basic agents and 5 deterministic
+  pathfinding variants built from the same vendored MicroRTS implementations (10 total).
+  Final-test competition agents and their manifest are not on this classpath.
 - Match count: exactly 10.
 - Compilation count: once per generated source.
 - Java generation count during evaluation: zero.
@@ -77,4 +79,3 @@ Current code does not yet respect these boundaries fully. See gaps `G-05` throug
 - Verify the ten-opponent roster and distinct match directories/seeds.
 - Verify a nine-match partial batch fails while retaining all nine results.
 - Verify each pipeline stage maps to the correct failure classification.
-

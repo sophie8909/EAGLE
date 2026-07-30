@@ -6,7 +6,7 @@ This document owns the post-evolution final-test contract. It does not alter the
 
 EAGLE has exactly two evaluation contexts:
 
-1. **Evolution Evaluation** runs inside the EA, uses the ten-opponent roster: 3 external agents, 5 vendored basic agents, and 2 historical self agents, produces `game_performance` and `code_quality`, and may affect selection and variation.
+1. **Evolution Evaluation** runs inside the EA, uses five vendored basic agents and five deterministic vendored pathfinding variants, produces `game_performance` and `code_quality`, and may affect selection and variation. It does not use external competition jars or historical-self agents.
 2. **Final Test** runs only after a completed EA run, selects already evaluated Java using evolution artifacts alone, and measures gameplay against external champions.
 
 There is no validation split or validation stage. Final Test never invokes an LLM, generation, repair, Reflection, Rewrite, crossover, mutation, or NSGA-II. Its results are descriptive and cannot affect candidate selection or evolutionary fitness. Operational source compilation and class-loading checks are prerequisites, not a model-selection stage.

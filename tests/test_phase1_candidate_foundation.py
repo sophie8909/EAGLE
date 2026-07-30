@@ -402,11 +402,11 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
                 "ai.PassiveAI",
                 "ai.abstraction.LightRush",
                 "ai.abstraction.HeavyRush",
-                "ai.competition.tiamat.Tiamat",
-                "GNS.Droplet",
-                "ai.competition.IzanagiBot.Izanagi",
-                "ai.JZ.MixedBot",
-                "ai.CMAB.GuidedA3NW",
+                "ai.abstraction.BFSLightRush",
+                "ai.abstraction.GreedyLightRush",
+                "ai.abstraction.FloodFillLightRush",
+                "ai.abstraction.AStarLightRush",
+                "ai.abstraction.BFSHeavyRush",
             ],
         )
         self.assertEqual(payload["max_cycles"], 345)

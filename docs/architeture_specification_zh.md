@@ -338,6 +338,6 @@ Compile ??敺? class loading?onstructor?uperclass?ethod signature
 
 ## 最終測試邊界
 
-EAGLE 只有兩種評估情境：演化期間固定使用 10-opponent roster 的 Evolution Evaluation（TMA、Mayari、COAC、五個 basic agent、兩個 historical self），以及演化完成後才執行的 Final Test。Final Test 只讀取已完成 run 的演化 artifacts，選定既有 Java，對固定版本的 TMA、Mayari、COAC 在多張既有地圖、固定 seeds、雙方 player side 上比賽；結果不得回流 fitness、selection、crossover、mutation、NSGA-II，也不得呼叫 LLM 或重新生成、修復候選者。此架構沒有 validation split 或 validation selection stage。
+EAGLE 只有兩種評估情境：演化期間固定使用 10-opponent roster 的 Evolution Evaluation（五個 vendored basic agent、五個 deterministic vendored pathfinding variant），以及演化完成後才執行的 Final Test。Evolution Evaluation 不使用 external competition jar，也不使用 historical self opponent。Final Test 只讀取已完成 run 的演化 artifacts，選定既有 Java，對固定版本的 TMA、Mayari、COAC 在多張既有地圖、固定 seeds、雙方 player side 上比賽；結果不得回流 fitness、selection、crossover、mutation、NSGA-II，也不得呼叫 LLM 或重新生成、修復候選者。此架構沒有 validation split 或 validation selection stage。
 
 完整 opponent pins、selector、artifact schema、計分與重現指令由 `docs/evaluation/final_test.md` 管理；該文件已加入 active documentation map。
