@@ -15,6 +15,6 @@
   views, controllers, and tests were removed rather than retained as
   compatibility surfaces.
 
-Remaining live verification is host-specific: the checked-in
-`/home/mhlab/EAGLE` model paths require that deployment’s Conda installation,
-llama.cpp binary, GGUF files, ports, and remote hosts.
+Remaining live verification is host-specific: the checked-in model paths require a
+local Ubuntu or WSL2 Conda installation, llama.cpp binary, GGUF file, ports, and
+any intentionally configured remote hosts.

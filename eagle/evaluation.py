@@ -223,8 +223,6 @@ def evaluate_candidate(
             agent_class=agent.qualified_class_name,
             integration_artifacts_dir=integration_dir,
             mock=mock,
-            java_executable=config.java_executable,
-            javac_executable=config.javac_executable,
         )
         if integration_result.ok:
             evaluation_started_at = _utc_now()
@@ -515,7 +513,6 @@ def compile_agent_source(agent: GeneratedJavaAgent, *, config: ExperimentConfig,
         microrts_dir=config.microrts_dir,
         output_dir=classes_dir / candidate_id,
         mock=mock,
-        javac_executable=config.javac_executable,
     )
 
 
@@ -567,7 +564,6 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                     generation_index=candidate.generation,
                     source_hash=source_hash, class_hash=class_hash,
                     extra_classpath_entries=opponent.classpath_entries,
-                    java_executable=config.java_executable,
                 )
             except (RuntimeError, OSError) as exc:
                 result = MatchResult(

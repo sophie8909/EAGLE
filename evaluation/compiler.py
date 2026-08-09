@@ -9,8 +9,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-from eagle.runtime.config import platform_executable_names, resolve_executable
-
 
 @dataclass(frozen=True)
 class CompilerDiagnostic:
@@ -121,7 +119,6 @@ def compile_generated_agent(
     microrts_dir: Path,
     output_dir: Path,
     mock: bool = False,
-    javac_executable: str | Path | None = None,
 ) -> CompileResult:
     microrts_dir = microrts_dir.resolve()
     source_paths = (source_path,) if isinstance(source_path, Path) else source_path
@@ -134,13 +131,8 @@ def compile_generated_agent(
             raise ValueError(f"Refusing to compile unresolved Java behavior template: {path}")
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    javac = resolve_executable(
-        javac_executable,
-        default_names=platform_executable_names("javac"),
-        label="javac",
-    )
     command = [
-        str(javac),
+        "javac",
         "-Xlint:all",
         "-cp",
         os.pathsep.join([str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]),

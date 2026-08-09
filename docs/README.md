@@ -7,6 +7,7 @@ This directory is the implementation entry point for EAGLE (Evolutionary Algorit
 1. [`eagle_architecture_spec.md`](eagle_architecture_spec.md) is the authoritative normative architecture contract.
 2. Files under [`architecture/`](architecture/overview.md), [`evaluation/`](evaluation/evaluation_pipeline.md), and [`artifacts/`](artifacts/artifact_schema.md) are canonical, responsibility-focused implementation contracts derived from the specification. They are normative only where they restate or link to the specification and are always subordinate to it.
 3. Files under [`implementation/`](implementation/current_status.md) describe repository reality, gaps, migration work, and the current [architecture traceability matrix](implementation/architecture_traceability_matrix.md). They are non-normative.
+   The Linux / WSL2 runtime audit records the two supported Linux deployment environments and their shared runtime assumptions.
 4. Files under [`operations/`](operations/running_eagle.md) and [`testing/`](testing/test_contracts.md) describe workflows and verification.
 5. [`architeture_specification_zh.md`](architeture_specification_zh.md) is the user-facing Traditional Chinese overview.
 

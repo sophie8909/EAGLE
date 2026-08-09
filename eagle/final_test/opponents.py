@@ -592,7 +592,7 @@ def _normalize_git_url(value: str) -> str:
 def _require_tool(name: str) -> None:
     if shutil.which(name) is None:
         raise OpponentSetupError(
-            f"Required tool '{name}' is not available. Run opponent setup in the EAGLE WSL/JDK environment."
+            f"Required tool '{name}' is not available. Run opponent setup in the EAGLE Linux/JDK environment."
         )
 
 

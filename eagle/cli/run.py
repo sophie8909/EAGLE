@@ -18,8 +18,8 @@ from eagle.search import run_search
 
 ENDPOINT_ERROR = """Qwen3.5 endpoint unavailable:
   URL: {url}
-  Start it with: .\run_env.ps1 start (PowerShell) or ./run_env.sh start
-  Inspect it with: .\run_env.ps1 status (PowerShell) or ./run_env.sh status
+  Start it with: ./run_env.sh
+  Inspect it with: ./run_env.sh status
   Log: runtime/logs/llm-server.log"""
 
 
@@ -41,8 +41,6 @@ def main(argv=None):
             llm_model=runtime.llm.model_name,
             generation_backend="mock" if args.mock else "openai",
             alignment_backend="mock" if args.mock else "openai",
-            java_executable=runtime.tools.java,
-            javac_executable=runtime.tools.javac,
         )
         config.validate()
         if not args.mock:

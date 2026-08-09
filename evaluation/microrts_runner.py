@@ -217,8 +217,6 @@ def integrate_microrts_agent(
     agent_class: str,
     integration_artifacts_dir: Path | None = None,
     mock: bool = False,
-    java_executable: str | Path | None = None,
-    javac_executable: str | Path | None = None,
 ) -> IntegrationResult:
     started_at = _utc_now()
     started = time.monotonic()
@@ -261,18 +259,8 @@ def integrate_microrts_agent(
     classpath = os.pathsep.join(
         [str(classes_dir), str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]
     )
-    javac = resolve_executable(
-        javac_executable,
-        default_names=platform_executable_names("javac"),
-        label="javac",
-    )
-    java = resolve_executable(
-        java_executable,
-        default_names=platform_executable_names("java"),
-        label="Java",
-    )
-    compile_command = [str(javac), "-cp", classpath, "-d", str(artifact_dir), str(probe_source)]
-    run_command = [str(java), "-cp", os.pathsep.join([classpath, str(artifact_dir)]), "EAGLEIntegrationProbe", agent_class]
+    compile_command = ["javac", "-cp", classpath, "-d", str(artifact_dir), str(probe_source)]
+    run_command = ["java", "-cp", os.pathsep.join([classpath, str(artifact_dir)]), "EAGLEIntegrationProbe", agent_class]
     commands = (tuple(compile_command), tuple(run_command))
 
     try:
@@ -777,8 +765,6 @@ def int_or_none(value: Any) -> int | None:
 
 # The standalone integration probe above is Phase 3.  Match execution is owned
 # by the canonical post-integration adapter and re-exported here for compatibility.
-from eagle.runtime.config import platform_executable_names, resolve_executable
-
 from .runtime_evaluation import (  # noqa: E402,F401
     MatchResult,
     classify_runtime_failure,

@@ -34,7 +34,7 @@ Snapshot: 2026-07-16 after the complete Phase 4 Evaluation Layer. This file desc
 
 The suite now covers Phase 2C mutation, Phase 3 validation/compilation/integration, and Phase 4 runtime evaluation, canonical Game Performance, failure-aware Code Quality, Function Capability, Strategy Alignment, objective aggregation, artifacts, and timing. Focused Phase 4 tests prove exactly 10 seeded fixed-roster calls, one source/class set, no regeneration, timeout/invalid/partial failures, formula boundaries, successful and partial end-to-end persistence, and two-objective output.
 
-The full WSL unit suite passes. A bounded real seven-check Integration probe exists from Phase 3; no real 10-match Java/MicroRTS batch was run for this implementation turn, so real-runtime gameplay remains unverified here.
+The full Linux unit suite passes on the canonical Ubuntu runtime; native Linux and WSL2 Ubuntu use the same commands. A bounded real seven-check Integration probe exists from Phase 3; no real 10-match Java/MicroRTS batch was run for this implementation turn, so real-runtime gameplay remains unverified here.
 
 ## Recent run evidence
 
@@ -46,7 +46,7 @@ The most recent complete saved population run (`runs/20260712_154209_634218`) us
 - Real EA mode requires the local generation endpoint, `javac`, and the vendored
   MicroRTS runtime. Final-test external opponent JARs are prepared only for the
   isolated Final Test workflow.
-- WSL is the project default for Python/Java/MicroRTS commands.
+- Native Ubuntu Linux is the primary runtime, and WSL2 Ubuntu is the additional supported runtime for Python/Java/MicroRTS commands.
 - Candidate inspection is artifact-only; the obsolete manual viewer has been removed.
 
 See [`architecture_gaps.md`](architecture_gaps.md) for the remaining implementation status.

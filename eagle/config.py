@@ -48,8 +48,6 @@ class ExperimentConfig:
     llm_roles: tuple[tuple[str, bool, float | None], ...] = ()
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
-    java_executable: Path | None = None
-    javac_executable: Path | None = None
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
     tick_limit: int = 100
     opponent: str = TRAINING_OPPONENT

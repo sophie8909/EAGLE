@@ -86,7 +86,7 @@ Incomplete matches are counted explicitly and excluded from rate/score denominat
 
 ## Reproduction
 
-From the repository's WSL environment with Git, a JDK, Java, and the vendored MicroRTS runtime available:
+From the repository's native Ubuntu or WSL2 Ubuntu environment with Git, a JDK, Java, and the vendored MicroRTS runtime available:
 
 ```bash
 python3 scripts/setup_final_test_opponents.py
