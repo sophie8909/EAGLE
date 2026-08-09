@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 from .game_performance import (
@@ -189,10 +190,15 @@ def compute_game_metrics(match_results: list[MatchResult]) -> GameMetrics:
 
 def summarize_match(result: MatchResult) -> dict[str, Any]:
     breakdown = fallback_performance_breakdown(result, result.raw_result)
+    match_dir = getattr(result, "match_dir", None)
+    match_id = None if match_dir is None else Path(str(match_dir)).name
     return {
         "opponent_id": getattr(result, "opponent_id", None),
         "opponent_name": getattr(result, "opponent_name", None) or getattr(result, "opponent", None),
         "match_index": result.match_index,
+        "match_id": match_id,
+        "candidate_id": getattr(result, "candidate_id", None),
+        "candidate_side": "p0" if getattr(result, "candidate_player", 0) == 0 else "p1",
         "seed": result.seed,
         "winner": _winner(result),
         "result": result.raw_result.get("result"),
@@ -205,6 +211,7 @@ def summarize_match(result: MatchResult) -> dict[str, Any]:
         "replay_path": result.replay_path,
         "telemetry_path": result.telemetry_path,
         "summary_path": result.summary_path,
+        "match_log_path": getattr(result, "match_log_path", None),
     }
 
 

@@ -12,7 +12,7 @@ import json
 import os
 import subprocess
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -25,6 +25,7 @@ from .game_performance import (
     write_summary_json,
     write_telemetry_json,
 )
+from .match_logs import write_match_log
 
 
 DEFAULT_MAP_PATH = "maps/8x8/basesWorkers8x8.xml"
@@ -80,6 +81,7 @@ class MatchResult:
     duration_seconds: float = 0.0
     timeout_seconds: float | None = None
     match_dir: str | None = None
+    match_log_path: str | None = None
 
     def to_json_dict(self) -> dict[str, Any]:
         telemetry = self.telemetry
@@ -136,6 +138,7 @@ class MatchResult:
             "telemetry_path": self.telemetry_path,
             "performance_breakdown_path": self.summary_path,
             "persistence_error": self.persistence_error,
+            "match_log_path": self.match_log_path,
             "timing": {
                 "started_at": self.started_at,
                 "finished_at": self.finished_at,
@@ -160,6 +163,7 @@ def run_microrts_match(
     scoring_config: GamePerformanceConfig | None = None,
     mock: bool = False,
     mock_score: float = 0.0,
+    generation_index: int = 0,
     seed: int | None = None,
     timeout_seconds: float = 120.0,
     map_path: str = DEFAULT_MAP_PATH,
@@ -231,7 +235,14 @@ def run_microrts_match(
             seed=seed_value,
         )
         raw_result_path.write_text(json.dumps(raw_result, indent=2), encoding="utf-8")
-        write_mock_round_state(round_state_dir, tick=0, p0_resource=50.0, p1_resource=50.0)
+        for tick in range(tick_limit + 1):
+            progress = tick / max(1, tick_limit)
+            write_mock_round_state(
+                round_state_dir,
+                tick=tick,
+                p0_resource=50.0 + (mock_score if candidate_player == 0 else 0.0) * progress,
+                p1_resource=50.0 + (mock_score if candidate_player == 1 else 0.0) * progress,
+            )
         write_mock_round_state(
             round_state_dir,
             tick=tick_limit,
@@ -256,6 +267,7 @@ def run_microrts_match(
             scoring_config=scoring_config,
             candidate_id=candidate_id,
             match_index=match_index,
+            generation_index=generation_index,
             opponent=opponent,
             candidate_player=candidate_player,
             map_path=map_path,
@@ -293,6 +305,7 @@ def run_microrts_match(
             scoring_config=scoring_config,
             candidate_id=candidate_id,
             match_index=match_index,
+            generation_index=generation_index,
             opponent=opponent,
             candidate_player=candidate_player,
             map_path=map_path,
@@ -321,6 +334,7 @@ def run_microrts_match(
         scoring_config=scoring_config,
         candidate_id=candidate_id,
         match_index=match_index,
+        generation_index=generation_index,
         opponent=opponent,
         candidate_player=candidate_player,
         map_path=map_path,
@@ -350,6 +364,7 @@ def _finish_match(
     scoring_config: GamePerformanceConfig,
     candidate_id: str | None,
     match_index: int,
+    generation_index: int,
     opponent: str,
     candidate_player: int,
     map_path: str,
@@ -438,6 +453,27 @@ def _finish_match(
         match_dir=str(match_dir),
         **values,
     )
+    match_log_path = match_dir / "match_log.jsonl.gz"
+    write_match_log(
+        match_log_path,
+        metadata={
+            "match_id": match_dir.name,
+            "candidate_id": candidate_id,
+            "generation_index": generation_index,
+            "candidate_side": "p0" if candidate_player == 0 else "p1",
+            "opponent_name": opponent,
+            "opponent_agent": opponent,
+            "map_name": map_path,
+            "map_width": 8,
+            "map_height": 8,
+            "round_index": match_index,
+            "seed": seed,
+        },
+        round_state_dir=round_state_dir,
+        raw_result=raw_result,
+        tick_limit=tick_limit,
+    )
+    result = replace(result, match_log_path=str(match_log_path))
     _persist_result(match_dir, result)
     return result
 
@@ -533,10 +569,9 @@ def _persist_result(match_dir: Path, result: MatchResult) -> None:
     try:
         (match_dir / "stdout.txt").write_text(result.stdout, encoding="utf-8")
         (match_dir / "stderr.txt").write_text(result.stderr, encoding="utf-8")
-        (match_dir / "result.json").write_text(
-            json.dumps(result.to_json_dict(), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        result_payload = json.dumps(result.to_json_dict(), ensure_ascii=False, indent=2)
+        (match_dir / "result.json").write_text(result_payload, encoding="utf-8")
+        (match_dir / "match_result.json").write_text(result_payload, encoding="utf-8")
         timing = result.to_json_dict()["timing"]
         (match_dir / "timing.json").write_text(json.dumps(timing, indent=2), encoding="utf-8")
     except OSError:

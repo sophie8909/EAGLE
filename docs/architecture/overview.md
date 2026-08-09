@@ -12,7 +12,7 @@ In scope:
 
 - evolutionary prompt search;
 - `Strategy Prompt`, latest evaluated `Previous Code`, and `Code Generation Prompt`;
-- Uniform Crossover and two-stage Strategy/Code Mutation;
+- Uniform Crossover, four-role Strategy Mutation, and separate Code Mutation;
 - full-file `CandidateAgent.java` generation;
 - exactly 10 matches against the fixed Evolution Evaluation roster;
 - `game_performance` and `code_quality` as the only NSGA-II objectives;

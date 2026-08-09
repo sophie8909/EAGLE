@@ -561,6 +561,7 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                     mock_score=config.mock_score_base + config.mock_score_step * (ordinal + match_index),
                     seed=seeds[match_index], timeout_seconds=config.match_timeout_seconds,
                     map_path=config.map_path, candidate_id=candidate.id,
+                    generation_index=candidate.generation,
                     source_hash=source_hash, class_hash=class_hash,
                     extra_classpath_entries=opponent.classpath_entries,
                 )

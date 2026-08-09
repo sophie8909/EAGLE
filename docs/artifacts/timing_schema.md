@@ -99,3 +99,10 @@ Candidate timing now includes post-Integration evaluation start/finish/duration,
 Run-level timing.jsonl contains event=generation and event=llm_request records. Generation records include generation boundaries, mutation/crossover counts and aggregates, aggregate request/validation/compilation/evaluation durations, and the generation duration. Request records include run_id, generation, candidate_id, operation_type, operation_stage, server_or_endpoint, model_id, request_started_at, request_finished_at, duration_seconds, status, failure_category, token counts when supplied, and request_correlation_id.
 
 Candidate timing.json contains operation-specific mutation and crossover generation-only spans, the shared child_generation span, separate validation/compilation/integration/evaluation spans, and child_total. Durations use a monotonic clock; UTC fields are display timestamps.
+
+## Strategy Reflection role timing
+
+Strategy Reflection attempt records use the canonical role names
+`match_commentator`, `manager`, `coach`, and `generator`. The Generator timing
+is the existing Java-generation timing; Commentator, Manager, and Coach timing
+is stored in their role request/response envelopes.

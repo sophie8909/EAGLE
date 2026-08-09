@@ -295,6 +295,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "llm_backend": llm_backend,
         "llm_model": None if is_mock_backend else config.llm_model,
         "llm_temperature": None if is_mock_backend else 0.2,
+        "llm_roles": {role: {"enabled": enabled, "temperature": temperature} for role, enabled, temperature in config.llm_roles},
         "retry_policy": {
             "max_attempts": 1 if is_mock_backend else 3,
             "mutation_max_attempts": config.mutation_max_attempts,

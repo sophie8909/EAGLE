@@ -18,36 +18,36 @@ See specification sections 7 through 10 and state-transition examples 28.2 and 2
 
 ## Shared contract
 
-Mutation has exactly two types: `strategy_mutation` and `code_mutation`. Each uses two separate LLM stages:
-
-1. Reflection analyzes evidence and returns reflection text.
-2. Prompt Rewrite consumes the reflection and returns only the rewritten prompt component.
-
-The final Java Generation LLM is a third call after mutation. Reflection and Rewrite never produce or edit Java directly.
+Strategy Mutation and Code Mutation are separate. Strategy Mutation changes only
+`strategy_prompt`; Code Mutation changes only `generation_prompt`. The final Java
+Generator remains a separate stage after either mutation.
 
 ## Strategy Mutation
 
-Changes only `strategy_prompt`; preserves `previous_code` and `generation_prompt`.
+Strategy Reflection is a sports-team workflow:
 
-Reflection inputs must include the current strategy, parent generated Java, the aggregate
-game-performance value, and the typed ten-opponent results. Each result carries its
-stable opponent identity, score, W/D/L, resources, units, status, and failure. The
-context also carries strongest/weakest matchup and score mean/min/max/stddev. The
-response is `strategy_reflection` and must not rewrite prompts or generate Java.
+1. Save and stream complete per-match logs.
+2. Match Commentator analyzes one match at a time.
+3. Delete each temporary raw log after terminal Commentator handling.
+4. Manager aggregates all compact match analyses and performance results.
+5. Coach replaces the parent `strategy_prompt` using the Manager plan.
+6. Generator receives the new strategy and the existing code-generation prompt.
 
-Rewrite inputs are the original strategy, reflection, parent generated Java, and game-evaluation summary. The response is only `new_strategy_prompt`.
+The Match Commentator never rewrites strategy or Java. The Manager never writes
+the final prompt or Java. The Coach never writes Java. Raw ticks are never sent
+to Manager or Coach. See [`../strategy-reflection.md`](../strategy-reflection.md)
+for schemas, artifact ownership, failure semantics, and budgeting.
 
 Canonical state transition:
 
 ```text
-before mutation:      A1 + B2 + C1
-after rewrite:        A2 + B2 + C1
-after Java generation:A2 + B3 + C1
-next inherited state: A2 + B3 + C1
+before mutation:       A1 + B2 + C1
+after Coach:            A2 + B2 + C1
+after Java generation:  A2 + B3 + C1
+next inherited state:   A2 + B3 + C1
 ```
 
 ## Code Mutation
-
 Changes only `generation_prompt`; preserves `strategy_prompt` and `previous_code`.
 
 Reflection inputs must include the strategy, current generation prompt, parent Java, latest child Java if any, raw generation response, validation/compile/integration/runtime results, completed-match count, function and strategy-alignment scores, and failure stage/category/reason. The response is `code_reflection` and must not generate replacement Java.
