@@ -17,6 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from eagle.runtime.config import platform_executable_names, resolve_executable
+
 from .game_performance import (
     GamePerformanceBreakdown,
     GamePerformanceConfig,
@@ -173,6 +175,7 @@ def run_microrts_match(
     candidate_player: int = 0,
     extra_classpath_entries: Iterable[Path] = (),
     match_output_dir: Path | None = None,
+    java_executable: str | Path | None = None,
 ) -> MatchResult:
     """Run one bounded match and persist its independent evidence immediately."""
 
@@ -197,8 +200,13 @@ def run_microrts_match(
     )
     ai1 = agent_class if candidate_player == 0 else opponent
     ai2 = opponent if candidate_player == 0 else agent_class
+    java = resolve_executable(
+        java_executable,
+        default_names=platform_executable_names("java"),
+        label="Java",
+    )
     command = [
-        "java",
+        str(java),
         f"-Deagle.match.seed={seed_value}",
         f"-Dmicrorts.trace.path={replay_path}",
         f"-Dmicrorts.round_state_dir={round_state_dir}",
