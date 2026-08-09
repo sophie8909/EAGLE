@@ -401,3 +401,32 @@ Using one count per independent active surface:
   `eagle/runtime/processes.py`, `eagle/runtime/config.py`,
   `tests/test_runtime_workflow.py`, and the new PowerShell launcher set
   (`run_env.ps1`, `run.ps1`, `analyze.ps1`).
+
+
+## Implementation status
+
+The minimum Windows migration has been applied without changing EA operators, fitness,
+opponents, scoring, reflection, mutation, crossover, or selection behavior.
+
+Resolved in the runtime surface:
+
+- configs/runtime.yaml no longer contains machine-specific /home/... paths.
+  The model path is project-relative, while the llama.cpp server is resolved from an
+  explicit path, PATH, or the platform default (llama-server.exe on Windows).
+- eagle/runtime/config.py resolves llama.cpp, Python, Java, and javac executables
+  and accepts optional additional llama-server arguments.
+- eagle/runtime/processes.py no longer reads /proc or sends POSIX signals. It
+  uses psutil for PID inspection/termination and keeps the small platform branch
+  limited to process-group creation flags at launch.
+- Java compilation, integration probing, and MicroRTS match execution use resolved
+  executables and retain os.pathsep classpaths.
+- run_env.ps1, run.ps1, and analyze.ps1 are thin wrappers that invoke the
+  active Python interpreter. The Linux wrappers remain available and delegate to
+  active-environment Python rather than activating Conda internally.
+- Analysis plotting uses the platform temporary directory instead of /tmp.
+- The unreferenced vendor llm-json-completion.sh helper was removed instead of ported.
+
+Remaining operational prerequisites are deployment-specific: install the JDK, install
+the psutil dependency, place llama-server.exe on PATH or configure its path,
+and set llm.model_path to the locally installed GGUF file. No model or llama.cpp
+binary is committed to this repository.

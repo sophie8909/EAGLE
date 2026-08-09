@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-#!/usr/bin/env bash
-set -euo pipefail
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
 
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-cd "$ROOT"
 COMMAND="${1:-start}"
-[[ $# -le 1 ]] || { echo "ERROR: run_env.sh accepts one command." >&2; exit 2; }
-case "$COMMAND" in start|stop|restart|status|check) ;; *) echo "ERROR: unknown command: $COMMAND" >&2; exit 2 ;; esac
+case "$COMMAND" in
+  start|stop|restart|status|check) ;;
+  *) printf 'Usage: %s [start|stop|restart|status|check]\n' "$0" >&2; exit 2 ;;
+esac
 
-exec conda run --no-capture-output -n eagle \
-  python -m eagle runtime "$COMMAND" --config configs/runtime.yaml
+exec python -m eagle runtime "$COMMAND" --config "$ROOT_DIR/configs/runtime.yaml"

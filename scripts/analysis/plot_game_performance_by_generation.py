@@ -10,6 +10,7 @@ import argparse
 import csv
 import math
 import os
+import tempfile
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+os.environ.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "eagle-matplotlib"))
 
 from matplotlib import pyplot as plt
 
