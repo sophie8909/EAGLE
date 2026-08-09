@@ -16,101 +16,34 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
-from evaluation.game_metrics import OpponentResult
-
 from .candidate import Candidate
 from .config import ExperimentConfig
 from .llm_errors import LLMServerError
 from .llm_progress import llm_request_progress
-from .llm_transport import read_chat_completion_content, truncate_prompt
+from .llm_transport import read_chat_completion_content
+from .reflection_context import (
+    CandidateReflectionSummary,
+    CodeDiagnostics,
+    EvolutionContext,
+    GameplayDiagnostics,
+    MapReflectionResult,
+    ObjectiveSummary,
+    OpponentReflectionSummary,
+    ReflectionContext,
+)
+from .reflection_prompts import (
+    build_code_reflection_prompt,
+    build_code_reflection_prompt_bundle,
+    build_strategy_reflection_prompt,
+    build_strategy_reflection_prompt_bundle,
+)
 
 
-REFLECTION_SCHEMA_VERSION = "phase2a-v1"
+REFLECTION_SCHEMA_VERSION = "reflection-v2"
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-@dataclass(frozen=True)
-class ReflectionContext:
-    """Canonical, typed snapshot passed from evaluation into Reflection.
-
-    The component-specific convenience fields remain for prompt compatibility,
-    but ``*_evidence`` and ``objectives`` are the authoritative payload. They
-    are copied from the evaluated Candidate rather than recalculated here.
-    """
-
-    generation: int
-    index: int
-    candidate_id: str = ""
-    objectives: dict[str, float] | None = None
-    evaluation_status: str = "unknown"
-    failure_stage: str | None = None
-    failure_category: str | None = None
-    failure_reason: str | None = None
-    game_evidence: dict[str, object] | None = None
-    code_quality_evidence: dict[str, object] | None = None
-    generation_evidence: dict[str, object] | None = None
-    aggregate_game_performance: float | None = None
-    # Deprecated constructor/read compatibility; canonical code uses the field above.
-    game_performance: float | None = None
-    opponent_results: tuple[OpponentResult, ...] = ()
-    strongest_opponent: OpponentResult | None = None
-    weakest_opponent: OpponentResult | None = None
-    score_mean: float | None = None
-    score_min: float | None = None
-    score_max: float | None = None
-    score_stddev: float | None = None
-    player_resource: float | None = None
-    enemy_resource: float | None = None
-    resource_breakdown: dict[str, object] | None = None
-    performance_breakdown: dict[str, object] | None = None
-    temporal_summary: dict[str, object] | None = None
-    match_summary: dict[str, object] | None = None
-    per_match_results: tuple[dict[str, object], ...] = ()
-    wins: int | None = None
-    draws: int | None = None
-    losses: int | None = None
-    final_player_resources: dict[str, object] | None = None
-    final_enemy_resources: dict[str, object] | None = None
-    final_resource_difference: object | None = None
-    unit_material_statistics: dict[str, object] | None = None
-    survival_statistics: dict[str, object] | None = None
-    round_state_summary: dict[str, object] | None = None
-    behavior_summary: dict[str, object] | None = None
-    opponent: str = "ai.abstraction.LightRush"
-    latest_child_java: str = ""
-    raw_generation_response: str = ""
-    validation_result: dict[str, object] | None = None
-    compilation_result: dict[str, object] | None = None
-    integration_result: dict[str, object] | None = None
-    runtime_result: dict[str, object] | None = None
-    completed_match_count: int | None = None
-    function_capability_score: float | None = None
-    strategy_alignment_score: float | None = None
-    compilation_score: float | None = None
-    compiler_errors: tuple[str, ...] = ()
-    compiler_warnings: tuple[str, ...] = ()
-    strategy_region_score: float | None = None
-    strategy_region_validation: dict[str, object] | None = None
-    static_quality_score: float | None = None
-    static_metrics: dict[str, object] | None = None
-    compile_success: bool | None = None
-    validation_success: bool | None = None
-    runtime_success: bool | None = None
-    error_category: str = ""
-    error_message: str = ""
-    target_module: str | None = None
-
-    def to_dict(self) -> dict[str, object]:
-        return asdict(self)
-
-    def __post_init__(self) -> None:
-        if self.aggregate_game_performance is None and self.game_performance is not None:
-            object.__setattr__(self, "aggregate_game_performance", self.game_performance)
-        elif self.game_performance is None and self.aggregate_game_performance is not None:
-            object.__setattr__(self, "game_performance", self.aggregate_game_performance)
 
 
 # Public compatibility name used by the existing mutation/rewrite API.
@@ -146,6 +79,10 @@ class ReflectionResult:
     backend: str | None = None
     llm_profile: str | None = None
     token_counts: dict[str, int] | None = None
+    parsed_response: dict[str, object] | None = None
+    analysis_summary: str = ""
+    revised_prompt: str = ""
+    prompt_metadata: dict[str, object] | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -166,7 +103,51 @@ class ReflectionResult:
             "backend": self.backend,
             "llm_profile": self.llm_profile,
             "token_counts": self.token_counts,
+            "parsed_response": self.parsed_response,
+            "analysis_summary": self.analysis_summary,
+            "revised_prompt": self.revised_prompt,
+            "prompt_metadata": self.prompt_metadata,
         }
+
+
+def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict[str, object], str, str]:
+    """Parse the single JSON contract shared by Strategy and Code Reflection."""
+    lowered = str(response).lower()
+    if "```java" in lowered or "package ai.generated" in lowered or "public class candidateagent" in lowered:
+        raise ValueError("Reflection response must not contain generated Java.")
+    reflection_type = reflection_type.removesuffix("_reflection")
+    payload = json.loads(response)
+    if not isinstance(payload, dict):
+        raise ValueError("Reflection response must be one JSON object.")
+    if reflection_type == "strategy":
+        diagnosis = payload.get("diagnosis")
+        if isinstance(diagnosis, dict) and isinstance(payload.get("mutation_plan"), dict):
+            revised = payload.get("revised_strategy_prompt")
+            if not isinstance(revised, str) or not revised.strip():
+                raise ValueError("Reflection response must contain non-empty revised_strategy_prompt.")
+            summary = json.dumps({"diagnosis": diagnosis, "mutation_plan": payload["mutation_plan"]}, ensure_ascii=False, sort_keys=True)
+            return payload, summary, revised.strip()
+        required = ("strengths", "weaknesses", "priority_changes")
+        revised_key = "revised_strategy_prompt"
+        analysis = payload.get("analysis")
+        if not isinstance(analysis, dict):
+            raise ValueError("Reflection response must contain an analysis object.")
+    elif reflection_type == "code":
+        analysis = payload.get("analysis")
+        if not isinstance(analysis, dict):
+            raise ValueError("Reflection response must contain an analysis object.")
+        required = ("implementation_failures", "constraint_failures", "priority_changes")
+        revised_key = "revised_code_generation_prompt"
+    else:
+        raise ValueError(f"Unknown reflection type: {reflection_type}")
+    for key in required:
+        if not isinstance(analysis.get(key), list):
+            raise ValueError(f"Reflection analysis.{key} must be an array.")
+    revised = payload.get(revised_key)
+    if not isinstance(revised, str) or not revised.strip():
+        raise ValueError(f"Reflection response must contain non-empty {revised_key}.")
+    summary = json.dumps({"analysis": analysis}, ensure_ascii=False, sort_keys=True)
+    return payload, summary, revised.strip()
 
 
 class ReflectionBackend(Protocol):
@@ -181,15 +162,48 @@ class MockReflectionBackend:
     """Deterministic Reflection backend used by tests and mock searches."""
 
     def __init__(self, response: str | None = None) -> None:
-        self.response = response or (
-            "Reflection: identify the strongest observed behavior, the most "
-            "important failure, and one concrete requirement for the next prompt."
-        )
+        self.response = response
         self.prompts: list[str] = []
 
     def generate(self, prompt: str) -> str:
         self.prompts.append(prompt)
-        return self.response
+        if self.response is not None:
+            return self.response
+        if "Strategy Reflection stage" in prompt:
+            return json.dumps({
+                "diagnosis": {"primary_failure": "mock evaluation", "secondary_failures": [], "supporting_matches": [], "behaviors_to_preserve": ["deterministic behavior"]},
+                "mutation_plan": {"remove_or_reduce": [], "add_or_strengthen": ["preserve the tested strategy"], "conditional_behaviors": ["When evidence is unavailable, preserve validated behavior."]},
+                "revised_strategy_prompt": "Preserve deterministic behavior and address the observed strategic weakness with conditional rules.",
+            })
+        if "Code Reflection stage" in prompt:
+            return json.dumps({
+                "analysis": {"implementation_failures": [], "constraint_failures": [], "priority_changes": ["preserve compilable complete-file output"]},
+                "revised_code_generation_prompt": "Return a complete compilable CandidateAgent.java file and preserve the required API constraints.",
+            })
+        if "MATCH_COMMENTATOR_OUTPUT=chunk" in prompt:
+            source = prompt.split("MATCH_COMMENTATOR_OUTPUT=chunk", 1)[1]
+            request = json.loads(source)
+            tick_range = request.get("tick_range") or {"start": 0, "end": 0}
+            return json.dumps({
+                "tick_range": tick_range,
+                "candidate_state": {"economy": "observed from supplied records", "production": "unknown", "army": "observed from supplied records", "positioning": "observed from supplied records"},
+                "opponent_state": {"economy": "observed from supplied records", "production": "unknown", "army": "observed from supplied records", "pressure": "unknown"},
+                "events": [], "turning_points": [], "candidate_strengths": [], "candidate_weaknesses": [], "possible_missed_opportunities": [], "state_at_chunk_end": "State recorded at the end of the supplied range.",
+            })
+        if "MATCH_COMMENTATOR_OUTPUT=final" in prompt:
+            source = prompt.split("MATCH_COMMENTATOR_OUTPUT=final", 1)[1]
+            request = json.loads(source)
+            metadata = request.get("match_metadata") or {}
+            coverage = request.get("trace_coverage") or {}
+            candidate_side = metadata.get("candidate_side", "p0")
+            return json.dumps({
+                "match_id": metadata.get("match_id", ""), "candidate_side": candidate_side,
+                "opponent": metadata.get("opponent_name", ""), "map": metadata.get("map_name", ""),
+                "result": {"winner": request.get("final_result", {}).get("winner"), "candidate_result": request.get("final_result", {}).get("candidate_result", "draw"), "game_length": request.get("final_result", {}).get("game_length")},
+                "match_summary": "Commentary unavailable beyond the observed structured state records.", "timeline": [], "turning_points": [], "candidate_strengths": [], "candidate_weaknesses": [], "opponent_behavior": [], "candidate_decision_errors": [], "missed_opportunities": [], "decisive_causes": [], "behaviors_to_preserve": [], "strategy_recommendations": [],
+                "coverage": {"first_tick": coverage.get("first_tick"), "last_tick": coverage.get("last_tick"), "all_ticks_processed": True},
+            })
+        return "Preserve the validated constraints and apply only the evidence-backed revision."
 
 
 class OpenAICompatibleReflectionBackend:
@@ -218,6 +232,7 @@ class OpenAICompatibleReflectionBackend:
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": self.temperature,
+            "response_format": {"type": "json_object"},
             "chat_template_kwargs": {"enable_thinking": False},
             "stream": True,
         }
@@ -294,11 +309,13 @@ class ReflectionStage:
         candidate: Candidate,
         request: str,
         artifact_dir: Path | None = None,
+        prompt_metadata: dict[str, object] | None = None,
     ) -> ReflectionResult:
         stage = "reflector"
-        request = truncate_prompt(request)
         if artifact_dir is not None:
             _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
+            if prompt_metadata is not None:
+                _write_json(artifact_dir / "mutation" / f"{stage}_prompt_metadata.json", prompt_metadata)
 
         attempts: list[ReflectionAttempt] = []
         last_response = ""
@@ -312,7 +329,7 @@ class ReflectionStage:
             try:
                 response = self.backend.generate(request)
                 last_response = response
-                _validate_reflection(response)
+                parsed, analysis_summary, revised_prompt = parse_reflection_response(response, reflection_type)
             except LLMServerError:
                 raise
             except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
@@ -351,7 +368,12 @@ class ReflectionStage:
                     module_name=reflection_type,
                     attempt=attempt_number,
                     error=error,
-                    metadata={"llm_profile": self.llm_profile, "operation_type": "mutation", "token_counts": None},
+                    metadata={
+                        "llm_profile": self.llm_profile,
+                        "operation_type": "mutation",
+                        "token_counts": None,
+                        "prompt_metadata": prompt_metadata,
+                    },
                     started_at=started_at,
                     finished_at=finished_at,
                     duration_seconds=max(0.0, time.monotonic() - monotonic_started),
@@ -368,6 +390,10 @@ class ReflectionStage:
                     model=self.model,
                     backend=self.backend_name,
                     llm_profile=self.llm_profile,
+                    parsed_response=parsed,
+                    analysis_summary=analysis_summary,
+                    revised_prompt=revised_prompt,
+                    prompt_metadata=prompt_metadata,
                 )
             time.sleep(0)
 
@@ -385,96 +411,10 @@ class ReflectionStage:
             model=self.model,
             backend=self.backend_name,
             llm_profile=self.llm_profile,
+            prompt_metadata=prompt_metadata,
         )
 
 
-def build_strategy_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
-    from .prompts import render_prompt
-
-    parent_java = candidate.generated_java or candidate.previous_code
-    opponent_payload = [item.to_json_dict() for item in context.opponent_results]
-    strongest = None if context.strongest_opponent is None else context.strongest_opponent.to_json_dict()
-    weakest = None if context.weakest_opponent is None else context.weakest_opponent.to_json_dict()
-    canonical_summary = {
-        "candidate_id": context.candidate_id or candidate.id,
-        "objectives": context.objectives or {},
-        "evaluation_status": context.evaluation_status,
-        "failure_stage": context.failure_stage or context.error_category,
-        "failure_category": context.failure_category or context.error_category,
-        "failure_reason": context.failure_reason or context.error_message,
-        "game_evidence": context.game_evidence,
-        "ten_match_summary": context.match_summary or {},
-        "aggregate_game_performance": context.aggregate_game_performance,
-        "opponent_results": opponent_payload,
-        "strongest_opponent": strongest,
-        "weakest_opponent": weakest,
-        "score_mean": context.score_mean,
-        "score_min": context.score_min,
-        "score_max": context.score_max,
-        "score_stddev": context.score_stddev,
-        "Strongest matchup": strongest,
-        "Weakest matchup": weakest,
-        "Score consistency": {
-            "mean": context.score_mean,
-            "min": context.score_min,
-            "max": context.score_max,
-            "stddev": context.score_stddev,
-        },
-    }
-    return render_prompt("strategy_reflection", {
-        "strategy_prompt": candidate.strategy_prompt,
-        "parent_java": parent_java,
-        "opponent": context.opponent,
-        "match_summary": canonical_summary,
-        "per_match_results": opponent_payload or list(context.per_match_results),
-        "wins": context.wins,
-        "draws": context.draws,
-        "losses": context.losses,
-        "game_performance": context.game_performance,
-        "final_player_resources": context.final_player_resources or {},
-        "final_enemy_resources": context.final_enemy_resources or {},
-        "final_resource_difference": context.final_resource_difference,
-        "resource_breakdown": context.resource_breakdown or {},
-        "unit_material_statistics": context.unit_material_statistics or {},
-        "survival_statistics": context.survival_statistics or {},
-        "round_state_summary": context.round_state_summary or {},
-        "temporal_summary": context.temporal_summary or {},
-        "behavior_summary": context.behavior_summary or {},
-    })
-
-
-def build_code_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
-    from .prompts import render_prompt
-
-    parent_java = candidate.generated_java or candidate.previous_code
-    latest_java = context.latest_child_java or candidate.generated_java
-    canonical_code_evidence = {
-        "candidate_id": context.candidate_id or candidate.id,
-        "objectives": context.objectives or {},
-        "evaluation_status": context.evaluation_status,
-        "game_performance": context.game_performance,
-        "code_quality": (context.objectives or {}).get("code_quality"),
-        "code_quality_evidence": context.code_quality_evidence,
-    }
-    return render_prompt("code_reflection", {
-        "strategy_prompt": candidate.strategy_prompt,
-        "generation_prompt": candidate.generation_prompt,
-        "parent_java": parent_java,
-        "latest_java": latest_java,
-        "raw_generation_response": context.raw_generation_response,
-        "validation_result": context.validation_result or {},
-        "compilation_result": {"canonical_reflection_context": canonical_code_evidence, "compilation": context.compilation_result},
-        "compiler_errors": list(context.compiler_errors),
-        "compiler_warnings": list(context.compiler_warnings),
-        "integration_result": context.integration_result or {},
-        "runtime_result": {"canonical_reflection_context": canonical_code_evidence, "runtime": context.runtime_result},
-        "completed_match_count": context.completed_match_count,
-        "function_capability_score": context.function_capability_score,
-        "strategy_alignment_score": context.strategy_alignment_score,
-        "failure_stage": context.failure_stage or context.error_category or context.error_message,
-        "failure_category": context.error_category,
-        "failure_reason": context.error_message,
-    })
 
 
 def _validate_reflection(response: str) -> None:
@@ -499,3 +439,8 @@ def _timing_payload(attempts: tuple[ReflectionAttempt, ...]) -> dict[str, object
 def _write_text(path: Path, value: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(value, encoding="utf-8")
+
+
+def _write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

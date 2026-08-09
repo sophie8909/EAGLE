@@ -69,6 +69,11 @@ def _generation_rows(data: RunData) -> list[dict[str, Any]]:
             "population_size": item.get("population_size"),
             "failure_count": item.get("failure_count"),
             "pareto_front_size": item.get("pareto_front_size"),
+            "expected_match_count": item.get("expected_match_count"),
+            "completed_match_count": item.get("completed_match_count"),
+            "evaluation_maps": json.dumps(item.get("evaluation_maps") or [], ensure_ascii=False),
+            "rounds_per_map": item.get("rounds_per_map"),
+            "swap_player_sides": item.get("swap_player_sides"),
         }
         for objective_id, values in item.get("objectives", {}).items():
             for metric in ("best", "mean", "median", "worst"):
@@ -163,7 +168,9 @@ def _plots(path: Path, generation_rows, objective_rows, operator_rows, timing_ro
     if len(candidates) > 1 and {"game_performance", "code_quality"} <= set(candidates[0]):
         plt.figure()
         plt.scatter([row.get("game_performance") for row in candidates], [row.get("code_quality") for row in candidates])
-        plt.xlabel("game_performance"); plt.ylabel("code_quality"); plt.tight_layout()
+        plt.xlabel("Code Quality / Simplicity (higher is better)")
+        plt.ylabel("Game Performance (higher is better)")
+        plt.tight_layout()
         plt.savefig(path / "final_pareto_front.png"); plt.close()
     elif candidates:
         objective = next((key for key in candidates[0] if key not in {"candidate_id", "generation", "operator", "mutation_type", "status", "failed"}), None)
@@ -180,7 +187,10 @@ def _line_plot(path: Path, rows, x, ys, title) -> None:
         points = [(row.get(x), row.get(y)) for row in rows if row.get(x) is not None and row.get(y) is not None]
         if points:
             plt.plot([item[0] for item in points], [item[1] for item in points], marker="o", label=y)
-    plt.title(title); plt.legend(); plt.tight_layout(); plt.savefig(path); plt.close()
+    plt.title(title)
+    if plt.gca().get_legend_handles_labels()[0]:
+        plt.legend()
+    plt.tight_layout(); plt.savefig(path); plt.close()
 
 
 def _bar_plot(path: Path, rows, x, y, title) -> None:

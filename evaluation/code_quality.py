@@ -1,4 +1,4 @@
-"""Deterministic component scoring for the code_quality optimization objective."""
+"""Deterministic Java metrics used by the canonical simplicity objective."""
 
 from __future__ import annotations
 
@@ -80,6 +80,8 @@ class StaticCodeMetrics:
     implementation_substance_score: float
     maintainability_score: float
     static_quality_score: float
+    logical_loc: int = 0
+    longest_function_loc: int = 0
 
     def to_json_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -89,41 +91,9 @@ class StaticCodeMetrics:
         return payload
 
 
-@dataclass(frozen=True)
-class CodeQualityBreakdown:
-    compilation_score: float
-    strategy_region_score: float
-    static_quality_score: float
-    warning_count: int
-    required_region_count: int
-    valid_region_count: int
-    compile_success: bool
-    compile_error_count: int
-    strategy_region_validation: dict[str, dict[str, Any]]
-    compiler_errors: tuple[str, ...] = ()
-    compiler_warnings: tuple[str, ...] = ()
-    static_metrics: StaticCodeMetrics | None = None
-
-    @property
-    def code_quality(self) -> float:
-        return round(
-            self.compilation_score
-            + self.strategy_region_score
-            + self.static_quality_score,
-            6,
-        )
-
-    def to_json_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["code_quality"] = self.code_quality
-        payload["compiler_errors"] = list(self.compiler_errors)
-        payload["compiler_warnings"] = list(self.compiler_warnings)
-        return payload
-
-
 def analyze_compilation(result: CompileResult | None) -> CompilerDiagnostics:
     if result is None:
-        return CompilerDiagnostics(False, 1, 0, -1000.0, errors=("Compilation was not run.",))
+        return CompilerDiagnostics(False, 1, 0, 0.0, errors=("Compilation was not run.",))
     diagnostics = result.diagnostics or parse_compiler_diagnostics(result.stdout + "\n" + result.stderr)
     warning_items = tuple(item for item in diagnostics if item.severity == "warning")
     error_items = tuple(item for item in diagnostics if item.severity == "error")
@@ -134,7 +104,7 @@ def analyze_compilation(result: CompileResult | None) -> CompilerDiagnostics:
             False,
             max(1, len(error_items)),
             len(warning_items),
-            -1000.0,
+            0.0,
             errors=errors or ((result.stderr or "javac failed").strip(),),
             warnings=warnings,
         )
@@ -142,7 +112,7 @@ def analyze_compilation(result: CompileResult | None) -> CompilerDiagnostics:
         True,
         0,
         len(warning_items),
-        0.0 if not warning_items else -50.0 * len(warning_items),
+        0.0,
         warnings=warnings,
     )
 
@@ -199,9 +169,29 @@ def analyze_static_code(strategy_regions: dict[str, str]) -> StaticCodeMetrics:
     ]
     if not bodies:
         return StaticCodeMetrics(
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0, 0,
-            (), (), (),
-            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            analyzed_region_count=0,
+            effective_line_count=0,
+            effective_character_count=0,
+            statement_count=0,
+            branch_count=0,
+            loop_count=0,
+            cyclomatic_complexity=0,
+            max_nesting_depth=0,
+            duplicate_line_count=0,
+            duplicate_line_ratio=0.0,
+            max_line_length=0,
+            action_helpers_used=(),
+            strategy_functions_called=(),
+            state_signals_used=(),
+            action_coverage_score=0.0,
+            strategy_connectivity_score=0.0,
+            state_usage_score=0.0,
+            control_flow_score=0.0,
+            implementation_substance_score=0.0,
+            maintainability_score=0.0,
+            static_quality_score=0.0,
+            logical_loc=0,
+            longest_function_loc=0,
         )
 
     cleaned_bodies = [_strip_comments_and_literals(body) for body in bodies]
@@ -223,6 +213,8 @@ def analyze_static_code(strategy_regions: dict[str, str]) -> StaticCodeMetrics:
     )
     duplicate_line_ratio = duplicate_line_count / max(1, len(meaningful_lines))
     max_line_length = max((len(line) for line in meaningful_lines), default=0)
+    logical_loc = len(meaningful_lines)
+    longest_function_loc = max((_longest_function_loc(body) for body in cleaned_bodies), default=0)
 
     action_helpers_used = tuple(
         name for name in _ACTION_HELPERS if re.search(rf"\b{name}\s*\(", cleaned)
@@ -304,6 +296,8 @@ def analyze_static_code(strategy_regions: dict[str, str]) -> StaticCodeMetrics:
         implementation_substance_score=rounded(substance_score),
         maintainability_score=rounded(maintainability_score),
         static_quality_score=rounded(static_quality_score),
+        logical_loc=logical_loc,
+        longest_function_loc=longest_function_loc,
     )
 
 
@@ -379,29 +373,34 @@ def _max_brace_depth(source: str) -> int:
     return maximum
 
 
-def build_code_quality(
-    compiler: CompilerDiagnostics,
-    strategy_region: StrategyRegionScoreResult,
-    strategy_regions: dict[str, str],
-) -> CodeQualityBreakdown:
-    metrics = analyze_static_code(strategy_regions)
-    return CodeQualityBreakdown(
-        compilation_score=compiler.compilation_score,
-        strategy_region_score=strategy_region.strategy_region_score,
-        static_quality_score=metrics.static_quality_score,
-        warning_count=compiler.warning_count,
-        required_region_count=strategy_region.required_region_count,
-        valid_region_count=strategy_region.valid_region_count,
-        compile_success=compiler.compile_success,
-        compile_error_count=compiler.compile_error_count,
-        strategy_region_validation={
-            key: value.to_json_dict()
-            for key, value in strategy_region.strategy_region_validation.items()
-        },
-        compiler_errors=compiler.errors,
-        compiler_warnings=compiler.warnings,
-        static_metrics=metrics,
-    )
+_METHOD_PATTERN = re.compile(
+    r"\b(?:public|protected|private|static|final|synchronized|native|abstract|default)\s+"
+    r"[\w<>,.?\[\] ]+\s+[A-Za-z_]\w*\s*\([^;{}]*\)\s*\{"
+)
+
+
+def _longest_function_loc(source: str) -> int:
+    """Return a bounded, lexical estimate of the longest Java method size."""
+    longest = 0
+    for match in _METHOD_PATTERN.finditer(source):
+        opening = source.find("{", match.start(), match.end())
+        if opening < 0:
+            continue
+        depth = 0
+        closing = None
+        for index in range(opening, len(source)):
+            if source[index] == "{":
+                depth += 1
+            elif source[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    closing = index
+                    break
+        if closing is None:
+            continue
+        longest = max(longest, source[match.start():closing + 1].count("\n") + 1)
+    return longest
+
 
 # Phase 4 activates the failure-aware successful formula at the stable API path.
 from .canonical_code_quality import *  # noqa: E402,F401,F403

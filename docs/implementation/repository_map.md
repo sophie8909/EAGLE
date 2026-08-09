@@ -29,7 +29,7 @@ This file maps active repository paths to responsibilities. It is descriptive, n
 | `evaluation/nsga2_objectives.py` | Current two-value objective dictionary | objective and failure docs |
 | `eagle/analysis/loader.py`, `eagle/analysis/report.py` | Canonical compact-artifact loading and static reports | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
 | `scripts/analysis/plot_game_performance_by_generation.py` | Gameplay plotting/CSV export | [`../operations/inspecting_runs.md`](../operations/inspecting_runs.md) |
-| `run_env.sh`, `run.sh`, `analyze.sh` | Canonical runtime, experiment, and offline-analysis entrypoints | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
+| `run_env.sh`, `watchdog.sh`, `run.sh`, `analyze.sh` | Canonical runtime, optional runtime watchdog, experiment, and offline-analysis entrypoints | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
 | `tests/` | Current unit/integration-contract tests | [`../testing/test_contracts.md`](../testing/test_contracts.md) |
 | `configs/runtime.yaml`, `configs/experiments/` | Canonical runtime and experiment configuration | [`../operations/running_eagle.md`](../operations/running_eagle.md) |
 | `eagle/java_templates/CandidateAgent.java` | Current known-good complete-file seed/template | [`../architecture/java_generation.md`](../architecture/java_generation.md) |

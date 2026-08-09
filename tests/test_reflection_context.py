@@ -41,13 +41,15 @@ class ReflectionContextTests(unittest.TestCase):
         evidence = evaluation.candidate.metadata["reflection_evidence"]
         self.assertEqual(evidence["objectives"], evaluation.candidate.fitness_objectives)
         self.assertEqual(evidence["evaluation_status"], "evaluated")
-        self.assertEqual(evidence["game"]["objective"], evaluation.candidate.fitness_objectives["game_performance"])
-        self.assertEqual(evidence["code_quality"]["code_quality"], evaluation.candidate.fitness_objectives["code_quality"])
+        self.assertNotIn("game", evidence)
+        self.assertNotIn("code_quality", evidence)
+        self.assertEqual(evaluation.candidate.game_eval_result["objective"], evaluation.candidate.fitness_objectives["game_performance"])
+        self.assertEqual(evaluation.candidate.code_quality_result["code_quality"], evaluation.candidate.fitness_objectives["code_quality"])
         context = mutation_context_from_candidate(evaluation.candidate, generation=1, index=0)
         self.assertEqual(context.objectives, evaluation.candidate.fitness_objectives)
         self.assertEqual(context.compilation_result["status"], "success")
         self.assertEqual(context.validation_result["status"], "passed")
-        self.assertEqual(context.completed_match_count, 10)
+        self.assertEqual(context.completed_match_count, 180)
 
     def test_failed_context_preserves_sentinel_and_root_cause(self):
         candidate = Candidate(
@@ -77,7 +79,6 @@ class ReflectionContextTests(unittest.TestCase):
         self.assertIn("missing symbol", context.error_message)
         self.assertEqual(choose_mutation(candidate, random.Random(1)), "code")
         prompt = build_code_reflection_prompt(candidate, context)
-        self.assertIn(str(FAILED_GAME_PERFORMANCE), prompt)
         self.assertIn("missing symbol: commandAttack", prompt)
 
     def test_selection_uses_canonical_code_evidence(self):
@@ -89,7 +90,7 @@ class ReflectionContextTests(unittest.TestCase):
                     "reflection_evidence": {
                         "evaluation_status": "evaluated",
                         "objectives": {"game_performance": 1.0, "code_quality": 500.0 + alignment},
-                        "game": {"completed_match_count": 10},
+                        "game": {"completed_match_count": 180},
                         "code_quality": {
                             "function_score": 80,
                             "strategy_alignment_score": alignment,
@@ -111,14 +112,14 @@ class ReflectionContextTests(unittest.TestCase):
             candidate_id="feedback-parent",
             objectives={"game_performance": 12.5, "code_quality": 590.0},
             evaluation_status="evaluated",
-            game_evidence={"completed_match_count": 10, "objective": 12.5},
+            game_evidence={"completed_match_count": 180, "objective": 12.5},
             match_summary={"wins": 6},
         )
         prompt = build_strategy_reflection_prompt(candidate, context)
         self.assertIn("feedback-parent", prompt)
         self.assertIn("game_performance", prompt)
         self.assertIn("12.5", prompt)
-        self.assertIn("completed_match_count", prompt)
+        self.assertNotIn("Parent generated_java", prompt)
 
 
 if __name__ == "__main__":

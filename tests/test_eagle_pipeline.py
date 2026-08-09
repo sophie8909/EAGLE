@@ -61,10 +61,10 @@ class RecordingMutationBackend:
 def quality_fixture() -> CodeQualityBreakdown:
     return CodeQualityBreakdown(
         compilation_score=0.0,
-        function_score=100.0,
-        strategy_alignment_score=5.0,
-        successful_base=500.0,
-        score=605.0,
+        function_score=0.0,
+        strategy_alignment_score=0.0,
+        successful_base=0.0,
+        score=60.0,
         warning_count=0,
         compile_success=True,
         compile_error_count=0,
@@ -100,8 +100,8 @@ class EaglePipelineTests(unittest.TestCase):
                 evaluation=evaluation,
             )
         text = output.getvalue()
-        self.assertIn("code_quality_total=605.0", text)
-        self.assertIn("successful_base=500.0 + compilation=0.0 + function=100.0 + strategy_alignment=5.0 = 605.0", text)
+        self.assertIn("code_quality_simplicity=60.0", text)
+        self.assertIn("complexity_penalty=0.0", text)
         self.assertIn("game_performance_matches=[100.0, -90.0]", text)
         self.assertIn("game_performance_fitness=1.0", text)
     def test_parse_minimal_yaml(self) -> None:
@@ -192,6 +192,7 @@ population_size: 3
         self.assertEqual(result.winner, 1)
         self.assertEqual(result.performance_breakdown.result_score, -100)
         self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertEqual(objectives["code_quality"], quality_fixture().code_quality)
         self.assertEqual(metrics.completed_match_count, 1)
 
     def test_normalize_prompt_truncates_long_prompt(self) -> None:
@@ -210,11 +211,11 @@ population_size: 3
         self.assertEqual(choose_mutation(failed_parent, random.Random(1)), "code")
 
     def test_high_code_quality_favors_strategy_mutation(self) -> None:
-        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 501.0})
+        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 51.0})
         self.assertEqual(choose_mutation(parent, random.Random(1)), "strategy")
 
     def test_high_code_quality_uses_code_mutation_for_tail(self) -> None:
-        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 501.0})
+        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 51.0})
 
         class TailRandom:
             def random(self) -> float:
@@ -222,8 +223,8 @@ population_size: 3
 
         self.assertEqual(choose_mutation(parent, TailRandom()), "code")
 
-    def test_code_quality_threshold_is_strictly_greater_than_500(self) -> None:
-        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 500.0})
+    def test_code_quality_threshold_is_strictly_greater_than_50(self) -> None:
+        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 50.0})
 
         class TailRandom:
             def random(self) -> float:
@@ -288,11 +289,11 @@ population_size: 3
         self.assertIsNotNone(evaluation.agent)
         self.assertTrue(evaluation.compile_result and evaluation.compile_result.ok)
         self.assertTrue(evaluation.integration_result and evaluation.integration_result.ok)
-        self.assertEqual(len(evaluation.match_results), 10)
+        self.assertEqual(len(evaluation.match_results), 180)
         self.assertEqual(evaluation.candidate.status, "evaluated")
         self.assertIsNone(evaluation.result.failure_category)
         self.assertTrue(evaluation.code_quality_breakdown.compile_success)
-        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, 0)
+        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
 
     def test_empty_java_response_fails_before_compile_or_matches(self) -> None:
         class NonJavaBackend(GenerationBackend):
@@ -318,7 +319,7 @@ population_size: 3
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
         self.assertFalse(evaluation.code_quality_breakdown.compile_success)
-        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, 0)
+        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
         self.assertIn("strategy region", " ".join(evaluation.strategy_region_score_result.strategy_region_validation["agent_strategy_region"].errors).lower())
 
     def test_seed_prompt_template_expands_to_blank_strategy_prompt(self) -> None:
@@ -355,7 +356,7 @@ population_size: 3
             self.assertTrue((result.run_dir / "config.yaml").exists())
             self.assertTrue((result.run_dir / "candidates").is_dir())
             self.assertTrue((result.run_dir / "generated_agents").is_dir())
-            self.assertTrue((result.run_dir / "results.jsonl").exists())
+            self.assertFalse((result.run_dir / "results.jsonl").exists())
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["objectives"], ["game_performance", "code_quality"])
             self.assertEqual(len(summary["final_population"]), 3)
@@ -373,20 +374,10 @@ population_size: 3
             self.assertTrue((candidate_dir / "evaluation" / "code_quality.json").exists())
             quality = json.loads((candidate_dir / "evaluation" / "code_quality.json").read_text(encoding="utf-8"))
             self.assertIn("score", quality)
+            self.assertEqual(quality["score"], quality["code_quality"])
             self.assertEqual(
-                quality["score"],
-                round(
-                    sum(
-                        quality[name]
-                        for name in (
-                            "successful_base",
-                            "compilation_score",
-                            "function_score",
-                            "strategy_alignment_score",
-                        )
-                    ),
-                    6,
-                ),
+                quality["code_quality"],
+                round(100 - quality["code_quality_details"]["complexity_penalty"], 6),
             )
             self.assertTrue((candidate_dir / "evaluation" / "objectives.json").exists())
             self.assertTrue((candidate_dir / "candidate_result.json").exists())
@@ -447,8 +438,9 @@ population_size: 3
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["completed_generation"], 2)
             self.assertEqual(summary["stop_reason"], "front0_stagnation_2_generations")
-            self.assertTrue((result.run_dir / "generation_002_population.json").exists())
-            self.assertFalse((result.run_dir / "generation_003_population.json").exists())
+            self.assertTrue((result.run_dir / "generations" / "generation_0002.json").exists())
+            self.assertFalse((result.run_dir / "generations" / "generation_0003.json").exists())
+            self.assertFalse((result.run_dir / "generation_002_population.json").exists())
 
     def test_generate_java_agent_uses_stable_template_class_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -709,6 +701,7 @@ population_size: 3
                 match_index=0,
                 match_artifacts_dir=root / "matches",
                 mock=True,
+                artifact_mode="full",
             )
             second = run_microrts_match(
                 microrts_dir=Path("third_party/microrts"),
@@ -719,6 +712,7 @@ population_size: 3
                 match_index=1,
                 match_artifacts_dir=root / "matches",
                 mock=True,
+                artifact_mode="full",
             )
             self.assertNotEqual(first.replay_path, second.replay_path)
             self.assertNotEqual(first.telemetry_path, second.telemetry_path)
@@ -817,6 +811,11 @@ population_size: 3
         tradeoff = Candidate(fitness_objectives={"game_performance": 3, "code_quality": 0.2})
         self.assertTrue(dominates(strong, weak))
         self.assertFalse(dominates(strong, tradeoff))
+
+    def test_higher_code_quality_dominates_when_game_performance_is_equal(self) -> None:
+        simpler = Candidate(fitness_objectives={"game_performance": 10.0, "code_quality": 80.0})
+        complex_candidate = Candidate(fitness_objectives={"game_performance": 10.0, "code_quality": 40.0})
+        self.assertTrue(dominates(simpler, complex_candidate))
 
 if __name__ == "__main__":
     unittest.main()

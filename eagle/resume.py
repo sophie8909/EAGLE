@@ -3,22 +3,24 @@ from __future__ import annotations
 
 import random
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from generation.backend import MockGenerationBackend
 
-from .artifacts import write_generation_manifest, write_summary
+from .artifacts import write_summary
 from .config import ExperimentConfig
 from .crossover import CrossoverContext
-from .evaluation import evaluate_population, preflight_evaluation_opponents
+from .evaluation import evaluate_population, prepare_eagle_opponent, preflight_evaluation_opponents
 from .llm_logging import LLMCallLogger
 from .llm_profiles import LLMClient
 from .mutation import build_reflection_backend
 from .rewrite import PromptRewriteMutation
-from .run_artifacts import finalize_run, load_resume_population, record_generation
+from .run_artifacts import finalize_run, load_error_memory, load_resume_population, record_error_memory, record_generation
 from .search import SearchResult, create_offspring, front_zero_signature
 from .selection import assign_rank_and_crowding, best_candidate, select_next_generation
 from .timing import Stopwatch, append_event, build_generation_event
+from evaluation.opponent_schedule import eagle_opponent_weight, select_previous_generation_champion
 
 
 def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path, mock: bool = False) -> SearchResult:
@@ -66,20 +68,41 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
     rng = random.Random(f"{config.random_seed}:{completed_generation}")
     front_signature = front_zero_signature(population)
     stagnation = 0
+    error_memory = load_error_memory(run_dir)
     stop_reason = None
     for generation in range(completed_generation + 1, config.generations):
         assign_rank_and_crowding(population)
+        previous_champion = select_previous_generation_champion(population)
+        eagle_opponent = prepare_eagle_opponent(
+            previous_champion,
+            generation=generation,
+            config=config,
+            classes_dir=classes_dir,
+            mock=mock,
+        )
+        eagle_opponent = replace(
+            eagle_opponent,
+            weight=eagle_opponent_weight(
+                generation,
+                config.generations,
+                enabled=config.eagle_opponent_enabled,
+                min_weight=config.eagle_opponent_min_weight,
+                max_weight=config.eagle_opponent_max_weight,
+            ),
+        )
         offspring = create_offspring(
             population, config=config, generation=generation, rng=rng,
-            mutations=mutations, artifact_root=candidates_dir,
+            mutations=mutations, artifact_root=candidates_dir, error_memory=error_memory,
         )
         span = Stopwatch.start()
         evaluated = evaluate_population(
             offspring, generation=generation, config=config, backend=generation_backend,
             generated_agents_dir=generated_agents_dir, classes_dir=classes_dir,
-            candidates_dir=candidates_dir, results_path=run_dir / "results.jsonl",
+            candidates_dir=candidates_dir,
             mock=mock, alignment_profile=shared_profile,
+            eagle_opponent=eagle_opponent,
         )
+        error_memory = record_error_memory(run_dir, evaluated)
         append_event(
             run_dir / "timing.jsonl",
             build_generation_event(
@@ -91,7 +114,6 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
         signature = front_zero_signature(population)
         stagnation = stagnation + 1 if signature == front_signature else 0
         front_signature = signature
-        write_generation_manifest(run_dir, generation, population)
         record_generation(run_dir, generation, population)
         completed_generation = generation
         if config.front0_stagnation_generations > 0 and stagnation >= config.front0_stagnation_generations:
@@ -119,6 +141,12 @@ def _validate_resume_config(config: ExperimentConfig, run_dir: Path) -> None:
         "mutation_rate": config.mutation_rate,
         "ea_random_seed": config.random_seed,
         "map": config.map_path,
+        "evaluation_maps": [
+            {"map_id": f"map_{index}", "path": path}
+            for index, path in enumerate(config.evaluation_maps, start=1)
+        ],
+        "rounds_per_map": config.rounds_per_map,
+        "swap_player_sides": config.swap_player_sides,
         "max_cycles": config.tick_limit,
         "microrts_match_seeds": list(config.resolved_match_seeds),
     }

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,7 +15,27 @@ from .candidate import DEFAULT_GENERATION_PROMPT
 
 
 TRAINING_OPPONENT = "ai.abstraction.LightRush"
-MATCHES_PER_CANDIDATE = 10
+# Canonical fixed search: ten opponents × three maps × three rounds × two sides.
+MATCHES_PER_CANDIDATE = 180
+FIXED_MATCHES_PER_OPPONENT = 18
+DEFAULT_EVALUATION_MAPS = (
+    "maps/8x8/basesWorkers8x8.xml",
+    "maps/16x16/basesWorkers16x16.xml",
+    "maps/24x24/basesWorkers24x24.xml",
+)
+DEFAULT_SEARCH_OPPONENTS = (
+    ("passive", 0.5),
+    ("random", 0.5),
+    ("randombias", 0.5),
+    ("lightrush", 1.0),
+    ("heavyrush", 1.0),
+    ("workerrush", 1.0),
+    ("allibot", 2.0),
+    ("mayari", 2.0),
+    ("coac", 2.0),
+    ("tma", 2.0),
+)
+FIXED_OPPONENT_WEIGHT_SUM = 12.5
 
 DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Resource", 0.0),
@@ -44,15 +63,28 @@ class ExperimentConfig:
     llm_model: str = "local-model"
     llm_temperature: float = 0.2
     llm_max_tokens: int | None = None
+    match_commentator_enabled: bool = True
+    match_commentator_temperature: float = 0.2
+    match_commentator_chunk_ticks: int = 200
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
     tick_limit: int = 100
     opponent: str = TRAINING_OPPONENT
     matches_per_candidate: int = MATCHES_PER_CANDIDATE
-    map_path: str = "maps/8x8/basesWorkers8x8.xml"
+    map_path: str = DEFAULT_EVALUATION_MAPS[0]
     match_timeout_seconds: float = 120.0
+    match_artifact_mode: str = "compact"
     match_seeds: tuple[int, ...] = ()
+    evaluation_maps: tuple[str, ...] = DEFAULT_EVALUATION_MAPS
+    rounds_per_map: int = 3
+    swap_player_sides: bool = True
+    evaluation_opponents: tuple[tuple[str, float], ...] = DEFAULT_SEARCH_OPPONENTS
+    eagle_opponent_enabled: bool = True
+    eagle_opponent_source: str = "previous_generation_best_game_performance"
+    eagle_opponent_schedule: str = "quadratic"
+    eagle_opponent_min_weight: float = 0.5
+    eagle_opponent_max_weight: float = 4.0
     max_prompt_chars: int = 4000
     max_prompt_lines: int = 80
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
@@ -64,7 +96,7 @@ class ExperimentConfig:
     material_scale: float = 10.0
     resource_scale: float = 10.0
     unit_material_values: tuple[tuple[str, float], ...] = DEFAULT_UNIT_MATERIAL_VALUES
-    front0_stagnation_generations: int = 5
+    front0_stagnation_generations: int = 10
     raw_config: str = ""
 
     @classmethod
@@ -92,6 +124,25 @@ class ExperimentConfig:
         if not isinstance(llm_settings, dict):
             raise ValueError("Experiment llm settings must be a mapping.")
         max_tokens = llm_settings.get("max_tokens")
+        role_settings = llm_settings.get("roles", {})
+        if not isinstance(role_settings, dict):
+            raise ValueError("llm.roles must be a mapping when provided.")
+        commentator_settings = role_settings.get("match_commentator", {})
+        if not isinstance(commentator_settings, dict):
+            raise ValueError("llm.roles.match_commentator must be a mapping.")
+        evaluation_settings = payload.get("evaluation", {})
+        if not isinstance(evaluation_settings, dict):
+            raise ValueError("evaluation must be a mapping.")
+        evaluation_maps = _parse_evaluation_maps(
+            evaluation_settings.get("maps", payload.get("evaluation_maps", DEFAULT_EVALUATION_MAPS))
+        )
+        rounds_per_map = int(evaluation_settings.get("rounds_per_map", payload.get("rounds_per_map", 3)))
+        swap_player_sides = bool(evaluation_settings.get("swap_player_sides", payload.get("swap_player_sides", True)))
+        raw_opponents = payload.get("evaluation_opponents", DEFAULT_SEARCH_OPPONENTS)
+        evaluation_opponents = _parse_evaluation_opponents(raw_opponents)
+        eagle_settings = payload.get("eagle_opponent", {})
+        if not isinstance(eagle_settings, dict):
+            raise ValueError("eagle_opponent must be a mapping.")
         return cls(
             seed_prompts=seed_prompts,
             generations=int(payload.get("generations", 1)),
@@ -107,15 +158,28 @@ class ExperimentConfig:
             llm_model=str(payload.get("llm_model", "local-model")),
             llm_temperature=float(llm_settings.get("temperature", 0.2)),
             llm_max_tokens=None if max_tokens is None else int(max_tokens),
+            match_commentator_enabled=bool(commentator_settings.get("enabled", True)),
+            match_commentator_temperature=float(commentator_settings.get("temperature", 0.2)),
+            match_commentator_chunk_ticks=int(commentator_settings.get("chunk_ticks", 200)),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
             tick_limit=int(payload.get("tick_limit", 100)),
             opponent=TRAINING_OPPONENT,
-            matches_per_candidate=MATCHES_PER_CANDIDATE,
-            map_path=str(payload.get("map_path", "maps/8x8/basesWorkers8x8.xml")),
+            matches_per_candidate=len(evaluation_maps) * rounds_per_map * 2 * len(evaluation_opponents),
+            map_path=str(payload.get("map_path", evaluation_maps[0])),
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
+            match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
             match_seeds=tuple(int(value) for value in payload.get("match_seeds", ())),
+            evaluation_maps=evaluation_maps,
+            rounds_per_map=rounds_per_map,
+            swap_player_sides=swap_player_sides,
+            evaluation_opponents=evaluation_opponents,
+            eagle_opponent_enabled=bool(eagle_settings.get("enabled", True)),
+            eagle_opponent_source=str(eagle_settings.get("source", "previous_generation_best_game_performance")),
+            eagle_opponent_schedule=str(eagle_settings.get("schedule", "quadratic")),
+            eagle_opponent_min_weight=float(eagle_settings.get("min_weight", 0.5)),
+            eagle_opponent_max_weight=float(eagle_settings.get("max_weight", 4.0)),
             max_prompt_chars=int(payload.get("max_prompt_chars", 4000)),
             max_prompt_lines=int(payload.get("max_prompt_lines", 80)),
             generation_prompt=str(payload.get("generation_prompt", DEFAULT_GENERATION_PROMPT)),
@@ -127,7 +191,7 @@ class ExperimentConfig:
             material_scale=float(payload.get("material_scale", 10.0)),
             resource_scale=float(payload.get("resource_scale", 10.0)),
             unit_material_values=_parse_unit_material_values(payload.get("unit_material_values")),
-            front0_stagnation_generations=int(payload.get("front0_stagnation_generations", 5)),
+            front0_stagnation_generations=int(payload.get("front0_stagnation_generations", 10)),
             raw_config=raw_config,
         )
 
@@ -148,18 +212,47 @@ class ExperimentConfig:
             raise ValueError("tick_limit must be at least 1.")
         if self.alignment_backend not in {"mock", "openai"}:
             raise ValueError("alignment_backend must be mock or openai.")
-        if self.matches_per_candidate != MATCHES_PER_CANDIDATE:
-            raise ValueError(f"matches_per_candidate must be exactly {MATCHES_PER_CANDIDATE}.")
+        if len(self.evaluation_maps) != 3:
+            raise ValueError("evaluation.maps must contain exactly three maps.")
+        if self.rounds_per_map != 3:
+            raise ValueError("evaluation.rounds_per_map must be exactly 3.")
+        if not self.swap_player_sides:
+            raise ValueError("evaluation.swap_player_sides must be true.")
+        if self.matches_per_candidate != FIXED_MATCHES_PER_OPPONENT * len(self.evaluation_opponents):
+            raise ValueError(
+                "matches_per_candidate must equal 18 matches per fixed opponent "
+                f"({FIXED_MATCHES_PER_OPPONENT * len(self.evaluation_opponents)})."
+            )
+        microrts_root = self.microrts_dir
+        for map_path in self.evaluation_maps:
+            if not (microrts_root / map_path).is_file():
+                raise ValueError(f"Configured evaluation map does not exist: {microrts_root / map_path}")
         if self.match_timeout_seconds <= 0:
             raise ValueError("match_timeout_seconds must be greater than zero.")
+        if self.match_artifact_mode not in {"compact", "full"}:
+            raise ValueError("match_artifact_mode must be compact or full.")
+        if tuple(item[0] for item in self.evaluation_opponents) != tuple(item[0] for item in DEFAULT_SEARCH_OPPONENTS):
+            raise ValueError("evaluation_opponents must use the canonical ten-opponent order.")
+        if any(weight <= 0 for _, weight in self.evaluation_opponents):
+            raise ValueError("evaluation opponent weights must be positive.")
+        if abs(self.fixed_opponent_weight_sum - FIXED_OPPONENT_WEIGHT_SUM) > 1e-9:
+            raise ValueError(f"fixed opponent weights must sum to {FIXED_OPPONENT_WEIGHT_SUM}.")
+        if self.eagle_opponent_schedule != "quadratic":
+            raise ValueError("eagle_opponent.schedule must be quadratic.")
+        if self.eagle_opponent_min_weight < 0 or self.eagle_opponent_max_weight < self.eagle_opponent_min_weight:
+            raise ValueError("eagle opponent weight bounds are invalid.")
         if self.llm_temperature < 0:
             raise ValueError("llm.temperature must not be negative.")
         if self.llm_max_tokens is not None and self.llm_max_tokens < 1:
             raise ValueError("llm.max_tokens must be positive.")
-        if len(self.resolved_match_seeds) != MATCHES_PER_CANDIDATE:
-            raise ValueError(f"match_seeds must contain exactly {MATCHES_PER_CANDIDATE} values.")
-        if len(set(self.resolved_match_seeds)) != MATCHES_PER_CANDIDATE:
-            raise ValueError("match_seeds must be distinct.")
+        if self.match_commentator_temperature < 0:
+            raise ValueError("llm.roles.match_commentator.temperature must not be negative.")
+        if self.match_commentator_chunk_ticks < 1:
+            raise ValueError("llm.roles.match_commentator.chunk_ticks must be positive.")
+        if len(self.resolved_match_seeds) != self.rounds_per_map:
+            raise ValueError("match_seeds must contain exactly one seed per round.")
+        if self.resolved_match_seeds != tuple(range(self.rounds_per_map)):
+            raise ValueError("round seeds must be the canonical deterministic schedule 0, 1, 2.")
         from generation.agent_template import JavaTemplatePaths, validate_java_template
         if self.material_scale <= 0 or self.resource_scale <= 0:
             raise ValueError("material_scale and resource_scale must be greater than zero.")
@@ -171,13 +264,64 @@ class ExperimentConfig:
 
     @property
     def resolved_match_seeds(self) -> tuple[int, ...]:
-        """Return the explicit or deterministically derived ten match seeds."""
+        """Return the stable round seed schedule shared by side-swapped pairs."""
 
-        if self.match_seeds:
-            return self.match_seeds
-        rng = random.Random(self.random_seed)
+        return tuple(self.match_seeds) if self.match_seeds else tuple(range(self.rounds_per_map))
 
-        return tuple(rng.sample(range(1, 2_147_483_647), MATCHES_PER_CANDIDATE))
+    @property
+    def fixed_matches_per_opponent(self) -> int:
+        return len(self.evaluation_maps) * self.rounds_per_map * 2
+
+    @property
+    def expected_match_count(self) -> int:
+        return self.fixed_matches_per_opponent * len(self.evaluation_opponents)
+
+    def eagle_match_seed(self, generation: int) -> int:
+        """Compatibility accessor for the dynamic opponent's first round seed."""
+
+        if generation < 1:
+            raise ValueError("An EAGLE-opponent seed is only defined for generation >= 1.")
+        return self.resolved_match_seeds[0]
+
+    @property
+    def fixed_opponent_weight_sum(self) -> float:
+        return round(sum(weight for _, weight in self.evaluation_opponents), 6)
+
+    @property
+    def evaluation_opponent_ids(self) -> tuple[str, ...]:
+        return tuple(item[0] for item in self.evaluation_opponents)
+
+
+def _parse_evaluation_opponents(value: object) -> tuple[tuple[str, float], ...]:
+    if not isinstance(value, list | tuple):
+        raise ValueError("evaluation_opponents must be a list of {id, weight} mappings.")
+    parsed: list[tuple[str, float]] = []
+    for item in value:
+        if isinstance(item, dict):
+            opponent_id = str(item.get("id", ""))
+            weight = float(item.get("weight"))
+        elif isinstance(item, (list, tuple)) and len(item) == 2:
+            opponent_id, weight = str(item[0]), float(item[1])
+        else:
+            raise ValueError("Each evaluation opponent must contain id and weight.")
+        if not opponent_id:
+            raise ValueError("Evaluation opponent id must not be empty.")
+        parsed.append((opponent_id, weight))
+    return tuple(parsed)
+
+
+def _parse_evaluation_maps(value: object) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("evaluation.maps must be a list of map paths.")
+    paths: list[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            item = item.get("path")
+        path = str(item or "").strip()
+        if not path:
+            raise ValueError("evaluation map paths must not be empty.")
+        paths.append(path)
+    return tuple(paths)
 
 def _parse_unit_material_values(value: object) -> tuple[tuple[str, float], ...]:
     resolved = dict(DEFAULT_UNIT_MATERIAL_VALUES)

@@ -68,7 +68,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
 
 
     def test_mutation_artifacts_survive_final_generation_failure(self):
-        backend = ScriptedMutationBackend(("reflection evidence", "rewritten prompt"))
+        backend = ScriptedMutationBackend((self._code_reflection(), "rewritten prompt"))
         config = ExperimentConfig.from_mapping(
             {"seed_prompts": ["seed"], "mutation_max_attempts": 1}
         )
@@ -102,7 +102,8 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             self.assertEqual(timing["generation_llm"]["attempts"][0]["status"], "error")
 
     def _assert_complete_pipeline(self, *, mutation_type, rewritten, untouched):
-        backend = ScriptedMutationBackend(("reflection evidence", rewritten))
+        reflection = self._strategy_reflection() if mutation_type == "strategy" else self._code_reflection()
+        backend = ScriptedMutationBackend((reflection, rewritten))
         config = ExperimentConfig.from_mapping(
             {"seed_prompts": ["seed"], "mutation_max_attempts": 1}
         )
@@ -189,6 +190,20 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             lineage = json.loads((candidate_dir / "lineage.json").read_text(encoding="utf-8"))
             self.assertEqual(lineage["source_candidate_ids"], ["parent-1", "parent-2"])
             self.assertEqual(lineage["operator"], "crossover+mutation")
+
+    @staticmethod
+    def _strategy_reflection():
+        return json.dumps({
+            "analysis": {"strengths": [], "weaknesses": ["late attack"], "priority_changes": ["attack earlier"]},
+            "revised_strategy_prompt": "Attack earlier while preserving the tested strategy.",
+        })
+
+    @staticmethod
+    def _code_reflection():
+        return json.dumps({
+            "analysis": {"implementation_failures": [], "constraint_failures": [], "priority_changes": ["preserve API"]},
+            "revised_code_generation_prompt": "Preserve the complete Java API and compile before runtime.",
+        })
 
 
 if __name__ == "__main__":

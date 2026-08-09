@@ -73,3 +73,36 @@ class CanonicalRunArtifactTests(unittest.TestCase):
                 "missing_count", "failure_count",
             },
         )
+
+    def test_population_snapshot_is_compact_but_keeps_fitness_and_timing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "run"
+            run.mkdir()
+            config = Path(directory) / "config.yaml"
+            config.write_text("", encoding="utf-8")
+            initialize_run_manifest(run, config_path=config)
+            marker = "verbose-match-output-" * 50_000
+            candidate = Candidate(
+                id="compact",
+                status="evaluated",
+                fitness_objectives={"game_performance": 12.5, "code_quality": 600.0},
+                timing={"child_total": {"duration_seconds": 3.25}},
+                metadata={
+                    "mutation": {
+                        "candidate_id": "compact",
+                        "operation": "code_mutation",
+                        "evidence": {"stdout": marker},
+                        "reflection": {"raw_response": marker},
+                    }
+                },
+            )
+
+            record_generation(run, 0, [candidate])
+            snapshot_path = run / "generations" / "generation_0000.json"
+            snapshot_text = snapshot_path.read_text(encoding="utf-8")
+            payload = json.loads(snapshot_text)["population"][0]
+
+            self.assertLess(snapshot_path.stat().st_size, 50_000)
+            self.assertNotIn("verbose-match-output", snapshot_text)
+            self.assertEqual(payload["fitness_objectives"]["game_performance"], 12.5)
+            self.assertEqual(payload["timing"]["child_total"]["duration_seconds"], 3.25)

@@ -20,14 +20,14 @@ from shutil import copy2
 from generation.backend import MockGenerationBackend, build_generation_backend
 from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE
 
-from .artifacts import write_generation_manifest, write_prompt_snapshot, write_resolved_config, write_summary
-from .run_artifacts import finalize_run, initialize_run_manifest, record_generation
+from .artifacts import write_prompt_snapshot, write_resolved_config, write_summary
+from .run_artifacts import finalize_run, initialize_run_manifest, record_error_memory, record_generation
 from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import CrossoverContext, crossover
-from .evaluation import evaluate_population, preflight_evaluation_opponents
+from .evaluation import evaluate_population, prepare_eagle_opponent, preflight_evaluation_opponents
 from .mutation import ReflectionContext, build_reflection_backend
-from evaluation.game_metrics import OpponentResult
+from .reflection_context import build_reflection_context
 from .llm_logging import LLMCallLogger
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
 from .llm_profiles import LLMClient
@@ -40,6 +40,7 @@ from .selection import (
     best_candidate,
     select_next_generation,
 )
+from evaluation.opponent_schedule import eagle_opponent_weight, select_previous_generation_champion
 
 
 @dataclass(frozen=True)
@@ -113,8 +114,6 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         client=client,
     )
     write_prompt_snapshot(run_dir, config)
-    results_path = run_dir / "results.jsonl"
-
     population = initialize_population(config)
     # Generation zero enters the same evaluation boundary as every offspring so objective and failure records have one shape.
     generation_span = Stopwatch.start()
@@ -126,9 +125,9 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         generated_agents_dir=generated_agents_dir,
         classes_dir=classes_dir,
         candidates_dir=candidates_dir,
-        results_path=results_path,
         mock=mock,
         alignment_profile=shared_profile,
+        eagle_opponent=None,
     )
     append_event(run_dir / "timing.jsonl", build_generation_event(
         run_id=active_run_id,
@@ -137,6 +136,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         span=generation_span.finish(),
     ))
     record_generation(run_dir, 0, evaluated_population)
+    error_memory = record_error_memory(run_dir, evaluated_population)
 
     front0_signature = front_zero_signature(evaluated_population)
     front0_stagnation_count = 0
@@ -145,6 +145,29 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
 
     for generation in range(1, config.generations):
         assign_rank_and_crowding(evaluated_population)
+        previous_champion = select_previous_generation_champion(evaluated_population)
+        eagle_opponent = prepare_eagle_opponent(
+            previous_champion,
+            generation=generation,
+            config=config,
+            classes_dir=classes_dir,
+            mock=mock,
+        )
+        eagle_opponent = replace(
+            eagle_opponent,
+            weight=eagle_opponent_weight(
+                generation,
+                config.generations,
+                enabled=config.eagle_opponent_enabled,
+                min_weight=config.eagle_opponent_min_weight,
+                max_weight=config.eagle_opponent_max_weight,
+            ),
+        )
+        print(
+            f"[gen {generation}] eagle_opponent={previous_champion.id} "
+            f"source_gen={generation - 1} weight={eagle_opponent.weight:g}",
+            flush=True,
+        )
         # Operators produce only child genotypes; evaluation starts at the shared boundary below.
         offspring = create_offspring(
             evaluated_population,
@@ -153,6 +176,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             rng=rng,
             mutations={"strategy": strategy_mutation, "code": code_mutation},
             artifact_root=candidates_dir,
+            error_memory=error_memory,
         )
         generation_span = Stopwatch.start()
         # Validation, compilation, runtime evaluation, objectives, and candidate artifacts stay centralized in evaluation.
@@ -164,10 +188,11 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             generated_agents_dir=generated_agents_dir,
             classes_dir=classes_dir,
             candidates_dir=candidates_dir,
-            results_path=results_path,
             mock=mock,
             alignment_profile=shared_profile,
+            eagle_opponent=eagle_opponent,
         )
+        error_memory = record_error_memory(run_dir, evaluated_offspring)
         append_event(run_dir / "timing.jsonl", build_generation_event(
             run_id=active_run_id,
             generation=generation,
@@ -183,7 +208,6 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         else:
             front0_signature = current_front0_signature
             front0_stagnation_count = 0
-        write_generation_manifest(run_dir, generation, evaluated_population)
         record_generation(run_dir, generation, evaluated_population)
         completed_generation = generation
         if (
@@ -264,7 +288,7 @@ def initialize_population(config: ExperimentConfig) -> list[Candidate]:
     return population[: config.population_size]
 
 
-def create_offspring(population: list[Candidate], *, config: ExperimentConfig, generation: int, rng: random.Random, mutations: dict[str, PromptRewriteMutation], artifact_root: Path | None = None) -> list[Candidate]:
+def create_offspring(population: list[Candidate], *, config: ExperimentConfig, generation: int, rng: random.Random, mutations: dict[str, PromptRewriteMutation], artifact_root: Path | None = None, error_memory: tuple[dict[str, object], ...] = ()) -> list[Candidate]:
     offspring: list[Candidate] = []
     while len(offspring) < config.population_size:
         context_index = len(offspring)
@@ -308,7 +332,32 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
             mutation = mutations[mutation_name]
             mutation_started_at = utc_now()
             mutation_started = time.monotonic()
-            child = mutation.mutate(child, mutation_context_from_candidate(feedback_parent, generation=generation, index=context_index), artifact_dir=(artifact_root / child.id) if artifact_root is not None else None)
+            parent_objectives = {
+                parent.id: dict(parent.fitness_objectives)
+                for parent in (parent_a, parent_b)
+            }
+            generation_best = max(
+                (item for item in population if item.game_eval_result),
+                key=lambda item: float(item.fitness_objectives.get("game_performance", float("-inf"))),
+                default=None,
+            )
+            reference_candidates = {parent.id: parent for parent in (parent_a, parent_b)}
+            if generation_best is not None:
+                reference_candidates["generation_best"] = generation_best
+            child = mutation.mutate(
+                child,
+                mutation_context_from_candidate(
+                    feedback_parent,
+                    generation=generation,
+                    index=context_index,
+                    reflection_type=mutation_name,
+                    error_memory=error_memory,
+                    evolution_candidate=child,
+                    parent_objectives=parent_objectives,
+                    reference_candidates=reference_candidates,
+                ),
+                artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
+            )
             mutation_record = child.metadata.get("mutation") or {}
             mutation_applied = bool(mutation_record.get("applied"))
             mutation_error = mutation_record.get("reflection_error") or mutation_record.get("rewrite_error")
@@ -339,8 +388,8 @@ def choose_mutation(feedback_parent: Candidate, rng: random.Random) -> str:
     """Choose a mutation type from the parent's latest evaluation.
 
     A failed game still takes the code-mutation path so the generated agent
-    can address implementation-level failures. Once code quality is above
-    500, the code is considered strong enough to favor strategy exploration:
+    can address implementation-level failures. Once simplicity is above 50,
+    the code is considered strong enough to favor strategy exploration:
     90% strategy mutation and 10% code mutation. All other successful
     candidates retain the default 50/50 split.
     """
@@ -352,7 +401,7 @@ def choose_mutation(feedback_parent: Candidate, rng: random.Random) -> str:
         return "code"
     game = evidence.get("game") or feedback_parent.game_eval_result or {}
     if evidence and (
-        int(game.get("completed_match_count") or 0) != 10
+        int(game.get("completed_match_count") or 0) != int(game.get("expected_match_count") or 180)
         or number_or_none(feedback_parent.fitness_objectives.get("game_performance")) == FAILED_GAME_PERFORMANCE
     ):
         return "code"
@@ -363,116 +412,34 @@ def choose_mutation(feedback_parent: Candidate, rng: random.Random) -> str:
         or (number_or_none(quality.get("strategy_alignment_score")) is not None and number_or_none(quality.get("strategy_alignment_score")) < 5)
     ):
         return "code"
-    if (number_or_none(feedback_parent.fitness_objectives.get("code_quality")) or 0.0) > 500:
+    # Valid simplicity scores are in [0, 100]; retain the old midpoint-style
+    # routing threshold after removing the obsolete +500 score base.
+    if (number_or_none(feedback_parent.fitness_objectives.get("code_quality")) or 0.0) > 50:
         return "strategy" if rng.random() < 0.9 else "code"
     return "strategy" if rng.random() < 0.5 else "code"
 
-def mutation_context_from_candidate(candidate: Candidate, *, generation: int, index: int) -> ReflectionContext:
-    evidence = candidate.metadata.get("reflection_evidence") or {}
-    game = evidence.get("game") or candidate.game_eval_result or {}
-    quality_payload = evidence.get("code_quality_payload") or candidate.code_quality_result or {}
-    quality = evidence.get("code_quality") or quality_payload.get("code_quality_breakdown") or {}
-    generation_evidence = evidence.get("generation") or {}
-    validation_result = generation_evidence.get("validation") or candidate.metadata.get("validation_result")
-    compilation_result = evidence.get("compilation") or candidate.metadata.get("compile_result")
-    integration_result = evidence.get("integration") or candidate.metadata.get("integration_result")
-    objectives = evidence.get("objectives") or candidate.fitness_objectives
-    matches = tuple(game.get("match_results") or game.get("matches") or ())
-    opponent_results = tuple(
-        _opponent_result_from_payload(item)
-        for item in (game.get("opponent_results") or ())
-        if isinstance(item, dict)
-    )
-    scores = tuple(item.score for item in opponent_results)
-    strongest = max(opponent_results, key=lambda item: item.score, default=None)
-    weakest = min(opponent_results, key=lambda item: item.score, default=None)
-    return ReflectionContext(
+def mutation_context_from_candidate(
+    candidate: Candidate,
+    *,
+    generation: int,
+    index: int,
+    reflection_type: str | None = None,
+    error_memory: tuple[dict[str, object], ...] = (),
+    evolution_candidate: Candidate | None = None,
+    parent_objectives: dict[str, dict[str, float]] | None = None,
+    reference_candidates: dict[str, Candidate] | None = None,
+) -> ReflectionContext:
+    return build_reflection_context(
+        candidate,
         generation=generation,
         index=index,
-        candidate_id=str(evidence.get("candidate_id") or candidate.id),
-        objectives={name: float(value) for name, value in objectives.items() if isinstance(value, int | float)},
-        evaluation_status=str(evidence.get("evaluation_status") or candidate.status),
-        failure_stage=evidence.get("failure_stage") or candidate.failure_stage,
-        failure_category=evidence.get("failure_category") or candidate.metadata.get("failure_category"),
-        failure_reason=evidence.get("failure_reason") or candidate.failure_reason or candidate.metadata.get("failure_reason"),
-        game_evidence=game,
-        code_quality_evidence=quality_payload,
-        generation_evidence=generation_evidence,
-        aggregate_game_performance=number_or_none(objectives.get("game_performance")),
-        opponent_results=opponent_results,
-        strongest_opponent=strongest,
-        weakest_opponent=weakest,
-        score_mean=_mean_or_none(scores),
-        score_min=min(scores) if scores else number_or_none(game.get("minimum_match_score")),
-        score_max=max(scores) if scores else number_or_none(game.get("maximum_match_score")),
-        score_stddev=number_or_none(game.get("score_stddev")),
-        player_resource=number_or_none(game.get("player0_resource")),
-        enemy_resource=number_or_none(game.get("player1_resource")),
-        resource_breakdown=game.get("resource_breakdown") or {},
-        performance_breakdown=game.get("performance_breakdown") or {},
-        temporal_summary=game.get("temporal_summary") or {},
-        match_summary=game,
-        per_match_results=matches,
-        wins=_as_int(game.get("wins")),
-        draws=_as_int(game.get("draws")),
-        losses=_as_int(game.get("losses")),
-        final_player_resources=game.get("final_player_resources") or {},
-        final_enemy_resources=game.get("final_enemy_resources") or {},
-        final_resource_difference=game.get("final_resource_difference", game.get("resource_difference")),
-        unit_material_statistics=game.get("unit_material_statistics") or {},
-        survival_statistics=game.get("survival_statistics") or {},
-        round_state_summary=game.get("round_state_summary") or {},
-        behavior_summary=game.get("behavior_summary") or {},
-        latest_child_java=candidate.generated_java,
-        raw_generation_response=str(generation_evidence.get("raw_response") or candidate.metadata.get("raw_generation_response") or ""),
-        validation_result=validation_result,
-        compilation_result=compilation_result,
-        integration_result=integration_result,
-        runtime_result=game,
-        completed_match_count=_as_int(game.get("completed_match_count")),
-        function_capability_score=number_or_none(quality.get("function_score")),
-        strategy_alignment_score=number_or_none(quality.get("strategy_alignment_score")),
-        compilation_score=number_or_none(quality.get("compilation_score")),
-        compiler_errors=tuple(quality.get("compiler_errors") or []),
-        compiler_warnings=tuple(quality.get("compiler_warnings") or []),
-        strategy_region_score=number_or_none(quality.get("strategy_region_score")),
-        strategy_region_validation=quality_payload.get("strategy_region_validation") or {},
-        static_quality_score=number_or_none(quality.get("static_quality_score")),
-        static_metrics=quality.get("static_metrics") or {},
-        compile_success=candidate.compile_status == "success",
-        validation_success=None if validation_result is None else bool(validation_result.get("ok")),
-        runtime_success=candidate.status == "evaluated",
-        error_category=str(evidence.get("failure_category") or candidate.metadata.get("failure_category") or ""),
-        error_message=str(evidence.get("failure_reason") or candidate.metadata.get("failure_reason") or ""),
+        reflection_type=reflection_type,
+        error_memory=error_memory,
+        evolution_candidate=evolution_candidate,
+        parent_objectives=parent_objectives,
+        reference_candidates=reference_candidates,
     )
 
 
 def number_or_none(value: object) -> float | None:
     return float(value) if isinstance(value, int | float) else None
-
-
-def _as_int(value: object) -> int | None:
-    return int(value) if isinstance(value, int) else None
-
-
-def _mean_or_none(values: tuple[float, ...]) -> float | None:
-    return sum(values) / len(values) if values else None
-
-
-def _opponent_result_from_payload(payload: dict[str, object]) -> OpponentResult:
-    failure = payload.get("failure")
-    return OpponentResult(
-        opponent_id=str(payload.get("opponent_id") or "unknown"),
-        opponent_name=str(payload.get("opponent_name") or payload.get("opponent_id") or "unknown"),
-        score=float(payload.get("score") or 0.0),
-        wins=int(payload.get("wins") or 0),
-        draws=int(payload.get("draws") or 0),
-        losses=int(payload.get("losses") or 0),
-        match_count=int(payload.get("match_count") or 0),
-        player_resource=float(payload.get("player_resource") or 0.0),
-        enemy_resource=float(payload.get("enemy_resource") or 0.0),
-        player_units=int(payload.get("player_units") or 0),
-        enemy_units=int(payload.get("enemy_units") or 0),
-        status=str(payload.get("status") or "unknown"),
-        failure=failure if isinstance(failure, dict) else None,
-    )

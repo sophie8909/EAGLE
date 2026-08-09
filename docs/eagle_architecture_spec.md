@@ -1,5 +1,7 @@
 # EAGLE Architecture Specification
 
+> **Current implementation correction (2026-08-05):** The active executable scorer supersedes older `code_complexity`/minimization and `+500` composite directions. Valid `code_quality` is a maximized simplicity score `100 - complexity_penalty`, with weights `40/25/20/15` for normalized cyclomatic complexity, nesting, logical LOC, and longest-function LOC. Generation, extraction, validation, compilation, integration, runtime, timeout, and incomplete failures receive `-1000` for both `game_performance` and `code_quality`. Compiler, Function Capability, and Strategy Alignment remain diagnostics only. See `docs/evaluation/code_quality.md` and `evaluation/canonical_code_quality.py`.
+
 > **EAGLE = Evolutionary Algorithm for Game-playing with LLM-Enabled Agents**
 
 ## 1. Scope
@@ -2110,3 +2112,13 @@ Final-test candidate selection uses completed-run evolution artifacts before mat
 There is no training/validation/test split and no validation selection stage. Compilation, integration, and champion class-load checks are operational prerequisites only. Final-test results cannot flow back to selection, variation, fitness, or survivor selection. A formal final test succeeds only when every configured match completes validly.
 
 Final-test competition score is distinct from evolution `game_performance`. The detailed opponent pins, selectors, schedule, artifacts, formulas, licensing status, and reproduction commands are owned by [`evaluation/final_test.md`](evaluation/final_test.md).
+
+## Match Commentator extension
+
+The canonical evaluation path may emit the auxiliary `match_commentator` role
+for every completed MicroRTS match. It reads the full per-tick trace, writes
+per-match structured commentary, and supplies only deterministic compact
+aggregation to Strategy Reflection. It does not alter either optimizer
+objective, match scoring, candidate validity, or selection. Trace and
+commentary ownership remains in the match directory; the schema and failure
+semantics are defined in `docs/match-commentator.md`.

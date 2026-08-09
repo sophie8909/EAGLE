@@ -37,7 +37,7 @@ from .opponents import (
 )
 from .schedule import FinalTestMatch, build_schedule, exact_match_count
 from .selection import SelectedCandidate, select_final_test_candidates
-from eagle.opponents import BASIC_OPPONENTS, EXTERNAL_OPPONENTS
+from eagle.opponents import EXTERNAL_OPPONENTS, FINAL_TEST_BASIC_OPPONENTS
 
 
 CompileFunction = Callable[..., CompileResult]
@@ -471,5 +471,5 @@ def _builtin_final_test_opponents() -> dict[str, ResolvedOpponent]:
             license_status="vendored MicroRTS runtime",
             detected_license_files=(),
         )
-        for item in BASIC_OPPONENTS
+        for item in FINAL_TEST_BASIC_OPPONENTS
     }

@@ -71,45 +71,33 @@ class Phase2AReflectionTests(unittest.TestCase):
     def test_strategy_prompt_contains_complete_game_evidence(self):
         prompt = build_strategy_reflection_prompt(self.candidate, self.context)
         for expected in (
-            "Current strategy_prompt",
-            "Parent generated_java",
-            "Complete 10-match summary",
-            "Per-match results",
-            "Wins: 6",
-            "draws: 1",
-            "losses: 3",
-            "Final player resources",
-            "Unit material statistics",
-            "Survival statistics",
-            "Round-state summary",
-            "Behavior summary",
-            "ai.abstraction.LightRush",
+            "Candidate strategy prompt",
+            "Aggregate objectives",
+            "Per-opponent summaries",
+            "Gameplay diagnostics",
+            "Required JSON shape",
         ):
             self.assertIn(expected, prompt)
-        self.assertIn("Do not generate Java", prompt)
+        self.assertNotIn("Parent generated_java", prompt)
 
     def test_code_prompt_contains_complete_failure_evidence(self):
         prompt = build_code_reflection_prompt(self.candidate, self.context)
         for expected in (
-            "strategy_prompt",
-            "current generation_prompt",
-            "parent generated_java",
-            "latest generated child Java",
-            "raw generation response",
-            "source validation result",
-            "compilation result",
-            "MicroRTS integration result",
-            "runtime result",
-            "completed-match count",
-            "function capability score",
-            "strategy alignment score",
-            "failure stage",
+            "Candidate prompts",
+            "Generated Java",
+            "Code diagnostics",
+            "Required JSON shape",
             "missing symbol",
         ):
             self.assertIn(expected, prompt)
+        self.assertNotIn("Opponent summaries", prompt)
 
     def test_reflection_retries_invalid_output_and_records_attempts(self):
-        backend = ScriptedBackend(("```java\nclass CandidateAgent {}\n```", "Useful reflection text."))
+        valid = json.dumps({
+            "analysis": {"strengths": [], "weaknesses": ["late attack"], "priority_changes": ["attack earlier"]},
+            "revised_strategy_prompt": "Attack earlier while preserving worker production.",
+        })
+        backend = ScriptedBackend(("```java\nclass CandidateAgent {}\n```", valid))
         stage = ReflectionStage(backend, max_attempts=2)
         result = stage.run(
             reflection_type="strategy_reflection",
@@ -117,7 +105,7 @@ class Phase2AReflectionTests(unittest.TestCase):
             request="request",
         )
         self.assertTrue(result.succeeded)
-        self.assertEqual(result.reflection, "Useful reflection text.")
+        self.assertEqual(result.revised_prompt, "Attack earlier while preserving worker production.")
         self.assertEqual([attempt.attempt for attempt in result.attempts], [1, 2])
         self.assertEqual(result.attempts[0].status, "error")
         self.assertEqual(result.attempts[1].status, "success")
@@ -139,8 +127,12 @@ class Phase2AReflectionTests(unittest.TestCase):
             self.assertTrue((mutation_dir / "reflector_attempt_002_response_raw.txt").exists())
             self.assertIsNotNone(result.error)
 
-    def test_oversized_reflection_request_is_truncated_before_backend_call(self):
-        backend = ScriptedBackend(("bounded reflection",))
+    def test_reflection_request_is_not_blindly_truncated(self):
+        response = json.dumps({
+            "analysis": {"strengths": [], "weaknesses": [], "priority_changes": []},
+            "revised_strategy_prompt": "Keep the strategy concise.",
+        })
+        backend = ScriptedBackend((response,))
         request = "BEGIN INSTRUCTIONS\n" + ("x" * 100_000) + "\nLATEST EVIDENCE"
         result = ReflectionStage(backend, max_attempts=1).run(
             reflection_type="strategy_reflection",
@@ -148,10 +140,9 @@ class Phase2AReflectionTests(unittest.TestCase):
             request=request,
         )
         self.assertTrue(result.succeeded)
-        self.assertLessEqual(len(backend.calls[0]), 60_000)
+        self.assertGreater(len(backend.calls[0]), 60_000)
         self.assertIn("BEGIN INSTRUCTIONS", backend.calls[0])
         self.assertIn("LATEST EVIDENCE", backend.calls[0])
-        self.assertIn("prompt truncated", backend.calls[0])
 
     def test_prompt_truncation_is_deterministic_and_keeps_short_prompts(self):
         short = "short prompt"

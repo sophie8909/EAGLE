@@ -449,7 +449,23 @@ public class Game {
     private String renderFeatureLine(Unit unit) {
         String team = unit.getPlayer() == 0 ? "Ally" : unit.getPlayer() == 1 ? "Enemy" : "Neutral";
         String unitLabel = featureUnitLabel(unit);
-        String details = "{HP=" + unit.getHitPoints() + ", resources=" + unit.getResources() + "}";
+        StringBuilder details = new StringBuilder("{ID=").append(unit.getID())
+                .append(", HP=").append(unit.getHitPoints())
+                .append(", MaxHP=").append(unit.getMaxHitPoints())
+                .append(", resources=").append(unit.getResources());
+        if (unit.getPlayer() >= 0) {
+            UnitAction action = gs.getUnitAction(unit);
+            if (action != null) {
+                details.append(", action=").append(UnitAction.actionName[action.getType()]);
+                if (action.getType() == UnitAction.TYPE_ATTACK_LOCATION) {
+                    details.append(", target=").append(action.getLocationX()).append(':').append(action.getLocationY());
+                } else if (action.getType() == UnitAction.TYPE_PRODUCE && action.getUnitType() != null) {
+                    details.append(", target=").append(action.getUnitType().name);
+                }
+                details.append(", eta=").append(action.ETA(unit));
+            }
+        }
+        details.append('}');
         return "(" + unit.getX() + "," + unit.getY() + ") " + team + " " + unitLabel + " " + details;
     }
 

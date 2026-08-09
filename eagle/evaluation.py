@@ -9,6 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+import hashlib
+import json
+import os
+import re
+import subprocess
 import time
 from pathlib import Path
 
@@ -44,11 +49,34 @@ from generation.java_agent_generator import (
     ValidationResult,
     generate_java_agent_result,
 )
-from .artifacts import append_result, write_candidate_artifacts, write_candidate_inputs
-from .candidate import Candidate
+from .artifacts import write_candidate_artifacts, write_candidate_inputs
+from .candidate import Candidate, compact_candidate_metadata
 from .config import ExperimentConfig
+from .commentary_aggregation import aggregate_commentaries
+from .match_commentator import CommentaryConfig, CommentaryResult, commentate_match
+from .mutation import build_reflection_backend
 from .final_test.opponents import OpponentSetupError
-from .opponents import EVALUATION_ROSTER, OpponentSpec, rooted_jar_path
+from .opponents import EVALUATION_ROSTER, OpponentSpec, SEARCH_OPPONENT_REGISTRY, rooted_jar_path
+from evaluation.opponent_schedule import EAGLE_OPPONENT_ID
+from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
+
+
+WORKER_RUSH_ADAPTER_SOURCE = """package ai.abstraction;
+
+import ai.abstraction.pathfinding.PathFinding;
+import rts.units.UnitTypeTable;
+
+/** Compatibility identity for the canonical EAGLE workerrush roster entry. */
+public final class WorkerRush extends LightRush {
+    public WorkerRush(UnitTypeTable utt) {
+        super(utt);
+    }
+
+    public WorkerRush(UnitTypeTable utt, PathFinding pathFinding) {
+        super(utt, pathFinding);
+    }
+}
+"""
 
 
 @dataclass(frozen=True)
@@ -74,6 +102,99 @@ class EvaluationOpponent:
     opponent_id: str
     class_name: str
     classpath_entries: tuple[Path, ...] = ()
+    weight: float = 1.0
+    source_generation: int | None = None
+    source_candidate_id: str | None = None
+    source_game_performance: float | None = None
+    source_classes_dir: Path | None = None
+
+
+def prepare_eagle_opponent(
+    champion: Candidate,
+    *,
+    generation: int,
+    config: ExperimentConfig,
+    classes_dir: Path,
+    mock: bool,
+) -> EvaluationOpponent:
+    """Create a loadable alias for the frozen prior champion's compiled phenotype.
+
+    Both the candidate and champion implement ``ai.generated.CandidateAgent``. A
+    JVM cannot load two definitions with that name, so the persisted champion
+    source is compiled once under an adapter identity; no LLM generation occurs.
+    """
+
+    source = champion.generated_java
+    if not source and champion.generated_java_path:
+        source_path = Path(champion.generated_java_path)
+        if source_path.is_file():
+            source = source_path.read_text(encoding="utf-8")
+    if mock and (not source or not re.search(r"\bCandidateAgent\b", source)):
+        return EvaluationOpponent(
+            EAGLE_OPPONENT_ID,
+            "ai.generated.EaglePreviousBest",
+            classpath_entries=(),
+            weight=0.0,
+            source_generation=generation - 1,
+            source_candidate_id=champion.id,
+            source_game_performance=float(champion.fitness_objectives.get("game_performance", -1000.0)),
+        )
+    if not source or not re.search(r"\bCandidateAgent\b", source):
+        raise OpponentSetupError(
+            f"Previous-generation champion {champion.id} has no persisted generated Java source."
+        )
+    alias = "EaglePreviousBest"
+    opponent_root = classes_dir.parent / "eagle_opponents" / f"generation_{generation:04d}_{champion.id}"
+    alias_source = opponent_root / f"{alias}.java"
+    alias_classes = opponent_root / "classes"
+    alias_source.parent.mkdir(parents=True, exist_ok=True)
+    alias_source.write_text(re.sub(r"\bCandidateAgent\b", alias, source), encoding="utf-8")
+    if not mock:
+        alias_classes.mkdir(parents=True, exist_ok=True)
+        microrts_dir = config.microrts_dir.resolve()
+        classpath = os.pathsep.join([
+            str(microrts_dir / "bin"),
+            str(microrts_dir / "lib" / "*"),
+        ])
+        completed = subprocess.run(
+            ["javac", "-cp", classpath, "-d", str(alias_classes), str(alias_source)],
+            cwd=microrts_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise OpponentSetupError(
+                f"Previous-generation champion {champion.id} could not be compiled as {alias}: "
+                f"{(completed.stderr or completed.stdout).strip()}"
+            )
+        (opponent_root / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "eagle-dynamic-opponent-v1",
+                    "opponent_id": EAGLE_OPPONENT_ID,
+                    "source_generation": generation - 1,
+                    "source_candidate_id": champion.id,
+                    "source_game_performance": champion.fitness_objectives.get("game_performance"),
+                    "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest(),
+                    "alias_class": f"ai.generated.{alias}",
+                    "source_path": str(alias_source),
+                    "classes_dir": str(alias_classes),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    return EvaluationOpponent(
+        EAGLE_OPPONENT_ID,
+        f"ai.generated.{alias}",
+        classpath_entries=(alias_classes,),
+        weight=0.0,
+        source_generation=generation - 1,
+        source_candidate_id=champion.id,
+        source_game_performance=float(champion.fitness_objectives.get("game_performance", -1000.0)),
+        source_classes_dir=alias_classes,
+    )
 
 
 @dataclass(frozen=True)
@@ -109,9 +230,9 @@ def evaluate_population(
     generated_agents_dir: Path,
     classes_dir: Path,
     candidates_dir: Path,
-    results_path: Path,
     mock: bool,
     alignment_profile: object | None = None,
+    eagle_opponent: EvaluationOpponent | None = None,
 ) -> list[Candidate]:
     evaluated = []
     for index, candidate in enumerate(population):
@@ -131,9 +252,9 @@ def evaluate_population(
             mock=mock,
             alignment_profile=alignment_profile,
             ordinal=index,
+            eagle_opponent=eagle_opponent,
         )
         write_candidate_artifacts(candidates_dir, evaluation)
-        append_result(results_path, evaluation)
         evaluated.append(evaluation.candidate)
         print_progress(generation=generation, index=index, population_size=len(population), evaluation=evaluation)
     return evaluated
@@ -150,6 +271,7 @@ def evaluate_candidate(
     alignment_profile: object | None = None,
     ordinal: int,
     match_artifacts_dir: Path | None = None,
+    eagle_opponent: EvaluationOpponent | None = None,
 ) -> CandidateEvaluation:
     generation_started_at = _utc_now()
     generation_monotonic_started = time.monotonic()
@@ -235,6 +357,7 @@ def evaluate_candidate(
                 match_artifacts_dir=match_artifacts_dir,
                 mock=mock,
                 ordinal=ordinal,
+                eagle_opponent=eagle_opponent,
             )
         else:
             match_error = integration_result.failure_reason or "MicroRTS integration failed."
@@ -243,6 +366,9 @@ def evaluate_candidate(
     failure_reason: str | None = None
     failure_stage: str | None = None
     completed_matches = sum(result.ok for result in matches)
+    expected_match_count = config.expected_match_count + (
+        config.fixed_matches_per_opponent if eagle_opponent is not None else 0
+    )
     if agent is None:
         validation_failed = bool(generation.validation_result.failed_checks)
         failure_stage = generation.failure_stage or ("validation" if validation_failed else "generation")
@@ -260,19 +386,33 @@ def evaluate_candidate(
         failure_category = "MicroRTS integration failure"
         failure_reason = integration_result.failure_reason
         failure_stage = "integration"
-    elif match_error or completed_matches != 10:
+    elif match_error or completed_matches != expected_match_count:
         failed_match = next((result for result in matches if not result.ok), None)
         failure_category = (
             failed_match.failure_category
             if failed_match is not None and failed_match.failure_category
             else "partial_evaluation"
         )
-        failure_reason = match_error or f"partial evaluation: completed {completed_matches} of 10 matches"
+        failure_reason = match_error or f"partial evaluation: completed {completed_matches} of {expected_match_count} matches"
         failure_stage = "runtime"
 
     objective_started_at = _utc_now()
     objective_started = time.monotonic()
-    game_metrics = compute_game_metrics(matches)
+    game_metrics = compute_game_metrics(
+        matches,
+        fixed_opponent_weights=dict(config.evaluation_opponents),
+        eagle_weight=0.0 if eagle_opponent is None else eagle_opponent.weight,
+        expected_match_count=config.expected_match_count + (
+            config.fixed_matches_per_opponent if eagle_opponent is not None else 0
+        ),
+        expected_matches_per_opponent=config.fixed_matches_per_opponent,
+        evaluation_maps=config.evaluation_maps,
+        eagle_reference=None if eagle_opponent is None else {
+            "generation": eagle_opponent.source_generation,
+            "candidate_id": eagle_opponent.source_candidate_id,
+            "game_performance": eagle_opponent.source_game_performance,
+        },
+    )
     capability_result: FunctionCapabilityResult | None = None
     alignment_result: StrategyAlignmentResult | None = None
     if failure_stage is None:
@@ -293,7 +433,13 @@ def evaluate_candidate(
             backend=alignment_backend,
             artifact_dir=alignment_dir,
         )
-        quality = build_successful_code_quality(compiler, capability_result, alignment_result)
+        quality = build_successful_code_quality(
+            compiler,
+            capability_result,
+            alignment_result,
+            strategy_regions={"candidate_generated_methods": generation.strategy_region},
+            strategy_region=region_score,
+        )
     else:
         quality = build_failure_code_quality(
             failure_stage,
@@ -302,6 +448,8 @@ def evaluate_candidate(
                 0.0 if integration_result is None else integration_result.integration_pass_ratio
             ),
             completed_matches=completed_matches,
+            strategy_regions={"candidate_generated_methods": generation.strategy_region},
+            strategy_region=region_score,
         )
     objectives = build_objectives(
         game_metrics=game_metrics,
@@ -334,6 +482,42 @@ def evaluate_candidate(
         "strategy_alignment": None if alignment_result is None else alignment_result.to_json_dict(),
         "strategy_region_validation": region_score.to_json_dict(),
     }
+    game_payload = game_metrics.to_json_dict()
+    game_payload["evaluation_configuration"] = {
+        "maps": list(config.evaluation_maps),
+        "rounds_per_map": config.rounds_per_map,
+        "swap_player_sides": config.swap_player_sides,
+        "expected_match_count": config.expected_match_count,
+    }
+    commentary_results: list[CommentaryResult] = []
+    commentator_backend = None
+    if config.match_commentator_enabled:
+        commentator_backend = build_reflection_backend(
+            "mock" if mock else config.generation_backend,
+            base_url=config.llm_base_url,
+            model=config.llm_model,
+            llm_profile="match_commentator",
+            temperature=config.match_commentator_temperature,
+            max_output_tokens=config.llm_max_tokens,
+        )
+    commentator_config = CommentaryConfig(
+        enabled=config.match_commentator_enabled,
+        temperature=config.match_commentator_temperature,
+        chunk_ticks=config.match_commentator_chunk_ticks,
+        max_attempts=config.mutation_max_attempts,
+    )
+    for match in matches:
+        if match.match_dir:
+            commentary_results.append(
+                commentate_match(match, backend=commentator_backend, config=commentator_config)
+            )
+    commentary_aggregation = aggregate_commentaries(
+        matches,
+        commentary_results,
+        candidate_id=candidate.id,
+    )
+    game_payload["commentary_aggregation"] = commentary_aggregation
+    compact_matches = [_compact_match_result(result) for result in matches]
     # This is the hand-off consumed by the next generation's Reflection stage.
     # Keep the exact evaluated values together so mutation never reconstructs
     # evidence from legacy metadata keys or recalculates an objective.
@@ -345,6 +529,12 @@ def evaluate_candidate(
         "failure_stage": failure_stage,
         "failure_category": failure_category,
         "failure_reason": failure_reason,
+        "eagle_reference": None if eagle_opponent is None else {
+            "generation": eagle_opponent.source_generation,
+            "candidate_id": eagle_opponent.source_candidate_id,
+            "game_performance": eagle_opponent.source_game_performance,
+            "weight": eagle_opponent.weight,
+        },
         "generation": {
             "raw_response": generation.raw_llm_output,
             "extracted_code": generation.extracted_code,
@@ -355,14 +545,9 @@ def evaluate_candidate(
                 for key, value in region_score.strategy_region_validation.items()
             },
         },
-        "compilation": None if compile_result is None else compile_result.to_json_dict(),
-        "integration": None if integration_result is None else integration_result.to_json_dict(),
-        "game": None if game_metrics is None else game_metrics.to_json_dict(),
-        "matches": [result.to_json_dict() for result in matches],
-        "code_quality_payload": quality_payload,
-        "code_quality": quality.to_json_dict(),
-        "function_capability": None if capability_result is None else capability_result.to_json_dict(),
-        "strategy_alignment": None if alignment_result is None else alignment_result.to_json_dict(),
+        "compilation": _compact_compilation_evidence(compile_result),
+        "integration": _compact_integration_evidence(integration_result),
+        "commentary_aggregation": commentary_aggregation,
     }
     timing = {
         **candidate.timing,
@@ -449,7 +634,7 @@ def evaluate_candidate(
         generation_prompt_parent_id=candidate.generation_prompt_parent_id,
         source_candidate_ids=candidate.source_candidate_ids,
         compile_status=compile_result.status if compile_result else "not_run",
-        game_eval_result=game_metrics.to_json_dict() if game_metrics else {},
+        game_eval_result=game_payload,
         code_quality_result=quality_payload,
         fitness_objectives=objectives,
         status="failed" if failure_category else "evaluated",
@@ -457,12 +642,15 @@ def evaluate_candidate(
         failure_reason=failure_reason,
         artifacts=candidate.artifacts,
         timing=timing,
-        metadata={
-            **candidate.metadata,
-            "failure_category": failure_category,
-            "failure_reason": failure_reason,
-            "reflection_evidence": reflection_evidence,
-        },
+        metadata=compact_candidate_metadata(
+            {
+                **candidate.metadata,
+                "failure_category": failure_category,
+                "failure_reason": failure_reason,
+                "reflection_evidence": reflection_evidence,
+            },
+            preserve_unpersisted_mutation=True,
+        ),
     )
     result = CandidateResult(
         candidate_id=candidate.id,
@@ -477,8 +665,8 @@ def evaluate_candidate(
         code_quality_breakdown=quality.to_json_dict(),
         function_capability=None if capability_result is None else capability_result.to_json_dict(),
         strategy_alignment=None if alignment_result is None else alignment_result.to_json_dict(),
-        match_result=matches,
-        game_metrics=game_metrics.to_json_dict() if game_metrics else None,
+        match_result=compact_matches,
+        game_metrics=game_payload,
         final_score=objectives,
         failure_category=failure_category,
         failure_reason=failure_reason,
@@ -491,7 +679,7 @@ def evaluate_candidate(
         agent=agent,
         compile_result=compile_result,
         integration_result=integration_result,
-        match_results=matches,
+        match_results=compact_matches,
         game_metrics=game_metrics,
         strategy_consistency_result=None,
         code_quality_breakdown=quality,
@@ -501,6 +689,39 @@ def evaluate_candidate(
         error=failure_reason,
         generation_timing=generation_timing,
     )
+
+
+def _compact_match_result(result: MatchResult) -> MatchResult:
+    """Release large process/telemetry payloads after canonical persistence."""
+
+    return replace(
+        result,
+        command=[],
+        stdout="",
+        stderr="",
+        raw_result={},
+        telemetry=None,
+    )
+
+
+def _compact_compilation_evidence(result: CompileResult | None) -> dict | None:
+    if result is None:
+        return None
+    payload = result.to_json_dict()
+    payload.pop("command", None)
+    payload.pop("stdout", None)
+    payload.pop("stderr", None)
+    return payload
+
+
+def _compact_integration_evidence(result: IntegrationResult | None) -> dict | None:
+    if result is None:
+        return None
+    payload = result.to_json_dict()
+    payload.pop("commands", None)
+    payload.pop("stdout", None)
+    payload.pop("stderr", None)
+    return payload
 
 
 def _utc_now() -> str:
@@ -527,70 +748,131 @@ def preflight_evaluation_opponents(
     if mock:
         return
     repository_root = (repository_root or _repository_root()).resolve()
-    for item in EVALUATION_ROSTER:
+    for item in SEARCH_OPPONENT_REGISTRY:
         if not item.enabled or not item.jar_path:
             continue
         jar_path = rooted_jar_path(repository_root, item)
         if jar_path is not None and not jar_path.is_file():
             raise OpponentSetupError(f"Bundled evolution opponent JAR is missing: {jar_path}")
+        if item.opponent_id == "allibot":
+            manifest_path = repository_root / "third_party" / "gui_opponents" / "resolved_allibot.json"
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise OpponentSetupError(f"AlliBot resolution manifest is missing or invalid: {manifest_path}") from exc
+            if manifest.get("schema_version") != "eagle-allibot-v2" or manifest.get("class_name") != item.class_name:
+                raise OpponentSetupError(f"AlliBot resolution manifest does not match {item.class_name}: {manifest_path}")
+            digest = hashlib.sha256(jar_path.read_bytes()).hexdigest() if jar_path is not None else ""
+            if digest != manifest.get("jar_sha256"):
+                raise OpponentSetupError(f"AlliBot JAR hash does not match its resolution manifest: {jar_path}")
+            source_lib = repository_root / "third_party" / "gui_opponents" / "src" / "allibot" / "lib"
+            if not any(path.is_file() and path.suffix == ".jar" for path in source_lib.glob("*.jar")):
+                raise OpponentSetupError(f"AlliBot upstream libraries are missing: {source_lib}")
 
 
-def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int) -> tuple[list[MatchResult], str | None]:
-    """Run the ten-match evolution protocol against the fixed evaluation roster."""
+def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int, eagle_opponent: EvaluationOpponent | None = None, historical_opponents: tuple[EvaluationOpponent, ...] = ()) -> tuple[list[MatchResult], str | None]:
+    """Run fixed opponents plus one frozen previous-generation champion when available."""
     match_results: list[MatchResult] = []
     source_hash = hash_file(agent.source_path)
     candidate_classes_dir = classes_dir / candidate.id
     class_hash = hash_class_directory(candidate_classes_dir)
-    seeds = config.resolved_match_seeds
     first_error: str | None = None
     try:
-        opponents = list(_resolved_static_evaluation_opponents(config, mock=mock))
-        if len(opponents) != config.matches_per_candidate:
+        opponents = list(
+            _resolved_static_evaluation_opponents(
+                config,
+                mock=mock,
+                classes_dir=classes_dir,
+            )
+        )
+        if eagle_opponent is not None:
+            opponents.append(eagle_opponent)
+        opponents.extend(historical_opponents)
+        matrix_opponents = tuple(
+            MatrixOpponent(
+                item.opponent_id,
+                item.weight,
+                item.source_generation,
+                item.source_candidate_id,
+                item.source_game_performance,
+            )
+            for item in opponents
+        )
+        specifications = build_match_matrix(
+            matrix_opponents,
+            canonical_evaluation_maps(config.evaluation_maps),
+            rounds_per_map=config.rounds_per_map,
+            swap_player_sides=config.swap_player_sides,
+            round_seeds=config.resolved_match_seeds,
+        )
+        expected_matches = len(specifications)
+        if len(opponents) != len(config.evaluation_opponents) + (1 if eagle_opponent is not None else 0) + len(historical_opponents):
             return match_results, (
                 f"evaluation roster has {len(opponents)} opponents; "
-                f"expected {config.matches_per_candidate}"
+                f"expected {len(config.evaluation_opponents) + (1 if eagle_opponent is not None else 0) + len(historical_opponents)}"
             )
-        for match_index, opponent in enumerate(opponents):
+        opponent_by_id = {item.opponent_id: item for item in opponents}
+        for specification in specifications:
+            opponent = opponent_by_id[specification.opponent_id]
             try:
                 result = run_microrts_match(
                     microrts_dir=config.microrts_dir, classes_dir=candidate_classes_dir,
                     agent_class=agent.qualified_class_name, opponent=opponent.class_name,
-                    tick_limit=config.tick_limit, match_index=match_index,
+                    tick_limit=config.tick_limit, match_index=specification.match_index,
                     match_artifacts_dir=match_artifacts_dir,
                     scoring_config=scoring_config_from_experiment(config), mock=mock,
-                    mock_score=config.mock_score_base + config.mock_score_step * (ordinal + match_index),
-                    seed=seeds[match_index], timeout_seconds=config.match_timeout_seconds,
-                    map_path=config.map_path, candidate_id=candidate.id,
+                    mock_score=config.mock_score_base + config.mock_score_step * (ordinal + specification.match_index),
+                    seed=specification.seed, timeout_seconds=config.match_timeout_seconds,
+                    map_path=specification.map_path, candidate_id=candidate.id,
+                    generation=candidate.generation,
+                    candidate_player=specification.candidate_player,
                     source_hash=source_hash, class_hash=class_hash,
                     extra_classpath_entries=opponent.classpath_entries,
+                    artifact_mode=config.match_artifact_mode,
+                    map_id=specification.map_id,
+                    round_index=specification.round_index,
+                    opponent_source_generation=specification.opponent_source_generation,
+                    opponent_source_candidate_id=specification.opponent_source_candidate_id,
+                    opponent_weight=specification.opponent_weight,
                 )
             except (RuntimeError, OSError) as exc:
                 result = MatchResult(
                     ok=False,
                     score=0.0,
                     command=[],
-                    match_index=match_index,
-                    seed=seeds[match_index],
+                    match_index=specification.match_index,
+                    generation=candidate.generation,
+                    seed=specification.seed,
                     opponent=opponent.class_name,
+                    candidate_player=specification.candidate_player,
+                    map_path=specification.map_path,
+                    map_id=specification.map_id,
+                    round_index=specification.round_index,
                     status="failed",
                     failure_category="runtime_match_failure",
                     failure_reason=str(exc),
                 )
             result = replace(
                 result,
+                generation=candidate.generation,
                 opponent_id=opponent.opponent_id,
-                opponent_name=next(
-                    item.display_name for item in EVALUATION_ROSTER
-                    if item.opponent_id == opponent.opponent_id
-                ),
+                opponent_name=_opponent_display_name(opponent.opponent_id),
+                map_id=specification.map_id,
+                round_index=specification.round_index,
+                opponent_source_generation=specification.opponent_source_generation,
+                opponent_source_candidate_id=specification.opponent_source_candidate_id,
+                opponent_weight=specification.opponent_weight,
             )
             match_results.append(result)
             if not result.ok and first_error is None:
                 first_error = match_error_message(result)
     except (RuntimeError, OSError) as exc:
         return match_results, str(exc)
-    if len(match_results) != config.matches_per_candidate:
-        return match_results, f"partial evaluation: completed {len(match_results)} of {config.matches_per_candidate} matches"
+    expected_matches = config.expected_match_count + (
+        config.fixed_matches_per_opponent if eagle_opponent is not None else 0
+    ) + config.fixed_matches_per_opponent * len(historical_opponents)
+    if len(match_results) != expected_matches:
+        return match_results, f"partial evaluation: completed {len(match_results)} of {expected_matches} matches"
     return match_results, first_error
 
 
@@ -598,22 +880,95 @@ def _resolved_static_evaluation_opponents(
     config: ExperimentConfig,
     *,
     mock: bool,
+    classes_dir: Path | None = None,
     repository_root: Path | None = None,
 ) -> tuple[EvaluationOpponent, ...]:
     repository_root = (repository_root or _repository_root()).resolve()
     opponents: list[EvaluationOpponent] = []
-    for item in EVALUATION_ROSTER:
+    configured_weights = dict(config.evaluation_opponents)
+    registry = {item.opponent_id: item for item in SEARCH_OPPONENT_REGISTRY}
+    worker_rush_classes = (
+        _prepare_worker_rush_adapter(config, classes_dir=classes_dir)
+        if not mock and classes_dir is not None
+        else None
+    )
+    for opponent_id in config.evaluation_opponent_ids:
+        item = registry.get(opponent_id)
+        if item is None:
+            raise OpponentSetupError(f"Configured search opponent is unavailable: {opponent_id}")
         if not item.enabled:
             continue
         classpath_entries: tuple[Path, ...] = ()
+        if opponent_id == "workerrush" and worker_rush_classes is not None:
+            classpath_entries = (worker_rush_classes,)
         jar_path = rooted_jar_path(repository_root, item)
         if jar_path is not None:
             if not mock and not jar_path.is_file():
                 raise OpponentSetupError(f"Bundled evolution opponent JAR is missing: {jar_path}")
-            if jar_path.is_file():
+            if jar_path.is_file() and not mock:
                 classpath_entries = (jar_path,)
-        opponents.append(EvaluationOpponent(item.opponent_id, item.class_name, classpath_entries))
+                if item.opponent_id == "allibot":
+                    source_lib = repository_root / "third_party" / "gui_opponents" / "src" / "allibot" / "lib"
+                    libraries = tuple(sorted(path.resolve() for path in source_lib.glob("*.jar") if path.is_file()))
+                    if not mock and not libraries:
+                        raise OpponentSetupError(f"AlliBot upstream libraries are missing: {source_lib}")
+                    classpath_entries = (jar_path, *libraries)
+        opponents.append(EvaluationOpponent(item.opponent_id, item.class_name, classpath_entries, configured_weights[item.opponent_id]))
     return tuple(opponents)
+
+
+def _prepare_worker_rush_adapter(config: ExperimentConfig, *, classes_dir: Path) -> Path:
+    """Compile the missing vendored WorkerRush identity once per run.
+
+    The checked-in MicroRTS runtime provides LightRush and HeavyRush but no
+    WorkerRush class. The canonical EAGLE ID is retained by a small Java
+    compatibility subclass so the roster remains loadable and deterministic.
+    """
+
+    root = classes_dir.resolve().parent / "opponent_adapters" / "worker_rush"
+    source = root / "WorkerRush.java"
+    output = root / "classes"
+    class_file = output / "ai" / "abstraction" / "WorkerRush.class"
+    if class_file.is_file():
+        return output
+    root.mkdir(parents=True, exist_ok=True)
+    output.mkdir(parents=True, exist_ok=True)
+    source.write_text(WORKER_RUSH_ADAPTER_SOURCE, encoding="utf-8")
+    microrts_dir = config.microrts_dir.resolve()
+    classpath = os.pathsep.join((str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")))
+    completed = subprocess.run(
+        ["javac", "-cp", classpath, "-d", str(output), str(source)],
+        cwd=microrts_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0 or not class_file.is_file():
+        raise OpponentSetupError(
+            "Canonical workerrush adapter could not be compiled: "
+            f"{(completed.stderr or completed.stdout).strip()}"
+        )
+    (root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "eagle-search-opponent-adapter-v1",
+                "opponent_id": "workerrush",
+                "class_name": "ai.abstraction.WorkerRush",
+                "implementation": "subclass of vendored ai.abstraction.LightRush",
+                "classes_dir": str(output),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return output
+
+
+def _opponent_display_name(opponent_id: str) -> str:
+    for item in SEARCH_OPPONENT_REGISTRY:
+        if item.opponent_id == opponent_id:
+            return item.display_name
+    return opponent_id
 
 
 def _repository_root() -> Path:
@@ -688,12 +1043,9 @@ def print_progress(*, generation: int, index: int, population_size: int, evaluat
         f"{candidate.id} status={candidate.status} "
         f"objectives={candidate.fitness_objectives} "
         f"{game_performance_detail} "
-        f"code_quality_total={quality.code_quality} "
-        f"code_quality_components=("
-        f"successful_base={quality.successful_base} + "
-        f"compilation={quality.compilation_score} + "
-        f"function={quality.function_score} + "
-        f"strategy_alignment={quality.strategy_alignment_score} = "
-        f"{quality.code_quality}){detail}",
+        f"code_quality_simplicity={quality.code_quality} "
+        f"complexity_penalty={quality.complexity_penalty} "
+        f"(cyclomatic={quality.cyclomatic_penalty}, nesting={quality.nesting_penalty}, "
+        f"logical_loc={quality.logical_loc_penalty}, longest_function={quality.longest_function_penalty}){detail}",
         flush=True,
     )

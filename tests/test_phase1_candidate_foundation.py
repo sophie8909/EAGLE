@@ -391,22 +391,22 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertEqual(payload["generation_count"], 4)
         self.assertEqual(payload["crossover_rate"], 0.25)
         self.assertEqual(payload["mutation_rate"], 0.5)
-        self.assertEqual(payload["front0_stagnation_generations"], 5)
-        self.assertEqual(payload["matches_per_candidate"], 10)
+        self.assertEqual(payload["front0_stagnation_generations"], 10)
+        self.assertEqual(payload["matches_per_candidate"], 180)
         self.assertEqual(payload["opponent"], "ai.abstraction.LightRush")
         self.assertEqual(
             [item["class_name"] for item in payload["evaluation_opponents"]],
             [
+                "ai.PassiveAI",
                 "ai.RandomAI",
                 "ai.RandomBiasedAI",
-                "ai.PassiveAI",
                 "ai.abstraction.LightRush",
                 "ai.abstraction.HeavyRush",
-                "ai.abstraction.BFSLightRush",
-                "ai.abstraction.GreedyLightRush",
-                "ai.abstraction.FloodFillLightRush",
-                "ai.abstraction.AStarLightRush",
-                "ai.abstraction.BFSHeavyRush",
+                "ai.abstraction.WorkerRush",
+                "ai.abstraction.submissions.allibot.alli",
+                "mayariBot.mayari",
+                "ai.coac.CoacAI",
+                "ai.tma.TMA",
             ],
         )
         self.assertEqual(payload["max_cycles"], 345)
@@ -421,8 +421,8 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             OBJECTIVE_FORMULA_VERSION,
         )
         self.assertRegex(payload["git_commit_hash"], r"^[0-9a-f]{40}$")
-        self.assertEqual(len(payload["microrts_match_seeds"]), 10)
-        self.assertEqual(len(set(payload["microrts_match_seeds"])), 10)
+        self.assertEqual(len(payload["microrts_match_seeds"]), 3)
+        self.assertEqual(len(set(payload["microrts_match_seeds"])), 3)
         self.assertIsNone(payload["prompt_version"])
         self.assertNotIn("microrts_match_seeds", payload["unsupported"])
         self.assertIn("prompt_version", payload["unsupported"])

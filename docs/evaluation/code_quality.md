@@ -1,87 +1,70 @@
-# `code_quality`
+# `code_quality` / simplicity
 
-This is the canonical implementation guide for successful-execution `code_quality`. Failure-stage values are owned by [`failure_classification.md`](failure_classification.md). Normative source: specification sections 15 through 17.
+`code_quality` is a maximized objective. The active scorer is
+`evaluation/canonical_code_quality.py`; `evaluation/code_quality.py` supplies
+the deterministic static metrics used by it.
 
-## Direction and roles
+## Valid candidates
 
-Higher is better. `code_quality` must:
-
-1. distinguish generation, validation, compilation, integration, and runtime failures; and
-2. evaluate candidates that complete all 10 matches.
-
-Only successful 10-match candidates use the component formula below.
-
-## Successful components
-
-### Compilation score
+For a candidate that passes generation, extraction, validation, compilation,
+integration, and the complete match batch:
 
 ```text
-compilation_score = max(-500, -50 * warning_count)
+complexity_penalty =
+    40 * normalized_cyclomatic
+  + 25 * normalized_nesting
+  + 20 * normalized_logical_loc
+  + 15 * normalized_longest_function
+
+code_quality = 100 - complexity_penalty
 ```
 
-Invoke `javac` with explicit warning flags, count structured diagnostics rather than stderr lines, deduplicate repeated warnings, and persist every diagnostic.
+The current metric version (`1`) normalizes
+cyclomatic complexity after the baseline value 1 over 39 points, maximum
+nesting depth after the method-body baseline 1 over 9 points, logical LOC
+after the first executable line over 299 points, and longest function LOC
+after the first line over 119 points. Each normalized value is clamped to `[0, 1]`; the four penalty fields and
+the final score are rounded to six decimal places.
 
-### Function capability score
+The measured source is the candidate's generated methods under the
+`candidate_generated_methods` label. `logical_loc` is the count of nonblank,
+non-brace executable lines after comments and literals are stripped. The
+longest-function metric is a lexical Java-method estimate.
 
-```text
-function_score =
-    economy_score
-  + production_score
-  + combat_score
-  + targeting_score
-  + state_aware_decision_score
-```
-
-Each capability is scored from `0` to `20`; total range is `[0, 100]`. Evaluate capabilities with deterministic static analysis, runtime evidence, and match telemetry. Do not require specific function names or fixed internal structure.
-
-### Strategy alignment score
-
-An independent LLM evaluator consumes `strategy_prompt`, generated `CandidateAgent.java`, and optional behavior summary. It returns validated structured data:
+Every valid score persists `code_quality_details` with:
 
 ```json
 {
-  "score": 0,
-  "reason": "..."
+  "complexity_penalty": 32.187179,
+  "cyclomatic_complexity": 20,
+  "maximum_nesting_depth": 3,
+  "logical_loc": 48,
+  "longest_function_loc": 16,
+  "cyclomatic_penalty": 19.487179,
+  "nesting_penalty": 7.5,
+  "logical_loc_penalty": 3.2,
+  "longest_function_penalty": 2.0,
+  "metric_version": "1",
+  "measured_source": "candidate_generated_methods"
 }
 ```
 
-The numeric score must be in `[0, 10]`. Persist both fields; only `score` contributes to `code_quality`. This is not a separate NSGA-II objective.
+Compiler warnings, compiler errors, function capability, missing/invalid
+functions, validation diagnostics, runtime diagnostics, and Strategy
+Alignment remain persisted diagnostic evidence. They do not contribute to a
+valid simplicity score. Strategy Alignment is not an optimizer objective.
 
-## Successful formula
+## Failed candidates
 
-The selected formula is:
+Generation, extraction, validation, compilation, integration, runtime,
+timeout, and incomplete evaluations receive `-1000` for both
+`game_performance` and `code_quality`. The failure stage and all available
+complexity/diagnostic evidence are retained separately.
 
-```text
-code_quality =
-    500
-  + compilation_score
-  + function_score
-  + strategy_alignment_score
-```
+## Objective ownership
 
-Its range is `[0, 610]`. The explicit `500` base guarantees every successful 10-match execution scores above the runtime-failure range `[-400, -201]`; no additional success clamp or hidden offset is allowed.
-
-Persist the selected formula through `objective_formula_version`. A formula-version change is an architecture change and requires updating the normative specification, this canonical owner, artifact compatibility, tests, the Matrix, and the Chinese overview.
-
-## Invariants
-
-- A candidate reaching a later failure stage always scores higher than an earlier failure.
-- Every successful candidate scores higher than every runtime failure.
-- Function scoring measures reachable behavior, not method names or code size alone.
-- Compiler warnings cannot push a successful result into an earlier failure range.
-- Strategy alignment is evaluated independently and cannot become a third objective.
-
-## Tests
-
-- Warning parsing, deduplication, `-50` penalty, and `-500` cap.
-- Each capability level and total cap.
-- Arbitrary helper/method names do not reduce capability credit when behavior exists.
-- Unreachable code does not receive capability credit.
-- Strategy-alignment response validation, bounds, and persistence.
-- Exact selected-formula and formula-version behavior across the `[0, 610]` range.
-- Cross-stage ordering against every failure boundary.
-
-## Current mismatch
-
-Active code sums compilation status, one marked-region validity score, and deterministic text metrics. It does not implement failure-stage ranges, capability scoring, or the independent alignment evaluator. See gap `G-07`.
-
+`evaluation/nsga2_objectives.py` exposes exactly two maximized objectives:
+`game_performance` and `code_quality`. Selection, Pareto sorting, tournament
+comparison, crowding, parent/child replacement, best-candidate reporting, and
+analysis use those directions. There is no active AOS implementation in the
+repository.

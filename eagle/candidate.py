@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
@@ -33,6 +33,7 @@ DEFAULT_GENERATION_PROMPT = (
 )
 
 LINEAGE_SCHEMA_VERSION = "1.0"
+CANDIDATE_SNAPSHOT_SCHEMA_VERSION = "eagle-candidate-v2"
 
 
 @dataclass(frozen=True)
@@ -103,11 +104,69 @@ class Candidate:
         )
 
     def to_json_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["candidate_id"] = self.id
-        payload["parent_ids"] = list(self.parent_ids)
-        payload["source_candidate_ids"] = list(self.resolved_source_candidate_ids())
+        """Return the compact, resumable candidate snapshot.
+
+        Raw match output, telemetry, and mutation LLM envelopes live in their
+        canonical per-stage files.  Keeping them out of population snapshots
+        prevents one verbose match log from being copied across every run-level
+        artifact and recursively deep-copied by ``dataclasses.asdict``.
+        """
+
+        return {
+            "candidate_schema_version": CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
+            "id": self.id,
+            "candidate_id": self.id,
+            "generation": self.generation,
+            "parent_ids": list(self.parent_ids),
+            "strategy_prompt": self.strategy_prompt,
+            "previous_code": self.previous_code,
+            "generation_prompt": self.generation_prompt,
+            "generated_java": self.generated_java,
+            "generated_java_path": self.generated_java_path,
+            "operator": self.operator,
+            "mutation_type": self.mutation_type,
+            "strategy_parent_id": self.strategy_parent_id,
+            "previous_code_parent_id": self.previous_code_parent_id,
+            "generation_prompt_parent_id": self.generation_prompt_parent_id,
+            "source_candidate_ids": list(self.resolved_source_candidate_ids()),
+            "compile_status": self.compile_status,
+            "game_eval_result": dict(self.game_eval_result),
+            "code_quality_result": dict(self.code_quality_result),
+            "fitness_objectives": dict(self.fitness_objectives),
+            "status": self.status,
+            "failure_stage": self.failure_stage,
+            "failure_reason": self.failure_reason,
+            "artifacts": dict(self.artifacts),
+            "timing": dict(self.timing),
+            "metadata": compact_candidate_metadata(self.metadata),
+        }
+
+    def to_individual_dict(self) -> dict[str, Any]:
+        """Return the small candidate index used by inspection/final test."""
+
+        payload = self.to_json_dict()
+        payload.pop("game_eval_result", None)
+        payload.pop("code_quality_result", None)
+        payload.pop("metadata", None)
         return payload
+
+    def to_summary_dict(self) -> dict[str, Any]:
+        """Return fitness and timing data for run-level summaries."""
+
+        return {
+            "candidate_schema_version": CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
+            "candidate_id": self.id,
+            "generation": self.generation,
+            "parent_ids": list(self.parent_ids),
+            "operator": self.operator,
+            "mutation_type": self.mutation_type,
+            "status": self.status,
+            "failure_stage": self.failure_stage,
+            "failure_reason": self.failure_reason,
+            "fitness_objectives": dict(self.fitness_objectives),
+            "timing": dict(self.timing),
+            "artifacts": dict(self.artifacts),
+        }
 
     def resolved_source_candidate_ids(self) -> tuple[str, ...]:
         """Return stable contributing candidate IDs without inspecting component text."""
@@ -139,3 +198,63 @@ class Candidate:
             "generation_prompt_parent_id": self.generation_prompt_parent_id,
             "source_candidate_ids": list(self.resolved_source_candidate_ids()),
         }
+
+
+def compact_mutation_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Keep mutation routing/status in memory; raw evidence stays on disk."""
+
+    keys = (
+        "schema_version",
+        "reflection_schema_version",
+        "candidate_id",
+        "feedback_candidate_id",
+        "operation",
+        "applied",
+        "type",
+        "objectives",
+        "evaluation_status",
+        "token_counts",
+        "reflection_model",
+        "reflection_profile",
+        "rewrite_model",
+        "rewrite_profile",
+        "reflection_attempts",
+        "rewrite_attempts",
+        "reflection_status",
+        "rewrite_status",
+        "reflection_error",
+        "rewrite_error",
+        "prompt_metadata",
+        "reflection_history",
+    )
+    return {key: record[key] for key in keys if key in record}
+
+
+def compact_candidate_metadata(
+    metadata: dict[str, Any],
+    *,
+    preserve_unpersisted_mutation: bool = False,
+) -> dict[str, Any]:
+    """Return only metadata required by selection, mutation, and resume."""
+
+    compact: dict[str, Any] = {}
+    for key in ("seed_index", "failure_category", "failure_reason"):
+        if key in metadata:
+            compact[key] = metadata[key]
+    history = metadata.get("reflection_history")
+    if isinstance(history, list):
+        compact["reflection_history"] = [dict(item) for item in history[-1:] if isinstance(item, dict)]
+    evidence = metadata.get("reflection_evidence")
+    if isinstance(evidence, dict):
+        compact["reflection_evidence"] = dict(evidence)
+    mutation = metadata.get("mutation")
+    if isinstance(mutation, dict):
+        # Production mutation stages persist the full record first and place a
+        # compact record in memory. Embedded callers without an artifact root
+        # must carry the full record until write_candidate_artifacts can save it.
+        compact["mutation"] = (
+            dict(mutation)
+            if preserve_unpersisted_mutation and "evidence" in mutation
+            else compact_mutation_record(mutation)
+        )
+    return compact

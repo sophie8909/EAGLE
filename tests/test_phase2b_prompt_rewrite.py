@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from eagle.candidate import Candidate
@@ -45,7 +46,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         )
 
     def test_strategy_rewrite_call_order_and_component_isolation(self):
-        backend = ScriptedRewriteBackend(("strategy reflection", "new strategy prompt"))
+        backend = ScriptedRewriteBackend((self._strategy_reflection(), "new strategy prompt"))
         mutation = PromptRewriteMutation(
             self.config,
             mutation_type="strategy",
@@ -64,7 +65,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertEqual(child.metadata["mutation"]["original_strategy_prompt"], "old strategy")
 
     def test_code_rewrite_changes_only_generation_prompt(self):
-        backend = ScriptedRewriteBackend(("code reflection", "new generation prompt"))
+        backend = ScriptedRewriteBackend((self._code_reflection(), "new generation prompt"))
         mutation = PromptRewriteMutation(
             self.config,
             mutation_type="code",
@@ -77,7 +78,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertEqual(child.generation_prompt, "new generation prompt")
         self.assertEqual(child.mutation_type, "code")
     def test_rewrite_prompt_builders_include_reflection_and_original_component(self):
-        backend = ScriptedRewriteBackend(("reflection",))
+        backend = ScriptedRewriteBackend((self._strategy_reflection(),))
         reflection = ReflectionStage(backend, max_attempts=1).run(
             reflection_type="strategy",
             candidate=self.candidate,
@@ -102,7 +103,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
 
     def test_reflection_and_rewrite_artifacts_survive_rewrite_failure(self):
-        backend = ScriptedRewriteBackend(("reflection", "", ""))
+        backend = ScriptedRewriteBackend((self._strategy_reflection(), "", ""))
         with tempfile.TemporaryDirectory() as temp:
             mutation = PromptRewriteMutation(
                 self.config,
@@ -120,6 +121,20 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
             self.assertTrue((mutation_dir / "rewriter_response_raw.txt").exists())
             self.assertTrue((mutation_dir / "original_strategy_prompt.txt").exists())
             self.assertTrue((Path(temp) / "timing.json").exists())
+
+    @staticmethod
+    def _strategy_reflection():
+        return json.dumps({
+            "analysis": {"strengths": ["workers"], "weaknesses": ["late attack"], "priority_changes": ["attack earlier"]},
+            "revised_strategy_prompt": "Attack earlier while preserving workers.",
+        })
+
+    @staticmethod
+    def _code_reflection():
+        return json.dumps({
+            "analysis": {"implementation_failures": ["none"], "constraint_failures": [], "priority_changes": ["preserve complete file"]},
+            "revised_code_generation_prompt": "Preserve a complete compilable file.",
+        })
 
 
 if __name__ == "__main__":

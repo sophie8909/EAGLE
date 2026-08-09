@@ -89,8 +89,13 @@ def _validate_experiment_document(path: Path) -> dict:
     found = sorted(forbidden.intersection(payload))
     llm = payload.get("llm")
     if isinstance(llm, dict):
-        forbidden_llm = forbidden | {"mode", "remote", "roles", "role_mapping", "operations"}
+        # Role-local behavior is valid in the experiment document. Endpoint,
+        # model, and server selection remain owned by runtime.yaml.
+        forbidden_llm = forbidden | {"mode", "remote", "role_mapping", "operations"}
         found.extend(f"llm.{key}" for key in sorted(forbidden_llm.intersection(llm)))
+        roles = llm.get("roles")
+        if roles is not None and not isinstance(roles, dict):
+            raise ValueError("llm.roles must be a mapping of role-local settings.")
     if found:
         raise ValueError("Experiment config cannot select runtime endpoints or models: " + ", ".join(sorted(found)))
     return payload

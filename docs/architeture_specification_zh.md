@@ -341,3 +341,18 @@ Compile ??敺? class loading?onstructor?uperclass?ethod signature
 EAGLE 只有兩種評估情境：演化期間固定使用 10-opponent roster 的 Evolution Evaluation（五個 vendored basic agent、五個 deterministic vendored pathfinding variant），以及演化完成後才執行的 Final Test。Evolution Evaluation 不使用 external competition jar，也不使用 historical self opponent。Final Test 只讀取已完成 run 的演化 artifacts，選定既有 Java，對固定版本的 TMA、Mayari、COAC 在多張既有地圖、固定 seeds、雙方 player side 上比賽；結果不得回流 fitness、selection、crossover、mutation、NSGA-II，也不得呼叫 LLM 或重新生成、修復候選者。此架構沒有 validation split 或 validation selection stage。
 
 完整 opponent pins、selector、artifact schema、計分與重現指令由 `docs/evaluation/final_test.md` 管理；該文件已加入 active documentation map。
+## 2026-08-04 產物精簡與 OOM 修復
+
+演化流程採用 `phase4-v3`、`eagle-candidate-v2` 與
+`eagle-generation-v2`。每場比賽的 `stdout`、`stderr`、command、原始結果與
+telemetry 僅由 `candidates/<candidate_id>/matches/<match_id>/` 保存一次；候選人、
+世代、最終族群與摘要檔不再重複內嵌這些大型資料。
+
+`generations/generation_<nnnn>.json` 是唯一的世代存活族群快照，並保留續跑所需
+的 genotype/phenotype、fitness objectives 與 timing。演化層級不再寫入重複的
+`results.jsonl` 或 `generation_<n>_population.json`；Final Test 自己的
+`results.jsonl` 不受影響。原始 LLM、編譯、整合與比賽證據仍保留在各自的單一
+stage 目錄中。
+# 目前實作修正（2026-08-05）
+
+目前 executable implementation 已 supersede 舊版 `code_complexity`/minimization 與 `+500` composite 方向。有效候選的 `code_quality` 是 maximize 方向的 simplicity 分數：`100 - complexity_penalty`，四項權重依序為 cyclomatic `40`、nesting `25`、logical LOC `20`、longest function `15`。generation、extraction、validation、compilation、integration、runtime、timeout、incomplete 失敗的 `game_performance` 與 `code_quality` 都是 `-1000`。Compiler、Function Capability、Strategy Alignment 仍保存為 diagnostics，不再加入有效 `code_quality`。權威程式位置是 `evaluation/canonical_code_quality.py` 與 `evaluation/code_quality.py`。

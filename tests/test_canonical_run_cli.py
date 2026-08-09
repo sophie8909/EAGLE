@@ -36,6 +36,13 @@ class CanonicalRunCliTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "cannot select runtime endpoints or models"):
                 _validate_experiment_document(path)
 
+    def test_experiment_allows_match_commentator_role_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            payload = _validate_experiment_document(
+                self.experiment(Path(directory), llm={"roles": {"match_commentator": {"enabled": True, "temperature": 0.2, "chunk_ticks": 200}}})
+            )
+            self.assertTrue(payload["llm"]["roles"]["match_commentator"]["enabled"])
+
     def test_run_shell_script_is_noninteractive(self):
         script = (Path(__file__).resolve().parents[1] / "run.sh").read_text(encoding="utf-8")
         self.assertNotIn("read -r -p", script)

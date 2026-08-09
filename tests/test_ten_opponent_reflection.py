@@ -14,14 +14,13 @@ from evaluation.microrts_runner import MatchResult
 
 
 class TenOpponentReflectionTests(unittest.TestCase):
-    def test_canonical_roster_is_ten_ordered_non_final_opponents(self):
+    def test_canonical_roster_is_ten_ordered_search_opponents(self):
         self.assertEqual(len(EVALUATION_ROSTER), 10)
         self.assertEqual(len({item.opponent_id for item in EVALUATION_ROSTER}), 10)
         self.assertEqual(
             [item.opponent_id for item in EVALUATION_ROSTER],
-            ["random", "random_biased", "passive", "light_rush", "heavy_rush", "bfs_light_rush", "greedy_light_rush", "floodfill_light_rush", "astar_light_rush", "bfs_heavy_rush"],
+            ["passive", "random", "randombias", "lightrush", "heavyrush", "workerrush", "allibot", "mayari", "coac", "tma"],
         )
-        self.assertTrue(set(EXTERNAL_OPPONENTS).isdisjoint(EVALUATION_ROSTER))
         self.assertFalse(any("self" in item.opponent_id.lower() for item in EVALUATION_ROSTER))
         self.assertFalse(any("historical" in item.class_name.lower() for item in EVALUATION_ROSTER))
 
@@ -74,12 +73,14 @@ class TenOpponentReflectionTests(unittest.TestCase):
         for index, item in enumerate(EVALUATION_ROSTER):
             self.assertIn(item.display_name, prompt)
             self.assertIn(f"{float(index * 10)}", prompt)
-        self.assertIn("Strongest", prompt)
-        self.assertIn("Weakest", prompt)
-        self.assertIn("score_stddev", prompt)
-        self.assertNotIn("TMA", prompt)
-        self.assertNotIn("Mayari", prompt)
-        self.assertNotIn("COAC", prompt)
+        self.assertIn("map_results", prompt)
+        self.assertIn("p0_result", prompt)
+        self.assertIn("p1_result", prompt)
+        self.assertIn("raw_score", prompt)
+        self.assertIn("weighted_score", prompt)
+        self.assertIn("TMA", prompt)
+        self.assertIn("Mayari", prompt)
+        self.assertIn("COAC", prompt)
 
     def test_generation_metrics_read_old_snapshots(self):
         candidate = Candidate(

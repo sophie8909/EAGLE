@@ -4,6 +4,7 @@
 | --- | --- |
 | Runtime configuration | `configs/runtime.yaml` |
 | Runtime shell command | `run_env.sh` |
+| Optional runtime watchdog | `watchdog.sh` |
 | Runtime CLI | `eagle.cli.runtime` |
 | Health check | `eagle.runtime.endpoints` |
 | Process/PID/log ownership | `eagle.runtime.processes` |
@@ -12,4 +13,5 @@
 | Offline analysis shell command | `analyze.sh` |
 
 Runtime files are only `runtime/logs/llm-server.log` and
-`runtime/pids/llm-server.pid`.
+`runtime/pids/llm-server.pid`; the independent watchdog additionally uses
+`runtime/pids/llm-watchdog.pid` while it is running.

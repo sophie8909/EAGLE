@@ -78,7 +78,8 @@ Each match-level `timing.json` records at least start, finish, duration, process
 - Attempt count/order matches persisted raw request/response artifacts.
 - Skipped/no-mutation stages are null with empty attempts.
 - Failure timestamps close at the terminal stage and preserve earlier durations.
-- Exactly 10 match durations on success.
+- Exactly 180 match durations on generation-0 success, or 198 when the dynamic
+  previous-generation opponent matrix is active.
 - Candidate total is not less than any contained stage duration.
 
 
@@ -92,10 +93,18 @@ when Java extraction or validation fails after Reflection and Rewrite have compl
 
 ## Phase 4 implementation note
 
-Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 10 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
+Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 180 or 198 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
 
 ## Canonical runtime timing additions
 
 Run-level timing.jsonl contains event=generation and event=llm_request records. Generation records include generation boundaries, mutation/crossover counts and aggregates, aggregate request/validation/compilation/evaluation durations, and the generation duration. Request records include run_id, generation, candidate_id, operation_type, operation_stage, server_or_endpoint, model_id, request_started_at, request_finished_at, duration_seconds, status, failure_category, token counts when supplied, and request_correlation_id.
 
 Candidate timing.json contains operation-specific mutation and crossover generation-only spans, the shared child_generation span, separate validation/compilation/integration/evaluation spans, and child_total. Durations use a monotonic clock; UTC fields are display timestamps.
+
+## Compact snapshot retention (2026-08-04)
+
+Candidate `timing` is retained unchanged in `eagle-candidate-v2` generation and
+final-population snapshots. Match stdout/stderr, commands, raw result payloads,
+and telemetry are excluded from those snapshots and remain in their owning
+match directories. Artifact compaction must never remove fitness objectives or
+timing records needed by resume and analysis.
