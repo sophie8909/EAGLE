@@ -28,6 +28,7 @@ from .game_performance import (
     write_telemetry_json,
 )
 from .match_trace import TraceArtifact, write_match_trace
+from .match_logs import write_match_log
 
 
 DEFAULT_MAP_PATH = "maps/8x8/basesWorkers8x8.xml"
@@ -93,6 +94,7 @@ class MatchResult:
     trace_integrity_path: str | None = None
     match_metadata_path: str | None = None
     match_result_path: str | None = None
+    match_log_path: str | None = None
 
     def to_json_dict(
         self,
@@ -171,6 +173,7 @@ class MatchResult:
                 "performance_breakdown": self.summary_path,
                 "timing": "timing.json",
             },
+            "match_log_path": self.match_log_path,
             "timing": {
                 "started_at": self.started_at,
                 "finished_at": self.finished_at,
@@ -202,6 +205,7 @@ def run_microrts_match(
     scoring_config: GamePerformanceConfig | None = None,
     mock: bool = False,
     mock_score: float = 0.0,
+    generation_index: int = 0,
     seed: int | None = None,
     timeout_seconds: float = 120.0,
     map_path: str = DEFAULT_MAP_PATH,
@@ -310,6 +314,7 @@ def run_microrts_match(
             candidate_id=candidate_id,
             generation=generation,
             match_index=match_index,
+            generation_index=generation_index,
             opponent=opponent,
             candidate_player=candidate_player,
             map_path=map_path,
@@ -354,6 +359,7 @@ def run_microrts_match(
             candidate_id=candidate_id,
             generation=generation,
             match_index=match_index,
+            generation_index=generation_index,
             opponent=opponent,
             candidate_player=candidate_player,
             map_path=map_path,
@@ -398,6 +404,7 @@ def run_microrts_match(
         candidate_id=candidate_id,
         generation=generation,
         match_index=match_index,
+        generation_index=generation_index,
         opponent=opponent,
         candidate_player=candidate_player,
         map_path=map_path,
@@ -434,6 +441,7 @@ def _finish_match(
     candidate_id: str | None,
     generation: int | None,
     match_index: int,
+    generation_index: int,
     opponent: str,
     candidate_player: int,
     map_path: str,
@@ -536,6 +544,29 @@ def _finish_match(
         )
     except (OSError, TypeError, ValueError) as exc:
         persistence_error = f"failed to persist match trace: {exc}"
+    match_log_path = match_dir / "match_log.jsonl.gz"
+    try:
+        write_match_log(
+            match_log_path,
+            metadata={
+                "match_id": match_dir.name,
+                "candidate_id": candidate_id,
+                "generation_index": generation_index,
+                "candidate_side": "p0" if candidate_player == 0 else "p1",
+                "opponent_name": opponent,
+                "opponent_agent": opponent,
+                "map_name": map_path,
+                "map_width": 8,
+                "map_height": 8,
+                "round_index": match_index,
+                "seed": seed,
+            },
+            round_state_dir=round_state_dir,
+            raw_result=raw_result,
+            tick_limit=tick_limit,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        persistence_error = f"failed to persist match log: {exc}"
     cleanup_error = None
     if artifact_mode == "compact" and (telemetry is None or telemetry_persisted):
         cleanup_error = _remove_raw_match_artifacts(round_state_dir, replay_path)
@@ -583,6 +614,7 @@ def _finish_match(
         trace_integrity_path=None if trace_artifact is None else str(trace_artifact.integrity_path),
         match_metadata_path=None if trace_artifact is None else str(trace_artifact.metadata_path),
         match_result_path=None if trace_artifact is None else str(trace_artifact.result_path),
+        match_log_path=str(match_log_path) if match_log_path.exists() else None,
         **values,
     )
     _persist_result(match_dir, result)

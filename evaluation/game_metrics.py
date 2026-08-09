@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 from .game_performance import (
@@ -448,6 +449,8 @@ def _summarize_opponent_group(
 
 def summarize_match(result: MatchResult) -> dict[str, Any]:
     breakdown = fallback_performance_breakdown(result, result.raw_result)
+    match_dir = getattr(result, "match_dir", None)
+    match_id = None if match_dir is None else Path(str(match_dir)).name
     return {
         "opponent_id": getattr(result, "opponent_id", None),
         "opponent_name": getattr(result, "opponent_name", None) or getattr(result, "opponent", None),
@@ -456,6 +459,9 @@ def summarize_match(result: MatchResult) -> dict[str, Any]:
         "map": result.map_path,
         "map_id": getattr(result, "map_id", None),
         "round_index": getattr(result, "round_index", None),
+        "match_id": match_id,
+        "candidate_id": getattr(result, "candidate_id", None),
+        "candidate_side": "p0" if getattr(result, "candidate_player", 0) == 0 else "p1",
         "seed": result.seed,
         "opponent_weight": getattr(result, "opponent_weight", 1.0),
         "opponent_source_generation": getattr(result, "opponent_source_generation", None),
@@ -476,6 +482,7 @@ def summarize_match(result: MatchResult) -> dict[str, Any]:
         "match_commentary_path": (
             None if getattr(result, "match_dir", None) is None else f"{result.match_dir}/commentary/match_commentary.json"
         ),
+        "match_log_path": getattr(result, "match_log_path", None),
     }
 
 

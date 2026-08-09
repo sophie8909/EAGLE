@@ -4,10 +4,11 @@ Tests must prove the normative architecture, not preserve accidental current str
 
 ## Standard command
 
-Run from WSL:
+Run from either native Ubuntu Linux or WSL2 Ubuntu, with the checkout inside the
+Linux filesystem:
 
 ```bash
-cd /mnt/d/Project/EAGLE
+cd ~/EAGLE
 python3 -m unittest discover -s tests
 ```
 

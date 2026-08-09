@@ -159,7 +159,7 @@ This table lists absent or materially incomplete proof. A row may be removed onl
 | EVO-10/EVO-11 | Assert Code Reflection → Rewrite → final generation call order, full failure evidence, prompt-only output, retry/failure retention. | P0 |
 | GEN-04 / ART-02 | Prove raw responses are durable before parsing for every attempt/backend and survive every failure path. | P0 |
 | ART-01–ART-12 | Golden tree/schema/readback/hash/version/timing/interruption tests for seed, crossover, both mutations, and every failure stage. | P0 |
-| TEST-06 | Bounded real complete-file Java/MicroRTS integration regression in WSL. | P1 |
+| TEST-06 | Bounded real complete-file Java/MicroRTS integration regression in native Linux or WSL2 Ubuntu. | P1 |
 
 ## Legacy Mapping
 

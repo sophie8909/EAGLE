@@ -3,7 +3,7 @@
 This directory owns only post-evolution opponents. Champion code is never copied into
 the EAGLE Python packages or `third_party/microrts/src`.
 
-Prepare all three pinned opponents from WSL with:
+Prepare all three pinned opponents from native Ubuntu or WSL2 Ubuntu with:
 
 ```bash
 python3 scripts/setup_final_test_opponents.py

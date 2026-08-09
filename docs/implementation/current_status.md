@@ -36,6 +36,7 @@ Snapshot: 2026-08-04 after the compact persistence/OOM fix. This file describes 
 The suite now covers Phase 2C mutation, Phase 3 validation/compilation/integration, and Phase 4 runtime evaluation, weighted adaptive Game Performance, failure-aware Code Quality, Function Capability, Strategy Alignment, objective aggregation, artifacts, and timing. Focused tests prove the fixed ten-opponent roster, deterministic 3-map × 3-round × 2-side matrix, champion tie-breaking, weighted normalization, no regeneration, timeout/invalid/partial failures, formula boundaries, successful and partial end-to-end persistence, and two-objective output.
 
 The full WSL unit suite passes. In addition to the bounded seven-check Integration probe, a real candidate completed the canonical 18-match one-opponent matrix (three maps, three rounds, both sides, 5,000-cycle limit) with all 18 result artifacts written to a temporary smoke directory; this is runtime proof, not performance evidence or a full EA run.
+The full Linux unit suite passes on the canonical Ubuntu runtime; native Linux and WSL2 Ubuntu use the same commands. A bounded real seven-check Integration probe exists from Phase 3; the one-opponent 18-match smoke run described above is runtime proof, not performance evidence or a full EA run.
 
 ## Recent run evidence
 
@@ -49,6 +50,7 @@ The most recent complete saved population run (`runs/20260712_154209_634218`) us
   the pinned TMA/Mayari/COAC JARs). The same external artifacts are available to
   the isolated Final Test workflow.
 - WSL is the project default for Python/Java/MicroRTS commands.
+- Native Ubuntu Linux is the primary runtime, and WSL2 Ubuntu is also supported for Python/Java/MicroRTS commands.
 - Candidate inspection is artifact-only; the obsolete manual viewer has been removed.
 
 See [`architecture_gaps.md`](architecture_gaps.md) for the remaining implementation status.

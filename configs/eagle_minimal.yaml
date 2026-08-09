@@ -13,3 +13,17 @@ matches_per_candidate: 10
 match_timeout_seconds: 120
 mock_score_base: 10
 mock_score_step: 1
+
+llm:
+  roles:
+    match_commentator:
+      enabled: true
+      temperature: 0.2
+    manager:
+      enabled: true
+      temperature: 0.2
+    coach:
+      enabled: true
+      temperature: 0.4
+    generator:
+      enabled: true

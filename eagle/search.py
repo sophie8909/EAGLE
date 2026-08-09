@@ -1,4 +1,4 @@
-﻿"""Canonical evolutionary search for prompt-generated Java MicroRTS agents.
+"""Canonical evolutionary search for prompt-generated Java MicroRTS agents.
 
 This module owns experiment lifecycle, offspring orchestration, and population
 updates. Evaluation owns the shared child pipeline; final-test execution is a
@@ -34,6 +34,7 @@ from .llm_profiles import LLMClient
 from .llm_errors import LLMServerError
 from .offspring import normalize_prompt
 from .rewrite import PromptRewriteMutation
+from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation
 from .selection import (
     select_parent,
     assign_rank_and_crowding,
@@ -84,18 +85,6 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     else:
         reflection_backend = client.prompt_backend(operation="reflection")
         rewrite_backend = client.prompt_backend(operation="rewrite")
-    strategy_mutation = PromptRewriteMutation(
-
-        config,
-        mutation_type="strategy",
-        reflection_backend=reflection_backend,
-        rewrite_backend=rewrite_backend,
-        artifact_root=candidates_dir,
-        logger=llm_logger,
-        reflection_model=None if backend_name == "mock" else client.model,
-        rewrite_model=None if backend_name == "mock" else client.model,
-        backend_name=backend_name,
-    )
     code_mutation = PromptRewriteMutation(
         config,
         mutation_type="code",
@@ -106,6 +95,16 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         reflection_model=None if backend_name == "mock" else client.model,
         rewrite_model=None if backend_name == "mock" else client.model,
         backend_name=backend_name,
+    )
+    role_temperatures = {role: temperature for role, _, temperature in config.llm_roles}
+    enabled_roles = ({role for role, enabled, _ in config.llm_roles if enabled} if config.llm_roles else {"match_commentator", "manager", "coach", "generator"})
+    strategy_role_backend = MockRoleBackend() if mock else client.prompt_backend(operation="match_commentator", temperature=role_temperatures.get("match_commentator"))
+    strategy_reflection_mutation = StrategyReflectionMutation(
+        strategy_role_backend,
+        max_attempts=config.mutation_max_attempts,
+        max_prompt_chars=60_000,
+        model_identity=None if backend_name == "mock" else client.model,
+        enabled_roles=enabled_roles,
     )
     write_resolved_config(
         run_dir,
@@ -174,7 +173,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             config=config,
             generation=generation,
             rng=rng,
-            mutations={"strategy": strategy_mutation, "code": code_mutation},
+            mutations={"strategy": strategy_reflection_mutation, "code": code_mutation},
             artifact_root=candidates_dir,
             error_memory=error_memory,
         )

@@ -108,3 +108,10 @@ final-population snapshots. Match stdout/stderr, commands, raw result payloads,
 and telemetry are excluded from those snapshots and remain in their owning
 match directories. Artifact compaction must never remove fitness objectives or
 timing records needed by resume and analysis.
+
+## Strategy Reflection role timing
+
+Strategy Reflection attempt records use the canonical role names
+`match_commentator`, `manager`, `coach`, and `generator`. The Generator timing
+is the existing Java-generation timing; Commentator, Manager, and Coach timing
+is stored in their role request/response envelopes.

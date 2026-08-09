@@ -1,4 +1,4 @@
-﻿"""Single LLM client configuration shared by all logical EAGLE operations."""
+"""Single LLM client configuration shared by all logical EAGLE operations."""
 from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import urlparse
@@ -44,11 +44,11 @@ class LLMClient:
 
     def generation_backend(self, *, logger=None):
         from generation.backend import build_generation_backend
-        return build_generation_backend("openai", base_url=self.base_url, model=self.model, logger=logger, llm_profile="generation", timeout_sec=self.timeout_seconds, temperature=self.temperature, max_output_tokens=self.max_output_tokens)
+        return build_generation_backend("openai", base_url=self.base_url, model=self.model, logger=logger, llm_profile="generator", timeout_sec=self.timeout_seconds, temperature=self.temperature, max_output_tokens=self.max_output_tokens)
 
-    def prompt_backend(self, *, operation: str):
+    def prompt_backend(self, *, operation: str, temperature: float | None = None):
         from eagle.mutation import build_reflection_backend
-        return build_reflection_backend("openai", base_url=self.base_url, model=self.model, llm_profile=operation, timeout_sec=self.timeout_seconds, temperature=self.temperature, max_output_tokens=self.max_output_tokens)
+        return build_reflection_backend("openai", base_url=self.base_url, model=self.model, llm_profile=operation, timeout_sec=self.timeout_seconds, temperature=self.temperature if temperature is None else temperature, max_output_tokens=self.max_output_tokens)
 
 def build_shared_profile(base_url: str, model: str, **kwargs) -> LLMProfile:
     parsed=urlparse(base_url)

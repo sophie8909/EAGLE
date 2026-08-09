@@ -192,3 +192,27 @@ Each Reflection, Rewrite, and Generation stage artifact records stage, the logic
 Final Test writes only beneath `runs/<run_id>/final_tests/<final_test_id>/` and never overwrites Evolution Evaluation evidence. Schema `eagle-final-test-v1` owns copied/resolved configuration, pre-match selection proof, opponent commits/classes/JAR hashes/adapter hashes, compile-once source/class identity, one evidence directory per scheduled match, JSONL results, failure inventory, aggregation, and timing.
 
 Unknown final-test schemas are rejected by the UI-independent reader. The complete tree and field ownership are defined in [`../evaluation/final_test.md`](../evaluation/final_test.md).
+
+
+## Strategy Reflection artifacts
+
+Temporary per-match traces are `matches/<match_id>/match_log.jsonl.gz`. They are
+streamed one tick per JSONL record and deleted after terminal Match Commentator
+handling. Permanent compact evidence is:
+
+```text
+matches/<match_id>/match_result.json
+candidates/<candidate_id>/commentary/<match_id>/match_analysis.json
+candidates/<candidate_id>/commentary/<match_id>/commentary_status.json
+candidates/<candidate_id>/reflection/manager_request.json
+candidates/<candidate_id>/reflection/manager_response.json
+candidates/<candidate_id>/reflection/manager_analysis.json
+candidates/<candidate_id>/reflection/coach_request.json
+candidates/<candidate_id>/reflection/coach_response.json
+candidates/<candidate_id>/reflection/coach_result.json
+```
+
+Role envelopes contain the role, candidate and generation identity, request ID,
+model-configuration identity, prompt version, and schema version. Manager and
+Coach artifacts never contain raw tick logs. Coach results retain both parent
+and replacement strategy prompts.

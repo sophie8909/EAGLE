@@ -1,4 +1,4 @@
-﻿"""Experiment configuration for the generated-agent EAGLE pipeline."""
+"""Experiment configuration for the generated-agent EAGLE pipeline."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import yaml
 from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH, get_seed_prompt_template
 
 from .candidate import DEFAULT_GENERATION_PROMPT
+from .llm_roles import parse_role_settings
 
 
 TRAINING_OPPONENT = "ai.abstraction.LightRush"
@@ -66,6 +67,7 @@ class ExperimentConfig:
     match_commentator_enabled: bool = True
     match_commentator_temperature: float = 0.2
     match_commentator_chunk_ticks: int = 200
+    llm_roles: tuple[tuple[str, bool, float | None], ...] = ()
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
@@ -124,10 +126,11 @@ class ExperimentConfig:
         if not isinstance(llm_settings, dict):
             raise ValueError("Experiment llm settings must be a mapping.")
         max_tokens = llm_settings.get("max_tokens")
-        role_settings = llm_settings.get("roles", {})
-        if not isinstance(role_settings, dict):
+        raw_role_settings = llm_settings.get("roles", {})
+        if not isinstance(raw_role_settings, dict):
             raise ValueError("llm.roles must be a mapping when provided.")
-        commentator_settings = role_settings.get("match_commentator", {})
+        role_settings = parse_role_settings(raw_role_settings)
+        commentator_settings = raw_role_settings.get("match_commentator", {})
         if not isinstance(commentator_settings, dict):
             raise ValueError("llm.roles.match_commentator must be a mapping.")
         evaluation_settings = payload.get("evaluation", {})
@@ -161,6 +164,7 @@ class ExperimentConfig:
             match_commentator_enabled=bool(commentator_settings.get("enabled", True)),
             match_commentator_temperature=float(commentator_settings.get("temperature", 0.2)),
             match_commentator_chunk_ticks=int(commentator_settings.get("chunk_ticks", 200)),
+            llm_roles=tuple((role, item.enabled, item.temperature) for role, item in role_settings.items()),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
@@ -243,6 +247,8 @@ class ExperimentConfig:
             raise ValueError("eagle opponent weight bounds are invalid.")
         if self.llm_temperature < 0:
             raise ValueError("llm.temperature must not be negative.")
+        if any(temperature is not None and temperature < 0 for _, _, temperature in self.llm_roles):
+            raise ValueError("llm.roles temperatures must not be negative.")
         if self.llm_max_tokens is not None and self.llm_max_tokens < 1:
             raise ValueError("llm.max_tokens must be positive.")
         if self.match_commentator_temperature < 0:

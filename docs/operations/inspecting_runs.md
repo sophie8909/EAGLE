@@ -6,7 +6,7 @@ run root, or pass one explicit relative or absolute canonical run folder:
 ```bash
 ./analyze.sh
 ./analyze.sh runs/20260728_143000_eagle
-./analyze.sh /home/mhlab/EAGLE/runs/20260728_143000_eagle
+./analyze.sh ~/EAGLE/runs/20260728_143000_eagle
 ```
 
 A canonical run is identified by a supported `manifest.json`, a supported
