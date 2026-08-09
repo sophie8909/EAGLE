@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import signal
 import socket
 import subprocess
 import time
@@ -10,6 +9,11 @@ from dataclasses import dataclass
 
 from .config import RuntimeConfig
 from .endpoints import health_check
+
+try:
+    import psutil
+except ImportError:  # pragma: no cover - the runtime environment declares psutil.
+    psutil = None
 
 
 @dataclass(frozen=True)
@@ -26,6 +30,7 @@ def build_server_command(runtime: RuntimeConfig) -> list[str]:
         "--port", str(llm.port), "--ctx-size", str(llm.context_size),
         "--n-gpu-layers", str(llm.gpu_layers), "--parallel", str(llm.parallel),
         "--threads", str(llm.threads), "--batch-size", str(llm.batch_size),
+        *llm.server_arguments,
     ]
 
 
@@ -53,14 +58,17 @@ class RuntimeManager:
         self.runtime.log_root.mkdir(parents=True, exist_ok=True)
         log_path = self.runtime.log_path
         with log_path.open("a", encoding="utf-8") as log:
-            process = subprocess.Popen(
-                command,
-                cwd=self.runtime.project_root,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-                text=True,
-            )
+            popen_kwargs = {
+                "cwd": self.runtime.project_root,
+                "stdout": log,
+                "stderr": subprocess.STDOUT,
+                "text": True,
+            }
+            if os.name == "nt":
+                popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                popen_kwargs["start_new_session"] = True
+            process = subprocess.Popen(command, **popen_kwargs)
         self.write_pid(process.pid)
         deadline = time.monotonic() + self.runtime.llm.startup_timeout_seconds
         detail = "startup timeout"
@@ -143,38 +151,37 @@ class RuntimeManager:
 
 
 def read_command(pid: int) -> str:
+    process = _process(pid)
+    if process is None:
+        return ""
     try:
-        return " ".join(
-            part.decode("utf-8", errors="replace")
-            for part in open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
-            if part
-        )
-    except OSError:
+        return " ".join(process.cmdline())
+    except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
         return ""
 
 
 def command_matches(pid: int, runtime: RuntimeConfig) -> bool:
-    command = read_command(pid)
+    command = _normalize_command(read_command(pid))
     return all(
-        value in command
+        _normalize_command(value)
+        in command
         for value in (
-            str(runtime.llm.server_binary), str(runtime.llm.model_path), str(runtime.llm.port),
+            str(runtime.llm.server_binary),
+            str(runtime.llm.model_path),
+            str(runtime.llm.port),
         )
     )
 
 
 def process_alive(pid: int) -> bool:
-    if pid <= 0:
+    process = _process(pid)
+    if process is None:
         return False
     try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
+        return process.is_running() and process.status() != psutil.STATUS_ZOMBIE
+    except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
         return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
+
 
 
 def port_occupied(host: str, port: int) -> bool:
@@ -190,14 +197,33 @@ def port_occupied(host: str, port: int) -> bool:
 
 
 def terminate_pid(pid: int, timeout: float) -> None:
-    os.kill(pid, signal.SIGTERM)
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if not process_alive(pid):
-            return
-        time.sleep(0.1)
-    if process_alive(pid):
-        os.kill(pid, signal.SIGKILL)
+    process = _process(pid)
+    if process is None:
+        return
+    try:
+        process.terminate()
+        process.wait(timeout=timeout)
+    except psutil.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=timeout)
+    except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
+        return
+
+
+def _process(pid: int):
+    if pid <= 0:
+        return None
+    if psutil is None:
+        raise RuntimeError("Process management requires the psutil package.")
+    try:
+        return psutil.Process(pid)
+    except (psutil.NoSuchProcess, psutil.ZombieProcess):
+        return None
+
+
+def _normalize_command(value: object) -> str:
+    return str(value).replace("\\", "/").casefold()
+
 
 
 def _log_tail(path, lines: int = 80) -> str:

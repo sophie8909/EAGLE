@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,7 +9,12 @@ from unittest.mock import patch
 
 import yaml
 
-from eagle.runtime.config import LEGACY_RUNTIME_ERROR, load_runtime_config
+from eagle.runtime.config import (
+    LEGACY_RUNTIME_ERROR,
+    load_runtime_config,
+    platform_executable_names,
+    resolve_executable,
+)
 from eagle.runtime.processes import RuntimeManager, build_server_command
 
 
@@ -81,12 +88,63 @@ class RuntimeWorkflowTests(unittest.TestCase):
             path.write_text(yaml.safe_dump(payload), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "between 1 and 65535"):
                 load_runtime_config(path)
-            binary = root / "llama-server"
-            binary.chmod(0o644)
-            path = self.make_config(root)
-            binary.chmod(0o644)
-            with self.assertRaisesRegex(ValueError, "not executable"):
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload["llm"]["server_binary"] = str(root / "missing-llama-server.exe")
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "does not exist or is not a file"):
                 load_runtime_config(path)
+
+
+    def test_executable_resolution_uses_explicit_path_before_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            explicit = root / ("llama-server.exe" if os.name == "nt" else "llama-server")
+            explicit.write_text("fake", encoding="utf-8")
+            with patch("eagle.runtime.config.shutil.which", return_value=None):
+                resolved = resolve_executable(
+                    explicit,
+                    default_names=platform_executable_names("llama-server"),
+                    label="llama.cpp server",
+                )
+            self.assertEqual(resolved, explicit.resolve())
+
+    def test_named_executable_resolves_from_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            found = Path(directory) / "llama-server.exe"
+            found.write_text("fake", encoding="utf-8")
+            with patch("eagle.runtime.config.shutil.which", return_value=str(found)):
+                resolved = resolve_executable(
+                    "llama-server",
+                    default_names=platform_executable_names("llama-server"),
+                    label="llama.cpp server",
+                )
+            self.assertEqual(resolved, found.resolve())
+
+    def test_runtime_defaults_to_active_python(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = load_runtime_config(self.make_config(Path(directory)))
+            self.assertEqual(runtime.tools.python, Path(sys.executable).resolve())
+
+    def test_missing_named_executable_fails_with_actionable_error(self):
+        with patch("eagle.runtime.config.shutil.which", return_value=None):
+            with self.assertRaisesRegex(ValueError, "llama.cpp server executable not found"):
+                resolve_executable(
+                    "llama-server.exe",
+                    default_names=platform_executable_names("llama-server"),
+                    label="llama.cpp server",
+                )
+
+    def test_server_arguments_are_forwarded_without_a_shell(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.make_config(root)
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload["llm"]["arguments"] = ["--flash-attn", "on"]
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            runtime = load_runtime_config(path)
+            command = build_server_command(runtime)
+            self.assertEqual(command[-2:], ["--flash-attn", "on"])
+            self.assertNotIn("bash", command)
 
     def test_stale_pid_is_removed_and_unrelated_managed_pid_is_not_stopped(self):
         with tempfile.TemporaryDirectory() as directory:

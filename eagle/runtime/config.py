@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import shutil
 import socket
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -41,6 +43,7 @@ class LLMConfig:
     batch_size: int
     startup_timeout_seconds: float
     health_timeout_seconds: float
+    server_arguments: tuple[str, ...] = ()
 
     @property
     def base_url(self) -> str:
@@ -59,6 +62,13 @@ class LLMConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeTools:
+    python: Path
+    java: Path
+    javac: Path
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     source_path: Path
     project_root: Path
@@ -66,6 +76,7 @@ class RuntimeConfig:
     llm: LLMConfig
     log_path: Path
     pid_path: Path
+    tools: RuntimeTools
 
     @property
     def run_root(self) -> Path:
@@ -115,7 +126,8 @@ def load_runtime_config(
     runtime = _mapping(payload, "runtime")
     log_path = _runtime_path(runtime, "log_path", project_root)
     pid_path = _runtime_path(runtime, "pid_path", project_root)
-    result = RuntimeConfig(source, project_root, conda_env, llm, log_path, pid_path)
+    tools = _parse_tools(payload.get("tools"), project_root, validate_files=validate_files)
+    result = RuntimeConfig(source, project_root, conda_env, llm, log_path, pid_path, tools)
     if create_directories:
         for directory in (result.log_root, result.pid_root):
             directory.mkdir(parents=True, exist_ok=True)
@@ -131,13 +143,20 @@ def _parse_llm(value: dict[str, Any], project_root: Path, *, validate_files: boo
     if model_name != "qwen3.5-9b":
         raise ValueError("llm.model_name must be exactly 'qwen3.5-9b'.")
     model_path = _path(value, "model_path", project_root)
-    server_binary = _path(value, "server_binary", project_root)
+    server_value = value.get("server_binary", value.get("executable"))
+    server_binary = resolve_executable(
+        server_value,
+        base_dir=project_root,
+        default_names=platform_executable_names("llama-server"),
+        label="llama.cpp server",
+        required=validate_files,
+    )
     if validate_files:
         if not model_path.is_file():
             raise ValueError(f"llm.model_path does not exist or is not a file: {model_path}")
-        if not server_binary.is_file() or not os.access(server_binary, os.X_OK):
+        if not server_binary.is_file():
             raise ValueError(
-                "llm.server_binary does not exist or is not executable: "
+                "llm.server_binary does not exist or is not a file: "
                 f"{server_binary}"
             )
     host = _required_text(value, "host")
@@ -152,9 +171,46 @@ def _parse_llm(value: dict[str, Any], project_root: Path, *, validate_files: boo
     batch_size = _positive_int(value, "batch_size")
     startup = _positive_number(value, "startup_timeout_seconds")
     health = _positive_number(value, "health_timeout_seconds")
+    server_arguments = _string_sequence(
+        value.get("arguments", value.get("server_arguments", ())),
+        "llm.arguments",
+    )
     return LLMConfig(
         model_name, model_path, server_binary, host, port, context_size, gpu_layers,
-        parallel, threads, batch_size, startup, health,
+        parallel, threads, batch_size, startup, health, server_arguments,
+    )
+
+
+def _parse_tools(value: object, project_root: Path, *, validate_files: bool) -> RuntimeTools:
+    if value is None:
+        value = {}
+    if not isinstance(value, dict):
+        raise ValueError("Runtime config field 'tools' must be a mapping.")
+    python_value = value.get("python", value.get("python_executable"))
+    if python_value in (None, ""):
+        python_value = sys.executable
+    return RuntimeTools(
+        python=resolve_executable(
+            python_value,
+            base_dir=project_root,
+            default_names=platform_executable_names("python"),
+            label="Python",
+            required=validate_files,
+        ),
+        java=resolve_executable(
+            value.get("java", value.get("java_executable")),
+            base_dir=project_root,
+            default_names=platform_executable_names("java"),
+            label="Java",
+            required=validate_files,
+        ),
+        javac=resolve_executable(
+            value.get("javac", value.get("javac_executable")),
+            base_dir=project_root,
+            default_names=platform_executable_names("javac"),
+            label="javac",
+            required=validate_files,
+        ),
     )
 
 
@@ -191,6 +247,66 @@ def _path(payload: dict[str, Any], key: str, project_root: Path) -> Path:
 
 def _runtime_path(payload: dict[str, Any], key: str, project_root: Path) -> Path:
     return _path(payload, key, project_root)
+
+
+def resolve_executable(
+    value: object | None,
+    *,
+    base_dir: Path | None = None,
+    default_names: tuple[str, ...],
+    label: str,
+    required: bool = True,
+) -> Path:
+    """Resolve configured paths first, then PATH, then platform defaults."""
+
+    configured = None if value is None else str(value).strip()
+    if configured:
+        candidate = Path(configured).expanduser()
+        has_path = (
+            candidate.is_absolute()
+            or candidate.parent != Path(".")
+            or configured.startswith((".", "/", '\\'))
+        )
+        if has_path:
+            if not candidate.is_absolute() and base_dir is not None:
+                candidate = base_dir / candidate
+            candidate = candidate.resolve()
+            if candidate.is_file():
+                return candidate
+            if required:
+                raise ValueError(f"{label} executable does not exist or is not a file: {candidate}")
+            return candidate
+        found = shutil.which(configured)
+        if found:
+            return Path(found).resolve()
+        if required:
+            raise ValueError(f"{label} executable not found on PATH: {configured}")
+        return Path(configured)
+
+    for name in default_names:
+        found = shutil.which(name)
+        if found:
+            return Path(found).resolve()
+    if required:
+        names = ", ".join(default_names)
+        raise ValueError(f"{label} executable not found. Add one of [{names}] to PATH or configure its path.")
+    return Path(default_names[0])
+
+
+def platform_executable_names(name: str) -> tuple[str, ...]:
+    if os.name == "nt":
+        return (f"{name}.exe", name)
+    return (name, f"{name}.exe")
+
+
+def _string_sequence(value: object, field: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, (list, tuple)) or any(
+        not isinstance(item, str) or not item.strip() for item in value
+    ):
+        raise ValueError(f"Runtime config field {field!r} must be a list of non-empty strings.")
+    return tuple(item.strip() for item in value)
 
 
 def _integer(payload: dict[str, Any], key: str) -> int:
