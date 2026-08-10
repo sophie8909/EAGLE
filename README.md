@@ -18,10 +18,13 @@ existing Qwen3.5-9B GGUF model, one CUDA-enabled `llama-server`, and
 `http://127.0.0.1:8080`. `run_env.sh` only manages that one process; it never
 starts the EA or analysis. `run.sh` validates that endpoint and runs the EA.
 
-`watchdog.sh` is an optional independent foreground monitor. It polls
-`run_env.sh status` and invokes `run_env.sh start` when the managed runtime is
-stopped or unhealthy. Use `./watchdog.sh --once` for one check, or
-`--interval SECONDS` to change the default ten-second polling interval.
+`watchdog.sh` is an optional independent foreground connectivity monitor. It
+checks the local network interface used by the default route and cycles the
+interface down/up when it is disconnected. It does not start, stop, or restart
+the LLM server. Use `run_env.sh` for server lifecycle, `./watchdog.sh --once`
+for one probe/recovery attempt, or `--interval SECONDS` to change the default
+five-minute polling interval. Set `EAGLE_WATCHDOG_INTERFACE` to pin a specific
+interface. Non-root execution requires passwordless `sudo` for `ip link`.
 
 Runtime state is intentionally small:
 
@@ -32,8 +35,8 @@ runtime/
 ```
 
 No model menus, endpoint discovery, remote mode, GUI, or fallback model is
-supported. The watchdog is only a shell-level monitor for the same configured
-local runtime; it is not a second server or endpoint.
+supported. The watchdog is only a shell-level local-interface monitor/recovery
+script; it is not a server lifecycle manager, second server, or endpoint router.
 
 ## Analysis
 

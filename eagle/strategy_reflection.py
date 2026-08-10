@@ -7,14 +7,17 @@ continues to use :mod:`eagle.rewrite` and is not routed through this module.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import random
+import shutil
 import time
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
-from evaluation.match_logs import delete_match_log, read_match_log_chunks
+from evaluation.match_logs import read_match_log_chunks
 
 from .candidate import Candidate
 from .llm_transport import truncate_prompt
@@ -130,7 +133,7 @@ class MockRoleBackend:
 class StrategyReflectionPipeline:
     """Run Commentator -> Manager -> Coach using shared backend plumbing."""
 
-    def __init__(self, backend: RoleBackend, *, max_attempts: int = 3, max_prompt_chars: int = 60_000, model_identity: str | None = None, enabled_roles: set[str] | None = None) -> None:
+    def __init__(self, backend: RoleBackend, *, max_attempts: int = 3, max_prompt_chars: int = 60_000, model_identity: str | None = None, enabled_roles: set[str] | None = None, selection_seed: int = 0) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
         self.backend = backend
@@ -138,6 +141,7 @@ class StrategyReflectionPipeline:
         self.max_prompt_chars = max_prompt_chars
         self.model_identity = model_identity
         self.enabled_roles = frozenset(("match_commentator", "manager", "coach") if enabled_roles is None else enabled_roles)
+        self.selection_seed = int(selection_seed)
 
     def mutate(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None) -> Candidate:
         result = self.run(candidate, context, artifact_dir=artifact_dir)
@@ -149,27 +153,40 @@ class StrategyReflectionPipeline:
             return _failed_result(candidate, artifact_dir, "strategy reflection roles disabled", [])
         analyses: list[MatchAnalysis] = []
         failures: list[str] = []
+        selection = select_reflection_matches(
+            context.per_match_results,
+            run_seed=self.selection_seed,
+            generation_index=context.evolution.generation_index,
+            candidate_id=candidate.id,
+            reflection_invocation=context.index,
+        )
+        _write_json(artifact_dir, "reflection/match_selection.json", selection)
+        selected_ids = set(selection["selected_match_ids"])
         for item in context.per_match_results:
+            match_id = _match_id(item)
+            if match_id not in selected_ids:
+                _delete_raw_match_artifacts(item)
+
+        selected_items = [item for item in context.per_match_results if _match_id(item) in selected_ids]
+        for item in selected_items:
             match_id = str(item.get("match_id") or f"match_{item.get('match_index', len(analyses)):03d}")
             log_path = _resolve_path(item.get("match_log_path"))
             if log_path is None or not log_path.exists():
                 failures.append(f"{match_id}: commentary unavailable")
                 _write_status(artifact_dir, match_id, "unavailable", failures[-1])
+                _delete_raw_match_artifacts(item)
                 continue
             try:
                 analysis = self._commentate(candidate, context, item, match_id, log_path, artifact_dir)
             except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
                 failures.append(f"{match_id}: {exc}")
                 _write_status(artifact_dir, match_id, "failed", str(exc))
-                delete_match_log(log_path)
+                _delete_raw_match_artifacts(item)
                 continue
             analyses.append(analysis)
-            delete_match_log(log_path)
+            _delete_raw_match_artifacts(item)
 
-        if failures:
-            return _failed_result(candidate, artifact_dir, f"commentary: {failures[0]}", analyses)
-
-        manager_payload = _manager_payload(candidate, context, analyses)
+        manager_payload = _manager_payload(candidate, context, analyses, selection, failures)
         try:
             manager_raw = self._call_role("manager", _manager_prompt(manager_payload), candidate, artifact_dir, extra={"candidate_id": candidate.id})
             manager = _parse_manager(manager_raw)
@@ -194,6 +211,7 @@ class StrategyReflectionPipeline:
                         "manager_analysis": manager.to_dict(),
                         "coach_result": coach.to_dict(),
                         "commentary_failures": failures,
+                        "match_selection": selection,
                     },
                     "mutation": {"applied": True, "type": "strategy", "reflection_error": None, "rewrite_error": None},
                 },
@@ -217,7 +235,7 @@ class StrategyReflectionPipeline:
         if len(partials) == 1:
             analysis = _parse_commentary(partials[0], match_id)
         else:
-            request = _commentator_synthesis_prompt(match_id, partials)
+            request = _commentator_synthesis_prompt(match_id, item, partials)
             raw = self._call_role("match_commentator", request, candidate, artifact_dir, match_id=match_id, suffix="synthesis")
             analysis = _parse_commentary(_parse_json(raw), match_id)
         _write_json(artifact_dir, f"commentary/{match_id}/match_analysis.json", analysis.to_dict())
@@ -252,30 +270,155 @@ class StrategyReflectionMutation(StrategyReflectionPipeline):
     pass
 
 
+def select_reflection_matches(
+    match_results: tuple[dict[str, Any], ...] | list[dict[str, Any]],
+    *,
+    run_seed: int,
+    generation_index: int,
+    candidate_id: str,
+    reflection_invocation: int = 0,
+) -> dict[str, Any]:
+    """Select up to three detailed matches using reproducible loss/draw/win priority."""
+
+    rows = [item for item in match_results if isinstance(item, dict)]
+    pools: dict[str, list[dict[str, Any]]] = {"loss": [], "draw": [], "win": []}
+    for item in rows:
+        outcome = _match_outcome(item)
+        if outcome is not None:
+            pools[outcome].append(item)
+    if pools["loss"]:
+        selected_outcome = "loss"
+    elif pools["draw"]:
+        selected_outcome = "draw"
+    elif pools["win"]:
+        selected_outcome = "win"
+    else:
+        selected_outcome = None
+
+    eligible = pools[selected_outcome] if selected_outcome is not None else []
+    seed = _selection_seed(
+        run_seed=run_seed,
+        generation_index=generation_index,
+        candidate_id=candidate_id,
+        reflection_invocation=reflection_invocation,
+    )
+    sample_size = min(3, len(eligible))
+    selected = random.Random(seed).sample(eligible, sample_size)
+    return {
+        "schema_version": "strategy-reflection-match-selection-v1",
+        "candidate_id": candidate_id,
+        "generation_index": generation_index,
+        "total_match_count": len(rows),
+        "available_results": {key: len(pools[key]) for key in ("loss", "draw", "win")},
+        "selected_outcome_class": selected_outcome,
+        "selection_rule": "strict_priority_loss_draw_win",
+        "eligible_match_ids": [_match_id(item) for item in eligible],
+        "selected_match_ids": [_match_id(item) for item in selected],
+        "requested_sample_size": 3,
+        "actual_sample_size": sample_size,
+        "random_provenance": {
+            "seed": seed,
+            "run_seed": int(run_seed),
+            "generation_index": int(generation_index),
+            "candidate_id": candidate_id,
+            "reflection_invocation": int(reflection_invocation),
+        },
+    }
+
+
+def _selection_seed(*, run_seed: int, generation_index: int, candidate_id: str, reflection_invocation: int) -> int:
+    material = f"{int(run_seed)}:{int(generation_index)}:{candidate_id}:{int(reflection_invocation)}:strategy_reflection".encode("utf-8")
+    return int.from_bytes(hashlib.sha256(material).digest()[:8], "big", signed=False)
+
+
+def _match_id(item: dict[str, Any]) -> str:
+    return str(item.get("match_id") or f"match_{int(item.get('match_index', -1)):03d}")
+
+
+def _match_outcome(item: dict[str, Any]) -> str | None:
+    if item.get("ok") is False or str(item.get("status") or "").lower() in {"failed", "error", "unavailable"}:
+        return None
+    candidate_player = item.get("candidate_player")
+    winner = item.get("winner")
+    try:
+        candidate_player = int(candidate_player)
+    except (TypeError, ValueError):
+        candidate_player = None
+    try:
+        winner = int(winner)
+    except (TypeError, ValueError):
+        winner = None
+    if candidate_player in {0, 1} and winner in {0, 1}:
+        return "win" if winner == candidate_player else "loss"
+    result = str(item.get("result") or "").lower()
+    if "win" in result:
+        if candidate_player is not None and result == f"p{candidate_player}_win":
+            return "win"
+        if result in {"p0_win", "p1_win"}:
+            return "loss"
+    if "draw" in result or winner not in {0, 1}:
+        return "draw"
+    return None
+
+
+def _delete_raw_match_artifacts(item: dict[str, Any]) -> None:
+    """Delete temporary commentator logs while preserving compact score artifacts."""
+
+    paths = [item.get("match_log_path"), item.get("match_trace_path")]
+    match_dir: Path | None = None
+    for value in paths:
+        if value:
+            path = Path(str(value))
+            match_dir = path.parent
+            path.unlink(missing_ok=True)
+    replay = item.get("replay_path")
+    if replay:
+        Path(str(replay)).unlink(missing_ok=True)
+    if match_dir is not None:
+        round_states = match_dir / "round_states"
+        if round_states.exists():
+            shutil.rmtree(round_states)
+
+
 def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, chunk: list[dict[str, Any]], chunk_index: int, chunk_count: object) -> str:
     return "\n".join([
         "ROLE: match_commentator",
         "You are the Match Commentator for an evolutionary MicroRTS team.",
         "Analyze one completed match only. Analyze both candidate and opponent.",
+        "Do not generalize this single match to the candidate's entire strategy.",
+        "Analyze only the supplied match. The Manager will compare multiple match analyses with aggregate evaluation results.",
         "Do not modify strategy, write Java, calculate fitness, or act as Manager or Coach.",
         f"match_id: {json.dumps(match_id)}",
-        f"candidate_strategy: {json.dumps(candidate.strategy_prompt, ensure_ascii=False)}",
-        f"opponent: {json.dumps(item.get('opponent_name') or item.get('opponent') or 'unknown')}",
+        f"candidate_basic_strategy: {json.dumps(candidate.strategy_prompt, ensure_ascii=False)}",
+        f"opponent_basic_strategy: {json.dumps({'identity': item.get('opponent_name') or item.get('opponent') or 'unknown', 'class': item.get('opponent') or 'unknown'}, ensure_ascii=False, sort_keys=True)}",
+        f"complete_match_record: {json.dumps(item, ensure_ascii=False, sort_keys=True)}",
         f"coverage_chunk: {chunk_index + 1}/{chunk_count}",
         "Return the compact match_analysis JSON schema.",
         json.dumps(chunk, ensure_ascii=False, sort_keys=True),
     ])
 
 
-def _commentator_synthesis_prompt(match_id: str, partials: list[dict[str, Any]]) -> str:
-    return "\n".join(["ROLE: match_commentator", "Synthesize the complete match analysis from all non-overlapping chunks.", f"match_id: {json.dumps(match_id)}", json.dumps(partials, ensure_ascii=False, sort_keys=True)])
+def _commentator_synthesis_prompt(match_id: str, item: dict[str, Any], partials: list[dict[str, Any]]) -> str:
+    return "\n".join([
+        "ROLE: match_commentator",
+        "Synthesize the complete match analysis from all non-overlapping chunks.",
+        "Analyze only the supplied match and do not generalize it to the candidate's entire strategy.",
+        f"match_id: {json.dumps(match_id)}",
+        f"complete_match_record: {json.dumps(item, ensure_ascii=False, sort_keys=True)}",
+        json.dumps(partials, ensure_ascii=False, sort_keys=True),
+    ])
 
 
 def _manager_prompt(payload: dict[str, Any]) -> str:
     return "\n".join([
         "ROLE: manager",
         "You are the Manager of an evolutionary MicroRTS team.",
-        "Use all match analyses to produce a concise strategic improvement plan.",
+        "You receive complete aggregate evaluation results and a small selected subset of detailed Match Commentator analyses.",
+        "Detailed matches use strict categorical priority: loss > draw > win.",
+        "If any losses existed, only losses were eligible. If no losses but draws existed, only draws were eligible. Wins were eligible only when there were no losses or draws.",
+        "Do not treat selected commentary as an unbiased sample or as the full evaluation distribution.",
+        "Use aggregate results to preserve successful opponents, maps, player positions, and other strong behaviors.",
+        "Use selected commentary to explain problematic matches and identify recurring strategic weaknesses.",
         "Do not inspect raw ticks, Java, compiler logs, or write the final strategy prompt.",
         "Return JSON with priority_improvements limited to at most three items.",
         json.dumps(payload, ensure_ascii=False, sort_keys=True),
@@ -294,12 +437,21 @@ def _coach_prompt(parent_strategy: str, manager: ManagerPlan) -> str:
     ])
 
 
-def _manager_payload(candidate: Candidate, context: ReflectionContext, analyses: list[MatchAnalysis]) -> dict[str, Any]:
+def _manager_payload(candidate: Candidate, context: ReflectionContext, analyses: list[MatchAnalysis], selection: dict[str, Any], failures: list[str]) -> dict[str, Any]:
     game = context.game_evidence or {}
+    selection_metadata = dict(selection)
+    selection_metadata.update({
+        "selected_match_count": selection.get("actual_sample_size", 0),
+        "total_losses": (selection.get("available_results") or {}).get("loss", 0),
+        "total_draws": (selection.get("available_results") or {}).get("draw", 0),
+        "total_wins": (selection.get("available_results") or {}).get("win", 0),
+        "commentary_failures": list(failures),
+        "selection_is_biased_toward_worse_outcomes": True,
+    })
     return {
         "candidate_id": candidate.id,
         "game_performance": context.aggregate_game_performance,
-        "opponent_results": [item.to_json_dict() for item in context.opponent_results],
+        "opponent_results": [item.to_dict() for item in context.opponents],
         "matches": [
             {
                 "match_id": item.match_id,
@@ -317,6 +469,8 @@ def _manager_payload(candidate: Candidate, context: ReflectionContext, analyses:
             for item in analyses
         ],
         "aggregate_summary": {key: game.get(key) for key in ("wins", "draws", "losses", "completed_match_count", "score_stddev")},
+        "parent_comparison": context.parent_comparison or {"available": False},
+        "match_selection": selection_metadata,
     }
 
 

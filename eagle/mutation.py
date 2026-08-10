@@ -20,7 +20,7 @@ from .candidate import Candidate
 from .config import ExperimentConfig
 from .llm_errors import LLMServerError
 from .llm_progress import llm_request_progress
-from .llm_transport import read_chat_completion_content
+from .llm_transport import read_chat_completion_content, truncate_prompt
 from .reflection_context import (
     CandidateReflectionSummary,
     CodeDiagnostics,
@@ -40,6 +40,7 @@ from .reflection_prompts import (
 
 
 REFLECTION_SCHEMA_VERSION = "reflection-v2"
+DEFAULT_STRUCTURED_OUTPUT_TOKENS = 2048
 
 
 def utc_now() -> str:
@@ -219,7 +220,11 @@ class OpenAICompatibleReflectionBackend:
         self.llm_profile = llm_profile
         self.timeout_sec = timeout_sec
         self.temperature = temperature
-        self.max_output_tokens = max_output_tokens
+        self.max_output_tokens = (
+            DEFAULT_STRUCTURED_OUTPUT_TOKENS
+            if max_output_tokens is None
+            else max_output_tokens
+        )
 
     @property
     def chat_completions_url(self) -> str:
@@ -228,6 +233,7 @@ class OpenAICompatibleReflectionBackend:
         return f"{self.base_url}/v1/chat/completions"
 
     def generate(self, prompt: str) -> str:
+        prompt = truncate_prompt(prompt)
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],

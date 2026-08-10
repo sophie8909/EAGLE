@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from eagle.commentary_aggregation import aggregate_commentaries
-from eagle.match_commentator import CommentaryConfig, CommentaryResult, commentate_match
+from eagle.match_commentator import CommentaryConfig, CommentaryResult, _contiguous_chunks, commentate_match
 from eagle.mutation import MockReflectionBackend
 from evaluation.runtime_evaluation import run_microrts_match
 
@@ -36,6 +36,11 @@ class MatchCommentatorTests(unittest.TestCase):
             ranges = output.status_payload["covered_tick_ranges"]
             self.assertEqual([(item["first_tick"], item["last_tick"]) for item in ranges], [(0, 2), (3, 5), (6, 7)])
             self.assertEqual(sum(item["tick_count"] for item in ranges), 8)
+
+    def test_large_tick_records_are_bounded_by_prompt_chars(self):
+        rows = [{"tick": tick, "raw_state": "x" * 1200} for tick in range(6)]
+        chunks = _contiguous_chunks(rows, chunk_ticks=200, max_prompt_chars=4096)
+        self.assertEqual([[row["tick"] for row in chunk] for chunk in chunks], [[0, 1, 2], [3, 4, 5]])
 
     def test_invalid_final_response_is_persisted_without_fitness_effect(self):
         with tempfile.TemporaryDirectory() as value:

@@ -8,20 +8,23 @@ NSGA-II, or AOS.
 ## Responsibility flow
 
 ```text
-MicroRTS match
-→ Java per-cycle snapshot
-→ streamed gzip JSONL trace
+all configured MicroRTS matches
+→ temporary complete tick logs
+→ strict loss/draw/win outcome selection
+→ at most three selected logs
 → contiguous commentator chunks
-→ final per-match commentary
-→ deterministic candidate aggregation
+→ final selected-match commentary
+→ Manager with aggregate results and selection metadata
 → Strategy Reflection context
 ```
 
 The Java observation hook is `third_party/microrts/src/rts/Game.java`, where
 `writeRoundStateSnapshot` is called before the loop and after each cycle.
 Python conversion and persistence are owned by `evaluation/match_trace.py`;
-commentary and response validation are owned by `eagle/match_commentator.py`;
-aggregation is owned by `eagle/commentary_aggregation.py`.
+commentary and response validation are owned by the sports-role pipeline in
+`eagle/strategy_reflection.py`. The general-purpose
+`eagle/match_commentator.py` API is a standalone trace-commentary utility and is
+not called once per EA match.
 
 ## Configuration and shared client
 
@@ -100,19 +103,29 @@ Invalid or generic evidence-free responses are retried a bounded number of
 times. Persistent failure writes an unavailable commentary and status; it does
 not change `game_performance`, `code_quality`, match winner, or selection.
 
+## Strategy Reflection selection
+
+Selection is categorical, not weighted:
+
+```text
+losses exist → sample up to 3 losses
+otherwise draws exist → sample up to 3 draws
+otherwise → sample up to 3 wins
+```
+
+The lower-priority classes have zero probability whenever a higher-priority
+class exists. Missing slots are never backfilled. Selection uses a local RNG
+seed derived from existing EA/run identity and persists its provenance in
+`reflection/match_selection.json`. The selected commentary is deliberately
+biased toward the worst available outcome; the Match Commentator is instructed
+not to generalize one selected match to the full candidate strategy.
+
 ## Strategy Reflection handoff
 
-`eagle/commentary_aggregation.py` deterministically groups comments by
-opponent, map, candidate side, result, and recurring recommendation. It keeps
-compact representative match IDs and tick evidence, but does not pass raw
-traces, all chunks, full Java, compiler logs, or every comment field to Strategy
-Reflection.
-
-The aggregation is stored in `evaluation/commentary_aggregation.json` and also
-in candidate game/reflection evidence. Strategy Reflection receives the current
-strategy prompt, aggregate game performance, scalar code quality, equivalent
-parent comparison when available, prioritized changes, opponent summaries,
-representative evidence, and preserve behaviors.
+The Manager receives complete aggregate opponent/map/side and win/draw/loss
+results, plus only the selected match analyses and selection metadata. It does
+not receive raw traces. Fitness continues to use all configured matches; the
+selection affects reflection context only.
 
 ## Storage and limitations
 

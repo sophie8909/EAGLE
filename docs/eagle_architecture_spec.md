@@ -2115,10 +2115,14 @@ Final-test competition score is distinct from evolution `game_performance`. The 
 
 ## Match Commentator extension
 
-The canonical evaluation path may emit the auxiliary `match_commentator` role
-for every completed MicroRTS match. It reads the full per-tick trace, writes
-per-match structured commentary, and supplies only deterministic compact
-aggregation to Strategy Reflection. It does not alter either optimizer
-objective, match scoring, candidate validity, or selection. Trace and
-commentary ownership remains in the match directory; the schema and failure
-semantics are defined in `docs/match-commentator.md`.
+The canonical Strategy Reflection path may emit the auxiliary `match_commentator`
+role only after a candidate's complete evaluation matrix is available. It
+temporarily retains complete tick logs, selects one outcome class using strict
+`loss > draw > win` priority, and samples at most three matches without
+replacement using reproducible run-derived randomness. It deletes unselected
+logs before commentary and selected logs after terminal commentary handling.
+The Manager receives complete aggregate evaluation results plus only the selected
+analyses. This role does not alter either optimizer objective, match scoring,
+candidate validity, or selection. Trace and commentary ownership remains in the
+match directory; the schema and failure semantics are defined in
+`docs/match-commentator.md`.

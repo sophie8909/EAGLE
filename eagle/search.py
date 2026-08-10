@@ -105,6 +105,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         max_prompt_chars=60_000,
         model_identity=None if backend_name == "mock" else client.model,
         enabled_roles=enabled_roles,
+        selection_seed=config.random_seed,
     )
     write_resolved_config(
         run_dir,

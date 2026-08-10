@@ -52,9 +52,6 @@ from generation.java_agent_generator import (
 from .artifacts import write_candidate_artifacts, write_candidate_inputs
 from .candidate import Candidate, compact_candidate_metadata
 from .config import ExperimentConfig
-from .commentary_aggregation import aggregate_commentaries
-from .match_commentator import CommentaryConfig, CommentaryResult, commentate_match
-from .mutation import build_reflection_backend
 from .final_test.opponents import OpponentSetupError
 from .opponents import EVALUATION_ROSTER, OpponentSpec, SEARCH_OPPONENT_REGISTRY, rooted_jar_path
 from evaluation.opponent_schedule import EAGLE_OPPONENT_ID
@@ -489,34 +486,6 @@ def evaluate_candidate(
         "swap_player_sides": config.swap_player_sides,
         "expected_match_count": config.expected_match_count,
     }
-    commentary_results: list[CommentaryResult] = []
-    commentator_backend = None
-    if config.match_commentator_enabled:
-        commentator_backend = build_reflection_backend(
-            "mock" if mock else config.generation_backend,
-            base_url=config.llm_base_url,
-            model=config.llm_model,
-            llm_profile="match_commentator",
-            temperature=config.match_commentator_temperature,
-            max_output_tokens=config.llm_max_tokens,
-        )
-    commentator_config = CommentaryConfig(
-        enabled=config.match_commentator_enabled,
-        temperature=config.match_commentator_temperature,
-        chunk_ticks=config.match_commentator_chunk_ticks,
-        max_attempts=config.mutation_max_attempts,
-    )
-    for match in matches:
-        if match.match_dir:
-            commentary_results.append(
-                commentate_match(match, backend=commentator_backend, config=commentator_config)
-            )
-    commentary_aggregation = aggregate_commentaries(
-        matches,
-        commentary_results,
-        candidate_id=candidate.id,
-    )
-    game_payload["commentary_aggregation"] = commentary_aggregation
     compact_matches = [_compact_match_result(result) for result in matches]
     # This is the hand-off consumed by the next generation's Reflection stage.
     # Keep the exact evaluated values together so mutation never reconstructs
@@ -547,7 +516,6 @@ def evaluate_candidate(
         },
         "compilation": _compact_compilation_evidence(compile_result),
         "integration": _compact_integration_evidence(integration_result),
-        "commentary_aggregation": commentary_aggregation,
     }
     timing = {
         **candidate.timing,

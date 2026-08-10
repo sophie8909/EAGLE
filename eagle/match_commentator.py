@@ -36,6 +36,7 @@ class CommentaryConfig:
     enabled: bool = True
     temperature: float = 0.2
     chunk_ticks: int = 200
+    max_prompt_chars: int = 48_000
     max_attempts: int = 3
 
 
@@ -78,7 +79,7 @@ def commentate_match(
             raise ValueError("match trace contains no tick rows")
         if not bool(integrity.get("complete")):
             raise ValueError("match trace integrity is incomplete")
-        chunks = _contiguous_chunks(rows, config.chunk_ticks)
+        chunks = _contiguous_chunks(rows, config.chunk_ticks, config.max_prompt_chars)
         chunk_outputs: list[dict[str, Any]] = []
         for index, chunk in enumerate(chunks):
             request = _chunk_prompt(metadata, match_result, chunk, index, len(chunks))
@@ -167,15 +168,34 @@ def validate_final(value: object, metadata: dict[str, Any], integrity: dict[str,
     return value
 
 
-def _contiguous_chunks(rows: list[dict[str, Any]], chunk_ticks: int) -> list[list[dict[str, Any]]]:
+def _contiguous_chunks(
+    rows: list[dict[str, Any]],
+    chunk_ticks: int,
+    max_prompt_chars: int = 48_000,
+) -> list[list[dict[str, Any]]]:
     if chunk_ticks < 1:
         raise ValueError("chunk_ticks must be positive")
+    if max_prompt_chars < 4_096:
+        raise ValueError("max_prompt_chars must be at least 4096")
     ordered = sorted(rows, key=lambda row: int(row["tick"]))
     expected = list(range(int(ordered[0]["tick"]), int(ordered[-1]["tick"]) + 1))
     actual = [int(row["tick"]) for row in ordered]
     if actual != expected:
         raise ValueError("commentator requires a complete, duplicate-free trace")
-    return [ordered[index:index + chunk_ticks] for index in range(0, len(ordered), chunk_ticks)]
+    chunks: list[list[dict[str, Any]]] = []
+    chunk: list[dict[str, Any]] = []
+    chunk_chars = 2
+    for row in ordered:
+        row_chars = len(json.dumps(row, ensure_ascii=False, sort_keys=True)) + 1
+        if chunk and (len(chunk) >= chunk_ticks or chunk_chars + row_chars > max_prompt_chars):
+            chunks.append(chunk)
+            chunk = []
+            chunk_chars = 2
+        chunk.append(row)
+        chunk_chars += row_chars
+    if chunk:
+        chunks.append(chunk)
+    return chunks
 
 
 def _chunk_prompt(metadata: dict[str, Any], match_result: Any, rows: list[dict[str, Any]], index: int, count: int) -> str:

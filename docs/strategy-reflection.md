@@ -5,28 +5,34 @@ evidence. It uses the shared LLM endpoint and client; role settings may change
 only role-local enablement and temperature.
 
 ```text
-complete match log -> Match Commentator -> match_analysis.json
-all match analyses -> Manager -> manager_analysis.json
+all configured evaluation matches -> aggregate Game Performance
+temporary complete logs -> strict loss/draw/win selection -> match_selection.json
+selected logs only -> Match Commentator -> selected match_analysis.json
+aggregate results + selected analyses -> Manager -> manager_analysis.json
 parent strategy + manager plan -> Coach -> new_strategy_prompt
 new strategy + existing code-generation prompt -> Generator -> Java candidate
 ```
 
 | Role | Input | Output | Must not do |
 | --- | --- | --- | --- |
-| Match Commentator | One complete match | Match analysis | Modify strategy or code |
-| Manager | All match analyses | Improvement plan | Write final prompt or code |
+| Match Commentator | At most three selected complete matches | Selected match analyses | Modify strategy or code; generalize one match to the whole candidate |
+| Manager | Complete aggregate results + selected analyses + selection metadata | Improvement plan | Write final prompt or code; treat selected matches as unbiased |
 | Coach | Parent strategy + Manager plan | New strategy prompt | Write Java |
 | Generator | Strategy + code-generation prompt | Java | Analyze matches |
 
 ## Match-log lifecycle
 
 MicroRTS round-state files are streamed into a stable `match_log.jsonl.gz` with
-one record per executed tick. Records contain match metadata, both players'
-resources, deterministic unit ordering, and only state exposed by the engine.
-The compressed trace is temporary. After Commentator success, or after bounded
-Commentator retries have produced `commentary_failure.json`, the raw trace is
-deleted. `match_result.json`, `commentary/match_analysis.json`, and
-`commentary/commentary_status.json` remain permanent.
+one record per executed tick. After all matches finish, completed outcomes are
+partitioned into `loss`, `draw`, and `win`. The first non-empty pool in that order
+is the only eligible pool; up to three entries are sampled without replacement
+using a seed derived from the EA run seed, generation, candidate, and reflection
+invocation. `reflection/match_selection.json` records the counts, eligible IDs,
+selected IDs, rule, and RNG provenance.
+
+Unselected raw logs are deleted before any commentary call. Selected logs are
+deleted after successful commentary or bounded terminal failure. Compact result,
+performance, opponent, map, side, round, and winner artifacts remain permanent.
 
 Long traces are chunked on complete tick records. Chunks are non-overlapping and
 the final Commentator synthesis represents the entire trace.
@@ -53,7 +59,9 @@ Coach results retain both the parent and replacement strategy prompts.
 ## Failure and budgeting rules
 
 Commentator failure does not change fitness; Manager receives an unavailable
-entry for that match. Manager or Coach failure leaves the parent strategy
+entry for that selected match. Manager receives the full aggregate win/draw/loss
+distribution and selection metadata, so selected commentary is never mistaken
+for the complete evaluation distribution. Manager or Coach failure leaves the parent strategy
 unchanged and records a role-attributed failure. Generator failures follow the
 existing Java-generation failure contract.
 

@@ -9,18 +9,20 @@ The Match Commentator role is analysis context only: it does not calculate
 ```text
 MicroRTS Game.start
   → per-cycle round-state snapshots
-  → evaluation/match_trace.py
-  → match_trace.jsonl.gz + integrity metadata
-  → eagle/match_commentator.py
-  → commentary/match_commentary.json
-  → eagle/commentary_aggregation.py
-  → Strategy Reflection prompt
+  → evaluation/match_trace.py + match_log.jsonl.gz
+  → all evaluation match results and aggregate fitness
+  → strict loss/draw/win selection (at most 3, reproducible)
+  → delete unselected logs
+  → eagle/strategy_reflection.py Match Commentator
+  → delete selected logs after terminal commentary
+  → Manager → Coach → Strategy Reflection child
 ```
 
 The existing game-performance scorer still owns match scoring. It continues to
 consume `MatchTelemetry` and `GamePerformanceBreakdown` in
-`evaluation/game_performance.py`; commentary is attached after `game_metrics` is
-computed in `eagle/evaluation.py`.
+`evaluation/game_performance.py`; the complete evaluation matrix is scored before
+the Strategy Reflection selection. Match Commentator is not called from
+`eagle/evaluation.py` for every match.
 
 ## Reflection entrypoints
 
@@ -31,7 +33,7 @@ computed in `eagle/evaluation.py`.
 | `eagle/search.py:mutation_context_from_candidate` | `create_offspring` | immediately before mutation | shared context adapter | strategy or code | feedback parent plus equivalent references |
 | `eagle/rewrite.py:PromptRewriteMutation.mutate` | `create_offspring` | one mutation selected | strategy or code mutation | strategy or code | Reflection then prompt-only Rewrite |
 | `eagle/mutation.py:ReflectionStage.run` | `PromptRewriteMutation.mutate` | every selected mutation | `strategy_reflection` / `code_reflection` | one component at a time | bounded retries; raw response persisted |
-| `eagle/match_commentator.py:commentate_match` | `eagle/evaluation.py:evaluate_candidate` | every match with a match directory when enabled; disabled/failing matches get an explicit status artifact | `match_commentator` | one completed match | never a mutation parent and never a fitness input |
+| `eagle/strategy_reflection.py:StrategyReflectionPipeline.run` | `eagle/search.py:create_offspring` | selected strategy mutation after complete parent evaluation; at most 3 matches from one strict outcome pool | `match_commentator` | selected completed matches only | never a mutation parent and never a fitness input |
 
 The shared reflection transport is `eagle/mutation.py:ReflectionBackend`,
 `build_reflection_backend`, and `OpenAICompatibleReflectionBackend`. The
@@ -103,39 +105,41 @@ match IDs.
 
 ## Candidate aggregation and Strategy Reflection
 
-`eagle/commentary_aggregation.py:aggregate_commentaries` groups structured
-comments by opponent, map, candidate side, and result. It deterministically
-counts recurring strengths, weaknesses, decisive causes, and recommendations;
-selects loss-first representative matches; and preserves match IDs and tick
-references. It does not call another LLM and does not include raw traces or full
-chunk documents.
+`eagle/strategy_reflection.py:select_reflection_matches` partitions completed
+match summaries into losses, draws, and wins. It chooses exactly one pool in
+strict `loss > draw > win` order, samples up to three entries without
+replacement using a seed derived from run seed, generation, candidate, and
+reflection invocation, and writes `reflection/match_selection.json` before raw
+log deletion. Lower-priority outcomes never backfill the sample.
 
-`eagle/evaluation.py:evaluate_candidate` adds the aggregation to
-`game_payload["commentary_aggregation"]` and to `reflection_evidence` only
-after `compute_game_metrics` and objective construction. The candidate writer
-persists `evaluation/commentary_aggregation.json`.
+`eagle/reflection_context.py:build_reflection_context` exposes complete
+per-match compact result summaries and complete opponent results to the sports
+pipeline. The Manager receives aggregate counts and summaries plus only the
+selected Match Commentator analyses and selection metadata.
+The active sports-role prompts are assembled by
+`eagle/strategy_reflection.py:_commentator_prompt`,
+`_commentator_synthesis_prompt`, `_manager_prompt`, and `_coach_prompt` in this
+order:
 
-`eagle/reflection_context.py:build_reflection_context` exposes the compact
-aggregation, representative match entries, priority changes, and preserve list.
-`eagle/reflection_prompts.py:build_strategy_reflection_prompt_bundle` renders
-these sections in this order:
+1. aggregate evaluation and opponent results;
+2. strict-priority selection metadata;
+3. selected Match Commentator analyses;
+4. parent comparison when available;
+5. behaviors and aggregate strengths to preserve in the Manager input.
 
-1. mutation task;
-2. current strategy prompt;
-3. aggregate objectives (`game_performance` and scalar `code_quality`);
-4. equivalent parent/generation-best comparison;
-5. prioritized mutation targets;
-6. per-opponent commentary summaries and representative evidence;
-7. behaviors to preserve;
-8. output schema.
+Raw traces are not inserted into the Manager or Coach prompts. Selected tick
+records are inserted into Commentator requests, and the complete compact match
+record is inserted alongside each selected chunk. Every role request passes
+through `eagle/strategy_reflection.py:_call_role`, which applies the configured
+prompt-character bound before the LLM request. Role request artifacts retain the
+bounded prompt actually sent to the LLM.
 
-Raw traces, all chunks, full Java, compiler logs, and every match document are
-not inserted into this Strategy Reflection prompt. Section sizes and omitted or
-truncated low-priority fields remain in reflection prompt metadata. The current
-strategy prompt and output schema are not truncated.
-
-The new accepted Strategy Reflection shape is parsed in
-`eagle/mutation.py:parse_reflection_response`:
+The sports-role output is parsed in
+`eagle/strategy_reflection.py:_parse_commentary`, `_parse_manager`, and
+`_parse_coach`. It produces `MatchAnalysis`, `ManagerPlan`, and `CoachResult`;
+the Coach result replaces only `strategy_prompt`. The separate generic
+prompt-only reflection path in `eagle/mutation.py:ReflectionStage` still parses
+the following compatibility shape when that path is invoked:
 
 ```json
 {
@@ -145,9 +149,10 @@ The new accepted Strategy Reflection shape is parsed in
 }
 ```
 
-`eagle/rewrite.py` persists the reflection and rewrites only
-`strategy_prompt` for a strategy mutation or only `generation_prompt` for a
-code mutation. The final Java generation stage remains separate.
+`eagle/rewrite.py` remains the active code-mutation reflection/rewrite owner.
+The sports-role Strategy Reflection path persists Manager/Coach artifacts and
+updates only `strategy_prompt`; the final Java generation stage remains
+separate.
 
 Equivalent parent comparison is implemented in
 `eagle/reflection_context.py:_parent_comparison`. It requires equal persisted
@@ -168,10 +173,9 @@ form that the CLI advertises:
 ./analyze.sh --candidate <candidate_id> --match <match_id> --commentary
 ```
 
-The first commentary view is a text summary from
-`evaluation/commentary_aggregation.json`; the second reads one
-`commentary/match_commentary.json` and prints summary, timeline, evidence,
-and trace path. No GUI is involved (`eagle/cli/analyze.py`).
+The commentary artifacts are stored under the selected child candidate's
+`reflection/` and `commentary/` directories. Legacy aggregation readers remain
+available for older run artifacts. No GUI is involved (`eagle/cli/analyze.py`).
 
 ## Current limitations
 
@@ -187,9 +191,9 @@ and trace path. No GUI is involved (`eagle/cli/analyze.py`).
   distinguish hidden intent beyond the supplied state.
 - Parent comparison is unavailable for legacy candidates without the persisted
   evaluation-configuration signature.
-- There is no separate error-pool sampler. Runtime/generation/compiler errors
-  remain in existing candidate failure/diagnostic artifacts; commentary status
-  is per match and is not an error-pool input.
+- Match Commentator selection is not a fitness sampler: Game Performance still
+  uses every configured evaluation match, while Strategy Reflection samples one
+  strict-priority outcome class and at most three detailed matches.
 
 ## Evidence map
 
@@ -199,9 +203,8 @@ and trace path. No GUI is involved (`eagle/cli/analyze.py`).
 | Match result and cleanup | `evaluation/runtime_evaluation.py:_finish_match` |
 | Trace schema/integrity/lazy reader | `evaluation/match_trace.py` |
 | Shared LLM request/retry contract | `eagle/mutation.py:ReflectionStage`, `build_reflection_backend` |
-| Commentator prompt/validation/artifacts | `eagle/match_commentator.py` |
-| Candidate aggregation | `eagle/commentary_aggregation.py` |
-| Strategy context/prompt | `eagle/reflection_context.py`, `eagle/reflection_prompts.py`, `config/prompt_templates.toml` |
+| Commentator prompt/selection/artifacts | `eagle/strategy_reflection.py`, `eagle/match_commentator.py` |
+| Strategy context/prompt | `eagle/reflection_context.py`, `eagle/strategy_reflection.py`, `config/prompt_templates.toml` |
 | Scoring ownership | `evaluation/game_performance.py`, `evaluation/game_metrics.py`, `evaluation/nsga2_objectives.py` |
 | Candidate artifact writer | `eagle/artifacts.py` |
 | Text analysis | `analyze.sh`, `eagle/cli/analyze.py` |

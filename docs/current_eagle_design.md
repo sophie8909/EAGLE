@@ -15,7 +15,7 @@ Implementation:
 
 ## 2. Canonical Runtime
 
-**Confirmed:** `./run_env.sh {start|stop|restart|status|check}` runs `python -m eagle runtime` inside conda environment `eagle`; it owns exactly one local llama.cpp `llama-server`. The optional `./watchdog.sh` is a separate shell monitor that calls `run_env.sh status/start` and owns no runtime process directly. `./run.sh [experiment-config] [--mock|--resume RUN]` runs the EA, and `./analyze.sh [RUN_DIR|--latest]` invokes offline static analysis. `analyze.sh` deliberately invokes the current Python directly, whereas the first two scripts use `conda run`.
+**Confirmed:** `./run_env.sh {start|stop|restart|status|check}` runs `python -m eagle runtime` inside conda environment `eagle`; it owns exactly one local llama.cpp `llama-server`. The optional `./watchdog.sh` is a separate shell local-interface monitor/recovery script and does not call `run_env.sh` or own a runtime process. `./run.sh [experiment-config] [--mock|--resume RUN]` runs the EA, and `./analyze.sh [RUN_DIR|--latest]` invokes offline static analysis. `analyze.sh` deliberately invokes the current Python directly, whereas the first two scripts use `conda run`.
 
 `configs/runtime.yaml` is the sole model/endpoint configuration. It permits only Qwen3.5-9B, configured as model alias/name `qwen3.5-9b`, at `http://127.0.0.1:8080`, context 32,768, GPU layers `-1`, one parallel slot, eight threads, and batch size 512. Runtime startup executes the configured local `llama-server`, tracks its PID, checks that its command line matches the configured binary/model/port, and health-checks it. The runtime manager has no embedded watchdog, remote endpoint, multiple-model topology, or role-specific model selection; the optional `watchdog.sh` is an external shell monitor. Logical roles use the same endpoint/model: generation, reflection, rewrite, and strategy alignment.
 
@@ -542,7 +542,7 @@ Implementation:
 
 ## 12. Confirmed Design Decisions
 
-- One local Qwen3.5-9B llama.cpp-compatible endpoint serves all LLM roles; `watchdog.sh` only monitors that endpoint and does not provide model or endpoint routing.
+- One local Qwen3.5-9B llama.cpp-compatible endpoint serves all LLM roles; `watchdog.sh` only monitors/restarts the local network interface and does not provide model routing or server lifecycle management.
 - The genotype is exactly strategy prompt, inherited prior complete Java, and generation prompt; phenotype is a newly generated complete Java file.
 - Evolution evaluates 180 weighted fixed-roster MicroRTS records in generation 0 and appends the same 18-record frozen previous-generation champion matrix thereafter; final test is an explicit post-evolution workflow with a different schedule.
 - NSGA-II maximizes exactly game performance and code quality; alignment, function capability, compilation/warnings, and game telemetry are components/evidence, not third objectives.

@@ -16,7 +16,10 @@ starts the server. The experiment configuration contains generation behavior
 only; model, host, port, and server settings belong exclusively to
 `configs/runtime.yaml`.
 
-`watchdog.sh` is optional and independent from `run_env.sh`. It polls
-`run_env.sh status` and invokes `run_env.sh start` when the managed runtime is
-stopped or unhealthy. Use `./watchdog.sh --once` for a single check or
+`watchdog.sh` is optional and independent from `run_env.sh`. It checks the
+local network interface used by the default route and cycles it down/up when
+disconnected; it does not manage the server process. Non-root execution
+requires passwordless `sudo` for `ip link`. Use
+`./watchdog.sh --once` for a single check or
 `./watchdog.sh --interval 30` for a 30-second foreground polling interval.
+Use `run_env.sh start|stop|restart|status|check` for server lifecycle.

@@ -14,4 +14,4 @@
 
 Runtime files are only `runtime/logs/llm-server.log` and
 `runtime/pids/llm-server.pid`; the independent watchdog additionally uses
-`runtime/pids/llm-watchdog.pid` while it is running.
+`runtime/pids/watchdog.pid` while it is running.

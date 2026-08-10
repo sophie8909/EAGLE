@@ -26,14 +26,21 @@ Generator remains a separate stage after either mutation.
 
 Strategy Reflection is a sports-team workflow:
 
-1. Save and stream complete per-match logs.
-2. Match Commentator analyzes one match at a time.
-3. Delete each temporary raw log after terminal Commentator handling.
-4. Manager aggregates all compact match analyses and performance results.
-5. Coach replaces the parent `strategy_prompt` using the Manager plan.
-6. Generator receives the new strategy and the existing code-generation prompt.
+1. Complete the configured evaluation matrix and compute Game Performance from every match.
+2. Temporarily retain complete match logs, partition completed results into losses, draws,
+   and wins, and select one pool with strict `loss > draw > win` priority.
+3. Use the run-derived reproducible RNG to sample at most three matches from that pool
+   without replacement; lower-priority outcomes never backfill the sample.
+4. Persist `reflection/match_selection.json`, delete unselected raw logs, and run Match
+   Commentator only for the selected matches. Delete each selected raw log after terminal
+   commentary handling.
+5. Manager receives complete aggregate evaluation evidence plus only the selected analyses.
+6. Coach replaces the parent `strategy_prompt` using the Manager plan.
+7. Generator receives the new strategy and the existing code-generation prompt.
 
-The Match Commentator never rewrites strategy or Java. The Manager never writes
+The Match Commentator never rewrites strategy or Java. The Manager knows that
+commentary is a biased worst-outcome sample and never treats it as the complete
+evaluation distribution. The Manager never writes
 the final prompt or Java. The Coach never writes Java. Raw ticks are never sent
 to Manager or Coach. See [`../strategy-reflection.md`](../strategy-reflection.md)
 for schemas, artifact ownership, failure semantics, and budgeting.

@@ -71,8 +71,8 @@ The user-facing workflow is now exactly `./run_env.sh`, `./run.sh`, and `./analy
 active runtime supports exactly one local Qwen3.5-9B llama-server process on
 127.0.0.1:8080. The process manager validates its PID command line, performs a
 two-path health check, and does not embed a watchdog loop or remote server.
-The optional independent `watchdog.sh` monitors this runtime through the
-canonical `run_env.sh` entrypoint.
+The optional independent `watchdog.sh` monitors/restarts the local network
+interface and leaves server lifecycle ownership with `run_env.sh`.
 
 Generation and Strategy Alignment retain their existing transport bounds. Reflection
 and Rewrite now use deterministic section budgets before final prompt construction;
@@ -112,7 +112,9 @@ RAM and caused the kernel to terminate Python together with VSCode processes.
 
 ## Match Commentator update (2026-08-06)
 
-The canonical match runner now persists a streamed gzip tick trace, integrity
-metadata, and per-match `match_commentator` artifacts before compact cleanup.
-Commentary is deterministically aggregated into Strategy Reflection context and
-is explicitly outside both optimizer objectives. See `docs/match-commentator.md`.
+The canonical match runner now persists a streamed gzip tick trace and integrity
+metadata for the complete evaluation matrix. Strategy Reflection selects one
+strict-priority outcome pool (`loss > draw > win`), samples at most three matches
+with reproducible run-derived randomness, calls `match_commentator` only for those
+matches, and cleans temporary raw logs after terminal handling. Aggregate fitness
+still uses every configured match. See `docs/match-commentator.md`.

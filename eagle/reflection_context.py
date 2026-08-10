@@ -587,6 +587,13 @@ def build_reflection_context(
         priority_strategy_changes=tuple(item for item in ((game.get("commentary_aggregation") or {}).get("priority_strategy_changes") or ()) if isinstance(item, dict)),
         behaviors_to_preserve=tuple(item for item in ((game.get("commentary_aggregation") or {}).get("behaviors_to_preserve") or ()) if isinstance(item, dict)),
         parent_comparison=_parent_comparison(candidate, reference_candidates),
+        per_match_results=tuple(
+            item for item in (game.get("match_results") or game.get("matches") or ())
+            if isinstance(item, dict)
+        ),
+        wins=int(game.get("wins") or 0),
+        draws=int(game.get("draws") or 0),
+        losses=int(game.get("losses") or 0),
     )
     aggregation = context.commentary_aggregation
     representatives: list[dict[str, object]] = []

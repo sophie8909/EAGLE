@@ -39,6 +39,8 @@ runs/<run_id>/
         │   ├── reflector_response_raw.txt
         │   ├── rewriter_request.txt
         │   └── rewriter_response_raw.txt
+        ├── reflection/
+        │   └── match_selection.json
         ├── generation/
         │   ├── request.txt
         │   ├── response_raw.txt
@@ -93,6 +95,11 @@ Each stage result JSON records:
 - source/class hashes where applicable.
 
 `candidate_result.json` is an index/summary, not a replacement for stage evidence. It includes identity, lineage reference, status/failure stage, objective values, completed-match count, and artifact references. `mutation/reflection_context.json` is the immutable evidence snapshot used to build the Reflection request; it retains the canonical two-objective values and normalized stage/failure evidence without recalculating fitness.
+
+Strategy Reflection additionally persists `reflection/match_selection.json` before
+deleting temporary raw match logs. It records the available loss/draw/win counts,
+the strict priority rule, eligible and selected match IDs, requested/actual sample
+size, generation/candidate identity, and the run-derived random provenance.
 
 `evaluation/game_performance.json` and `evaluation/objectives.json` retain both the
 aggregate `game_performance` and ordered `opponent_scores`. The former also contains
@@ -180,9 +187,11 @@ The active match directory additionally owns `match_metadata.json`, streamed
 `match_trace.jsonl.gz`, `match_trace_integrity.json`, and `match_result.json`.
 The `commentary/` child owns one JSON file per contiguous chunk plus
 `final_request.json`, `final_response.json`, `match_commentary.json`, and
-`commentary_status.json`. `evaluation/commentary_aggregation.json` is the
-candidate-level compact handoff to Strategy Reflection. Raw traces and chunk
-documents remain match-owned and are not copied into reflection prompts.
+`commentary_status.json`. Strategy Reflection owns
+`reflection/match_selection.json` under the selected child candidate. Raw
+commentator logs are removed after selection/terminal commentary handling;
+compact match result and scoring artifacts remain match-owned and are not copied
+into reflection prompts.
 ## LLM stage identity
 
 Each Reflection, Rewrite, and Generation stage artifact records stage, the logical llm_profile (reflector, rewriter, or generator), and the configured model alias. The alias is the launcher --alias value, not a filename inferred from .gguf or an arbitrary /v1/models response. The resolved configuration records the centralized routing: Reflector, Rewriter, and Generator use their resolved semantic role profiles.
