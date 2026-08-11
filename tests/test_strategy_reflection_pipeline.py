@@ -82,6 +82,31 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
         self.assertEqual(one_draw["selected_outcome_class"], "draw")
         self.assertEqual(one_draw["selected_match_ids"], ["draw-0"])
 
+    def test_selection_prioritizes_high_weight_opponents_within_outcome_pool(self) -> None:
+        rows = []
+        for index in range(3):
+            row = self._result(f"high-{index}", "loss")
+            row["opponent_weight"] = 2.0
+            rows.append(row)
+        for index in range(3):
+            row = self._result(f"low-{index}", "loss")
+            row["opponent_weight"] = 0.5
+            rows.append(row)
+
+        selection = select_reflection_matches(
+            rows,
+            run_seed=7,
+            generation_index=4,
+            candidate_id="candidate",
+            reflection_invocation=2,
+        )
+
+        self.assertEqual(selection["selected_outcome_class"], "loss")
+        self.assertEqual(selection["sampling_priority"], "descending_opponent_weight_within_selected_outcome")
+        self.assertEqual(selection["actual_sample_size"], 3)
+        self.assertTrue(all(item.startswith("high-") for item in selection["selected_match_ids"]))
+        self.assertEqual(selection["opponent_weight_tiers"][0]["opponent_weight"], 2.0)
+
     def test_strategy_pipeline_commentates_only_selected_matches(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
