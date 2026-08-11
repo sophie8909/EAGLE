@@ -23,11 +23,46 @@ from .candidate import Candidate
 from .llm_transport import truncate_prompt
 from .mutation import ReflectionContext, utc_now
 from .offspring import normalize_prompt
+from .strategy_diversity import build_strategy_niche, normalize_strategy_signature
 
 
 CANONICAL_ROLES = ("match_commentator", "manager", "coach", "generator")
 ROLE_SCHEMA_VERSION = "strategy-reflection-v1"
 PROMPT_VERSION = "sports-team-v1"
+
+STRATEGY_MUTATION_INTENT_DISTRIBUTION = (
+    ("REFINE", 0.40),
+    ("COUNTER", 0.25),
+    ("STRUCTURAL", 0.20),
+    ("ALTERNATIVE", 0.15),
+)
+COACH_INTENT_INSTRUCTIONS = {
+    "REFINE": "Preserve the parent's overall strategic identity. Modify only the strategic behaviors required to address the Manager's highest-priority findings.",
+    "COUNTER": "Focus on the opponent behavior identified by the Manager as causing the important failures. Create concrete conditional responses to that behavior. Preserve unrelated successful strategy components.",
+    "STRUCTURAL": "You may substantially reorganize the opening, economy, production, attack timing, expansion, or defense strategy. Do not merely rewrite the parent using different wording. Use the Manager evidence to create a materially different strategic structure.",
+    "ALTERNATIVE": "Solve the Manager's identified problems using a different strategic approach from the parent. Avoid reproducing the parent's core strategy unless the evidence makes it necessary.",
+}
+
+
+def normalize_mutation_intent(value: object) -> str | None:
+    intent = str(value or "").strip().upper()
+    return intent if intent in {name for name, _ in STRATEGY_MUTATION_INTENT_DISTRIBUTION} else None
+
+
+def select_strategy_mutation_intent(*, rng: random.Random | None = None, seed: int | None = None) -> str:
+    """Select exactly one intent from the small deterministic EA distribution."""
+
+    if rng is None:
+        if seed is None:
+            raise ValueError("select_strategy_mutation_intent requires rng or seed")
+        rng = random.Random(seed)
+    draw = rng.random()
+    cumulative = 0.0
+    for intent, probability in STRATEGY_MUTATION_INTENT_DISTRIBUTION:
+        cumulative += probability
+        if draw < cumulative:
+            return intent
+    return STRATEGY_MUTATION_INTENT_DISTRIBUTION[-1][0]
 
 
 class RoleBackend(Protocol):
@@ -74,6 +109,7 @@ class ManagerPlan:
 @dataclass(frozen=True)
 class CoachResult:
     strategy_changes: dict[str, list[str]]
+    strategy_signature: dict[str, Any]
     parent_strategy_prompt: str
     new_strategy_prompt: str
 
@@ -124,6 +160,7 @@ class MockRoleBackend:
             parent = _text_value(prompt, "parent_strategy_prompt")
             return json.dumps({
                 "strategy_changes": {"preserved": ["stable opening"], "removed_or_reduced": [], "added_or_strengthened": ["attack after the first combat group is ready"]},
+                "strategy_signature": {"opening": "worker_first", "economy": "balanced_worker", "production": ["worker", "light"], "attack_timing": "mid", "combat_style": "pressure", "expansion": "conditional", "defense": "reactive", "target_priority": "workers"},
                 "parent_strategy_prompt": parent,
                 "new_strategy_prompt": parent + "\nIf the first combat group is ready, attack before floating resources.",
             })
@@ -143,12 +180,27 @@ class StrategyReflectionPipeline:
         self.enabled_roles = frozenset(("match_commentator", "manager", "coach") if enabled_roles is None else enabled_roles)
         self.selection_seed = int(selection_seed)
 
-    def mutate(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None) -> Candidate:
-        result = self.run(candidate, context, artifact_dir=artifact_dir)
+    def mutate(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> Candidate:
+        result = self.run(candidate, context, artifact_dir=artifact_dir, mutation_intent=mutation_intent)
         return result.candidate
 
-    def run(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None) -> StrategyReflectionResult:
+    def run(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> StrategyReflectionResult:
         required_roles = {"match_commentator", "manager", "coach"}
+        intent = normalize_mutation_intent(mutation_intent) or select_strategy_mutation_intent(
+            seed=_intent_seed(self.selection_seed, context.evolution.generation_index, candidate.id, context.index)
+        )
+        parent_niche = candidate.strategy_niche or "unknown"
+        candidate = replace(
+            candidate,
+            mutation_intent=intent,
+            parent_strategy_niche=parent_niche,
+        )
+        _write_json(artifact_dir, "reflection/mutation_intent.json", {
+            "mutation_intent": intent,
+            "parent_strategy_niche": parent_niche,
+            "child_strategy_niche": parent_niche,
+            "niche_changed": False,
+        })
         if required_roles - self.enabled_roles:
             return _failed_result(candidate, artifact_dir, "strategy reflection roles disabled", [])
         analyses: list[MatchAnalysis] = []
@@ -195,12 +247,20 @@ class StrategyReflectionPipeline:
             return _failed_result(candidate, artifact_dir, f"manager: {exc}", analyses)
 
         try:
-            coach_request = _coach_prompt(candidate.strategy_prompt, manager)
+            coach_request = _coach_prompt(candidate.strategy_prompt, manager, intent)
             coach_raw = self._call_role("coach", coach_request, candidate, artifact_dir, extra={"parent_candidate_id": candidate.id})
             coach = _parse_coach(coach_raw, parent_strategy_prompt=candidate.strategy_prompt)
+            child_signature = normalize_strategy_signature(coach.strategy_signature)
+            child_niche = build_strategy_niche(child_signature)
+            niche_changed = parent_niche != "unknown" and child_niche != parent_niche
             child = replace(
                 candidate,
                 strategy_prompt=normalize_prompt(coach.new_strategy_prompt, max_chars=4000, max_lines=80),
+                strategy_signature=child_signature,
+                strategy_niche=child_niche,
+                mutation_intent=intent,
+                parent_strategy_niche=parent_niche,
+                niche_changed=niche_changed,
                 mutation_type="strategy",
                 metadata={
                     **candidate.metadata,
@@ -210,6 +270,10 @@ class StrategyReflectionPipeline:
                         "analyses": [item.to_dict() for item in analyses],
                         "manager_analysis": manager.to_dict(),
                         "coach_result": coach.to_dict(),
+                        "mutation_intent": intent,
+                        "parent_strategy_niche": parent_niche,
+                        "child_strategy_niche": child_niche,
+                        "niche_changed": niche_changed,
                         "commentary_failures": failures,
                         "match_selection": selection,
                     },
@@ -217,6 +281,12 @@ class StrategyReflectionPipeline:
                 },
             )
             _write_json(artifact_dir, "reflection/coach_result.json", coach.to_dict())
+            _write_json(artifact_dir, "reflection/mutation_intent.json", {
+                "mutation_intent": intent,
+                "parent_strategy_niche": parent_niche,
+                "child_strategy_niche": child_niche,
+                "niche_changed": niche_changed,
+            })
             return StrategyReflectionResult(child, "success", tuple(analyses), manager, coach, None)
         except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
             return _failed_result(candidate, artifact_dir, f"coach: {exc}", analyses, manager=manager)
@@ -303,7 +373,7 @@ def select_reflection_matches(
         reflection_invocation=reflection_invocation,
     )
     sample_size = min(3, len(eligible))
-    selected = random.Random(seed).sample(eligible, sample_size)
+    selected, weight_tiers = _sample_by_opponent_weight(eligible, sample_size, seed)
     return {
         "schema_version": "strategy-reflection-match-selection-v1",
         "candidate_id": candidate_id,
@@ -312,8 +382,10 @@ def select_reflection_matches(
         "available_results": {key: len(pools[key]) for key in ("loss", "draw", "win")},
         "selected_outcome_class": selected_outcome,
         "selection_rule": "strict_priority_loss_draw_win",
+        "sampling_priority": "descending_opponent_weight_within_selected_outcome",
         "eligible_match_ids": [_match_id(item) for item in eligible],
         "selected_match_ids": [_match_id(item) for item in selected],
+        "opponent_weight_tiers": weight_tiers,
         "requested_sample_size": 3,
         "actual_sample_size": sample_size,
         "random_provenance": {
@@ -326,13 +398,56 @@ def select_reflection_matches(
     }
 
 
+def _sample_by_opponent_weight(
+    eligible: list[dict[str, Any]], sample_size: int, seed: int
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Sample from descending opponent-weight tiers without replacement."""
+
+    tiers: dict[float, list[dict[str, Any]]] = {}
+    for item in eligible:
+        weight = _opponent_weight(item)
+        tiers.setdefault(weight, []).append(item)
+    ordered_tiers = sorted(tiers.items(), key=lambda pair: pair[0], reverse=True)
+    rng = random.Random(seed)
+    selected: list[dict[str, Any]] = []
+    metadata: list[dict[str, Any]] = []
+    remaining = sample_size
+    for weight, items in ordered_tiers:
+        tier_ids = [_match_id(item) for item in items]
+        chosen_count = min(remaining, len(items))
+        chosen = rng.sample(items, chosen_count)
+        selected.extend(chosen)
+        metadata.append({
+            "opponent_weight": weight,
+            "eligible_match_ids": tier_ids,
+            "selected_match_ids": [_match_id(item) for item in chosen],
+        })
+        remaining -= chosen_count
+        if remaining == 0:
+            break
+    return selected, metadata
+
+
 def _selection_seed(*, run_seed: int, generation_index: int, candidate_id: str, reflection_invocation: int) -> int:
     material = f"{int(run_seed)}:{int(generation_index)}:{candidate_id}:{int(reflection_invocation)}:strategy_reflection".encode("utf-8")
     return int.from_bytes(hashlib.sha256(material).digest()[:8], "big", signed=False)
 
 
+def _intent_seed(run_seed: int, generation_index: int, candidate_id: str, invocation: int) -> int:
+    material = f"{int(run_seed)}:{int(generation_index)}:{candidate_id}:{int(invocation)}:strategy_mutation_intent".encode("utf-8")
+    return int.from_bytes(hashlib.sha256(material).digest()[:8], "big", signed=False)
+
+
 def _match_id(item: dict[str, Any]) -> str:
     return str(item.get("match_id") or f"match_{int(item.get('match_index', -1)):03d}")
+
+
+def _opponent_weight(item: dict[str, Any]) -> float:
+    try:
+        weight = float(item.get("opponent_weight", 1.0))
+    except (TypeError, ValueError):
+        return 1.0
+    return weight if weight == weight else 1.0
 
 
 def _match_outcome(item: dict[str, Any]) -> str | None:
@@ -425,12 +540,18 @@ def _manager_prompt(payload: dict[str, Any]) -> str:
     ])
 
 
-def _coach_prompt(parent_strategy: str, manager: ManagerPlan) -> str:
+def _coach_prompt(parent_strategy: str, manager: ManagerPlan, mutation_intent: str) -> str:
     return "\n".join([
         "ROLE: coach",
         "You are the Coach of an evolutionary MicroRTS team.",
         "Revise the parent strategy prompt using the Manager improvement plan.",
         "Return a replacement strategy prompt with concrete conditional behavioral rules.",
+        f"Mutation Intent: {mutation_intent}",
+        COACH_INTENT_INSTRUCTIONS[mutation_intent],
+        "Return exactly one JSON object with strategy_changes, strategy_signature, parent_strategy_prompt, and new_strategy_prompt.",
+        "strategy_changes must contain preserved, removed_or_reduced, and added_or_strengthened arrays.",
+        "strategy_signature must contain short categorical opening, economy, production, attack_timing, combat_style, expansion, defense, and target_priority fields.",
+        "Do not append reflection history recursively.",
         "Do not write Java, discuss implementation details, or return analysis outside the schema.",
         "parent_strategy_prompt: " + json.dumps(parent_strategy, ensure_ascii=False),
         "manager_analysis: " + json.dumps(manager.to_dict(), ensure_ascii=False, sort_keys=True),
@@ -519,6 +640,7 @@ def _parse_coach(payload: str, *, parent_strategy_prompt: str) -> CoachResult:
     changes = data.get("strategy_changes") or {}
     return CoachResult(
         strategy_changes={key: _strings(changes.get(key)) for key in ("preserved", "removed_or_reduced", "added_or_strengthened")},
+        strategy_signature=normalize_strategy_signature(data.get("strategy_signature")),
         parent_strategy_prompt=str(data.get("parent_strategy_prompt") or parent_strategy_prompt),
         new_strategy_prompt=prompt,
     )
