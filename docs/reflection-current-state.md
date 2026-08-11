@@ -109,8 +109,10 @@ match IDs.
 match summaries into losses, draws, and wins. It chooses exactly one pool in
 strict `loss > draw > win` order, samples up to three entries without
 replacement using a seed derived from run seed, generation, candidate, and
-reflection invocation, and writes `reflection/match_selection.json` before raw
-log deletion. Lower-priority outcomes never backfill the sample.
+reflection invocation. Within that selected outcome pool, higher
+`opponent_weight` tiers are selected first; this is categorical priority rather
+than numerical weighted sampling. It writes `reflection/match_selection.json`
+before raw log deletion. Lower-priority outcomes never backfill the sample.
 
 `eagle/reflection_context.py:build_reflection_context` exposes complete
 per-match compact result summaries and complete opponent results to the sports

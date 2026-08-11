@@ -19,8 +19,9 @@ See specification sections 7 through 10 and state-transition examples 28.2 and 2
 ## Shared contract
 
 Strategy Mutation and Code Mutation are separate. Strategy Mutation changes only
-`strategy_prompt`; Code Mutation changes only `generation_prompt`. The final Java
-Generator remains a separate stage after either mutation.
+the `strategy_prompt` genotype component and its strategy metadata; Code Mutation
+changes only `generation_prompt`. The final Java Generator remains a separate
+stage after either mutation.
 
 ## Strategy Mutation
 
@@ -30,12 +31,16 @@ Strategy Reflection is a sports-team workflow:
 2. Temporarily retain complete match logs, partition completed results into losses, draws,
    and wins, and select one pool with strict `loss > draw > win` priority.
 3. Use the run-derived reproducible RNG to sample at most three matches from that pool
-   without replacement; lower-priority outcomes never backfill the sample.
+   without replacement. Within the selected outcome pool, higher `opponent_weight`
+   tiers are selected before lower-weight tiers; lower-priority outcomes never
+   backfill the sample and weights are not sampling probabilities.
 4. Persist `reflection/match_selection.json`, delete unselected raw logs, and run Match
    Commentator only for the selected matches. Delete each selected raw log after terminal
    commentary handling.
 5. Manager receives complete aggregate evaluation evidence plus only the selected analyses.
-6. Coach replaces the parent `strategy_prompt` using the Manager plan.
+6. Coach receives the parent strategy, Manager plan, and one deterministic
+   mutation intent, then replaces the parent `strategy_prompt` and emits a
+   categorical strategy signature.
 7. Generator receives the new strategy and the existing code-generation prompt.
 
 The Match Commentator never rewrites strategy or Java. The Manager knows that
@@ -44,6 +49,13 @@ evaluation distribution. The Manager never writes
 the final prompt or Java. The Coach never writes Java. Raw ticks are never sent
 to Manager or Coach. See [`../strategy-reflection.md`](../strategy-reflection.md)
 for schemas, artifact ownership, failure semantics, and budgeting.
+
+The four mutation intents are `REFINE` (local evidence-backed improvement),
+`COUNTER` (respond to the selected opponent behavior), `STRUCTURAL` (permit a
+major strategic reorganization), and `ALTERNATIVE` (solve the same problem with
+a different strategy). The default run-RNG probabilities are 0.40, 0.25, 0.20,
+and 0.15 respectively. Strategy niches, the run-level archive, and diversity
+metrics are analysis metadata only and do not alter fitness or NSGA-II.
 
 Canonical state transition:
 

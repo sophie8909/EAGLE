@@ -114,9 +114,12 @@ otherwise → sample up to 3 wins
 ```
 
 The lower-priority classes have zero probability whenever a higher-priority
-class exists. Missing slots are never backfilled. Selection uses a local RNG
+class exists. Missing slots are never backfilled from a lower-priority outcome
+class. Within the selected outcome class, higher `opponent_weight` tiers are
+preferred categorically before lower-weight tiers. Selection uses a local RNG
 seed derived from existing EA/run identity and persists its provenance in
-`reflection/match_selection.json`. The selected commentary is deliberately
+`reflection/match_selection.json`; opponent weights are not sampling
+probabilities. The selected commentary is deliberately
 biased toward the worst available outcome; the Match Commentator is instructed
 not to generalize one selected match to the full candidate strategy.
 

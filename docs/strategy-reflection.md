@@ -27,8 +27,10 @@ one record per executed tick. After all matches finish, completed outcomes are
 partitioned into `loss`, `draw`, and `win`. The first non-empty pool in that order
 is the only eligible pool; up to three entries are sampled without replacement
 using a seed derived from the EA run seed, generation, candidate, and reflection
-invocation. `reflection/match_selection.json` records the counts, eligible IDs,
-selected IDs, rule, and RNG provenance.
+invocation. Within that one outcome pool, higher `opponent_weight` tiers are
+sampled first; this is categorical priority, not numerical weighted random
+sampling. `reflection/match_selection.json` records the counts, eligible IDs,
+selected IDs, opponent-weight tiers, rule, and RNG provenance.
 
 Unselected raw logs are deleted before any commentary call. Selected logs are
 deleted after successful commentary or bounded terminal failure. Compact result,
@@ -72,3 +74,42 @@ unchanged.
 
 Code Reflection remains a separate mutation path for Java validation,
 compilation, integration, and code-quality evidence.
+
+## Strategy diversity metadata
+
+Coach returns the replacement strategy prompt and a structured
+`strategy_signature` in the same response. The persisted signature has the
+canonical fields `opening`, `economy`, `production`, `attack_timing`,
+`combat_style`, `expansion`, `defense`, and `target_priority`. Values are
+normalized deterministically; old candidates without the fields remain
+`unknown` and are never parsed from raw prompt text.
+
+`build_strategy_niche(signature)` derives a stable major-structure label from
+attack timing, primary production (`mixed` for multiple unit types), and
+combat style, with a stable `unknown` fallback. Each candidate snapshot and
+candidate genotype stores `strategy_signature`, `strategy_niche`, and, for a
+Strategy Mutation, `mutation_intent`, `parent_strategy_niche`, and
+`niche_changed`.
+
+Every Strategy Mutation receives exactly one intent from the run RNG:
+
+| Intent | Default probability | Meaning |
+| --- | ---: | --- |
+| `REFINE` | 0.40 | Preserve strategic identity and make evidence-backed local changes. |
+| `COUNTER` | 0.25 | Respond to the opponent behavior identified by the Manager. |
+| `STRUCTURAL` | 0.20 | Reorganize major opening/economy/production/timing/expansion/defense relationships. |
+| `ALTERNATIVE` | 0.15 | Solve the same Manager problem with a different strategic approach. |
+
+The run-level `strategy_archive.json` keeps one successfully evaluated
+representative per known niche, replacing it only when game performance is
+better (then code quality and deterministic candidate-ID tie-breaking). It is
+storage and analysis metadata only; it is not a population and never enters
+NSGA-II.
+
+Generation snapshots include analysis-only metrics under
+`strategy_diversity`: unique niches, dominant niche ratio, new and revisited
+niches, mean categorical signature distance, and overall/per-intent niche
+change rates. `./analyze.sh` emits `strategy_diversity.csv`,
+`strategy_niches.csv`, and four static plots. These metrics do not alter
+`game_performance`, `code_quality`, dominance, survivor selection, crossover,
+or parent selection.

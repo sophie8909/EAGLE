@@ -296,63 +296,29 @@ Implementation:
 
 | Operator | Feedback input | Modified field | LLM output | Implementation |
 | --- | --- | --- | --- | --- |
-| strategy mutation | complete evaluated game evidence, opponent-level 18-match summaries, objectives, parent Java | `strategy_prompt` only | reflection text, then revised strategy prompt | `PromptRewriteMutation(mutation_type="strategy")` |
+| strategy mutation | complete evaluated game evidence, aggregate opponent summaries, and at most three selected detailed matches | `strategy_prompt` plus strategy metadata | Match Commentator analyses -> Manager plan -> Coach signature and replacement prompt | `StrategyReflectionMutation` |
 | code mutation | generation/validation/compile/integration/runtime/code-quality evidence | `generation_prompt` only | reflection text, then revised generation prompt | `PromptRewriteMutation(mutation_type="code")` |
 
-Both paths are exactly **Reflection LLM -> Rewrite LLM -> later full Java Generation LLM**. Neither directly edits Java. Reflection/rewrite retry up to `mutation_max_attempts` (3 in the canonical experiment) for empty/invalid local responses; both response validators reject Java. A failed reflection/rewrite returns a child with the original prompts, `applied: false`, and retained mutation artifacts; an `LLMServerError` is re-raised.
+Neither path directly edits Java. Strategy Reflection uses the role pipeline documented in [`strategy-reflection.md`](strategy-reflection.md); code mutation retains the existing Reflection -> Rewrite path. A failed mutation returns a child with the original prompts and retained mutation artifacts; an `LLMServerError` is re-raised.
 
 Implementation:
 
+- `eagle/strategy_reflection.py`: `StrategyReflectionMutation`, `StrategyReflectionPipeline.run`
 - `eagle/rewrite.py`: `PromptRewriteMutation`, `PromptRewriteStage.run`, `_validate_rewritten_prompt`
 - `eagle/mutation.py`: `ReflectionStage.run`, `_validate_reflection`
 - `eagle/search.py`: `create_offspring`, `choose_mutation`
 
 ### 7.2 Strategy Reflection
 
-The feedback parent is the child strategy component's recorded source parent, not a prompt-text match. `mutation_context_from_candidate` maps its preserved `reflection_evidence` to a `ReflectionContext`. It provides overall objective values and opponent-level game evidence: ten `OpponentResult` records (identity/name, 18-match average, P0/P1 averages, three map averages, W/D/L, resources, units, status/failure, weight/contribution), strongest/weakest matchups, score mean/min/max/stddev, aggregate W/D/L, final resources/difference, material, survival, temporal/round-state, and behaviour summaries. These are game scores, not Strategy Alignment scores; raw 180 match rows are not the primary reflection summary.
+The feedback parent is the child strategy component's recorded source parent, not a prompt-text match. All configured matches first produce compact aggregate evidence. The pipeline selects one strict outcome pool (`loss > draw > win`), then samples at most three matches within that pool by descending opponent-weight tiers using the run-derived RNG. Unselected raw logs are deleted before commentary; selected logs are deleted after commentary reaches a terminal state. The Manager receives complete aggregate results plus only those selected analyses. The Coach receives the parent strategy, Manager plan, and one mutation intent, and returns `strategy_changes`, a categorical `strategy_signature`, and `new_strategy_prompt`. The Generator receives the Coach strategy prompt plus the existing code-generation prompt.
 
-The current search roster identity is the ten bots named in section 6.2. The strategy-reflection template tells the reflector to compare opponents, preserve behaviours that work across multiple opponents, identify opponent-specific weaknesses without overfitting, and use strongest/weakest/variance evidence. The constructed `match_summary` also includes evaluation/failure status and the two objectives.
-
-Actual prompt structure (values are substituted at runtime):
-
-```text
-EAGLE Strategy Reflection stage.
-Analyze the complete strategy using the evidence below. Return reflection text only.
-Do not rewrite either prompt. Do not generate Java, a patch, a diff, or a code block.
-
-Current strategy_prompt: $strategy_prompt
-Parent generated_java: $parent_java
-Opponent identity: $opponent
-Complete 180/198-match matrix summary; aggregate game performance and opponent-level 18-match feedback: $match_summary
-Opponent summaries (one 18-match summary for every configured opponent): $per_match_results
-Wins: $wins; draws: $draws; losses: $losses
-Game performance: $game_performance
-The opponent summary includes P0/P1 averages, map averages, Strongest matchup, Weakest matchup, and Score consistency.
-Final player resources: $final_player_resources
-Final enemy resources: $final_enemy_resources
-Final resource difference: $final_resource_difference
-Resource evidence: $resource_breakdown
-Unit material statistics: $unit_material_statistics
-Survival statistics: $survival_statistics
-Round-state summary: $round_state_summary
-Temporal summary: $temporal_summary
-Behavior summary: $behavior_summary
-Compare behaviour across opponents, identify strategies that work across multiple
-opponents, and identify opponent-specific weaknesses without overfitting to one matchup.
-Use the strongest and weakest matchups and score variance/consistency as evidence. Propose
-one coherent, concise, implementable revised strategy for intended MicroRTS behaviour.
-Focus on strategy only: do not generate Java, code, patches, or diffs. The output must
-remain reflection only.
-```
-
-It then asks the rewriter for only the new strategy prompt, supplying original strategy, reflection, parent Java, and game summary. The output is normalized to 4,000 characters and 80 lines before being installed as the child's `strategy_prompt`.
+Strategy Mutation intent selection uses the EA RNG with `REFINE=0.40`, `COUNTER=0.25`, `STRUCTURAL=0.20`, and `ALTERNATIVE=0.15`. The deterministic niche and archive/diversity metadata described in `strategy-reflection.md` are analysis-only.
 
 Implementation:
 
 - `eagle/search.py`: `mutation_context_from_candidate`, `parent_for_component`
-- `eagle/mutation.py`: `ReflectionContext`, `build_strategy_reflection_prompt`
-- `eagle/rewrite.py`: `build_strategy_rewrite_prompt`, `PromptRewriteMutation.mutate`
-- `config/prompt_templates.toml`: `[templates.strategy_reflection]`, `[templates.strategy_rewrite]`
+- `eagle/mutation.py`: `ReflectionContext`
+- `eagle/strategy_reflection.py`: role prompt builders and parsers
 
 ```mermaid
 flowchart LR
@@ -472,12 +438,13 @@ Implementation:
 runs/<run_id>/
 ├── manifest.json, config.yaml, resolved_config.json, prompt_snapshot.json
 ├── generation_metrics.jsonl, timing.jsonl, errors.jsonl
+├── strategy_archive.json
 ├── generations/generation_####.json
 ├── final_population.json, summary.json
 ├── llm_logs/<sequence>_<stage>_<candidate>_*.json
 ├── candidates/<candidate_id>/
 │   ├── individual.json, lineage.json, candidate_result.json, timing.json
-│   ├── genotype/{strategy_prompt.txt,previous_code.java,generation_prompt.txt}
+│   ├── genotype/{strategy_prompt.txt,strategy_signature.json,previous_code.java,generation_prompt.txt}
 │   ├── generation/{request.txt,response_raw.txt,extracted_candidate.java,normalized_candidate.java,result.json}
 │   ├── validation/validation_result.json
 │   ├── compilation/{command.txt,stdout.txt,stderr.txt,compilation_result.json}

@@ -19,6 +19,7 @@ runs/<run_id>/
 ├── resolved_config.json
 ├── manifest.json
 ├── summary.json
+├── strategy_archive.json
 ├── final_population.json
 ├── generation_metrics.jsonl
 ├── timing.jsonl
@@ -29,6 +30,7 @@ runs/<run_id>/
         ├── lineage.json
         ├── genotype/
         │   ├── strategy_prompt.txt
+        │   ├── strategy_signature.json
         │   ├── previous_code.java
         │   └── generation_prompt.txt
         ├── crossover/provenance.json
@@ -40,7 +42,8 @@ runs/<run_id>/
         │   ├── rewriter_request.txt
         │   └── rewriter_response_raw.txt
         ├── reflection/
-        │   └── match_selection.json
+        │   ├── match_selection.json
+        │   └── mutation_intent.json
         ├── generation/
         │   ├── request.txt
         │   ├── response_raw.txt
@@ -77,6 +80,13 @@ The specification calls this layout recommended while making the underlying evid
 
 `generations/generation_<nnnn>.json` is the only surviving-population snapshot for a generation. It uses `eagle-generation-v2`; `final_population.json` uses `eagle-final-population-v2`. Both retain the resumable genotype/phenotype, fitness objectives, and timing, but omit raw process output, telemetry, and full mutation LLM envelopes. The run root does not write a second flat `generation_<n>_population.json` or an evolution-level `results.jsonl`.
 
+`strategy_archive.json` is an analysis-only, schema-versioned map from known
+strategy niche to one successfully evaluated representative. It does not
+participate in fitness, dominance, NSGA-II survivor selection, or parent
+selection. `genotype/strategy_signature.json` contains the structured Coach
+signature and mutation metadata. Legacy snapshots without these fields are
+read as `unknown`; no signature is inferred from prompt text.
+
 Never silently override an input without writing the resolved value.
 
 ## Variation and generation contracts
@@ -99,7 +109,10 @@ Each stage result JSON records:
 Strategy Reflection additionally persists `reflection/match_selection.json` before
 deleting temporary raw match logs. It records the available loss/draw/win counts,
 the strict priority rule, eligible and selected match IDs, requested/actual sample
-size, generation/candidate identity, and the run-derived random provenance.
+size, generation/candidate identity, and the run-derived random provenance. Within
+the selected outcome class it also records descending `opponent_weight` tiers;
+higher tiers are selected before lower tiers without treating weights as sampling
+probabilities.
 
 `evaluation/game_performance.json` and `evaluation/objectives.json` retain both the
 aggregate `game_performance` and ordered `opponent_scores`. The former also contains
