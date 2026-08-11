@@ -116,7 +116,13 @@ def _error_category(candidate: Candidate) -> str:
     return "generation_failure"
 
 
-def record_generation(run_dir: Path, generation: int, population: list[Candidate]) -> None:
+def record_generation(
+    run_dir: Path,
+    generation: int,
+    population: list[Candidate],
+    *,
+    diversity: dict[str, Any] | None = None,
+) -> None:
     """Record the surviving population after selection exactly once."""
     snapshot = {
         "schema_version": GENERATION_SCHEMA_VERSION,
@@ -127,7 +133,7 @@ def record_generation(run_dir: Path, generation: int, population: list[Candidate
     generations_dir.mkdir(parents=True, exist_ok=True)
     snapshot_path = generations_dir / f"generation_{generation:04d}.json"
     atomic_json(snapshot_path, snapshot)
-    metrics = generation_metrics(generation, population)
+    metrics = generation_metrics(generation, population, diversity=diversity)
     metrics_path = run_dir / "generation_metrics.jsonl"
     existing = _jsonl_by_key(metrics_path, "generation")
     existing[generation] = metrics
@@ -156,7 +162,12 @@ def finalize_run(run_dir: Path, population: list[Candidate], *, stop_reason: str
     atomic_json(run_dir / "manifest.json", manifest)
 
 
-def generation_metrics(generation: int, population: list[Candidate]) -> dict[str, Any]:
+def generation_metrics(
+    generation: int,
+    population: list[Candidate],
+    *,
+    diversity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     objectives: dict[str, Any] = {}
     opponent_by_candidate: dict[str, Any] = {}
     opponent_values: dict[str, list[float]] = {}
@@ -259,7 +270,7 @@ def generation_metrics(generation: int, population: list[Candidate]) -> dict[str
     eagle_reference = first_game.get("eagle_reference")
     previous_champion_id = None if not isinstance(eagle_reference, dict) else eagle_reference.get("candidate_id")
     previous_champion_generation = None if not isinstance(eagle_reference, dict) else eagle_reference.get("generation")
-    return {
+    payload = {
         "schema_version": "eagle-generation-metrics-v1",
         "generation": generation,
         "population_size": len(population),
@@ -286,6 +297,9 @@ def generation_metrics(generation: int, population: list[Candidate]) -> dict[str
             "by_opponent": opponent_summary,
         },
     }
+    if diversity is not None:
+        payload["strategy_diversity"] = dict(diversity)
+    return payload
 
 
 def load_resume_population(run_dir: Path) -> tuple[int, list[Candidate]]:

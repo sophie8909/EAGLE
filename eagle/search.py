@@ -34,7 +34,9 @@ from .llm_profiles import LLMClient
 from .llm_errors import LLMServerError
 from .offspring import normalize_prompt
 from .rewrite import PromptRewriteMutation
-from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation
+from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation, select_strategy_mutation_intent
+from .strategy_archive import archive_niches, ensure_strategy_archive, update_strategy_archive
+from .strategy_diversity import diversity_console_summary, generation_diversity_metrics
 from .selection import (
     select_parent,
     assign_rank_and_crowding,
@@ -76,6 +78,7 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     classes_dir.mkdir()
     copy2(config_path, run_dir / "config.yaml")
     initialize_run_manifest(run_dir, config_path=config_path)
+    ensure_strategy_archive(run_dir)
 
     llm_logger = LLMCallLogger(run_dir / "llm_logs", run_id=active_run_id, timing_path=run_dir / "timing.jsonl")
     generation_backend = MockGenerationBackend() if mock else client.generation_backend(logger=llm_logger)
@@ -129,13 +132,22 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         alignment_profile=shared_profile,
         eagle_opponent=None,
     )
+    archive_before = archive_niches(run_dir)
+    update_strategy_archive(run_dir, evaluated_population)
     append_event(run_dir / "timing.jsonl", build_generation_event(
         run_id=active_run_id,
         generation=0,
         candidates=evaluated_population,
         span=generation_span.finish(),
     ))
-    record_generation(run_dir, 0, evaluated_population)
+    generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
+    record_generation(
+        run_dir,
+        0,
+        evaluated_population,
+        diversity=generation_diversity,
+    )
+    print(diversity_console_summary(0, generation_diversity), flush=True)
     error_memory = record_error_memory(run_dir, evaluated_population)
 
     front0_signature = front_zero_signature(evaluated_population)
@@ -192,6 +204,8 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             alignment_profile=shared_profile,
             eagle_opponent=eagle_opponent,
         )
+        archive_before = archive_niches(run_dir)
+        update_strategy_archive(run_dir, evaluated_offspring)
         error_memory = record_error_memory(run_dir, evaluated_offspring)
         append_event(run_dir / "timing.jsonl", build_generation_event(
             run_id=active_run_id,
@@ -208,7 +222,14 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         else:
             front0_signature = current_front0_signature
             front0_stagnation_count = 0
-        record_generation(run_dir, generation, evaluated_population)
+        generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
+        record_generation(
+            run_dir,
+            generation,
+            evaluated_population,
+            diversity=generation_diversity,
+        )
+        print(diversity_console_summary(generation, generation_diversity), flush=True)
         completed_generation = generation
         if (
             config.front0_stagnation_generations > 0
@@ -318,6 +339,8 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
                 generation=generation,
                 parent_ids=(parent_a.id,),
                 strategy_prompt=normalize_prompt(parent_a.strategy_prompt, max_chars=config.max_prompt_chars, max_lines=config.max_prompt_lines),
+                strategy_signature=dict(parent_a.strategy_signature),
+                strategy_niche=parent_a.strategy_niche,
                 previous_code=parent_a.generated_java,
                 generation_prompt=parent_a.generation_prompt,
                 operator="copy",
@@ -330,6 +353,10 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
             feedback_parent = parent_for_component(child.strategy_parent_id, (parent_a, parent_b))
             mutation_name = choose_mutation(feedback_parent, rng)
             mutation = mutations[mutation_name]
+            mutation_intent = None
+            if mutation_name == "strategy":
+                mutation_intent = select_strategy_mutation_intent(rng=rng)
+                child = replace(child, mutation_intent=mutation_intent, parent_strategy_niche=feedback_parent.strategy_niche)
             mutation_started_at = utc_now()
             mutation_started = time.monotonic()
             parent_objectives = {
@@ -344,20 +371,29 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
             reference_candidates = {parent.id: parent for parent in (parent_a, parent_b)}
             if generation_best is not None:
                 reference_candidates["generation_best"] = generation_best
-            child = mutation.mutate(
-                child,
-                mutation_context_from_candidate(
-                    feedback_parent,
-                    generation=generation,
-                    index=context_index,
-                    reflection_type=mutation_name,
-                    error_memory=error_memory,
-                    evolution_candidate=child,
-                    parent_objectives=parent_objectives,
-                    reference_candidates=reference_candidates,
-                ),
-                artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
+            mutation_context = mutation_context_from_candidate(
+                feedback_parent,
+                generation=generation,
+                index=context_index,
+                reflection_type=mutation_name,
+                error_memory=error_memory,
+                evolution_candidate=child,
+                parent_objectives=parent_objectives,
+                reference_candidates=reference_candidates,
             )
+            if mutation_name == "strategy":
+                child = mutation.mutate(
+                    child,
+                    mutation_context,
+                    artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
+                    mutation_intent=mutation_intent,
+                )
+            else:
+                child = mutation.mutate(
+                    child,
+                    mutation_context,
+                    artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
+                )
             mutation_record = child.metadata.get("mutation") or {}
             mutation_applied = bool(mutation_record.get("applied"))
             mutation_error = mutation_record.get("reflection_error") or mutation_record.get("rewrite_error")

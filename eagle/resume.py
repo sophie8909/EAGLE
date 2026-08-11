@@ -18,6 +18,9 @@ from .mutation import build_reflection_backend
 from .rewrite import PromptRewriteMutation
 from .run_artifacts import finalize_run, load_error_memory, load_resume_population, record_error_memory, record_generation
 from .search import SearchResult, create_offspring, front_zero_signature
+from .strategy_archive import archive_niches, ensure_strategy_archive, update_strategy_archive
+from .strategy_diversity import diversity_console_summary, generation_diversity_metrics
+from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation
 from .selection import assign_rank_and_crowding, best_candidate, select_next_generation
 from .timing import Stopwatch, append_event, build_generation_event
 from evaluation.opponent_schedule import eagle_opponent_weight, select_previous_generation_champion
@@ -28,6 +31,11 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
     preflight_evaluation_opponents(config, mock=mock)
     _validate_resume_config(config, run_dir)
     completed_generation, population = load_resume_population(run_dir)
+    ensure_strategy_archive(run_dir)
+    # Backfill the archive from the surviving snapshot when resuming a run
+    # created before strategy_archive.json existed.  Older candidates retain
+    # the explicit ``unknown`` fallback and are not inferred from prompt text.
+    update_strategy_archive(run_dir, population)
     if completed_generation >= config.generations - 1:
         best = best_candidate(population)
         return SearchResult(run_dir, population, best, completed_generation)
@@ -51,12 +59,17 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
     classes_dir = run_dir / "classes"
     for directory in (candidates_dir, generated_agents_dir, classes_dir):
         directory.mkdir(parents=True, exist_ok=True)
+    role_temperatures = {role: temperature for role, _, temperature in config.llm_roles}
+    enabled_roles = ({role for role, enabled, _ in config.llm_roles if enabled} if config.llm_roles else {"match_commentator", "manager", "coach", "generator"})
+    strategy_role_backend = MockRoleBackend() if mock else client.prompt_backend(operation="match_commentator", temperature=role_temperatures.get("match_commentator"))
     mutations = {
-        "strategy": PromptRewriteMutation(
-            config, mutation_type="strategy", reflection_backend=reflection_backend,
-            rewrite_backend=rewrite_backend, artifact_root=candidates_dir, logger=logger,
-            reflection_model=None if mock else client.model,
-            rewrite_model=None if mock else client.model, backend_name=backend_name,
+        "strategy": StrategyReflectionMutation(
+            strategy_role_backend,
+            max_attempts=config.mutation_max_attempts,
+            max_prompt_chars=60_000,
+            model_identity=None if mock else client.model,
+            enabled_roles=enabled_roles,
+            selection_seed=config.random_seed,
         ),
         "code": PromptRewriteMutation(
             config, mutation_type="code", reflection_backend=reflection_backend,
@@ -102,6 +115,8 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
             mock=mock, alignment_profile=shared_profile,
             eagle_opponent=eagle_opponent,
         )
+        archive_before = archive_niches(run_dir)
+        update_strategy_archive(run_dir, evaluated)
         error_memory = record_error_memory(run_dir, evaluated)
         append_event(
             run_dir / "timing.jsonl",
@@ -114,7 +129,14 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
         signature = front_zero_signature(population)
         stagnation = stagnation + 1 if signature == front_signature else 0
         front_signature = signature
-        record_generation(run_dir, generation, population)
+        generation_diversity = generation_diversity_metrics(population, previous_archive_niches=archive_before)
+        record_generation(
+            run_dir,
+            generation,
+            population,
+            diversity=generation_diversity,
+        )
+        print(diversity_console_summary(generation, generation_diversity), flush=True)
         completed_generation = generation
         if config.front0_stagnation_generations > 0 and stagnation >= config.front0_stagnation_generations:
             stop_reason = f"front0_stagnation_{config.front0_stagnation_generations}_generations"
