@@ -114,7 +114,9 @@ after terminal handling. Aggregate fitness still uses every configured match.
 
 ## Four-entrypoint cleanup (2026-08-11)
 
-The executable surface is limited to `run_env.sh`, `run.sh`, `analyze.sh`, and
-`watchdog.sh`. Final-test, GUI-match, migration, standalone commentator, and
-unused legacy analysis utilities were removed. External opponent assets remain
-because the active evolution roster still resolves them during evaluation.
+The four operational entrypoints are `run_env.sh`, `run.sh`, `analyze.sh`, and
+`watchdog.sh`. The read-only `scripts/run_gui_match.py` inspection utility and
+its AlliBot setup helpers remain outside the EA path. Final-test, migration,
+standalone commentator, and unused legacy analysis utilities were removed.
+External opponent assets remain because the active evolution roster still
+resolves them during evaluation.

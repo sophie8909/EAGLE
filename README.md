@@ -34,9 +34,11 @@ runtime/
 └── pids/llm-server.pid
 ```
 
-No model menus, endpoint discovery, remote mode, GUI, or fallback model is
-supported. The watchdog is only a shell-level local-interface monitor/recovery
-script; it is not a server lifecycle manager, second server, or endpoint router.
+No model menus, endpoint discovery, remote mode, or fallback model is supported.
+The optional `scripts/run_gui_match.py` utility remains available for visual
+inspection of one persisted candidate and is outside EA evaluation. The
+watchdog is only a shell-level local-interface monitor/recovery script; it is
+not a server lifecycle manager, second server, or endpoint router.
 
 ## Analysis
 

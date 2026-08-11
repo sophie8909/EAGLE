@@ -14,6 +14,10 @@ are not part of the runtime contract.
 | `analyze.sh` | Select a canonical run and generate offline CSV/JSON/Markdown/PNG reports | `python -m eagle analyze` |
 | `watchdog.sh` | Poll the local default-route network interface and recover it with `ip link` | Shell commands only; no Python or LLM lifecycle |
 
+`scripts/run_gui_match.py` is a retained, read-only visual inspection utility,
+not a fifth EA entrypoint. `scripts/setup_allibot.py` and
+`scripts/allibot_llama_cpp_adapter.py` prepare its optional AlliBot dependency.
+
 ## Python command and orchestration layer
 
 | Path | Responsibility |
@@ -93,13 +97,13 @@ are not part of the runtime contract.
 | `experiment_env/` | Local Conda/model/llama.cpp runtime assets; external dependency, not EAGLE Python logic. |
 | `third_party/microrts/` | Vendored MicroRTS runtime, maps, libraries, and Java sources used by evaluation. |
 | `third_party/final_test_opponents/` | External opponent manifests/JAR/adapters still referenced by the active ten-opponent evolution roster. The final-test executor was removed. |
-| `third_party/gui_opponents/` | AlliBot runtime assets still referenced by the active evolution roster; GUI execution code was removed. |
+| `third_party/gui_opponents/` | AlliBot runtime assets referenced by active evaluation and the retained GUI inspection utility. |
 
 ## Tests and documentation
 
 | Path | Responsibility |
 | --- | --- |
-| `tests/` | Unit and contract tests for the four-entrypoint dependency closure. Tests for removed final-test, GUI, and standalone commentator paths were deleted with those paths. |
+| `tests/` | Unit and contract tests for the four-entrypoint dependency closure plus the retained GUI inspection utility. Tests for removed final-test and standalone commentator paths were deleted. |
 | `docs/architecture/` | Architecture and ownership contracts. |
 | `docs/evaluation/` | Active evaluation and objective contracts. |
 | `docs/artifacts/` | Persisted artifact and timing contracts. |
@@ -114,7 +118,7 @@ The following were not reachable from the four entrypoints and were removed:
 
 - `eagle/cli/migrate_run.py` and the `migrate-run` dispatcher branch;
 - `eagle/final_test/` and `configs/final_test_champions.yaml`;
-- `scripts/` utilities for final tests, GUI matches, AlliBot setup, and legacy plotting;
+- `scripts/` utilities for final tests and legacy plotting; GUI match and AlliBot setup utilities are retained;
 - `eagle/analysis/{errors,final_tests,objectives,records,timing}.py`;
 - `eagle/match_commentator.py` and `eagle/commentary_aggregation.py` standalone APIs;
 - unused `agents/` and `generation/parsing.py` scaffolding;

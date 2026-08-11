@@ -69,6 +69,20 @@ SEARCH_OPPONENT_REGISTRY = (
 )
 EVALUATION_ROSTER = SEARCH_OPPONENT_REGISTRY
 
+# Compatibility names for the retained visual inspection utility. AlliBot is
+# also present in the normal search roster; this alias describes its GUI asset
+# layout, not a separate evaluation roster.
+GUI_ONLY_OPPONENTS = ALLIBOT_OPPONENTS
+
+
+def gui_opponent_by_id(opponent_id: str) -> OpponentSpec:
+    """Resolve an opponent supported by the visual inspection utility."""
+
+    for item in EVALUATION_ROSTER + EXTERNAL_OPPONENTS + ALLIBOT_OPPONENTS:
+        if item.opponent_id == opponent_id:
+            return item
+    raise KeyError(opponent_id)
+
 
 def rooted_jar_path(repository_root: Path, opponent: OpponentSpec) -> Path | None:
     if not opponent.jar_path:
