@@ -34,6 +34,17 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
     genotype_dir = candidate_dir / "genotype"
     genotype_dir.mkdir(parents=True, exist_ok=True)
     (genotype_dir / "strategy_prompt.txt").write_text(candidate.strategy_prompt, encoding="utf-8")
+    write_json(
+        genotype_dir / "strategy_signature.json",
+        {
+            "schema_version": "eagle-strategy-diversity-v1",
+            "strategy_signature": dict(candidate.strategy_signature),
+            "strategy_niche": candidate.strategy_niche,
+            "mutation_intent": candidate.mutation_intent,
+            "parent_strategy_niche": candidate.parent_strategy_niche,
+            "niche_changed": candidate.niche_changed,
+        },
+    )
     (genotype_dir / "previous_code.java").write_text(candidate.previous_code, encoding="utf-8")
     (genotype_dir / "generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
     write_json(candidate_dir / "lineage.json", candidate.lineage_to_json_dict())

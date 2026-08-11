@@ -30,6 +30,8 @@ def crossover(parent_a: Candidate, parent_b: Candidate, context: CrossoverContex
         generation=context.generation,
         parent_ids=(parent_a.id, parent_b.id),
         strategy_prompt=strategy_parent.strategy_prompt,
+        strategy_signature=dict(strategy_parent.strategy_signature),
+        strategy_niche=strategy_parent.strategy_niche,
         previous_code=previous_code_parent.generated_java,
         generation_prompt=generation_prompt_parent.generation_prompt,
         operator="crossover",

@@ -58,6 +58,11 @@ class Candidate:
     game_eval_result: dict[str, Any] = field(default_factory=dict)
     code_quality_result: dict[str, Any] = field(default_factory=dict)
     fitness_objectives: dict[str, float] = field(default_factory=dict)
+    strategy_signature: dict[str, Any] = field(default_factory=dict)
+    strategy_niche: str = "unknown"
+    mutation_intent: str | None = None
+    parent_strategy_niche: str | None = None
+    niche_changed: bool | None = None
     status: str = "pending"
     failure_stage: str | None = None
     failure_reason: str | None = None
@@ -133,6 +138,11 @@ class Candidate:
             "game_eval_result": dict(self.game_eval_result),
             "code_quality_result": dict(self.code_quality_result),
             "fitness_objectives": dict(self.fitness_objectives),
+            "strategy_signature": dict(self.strategy_signature),
+            "strategy_niche": self.strategy_niche,
+            "mutation_intent": self.mutation_intent,
+            "parent_strategy_niche": self.parent_strategy_niche,
+            "niche_changed": self.niche_changed,
             "status": self.status,
             "failure_stage": self.failure_stage,
             "failure_reason": self.failure_reason,
@@ -160,6 +170,11 @@ class Candidate:
             "parent_ids": list(self.parent_ids),
             "operator": self.operator,
             "mutation_type": self.mutation_type,
+            "strategy_signature": dict(self.strategy_signature),
+            "strategy_niche": self.strategy_niche,
+            "mutation_intent": self.mutation_intent,
+            "parent_strategy_niche": self.parent_strategy_niche,
+            "niche_changed": self.niche_changed,
             "status": self.status,
             "failure_stage": self.failure_stage,
             "failure_reason": self.failure_reason,
@@ -224,6 +239,10 @@ def compact_mutation_record(record: dict[str, Any]) -> dict[str, Any]:
         "rewrite_status",
         "reflection_error",
         "rewrite_error",
+        "mutation_intent",
+        "parent_strategy_niche",
+        "child_strategy_niche",
+        "niche_changed",
         "prompt_metadata",
         "reflection_history",
     )
