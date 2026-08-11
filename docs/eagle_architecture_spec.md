@@ -825,7 +825,12 @@ evaluation_opponents =
   bfs_heavy_rush
 ```
 
-The ten Evolution Evaluation opponents are five vendored basic agents—RandomAI, RandomBiasedAI, PassiveAI, LightRush, and HeavyRush—and five deterministic pathfinding variants—BFS LightRush, Greedy LightRush, FloodFill LightRush, AStar LightRush, and BFS HeavyRush. They are compiled against the vendored MicroRTS runtime. External competition agents and historical-self opponents are not part of Evolution Evaluation; the former are reserved for Final Test.
+The current checked-in experiment config defines ten Evolution Evaluation
+opponents: PassiveAI, RandomAI, RandomBiasedAI, LightRush, HeavyRush,
+WorkerRush, AlliBot, Mayari, COAC, and TMA. External opponent JARs are normal
+evaluation dependencies when configured. Historical-self opponents are not
+part of the fixed roster; the previous-generation EAGLE candidate is a separate
+adaptive opponent handled by the search pipeline.
 
 Across the 10 matches:
 
@@ -2103,15 +2108,13 @@ Implement in this order:
 ```
 
 Do not refactor unrelated modules before these contracts are implemented and tested.
-# 31. Post-Evolution Champion Final Test
+# 31. Post-Evolution Boundary
 
-EAGLE has exactly two evaluation contexts. Evolution Evaluation is the ten-match fitness protocol against five vendored basic agents and five deterministic vendored pathfinding variants. It excludes external competition jars and historical-self agents. Final Test is a post-run, gameplay-only comparison over selected completed-run candidates; it never changes an evolutionary objective.
-
-Final-test candidate selection uses completed-run evolution artifacts before matches begin. It reuses canonical generated Java without LLM, regeneration, repair, Reflection, Rewrite, mutation, crossover, or NSGA-II calls; compiles each source once; tests deterministic vendored maps/seeds on both player sides; never substitutes an unavailable champion; and writes a separate versioned `final_tests/<final_test_id>/` tree.
-
-There is no training/validation/test split and no validation selection stage. Compilation, integration, and champion class-load checks are operational prerequisites only. Final-test results cannot flow back to selection, variation, fitness, or survivor selection. A formal final test succeeds only when every configured match completes validly.
-
-Final-test competition score is distinct from evolution `game_performance`. The detailed opponent pins, selectors, schedule, artifacts, formulas, licensing status, and reproduction commands are owned by [`evaluation/final_test.md`](evaluation/final_test.md).
+The current repository has no separate post-evolution final-test executable or
+objective. The four supported entrypoints end at the canonical evolution
+artifacts and offline analysis. External opponent assets remain part of the
+normal evolution roster when selected by the experiment configuration; their
+results are ordinary `game_performance` evidence.
 
 ## Match Commentator extension
 

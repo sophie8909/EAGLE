@@ -24,7 +24,7 @@ def utc_now() -> str:
 
 
 def initialize_run_manifest(run_dir: Path, *, config_path: Path) -> None:
-    for directory in (run_dir / "generations", run_dir / "final_test"):
+    for directory in (run_dir / "generations",):
         directory.mkdir(parents=True, exist_ok=True)
     for artifact in (run_dir / "generation_metrics.jsonl", run_dir / "errors.jsonl"):
         artifact.touch(exist_ok=True)

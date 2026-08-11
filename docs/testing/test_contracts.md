@@ -28,7 +28,6 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Compilation | isolated output; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; `passed`/`failed`/`blocked`; no match execution |
 | Matches | compile once; same source/class hash; exactly 10 roster matches (5 vendored basic, 5 vendored pathfinding variants); distinct directories/seeds; no regeneration |
-| Final Test | pinned revision and interrupted-checkout recovery; explicit adapter hashes; selection before matches; both sides; exact counts; compile once; stable hashes; no LLM/evolutionary operators; aggregation and incomplete rejection; real three-champion smoke |
 | Game Performance | exact canonical component math, clamps, bands, aggregation, partial-batch failure |
 | Code Quality | `[0,100]` simplicity score from four weighted complexity penalties, persisted details, diagnostic separation, and `-1000` failure sentinel for both objectives |
 | Artifacts | golden tree, schemas, hashes, resolved config, readback reconstruction, interruption safety; generation/final snapshots preserve fitness and timing while excluding raw match output and full mutation envelopes; evolution writes no duplicate `results.jsonl` or flat population snapshot |

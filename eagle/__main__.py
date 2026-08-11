@@ -7,7 +7,7 @@ import sys
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
-        print("Usage: python -m eagle {runtime|run|analyze|migrate-run} ...")
+        print("Usage: python -m eagle {runtime|run|analyze} ...")
         return 2
     command, rest = args[0], args[1:]
     if command == "runtime":
@@ -19,9 +19,6 @@ def main(argv: list[str] | None = None) -> int:
     if command == "analyze":
         from eagle.cli.analyze import main as analyze_main
         return analyze_main(rest)
-    if command == "migrate-run":
-        from eagle.cli.migrate_run import main as migrate_main
-        return migrate_main(rest)
     print(f"Unknown EAGLE command: {command}")
     return 2
 

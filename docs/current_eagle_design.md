@@ -10,7 +10,7 @@ Implementation:
 
 - `eagle/__main__.py`: `main`
 - `eagle/search.py`: `run_search`
-- `eagle/opponents.py`: `EVALUATION_ROSTER`, `FINAL_TEST_ROSTER`
+- `eagle/opponents.py`: `EVALUATION_ROSTER`
 - `git log --oneline`: `e3566b5 fix(evaluation): remove historical self opponents`
 
 ## 2. Canonical Runtime
@@ -44,11 +44,11 @@ Implementation:
 | `strategy_prompt` | natural-language MicroRTS strategy | seed; uniform crossover selects a parent; strategy mutation rewrites only this field | Java generation and strategy reflection; `genotype/strategy_prompt.txt`, `individual.json` |
 | `previous_code` | inherited latest evaluated full Java, used as generation starting source when it has strategy markers | empty at seed; crossover/copy use selected parent `generated_java`; neither mutation changes it | `Candidate.generation_input`; `genotype/previous_code.java`, `individual.json` |
 | `generation_prompt` | full-file generation constraints/instructions | default/seed; uniform crossover selects a parent; code mutation rewrites only this field | Java generation and code reflection; `genotype/generation_prompt.txt`, `individual.json` |
-| `generated_java`, `generated_java_path` | normalized complete Java phenotype and source location | only evaluation/generation writes it | compiler, integration, matches, final test; `generation/normalized_candidate.java`, `individual.json` |
+| `generated_java`, `generated_java_path` | normalized complete Java phenotype and source location | only evaluation/generation writes it | compiler, integration, matches, analysis; `generation/normalized_candidate.java`, `individual.json` |
 | `operator`, `mutation_type`, three component parent IDs, `source_candidate_ids` | variation/provenance | seed/copy/crossover/mutation | parent-feedback routing and artifacts; `lineage.json`, `crossover/provenance.json`, `individual.json` |
 | `compile_status` | compiler stage state (`pending`, success/failed, or `not_run`) | default; evaluation copies compiler result status | inspection/reflection; `individual.json`, candidate result |
 | `game_eval_result`, `code_quality_result`, `fitness_objectives` | game evidence, quality payload, and the two active numerical objectives | empty defaults; evaluation fills all three | selection, next mutation, generation metrics; individual/evaluation/snapshot artifacts |
-| `status`, `failure_stage`, `failure_reason` | evaluated/failed state and canonical stage/reason | defaults; evaluation assigns stage-aware failure state | survival, analysis, final-test selection rejection; individual/result/snapshot artifacts |
+| `status`, `failure_stage`, `failure_reason` | evaluated/failed state and canonical stage/reason | defaults; evaluation assigns stage-aware failure state | survival and analysis; individual/result/snapshot artifacts |
 | `artifacts`, `timing`, `metadata` | optional path map, stage timings, and non-schema hand-off data (including `reflection_evidence` and mutation record) | defaults; evaluation/mutation extend them | reflection, diagnostics/analysis; `timing.json`, `individual.json`, snapshots |
 
 `generation_input` uses `previous_code` only if it begins `package ai.generated;` and contains the strategy-region markers; otherwise it loads `eagle/java_templates/CandidateAgent.java`. The generated source must be a public `ai.generated.CandidateAgent` extending `AbstractionLayerAI`, with both required constructors and `getAction`, `reset`, and `clone` methods.
@@ -97,7 +97,6 @@ flowchart TD
   Survive --> Stop{more generations / no front-0 stagnation?}
   Stop -->|yes| Rank
   Stop -->|no| Final[Persist summary and final population]
-  Final --> FT[Optional separate final-test command]
   Final --> A[Offline analysis]
 ```
 
@@ -110,7 +109,7 @@ flowchart TD
 | evolutionary evaluation | one integrated class directory | weighted fixed-roster batch, plus one frozen previous-generation champion from generation 1 onward | evaluated/failed candidate | `eagle/evaluation.py`: `evaluate_candidate`, `evaluate_matches`; `evaluation/opponent_schedule.py` |
 | parent/variation | ranked population | tournament, component crossover/copy, optional prompt mutation | population-size child genotypes | `eagle/selection.py`; `eagle/search.py`: `create_offspring` |
 | replacement | parents + evaluated offspring | Pareto fronts then crowding truncation | next population | `eagle/selection.py`: `select_next_generation` |
-| final test | completed run, selected already-evaluated Java | compile once then independent champion/basic schedule | final-test directory | `scripts/run_final_test.py`; `eagle/final_test/runner.py` |
+| post-run analysis | completed canonical run | static report generation | `analysis/` directory | `analyze.sh`; `eagle/analysis/report.py` |
 
 Generation zero follows the same Java/evaluation boundary as every offspring. Each later iteration creates exactly `population_size` offspring, evaluates all of them, then uses parent-plus-offspring survival. `front0_stagnation_generations` stops a run when the sorted front-0 objective-vector signature does not change for the configured number of generations (10 in the canonical experiment). A failure does not remove a candidate before survival; it receives failure fitness.
 
@@ -268,7 +267,7 @@ Implementation:
 | integration failure | seven-check probe fails; `integration` | game `-1000`, code `-1000` | integration request/output/result; code reflection includes it |
 | runtime exception, illegal action, bad/missing result, timeout | failed `MatchResult` or incomplete batch; `runtime` | game `-1000`, code `-1000` | per-match evidence and retained completed matches; code/strategy reflection context |
 | evaluator/alignment malformed result | alignment catches non-server parse/runtime error | successful pipeline still has normal game score; alignment component becomes 0 | `strategy_alignment/result.json`, request/raw response |
-| missing artifact | analysis/final-test loaders reject/skip according to loader | no retroactive fitness recalculation | explicit loader error; no error pool |
+| missing artifact | canonical analysis loader rejects unsupported/missing run evidence | no retroactive fitness recalculation | explicit loader error; no error pool |
 | unexpected `RuntimeError`/`OSError` in a match | caught in `evaluate_matches` as failed runtime match | runtime failure values as above | failed match record and candidate result |
 
 `errors.jsonl` is initialized by the canonical run manifest but current evaluation/artifact writers do not append candidate failures to it; failures are instead represented in candidate directories, generation snapshots, and final population. This is an observability gap, not an error pool.
@@ -415,20 +414,14 @@ sequenceDiagram
   E-->>S: objectives + next reflection_evidence
 ```
 
-## 8. Evaluation and Final Test
+## 8. Evaluation
 
 Search evaluation validates source, compiles once in `classes/<candidate_id>`, runs a separate seven-check integration probe, then starts the weighted ten-opponent matrix (18 records/opponent; plus the same 18-record dynamic matrix from generation 1 onward). Validation requires package/class/superclass, two constructors, callable methods, allowed imports/no forbidden runtime behaviours, and the overall runtime contract. The dynamic opponent is prepared once per generation by compiling the selected previous candidate under the alias `ai.generated.EaglePreviousBest`, so all candidates in that generation use the same frozen reference.
-
-**Confirmed:** final testing is not called by EA completion. `python scripts/run_final_test.py --run-dir RUN --selector {best-game-performance|balanced|pareto}` or `--candidate-id ID` first selects evaluated candidates using completed evolution artifacts only. It copies their canonical source, recompiles/integrates it, then schedules 10 matches per final-test opponent across configured maps/seeds/sides, with 5,000 cycles per configured map. The checked-in final-test config uses external `tma`, `mayari`, `coac` plus five basic bots, ten deterministic seeds, three maps, alternating player side, and thus 80 matches per selected candidate. `--smoke` changes this to two matches/opponent (16/candidate), not an evolution result.
 
 Implementation:
 
 - `generation/java_agent_generator.py`: `validate_generated_java_source`
 - `evaluation/microrts_runner.py`: `integrate_microrts_agent`, `run_microrts_match`
-- `scripts/run_final_test.py`: `main`
-- `eagle/final_test/selection.py`: `select_final_test_candidates`
-- `eagle/final_test/schedule.py`: `build_schedule`, `exact_match_count`
-- `configs/final_test_champions.yaml`
 
 ## 9. Artifacts and Observability
 
@@ -456,20 +449,18 @@ runs/<run_id>/
 │   └── mutation/{metadata.json,reflection_context.json,requests,responses,original prompts...}
 ├── classes/<candidate_id>/
 ├── generated_agents/<candidate_id>/CandidateAgent.java
-├── final_test/ (created by the run manifest; currently not the configured final-test output root)
-└── final_tests/<final_test_id>/... (only if separately run)
+└── analysis/ (created by `analyze.sh`)
 ```
 
 | Artifact | Producer | Main contents | Consumer |
 | --- | --- | --- | --- |
 | `manifest.json`, `resolved_config.json` | search/artifacts | version, lifecycle, resolved runtime/EA/seeds/commit | resume, canonical analysis |
 | generation snapshot/metrics | `record_generation` | surviving population; objective statistics and opponent summaries | resume, analysis |
-| candidate genotype/lineage/individual | artifact writer | reconstructable genotype, phenotype, provenance, status, objectives | final-test selection, inspection |
+| candidate genotype/lineage/individual | artifact writer | reconstructable genotype, phenotype, provenance, status, objectives | resume and inspection |
 | generation/mutation/LLM artifacts | generator, reflector/rewriter, `LLMCallLogger` | requests, raw responses, attempt status/timing | debugging, reflection provenance |
 | compilation/integration/match artifacts | evaluation adapters | command/diagnostics/checks/telemetry/replay/results | score computation, diagnosis |
 | evaluation artifacts | `write_candidate_artifacts` | objectives and all component evidence | reflection, inspection |
 | `timing.jsonl` + candidate timing | all staged writers | generation, mutation, evaluation/match/alignment timings | analysis |
-| `final_tests/...` | final-test runner | selection, opponents, copied source, match records, aggregates | final-test reporting |
 
 Every completed generation persists membership through both a survivor snapshot and `generations/generation_####.json`; every evaluated candidate persists objectives, generated Java, prompt/genotype, lineage and available diagnostics. Operators and parent IDs are persisted. Prompt and raw LLM outputs are persisted. Match results and failure classifications are persisted per candidate, including map/round/side/seed and expected/completed/missing matrix counts. `evaluation/game_performance.json`, candidate reflection evidence, and `generation_metrics.jsonl` retain each opponent's 18-match average, P0/P1 and map summaries, weight, and weighted contribution, plus dynamic source generation/candidate when present. The run-level generation record also records the previous-generation champion and its score. Timing is broad but not complete: selection/crossover only appear inside candidate timing where applicable, and no candidate-level start/finish wall-clock record is guaranteed. As noted in section 6.4, initialized `errors.jsonl` is not currently populated by candidate evaluation failures.
 
@@ -478,7 +469,6 @@ Implementation:
 - `eagle/artifacts.py`: `write_candidate_inputs`, `write_candidate_artifacts`, `write_resolved_config`, `write_summary`
 - `eagle/run_artifacts.py`: `initialize_run_manifest`, `record_generation`, `finalize_run`
 - `eagle/llm_logging.py`: `LLMCallLogger.write`
-- `eagle/final_test/artifacts.py`: final-test artifact helpers
 
 ## 10. Analysis Workflow
 
@@ -505,13 +495,12 @@ Implementation:
 | evaluation/fitness | `eagle/evaluation.py`, `evaluation/match_matrix.py`, `evaluation/opponent_schedule.py`, `evaluation/compiler.py`, `evaluation/microrts_runner.py`, `evaluation/game_performance.py`, `evaluation/game_metrics.py`, `evaluation/canonical_code_quality.py`, `tests/test_evaluation_matrix.py`, `tests/test_phase4_*`, `tests/test_weighted_adaptive_opponents.py` |
 | mutation/reflection | `eagle/mutation.py`, `eagle/rewrite.py`, `config/prompt_templates.toml`, `tests/test_phase2*.py`, `tests/test_ten_opponent_reflection.py` |
 | persistence/analysis | `eagle/artifacts.py`, `eagle/run_artifacts.py`, `eagle/analysis/*`, `tests/test_canonical_run_artifacts.py`, `tests/test_canonical_analysis.py` |
-| final test | `scripts/run_final_test.py`, `eagle/final_test/*`, `configs/final_test_champions.yaml`, `tests/test_final_test.py` |
 
 ## 12. Confirmed Design Decisions
 
 - One local Qwen3.5-9B llama.cpp-compatible endpoint serves all LLM roles; `watchdog.sh` only monitors/restarts the local network interface and does not provide model routing or server lifecycle management.
 - The genotype is exactly strategy prompt, inherited prior complete Java, and generation prompt; phenotype is a newly generated complete Java file.
-- Evolution evaluates 180 weighted fixed-roster MicroRTS records in generation 0 and appends the same 18-record frozen previous-generation champion matrix thereafter; final test is an explicit post-evolution workflow with a different schedule.
+- Evolution evaluates 180 weighted fixed-roster MicroRTS records in generation 0 and appends the same 18-record frozen previous-generation champion matrix thereafter.
 - NSGA-II maximizes exactly game performance and code quality; alignment, function capability, compilation/warnings, and game telemetry are components/evidence, not third objectives.
 - Strategy and code mutation are prompt-only two-call reflection/rewrite operators, followed by the normal third Java-generation call.
 - Current code has no error pool and no AOS.
@@ -534,9 +523,8 @@ Implementation:
 
 - **Confirmed discrepancy:** `configs/experiments/microrts.yaml` declares `generation_backend: openai` and `alignment_backend: openai`, but the run CLI forcibly selects both from runtime/`--mock`; this is benign duplication, not role routing.
 - **Confirmed observability gap:** the run manifest initializes `errors.jsonl`, analysis reads it, but current evaluation code does not append candidate failures to it.
-- **Confirmed:** evolution no longer writes `results.jsonl`; compact canonical generation/final-population records retain fitness and timing. The separate Final Test protocol still owns its own `results.jsonl`.
+- **Confirmed:** evolution no longer writes `results.jsonl`; compact canonical generation/final-population records retain fitness and timing.
 - **Confirmed historical caveat:** inspected saved runs contain older opponent/schema traces (including `eagle_policy`) that conflict with current `EVALUATION_ROSTER`; the current code and recent history establish the active roster.
 - **Confirmed implementation detail:** the dynamic champion is compiled once per generation under the `ai.generated.EaglePreviousBest` alias because the candidate and reference cannot both define `ai.generated.CandidateAgent` in one JVM classpath; the alias manifest records source identity and compiled location.
 - **Confirmed:** there is no separate active HOF roster in the current search configuration. `evaluate_matches` accepts optional historical opponents, and if supplied they use the same 18-record matrix, but `run_search` currently supplies only the fixed roster plus `eagle_previous_best`.
-- **Confirmed:** final-test scheduling remains a separate 10-match-per-opponent protocol; it is not silently changed by the evolutionary 18-match matrix.
 - **Inference:** a candidate's successful code-quality lower bound of zero is reachable only with at least ten counted warning penalties and no capability/alignment score; its formal range follows the implemented formula, not a separately enforced clamp.

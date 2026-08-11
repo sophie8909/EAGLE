@@ -52,8 +52,7 @@ from generation.java_agent_generator import (
 from .artifacts import write_candidate_artifacts, write_candidate_inputs
 from .candidate import Candidate, compact_candidate_metadata
 from .config import ExperimentConfig
-from .final_test.opponents import OpponentSetupError
-from .opponents import EVALUATION_ROSTER, OpponentSpec, SEARCH_OPPONENT_REGISTRY, rooted_jar_path
+from .opponents import EVALUATION_ROSTER, OpponentSetupError, OpponentSpec, SEARCH_OPPONENT_REGISTRY, rooted_jar_path
 from evaluation.opponent_schedule import EAGLE_OPPONENT_ID
 from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
 

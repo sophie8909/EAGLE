@@ -337,11 +337,11 @@ Compile ??敺? class loading?onstructor?uperclass?ethod signature
 
 初始實驗使用兩個邏輯 profile：Machine B 的 general profile（預設 alias qwen3.5-9b、本機 8080）負責 Reflection 與 Rewrite，也執行 EAGLE；Machine A 的 coder profile（預設 alias qwen2.5-coder-7b、預設 8081）只負責完整 Java Generation。Launcher 讀取實際 .gguf 路徑、以明確設定的 alias 作為 artifact model identifier，並只原子更新 endpoint config 的選定 section。Pipeline 不得把這些初始 model 名稱寫死，stage 只依賴 general 與 coder。
 
-## 最終測試邊界
+## Evolution Evaluation 邊界
 
-EAGLE 只有兩種評估情境：演化期間固定使用 10-opponent roster 的 Evolution Evaluation（五個 vendored basic agent、五個 deterministic vendored pathfinding variant），以及演化完成後才執行的 Final Test。Evolution Evaluation 不使用 external competition jar，也不使用 historical self opponent。Final Test 只讀取已完成 run 的演化 artifacts，選定既有 Java，對固定版本的 TMA、Mayari、COAC 在多張既有地圖、固定 seeds、雙方 player side 上比賽；結果不得回流 fitness、selection、crossover、mutation、NSGA-II，也不得呼叫 LLM 或重新生成、修復候選者。此架構沒有 validation split 或 validation selection stage。
+目前 EAGLE 只有一個 Evolution Evaluation 情境。它依 experiment config 執行固定的 10-opponent roster，並可包含已解析的 external opponent assets；所有比賽結果都屬於一般 `game_performance` 證據。沒有獨立的 post-evolution Final Test、validation split 或 validation selection stage。
 
-完整 opponent pins、selector、artifact schema、計分與重現指令由 `docs/evaluation/final_test.md` 管理；該文件已加入 active documentation map。
+目前沒有獨立的 post-evolution Final Test executable；外部 opponent assets 若被實驗設定選取，屬於一般 Evolution Evaluation 的依賴與結果。
 ## 2026-08-04 產物精簡與 OOM 修復
 
 演化流程採用 `phase4-v3`、`eagle-candidate-v2` 與
@@ -351,8 +351,7 @@ telemetry 僅由 `candidates/<candidate_id>/matches/<match_id>/` 保存一次；
 
 `generations/generation_<nnnn>.json` 是唯一的世代存活族群快照，並保留續跑所需
 的 genotype/phenotype、fitness objectives 與 timing。演化層級不再寫入重複的
-`results.jsonl` 或 `generation_<n>_population.json`；Final Test 自己的
-`results.jsonl` 不受影響。原始 LLM、編譯、整合與比賽證據仍保留在各自的單一
+`results.jsonl` 或 `generation_<n>_population.json`。原始 LLM、編譯、整合與比賽證據仍保留在各自的單一
 stage 目錄中。
 # 目前實作修正（2026-08-05）
 

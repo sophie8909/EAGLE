@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-08-04 after the compact persistence/OOM fix. This file describes active source/tests/configuration. It is not normative. Historical runs use legacy artifact layouts and require explicit migration.
+Snapshot: 2026-08-11 after the four-entrypoint cleanup. This file describes active source/tests/configuration. It is not normative. Historical runs use legacy artifact layouts and are rejected by the canonical readers.
 
 ## Status summary
 
@@ -47,19 +47,12 @@ The most recent complete saved population run (`runs/20260712_154209_634218`) us
 - `python -m eagle run --config configs/experiments/microrts.yaml --runtime-config configs/runtime.yaml --mock` exercises the contract-shaped weighted 180/198-match evaluation pipeline, but mock execution is not real MicroRTS proof.
 - Real EA mode requires the local generation endpoint, `javac`, the vendored
   MicroRTS runtime, and resolved search-opponent artifacts (including AlliBot and
-  the pinned TMA/Mayari/COAC JARs). The same external artifacts are available to
-  the isolated Final Test workflow.
+  the pinned TMA/Mayari/COAC JARs).
 - WSL is the project default for Python/Java/MicroRTS commands.
 - Native Ubuntu Linux is the primary runtime, and WSL2 Ubuntu is also supported for Python/Java/MicroRTS commands.
 - Candidate inspection is artifact-only; the obsolete manual viewer has been removed.
 
 See [`architecture_gaps.md`](architecture_gaps.md) for the remaining implementation status.
-
-## Final Test compatibility evidence (2026-07-23)
-
-Pinned TMA, Mayari, and COAC sources build locally with Temurin 17, and all three expected classes pass the vendored MicroRTS load/constructor probe. TMA uses its unchanged entrypoint and active `strategiesV2` sources plus an explicit behavior-free package marker for a stale import; the adapter path and SHA-256 are persisted.
-
-A real bounded smoke selected candidate `1ed41153d0c4` from completed mock-evolution run `20260723_092713_386247`, compiled it once, and completed six of six real MicroRTS matches on `basesWorkers8x8` (one seed, all three champions, both sides). The candidate lost all six matches; compatibility, evidence completeness, and stable source/class identity passed. The smoke is runtime proof, not performance evidence and not a formal 80-match Final Test.
 
 ## Canonical runtime update (2026-07-24)
 
@@ -97,7 +90,7 @@ metrics, final populations, timing, and error artifacts. It never reads
 Analysis writes derived Markdown, JSON, CSV, and static Matplotlib output under
 the run's configured analysis directory. Partial initialized/running runs
 remain analyzable, unsupported schemas fail explicitly, and historical layouts
-require the explicit `migrate-run` boundary.
+are rejected without a migration subcommand.
 
 ## Compact persistence and OOM fix (2026-08-04)
 
@@ -115,6 +108,13 @@ RAM and caused the kernel to terminate Python together with VSCode processes.
 The canonical match runner now persists a streamed gzip tick trace and integrity
 metadata for the complete evaluation matrix. Strategy Reflection selects one
 strict-priority outcome pool (`loss > draw > win`), samples at most three matches
-with reproducible run-derived randomness, calls `match_commentator` only for those
-matches, and cleans temporary raw logs after terminal handling. Aggregate fitness
-still uses every configured match. See `docs/match-commentator.md`.
+with reproducible run-derived randomness, calls the in-pipeline
+`match_commentator` role only for those matches, and cleans temporary raw logs
+after terminal handling. Aggregate fitness still uses every configured match.
+
+## Four-entrypoint cleanup (2026-08-11)
+
+The executable surface is limited to `run_env.sh`, `run.sh`, `analyze.sh`, and
+`watchdog.sh`. Final-test, GUI-match, migration, standalone commentator, and
+unused legacy analysis utilities were removed. External opponent assets remain
+because the active evolution roster still resolves them during evaluation.

@@ -71,6 +71,8 @@ When code and the specification differ, preserve the specification and update [`
 - Pure implementation fixes that do not alter documented behavior do not require rewriting the Chinese overview.
 - Any added, removed, or renamed active documentation file must update the documentation map in `architeture_specification_zh.md`.
 
-## Champion Final Test
+## Post-run analysis
 
-Post-evolution champion comparison is owned by [`evaluation/final_test.md`](evaluation/final_test.md). It is separate from Evolution Evaluation fitness and must be read for opponent setup, candidate selection, final-test scheduling/execution, artifacts, aggregation, analysis, or reproduction work.
+There is no separate champion-comparison executable in the current repository.
+Opponent setup/assets referenced by the active evolution roster are owned by the
+normal evaluation pipeline.

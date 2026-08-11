@@ -28,11 +28,9 @@ generation, use:
 ./analyze.sh --run-dir <run_dir> --agent <candidate_id>
 ```
 
-Historical layouts are rejected. They require an explicit migration command:
-
-```bash
-python -m eagle migrate-run RUN_DIR
-```
+Historical layouts are rejected. The canonical command surface intentionally has
+no migration subcommand; migrate or inspect old data outside the EAGLE runtime
+before presenting it to `./analyze.sh`.
 
 ## Candidate debugging order
 

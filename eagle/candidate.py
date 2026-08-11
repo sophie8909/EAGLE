@@ -152,7 +152,7 @@ class Candidate:
         }
 
     def to_individual_dict(self) -> dict[str, Any]:
-        """Return the small candidate index used by inspection/final test."""
+        """Return the small candidate index used by offline inspection."""
 
         payload = self.to_json_dict()
         payload.pop("game_eval_result", None)

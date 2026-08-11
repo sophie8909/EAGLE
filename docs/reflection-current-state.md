@@ -76,18 +76,18 @@ records the failure.
 
 ## Commentator execution
 
-`eagle/match_commentator.py:commentate_match` loads metadata/integrity and
-lazily reads the gzip rows. It partitions the complete ordered tick sequence by
-`llm.roles.match_commentator.chunk_ticks`; it never character-slices a prompt
-or splits a serialized row. Every chunk request includes its exact range and
-rows. The final request includes metadata, result, integrity, ordered chunk
-analyses, and coverage—not the entire raw trace again.
+`eagle/strategy_reflection.py:StrategyReflectionPipeline._commentate` loads
+metadata/integrity through `evaluation.match_logs:read_match_log_chunks` and
+partitions the gzip rows using `llm.roles.match_commentator.chunk_ticks`. It
+does not use the removed standalone commentator module. Each chunk request is
+assembled by `_commentator_prompt`; multi-chunk matches receive one additional
+`_commentator_synthesis_prompt` request.
 
-The role system prompt is `MATCH_COMMENTATOR_SYSTEM_PROMPT`
-(`eagle/match_commentator.py:15-34`). It prohibits Java/strategy rewriting
-and fitness calculation and requires tick evidence, observation/inference
-separation, and structured JSON. Chunk and final schemas are emitted by
-`_chunk_schema` and `_final_schema`.
+The effective role instructions are the strings in
+`eagle/strategy_reflection.py:_commentator_prompt` and
+`_commentator_synthesis_prompt`. They prohibit Java/strategy rewriting and
+fitness calculation, require analysis of only the supplied match, and require
+structured JSON parsed by `_parse_commentary`.
 
 Every request records `first_tick`, `last_tick`, `tick_count`,
 prompt/response sizes, attempt count, and coverage status. Chunk files contain
@@ -205,7 +205,7 @@ available for older run artifacts. No GUI is involved (`eagle/cli/analyze.py`).
 | Match result and cleanup | `evaluation/runtime_evaluation.py:_finish_match` |
 | Trace schema/integrity/lazy reader | `evaluation/match_trace.py` |
 | Shared LLM request/retry contract | `eagle/mutation.py:ReflectionStage`, `build_reflection_backend` |
-| Commentator prompt/selection/artifacts | `eagle/strategy_reflection.py`, `eagle/match_commentator.py` |
+| Commentator prompt/selection/artifacts | `eagle/strategy_reflection.py:StrategyReflectionPipeline`, `select_reflection_matches` |
 | Strategy context/prompt | `eagle/reflection_context.py`, `eagle/strategy_reflection.py`, `config/prompt_templates.toml` |
 | Scoring ownership | `evaluation/game_performance.py`, `evaluation/game_metrics.py`, `evaluation/nsga2_objectives.py` |
 | Candidate artifact writer | `eagle/artifacts.py` |

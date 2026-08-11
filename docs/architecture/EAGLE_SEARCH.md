@@ -46,7 +46,7 @@ and individual request records retain each LLM attempt, retry, status, and durat
 
 ## Final evaluation
 
-Post-evolution champion comparison is a separate explicit final-test protocol,
-started with `scripts/run_final_test.py`. It consumes the completed run's
-canonical generated sources and never re-enters search, mutation, crossover, or
-NSGA-II.
+The current repository has no post-evolution final-test executable. The four
+supported entrypoints end at the canonical evolution artifacts and offline
+analysis; external opponent assets remain only because the active evolution
+roster uses them during the normal match matrix.

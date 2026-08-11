@@ -213,7 +213,7 @@ Native Ubuntu: Python -> Linux java/javac -> MicroRTS
 WSL2:          Python -> WSL Linux java/javac -> MicroRTS
 ~~~
 
-The active Java compilation, integration, match, and Final Test paths use direct
+The active Java compilation, integration, and match paths use direct
 argument lists, explicit cwd values, and Linux classpath separator :. Do not
 add Windows classpath ; or invoke Windows java.exe.
 

@@ -66,6 +66,7 @@ flowchart TD
 
 ## Post-evolution boundary
 
-After a run completes, the optional champion Final Test selects already evaluated canonical Java from evolution artifacts and compares it with pinned TMA, Mayari, and COAC agents. This branch is terminal analysis: it has no path back to fitness, NSGA-II, crossover, mutation, generation, or any LLM.
-
-Evolution Evaluation uses five vendored basic agents and five deterministic vendored pathfinding variants for fitness. Historical-self opponents and incompatible competition jars are excluded from the active roster. Final Test remains a separate post-run protocol; see [`../evaluation/final_test.md`](../evaluation/final_test.md) for selectors, both-side schedule, artifact tree, and reproducibility contract.
+The current repository has no separate post-evolution final-test branch. After a
+run completes, `analyze.sh` reads only canonical compact evolution artifacts.
+Evolution Evaluation owns all configured opponents, including external opponent
+assets when selected by the experiment configuration.

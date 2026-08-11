@@ -1,8 +1,8 @@
 """Canonical evolutionary search for prompt-generated Java MicroRTS agents.
 
 This module owns experiment lifecycle, offspring orchestration, and population
-updates. Evaluation owns the shared child pipeline; final-test execution is a
-separate post-evolution protocol. The canonical entrypoint is ``run_search``.
+updates. Evaluation owns the shared child pipeline. The canonical entrypoint
+is ``run_search``.
 """
 
 from __future__ import annotations
