@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 from eagle.analysis.loader import load_run, resolve_explicit_run, resolve_latest_run
-from eagle.analysis.report import generate_analysis
 from eagle.runtime.config import load_runtime_config
 
 
@@ -19,6 +18,7 @@ def main(argv: list[str] | None = None) -> int:
     target.add_argument("--run-dir")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--candidate")
+    parser.add_argument("--agent", help="Print Game Performance for one candidate agent across generations.")
     parser.add_argument("--match")
     parser.add_argument("--match-commentaries", action="store_true")
     parser.add_argument("--commentary", action="store_true")
@@ -26,8 +26,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         runtime = load_runtime_config(args.runtime_config, validate_files=False)
         run_dir = resolve_latest_run(runtime.run_root) if args.latest else resolve_explicit_run(args.run_dir)
+        if args.agent:
+            return _print_agent_game_performance(load_run(run_dir), args.agent)
         if args.candidate and (args.match_commentaries or args.commentary):
             return _print_commentary_view(run_dir, args.candidate, args.match, args.commentary)
+        from eagle.analysis.report import generate_analysis
         print(f"Analyzing run: {run_dir}")
         output = generate_analysis(
             load_run(run_dir),
@@ -39,6 +42,43 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+
+
+def _print_agent_game_performance(data, candidate_id: str) -> int:
+    rows = []
+    for snapshot in data.generations:
+        population = snapshot.get("population", [])
+        if not isinstance(population, list):
+            continue
+        for item in population:
+            if not isinstance(item, dict):
+                continue
+            item_id = str(item.get("candidate_id") or item.get("id") or "")
+            if item_id != candidate_id:
+                continue
+            objectives = item.get("fitness_objectives") or item.get("objectives") or {}
+            rows.append({
+                "generation": item.get("generation", snapshot.get("generation")),
+                "candidate_id": item_id,
+                "game_performance": objectives.get("game_performance"),
+            })
+    if not rows and isinstance(data.final_population, dict):
+        for item in data.final_population.get("population", []):
+            if not isinstance(item, dict):
+                continue
+            item_id = str(item.get("candidate_id") or item.get("id") or "")
+            if item_id != candidate_id:
+                continue
+            objectives = item.get("fitness_objectives") or item.get("objectives") or {}
+            rows.append({
+                "generation": item.get("generation"),
+                "candidate_id": item_id,
+                "game_performance": objectives.get("game_performance"),
+            })
+    if not rows:
+        raise ValueError(f"Agent does not exist in run snapshots: {candidate_id}")
+    print(json.dumps(sorted(rows, key=lambda item: (item.get("generation", -1), item["candidate_id"])), ensure_ascii=False, indent=2))
+    return 0
 
 
 def _print_commentary_view(run_dir: Path, candidate_id: str, match_id: str | None, single: bool) -> int:

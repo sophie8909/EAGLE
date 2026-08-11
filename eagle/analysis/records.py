@@ -15,6 +15,7 @@ CANDIDATE_ARTIFACT_PATHS = {
     "individual": "individual.json",
     "lineage": "lineage.json",
     "prompt": "prompt.json",
+    "strategy_signature": "genotype/strategy_signature.json",
     "raw_llm_response": "generation/response_raw.txt",
     "extracted_code": "generation/extracted_candidate.java",
     "assembled_code": "generation/normalized_candidate.java",
@@ -75,6 +76,11 @@ class CandidateRecord:
     strategy_prompt: str
     generation_prompt: str
     generated_java: str
+    strategy_signature: dict[str, Any] = field(default_factory=dict)
+    strategy_niche: str = "unknown"
+    mutation_intent: str | None = None
+    parent_strategy_niche: str | None = None
+    niche_changed: bool | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -274,6 +280,11 @@ def _record_from_candidate(candidate: dict[str, Any], source: Path) -> Candidate
         strategy_prompt=str(candidate.get("strategy_prompt", "")),
         generation_prompt=str(candidate.get("generation_prompt", "")),
         generated_java=str(candidate.get("generated_java", "")),
+        strategy_signature=dict(candidate.get("strategy_signature") or {}) if isinstance(candidate.get("strategy_signature"), dict) else {},
+        strategy_niche=str(candidate.get("strategy_niche") or "unknown"),
+        mutation_intent=str(candidate["mutation_intent"]) if candidate.get("mutation_intent") is not None else None,
+        parent_strategy_niche=str(candidate["parent_strategy_niche"]) if candidate.get("parent_strategy_niche") is not None else None,
+        niche_changed=candidate.get("niche_changed") if isinstance(candidate.get("niche_changed"), bool) else None,
         raw=candidate,
     )
 

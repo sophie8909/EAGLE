@@ -43,4 +43,7 @@ script; it is not a server lifecycle manager, second server, or endpoint router.
 `./analyze.sh` performs offline analysis of the latest valid run, or a supplied
 run directory. It retains candidate fitness, objective trends, failures,
 operation timing, request counts, token counts, and total LLM time. Historical
-run records may still be read by the analysis readers.
+run records may still be read by the analysis readers. Individual agent
+`game_performance` values are exported to
+`<run>/analysis/agent_game_performance.csv`; use
+`./analyze.sh --agent <candidate_id>` to print one agent's values by generation.

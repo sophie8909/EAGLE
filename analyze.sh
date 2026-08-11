@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CALLER_DIR="$PWD"
 RUNTIME_CONFIG="$ROOT_DIR/configs/runtime.yaml"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/eagle-matplotlib}"
+mkdir -p "$MPLCONFIGDIR"
 cd "$ROOT_DIR"
 
 if [[ $# -eq 0 ]]; then
@@ -31,6 +33,9 @@ if [[ "$1" = "--run-dir" ]]; then
     exec python -m eagle analyze --runtime-config "$RUNTIME_CONFIG" --run-dir "$RUN_DIR" "$@"
 fi
 if [[ "$1" = "--candidate" ]]; then
+    exec python -m eagle analyze --runtime-config "$RUNTIME_CONFIG" --latest "$@"
+fi
+if [[ "$1" = "--agent" ]]; then
     exec python -m eagle analyze --runtime-config "$RUNTIME_CONFIG" --latest "$@"
 fi
 RUN_DIR="$1"

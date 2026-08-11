@@ -18,6 +18,16 @@ Derived Markdown, JSON, CSV, and static Matplotlib plots are written under
 `RUN_DIR/analysis/`. The canonical loader reads compact generation, final
 population, timing, and error artifacts. It never reads `results.jsonl`.
 
+Individual agent Game Performance is written to
+`analysis/agent_game_performance.csv` and plotted in
+`analysis/plots/agent_game_performance.png`. To print one agent's score by
+generation, use:
+
+```bash
+./analyze.sh --agent <candidate_id>
+./analyze.sh --run-dir <run_dir> --agent <candidate_id>
+```
+
 Historical layouts are rejected. They require an explicit migration command:
 
 ```bash

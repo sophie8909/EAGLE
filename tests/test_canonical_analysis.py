@@ -62,3 +62,60 @@ class CanonicalAnalysisTests(unittest.TestCase):
             for name in OUTPUT_FILES:
                 self.assertTrue((output / name).is_file())
             self.assertEqual((run / "results.jsonl").read_text(encoding="utf-8"), "not json\n")
+
+    def test_outputs_individual_agent_game_performance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = self.make_run(root, "run", stamp=datetime.now(timezone.utc))
+            (run / "generations").mkdir()
+            atomic_json(run / "generations" / "generation_0000.json", {
+                "schema_version": "eagle-generation-v2",
+                "generation": 0,
+                "population": [{
+                    "candidate_id": "agent-a",
+                    "generation": 0,
+                    "status": "evaluated",
+                    "operator": "seed",
+                    "mutation_type": None,
+                    "fitness_objectives": {"game_performance": 12.5, "code_quality": 80.0},
+                }],
+            })
+            output = generate_analysis(load_run(run), force=True)
+            rows = (output / "agent_game_performance.csv").read_text(encoding="utf-8")
+            self.assertIn("candidate_id", rows)
+            self.assertIn("agent-a", rows)
+            self.assertIn("12.5", rows)
+
+    def test_outputs_strategy_diversity_and_niche_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = self.make_run(root, "run", stamp=datetime.now(timezone.utc))
+            atomic_json(run / "generation_metrics.jsonl", {})
+            (run / "generation_metrics.jsonl").write_text(
+                json.dumps({
+                    "generation": 2,
+                    "population_size": 2,
+                    "strategy_diversity": {
+                        "unique_niches": 2,
+                        "dominant_niche": "early-light-rush",
+                        "dominant_niche_count": 1,
+                        "dominant_niche_ratio": 0.5,
+                        "mean_strategy_distance": 0.25,
+                        "new_niches": 1,
+                        "revisited_niches": 1,
+                        "niche_change_rate": 0.5,
+                        "niche_distribution": {"early-light-rush": 1, "mid-mixed-balanced": 1},
+                        "intent_niche_change_rates": {"STRUCTURAL": 1.0},
+                    },
+                    "objectives": {},
+                }) + "\n",
+                encoding="utf-8",
+            )
+            output = generate_analysis(load_run(run), force=True)
+            diversity = (output / "strategy_diversity.csv").read_text(encoding="utf-8")
+            niches = (output / "strategy_niches.csv").read_text(encoding="utf-8")
+            self.assertIn("early-light-rush", diversity)
+            self.assertIn("0.25", diversity)
+            self.assertIn("mid-mixed-balanced", niches)
+            for plot in ("unique_strategy_niches.png", "dominant_niche_ratio.png", "mean_strategy_distance.png", "niche_change_by_mutation_intent.png"):
+                self.assertTrue((output / "plots" / plot).exists())

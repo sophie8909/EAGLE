@@ -16,7 +16,8 @@ from .loader import RunData
 
 OUTPUT_FILES = (
     "summary.md", "run_summary.json", "generation_metrics.csv",
-    "candidate_summary.csv", "objective_statistics.csv", "operator_statistics.csv",
+    "candidate_summary.csv", "agent_game_performance.csv", "strategy_diversity.csv", "strategy_niches.csv",
+    "objective_statistics.csv", "operator_statistics.csv",
     "timing_statistics.csv", "error_statistics.csv",
 )
 
@@ -27,6 +28,9 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
     plots = output / "plots"
     plots.mkdir(exist_ok=True)
     candidates = _candidate_rows(data)
+    agent_game_rows = _agent_game_performance_rows(data)
+    diversity_rows = _strategy_diversity_rows(data)
+    niche_rows = _strategy_niche_rows(data)
     objective_rows = _objective_rows(data)
     generation_rows = _generation_rows(data)
     operator_rows = _operator_rows(candidates)
@@ -34,6 +38,9 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
     error_rows = _error_rows(data.errors, candidates)
     _write_csv(output / "generation_metrics.csv", generation_rows)
     _write_csv(output / "candidate_summary.csv", candidates)
+    _write_csv(output / "agent_game_performance.csv", agent_game_rows)
+    _write_csv(output / "strategy_diversity.csv", diversity_rows)
+    _write_csv(output / "strategy_niches.csv", niche_rows)
     _write_csv(output / "objective_statistics.csv", objective_rows)
     _write_csv(output / "operator_statistics.csv", operator_rows)
     _write_csv(output / "timing_statistics.csv", timing_rows)
@@ -44,6 +51,8 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
         "status": data.manifest.get("status"),
         "completed_generations": data.manifest.get("completed_generations", []),
         "candidate_count": len(candidates),
+        "agent_game_performance_count": len(agent_game_rows),
+        "strategy_diversity_count": len(diversity_rows),
         "failure_count": sum(bool(row["failed"]) for row in candidates),
         "objectives": sorted({row["objective_id"] for row in objective_rows}),
     }
@@ -54,10 +63,11 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
         f"- Status: {summary['status']}\n"
         f"- Completed generations: {len(summary['completed_generations'])}\n"
         f"- Final candidates: {summary['candidate_count']}\n"
+        f"- Individual agent Game Performance rows: {summary['agent_game_performance_count']}\n"
         f"- Failures: {summary['failure_count']}\n",
         encoding="utf-8",
     )
-    _plots(plots, generation_rows, objective_rows, operator_rows, timing_rows, error_rows, candidates)
+    _plots(plots, generation_rows, objective_rows, operator_rows, timing_rows, error_rows, candidates, agent_game_rows, diversity_rows)
     return output
 
 
@@ -75,6 +85,17 @@ def _generation_rows(data: RunData) -> list[dict[str, Any]]:
             "rounds_per_map": item.get("rounds_per_map"),
             "swap_player_sides": item.get("swap_player_sides"),
         }
+        diversity = item.get("strategy_diversity") or {}
+        if isinstance(diversity, dict):
+            base.update({
+                "unique_niches": diversity.get("unique_niches"),
+                "dominant_niche": diversity.get("dominant_niche", "unknown"),
+                "dominant_niche_ratio": diversity.get("dominant_niche_ratio"),
+                "mean_strategy_distance": diversity.get("mean_strategy_distance"),
+                "new_niches": diversity.get("new_niches"),
+                "revisited_niches": diversity.get("revisited_niches"),
+                "niche_change_rate": diversity.get("niche_change_rate"),
+            })
         for objective_id, values in item.get("objectives", {}).items():
             for metric in ("best", "mean", "median", "worst"):
                 base[f"{objective_id}_{metric}"] = values.get(metric)
@@ -90,12 +111,95 @@ def _candidate_rows(data: RunData) -> list[dict[str, Any]]:
             "generation": item.get("generation"),
             "operator": item.get("operator"),
             "mutation_type": item.get("mutation_type"),
+            "strategy_niche": item.get("strategy_niche", "unknown"),
+            "mutation_intent": item.get("mutation_intent"),
+            "parent_strategy_niche": item.get("parent_strategy_niche"),
+            "niche_changed": item.get("niche_changed"),
             "status": item.get("status"),
             "failed": bool(item.get("failure_reason")) or item.get("status") == "failed",
             **{str(key): value for key, value in item.get("fitness_objectives", {}).items()},
         }
         for item in population if isinstance(item, dict)
     ]
+
+
+def _strategy_diversity_rows(data: RunData) -> list[dict[str, Any]]:
+    """Flatten optional generation diversity metadata for legacy-safe CSV output."""
+
+    rows: list[dict[str, Any]] = []
+    for item in data.generation_metrics:
+        diversity = item.get("strategy_diversity") or {}
+        if not isinstance(diversity, dict):
+            diversity = {}
+        intent_rates = diversity.get("intent_niche_change_rates") or {}
+        if not isinstance(intent_rates, dict):
+            intent_rates = {}
+        rows.append({
+            "generation": item.get("generation"),
+            "unique_niches": diversity.get("unique_niches", 0),
+            "dominant_niche": diversity.get("dominant_niche", "unknown"),
+            "dominant_niche_count": diversity.get("dominant_niche_count", 0),
+            "dominant_niche_ratio": diversity.get("dominant_niche_ratio", 0.0),
+            "mean_strategy_distance": diversity.get("mean_strategy_distance", 0.0),
+            "new_niches": diversity.get("new_niches", 0),
+            "revisited_niches": diversity.get("revisited_niches", 0),
+            "niche_change_rate": diversity.get("niche_change_rate"),
+            "known_signature_count": diversity.get("known_signature_count", 0),
+            "unknown_signature_count": diversity.get("unknown_signature_count", 0),
+            **{f"{intent.lower()}_niche_change_rate": intent_rates.get(intent) for intent in ("REFINE", "COUNTER", "STRUCTURAL", "ALTERNATIVE")},
+        })
+    return rows
+
+
+def _strategy_niche_rows(data: RunData) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in data.generation_metrics:
+        generation = item.get("generation")
+        diversity = item.get("strategy_diversity") or {}
+        distribution = diversity.get("niche_distribution") if isinstance(diversity, dict) else {}
+        if not isinstance(distribution, dict):
+            continue
+        total = sum(int(value) for value in distribution.values() if isinstance(value, (int, float)))
+        for niche, count in sorted(distribution.items()):
+            numeric_count = int(count)
+            rows.append({
+                "generation": generation,
+                "strategy_niche": niche,
+                "candidate_count": numeric_count,
+                "population_ratio": numeric_count / total if total else 0.0,
+            })
+    return rows
+
+
+def _agent_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
+    """Return one Game Performance row for every agent in each population snapshot."""
+
+    snapshots = data.generations
+    if not snapshots and data.final_population:
+        snapshots = [data.final_population]
+    rows: list[dict[str, Any]] = []
+    for snapshot in snapshots:
+        snapshot_generation = snapshot.get("generation")
+        population = snapshot.get("population", [])
+        if not isinstance(population, list):
+            continue
+        for item in population:
+            if not isinstance(item, dict):
+                continue
+            objectives = item.get("fitness_objectives") or item.get("objectives") or {}
+            if not isinstance(objectives, dict):
+                objectives = {}
+            rows.append({
+                "generation": item.get("generation", snapshot_generation),
+                "candidate_id": item.get("candidate_id") or item.get("id"),
+                "status": item.get("status"),
+                "operator": item.get("operator"),
+                "mutation_type": item.get("mutation_type"),
+                "game_performance": objectives.get("game_performance"),
+                "code_quality": objectives.get("code_quality"),
+                "failed": bool(item.get("failure_reason")) or item.get("status") == "failed",
+            })
+    return sorted(rows, key=lambda item: (item.get("generation", -1), str(item.get("candidate_id") or "")))
 
 
 def _objective_rows(data: RunData) -> list[dict[str, Any]]:
@@ -152,7 +256,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def _plots(path: Path, generation_rows, objective_rows, operator_rows, timing_rows, error_rows, candidates) -> None:
+def _plots(path: Path, generation_rows, objective_rows, operator_rows, timing_rows, error_rows, candidates, agent_game_rows, diversity_rows) -> None:
     for objective in sorted({row.get("objective_id") for row in objective_rows if row.get("objective_id")}):
         rows = [row for row in objective_rows if row.get("objective_id") == objective]
         _line_plot(path / f"{objective}_by_generation.png", rows, "generation", ("best", "mean", "median", "worst"), objective)
@@ -164,6 +268,17 @@ def _plots(path: Path, generation_rows, objective_rows, operator_rows, timing_ro
     _line_plot(path / "timing_by_generation.png", timing_rows, "generation", ("total_seconds",), "Timing by generation")
     _bar_plot(path / "timing_by_operation.png", timing_rows, "operation", "total_seconds", "Timing by operation")
     _line_plot(path / "errors_by_generation.png", error_rows, "generation", ("count",), "Errors by generation")
+    _agent_game_performance_plot(path / "agent_game_performance.png", agent_game_rows)
+    _line_plot(path / "unique_strategy_niches.png", diversity_rows, "generation", ("unique_niches",), "Unique strategy niches")
+    _line_plot(path / "dominant_niche_ratio.png", diversity_rows, "generation", ("dominant_niche_ratio",), "Dominant niche ratio")
+    _line_plot(path / "mean_strategy_distance.png", diversity_rows, "generation", ("mean_strategy_distance",), "Mean strategy distance")
+    _line_plot(
+        path / "niche_change_by_mutation_intent.png",
+        diversity_rows,
+        "generation",
+        ("refine_niche_change_rate", "counter_niche_change_rate", "structural_niche_change_rate", "alternative_niche_change_rate"),
+        "Niche change by mutation intent",
+    )
 
     if len(candidates) > 1 and {"game_performance", "code_quality"} <= set(candidates[0]):
         plt.figure()
@@ -199,3 +314,28 @@ def _bar_plot(path: Path, rows, x, y, title) -> None:
         return
     plt.figure(); plt.bar([item[0] for item in points], [item[1] for item in points])
     plt.title(title); plt.xticks(rotation=30, ha="right"); plt.tight_layout(); plt.savefig(path); plt.close()
+
+
+def _agent_game_performance_plot(path: Path, rows: list[dict[str, Any]]) -> None:
+    points = [
+        item for item in rows
+        if item.get("generation") is not None
+        and item.get("game_performance") is not None
+        and not item.get("failed")
+    ]
+    if not points:
+        return
+    plt.figure(figsize=(10, 5))
+    plt.scatter(
+        [item["generation"] for item in points],
+        [item["game_performance"] for item in points],
+        s=18,
+        alpha=0.65,
+    )
+    plt.xlabel("Generation")
+    plt.ylabel("Game Performance")
+    plt.title("Individual agent Game Performance")
+    plt.grid(True, alpha=0.2)
+    plt.tight_layout()
+    plt.savefig(path)
+    plt.close()
