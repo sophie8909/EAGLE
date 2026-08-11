@@ -45,36 +45,17 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _print_agent_game_performance(data, candidate_id: str) -> int:
-    rows = []
-    for snapshot in data.generations:
-        population = snapshot.get("population", [])
-        if not isinstance(population, list):
-            continue
-        for item in population:
-            if not isinstance(item, dict):
-                continue
-            item_id = str(item.get("candidate_id") or item.get("id") or "")
-            if item_id != candidate_id:
-                continue
-            objectives = item.get("fitness_objectives") or item.get("objectives") or {}
-            rows.append({
-                "generation": item.get("generation", snapshot.get("generation")),
-                "candidate_id": item_id,
-                "game_performance": objectives.get("game_performance"),
-            })
-    if not rows and isinstance(data.final_population, dict):
-        for item in data.final_population.get("population", []):
-            if not isinstance(item, dict):
-                continue
-            item_id = str(item.get("candidate_id") or item.get("id") or "")
-            if item_id != candidate_id:
-                continue
-            objectives = item.get("fitness_objectives") or item.get("objectives") or {}
-            rows.append({
-                "generation": item.get("generation"),
-                "candidate_id": item_id,
-                "game_performance": objectives.get("game_performance"),
-            })
+    from eagle.analysis.report import _agent_game_performance_rows
+
+    rows = [
+        {
+            "generation": item.get("generation"),
+            "candidate_id": item.get("candidate_id"),
+            "game_performance": item.get("game_performance"),
+        }
+        for item in _agent_game_performance_rows(data)
+        if str(item.get("candidate_id") or "") == candidate_id
+    ]
     if not rows:
         raise ValueError(f"Agent does not exist in run snapshots: {candidate_id}")
     print(json.dumps(sorted(rows, key=lambda item: (item.get("generation", -1), item["candidate_id"])), ensure_ascii=False, indent=2))

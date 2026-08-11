@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import json
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -22,8 +23,6 @@ def ensure_strategy_archive(run_dir: Path) -> None:
 
 def load_strategy_archive(run_dir: Path) -> dict[str, Any]:
     ensure_strategy_archive(run_dir)
-    import json
-
     payload = json.loads((run_dir / ARCHIVE_FILENAME).read_text(encoding="utf-8"))
     if payload.get("schema_version") != ARCHIVE_SCHEMA_VERSION:
         raise ValueError(f"Unsupported strategy archive schema: {run_dir / ARCHIVE_FILENAME}")
@@ -43,7 +42,7 @@ def update_strategy_archive(run_dir: Path, candidates: Iterable[Candidate]) -> d
         if not _archiveable(candidate):
             continue
         niche = candidate.strategy_niche
-        candidate_entry = _entry(run_dir, candidate)
+        candidate_entry = _entry(candidate)
         current = entries.get(niche)
         if current is None or _better(candidate_entry, current):
             entries[niche] = candidate_entry
@@ -67,7 +66,7 @@ def _archiveable(candidate: Candidate) -> bool:
     )
 
 
-def _entry(_run_dir: Path, candidate: Candidate) -> dict[str, Any]:
+def _entry(candidate: Candidate) -> dict[str, Any]:
     return {
         "strategy_niche": candidate.strategy_niche,
         "strategy_signature": dict(candidate.strategy_signature),
