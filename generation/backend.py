@@ -11,15 +11,13 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from eagle.candidate import Candidate
-from eagle.llm_errors import LLMServerError
+from eagle.llm import LLMServerError, llm_request_progress, read_chat_completion_content, truncate_prompt
 from eagle.timing import utc_now
-from eagle.llm_progress import llm_request_progress
-from eagle.llm_transport import read_chat_completion_content, truncate_prompt
 
 
 
 if TYPE_CHECKING:
-    from eagle.llm_logging import LLMCallLogger
+    from eagle.llm import LLMCallLogger
 
 
 class GenerationBackend(ABC):
@@ -44,10 +42,10 @@ class MockGenerationBackend(GenerationBackend):
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
 
-    def __init__(self, base_url: str, model: str, timeout_sec: float = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, llm_profile: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None) -> None:
+    def __init__(self, base_url: str, model: str, timeout_sec: float = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.llm_profile = llm_profile
+        self.operation = operation
         self.timeout_sec = timeout_sec
         self.max_retries = max_retries
         self.logger = logger
@@ -175,7 +173,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                 "class_name": generated_class_name(candidate.id),
                 "url": self.chat_completions_url,
                 "endpoint": self.base_url,
-                "llm_profile": self.llm_profile,
+                "operation": self.operation,
                 "operation_type": "mutation" if candidate.operator in {"mutation", "crossover+mutation"} else "crossover" if candidate.operator == "crossover" else None,
             },
             started_at=self._active_request_started_at,
@@ -211,9 +209,9 @@ def build_generation_backend(
     name: str,
     *,
     base_url: str = "http://localhost:8080",
-    model: str = "local-model",
+    model: str | None = None,
     logger: LLMCallLogger | None = None,
-    llm_profile: str | None = None,
+    operation: str | None = None,
     timeout_sec: float = 120,
     temperature: float = 0.2,
     max_output_tokens: int | None = None,
@@ -221,5 +219,7 @@ def build_generation_backend(
     if name == "mock":
         return MockGenerationBackend()
     if name in {"openai", "openai"}:
-        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, llm_profile=llm_profile, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
+        if not model:
+            raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
+        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
     raise ValueError(f"Unknown generation backend: {name}")

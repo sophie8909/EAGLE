@@ -6,8 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from eagle.candidate import Candidate
-from eagle.llm_errors import LLMServerError
-from eagle.llm_logging import LLMCallLogger
+from eagle.llm import LLMCallLogger, LLMServerError
 from generation.backend import OpenAICompatibleGenerationBackend
 
 

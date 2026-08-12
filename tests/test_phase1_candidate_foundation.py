@@ -391,7 +391,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertEqual(payload["generation_count"], 4)
         self.assertEqual(payload["crossover_rate"], 0.25)
         self.assertEqual(payload["mutation_rate"], 0.5)
-        self.assertEqual(payload["front0_stagnation_generations"], 10)
+        self.assertEqual(payload["stagnation_generations"], 10)
         self.assertEqual(payload["matches_per_candidate"], 180)
         self.assertEqual(payload["opponent"], "ai.abstraction.LightRush")
         self.assertEqual(
@@ -414,6 +414,8 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertEqual(payload["llm_backend"], "mock")
         self.assertIsNone(payload["llm_model"])
         self.assertIsNone(payload["llm_temperature"])
+        self.assertEqual(payload["commentator"]["enabled"], True)
+        self.assertIsNone(payload["model_path"])
         self.assertEqual(payload["retry_policy"]["max_attempts"], 1)
         self.assertEqual(payload["artifact_schema_version"], ARTIFACT_SCHEMA_VERSION)
         self.assertEqual(

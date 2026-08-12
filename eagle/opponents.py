@@ -27,7 +27,9 @@ EXTERNAL_OPPONENTS = (
 )
 
 # AlliBot ships against a newer, LLM-enabled MicroRTS fork. Its local setup owns
-# a self-contained upstream runtime JAR; the spec is part of the search roster.
+# a self-contained upstream runtime JAR; the evolutionary case is named
+# ``allinbot`` while the GUI inspection utility keeps its historical ``allibot``
+# identifier.
 ALLIBOT_OPPONENTS = (
     OpponentSpec(
         "allibot",
@@ -36,6 +38,14 @@ ALLIBOT_OPPONENTS = (
         "gui_only_external",
         "third_party/gui_opponents/jars/allibot.jar",
     ),
+)
+
+ALLINBOT_SEARCH_OPPONENT = OpponentSpec(
+    "allinbot",
+    "AllInBot (upstream runtime)",
+    "ai.abstraction.submissions.allibot.alli",
+    "external",
+    "third_party/gui_opponents/jars/allibot.jar",
 )
 
 BASIC_OPPONENTS = (
@@ -62,7 +72,7 @@ MICRORTS_VARIANT_OPPONENTS = (
 # available here; setup/preflight must fail if one is unavailable.
 SEARCH_OPPONENT_REGISTRY = (
     *BASIC_OPPONENTS,
-    ALLIBOT_OPPONENTS[0],
+    ALLINBOT_SEARCH_OPPONENT,
     EXTERNAL_OPPONENTS[1],
     EXTERNAL_OPPONENTS[2],
     EXTERNAL_OPPONENTS[0],

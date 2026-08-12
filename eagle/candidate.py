@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from .opponent_cases import LEXICASE_CASES, FAILED_OPPONENT_SCORE
+
 
 ACTION_API_GUIDE = """Fixed action helpers already implemented in CandidateAgent.java:
 - commandMove(Unit unit, int x, int y)
@@ -38,7 +40,7 @@ CANDIDATE_SNAPSHOT_SCHEMA_VERSION = "eagle-candidate-v2"
 
 @dataclass(frozen=True)
 class Candidate:
-    """One NSGA-II individual that generates one complete Java agent."""
+    """One evolutionary individual that generates one complete Java agent."""
 
     id: str = field(default_factory=lambda: uuid4().hex[:12])
     generation: int = 0
@@ -71,12 +73,9 @@ class Candidate:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def objective_vector(self) -> tuple[float, ...]:
-        if not self.fitness_objectives:
-            return (0.0, 0.0)
-        return (
-            float(self.fitness_objectives.get("game_performance", 0.0)),
-            float(self.fitness_objectives.get("code_quality", 0.0)),
-        )
+        """Return the ten opponent cases used by lexicase selection."""
+
+        return tuple(float(self.fitness_objectives.get(case, FAILED_OPPONENT_SCORE)) for case in LEXICASE_CASES)
 
     def generation_input(self, *, class_name: str = "", module_name: str = "controller") -> str:
         """Build one request for a complete single-file Java agent."""
@@ -229,10 +228,9 @@ def compact_mutation_record(record: dict[str, Any]) -> dict[str, Any]:
         "objectives",
         "evaluation_status",
         "token_counts",
-        "reflection_model",
-        "reflection_profile",
-        "rewrite_model",
-        "rewrite_profile",
+        "model",
+        "reflection_operation",
+        "rewrite_operation",
         "reflection_attempts",
         "rewrite_attempts",
         "reflection_status",

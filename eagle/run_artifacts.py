@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE, OBJECTIVE_DIRECTIONS
+from evaluation.objectives import OBJECTIVE_DIRECTIONS
+from eagle.opponent_cases import FAILED_OPPONENT_SCORE
 
 from .candidate import Candidate
 
-from .selection import assign_rank_and_crowding
 RUN_SCHEMA_VERSION = "eagle-run-v1"
 GENERATION_SCHEMA_VERSION = "eagle-generation-v2"
 ERROR_MEMORY_SCHEMA_VERSION = "eagle-error-memory-v1"
@@ -41,6 +41,22 @@ def initialize_run_manifest(run_dir: Path, *, config_path: Path) -> None:
             "last_update_time": utc_now(),
         },
     )
+
+
+def mark_run_interrupted(run_dir: Path) -> None:
+    """Mark a run resumable after Ctrl-C without inventing a population snapshot."""
+
+    manifest = load_manifest(run_dir)
+    if manifest.get("status") == "complete":
+        return
+    completed = [int(value) for value in manifest.get("completed_generations", [])]
+    manifest.update(
+        status="interrupted",
+        resumable=bool(completed),
+        interrupted_at=utc_now(),
+        last_update_time=utc_now(),
+    )
+    atomic_json(run_dir / "manifest.json", manifest)
 
 
 def record_error_memory(run_dir: Path, candidates: list[Candidate]) -> tuple[dict[str, object], ...]:
@@ -172,7 +188,6 @@ def generation_metrics(
     opponent_by_candidate: dict[str, Any] = {}
     opponent_values: dict[str, list[float]] = {}
     opponent_failures: dict[str, int] = {}
-    fronts = assign_rank_and_crowding(population)
     for objective_id, direction in OBJECTIVE_DIRECTIONS.items():
         values = [
             float(candidate.fitness_objectives[objective_id])
@@ -181,13 +196,13 @@ def generation_metrics(
             and math.isfinite(float(candidate.fitness_objectives[objective_id]))
             and candidate.status != "failed"
             and candidate.failure_reason is None
-            and float(candidate.fitness_objectives[objective_id]) != FAILED_GAME_PERFORMANCE
+            and float(candidate.fitness_objectives[objective_id]) != FAILED_OPPONENT_SCORE
         ]
         missing = sum(objective_id not in candidate.fitness_objectives for candidate in population)
         failures = sum(
             candidate.status == "failed"
             or candidate.failure_reason is not None
-            or candidate.fitness_objectives.get(objective_id) == FAILED_GAME_PERFORMANCE
+            or candidate.fitness_objectives.get(objective_id) == FAILED_OPPONENT_SCORE
             for candidate in population
         )
         if values:
@@ -222,18 +237,16 @@ def generation_metrics(
             best = max(rows, key=lambda item: float(item.get("score") or 0.0)) if rows else None
             worst = min(rows, key=lambda item: float(item.get("score") or 0.0)) if rows else None
             opponent_by_candidate[candidate.id] = {
-                "aggregate_game_performance": candidate.fitness_objectives.get("game_performance"),
+                "aggregate_game_performance": game.get("game_performance"),
                 "expected_match_count": game.get("expected_match_count"),
                 "completed_match_count": game.get("completed_match_count"),
                 "evaluation_maps": game.get("evaluation_maps"),
                 "rounds_per_map": game.get("rounds_per_map"),
                 "swap_player_sides": game.get("swap_player_sides"),
-                "opponent_scores": scores,
+                "opponent_scores": {str(item.get("opponent_id") or "unknown"): float(item.get("score") or 0.0) for item in rows},
                 "fixed_weight_sum": game.get("fixed_weight_sum"),
-                "eagle_weight": game.get("eagle_weight", 0.0),
                 "total_weight": game.get("total_weight"),
                 "weighted_numerator": game.get("weighted_numerator"),
-                "eagle_reference": game.get("eagle_reference"),
                 "opponent_results": rows,
                 "best_matchup": None if best is None else {
                     "opponent_id": best.get("opponent_id"), "score": best.get("score")
@@ -245,18 +258,19 @@ def generation_metrics(
             for item in rows:
                 opponent_id = str(item.get("opponent_id") or "unknown")
                 opponent_values.setdefault(opponent_id, []).append(float(item.get("score") or 0.0))
-                if item.get("status") != "completed" or float(item.get("score") or 0.0) == FAILED_GAME_PERFORMANCE:
+                if item.get("status") != "completed" or float(item.get("score") or 0.0) == FAILED_OPPONENT_SCORE:
                     opponent_failures[opponent_id] = opponent_failures.get(opponent_id, 0) + 1
         else:
             # Older generation snapshots remain valid; they simply have no detail.
             opponent_by_candidate.setdefault(candidate.id, {
-                "aggregate_game_performance": candidate.fitness_objectives.get("game_performance"),
-                "opponent_scores": list(game.get("opponent_scores") or []),
+                "aggregate_game_performance": game.get("game_performance"),
+                "opponent_scores": dict(game.get("opponent_scores") or {}),
                 "best_matchup": None,
                 "worst_matchup": None,
             })
     opponent_summary = {
         opponent_id: {
+            "game_performance": statistics.fmean(scores),
             "mean_score": statistics.fmean(scores),
             "failure_count": opponent_failures.get(opponent_id, 0),
             "sample_count": len(scores),
@@ -267,20 +281,30 @@ def generation_metrics(
         (candidate.game_eval_result or {} for candidate in population if candidate.game_eval_result),
         {},
     )
-    eagle_reference = first_game.get("eagle_reference")
-    previous_champion_id = None if not isinstance(eagle_reference, dict) else eagle_reference.get("candidate_id")
-    previous_champion_generation = None if not isinstance(eagle_reference, dict) else eagle_reference.get("generation")
+    aggregate_values = [
+        float((candidate.game_eval_result or {}).get("game_performance"))
+        for candidate in population
+        if (candidate.game_eval_result or {}).get("game_performance") is not None
+    ]
+    quality_values = [
+        float((candidate.code_quality_result or {}).get("code_quality"))
+        for candidate in population
+        if (candidate.code_quality_result or {}).get("code_quality") is not None
+    ]
+
+    def summary(values: list[float]) -> dict[str, Any]:
+        return {
+            "best": max(values) if values else None,
+            "mean": statistics.fmean(values) if values else None,
+            "median": statistics.median(values) if values else None,
+            "worst": min(values) if values else None,
+            "count": len(values),
+        }
+
     payload = {
         "schema_version": "eagle-generation-metrics-v1",
         "generation": generation,
         "population_size": len(population),
-        "previous_champion_candidate_id": previous_champion_id,
-        "previous_champion_generation": previous_champion_generation,
-        "previous_champion_game_performance": next(
-            iter((eagle_reference.get("game_performance"),)) if isinstance(eagle_reference, dict) else iter(()),
-            None,
-        ),
-        "eagle_weight": first_game.get("eagle_weight", 0.0),
         "fixed_weight_sum": first_game.get("fixed_weight_sum"),
         "total_weight": first_game.get("total_weight"),
         "weighted_numerator": first_game.get("weighted_numerator"),
@@ -290,8 +314,9 @@ def generation_metrics(
         "rounds_per_map": first_game.get("rounds_per_map"),
         "swap_player_sides": first_game.get("swap_player_sides"),
         "failure_count": sum(candidate.status == "failed" or candidate.failure_reason is not None for candidate in population),
-        "pareto_front_size": len(fronts[0]) if fronts else 0,
         "objectives": objectives,
+        "game_performance": summary(aggregate_values),
+        "code_quality_diagnostic": summary(quality_values),
         "opponent_scores": {
             "by_candidate": opponent_by_candidate,
             "by_opponent": opponent_summary,

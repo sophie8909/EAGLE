@@ -30,9 +30,9 @@ not a fifth EA entrypoint. `scripts/setup_allibot.py` and
 | `eagle/runtime/endpoints.py` | Local endpoint URL construction and health checks. |
 | `eagle/runtime/processes.py` | PID-validated local `llama-server` process lifecycle. |
 | `eagle/config.py` | Experiment configuration parsing, defaults, validation, and resolved settings. |
-| `eagle/search.py` | Population initialization, generation loop, variation/evaluation orchestration, NSGA-II survivor update, and final run status. |
+| `eagle/search.py` | Population initialization, generation loop, variation/evaluation orchestration, lexicase survivor update, and final run status. |
 | `eagle/resume.py` | Resumes a canonical run while preserving its persisted state and artifact ownership. |
-| `eagle/offspring.py` | Candidate seed/offspring construction and prompt normalization. |
+| `eagle/prompts.py` | Canonical prompt templates plus genotype prompt normalization. |
 | `eagle/candidate.py` | Candidate genotype/phenotype state, identity, lineage, failure, objective, and artifact metadata. |
 | `eagle/crossover.py` | Three-component uniform crossover and provenance recording. |
 | `eagle/mutation.py` | Mutation context, reflection/rewrite dispatch, and mutation records. |
@@ -40,10 +40,8 @@ not a fifth EA entrypoint. `scripts/setup_allibot.py` and
 | `eagle/strategy_reflection.py` | Sports-role Strategy Reflection: strict match selection, Match Commentator, Manager, Coach, strategy signature, niche, and intent artifacts. |
 | `eagle/reflection_context.py` | Structured evidence passed to Strategy and Code Reflection. |
 | `eagle/reflection_prompts.py` | Code Reflection prompt construction. |
-| `eagle/strategy_archive.py` | Run-level strategy-niche representative archive. |
-| `eagle/strategy_diversity.py` | Deterministic signature normalization, niche derivation, distance, and diversity metrics. |
+| `eagle/strategy_diversity.py` | Deterministic signature normalization, niche derivation, distance, diversity metrics, and the run-level representative archive. |
 | `eagle/opponents.py` | Evolution opponent identities, roster constants, JAR paths, and opponent setup errors. |
-| `eagle/prompts.py` | Seed and final-generation prompt text. |
 
 ## Evaluation and generation layer
 
@@ -53,12 +51,7 @@ not a fifth EA entrypoint. `scripts/setup_allibot.py` and
 | `eagle/artifacts.py` | Candidate input, stage, match, objective, and compact artifact serialization. |
 | `eagle/run_artifacts.py` | Run manifest, generation snapshots, generation metrics, error memory, final population, and atomic JSON/JSONL writes. |
 | `eagle/timing.py` | Candidate/stage timing events. |
-| `eagle/llm_errors.py` | LLM transport/server error types. |
-| `eagle/llm_logging.py` | Raw LLM request/response and attempt timing artifacts. |
-| `eagle/llm_profiles.py` | Runtime role/profile configuration values. |
-| `eagle/llm_progress.py` | Bounded LLM progress reporting. |
-| `eagle/llm_roles.py` | Canonical role names and role settings. |
-| `eagle/llm_transport.py` | OpenAI-compatible transport, prompt limits, and shared client plumbing. |
+| `eagle/llm.py` | Shared one-endpoint/one-model transport, prompt bounds, request progress, errors, and durable request/timing logging. |
 | `evaluation/compiler.py` | `javac` invocation and compiler diagnostic parsing. |
 | `evaluation/code_quality.py` | Static metrics, strategy-region diagnostics, and compatibility exports for the canonical quality implementation. |
 | `evaluation/canonical_code_quality.py` | Failure-aware Code Quality objective formula and diagnostic breakdown. |
@@ -70,8 +63,8 @@ not a fifth EA entrypoint. `scripts/setup_allibot.py` and
 | `evaluation/match_trace.py` | Match trace serialization/read helpers. |
 | `evaluation/microrts_runner.py` | MicroRTS integration probe and compatibility façade for canonical match execution. |
 | `evaluation/runtime_evaluation.py` | Canonical MicroRTS match process, result validation, hashes, and runtime failure classification. |
-| `evaluation/nsga2_objectives.py` | Exactly two optimizer objectives and failure values. |
-| `evaluation/opponent_schedule.py` | Weighted opponent schedule and previous-generation EAGLE opponent. |
+| `evaluation/objectives.py` | Ten opponent objectives and reporting aggregate. |
+| `eagle/opponent_cases.py` | Fixed opponent cases, reporting weights, and failure values. |
 | `evaluation/strategy_alignment.py` | Strategy-alignment diagnostic evaluation. |
 | `generation/agent_template.py` | Complete Java-agent template paths and source contract. |
 | `generation/backend.py` | Mock/OpenAI-compatible generation backend. |

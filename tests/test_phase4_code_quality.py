@@ -3,7 +3,7 @@ import unittest
 import urllib.error
 from unittest.mock import patch
 
-from eagle.llm_errors import LLMServerError
+from eagle.llm import LLMServerError
 from evaluation.code_quality import (
     analyze_compilation,
     build_failure_code_quality,

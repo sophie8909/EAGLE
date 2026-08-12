@@ -117,5 +117,41 @@ class CanonicalAnalysisTests(unittest.TestCase):
             self.assertIn("early-light-rush", diversity)
             self.assertIn("0.25", diversity)
             self.assertIn("mid-mixed-balanced", niches)
-            for plot in ("unique_strategy_niches.png", "dominant_niche_ratio.png", "mean_strategy_distance.png", "niche_change_by_mutation_intent.png"):
-                self.assertTrue((output / "plots" / plot).exists())
+            self.assertFalse(list((output / "plots").glob("*.png")))
+
+    def test_plot_set_contains_only_objectives_agents_and_opponents(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = self.make_run(root, "run", stamp=datetime.now(timezone.utc))
+            (run / "generations").mkdir()
+            atomic_json(run / "generations" / "generation_0000.json", {
+                "schema_version": "eagle-generation-v2",
+                "generation": 0,
+                "population": [{
+                    "candidate_id": "agent-a", "generation": 0, "status": "evaluated",
+                    "fitness_objectives": {"game_performance": 12.5, "code_quality": 80.0},
+                }],
+            })
+            (run / "generation_metrics.jsonl").write_text(json.dumps({
+                "generation": 0,
+                "objectives": {
+                    "game_performance": {"objective_id": "game_performance", "best": 12.5, "mean": 12.5, "median": 12.5, "worst": 12.5},
+                    "code_quality": {"objective_id": "code_quality", "best": 80.0, "mean": 80.0, "median": 80.0, "worst": 80.0},
+                },
+                "opponent_scores": {"by_opponent": {
+                    "passive": {"game_performance": 20.0},
+                    "random": {"game_performance": 5.0},
+                }},
+            }) + "\n", encoding="utf-8")
+            output = generate_analysis(load_run(run), force=True)
+            plot_names = {path.name for path in (output / "plots").glob("*.png")}
+            self.assertEqual(plot_names, {
+                "agent_game_performance.png",
+                "code_quality_by_generation.png",
+                "game_performance_by_generation.png",
+                "game_performance_by_generation_passive.png",
+                "game_performance_by_generation_random.png",
+            })
+            opponent_rows = (output / "opponent_game_performance.csv").read_text(encoding="utf-8")
+            self.assertIn("passive", opponent_rows)
+            self.assertIn("20.0", opponent_rows)

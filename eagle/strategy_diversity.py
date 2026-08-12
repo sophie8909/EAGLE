@@ -1,10 +1,22 @@
-"""Deterministic strategy signatures, niches, and diversity metrics."""
+"""Deterministic strategy signatures, niches, diversity metrics, and archive.
+
+This module is analysis/storage support, not an optimizer objective. Signature
+normalization and niche derivation are pure operations; archive persistence is
+kept here because it stores the same niche records used by the metrics.
+"""
 
 from __future__ import annotations
 
+import json
+import math
 from collections import Counter
 from itertools import combinations
+from pathlib import Path
 from typing import Any, Iterable, Mapping
+
+from .candidate import Candidate
+from .opponent_cases import LEXICASE_CASES
+from .run_artifacts import atomic_json
 
 
 STRATEGY_SIGNATURE_FIELDS = (
@@ -18,6 +30,8 @@ STRATEGY_SIGNATURE_FIELDS = (
     "target_priority",
 )
 UNKNOWN = "unknown"
+ARCHIVE_SCHEMA_VERSION = "eagle-strategy-archive-v1"
+ARCHIVE_FILENAME = "strategy_archive.json"
 
 _SYNONYMS = {
     "worker first": "worker_first",
@@ -60,6 +74,7 @@ _TOKEN_SYNONYMS = {
 }
 
 
+# Strategy signature and niche derivation -----------------------------------
 def normalize_strategy_signature(value: object) -> dict[str, Any]:
     """Normalize Coach output without using another LLM or raw prompt text."""
 
@@ -117,6 +132,7 @@ def strategy_distance(left: object, right: object) -> float:
     return 0.0 if not distances else sum(distances) / len(distances)
 
 
+# Generation-level analysis metrics -----------------------------------------
 def generation_diversity_metrics(
     population: Iterable[object],
     *,
@@ -229,3 +245,93 @@ def _jaccard_distance(left: object, right: object) -> float:
 
 def _known_niche(value: str) -> bool:
     return bool(value and value != UNKNOWN and value != "unknown-unknown-balanced")
+
+
+# Strategy archive persistence
+def ensure_strategy_archive(run_dir: Path) -> None:
+    """Create the run-level archive before the first generation is recorded."""
+
+    path = run_dir / ARCHIVE_FILENAME
+    if not path.exists():
+        atomic_json(path, {"schema_version": ARCHIVE_SCHEMA_VERSION, "niches": {}})
+
+
+def load_strategy_archive(run_dir: Path) -> dict[str, Any]:
+    """Load and validate one archive of best representatives by niche."""
+
+    ensure_strategy_archive(run_dir)
+    path = run_dir / ARCHIVE_FILENAME
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != ARCHIVE_SCHEMA_VERSION:
+        raise ValueError(f"Unsupported strategy archive schema: {path}")
+    if not isinstance(payload.get("niches"), dict):
+        raise ValueError(f"Invalid strategy archive: {path}")
+    return payload
+
+
+def archive_niches(run_dir: Path) -> set[str]:
+    """Return niches known before the current generation is archived."""
+
+    return set(load_strategy_archive(run_dir).get("niches", {}))
+
+
+def update_strategy_archive(run_dir: Path, candidates: Iterable[Candidate]) -> dict[str, Any]:
+    """Keep only the best successfully evaluated representative per niche."""
+
+    payload = load_strategy_archive(run_dir)
+    entries = dict(payload.get("niches", {}))
+    for candidate in candidates:
+        if not _archiveable(candidate):
+            continue
+        niche = candidate.strategy_niche
+        candidate_entry = _archive_entry(candidate)
+        current = entries.get(niche)
+        if current is None or _better_archive_entry(candidate_entry, current):
+            entries[niche] = candidate_entry
+    payload = {"schema_version": ARCHIVE_SCHEMA_VERSION, "niches": dict(sorted(entries.items()))}
+    atomic_json(run_dir / ARCHIVE_FILENAME, payload)
+    return payload
+
+
+def _archiveable(candidate: Candidate) -> bool:
+    game = (candidate.game_eval_result or {}).get("game_performance")
+    return (
+        candidate.status == "evaluated"
+        and not candidate.failure_reason
+        and candidate.strategy_niche not in {"", UNKNOWN}
+        and isinstance(game, (int, float))
+        and math.isfinite(float(game))
+        and float(game) != -1000.0
+        and all(
+            float(candidate.fitness_objectives.get(case, -1000.0)) != -1000.0
+            for case in LEXICASE_CASES
+        )
+    )
+
+
+def _archive_entry(candidate: Candidate) -> dict[str, Any]:
+    return {
+        "strategy_niche": candidate.strategy_niche,
+        "strategy_signature": dict(candidate.strategy_signature),
+        "representative_candidate_id": candidate.id,
+        "generation": candidate.generation,
+        "best_game_performance": (candidate.game_eval_result or {}).get("game_performance"),
+        "code_quality": (candidate.code_quality_result or {}).get("code_quality"),
+        "strategy_prompt_path": f"candidates/{candidate.id}/genotype/strategy_prompt.txt",
+    }
+
+
+def _better_archive_entry(candidate: dict[str, Any], current: dict[str, Any]) -> bool:
+    candidate_score = _finite_score(candidate.get("best_game_performance"))
+    current_score = _finite_score(current.get("best_game_performance"))
+    if candidate_score != current_score:
+        return candidate_score > current_score
+    return str(candidate.get("representative_candidate_id", "")) < str(current.get("representative_candidate_id", ""))
+
+
+def _finite_score(value: object) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return -math.inf
+    return score if math.isfinite(score) else -math.inf

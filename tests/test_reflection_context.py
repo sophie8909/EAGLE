@@ -9,9 +9,9 @@ from eagle.evaluation import evaluate_candidate
 from eagle.mutation import build_code_reflection_prompt, build_strategy_reflection_prompt, ReflectionContext
 from eagle.search import choose_mutation, mutation_context_from_candidate
 from generation.backend import MockGenerationBackend
-from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE
+from eagle.opponent_cases import FAILED_OPPONENT_SCORE as FAILED_GAME_PERFORMANCE
 from evaluation.code_quality import build_failure_code_quality
-from evaluation.nsga2_objectives import build_objectives
+from evaluation.objectives import build_objectives
 
 
 class ReflectionContextTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class ReflectionContextTests(unittest.TestCase):
             game_metrics=None,
             code_quality=build_failure_code_quality("generation"),
         )
-        self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in objectives.values()))
 
     def test_evaluation_propagates_canonical_evidence_to_next_reflection(self):
         config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
@@ -43,8 +43,7 @@ class ReflectionContextTests(unittest.TestCase):
         self.assertEqual(evidence["evaluation_status"], "evaluated")
         self.assertNotIn("game", evidence)
         self.assertNotIn("code_quality", evidence)
-        self.assertEqual(evaluation.candidate.game_eval_result["objective"], evaluation.candidate.fitness_objectives["game_performance"])
-        self.assertEqual(evaluation.candidate.code_quality_result["code_quality"], evaluation.candidate.fitness_objectives["code_quality"])
+        self.assertEqual(evaluation.candidate.game_eval_result["game_performance"], evaluation.game_metrics.objective)
         context = mutation_context_from_candidate(evaluation.candidate, generation=1, index=0)
         self.assertEqual(context.objectives, evaluation.candidate.fitness_objectives)
         self.assertEqual(context.compilation_result["status"], "success")
@@ -56,7 +55,7 @@ class ReflectionContextTests(unittest.TestCase):
             status="failed",
             failure_stage="compilation",
             failure_reason="missing symbol: commandAttack",
-            fitness_objectives={"game_performance": FAILED_GAME_PERFORMANCE, "code_quality": -805.0},
+            fitness_objectives={case: FAILED_GAME_PERFORMANCE for case in ("passive", "random", "randombias", "lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma")},
             metadata={
                 "reflection_evidence": {
                     "candidate_id": "failed-candidate",

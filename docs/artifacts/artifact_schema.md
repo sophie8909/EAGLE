@@ -76,13 +76,13 @@ The specification calls this layout recommended while making the underlying evid
 
 ## Run-level contracts
 
-`config.yaml` preserves the supplied configuration. `resolved_config.json` records actual runtime values, including population/generation sizes, operator rates/policy, the weighted ten-opponent × 18-match evaluation matrix, adaptive `eagle_previous_best` settings, maps/rounds/sides/seeds, LLM/retry/prompt versions, objective/artifact versions, and Git commit. `summary.json` records completion state, selected population, Pareto fronts, objective names, and failure counts.
+`config.yaml` preserves the supplied configuration. `resolved_config.json` records actual runtime values, including population/generation sizes, operator rates/policy, the fixed ten-opponent × 18-match evaluation matrix, maps/rounds/sides/seeds, LLM/retry/prompt versions, objective/artifact versions, and Git commit. `summary.json` records completion state, selected population, ten opponent objective names, reporting metrics, and failure counts.
 
 `generations/generation_<nnnn>.json` is the only surviving-population snapshot for a generation. It uses `eagle-generation-v2`; `final_population.json` uses `eagle-final-population-v2`. Both retain the resumable genotype/phenotype, fitness objectives, and timing, but omit raw process output, telemetry, and full mutation LLM envelopes. The run root does not write a second flat `generation_<n>_population.json` or an evolution-level `results.jsonl`.
 
 `strategy_archive.json` is an analysis-only, schema-versioned map from known
 strategy niche to one successfully evaluated representative. It does not
-participate in fitness, dominance, NSGA-II survivor selection, or parent
+    participate in the ten-case fitness, lexicase survivor selection, or parent
 selection. `genotype/strategy_signature.json` contains the structured Coach
 signature and mutation metadata. Legacy snapshots without these fields are
 read as `unknown`; no signature is inferred from prompt text.
@@ -104,7 +104,7 @@ Each stage result JSON records:
 - validation checks or compiler/integration diagnostics;
 - source/class hashes where applicable.
 
-`candidate_result.json` is an index/summary, not a replacement for stage evidence. It includes identity, lineage reference, status/failure stage, objective values, completed-match count, and artifact references. `mutation/reflection_context.json` is the immutable evidence snapshot used to build the Reflection request; it retains the canonical two-objective values and normalized stage/failure evidence without recalculating fitness.
+`candidate_result.json` is an index/summary, not a replacement for stage evidence. It includes identity, lineage reference, status/failure stage, objective values, completed-match count, and artifact references. `mutation/reflection_context.json` is the immutable evidence snapshot used to build the Reflection request; it retains the ten opponent objective values, reporting aggregate, and normalized stage/failure evidence without recalculating fitness.
 
 Strategy Reflection additionally persists `reflection/match_selection.json` before
 deleting temporary raw match logs. It records the available loss/draw/win counts,
@@ -118,7 +118,7 @@ probabilities.
 aggregate `game_performance` and ordered `opponent_scores`. The former also contains
 `opponent_results`, with one resource/unit/W-D-L/status/failure record per opponent,
 the configured weight, raw score, and weighted contribution. It records
-`fixed_weight_sum`, `eagle_weight`, `total_weight`, `weighted_numerator`, and the
+`fixed_weight_sum`, `total_weight`, `weighted_numerator`, and the
 previous-generation reference when present. Generation metrics retain candidate-level
 fixed-plus-dynamic score arrays, per-opponent weights and failure counts, and each
 candidate's best/worst matchup. Readers treat missing
@@ -207,7 +207,10 @@ compact match result and scoring artifacts remain match-owned and are not copied
 into reflection prompts.
 ## LLM stage identity
 
-Each Reflection, Rewrite, and Generation stage artifact records stage, the logical llm_profile (reflector, rewriter, or generator), and the configured model alias. The alias is the launcher --alias value, not a filename inferred from .gguf or an arbitrary /v1/models response. The resolved configuration records the centralized routing: Reflector, Rewriter, and Generator use their resolved semantic role profiles.
+Each Reflection, Rewrite, and Generation stage artifact records the stage
+operation and the one configured model path. Reflection, Rewrite, Generation,
+and Strategy Alignment all use the same llama.cpp endpoint/model. No model
+alias, profile topology, or per-operation endpoint is persisted.
 
 ## Post-evolution artifacts
 

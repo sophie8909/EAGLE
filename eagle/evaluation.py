@@ -9,10 +9,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-import hashlib
 import json
+import hashlib
 import os
-import re
 import subprocess
 import time
 from pathlib import Path
@@ -36,7 +35,7 @@ from evaluation.microrts_runner import (
     hash_file,
     run_microrts_match,
 )
-from evaluation.nsga2_objectives import build_objectives
+from evaluation.objectives import build_objectives, reporting_game_performance
 from evaluation.strategy_alignment import (
     StrategyAlignmentResult,
     build_strategy_alignment_backend,
@@ -53,7 +52,6 @@ from .artifacts import write_candidate_artifacts, write_candidate_inputs
 from .candidate import Candidate, compact_candidate_metadata
 from .config import ExperimentConfig
 from .opponents import EVALUATION_ROSTER, OpponentSetupError, OpponentSpec, SEARCH_OPPONENT_REGISTRY, rooted_jar_path
-from evaluation.opponent_schedule import EAGLE_OPPONENT_ID
 from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
 
 
@@ -77,6 +75,13 @@ public final class WorkerRush extends LightRush {
 
 @dataclass(frozen=True)
 class CandidateEvaluation:
+    """In-memory envelope joining stage results for one evaluated candidate.
+
+    ``candidate`` is the compact state passed back to search. The remaining
+    fields are typed evidence needed by artifact writers and progress reports
+    before large runtime payloads are compacted.
+    """
+
     candidate: Candidate
     result: "CandidateResult"
     agent: GeneratedJavaAgent | None
@@ -99,102 +104,12 @@ class EvaluationOpponent:
     class_name: str
     classpath_entries: tuple[Path, ...] = ()
     weight: float = 1.0
-    source_generation: int | None = None
-    source_candidate_id: str | None = None
-    source_game_performance: float | None = None
-    source_classes_dir: Path | None = None
-
-
-def prepare_eagle_opponent(
-    champion: Candidate,
-    *,
-    generation: int,
-    config: ExperimentConfig,
-    classes_dir: Path,
-    mock: bool,
-) -> EvaluationOpponent:
-    """Create a loadable alias for the frozen prior champion's compiled phenotype.
-
-    Both the candidate and champion implement ``ai.generated.CandidateAgent``. A
-    JVM cannot load two definitions with that name, so the persisted champion
-    source is compiled once under an adapter identity; no LLM generation occurs.
-    """
-
-    source = champion.generated_java
-    if not source and champion.generated_java_path:
-        source_path = Path(champion.generated_java_path)
-        if source_path.is_file():
-            source = source_path.read_text(encoding="utf-8")
-    if mock and (not source or not re.search(r"\bCandidateAgent\b", source)):
-        return EvaluationOpponent(
-            EAGLE_OPPONENT_ID,
-            "ai.generated.EaglePreviousBest",
-            classpath_entries=(),
-            weight=0.0,
-            source_generation=generation - 1,
-            source_candidate_id=champion.id,
-            source_game_performance=float(champion.fitness_objectives.get("game_performance", -1000.0)),
-        )
-    if not source or not re.search(r"\bCandidateAgent\b", source):
-        raise OpponentSetupError(
-            f"Previous-generation champion {champion.id} has no persisted generated Java source."
-        )
-    alias = "EaglePreviousBest"
-    opponent_root = classes_dir.parent / "eagle_opponents" / f"generation_{generation:04d}_{champion.id}"
-    alias_source = opponent_root / f"{alias}.java"
-    alias_classes = opponent_root / "classes"
-    alias_source.parent.mkdir(parents=True, exist_ok=True)
-    alias_source.write_text(re.sub(r"\bCandidateAgent\b", alias, source), encoding="utf-8")
-    if not mock:
-        alias_classes.mkdir(parents=True, exist_ok=True)
-        microrts_dir = config.microrts_dir.resolve()
-        classpath = os.pathsep.join([
-            str(microrts_dir / "bin"),
-            str(microrts_dir / "lib" / "*"),
-        ])
-        completed = subprocess.run(
-            ["javac", "-cp", classpath, "-d", str(alias_classes), str(alias_source)],
-            cwd=microrts_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if completed.returncode != 0:
-            raise OpponentSetupError(
-                f"Previous-generation champion {champion.id} could not be compiled as {alias}: "
-                f"{(completed.stderr or completed.stdout).strip()}"
-            )
-        (opponent_root / "manifest.json").write_text(
-            json.dumps(
-                {
-                    "schema_version": "eagle-dynamic-opponent-v1",
-                    "opponent_id": EAGLE_OPPONENT_ID,
-                    "source_generation": generation - 1,
-                    "source_candidate_id": champion.id,
-                    "source_game_performance": champion.fitness_objectives.get("game_performance"),
-                    "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest(),
-                    "alias_class": f"ai.generated.{alias}",
-                    "source_path": str(alias_source),
-                    "classes_dir": str(alias_classes),
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-    return EvaluationOpponent(
-        EAGLE_OPPONENT_ID,
-        f"ai.generated.{alias}",
-        classpath_entries=(alias_classes,),
-        weight=0.0,
-        source_generation=generation - 1,
-        source_candidate_id=champion.id,
-        source_game_performance=float(champion.fitness_objectives.get("game_performance", -1000.0)),
-        source_classes_dir=alias_classes,
-    )
 
 
 @dataclass(frozen=True)
 class CandidateResult:
+    """Persistable result record produced by the complete child pipeline."""
+
     candidate_id: str
     parent_ids: tuple[str, ...]
     raw_llm_output: str = ""
@@ -227,8 +142,7 @@ def evaluate_population(
     classes_dir: Path,
     candidates_dir: Path,
     mock: bool,
-    alignment_profile: object | None = None,
-    eagle_opponent: EvaluationOpponent | None = None,
+    llm_client: object | None = None,
 ) -> list[Candidate]:
     evaluated = []
     for index, candidate in enumerate(population):
@@ -246,9 +160,8 @@ def evaluate_population(
             classes_dir=classes_dir,
             match_artifacts_dir=candidates_dir / candidate.id / "matches",
             mock=mock,
-            alignment_profile=alignment_profile,
+            llm_client=llm_client,
             ordinal=index,
-            eagle_opponent=eagle_opponent,
         )
         write_candidate_artifacts(candidates_dir, evaluation)
         evaluated.append(evaluation.candidate)
@@ -264,11 +177,21 @@ def evaluate_candidate(
     generated_agents_dir: Path,
     classes_dir: Path,
     mock: bool,
-    alignment_profile: object | None = None,
+    llm_client: object | None = None,
     ordinal: int,
     match_artifacts_dir: Path | None = None,
-    eagle_opponent: EvaluationOpponent | None = None,
 ) -> CandidateEvaluation:
+    """Evaluate one candidate through the canonical child pipeline.
+
+    The stages are ordered and failure-aware: generate Java, validate it,
+    compile it, integrate it with MicroRTS, run the complete match matrix,
+    calculate both objectives, and return one candidate/artifact envelope.
+    A failed stage stops only dependent later stages; the candidate still
+    receives explicit failure scores and remains available to lexicase.
+    """
+
+    # Stage 1: ask the generation backend for a complete Java phenotype and
+    # preserve its raw response and validation evidence.
     generation_started_at = _utc_now()
     generation_monotonic_started = time.monotonic()
     generation = generate_java_agent_result(
@@ -280,7 +203,7 @@ def evaluate_candidate(
     generation_finished_at = _utc_now()
     generation_timing = {
         "stage": "generation",
-        "llm_profile": getattr(backend, "llm_profile", None),
+        "operation": getattr(backend, "operation", None),
         "model": getattr(backend, "model", None),
         "started_at": generation_started_at,
         "finished_at": generation_finished_at,
@@ -304,6 +227,8 @@ def evaluate_candidate(
             error=generation.failure_reason or "Complete Java validation did not run.",
         )
 
+    # Stage 2: compile the validated phenotype once. No match can run unless
+    # compilation succeeds.
     compile_result: CompileResult | None = None
     compile_error: str | None = None
     compilation_started_at: str | None = None
@@ -333,6 +258,8 @@ def evaluate_candidate(
     evaluation_finished_at: str | None = None
     evaluation_started: float | None = None
 
+    # Stages 3-4: integrate the class, then execute the full configured
+    # opponent/map/round/side matrix. This is the sole owner of match count.
     if compiler.compile_success and agent is not None:
         integration_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent / "integration"
         integration_result = integrate_microrts_agent(
@@ -353,18 +280,17 @@ def evaluate_candidate(
                 match_artifacts_dir=match_artifacts_dir,
                 mock=mock,
                 ordinal=ordinal,
-                eagle_opponent=eagle_opponent,
             )
         else:
             match_error = integration_result.failure_reason or "MicroRTS integration failed."
 
+    # Stage 5: classify the first blocking failure without discarding partial
+    # diagnostics or successful match records.
     failure_category: str | None = None
     failure_reason: str | None = None
     failure_stage: str | None = None
     completed_matches = sum(result.ok for result in matches)
-    expected_match_count = config.expected_match_count + (
-        config.fixed_matches_per_opponent if eagle_opponent is not None else 0
-    )
+    expected_match_count = config.expected_match_count
     if agent is None:
         validation_failed = bool(generation.validation_result.failed_checks)
         failure_stage = generation.failure_stage or ("validation" if validation_failed else "generation")
@@ -392,22 +318,17 @@ def evaluate_candidate(
         failure_reason = match_error or f"partial evaluation: completed {completed_matches} of {expected_match_count} matches"
         failure_stage = "runtime"
 
+    # Stage 6: aggregate game telemetry and calculate one objective per fixed
+    # opponent. The weighted aggregate is reporting-only and never enters
+    # parent or survivor selection.
     objective_started_at = _utc_now()
     objective_started = time.monotonic()
     game_metrics = compute_game_metrics(
         matches,
         fixed_opponent_weights=dict(config.evaluation_opponents),
-        eagle_weight=0.0 if eagle_opponent is None else eagle_opponent.weight,
-        expected_match_count=config.expected_match_count + (
-            config.fixed_matches_per_opponent if eagle_opponent is not None else 0
-        ),
+        expected_match_count=config.expected_match_count,
         expected_matches_per_opponent=config.fixed_matches_per_opponent,
         evaluation_maps=config.evaluation_maps,
-        eagle_reference=None if eagle_opponent is None else {
-            "generation": eagle_opponent.source_generation,
-            "candidate_id": eagle_opponent.source_candidate_id,
-            "game_performance": eagle_opponent.source_game_performance,
-        },
     )
     capability_result: FunctionCapabilityResult | None = None
     alignment_result: StrategyAlignmentResult | None = None
@@ -415,11 +336,11 @@ def evaluate_candidate(
         capability_result = evaluate_function_capability(generation.assembled_java, matches)
         alignment_backend = build_strategy_alignment_backend(
             "mock" if mock else config.alignment_backend,
-            base_url=getattr(alignment_profile, "base_url", config.llm_base_url),
-            model=getattr(alignment_profile, "model", config.llm_model),
-            timeout_seconds=getattr(alignment_profile, "timeout_seconds", 120.0),
-            temperature=getattr(alignment_profile, "temperature", 0.0),
-            max_output_tokens=getattr(alignment_profile, "max_output_tokens", None),
+            base_url=getattr(llm_client, "base_url", config.llm_base_url),
+            model=getattr(llm_client, "model", config.llm_model),
+            timeout_seconds=getattr(llm_client, "timeout_seconds", 120.0),
+            temperature=getattr(llm_client, "temperature", 0.0),
+            max_output_tokens=getattr(llm_client, "max_output_tokens", None),
         )
         alignment_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent / "strategy_alignment"
         alignment_result = evaluate_strategy_alignment(
@@ -479,6 +400,11 @@ def evaluate_candidate(
         "strategy_region_validation": region_score.to_json_dict(),
     }
     game_payload = game_metrics.to_json_dict()
+    game_payload["opponent_scores"] = {
+        result.opponent_id: float(result.score)
+        for result in game_metrics.opponent_results
+    }
+    game_payload["game_performance"] = reporting_game_performance(objectives)
     game_payload["evaluation_configuration"] = {
         "maps": list(config.evaluation_maps),
         "rounds_per_map": config.rounds_per_map,
@@ -493,16 +419,11 @@ def evaluate_candidate(
         "schema_version": "phase4-reflection-context-v1",
         "candidate_id": candidate.id,
         "objectives": dict(objectives),
+        "game_performance": game_payload["game_performance"],
         "evaluation_status": "failed" if failure_category else "evaluated",
         "failure_stage": failure_stage,
         "failure_category": failure_category,
         "failure_reason": failure_reason,
-        "eagle_reference": None if eagle_opponent is None else {
-            "generation": eagle_opponent.source_generation,
-            "candidate_id": eagle_opponent.source_candidate_id,
-            "game_performance": eagle_opponent.source_game_performance,
-            "weight": eagle_opponent.weight,
-        },
         "generation": {
             "raw_response": generation.raw_llm_output,
             "extracted_code": generation.extracted_code,
@@ -585,6 +506,8 @@ def evaluate_candidate(
         "status": "failed" if failure_stage else "success",
         "failure_stage": failure_stage,
     }
+    # Stage 7: rebuild the candidate with evaluated phenotype, objectives,
+    # lineage, failure state, reflection evidence, and timing.
     evaluated_candidate = Candidate(
         id=candidate.id,
         generation=candidate.generation,
@@ -726,24 +649,24 @@ def preflight_evaluation_opponents(
         jar_path = rooted_jar_path(repository_root, item)
         if jar_path is not None and not jar_path.is_file():
             raise OpponentSetupError(f"Bundled evolution opponent JAR is missing: {jar_path}")
-        if item.opponent_id == "allibot":
+        if item.opponent_id == "allinbot":
             manifest_path = repository_root / "third_party" / "gui_opponents" / "resolved_allibot.json"
             try:
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as exc:
                 raise OpponentSetupError(f"AlliBot resolution manifest is missing or invalid: {manifest_path}") from exc
             if manifest.get("schema_version") != "eagle-allibot-v2" or manifest.get("class_name") != item.class_name:
-                raise OpponentSetupError(f"AlliBot resolution manifest does not match {item.class_name}: {manifest_path}")
+                raise OpponentSetupError(f"AllInBot resolution manifest does not match {item.class_name}: {manifest_path}")
             digest = hashlib.sha256(jar_path.read_bytes()).hexdigest() if jar_path is not None else ""
             if digest != manifest.get("jar_sha256"):
-                raise OpponentSetupError(f"AlliBot JAR hash does not match its resolution manifest: {jar_path}")
+                raise OpponentSetupError(f"AllInBot JAR hash does not match its resolution manifest: {jar_path}")
             source_lib = repository_root / "third_party" / "gui_opponents" / "src" / "allibot" / "lib"
             if not any(path.is_file() and path.suffix == ".jar" for path in source_lib.glob("*.jar")):
-                raise OpponentSetupError(f"AlliBot upstream libraries are missing: {source_lib}")
+                raise OpponentSetupError(f"AllInBot upstream libraries are missing: {source_lib}")
 
 
-def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int, eagle_opponent: EvaluationOpponent | None = None, historical_opponents: tuple[EvaluationOpponent, ...] = ()) -> tuple[list[MatchResult], str | None]:
-    """Run fixed opponents plus one frozen previous-generation champion when available."""
+def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int) -> tuple[list[MatchResult], str | None]:
+    """Run the complete fixed ten-opponent evaluation matrix."""
     match_results: list[MatchResult] = []
     source_hash = hash_file(agent.source_path)
     candidate_classes_dir = classes_dir / candidate.id
@@ -757,16 +680,10 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                 classes_dir=classes_dir,
             )
         )
-        if eagle_opponent is not None:
-            opponents.append(eagle_opponent)
-        opponents.extend(historical_opponents)
         matrix_opponents = tuple(
             MatrixOpponent(
                 item.opponent_id,
                 item.weight,
-                item.source_generation,
-                item.source_candidate_id,
-                item.source_game_performance,
             )
             for item in opponents
         )
@@ -778,10 +695,10 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
             round_seeds=config.resolved_match_seeds,
         )
         expected_matches = len(specifications)
-        if len(opponents) != len(config.evaluation_opponents) + (1 if eagle_opponent is not None else 0) + len(historical_opponents):
+        if len(opponents) != len(config.evaluation_opponents):
             return match_results, (
                 f"evaluation roster has {len(opponents)} opponents; "
-                f"expected {len(config.evaluation_opponents) + (1 if eagle_opponent is not None else 0) + len(historical_opponents)}"
+                f"expected {len(config.evaluation_opponents)}"
             )
         opponent_by_id = {item.opponent_id: item for item in opponents}
         for specification in specifications:
@@ -804,8 +721,6 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                     artifact_mode=config.match_artifact_mode,
                     map_id=specification.map_id,
                     round_index=specification.round_index,
-                    opponent_source_generation=specification.opponent_source_generation,
-                    opponent_source_candidate_id=specification.opponent_source_candidate_id,
                     opponent_weight=specification.opponent_weight,
                 )
             except (RuntimeError, OSError) as exc:
@@ -832,8 +747,6 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                 opponent_name=_opponent_display_name(opponent.opponent_id),
                 map_id=specification.map_id,
                 round_index=specification.round_index,
-                opponent_source_generation=specification.opponent_source_generation,
-                opponent_source_candidate_id=specification.opponent_source_candidate_id,
                 opponent_weight=specification.opponent_weight,
             )
             match_results.append(result)
@@ -841,9 +754,7 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                 first_error = match_error_message(result)
     except (RuntimeError, OSError) as exc:
         return match_results, str(exc)
-    expected_matches = config.expected_match_count + (
-        config.fixed_matches_per_opponent if eagle_opponent is not None else 0
-    ) + config.fixed_matches_per_opponent * len(historical_opponents)
+    expected_matches = config.expected_match_count
     if len(match_results) != expected_matches:
         return match_results, f"partial evaluation: completed {len(match_results)} of {expected_matches} matches"
     return match_results, first_error
@@ -880,7 +791,7 @@ def _resolved_static_evaluation_opponents(
                 raise OpponentSetupError(f"Bundled evolution opponent JAR is missing: {jar_path}")
             if jar_path.is_file() and not mock:
                 classpath_entries = (jar_path,)
-                if item.opponent_id == "allibot":
+                if item.opponent_id == "allinbot":
                     source_lib = repository_root / "third_party" / "gui_opponents" / "src" / "allibot" / "lib"
                     libraries = tuple(sorted(path.resolve() for path in source_lib.glob("*.jar") if path.is_file()))
                     if not mock and not libraries:
@@ -1003,7 +914,7 @@ def print_progress(*, generation: int, index: int, population_size: int, evaluat
     )
     game_performance_detail = (
         f" game_performance_matches={match_scores}"
-        f" game_performance_fitness={candidate.fitness_objectives.get('game_performance')}"
+        f" aggregate_game_performance={getattr(game_metrics, 'objective', None) if game_metrics else None}"
     )
     detail = ""
     if evaluation.error:
@@ -1014,7 +925,7 @@ def print_progress(*, generation: int, index: int, population_size: int, evaluat
     print(
         f"[gen {generation} cand {index + 1}/{population_size}] "
         f"{candidate.id} status={candidate.status} "
-        f"objectives={candidate.fitness_objectives} "
+        f"opponent_scores={candidate.fitness_objectives} "
         f"{game_performance_detail} "
         f"code_quality_simplicity={quality.code_quality} "
         f"complexity_penalty={quality.complexity_penalty} "

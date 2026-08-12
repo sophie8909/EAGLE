@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 from .candidate import Candidate, compact_mutation_record
 from .config import ExperimentConfig
-from .llm_errors import LLMServerError
+from .llm import LLMServerError
 from .mutation import (
     REFLECTION_SCHEMA_VERSION,
     ReflectionContext,
@@ -29,7 +29,7 @@ from .mutation import (
     _timing_payload,
     utc_now,
 )
-from .offspring import normalize_prompt
+from .prompts import normalize_prompt
 
 
 REWRITE_SCHEMA_VERSION = "phase2b-v1"
@@ -54,7 +54,7 @@ class RewriteResult:
     error: str | None = None
     model: str | None = None
     backend: str | None = None
-    llm_profile: str | None = None
+    operation: str | None = None
     token_counts: dict[str, int] | None = None
 
     @property
@@ -74,7 +74,7 @@ class RewriteResult:
             "error": self.error,
             "model": self.model,
             "backend": self.backend,
-            "llm_profile": self.llm_profile,
+            "operation": self.operation,
             "token_counts": self.token_counts,
         }
 
@@ -97,7 +97,7 @@ class PromptRewriteStage:
         self.max_attempts = max_attempts
         self.logger = logger
         self.model = model
-        self.llm_profile = getattr(backend, "llm_profile", None)
+        self.operation = getattr(backend, "operation", None)
         self.backend_name = backend_name or type(backend).__name__
 
     def run(
@@ -158,7 +158,7 @@ class PromptRewriteStage:
                     module_name=rewrite_type,
                     attempt=attempt_number,
                     error=error,
-                    metadata={"llm_profile": self.llm_profile, "operation_type": "mutation", "token_counts": None},
+                    metadata={"operation": self.operation, "operation_type": "mutation", "token_counts": None},
                     started_at=started_at,
                     finished_at=finished_at,
                     duration_seconds=max(0.0, time.monotonic() - monotonic_started),
@@ -174,7 +174,7 @@ class PromptRewriteStage:
                     attempts=tuple(attempts),
                     model=self.model,
                     backend=self.backend_name,
-                    llm_profile=self.llm_profile,
+                    operation=self.operation,
                 )
             time.sleep(0)
         if artifact_dir is not None:
@@ -190,7 +190,7 @@ class PromptRewriteStage:
             error=last_error or "Rewrite stage failed.",
             model=self.model,
             backend=self.backend_name,
-            llm_profile=self.llm_profile,
+            operation=self.operation,
         )
 
 
@@ -206,8 +206,6 @@ class PromptRewriteMutation:
         rewrite_backend: RewriteBackend,
         artifact_root: Path | None = None,
         logger: Any | None = None,
-        reflection_model: str | None = None,
-        rewrite_model: str | None = None,
         backend_name: str | None = None,
     ) -> None:
         if mutation_type not in {"strategy", "code"}:
@@ -219,14 +217,14 @@ class PromptRewriteMutation:
             reflection_backend,
             max_attempts=config.mutation_max_attempts,
             logger=logger,
-            model=reflection_model if reflection_model is not None else (None if config.generation_backend == "mock" else config.llm_model),
+            model=None if config.generation_backend == "mock" else config.llm_model,
             backend_name=backend_name or config.generation_backend,
         )
         self.rewrite = PromptRewriteStage(
             rewrite_backend,
             max_attempts=config.mutation_max_attempts,
             logger=logger,
-            model=rewrite_model if rewrite_model is not None else (None if config.generation_backend == "mock" else config.llm_model),
+            model=None if config.generation_backend == "mock" else config.llm_model,
             backend_name=backend_name or config.generation_backend,
         )
 
@@ -340,10 +338,9 @@ class PromptRewriteMutation:
             "evidence": context.to_dict(),
             "token_counts": {"reflection": None, "rewrite": None},
             "prompt_metadata": reflection.prompt_metadata,
-            "reflection_model": reflection.model,
-            "reflection_profile": reflection.llm_profile,
-            "rewrite_model": None if rewrite is None else rewrite.model,
-            "rewrite_profile": None if rewrite is None else rewrite.llm_profile,
+            "model": reflection.model or (None if rewrite is None else rewrite.model),
+            "reflection_operation": reflection.operation,
+            "rewrite_operation": None if rewrite is None else rewrite.operation,
             "reflection_attempts": len(reflection.attempts),
             "rewrite_attempts": 0 if rewrite is None else len(rewrite.attempts),
             "reflection_status": reflection.status,

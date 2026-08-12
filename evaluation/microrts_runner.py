@@ -439,6 +439,12 @@ class MatchResult:
     telemetry_path: str | None = None
     summary_path: str | None = None
     persistence_error: str | None = None
+    generation: int | None = None
+    opponent_id: str | None = None
+    opponent_name: str | None = None
+    map_id: str | None = None
+    round_index: int | None = None
+    opponent_weight: float | None = None
 
 
 def run_microrts_match(

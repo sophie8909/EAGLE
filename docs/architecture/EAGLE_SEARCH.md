@@ -1,5 +1,9 @@
 # EAGLE Search Lifecycle
 
+The active search contract is opponent-wise seeded lexicase selection. See
+[`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md). Older NSGA-II
+steps in this file are historical and do not describe the live implementation.
+
 `eagle.search.run_search` is the only evolutionary search entrypoint. It owns
 run preparation, parent/operator selection, survival selection, generation
 manifests, and the final run summary. `eagle.evaluation.evaluate_population`

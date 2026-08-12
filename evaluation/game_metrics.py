@@ -15,8 +15,6 @@ from .game_performance import (
     tick_from_result,
 )
 from .microrts_runner import MatchResult
-
-
 FAILED_GAME_PERFORMANCE = -1000.0
 OBJECTIVE_FORMULA_VERSION = "eagle-objectives-phase4-v1"
 
@@ -48,8 +46,6 @@ class OpponentResult:
     p1_average: float = 0.0
     map_averages: dict[str, float] = field(default_factory=dict)
     match_scores: tuple[float, ...] = ()
-    source_generation: int | None = None
-    source_candidate_id: str | None = None
 
     def to_json_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -92,11 +88,9 @@ class GameMetrics:
     behavior_summary: dict[str, Any] = field(default_factory=dict)
     opponent_results: list[OpponentResult] = field(default_factory=list)
     opponent_scores: list[float] = field(default_factory=list)
-    fixed_weight_sum: float = 10.0
-    eagle_weight: float = 0.0
-    total_weight: float = 10.0
+    fixed_weight_sum: float = 12.5
+    total_weight: float = 12.5
     weighted_numerator: float = 0.0
-    eagle_reference: dict[str, Any] | None = None
     expected_match_count: int = 10
     evaluation_maps: tuple[str, ...] = ()
     rounds_per_map: int = 3
@@ -109,6 +103,11 @@ class GameMetrics:
         # by fitness, analysis, and the next mutation Reflection.
         payload.pop("raw_metrics", None)
         payload["opponent_results"] = [item.to_json_dict() for item in self.opponent_results]
+        payload["opponent_scores"] = {
+            item.opponent_id: float(item.score)
+            for item in self.opponent_results
+        }
+        payload["game_performance"] = self.objective
         payload["match_results"] = self.match_summaries
         return payload
 
@@ -117,14 +116,11 @@ def _legacy_compute_game_metrics(
     match_results: list[MatchResult],
     *,
     fixed_opponent_weights: dict[str, float] | None = None,
-    eagle_weight: float = 0.0,
     expected_match_count: int = 10,
-    eagle_reference: dict[str, Any] | None = None,
 ) -> GameMetrics:
     fixed_weights = fixed_opponent_weights or {}
     fixed_weight_sum = sum(fixed_weights.values()) if fixed_weights else float(expected_match_count)
-    active_eagle_weight = float(eagle_weight)
-    total_weight = fixed_weight_sum + active_eagle_weight
+    total_weight = fixed_weight_sum
     completed = [
         result
         for result in match_results
@@ -135,7 +131,7 @@ def _legacy_compute_game_metrics(
         summarize_opponent_result(
             result,
             index=index,
-            weight=(active_eagle_weight if getattr(result, "opponent_id", None) == "eagle_previous_best" else fixed_weights.get(getattr(result, "opponent_id", None), 1.0)),
+            weight=fixed_weights.get(getattr(result, "opponent_id", None), 1.0),
         )
         for index, result in enumerate(match_results)
     ]
@@ -231,10 +227,8 @@ def _legacy_compute_game_metrics(
         opponent_results=opponent_results,
         opponent_scores=opponent_scores,
         fixed_weight_sum=round(fixed_weight_sum, 6),
-        eagle_weight=round(active_eagle_weight, 6),
         total_weight=round(total_weight, 6),
         weighted_numerator=round(weighted_numerator, 6),
-        eagle_reference=eagle_reference,
     )
 
 
@@ -242,9 +236,7 @@ def compute_game_metrics(
     match_results: list[MatchResult],
     *,
     fixed_opponent_weights: dict[str, float] | None = None,
-    eagle_weight: float = 0.0,
     expected_match_count: int = 10,
-    eagle_reference: dict[str, Any] | None = None,
     expected_matches_per_opponent: int | None = None,
     evaluation_maps: tuple[str, ...] = (),
     rounds_per_map: int = 3,
@@ -263,9 +255,7 @@ def compute_game_metrics(
     if fixed_opponent_weights is None and not any(getattr(item, "opponent_id", None) for item in match_results):
         return _legacy_compute_game_metrics(
             match_results,
-            eagle_weight=eagle_weight,
             expected_match_count=expected_match_count,
-            eagle_reference=eagle_reference,
         )
     if fixed_opponent_weights is None:
         inferred_ids = tuple(dict.fromkeys(str(getattr(item, "opponent_id", "unknown")) for item in match_results))
@@ -273,8 +263,6 @@ def compute_game_metrics(
     else:
         fixed_weights = fixed_opponent_weights
     active_ids = list(fixed_weights)
-    if eagle_weight and "eagle_previous_best" not in active_ids:
-        active_ids.append("eagle_previous_best")
     grouped: dict[str, list[MatchResult]] = {item: [] for item in active_ids}
     for result in match_results:
         grouped.setdefault(str(getattr(result, "opponent_id", None) or "unknown"), []).append(result)
@@ -283,11 +271,10 @@ def compute_game_metrics(
         1 if fixed_opponent_weights is None and expected_match_count == len(match_results) else max(1, expected_match_count // active_count)
     )
     fixed_weight_sum = sum(fixed_weights.values()) if fixed_weights else float(expected_match_count)
-    active_eagle_weight = float(eagle_weight)
-    total_weight = fixed_weight_sum + active_eagle_weight
+    total_weight = fixed_weight_sum
     opponent_results: list[OpponentResult] = []
     for opponent_id in active_ids:
-        weight = active_eagle_weight if opponent_id == "eagle_previous_best" else float(fixed_weights.get(opponent_id, 1.0))
+        weight = float(fixed_weights.get(opponent_id, 1.0))
         opponent_results.append(
             _summarize_opponent_group(
                 opponent_id,
@@ -381,10 +368,8 @@ def compute_game_metrics(
         opponent_results=opponent_results,
         opponent_scores=opponent_scores,
         fixed_weight_sum=round(fixed_weight_sum, 6),
-        eagle_weight=round(active_eagle_weight, 6),
         total_weight=round(total_weight, 6),
         weighted_numerator=round(weighted_numerator, 6),
-        eagle_reference=eagle_reference,
         expected_match_count=expected_match_count,
         evaluation_maps=tuple(evaluation_maps),
         rounds_per_map=rounds_per_map,
@@ -442,8 +427,6 @@ def _summarize_opponent_group(
         p1_average=_mean(p1_scores),
         map_averages={key: _mean(value) for key, value in map_scores.items()},
         match_scores=tuple(scores),
-        source_generation=getattr(first, "opponent_source_generation", None) if first else None,
-        source_candidate_id=getattr(first, "opponent_source_candidate_id", None) if first else None,
     )
 
 
@@ -464,8 +447,6 @@ def summarize_match(result: MatchResult) -> dict[str, Any]:
         "candidate_side": "p0" if getattr(result, "candidate_player", 0) == 0 else "p1",
         "seed": result.seed,
         "opponent_weight": getattr(result, "opponent_weight", 1.0),
-        "opponent_source_generation": getattr(result, "opponent_source_generation", None),
-        "opponent_source_candidate_id": getattr(result, "opponent_source_candidate_id", None),
         "winner": _winner(result),
         "result": result.raw_result.get("result"),
         "final_cycle": result.final_cycle,

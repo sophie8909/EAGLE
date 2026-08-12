@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,8 @@ from .loader import RunData
 
 OUTPUT_FILES = (
     "summary.md", "run_summary.json", "generation_metrics.csv",
-    "candidate_summary.csv", "agent_game_performance.csv", "strategy_diversity.csv", "strategy_niches.csv",
+    "candidate_summary.csv", "agent_game_performance.csv", "opponent_game_performance.csv",
+    "strategy_diversity.csv", "strategy_niches.csv",
     "objective_statistics.csv", "operator_statistics.csv",
     "timing_statistics.csv", "error_statistics.csv",
 )
@@ -36,9 +38,11 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
     operator_rows = _operator_rows(candidates)
     timing_rows = _timing_rows(data.timing)
     error_rows = _error_rows(data.errors, candidates)
+    opponent_game_rows = _opponent_game_performance_rows(data)
     _write_csv(output / "generation_metrics.csv", generation_rows)
     _write_csv(output / "candidate_summary.csv", candidates)
     _write_csv(output / "agent_game_performance.csv", agent_game_rows)
+    _write_csv(output / "opponent_game_performance.csv", opponent_game_rows)
     _write_csv(output / "strategy_diversity.csv", diversity_rows)
     _write_csv(output / "strategy_niches.csv", niche_rows)
     _write_csv(output / "objective_statistics.csv", objective_rows)
@@ -52,6 +56,7 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
         "completed_generations": data.manifest.get("completed_generations", []),
         "candidate_count": len(candidates),
         "agent_game_performance_count": len(agent_game_rows),
+        "opponent_game_performance_count": len(opponent_game_rows),
         "strategy_diversity_count": len(diversity_rows),
         "failure_count": sum(bool(row["failed"]) for row in candidates),
         "objectives": sorted({row["objective_id"] for row in objective_rows}),
@@ -64,10 +69,11 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
         f"- Completed generations: {len(summary['completed_generations'])}\n"
         f"- Final candidates: {summary['candidate_count']}\n"
         f"- Individual agent Game Performance rows: {summary['agent_game_performance_count']}\n"
+        f"- Per-opponent Game Performance rows: {summary['opponent_game_performance_count']}\n"
         f"- Failures: {summary['failure_count']}\n",
         encoding="utf-8",
     )
-    _plots(plots, generation_rows, objective_rows, operator_rows, timing_rows, error_rows, candidates, agent_game_rows, diversity_rows)
+    _plots(plots, generation_rows, candidates, agent_game_rows, opponent_game_rows)
     return output
 
 
@@ -78,13 +84,24 @@ def _generation_rows(data: RunData) -> list[dict[str, Any]]:
             "generation": item.get("generation"),
             "population_size": item.get("population_size"),
             "failure_count": item.get("failure_count"),
-            "pareto_front_size": item.get("pareto_front_size"),
             "expected_match_count": item.get("expected_match_count"),
             "completed_match_count": item.get("completed_match_count"),
             "evaluation_maps": json.dumps(item.get("evaluation_maps") or [], ensure_ascii=False),
             "rounds_per_map": item.get("rounds_per_map"),
             "swap_player_sides": item.get("swap_player_sides"),
         }
+        aggregate = item.get("game_performance") or {}
+        quality = item.get("code_quality_diagnostic") or {}
+        base.update({
+            "game_performance_best": aggregate.get("best"),
+            "game_performance_mean": aggregate.get("mean"),
+            "game_performance_median": aggregate.get("median"),
+            "game_performance_worst": aggregate.get("worst"),
+            "code_quality_best": quality.get("best"),
+            "code_quality_mean": quality.get("mean"),
+            "code_quality_median": quality.get("median"),
+            "code_quality_worst": quality.get("worst"),
+        })
         diversity = item.get("strategy_diversity") or {}
         if isinstance(diversity, dict):
             base.update({
@@ -117,6 +134,8 @@ def _candidate_rows(data: RunData) -> list[dict[str, Any]]:
             "niche_changed": item.get("niche_changed"),
             "status": item.get("status"),
             "failed": bool(item.get("failure_reason")) or item.get("status") == "failed",
+            "game_performance": (item.get("game_eval_result") or {}).get("game_performance"),
+            "code_quality": (item.get("code_quality_result") or {}).get("code_quality"),
             **{str(key): value for key, value in item.get("fitness_objectives", {}).items()},
         }
         for item in population if isinstance(item, dict)
@@ -187,6 +206,8 @@ def _agent_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
             if not isinstance(item, dict):
                 continue
             objectives = item.get("fitness_objectives") or item.get("objectives") or {}
+            game = item.get("game_eval_result") or {}
+            diagnostics = item.get("code_quality_result") or {}
             if not isinstance(objectives, dict):
                 objectives = {}
             rows.append({
@@ -195,11 +216,35 @@ def _agent_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
                 "status": item.get("status"),
                 "operator": item.get("operator"),
                 "mutation_type": item.get("mutation_type"),
-                "game_performance": objectives.get("game_performance"),
-                "code_quality": objectives.get("code_quality"),
+                "game_performance": game.get("game_performance", objectives.get("game_performance")),
+                "code_quality": diagnostics.get("code_quality", objectives.get("code_quality")),
                 "failed": bool(item.get("failure_reason")) or item.get("status") == "failed",
             })
     return sorted(rows, key=lambda item: (item.get("generation", -1), str(item.get("candidate_id") or "")))
+
+
+def _opponent_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
+    """Flatten generation-level mean Game Performance for each opponent."""
+
+    rows: list[dict[str, Any]] = []
+    for item in data.generation_metrics:
+        generation = item.get("generation")
+        opponent_scores = item.get("opponent_scores") or {}
+        by_opponent = opponent_scores.get("by_opponent") if isinstance(opponent_scores, dict) else {}
+        if not isinstance(by_opponent, dict):
+            continue
+        for opponent_id, summary in by_opponent.items():
+            if not isinstance(summary, dict):
+                continue
+            game_performance = summary.get("game_performance", summary.get("mean_score"))
+            if game_performance is None:
+                continue
+            rows.append({
+                "generation": generation,
+                "opponent_id": str(opponent_id),
+                "game_performance": game_performance,
+            })
+    return sorted(rows, key=lambda item: (item.get("generation", -1), item["opponent_id"]))
 
 
 def _objective_rows(data: RunData) -> list[dict[str, Any]]:
@@ -256,52 +301,39 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def _plots(path: Path, generation_rows, objective_rows, operator_rows, timing_rows, error_rows, candidates, agent_game_rows, diversity_rows) -> None:
-    for objective in sorted({row.get("objective_id") for row in objective_rows if row.get("objective_id")}):
-        rows = [row for row in objective_rows if row.get("objective_id") == objective]
-        _line_plot(path / f"{objective}_by_generation.png", rows, "generation", ("best", "mean", "median", "worst"), objective)
-    _line_plot(path / "population_failures.png", generation_rows, "generation", ("population_size", "failure_count"), "Population and failures")
-    _line_plot(path / "pareto_front_size.png", generation_rows, "generation", ("pareto_front_size",), "Pareto-front size")
-    _bar_plot(path / "operator_usage.png", operator_rows, "operator", "usage_count", "Operator usage")
-    _bar_plot(path / "operator_success_rate.png", operator_rows, "operator", "success_rate", "Operator success rate")
-    _bar_plot(path / "errors_by_stage.png", error_rows, "stage", "count", "Errors by stage")
-    _line_plot(path / "timing_by_generation.png", timing_rows, "generation", ("total_seconds",), "Timing by generation")
-    _bar_plot(path / "timing_by_operation.png", timing_rows, "operation", "total_seconds", "Timing by operation")
-    _line_plot(path / "errors_by_generation.png", error_rows, "generation", ("count",), "Errors by generation")
-    _agent_game_performance_plot(path / "agent_game_performance.png", agent_game_rows)
-    _line_plot(path / "unique_strategy_niches.png", diversity_rows, "generation", ("unique_niches",), "Unique strategy niches")
-    _line_plot(path / "dominant_niche_ratio.png", diversity_rows, "generation", ("dominant_niche_ratio",), "Dominant niche ratio")
-    _line_plot(path / "mean_strategy_distance.png", diversity_rows, "generation", ("mean_strategy_distance",), "Mean strategy distance")
-    _line_plot(
-        path / "niche_change_by_mutation_intent.png",
-        diversity_rows,
-        "generation",
-        ("refine_niche_change_rate", "counter_niche_change_rate", "structural_niche_change_rate", "alternative_niche_change_rate"),
-        "Niche change by mutation intent",
-    )
+def _plots(path: Path, generation_rows, candidates, agent_game_rows, opponent_game_rows) -> None:
+    """Write only the compact plot set used for current run comparison."""
 
-    if len(candidates) > 1 and {"game_performance", "code_quality"} <= set(candidates[0]):
-        plt.figure()
-        plt.scatter([row.get("game_performance") for row in candidates], [row.get("code_quality") for row in candidates])
-        plt.xlabel("Code Quality / Simplicity (higher is better)")
-        plt.ylabel("Game Performance (higher is better)")
-        plt.tight_layout()
-        plt.savefig(path / "final_pareto_front.png"); plt.close()
-    elif candidates:
-        objective = next((key for key in candidates[0] if key not in {"candidate_id", "generation", "operator", "mutation_type", "status", "failed"}), None)
-        if objective:
-            ranked = sorted(candidates, key=lambda row: row.get(objective, float("-inf")), reverse=True)
-            _bar_plot(path / "final_ranking.png", ranked, "candidate_id", objective, "Final ranking")
+    for old_plot in path.glob("*.png"):
+        old_plot.unlink()
+    _line_plot(path / "code_quality_by_generation.png", generation_rows, "generation", ("code_quality_best", "code_quality_mean", "code_quality_median", "code_quality_worst"), "Code Quality diagnostic by generation")
+    _line_plot(path / "game_performance_by_generation.png", generation_rows, "generation", ("game_performance_best", "game_performance_mean", "game_performance_median", "game_performance_worst"), "Aggregate Game Performance by generation")
+    _agent_game_performance_plot(path / "agent_game_performance.png", agent_game_rows)
+    for opponent_id in sorted({row["opponent_id"] for row in opponent_game_rows}):
+        rows = [row for row in opponent_game_rows if row["opponent_id"] == opponent_id]
+        filename_id = re.sub(r"[^A-Za-z0-9_-]+", "_", opponent_id).strip("_") or "unknown"
+        _line_plot(
+            path / f"game_performance_by_generation_{filename_id}.png",
+            rows,
+            "generation",
+            ("game_performance",),
+            f"Game Performance vs {opponent_id}",
+        )
 
 
 def _line_plot(path: Path, rows, x, ys, title) -> None:
     if not rows:
         return
-    plt.figure()
+    plotted = []
     for y in ys:
         points = [(row.get(x), row.get(y)) for row in rows if row.get(x) is not None and row.get(y) is not None]
         if points:
-            plt.plot([item[0] for item in points], [item[1] for item in points], marker="o", label=y)
+            plotted.append((y, points))
+    if not plotted:
+        return
+    plt.figure()
+    for y, points in plotted:
+        plt.plot([item[0] for item in points], [item[1] for item in points], marker="o", label=y)
     plt.title(title)
     if plt.gca().get_legend_handles_labels()[0]:
         plt.legend()

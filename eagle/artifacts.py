@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 
 from evaluation.compiler import CompileResult
 from evaluation.code_quality import OBJECTIVE_FORMULA_VERSION, analyze_compilation
-from evaluation.nsga2_objectives import OBJECTIVE_DIRECTIONS
+from evaluation.objectives import OBJECTIVE_DIRECTIONS
 from evaluation.microrts_runner import DEFAULT_MAP_PATH, INTEGRATION_CHECK_NAMES, IntegrationResult, MatchResult
 from generation.java_agent_generator import ValidationResult
 
 from .candidate import Candidate
 from .opponents import EVALUATION_ROSTER, SEARCH_OPPONENT_REGISTRY
-from .llm_profiles import LLMClient
+from .llm import LLMClient
 from .prompts import DEFAULT_PROMPT_TEMPLATE_PATH, load_prompt_templates
 from .config import ExperimentConfig
 
@@ -24,6 +24,8 @@ if TYPE_CHECKING:
     from .evaluation import CandidateEvaluation
 
 
+# Writers are grouped by lifecycle boundary: genotype inputs first,
+# stage/evaluation evidence next, and run summaries/configuration last.
 ARTIFACT_SCHEMA_VERSION = "phase4-v3"
 
 
@@ -159,11 +161,18 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "objective_formula_version": OBJECTIVE_FORMULA_VERSION,
         "candidate_id": evaluation.candidate.id,
-        "game_performance": evaluation.candidate.fitness_objectives["game_performance"],
-        "code_quality": evaluation.candidate.fitness_objectives["code_quality"],
-        "opponent_scores": list(game_payload.get("opponent_scores") or []),
+        "game_performance": game_payload.get("game_performance"),
+        "opponent_scores": (
+            dict(game_payload.get("opponent_scores"))
+            if isinstance(game_payload.get("opponent_scores"), dict)
+            else {
+                str(item.get("opponent_id") or "unknown"): float(item.get("score") or 0.0)
+                for item in (game_payload.get("opponent_results") or [])
+                if isinstance(item, dict)
+            }
+        ),
         "opponent_results": list(game_payload.get("opponent_results") or []),
-        "objective_names": ["game_performance", "code_quality"],
+        "objective_names": list(evaluation.candidate.fitness_objectives),
     }
     write_json(evaluation_dir / "game_performance.json", game_payload)
     write_json(
@@ -196,7 +205,7 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
             "match_count": len(evaluation.match_results),
             "expected_match_count": game_payload.get("expected_match_count"),
             "missing_match_count": max(0, int(game_payload.get("expected_match_count") or 0) - sum(result.ok for result in evaluation.match_results)),
-            "opponent_scores": list(game_payload.get("opponent_scores") or []),
+            "opponent_scores": dict(game_payload.get("opponent_scores") or {}),
             "opponent_results": list(game_payload.get("opponent_results") or []),
             "objectives": objectives_payload,
             "artifacts": {
@@ -273,7 +282,7 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         "failure_reason": result.failure_reason,
         "validation_result": validation_to_dict(result.validation_result),
         "stage": "generation",
-        "llm_profile": (evaluation.generation_timing or {}).get("llm_profile"),
+        "operation": (evaluation.generation_timing or {}).get("operation"),
         "model": (evaluation.generation_timing or {}).get("model"),
         "attempts": (evaluation.generation_timing or {}).get("attempts", []),
     })
@@ -292,11 +301,10 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "crossover_rate": config.crossover_rate,
         "mutation_rate": config.mutation_rate,
         "mutation_selection_policy": "failed_game_to_code_otherwise_seeded_random",
-        "front0_stagnation_generations": config.front0_stagnation_generations,
+        "stagnation_generations": config.stagnation_generations,
         "matches_per_candidate": config.matches_per_candidate,
         "matches_per_opponent": config.fixed_matches_per_opponent,
         "fixed_matches_per_candidate": config.expected_match_count,
-        "dynamic_eagle_matches_from_generation": config.fixed_matches_per_opponent,
         "opponent": config.opponent,
         "evaluation_opponents": [
             {
@@ -308,13 +316,6 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
             for order, (opponent_id, weight) in enumerate(config.evaluation_opponents, start=1)
         ],
         "fixed_opponent_weight_sum": config.fixed_opponent_weight_sum,
-        "eagle_opponent": {
-            "enabled": config.eagle_opponent_enabled,
-            "source": config.eagle_opponent_source,
-            "schedule": config.eagle_opponent_schedule,
-            "min_weight": config.eagle_opponent_min_weight,
-            "max_weight": config.eagle_opponent_max_weight,
-        },
         "objective_directions": OBJECTIVE_DIRECTIONS,
         "map": config.map_path,
         "evaluation_maps": [
@@ -328,16 +329,22 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "ea_random_seed": config.random_seed,
         "microrts_match_seeds": list(config.resolved_match_seeds),
         "round_seed_schedule": list(config.resolved_match_seeds),
-        "eagle_match_seed_policy": "dynamic and historical opponents reuse the canonical round seed schedule",
+        "match_seed_policy": "all ten fixed opponents reuse the canonical round seed schedule",
         "match_timeout_seconds": config.match_timeout_seconds,
         "match_artifact_mode": config.match_artifact_mode,
         "unit_material_values": dict(config.unit_material_values),
         "material_scale": config.material_scale,
         "resource_scale": config.resource_scale,
         "llm_backend": llm_backend,
+        "model": None if is_mock_backend else config.llm_model,
+        "model_path": None if is_mock_backend else config.llm_model_path,
         "llm_model": None if is_mock_backend else config.llm_model,
         "llm_temperature": None if is_mock_backend else 0.2,
-        "llm_roles": {role: {"enabled": enabled, "temperature": temperature} for role, enabled, temperature in config.llm_roles},
+        "commentator": {
+            "enabled": config.match_commentator_enabled,
+            "temperature": config.match_commentator_temperature,
+            "chunk_ticks": config.match_commentator_chunk_ticks,
+        },
         "retry_policy": {
             "max_attempts": 1 if is_mock_backend else 3,
             "mutation_max_attempts": config.mutation_max_attempts,
@@ -348,6 +355,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "strategy_alignment_model": None if mock else config.llm_model,
         "llm": None if client is None else {
             "model": client.model,
+            "model_path": config.llm_model_path,
             "base_url": client.base_url,
             "timeout_seconds": client.timeout_seconds,
         },
@@ -404,7 +412,6 @@ def write_summary(
     config: ExperimentConfig,
     final_population: list[Candidate],
     best_candidate: Candidate | None,
-    pareto_fronts: list[list[Candidate]],
     mock: bool,
     completed_generation: int | None = None,
     stop_reason: str | None = None,
@@ -415,9 +422,9 @@ def write_summary(
         "completed_generation": completed_generation,
         "stop_reason": stop_reason,
         "population_size": config.population_size,
-        "objectives": ["game_performance", "code_quality"],
+        "objectives": list(OBJECTIVE_DIRECTIONS),
+        "reporting_metrics": ["game_performance"],
         "best_candidate": None if best_candidate is None else best_candidate.to_summary_dict(),
-        "pareto_fronts": [[candidate.id for candidate in front] for front in pareto_fronts],
         "final_population": [candidate.to_summary_dict() for candidate in final_population],
     })
 

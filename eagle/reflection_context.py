@@ -66,8 +66,16 @@ class ObjectiveSummary:
                     "code_quality": self.code_quality,
                     **dict(self.other_objectives),
                 }.items()
-                if value is not None
+                if value is not None and key in other
             }
+            expected.update({
+                key: value
+                for key, value in {
+                    "game_performance": self.game_performance,
+                    "code_quality": self.code_quality,
+                }.items()
+                if value is not None and key in other
+            })
             return expected == other
         if not isinstance(other, ObjectiveSummary):
             return NotImplemented
@@ -127,9 +135,6 @@ class OpponentReflectionSummary:
     p1_losses: int = 0
     map_results: tuple[MapReflectionResult, ...] = ()
     gameplay_diagnostics: GameplayDiagnostics = field(default_factory=GameplayDiagnostics)
-    is_eagle_opponent: bool = False
-    eagle_generation: int | None = None
-    eagle_weight: float | None = None
     completed_match_count: int = 0
     expected_match_count: int = 0
     missing_match_count: int = 0
@@ -152,9 +157,6 @@ class OpponentReflectionSummary:
             "p1_losses": self.p1_losses,
             "map_results": [item.to_dict() for item in self.map_results],
             "gameplay_diagnostics": self.gameplay_diagnostics.to_dict(),
-            "is_eagle_opponent": self.is_eagle_opponent,
-            "eagle_generation": self.eagle_generation,
-            "eagle_weight": self.eagle_weight,
             "completed_match_count": self.completed_match_count,
             "expected_match_count": self.expected_match_count,
             "missing_match_count": self.missing_match_count,
@@ -387,14 +389,12 @@ def _opponent_summaries(game: Mapping[str, object]) -> tuple[OpponentReflectionS
     by_opponent: dict[str, list[dict[str, object]]] = {}
     for row in rows:
         by_opponent.setdefault(str(row.get("opponent_id") or row.get("opponent_name") or "unknown"), []).append(row)
-    eagle = game.get("eagle_reference") if isinstance(game.get("eagle_reference"), dict) else {}
     summaries: list[OpponentReflectionSummary] = []
     for raw in game.get("opponent_results") or ():
         if not isinstance(raw, dict):
             continue
         opponent_id = str(raw.get("opponent_id") or "unknown")
         opponent_rows = by_opponent.get(opponent_id, [])
-        is_eagle = opponent_id == "eagle_previous_best"
         summaries.append(
             OpponentReflectionSummary(
                 opponent_name=str(raw.get("opponent_name") or opponent_id),
@@ -411,9 +411,6 @@ def _opponent_summaries(game: Mapping[str, object]) -> tuple[OpponentReflectionS
                 p1_losses=sum(row.get("winner") == 0 and row.get("candidate_player") == 1 for row in opponent_rows),
                 map_results=_map_results(opponent_rows),
                 gameplay_diagnostics=_gameplay_diagnostics(opponent_rows, raw),
-                is_eagle_opponent=is_eagle,
-                eagle_generation=(int(eagle["generation"]) if is_eagle and _number(eagle.get("generation")) is not None else None),
-                eagle_weight=(_number(eagle.get("weight")) if is_eagle else None),
                 completed_match_count=int(raw.get("completed_match_count") or 0),
                 expected_match_count=int(raw.get("expected_match_count") or 0),
                 missing_match_count=int(raw.get("missing_match_count") or 0),
@@ -549,6 +546,11 @@ def build_reflection_context(
     )
     generation_evidence = evidence.get("generation") if isinstance(evidence.get("generation"), dict) else {}
     objectives = candidate.fitness_objectives or evidence.get("objectives") or {}
+    aggregate_game_performance = _number(game.get("game_performance"))
+    if aggregate_game_performance is None:
+        aggregate_game_performance = _number(game.get("objective"))
+    if aggregate_game_performance is None:
+        aggregate_game_performance = _number(objectives.get("game_performance")) if isinstance(objectives, Mapping) else None
     history = candidate.metadata.get("reflection_history") or ()
     previous: str | None = None
     for item in reversed(history if isinstance(history, (list, tuple)) else ()):
@@ -572,7 +574,7 @@ def build_reflection_context(
             candidate.generated_java or str(generation_evidence.get("assembled_java") or generation_evidence.get("extracted_code") or ""),
             candidate.status,
         ),
-        objectives=_objective_summary(objectives),
+        objectives=_objective_summary({**objectives, "game_performance": aggregate_game_performance}),
         opponents=_opponent_summaries(game),
         code_diagnostics=_diagnostics(candidate, evidence, quality, generation_evidence, error_memory),
         evolution=EvolutionContext(
@@ -580,7 +582,11 @@ def build_reflection_context(
             parent_candidate_ids=tuple(selected_candidate.parent_ids),
             mutation_operator=selected_candidate.mutation_type or selected_candidate.operator,
             parent_objectives=parent_objective_items,
-            candidate_rank_or_selection_metadata={key: value for key, value in selected_candidate.metadata.items() if key in {"pareto_rank", "crowding_distance"}},
+            candidate_rank_or_selection_metadata={
+                key: value
+                for key, value in selected_candidate.metadata.items()
+                if key in {"lexicase_case", "lexicase_case_order", "selection_role"}
+            },
         ),
         previous_reflection=previous,
         commentary_aggregation=(game.get("commentary_aggregation") if isinstance(game.get("commentary_aggregation"), dict) else {}),

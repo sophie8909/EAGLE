@@ -18,9 +18,7 @@ from typing import Any, Protocol
 
 from .candidate import Candidate
 from .config import ExperimentConfig
-from .llm_errors import LLMServerError
-from .llm_progress import llm_request_progress
-from .llm_transport import read_chat_completion_content, truncate_prompt
+from .llm import LLMServerError, llm_request_progress, read_chat_completion_content, truncate_prompt
 from .reflection_context import (
     CandidateReflectionSummary,
     CodeDiagnostics,
@@ -39,6 +37,9 @@ from .reflection_prompts import (
 )
 
 
+# Typed request/result records and response parsing are shared by Code
+# Reflection and Strategy Reflection. The concrete strategy role sequence is
+# intentionally kept in eagle.strategy_reflection.
 REFLECTION_SCHEMA_VERSION = "reflection-v2"
 DEFAULT_STRUCTURED_OUTPUT_TOKENS = 2048
 
@@ -78,7 +79,7 @@ class ReflectionResult:
     error: str | None = None
     model: str | None = None
     backend: str | None = None
-    llm_profile: str | None = None
+    operation: str | None = None
     token_counts: dict[str, int] | None = None
     parsed_response: dict[str, object] | None = None
     analysis_summary: str = ""
@@ -102,7 +103,7 @@ class ReflectionResult:
             "error": self.error,
             "model": self.model,
             "backend": self.backend,
-            "llm_profile": self.llm_profile,
+            "operation": self.operation,
             "token_counts": self.token_counts,
             "parsed_response": self.parsed_response,
             "analysis_summary": self.analysis_summary,
@@ -214,10 +215,10 @@ class OpenAICompatibleReflectionBackend:
     and artifact record.
     """
 
-    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, llm_profile: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None) -> None:
+    def __init__(self, base_url: str, model: str, *, timeout_sec: float = 120, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.llm_profile = llm_profile
+        self.operation = operation
         self.timeout_sec = timeout_sec
         self.temperature = temperature
         self.max_output_tokens = (
@@ -252,7 +253,7 @@ class OpenAICompatibleReflectionBackend:
         )
         try:
             with llm_request_progress(
-                stage=self.llm_profile or "reflection",
+                stage=self.operation or "reflection",
                 endpoint=self.chat_completions_url,
                 model=self.model,
             ):
@@ -274,8 +275,8 @@ def build_reflection_backend(
     name: str,
     *,
     base_url: str = "http://localhost:8080",
-    model: str = "local-model",
-    llm_profile: str | None = None,
+    model: str | None = None,
+    operation: str | None = None,
     timeout_sec: float = 120,
     temperature: float = 0.2,
     max_output_tokens: int | None = None,
@@ -283,7 +284,9 @@ def build_reflection_backend(
     if name == "mock":
         return MockReflectionBackend()
     if name in {"openai", "openai"}:
-        return OpenAICompatibleReflectionBackend(base_url, model, llm_profile=llm_profile, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
+        if not model:
+            raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
+        return OpenAICompatibleReflectionBackend(base_url, model, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
     raise ValueError(f"Unknown mutation backend: {name}")
 
 
@@ -305,7 +308,7 @@ class ReflectionStage:
         self.max_attempts = max_attempts
         self.logger = logger
         self.model = model
-        self.llm_profile = getattr(backend, "llm_profile", None)
+        self.operation = getattr(backend, "operation", None)
         self.backend_name = backend_name or type(backend).__name__
 
     def run(
@@ -375,7 +378,7 @@ class ReflectionStage:
                     attempt=attempt_number,
                     error=error,
                     metadata={
-                        "llm_profile": self.llm_profile,
+                        "operation": self.operation,
                         "operation_type": "mutation",
                         "token_counts": None,
                         "prompt_metadata": prompt_metadata,
@@ -395,7 +398,7 @@ class ReflectionStage:
                     attempts=tuple(attempts),
                     model=self.model,
                     backend=self.backend_name,
-                    llm_profile=self.llm_profile,
+                    operation=self.operation,
                     parsed_response=parsed,
                     analysis_summary=analysis_summary,
                     revised_prompt=revised_prompt,
@@ -416,7 +419,7 @@ class ReflectionStage:
             error=last_error or "Reflection stage failed.",
             model=self.model,
             backend=self.backend_name,
-            llm_profile=self.llm_profile,
+            operation=self.operation,
             prompt_metadata=prompt_metadata,
         )
 

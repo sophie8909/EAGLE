@@ -26,6 +26,10 @@ def build_server_command(runtime: RuntimeConfig) -> list[str]:
         "--port", str(llm.port), "--ctx-size", str(llm.context_size),
         "--n-gpu-layers", str(llm.gpu_layers), "--parallel", str(llm.parallel),
         "--threads", str(llm.threads), "--batch-size", str(llm.batch_size),
+        # The bundled llama.cpp build can abort while reusing a prompt-cache
+        # sequence. EAGLE already owns request-level context, so server-side
+        # prompt caching is unnecessary and unsafe for this runtime.
+        "--no-cache-prompt",
     ]
 
 
@@ -38,8 +42,10 @@ class RuntimeManager:
         pid = self.read_pid()
         if pid is not None:
             if process_alive(pid):
-                if not command_matches(pid, self.runtime):
+                if not managed_command_matches(pid, self.runtime):
                     raise RuntimeError(f"llama-server.pid points to an unrelated process: {pid}")
+                if not command_matches(pid, self.runtime):
+                    raise RuntimeError("Managed llama-server is using a different model; use restart --model.")
                 ok, detail = health_check(self.runtime)
                 if ok:
                     return ProcessStatus("healthy", detail, pid)
@@ -75,6 +81,7 @@ class RuntimeManager:
                 )
             ok, detail = health_check(self.runtime)
             if ok:
+                self._write_active_model()
                 return ProcessStatus("healthy", detail, process.pid)
             time.sleep(0.25)
         self.stop()
@@ -87,17 +94,18 @@ class RuntimeManager:
         if not process_alive(pid):
             self.remove_pid()
             return
-        if not command_matches(pid, self.runtime):
+        if not managed_command_matches(pid, self.runtime):
             raise RuntimeError(f"Refusing to stop unrelated process PID {pid}.")
         terminate_pid(pid, 5.0)
         self.remove_pid()
+        self._remove_active_model()
 
     def status(self) -> ProcessStatus:
         pid = self.read_pid()
         if pid is None or not process_alive(pid):
             self.remove_pid()
             return ProcessStatus("stopped", "no live managed PID")
-        if not command_matches(pid, self.runtime):
+        if not managed_command_matches(pid, self.runtime):
             return ProcessStatus("unrelated", "PID command line does not match", pid)
         ok, detail = health_check(self.runtime)
         return ProcessStatus("healthy" if ok else "unhealthy", detail, pid)
@@ -140,6 +148,19 @@ class RuntimeManager:
             self.runtime.pid_path.unlink()
         except FileNotFoundError:
             pass
+        self._remove_active_model()
+
+    def _write_active_model(self) -> None:
+        self.runtime.active_model_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.runtime.active_model_path.with_suffix(".tmp")
+        temporary.write_text(str(self.runtime.llm.model_path), encoding="utf-8")
+        temporary.replace(self.runtime.active_model_path)
+
+    def _remove_active_model(self) -> None:
+        try:
+            self.runtime.active_model_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def read_command(pid: int) -> str:
@@ -161,6 +182,13 @@ def command_matches(pid: int, runtime: RuntimeConfig) -> bool:
             str(runtime.llm.server_binary), str(runtime.llm.model_path), str(runtime.llm.port),
         )
     )
+
+
+def managed_command_matches(pid: int, runtime: RuntimeConfig) -> bool:
+    """Check ownership without requiring the current model selection to match."""
+
+    command = read_command(pid)
+    return all(value in command for value in (str(runtime.llm.server_binary), str(runtime.llm.port)))
 
 
 def process_alive(pid: int) -> bool:

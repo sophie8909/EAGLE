@@ -1,5 +1,11 @@
 # EAGLE Architecture Specification
 
+> Current implementation note (2026-08-12): the active evolutionary contract
+> is [`opponent-wise-lexicase.md`](opponent-wise-lexicase.md). It supersedes
+> legacy NSGA-II/two-objective and previous-generation EAGLE-opponent passages
+> in this historical baseline. The executable source and focused current
+> document are authoritative for this refactor.
+
 > **Current implementation correction (2026-08-05):** The active executable scorer supersedes older `code_complexity`/minimization and `+500` composite directions. Valid `code_quality` is a maximized simplicity score `100 - complexity_penalty`, with weights `40/25/20/15` for normalized cyclomatic complexity, nesting, logical LOC, and longest-function LOC. Generation, extraction, validation, compilation, integration, runtime, timeout, and incomplete failures receive `-1000` for both `game_performance` and `code_quality`. Compiler, Function Capability, and Strategy Alignment remain diagnostics only. See `docs/evaluation/code_quality.md` and `evaluation/canonical_code_quality.py`.
 
 > **EAGLE = Evolutionary Algorithm for Game-playing with LLM-Enabled Agents**
@@ -1705,8 +1711,9 @@ Required metadata:
 {
   "applied": true,
   "type": "strategy",
-  "reflection_model": "",
-  "rewrite_model": "",
+  "model": "",
+  "reflection_operation": "reflection",
+  "rewrite_operation": "rewrite",
   "reflection_attempts": 1,
   "rewrite_attempts": 1
 }

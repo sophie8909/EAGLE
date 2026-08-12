@@ -4,7 +4,7 @@ This directory is the implementation entry point for EAGLE (Evolutionary Algorit
 
 ## Authority and document classes
 
-1. [`eagle_architecture_spec.md`](eagle_architecture_spec.md) is the authoritative normative architecture contract.
+1. [`eagle_architecture_spec.md`](eagle_architecture_spec.md) is the baseline architecture contract; the current opponent-wise fitness and lexicase replacement contract is [`opponent-wise-lexicase.md`](opponent-wise-lexicase.md).
 2. Files under [`architecture/`](architecture/overview.md), [`evaluation/`](evaluation/evaluation_pipeline.md), and [`artifacts/`](artifacts/artifact_schema.md) are canonical, responsibility-focused implementation contracts derived from the specification. They are normative only where they restate or link to the specification and are always subordinate to it.
 3. Files under [`implementation/`](implementation/current_status.md) describe repository reality, gaps, migration work, and the current [architecture traceability matrix](implementation/architecture_traceability_matrix.md). They are non-normative.
    The Linux / WSL2 runtime audit records the two supported Linux deployment environments and their shared runtime assumptions.
@@ -20,7 +20,7 @@ When code and the specification differ, preserve the specification and update [`
 | Task | Required documents |
 | --- | --- |
 | Modify the Candidate model or genotype/phenotype boundary | [architecture spec](eagle_architecture_spec.md) + [candidate model](architecture/candidate_model.md) + [lineage schema](artifacts/lineage_schema.md) |
-| Modify overall pipeline or NSGA-II flow | [architecture spec](eagle_architecture_spec.md) + [overview](architecture/overview.md) + [evolutionary flow](architecture/evolutionary_flow.md) |
+| Modify overall pipeline or lexicase flow | [opponent-wise lexicase](opponent-wise-lexicase.md) + [overview](architecture/overview.md) + [evolutionary flow](architecture/evolutionary_flow.md) |
 | Modify Strategy or Code Mutation | [architecture spec](eagle_architecture_spec.md) + [mutation](architecture/mutation.md) + [artifact schema](artifacts/artifact_schema.md) + [timing schema](artifacts/timing_schema.md) |
 | Modify Uniform Crossover | [architecture spec](eagle_architecture_spec.md) + [crossover](architecture/crossover.md) + [lineage schema](artifacts/lineage_schema.md) |
 | Modify Java generation, validation, or compilation | [architecture spec](eagle_architecture_spec.md) + [Java generation](architecture/java_generation.md) + [failure classification](evaluation/failure_classification.md) |
@@ -41,7 +41,7 @@ When code and the specification differ, preserve the specification and update [`
 | --- | --- |
 | Scope, global invariants, and precedence | [`eagle_architecture_spec.md`](eagle_architecture_spec.md) |
 | Candidate model and inheritance | [`architecture/candidate_model.md`](architecture/candidate_model.md) |
-| Population lifecycle, selection, and NSGA-II | [`architecture/evolutionary_flow.md`](architecture/evolutionary_flow.md) |
+| Population lifecycle, selection, and opponent-wise lexicase | [`architecture/evolutionary_flow.md`](architecture/evolutionary_flow.md) |
 | Uniform Crossover | [`architecture/crossover.md`](architecture/crossover.md) |
 | Strategy and Code Mutation | [`architecture/mutation.md`](architecture/mutation.md) |
 | Full-file Java generation, validation, and compilation | [`architecture/java_generation.md`](architecture/java_generation.md) |

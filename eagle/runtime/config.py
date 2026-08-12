@@ -1,4 +1,4 @@
-"""Canonical local Qwen3.5 runtime configuration."""
+"""Canonical local llama.cpp runtime configuration."""
 from __future__ import annotations
 
 import ipaddress
@@ -13,8 +13,8 @@ import yaml
 RUNTIME_SCHEMA_VERSION = "runtime-v1"
 LEGACY_RUNTIME_ERROR = (
     "Unsupported legacy multi-model runtime configuration.\n"
-    "EAGLE now supports only the Qwen3.5-9B model configured in configs/runtime.yaml.\n"
-    "Remove server lists, role mappings, and per-operation endpoints."
+    "Configure one llama.cpp model under llm.model_path; do not define server lists,\n"
+    "role mappings, aliases, or per-operation endpoints."
 )
 
 
@@ -29,7 +29,6 @@ class ServerArguments:
 
 @dataclass(frozen=True)
 class LLMConfig:
-    model_name: str
     model_path: Path
     server_binary: Path
     host: str
@@ -84,6 +83,12 @@ class RuntimeConfig:
         return self.log_root.parent
 
     @property
+    def active_model_path(self) -> Path:
+        """Runtime state file containing the model used by the live server."""
+
+        return self.runtime_root / "active-model.path"
+
+    @property
     def analysis_output_directory_name(self) -> str:
         return "analysis"
 
@@ -93,6 +98,7 @@ def load_runtime_config(
     *,
     create_directories: bool = True,
     validate_files: bool = True,
+    model_override: str | Path | None = None,
 ) -> RuntimeConfig:
     source = Path(path).expanduser().resolve()
     try:
@@ -116,6 +122,33 @@ def load_runtime_config(
     log_path = _runtime_path(runtime, "log_path", project_root)
     pid_path = _runtime_path(runtime, "pid_path", project_root)
     result = RuntimeConfig(source, project_root, conda_env, llm, log_path, pid_path)
+    selected_model = model_override
+    if selected_model is None and result.pid_path.is_file() and result.active_model_path.is_file():
+        selected_model = result.active_model_path.read_text(encoding="utf-8").strip() or None
+    if selected_model is not None:
+        model_path = _path_value(selected_model, project_root)
+        if validate_files and not model_path.is_file():
+            raise ValueError(f"Selected model does not exist or is not a file: {model_path}")
+        result = RuntimeConfig(
+            result.source_path,
+            result.project_root,
+            result.conda_env,
+            LLMConfig(
+                model_path,
+                result.llm.server_binary,
+                result.llm.host,
+                result.llm.port,
+                result.llm.context_size,
+                result.llm.gpu_layers,
+                result.llm.parallel,
+                result.llm.threads,
+                result.llm.batch_size,
+                result.llm.startup_timeout_seconds,
+                result.llm.health_timeout_seconds,
+            ),
+            result.log_path,
+            result.pid_path,
+        )
     if create_directories:
         for directory in (result.log_root, result.pid_root):
             directory.mkdir(parents=True, exist_ok=True)
@@ -127,9 +160,6 @@ def read_conda_env(path: str | Path) -> str:
 
 
 def _parse_llm(value: dict[str, Any], project_root: Path, *, validate_files: bool) -> LLMConfig:
-    model_name = _required_text(value, "model_name")
-    if model_name != "qwen3.5-9b":
-        raise ValueError("llm.model_name must be exactly 'qwen3.5-9b'.")
     model_path = _path(value, "model_path", project_root)
     server_binary = _path(value, "server_binary", project_root)
     if validate_files:
@@ -153,7 +183,7 @@ def _parse_llm(value: dict[str, Any], project_root: Path, *, validate_files: boo
     startup = _positive_number(value, "startup_timeout_seconds")
     health = _positive_number(value, "health_timeout_seconds")
     return LLMConfig(
-        model_name, model_path, server_binary, host, port, context_size, gpu_layers,
+        model_path, server_binary, host, port, context_size, gpu_layers,
         parallel, threads, batch_size, startup, health,
     )
 
@@ -161,8 +191,8 @@ def _parse_llm(value: dict[str, Any], project_root: Path, *, validate_files: boo
 def _contains_legacy_runtime_key(payload: dict[str, Any]) -> bool:
     keys = {
         "mode", "client_host", "remote", "servers", "endpoints", "roles", "role_mapping",
-        "reflector", "rewriter", "generator", "coder", "general", "watchdog",
-        "resolved_endpoint", "fallback", "models", "health_check", "environment",
+        "reflector", "rewriter", "generator", "coder", "general", "watchdog", "alias",
+        "resolved_endpoint", "fallback", "models", "health_check", "environment", "model_name",
     }
     return bool(keys.intersection(payload)) or any(
         key in payload.get("llm", {}) if isinstance(payload.get("llm"), dict) else False
@@ -185,8 +215,12 @@ def _required_text(payload: dict[str, Any], key: str) -> str:
 
 
 def _path(payload: dict[str, Any], key: str, project_root: Path) -> Path:
-    value = Path(_required_text(payload, key)).expanduser()
-    return value if value.is_absolute() else (project_root / value).resolve()
+    return _path_value(_required_text(payload, key), project_root)
+
+
+def _path_value(value: str | Path, project_root: Path) -> Path:
+    path = Path(str(value)).expanduser()
+    return path if path.is_absolute() else (project_root / path).resolve()
 
 
 def _runtime_path(payload: dict[str, Any], key: str, project_root: Path) -> Path:

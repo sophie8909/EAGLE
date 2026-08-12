@@ -1,9 +1,8 @@
 schema_version: experiment-v1
-algorithm: nsga2
+algorithm: lexicase
 application: microrts
 objectives:
-  game_performance: maximize
-  code_quality: maximize
+  opponent_cases: maximize
 llm:
   temperature: 0.0
   max_tokens: 8192
@@ -20,4 +19,4 @@ microrts_dir: third_party/microrts
 tick_limit: 20
 map_path: maps/8x8/basesWorkers8x8.xml
 match_timeout_seconds: 30
-front0_stagnation_generations: 0
+stagnation_generations: 0

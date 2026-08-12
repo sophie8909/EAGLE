@@ -16,34 +16,45 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from shutil import copy2
+from typing import Callable
 
 from generation.backend import MockGenerationBackend, build_generation_backend
-from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE
+from .opponent_cases import FAILED_OPPONENT_SCORE, LEXICASE_CASES
 
 from .artifacts import write_prompt_snapshot, write_resolved_config, write_summary
-from .run_artifacts import finalize_run, initialize_run_manifest, record_error_memory, record_generation
+from .run_artifacts import (
+    finalize_run,
+    initialize_run_manifest,
+    mark_run_interrupted,
+    record_error_memory,
+    record_generation,
+)
 from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import CrossoverContext, crossover
-from .evaluation import evaluate_population, prepare_eagle_opponent, preflight_evaluation_opponents
+from .evaluation import evaluate_population, preflight_evaluation_opponents
 from .mutation import ReflectionContext, build_reflection_backend
 from .reflection_context import build_reflection_context
-from .llm_logging import LLMCallLogger
+from .llm import LLMCallLogger
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
-from .llm_profiles import LLMClient
-from .llm_errors import LLMServerError
-from .offspring import normalize_prompt
+from .llm import LLMClient, LLMServerError
+from .prompts import normalize_prompt
 from .rewrite import PromptRewriteMutation
 from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation, select_strategy_mutation_intent
-from .strategy_archive import archive_niches, ensure_strategy_archive, update_strategy_archive
-from .strategy_diversity import diversity_console_summary, generation_diversity_metrics
+from .strategy_diversity import (
+    archive_niches,
+    diversity_console_summary,
+    ensure_strategy_archive,
+    generation_diversity_metrics,
+    update_strategy_archive,
+)
+from .opponent_archive import ensure_opponent_archive, update_opponent_archive
 from .selection import (
     select_parent,
-    assign_rank_and_crowding,
     best_candidate,
+    population_signature,
     select_next_generation,
 )
-from evaluation.opponent_schedule import eagle_opponent_weight, select_previous_generation_champion
 
 
 @dataclass(frozen=True)
@@ -56,14 +67,44 @@ class SearchResult:
 
 
 def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = False, run_id: str | None = None) -> SearchResult:
-    """Prepare a run, evolve generations, persist state, and finalize the run."""
+    """Run the EA and preserve the last completed generation on Ctrl-C."""
+
+    active_run: list[Path | None] = [None]
+    try:
+        return _run_search_impl(
+            config,
+            config_path=config_path,
+            mock=mock,
+            run_id=run_id,
+            on_run_created=lambda path: active_run.__setitem__(0, path),
+        )
+    except KeyboardInterrupt:
+        if active_run[0] is not None:
+            mark_run_interrupted(active_run[0])
+        raise
+
+
+def _run_search_impl(
+    config: ExperimentConfig,
+    *,
+    config_path: Path,
+    mock: bool = False,
+    run_id: str | None = None,
+    on_run_created: Callable[[Path], None] | None = None,
+) -> SearchResult:
+    """Run the EA lifecycle: initialize, evaluate, select, repeat, and finalize.
+
+    Operators create only candidate genotypes. The evaluation module owns the
+    child boundary where generated Java, diagnostics, objectives, and compact
+    artifacts are produced; this function owns population-level orchestration.
+    """
     config.validate()
     preflight_evaluation_opponents(config, mock=mock)
     rng = random.Random(config.random_seed)
 
     backend_name = "mock" if mock else config.generation_backend
     client = LLMClient(config.llm_base_url, config.llm_model, temperature=config.llm_temperature, max_output_tokens=config.llm_max_tokens)
-    shared_profile = client.profile
+    shared_client = client
     if not mock:
         _preflight_llm_endpoint(client)
 
@@ -78,7 +119,10 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     classes_dir.mkdir()
     copy2(config_path, run_dir / "config.yaml")
     initialize_run_manifest(run_dir, config_path=config_path)
+    if on_run_created is not None:
+        on_run_created(run_dir)
     ensure_strategy_archive(run_dir)
+    ensure_opponent_archive(run_dir)
 
     llm_logger = LLMCallLogger(run_dir / "llm_logs", run_id=active_run_id, timing_path=run_dir / "timing.jsonl")
     generation_backend = MockGenerationBackend() if mock else client.generation_backend(logger=llm_logger)
@@ -95,13 +139,12 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         rewrite_backend=rewrite_backend,
         artifact_root=candidates_dir,
         logger=llm_logger,
-        reflection_model=None if backend_name == "mock" else client.model,
-        rewrite_model=None if backend_name == "mock" else client.model,
         backend_name=backend_name,
     )
-    role_temperatures = {role: temperature for role, _, temperature in config.llm_roles}
-    enabled_roles = ({role for role, enabled, _ in config.llm_roles if enabled} if config.llm_roles else {"match_commentator", "manager", "coach", "generator"})
-    strategy_role_backend = MockRoleBackend() if mock else client.prompt_backend(operation="match_commentator", temperature=role_temperatures.get("match_commentator"))
+    enabled_roles = {"manager", "coach"}
+    if config.match_commentator_enabled:
+        enabled_roles.add("match_commentator")
+    strategy_role_backend = MockRoleBackend() if mock else client.prompt_backend(operation="match_commentator", temperature=config.match_commentator_temperature)
     strategy_reflection_mutation = StrategyReflectionMutation(
         strategy_role_backend,
         max_attempts=config.mutation_max_attempts,
@@ -117,6 +160,8 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         client=client,
     )
     write_prompt_snapshot(run_dir, config)
+    # Initialization is followed by the same evaluation boundary used for
+    # every later offspring generation.
     population = initialize_population(config)
     # Generation zero enters the same evaluation boundary as every offspring so objective and failure records have one shape.
     generation_span = Stopwatch.start()
@@ -129,11 +174,11 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         classes_dir=classes_dir,
         candidates_dir=candidates_dir,
         mock=mock,
-        alignment_profile=shared_profile,
-        eagle_opponent=None,
+        llm_client=shared_client,
     )
     archive_before = archive_niches(run_dir)
     update_strategy_archive(run_dir, evaluated_population)
+    update_opponent_archive(run_dir, evaluated_population)
     append_event(run_dir / "timing.jsonl", build_generation_event(
         run_id=active_run_id,
         generation=0,
@@ -150,36 +195,14 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
     print(diversity_console_summary(0, generation_diversity), flush=True)
     error_memory = record_error_memory(run_dir, evaluated_population)
 
-    front0_signature = front_zero_signature(evaluated_population)
-    front0_stagnation_count = 0
+    population_state_signature = population_signature(evaluated_population)
+    stagnation_count = 0
     completed_generation = 0
     stop_reason: str | None = None
 
+    # One fixed EA step per iteration: select parents -> create offspring ->
+    # evaluate offspring -> select survivors.
     for generation in range(1, config.generations):
-        assign_rank_and_crowding(evaluated_population)
-        previous_champion = select_previous_generation_champion(evaluated_population)
-        eagle_opponent = prepare_eagle_opponent(
-            previous_champion,
-            generation=generation,
-            config=config,
-            classes_dir=classes_dir,
-            mock=mock,
-        )
-        eagle_opponent = replace(
-            eagle_opponent,
-            weight=eagle_opponent_weight(
-                generation,
-                config.generations,
-                enabled=config.eagle_opponent_enabled,
-                min_weight=config.eagle_opponent_min_weight,
-                max_weight=config.eagle_opponent_max_weight,
-            ),
-        )
-        print(
-            f"[gen {generation}] eagle_opponent={previous_champion.id} "
-            f"source_gen={generation - 1} weight={eagle_opponent.weight:g}",
-            flush=True,
-        )
         # Operators produce only child genotypes; evaluation starts at the shared boundary below.
         offspring = create_offspring(
             evaluated_population,
@@ -201,11 +224,11 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
             classes_dir=classes_dir,
             candidates_dir=candidates_dir,
             mock=mock,
-            alignment_profile=shared_profile,
-            eagle_opponent=eagle_opponent,
+            llm_client=shared_client,
         )
         archive_before = archive_niches(run_dir)
         update_strategy_archive(run_dir, evaluated_offspring)
+        update_opponent_archive(run_dir, evaluated_offspring)
         error_memory = record_error_memory(run_dir, evaluated_offspring)
         append_event(run_dir / "timing.jsonl", build_generation_event(
             run_id=active_run_id,
@@ -215,13 +238,18 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         ))
         # Survival selection is the only population update boundary and consumes
         # the objectives already persisted by evaluate_population.
-        evaluated_population = select_next_generation(evaluated_population, evaluated_offspring, population_size=config.population_size)
-        current_front0_signature = front_zero_signature(evaluated_population)
-        if current_front0_signature == front0_signature:
-            front0_stagnation_count += 1
+        evaluated_population = select_next_generation(
+            evaluated_population,
+            evaluated_offspring,
+            population_size=config.population_size,
+            rng=rng,
+        )
+        current_population_signature = population_signature(evaluated_population)
+        if current_population_signature == population_state_signature:
+            stagnation_count += 1
         else:
-            front0_signature = current_front0_signature
-            front0_stagnation_count = 0
+            population_state_signature = current_population_signature
+            stagnation_count = 0
         generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
         record_generation(
             run_dir,
@@ -232,21 +260,18 @@ def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = Fals
         print(diversity_console_summary(generation, generation_diversity), flush=True)
         completed_generation = generation
         if (
-            config.front0_stagnation_generations > 0
-            and front0_stagnation_count >= config.front0_stagnation_generations
+            config.stagnation_generations > 0
+            and stagnation_count >= config.stagnation_generations
         ):
-            stop_reason = f"front0_stagnation_{config.front0_stagnation_generations}_generations"
+            stop_reason = f"stagnation_{config.stagnation_generations}_generations"
             break
 
-    assign_rank_and_crowding(evaluated_population)
     best = best_candidate(evaluated_population)
-    final_fronts = assign_rank_and_crowding(evaluated_population)
     write_summary(
         run_dir,
         config=config,
         final_population=evaluated_population,
         best_candidate=best,
-        pareto_fronts=final_fronts,
         mock=mock,
         completed_generation=completed_generation,
         stop_reason=stop_reason,
@@ -285,20 +310,7 @@ def _preflight_llm_endpoint(client: LLMClient) -> None:
         if not isinstance(payload.get("choices"), list):
             raise RuntimeError("response has no choices array")
     except (OSError, urllib.error.URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
-        raise LLMServerError(f"Qwen3.5 endpoint preflight failed at {url}: {exc}") from exc
-
-
-def front_zero_signature(population: list[Candidate]) -> tuple[tuple[float, ...], ...]:
-    """Return a stable signature for the objective values in Pareto front 0."""
-
-    fronts = assign_rank_and_crowding(population)
-    if not fronts:
-        return ()
-    return tuple(sorted(_objective_signature(candidate) for candidate in fronts[0]))
-
-
-def _objective_signature(candidate: Candidate) -> tuple[float, ...]:
-    return tuple(round(float(value), 12) for value in candidate.objective_vector())
+        raise LLMServerError(f"Configured llama.cpp endpoint preflight failed at {url}: {exc}") from exc
 
 
 def initialize_population(config: ExperimentConfig) -> list[Candidate]:
@@ -310,6 +322,12 @@ def initialize_population(config: ExperimentConfig) -> list[Candidate]:
 
 
 def create_offspring(population: list[Candidate], *, config: ExperimentConfig, generation: int, rng: random.Random, mutations: dict[str, PromptRewriteMutation], artifact_root: Path | None = None, error_memory: tuple[dict[str, object], ...] = ()) -> list[Candidate]:
+    """Create the next generation's genotypes without evaluating them.
+
+    Parent selection, optional three-component crossover, and optional
+    prompt-only mutation happen here. Java generation, compilation, matches,
+    and objective calculation remain in :func:`evaluate_population`.
+    """
     offspring: list[Candidate] = []
     while len(offspring) < config.population_size:
         context_index = len(offspring)
@@ -365,7 +383,7 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
             }
             generation_best = max(
                 (item for item in population if item.game_eval_result),
-                key=lambda item: float(item.fitness_objectives.get("game_performance", float("-inf"))),
+                key=lambda item: float((item.game_eval_result or {}).get("game_performance", float("-inf"))),
                 default=None,
             )
             reference_candidates = {parent.id: parent for parent in (parent_a, parent_b)}
@@ -433,12 +451,18 @@ def choose_mutation(feedback_parent: Candidate, rng: random.Random) -> str:
     failure_stage = evidence.get("failure_stage") or feedback_parent.failure_stage
     if failure_stage or feedback_parent.status == "failed":
         return "code"
-    if number_or_none(feedback_parent.fitness_objectives.get("game_performance")) == FAILED_GAME_PERFORMANCE:
+    if any(
+        number_or_none(feedback_parent.fitness_objectives.get(case)) == FAILED_OPPONENT_SCORE
+        for case in LEXICASE_CASES
+    ):
         return "code"
     game = evidence.get("game") or feedback_parent.game_eval_result or {}
     if evidence and (
         int(game.get("completed_match_count") or 0) != int(game.get("expected_match_count") or 180)
-        or number_or_none(feedback_parent.fitness_objectives.get("game_performance")) == FAILED_GAME_PERFORMANCE
+        or any(
+            number_or_none(feedback_parent.fitness_objectives.get(case)) == FAILED_OPPONENT_SCORE
+            for case in LEXICASE_CASES
+        )
     ):
         return "code"
     quality = evidence.get("code_quality") or feedback_parent.code_quality_result.get("code_quality_breakdown") or {}
@@ -450,7 +474,7 @@ def choose_mutation(feedback_parent: Candidate, rng: random.Random) -> str:
         return "code"
     # Valid simplicity scores are in [0, 100]; retain the old midpoint-style
     # routing threshold after removing the obsolete +500 score base.
-    if (number_or_none(feedback_parent.fitness_objectives.get("code_quality")) or 0.0) > 50:
+    if (number_or_none((feedback_parent.code_quality_result or {}).get("code_quality")) or 0.0) > 50:
         return "strategy" if rng.random() < 0.9 else "code"
     return "strategy" if rng.random() < 0.5 else "code"
 

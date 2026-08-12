@@ -55,7 +55,8 @@ The four mutation intents are `REFINE` (local evidence-backed improvement),
 major strategic reorganization), and `ALTERNATIVE` (solve the same problem with
 a different strategy). The default run-RNG probabilities are 0.40, 0.25, 0.20,
 and 0.15 respectively. Strategy niches, the run-level archive, and diversity
-metrics are analysis metadata only and do not alter fitness or NSGA-II.
+metrics are analysis metadata only and do not alter opponent-wise fitness or
+lexicase selection.
 
 Canonical state transition:
 

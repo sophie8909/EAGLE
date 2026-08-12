@@ -11,6 +11,31 @@ from pathlib import Path
 from typing import Mapping
 
 
+def normalize_prompt(prompt: str, *, max_chars: int, max_lines: int) -> str:
+    """Normalize a prompt before it becomes part of the candidate genotype.
+
+    Prompt limits are enforced at the genotype boundary so every mutation,
+    crossover, and resume path sees the same bounded representation.
+    """
+
+    lines: list[str] = []
+    previous_blank = False
+    for line in str(prompt).strip().splitlines():
+        if not line.strip():
+            if lines and not previous_blank:
+                lines.append("")
+            previous_blank = True
+            continue
+        lines.append(line.rstrip())
+        previous_blank = False
+
+    while lines and not lines[-1]:
+        lines.pop()
+
+    bounded = "\n".join(lines[:max_lines])
+    return bounded[:max_chars].rstrip()
+
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROMPT_TEMPLATE_PATH = REPOSITORY_ROOT / "config" / "prompt_templates.toml"
 

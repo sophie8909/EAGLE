@@ -10,6 +10,7 @@ from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation import evaluate_candidate
+from eagle.opponent_cases import LEXICASE_CASES
 from evaluation.microrts_runner import MatchResult
 from generation.backend import MockGenerationBackend
 
@@ -38,16 +39,12 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             self.assertEqual(len(evaluation.match_results), 180)
             self.assertTrue(all(result.ok for result in evaluation.match_results))
             self.assertIsNone(evaluation.result.failure_stage)
-            self.assertNotEqual(evaluation.candidate.fitness_objectives["game_performance"], -1000)
+            self.assertEqual(set(evaluation.candidate.fitness_objectives), set(LEXICASE_CASES))
+            self.assertTrue(all(value != -1000 for value in evaluation.candidate.fitness_objectives.values()))
             self.assertIsNotNone(evaluation.function_capability_result)
             self.assertIsNotNone(evaluation.strategy_alignment_result)
             self.assertEqual(evaluation.strategy_alignment_result.score, 10)
-            self.assertEqual(
-                evaluation.candidate.fitness_objectives["code_quality"],
-                evaluation.code_quality_breakdown.code_quality,
-            )
-            self.assertGreaterEqual(evaluation.candidate.fitness_objectives["code_quality"], 0)
-            self.assertLessEqual(evaluation.candidate.fitness_objectives["code_quality"], 100)
+            self.assertEqual(evaluation.candidate.game_eval_result["game_performance"], evaluation.game_metrics.objective)
 
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
             self.assertEqual(len(timing["match_durations_seconds"]), 180)
@@ -75,7 +72,8 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             objectives = json.loads((candidate_dir / "evaluation" / "objectives.json").read_text(encoding="utf-8"))
             summary = json.loads((candidate_dir / "evaluation" / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(capability["function_score"], evaluation.code_quality_breakdown.function_score)
-            self.assertEqual(objectives["objective_names"], ["game_performance", "code_quality"])
+            self.assertEqual(objectives["objective_names"], list(LEXICASE_CASES))
+            self.assertEqual(set(objectives["opponent_scores"]), set(LEXICASE_CASES))
             self.assertEqual(summary["completed_match_count"], 180)
 
     def test_partial_runtime_failure_uses_progress_score_and_retains_evidence(self):
@@ -131,8 +129,8 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             self.assertEqual(calls, list(range(180)))
             self.assertEqual(evaluation.result.failure_stage, "runtime")
             self.assertEqual(evaluation.result.failure_category, "runtime_exception")
-            self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], -1000)
-            self.assertEqual(evaluation.candidate.fitness_objectives["code_quality"], -1000)
+            self.assertEqual(set(evaluation.candidate.fitness_objectives), set(LEXICASE_CASES))
+            self.assertTrue(all(value == -1000 for value in evaluation.candidate.fitness_objectives.values()))
             self.assertIsNone(evaluation.function_capability_result)
             self.assertIsNone(evaluation.strategy_alignment_result)
             runtime_failure = json.loads((candidate_dir / "evaluation" / "runtime_failure.json").read_text(encoding="utf-8"))

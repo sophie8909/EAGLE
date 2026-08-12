@@ -2,7 +2,8 @@
 
 Audit date: 2026-08-06. This document describes the executable repository path.
 The Match Commentator role is analysis context only: it does not calculate
-`game_performance`, `code_quality`, candidate validity, or NSGA-II objectives.
+`game_performance`, `code_quality`, candidate validity, or the ten opponent
+objectives. Aggregate Game Performance is reporting-only.
 
 ## Current flow
 
@@ -78,7 +79,7 @@ records the failure.
 
 `eagle/strategy_reflection.py:StrategyReflectionPipeline._commentate` loads
 metadata/integrity through `evaluation.match_logs:read_match_log_chunks` and
-partitions the gzip rows using `llm.roles.match_commentator.chunk_ticks`. It
+partitions the gzip rows using `llm.match_commentator.chunk_ticks`. It
 does not use the removed standalone commentator module. Each chunk request is
 assembled by `_commentator_prompt`; multi-chunk matches receive one additional
 `_commentator_synthesis_prompt` request.
@@ -207,7 +208,7 @@ available for older run artifacts. No GUI is involved (`eagle/cli/analyze.py`).
 | Shared LLM request/retry contract | `eagle/mutation.py:ReflectionStage`, `build_reflection_backend` |
 | Commentator prompt/selection/artifacts | `eagle/strategy_reflection.py:StrategyReflectionPipeline`, `select_reflection_matches` |
 | Strategy context/prompt | `eagle/reflection_context.py`, `eagle/strategy_reflection.py`, `config/prompt_templates.toml` |
-| Scoring ownership | `evaluation/game_performance.py`, `evaluation/game_metrics.py`, `evaluation/nsga2_objectives.py` |
+| Scoring ownership | `evaluation/game_performance.py`, `evaluation/game_metrics.py`, `evaluation/objectives.py` |
 | Candidate artifact writer | `eagle/artifacts.py` |
 | Text analysis | `analyze.sh`, `eagle/cli/analyze.py` |
 
@@ -222,7 +223,7 @@ Strategy Mutation. Code Reflection still owns implementation-level mutation and
 continues to operate independently.
 
 The evaluator remains authoritative for the fixed match roster, match count,
-game-performance scoring, code-quality simplicity scoring, and NSGA-II
+game-performance scoring, code-quality simplicity diagnostics, and opponent-wise
 objectives. Strategy Reflection only consumes the resulting evidence and
 changes `strategy_prompt`.
 

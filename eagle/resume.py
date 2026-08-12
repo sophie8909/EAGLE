@@ -11,38 +11,61 @@ from generation.backend import MockGenerationBackend
 from .artifacts import write_summary
 from .config import ExperimentConfig
 from .crossover import CrossoverContext
-from .evaluation import evaluate_population, prepare_eagle_opponent, preflight_evaluation_opponents
-from .llm_logging import LLMCallLogger
-from .llm_profiles import LLMClient
+from .evaluation import evaluate_population, preflight_evaluation_opponents
+from .llm import LLMCallLogger, LLMClient
 from .mutation import build_reflection_backend
 from .rewrite import PromptRewriteMutation
-from .run_artifacts import finalize_run, load_error_memory, load_resume_population, record_error_memory, record_generation
-from .search import SearchResult, create_offspring, front_zero_signature
-from .strategy_archive import archive_niches, ensure_strategy_archive, update_strategy_archive
-from .strategy_diversity import diversity_console_summary, generation_diversity_metrics
+from .run_artifacts import (
+    finalize_run,
+    load_error_memory,
+    load_resume_population,
+    mark_run_interrupted,
+    record_error_memory,
+    record_generation,
+)
+from .search import SearchResult, create_offspring
+from .strategy_diversity import (
+    archive_niches,
+    diversity_console_summary,
+    ensure_strategy_archive,
+    generation_diversity_metrics,
+    update_strategy_archive,
+)
+from .opponent_archive import ensure_opponent_archive, update_opponent_archive
 from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation
-from .selection import assign_rank_and_crowding, best_candidate, select_next_generation
+from .selection import best_candidate, population_signature, select_next_generation
 from .timing import Stopwatch, append_event, build_generation_event
-from evaluation.opponent_schedule import eagle_opponent_weight, select_previous_generation_champion
 
 
 def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path, mock: bool = False) -> SearchResult:
+    """Continue from the last atomically recorded generation."""
+
+    try:
+        return _resume_search_impl(config, config_path=config_path, run_dir=run_dir, mock=mock)
+    except KeyboardInterrupt:
+        mark_run_interrupted(run_dir)
+        raise
+
+
+def _resume_search_impl(config: ExperimentConfig, *, config_path: Path, run_dir: Path, mock: bool = False) -> SearchResult:
     config.validate()
     preflight_evaluation_opponents(config, mock=mock)
     _validate_resume_config(config, run_dir)
     completed_generation, population = load_resume_population(run_dir)
     ensure_strategy_archive(run_dir)
+    ensure_opponent_archive(run_dir)
     # Backfill the archive from the surviving snapshot when resuming a run
     # created before strategy_archive.json existed.  Older candidates retain
     # the explicit ``unknown`` fallback and are not inferred from prompt text.
     update_strategy_archive(run_dir, population)
+    update_opponent_archive(run_dir, population)
     if completed_generation >= config.generations - 1:
         best = best_candidate(population)
         return SearchResult(run_dir, population, best, completed_generation)
 
     backend_name = "mock" if mock else config.generation_backend
     client = LLMClient(config.llm_base_url, config.llm_model, temperature=config.llm_temperature, max_output_tokens=config.llm_max_tokens)
-    shared_profile = client.profile
+    shared_client = client
     if not mock:
         from .search import _preflight_llm_endpoint
         _preflight_llm_endpoint(client)
@@ -59,9 +82,10 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
     classes_dir = run_dir / "classes"
     for directory in (candidates_dir, generated_agents_dir, classes_dir):
         directory.mkdir(parents=True, exist_ok=True)
-    role_temperatures = {role: temperature for role, _, temperature in config.llm_roles}
-    enabled_roles = ({role for role, enabled, _ in config.llm_roles if enabled} if config.llm_roles else {"match_commentator", "manager", "coach", "generator"})
-    strategy_role_backend = MockRoleBackend() if mock else client.prompt_backend(operation="match_commentator", temperature=role_temperatures.get("match_commentator"))
+    enabled_roles = {"manager", "coach"}
+    if config.match_commentator_enabled:
+        enabled_roles.add("match_commentator")
+    strategy_role_backend = MockRoleBackend() if mock else client.prompt_backend(operation="match_commentator", temperature=config.match_commentator_temperature)
     mutations = {
         "strategy": StrategyReflectionMutation(
             strategy_role_backend,
@@ -74,35 +98,15 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
         "code": PromptRewriteMutation(
             config, mutation_type="code", reflection_backend=reflection_backend,
             rewrite_backend=rewrite_backend, artifact_root=candidates_dir, logger=logger,
-            reflection_model=None if mock else client.model,
-            rewrite_model=None if mock else client.model, backend_name=backend_name,
+            backend_name=backend_name,
         ),
     }
     rng = random.Random(f"{config.random_seed}:{completed_generation}")
-    front_signature = front_zero_signature(population)
+    population_state_signature = population_signature(population)
     stagnation = 0
     error_memory = load_error_memory(run_dir)
     stop_reason = None
     for generation in range(completed_generation + 1, config.generations):
-        assign_rank_and_crowding(population)
-        previous_champion = select_previous_generation_champion(population)
-        eagle_opponent = prepare_eagle_opponent(
-            previous_champion,
-            generation=generation,
-            config=config,
-            classes_dir=classes_dir,
-            mock=mock,
-        )
-        eagle_opponent = replace(
-            eagle_opponent,
-            weight=eagle_opponent_weight(
-                generation,
-                config.generations,
-                enabled=config.eagle_opponent_enabled,
-                min_weight=config.eagle_opponent_min_weight,
-                max_weight=config.eagle_opponent_max_weight,
-            ),
-        )
         offspring = create_offspring(
             population, config=config, generation=generation, rng=rng,
             mutations=mutations, artifact_root=candidates_dir, error_memory=error_memory,
@@ -112,11 +116,11 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
             offspring, generation=generation, config=config, backend=generation_backend,
             generated_agents_dir=generated_agents_dir, classes_dir=classes_dir,
             candidates_dir=candidates_dir,
-            mock=mock, alignment_profile=shared_profile,
-            eagle_opponent=eagle_opponent,
+            mock=mock, llm_client=shared_client,
         )
         archive_before = archive_niches(run_dir)
         update_strategy_archive(run_dir, evaluated)
+        update_opponent_archive(run_dir, evaluated)
         error_memory = record_error_memory(run_dir, evaluated)
         append_event(
             run_dir / "timing.jsonl",
@@ -125,10 +129,12 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
                 span=span.finish(),
             ),
         )
-        population = select_next_generation(population, evaluated, population_size=config.population_size)
-        signature = front_zero_signature(population)
-        stagnation = stagnation + 1 if signature == front_signature else 0
-        front_signature = signature
+        population = select_next_generation(
+            population, evaluated, population_size=config.population_size, rng=rng,
+        )
+        signature = population_signature(population)
+        stagnation = stagnation + 1 if signature == population_state_signature else 0
+        population_state_signature = signature
         generation_diversity = generation_diversity_metrics(population, previous_archive_niches=archive_before)
         record_generation(
             run_dir,
@@ -138,14 +144,13 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
         )
         print(diversity_console_summary(generation, generation_diversity), flush=True)
         completed_generation = generation
-        if config.front0_stagnation_generations > 0 and stagnation >= config.front0_stagnation_generations:
-            stop_reason = f"front0_stagnation_{config.front0_stagnation_generations}_generations"
+        if config.stagnation_generations > 0 and stagnation >= config.stagnation_generations:
+            stop_reason = f"stagnation_{config.stagnation_generations}_generations"
             break
-    fronts = assign_rank_and_crowding(population)
     best = best_candidate(population)
     write_summary(
         run_dir, config=config, final_population=population, best_candidate=best,
-        pareto_fronts=fronts, mock=mock, completed_generation=completed_generation,
+        mock=mock, completed_generation=completed_generation,
         stop_reason=stop_reason,
     )
     finalize_run(run_dir, population, stop_reason=stop_reason)

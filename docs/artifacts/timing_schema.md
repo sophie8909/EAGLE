@@ -78,8 +78,7 @@ Each match-level `timing.json` records at least start, finish, duration, process
 - Attempt count/order matches persisted raw request/response artifacts.
 - Skipped/no-mutation stages are null with empty attempts.
 - Failure timestamps close at the terminal stage and preserve earlier durations.
-- Exactly 180 match durations on generation-0 success, or 198 when the dynamic
-  previous-generation opponent matrix is active.
+- Exactly 180 match durations on successful evaluation.
 - Candidate total is not less than any contained stage duration.
 
 
@@ -93,7 +92,7 @@ when Java extraction or validation fails after Reflection and Rewrite have compl
 
 ## Phase 4 implementation note
 
-Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 180 or 198 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
+Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 180 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
 
 ## Canonical runtime timing additions
 

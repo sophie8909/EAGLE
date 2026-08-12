@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from eagle.candidate import Candidate
-from eagle.llm_errors import LLMServerError
+from eagle.llm import LLMServerError
 from evaluation.code_quality import StrategyRegionScoreResult, evaluate_agent_strategy_region
 from .agent_template import JavaTemplatePaths, extract_strategy_region
 from .backend import GenerationBackend

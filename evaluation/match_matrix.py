@@ -17,9 +17,6 @@ class EvaluationMap:
 class MatrixOpponent:
     opponent_id: str
     weight: float = 1.0
-    source_generation: int | None = None
-    source_candidate_id: str | None = None
-    source_game_performance: float | None = None
 
 
 @dataclass(frozen=True)
@@ -33,9 +30,6 @@ class MatchSpecification:
     candidate_player: int
     opponent_player: int
     seed: int
-    opponent_source_generation: int | None = None
-    opponent_source_candidate_id: str | None = None
-    opponent_source_game_performance: float | None = None
 
 
 def build_match_matrix(
@@ -81,9 +75,6 @@ def build_match_matrix(
                             candidate_player=candidate_player,
                             opponent_player=1 - candidate_player,
                             seed=seed,
-                            opponent_source_generation=opponent.source_generation,
-                            opponent_source_candidate_id=opponent.source_candidate_id,
-                            opponent_source_game_performance=opponent.source_game_performance,
                         )
                     )
                     match_index += 1

@@ -20,9 +20,9 @@ from uuid import uuid4
 from evaluation.match_logs import read_match_log_chunks
 
 from .candidate import Candidate
-from .llm_transport import truncate_prompt
+from .llm import truncate_prompt
 from .mutation import ReflectionContext, utc_now
-from .offspring import normalize_prompt
+from .prompts import normalize_prompt
 from .strategy_diversity import build_strategy_niche, normalize_strategy_signature
 
 
@@ -44,6 +44,8 @@ COACH_INTENT_INSTRUCTIONS = {
 }
 
 
+# Mutation-intent selection is part of the EA RNG stream; the role pipeline
+# below consumes that selected intent but never creates a second RNG system.
 def normalize_mutation_intent(value: object) -> str | None:
     intent = str(value or "").strip().upper()
     return intent if intent in {name for name, _ in STRATEGY_MUTATION_INTENT_DISTRIBUTION} else None
@@ -167,6 +169,8 @@ class MockRoleBackend:
         return ""
 
 
+# Strategy Reflection role pipeline: selected match evidence -> commentator ->
+# manager -> coach. Java generation remains outside this module.
 class StrategyReflectionPipeline:
     """Run Commentator -> Manager -> Coach using shared backend plumbing."""
 
@@ -340,6 +344,7 @@ class StrategyReflectionMutation(StrategyReflectionPipeline):
     pass
 
 
+# Match selection and raw-log lifecycle -------------------------------------
 def select_reflection_matches(
     match_results: tuple[dict[str, Any], ...] | list[dict[str, Any]],
     *,
@@ -495,6 +500,7 @@ def _delete_raw_match_artifacts(item: dict[str, Any]) -> None:
             shutil.rmtree(round_states)
 
 
+# Role prompt construction and response parsing -----------------------------
 def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, chunk: list[dict[str, Any]], chunk_index: int, chunk_count: object) -> str:
     return "\n".join([
         "ROLE: match_commentator",

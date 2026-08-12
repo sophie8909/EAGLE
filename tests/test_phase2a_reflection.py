@@ -11,7 +11,7 @@ from eagle.mutation import (
     build_code_reflection_prompt,
     build_strategy_reflection_prompt,
 )
-from eagle.llm_transport import truncate_prompt
+from eagle.llm import truncate_prompt
 
 
 class ScriptedBackend:

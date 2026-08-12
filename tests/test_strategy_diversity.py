@@ -7,8 +7,16 @@ from pathlib import Path
 
 from eagle.artifacts import write_candidate_inputs
 from eagle.candidate import Candidate
-from eagle.strategy_archive import archive_niches, ensure_strategy_archive, load_strategy_archive, update_strategy_archive
-from eagle.strategy_diversity import build_strategy_niche, generation_diversity_metrics, normalize_strategy_signature, strategy_distance
+from eagle.strategy_diversity import (
+    archive_niches,
+    build_strategy_niche,
+    ensure_strategy_archive,
+    generation_diversity_metrics,
+    load_strategy_archive,
+    normalize_strategy_signature,
+    strategy_distance,
+    update_strategy_archive,
+)
 from eagle.strategy_reflection import (
     COACH_INTENT_INSTRUCTIONS,
     STRATEGY_MUTATION_INTENT_DISTRIBUTION,
@@ -54,7 +62,9 @@ def candidate(
         parent_strategy_niche=parent_niche,
         niche_changed=changed,
         status="evaluated",
-        fitness_objectives={"game_performance": game, "code_quality": quality},
+        fitness_objectives={case: game for case in ("passive", "random", "randombias", "lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma")},
+        game_eval_result={"game_performance": game},
+        code_quality_result={"code_quality": quality},
     )
 
 

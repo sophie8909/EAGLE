@@ -333,9 +333,9 @@ Compile ??敺? class loading?onstructor?uperclass?ethod signature
 | `docs/testing/test_contracts.md` | Contract matrix?ixtures ??WSL validation??| ?啣?/靽格 tests ?遙雿?contract behavior??| Required coverage?ixtures ??validation command ?寡???|
 
 ??Documentation Map 敹?????active English documentation files?銵冽??`docs/` 撖阡?蝯?銝??湛???靽格迤銵冽??`docs/README.md`嚗?摰??賊?霈??
-## 初始雙主機 LLM 部署
+## 單一 llama.cpp LLM 部署
 
-初始實驗使用兩個邏輯 profile：Machine B 的 general profile（預設 alias qwen3.5-9b、本機 8080）負責 Reflection 與 Rewrite，也執行 EAGLE；Machine A 的 coder profile（預設 alias qwen2.5-coder-7b、預設 8081）只負責完整 Java Generation。Launcher 讀取實際 .gguf 路徑、以明確設定的 alias 作為 artifact model identifier，並只原子更新 endpoint config 的選定 section。Pipeline 不得把這些初始 model 名稱寫死，stage 只依賴 general 與 coder。
+目前所有 LLM role 都透過同一個本機 llama.cpp endpoint 與同一個模型執行，包含 Reflection、Rewrite、Generation 與 Strategy Alignment。`configs/runtime.yaml` 提供預設 Qwen3.5-9B GGUF；`run_env.sh --model <GGUF 路徑>` 可直接切換模型，不使用多模型 profile、role endpoint 或 launcher alias。實驗的 resolved configuration 會記錄實際使用的模型路徑。
 
 ## Evolution Evaluation 邊界
 

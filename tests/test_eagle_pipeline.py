@@ -15,9 +15,9 @@ from eagle.config import ExperimentConfig, parse_minimal_yaml
 from eagle.crossover import CrossoverContext, crossover
 from eagle.evaluation import evaluate_candidate, print_progress
 from eagle.mutation import MutationContext
-from eagle.offspring import normalize_prompt
-from eagle.search import choose_mutation, front_zero_signature, run_search
-from eagle.selection import select_parent, dominates
+from eagle.prompts import normalize_prompt
+from eagle.search import choose_mutation, population_signature, run_search
+from eagle.selection import select_parent
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_performance import (
     GamePerformanceConfig,
@@ -29,7 +29,8 @@ from evaluation.game_performance import (
 )
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
 from evaluation.microrts_runner import MatchResult, persist_match_artifacts, run_microrts_match
-from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE, build_objectives
+from evaluation.objectives import build_objectives
+from eagle.opponent_cases import FAILED_OPPONENT_SCORE as FAILED_GAME_PERFORMANCE, LEXICASE_CASES
 from evaluation.code_quality import CodeQualityBreakdown
 from generation.agent_template import (
     STRATEGY_START_MARKER,
@@ -77,8 +78,7 @@ class EaglePipelineTests(unittest.TestCase):
                 id="score-test",
                 status="evaluated",
                 fitness_objectives={
-                    "game_performance": 1.0,
-                    "code_quality": quality.code_quality,
+                    "passive": 1.0,
                 },
             ),
             error=None,
@@ -103,7 +103,7 @@ class EaglePipelineTests(unittest.TestCase):
         self.assertIn("code_quality_simplicity=60.0", text)
         self.assertIn("complexity_penalty=0.0", text)
         self.assertIn("game_performance_matches=[100.0, -90.0]", text)
-        self.assertIn("game_performance_fitness=1.0", text)
+        self.assertIn("aggregate_game_performance=None", text)
     def test_parse_minimal_yaml(self) -> None:
         payload = parse_minimal_yaml(
             """
@@ -191,8 +191,7 @@ population_size: 3
         self.assertTrue(result.ok)
         self.assertEqual(result.winner, 1)
         self.assertEqual(result.performance_breakdown.result_score, -100)
-        self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
-        self.assertEqual(objectives["code_quality"], quality_fixture().code_quality)
+        self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in objectives.values()))
         self.assertEqual(metrics.completed_match_count, 1)
 
     def test_normalize_prompt_truncates_long_prompt(self) -> None:
@@ -207,15 +206,15 @@ population_size: 3
         normalized = normalize_prompt(prompt, max_chars=100, max_lines=10)
         self.assertEqual(normalized, "first\n\nsecond\n\nthird")
     def test_failed_game_performance_selects_code_mutation(self) -> None:
-        failed_parent = Candidate(fitness_objectives={"game_performance": FAILED_GAME_PERFORMANCE})
+        failed_parent = Candidate(fitness_objectives={case: FAILED_GAME_PERFORMANCE for case in LEXICASE_CASES})
         self.assertEqual(choose_mutation(failed_parent, random.Random(1)), "code")
 
     def test_high_code_quality_favors_strategy_mutation(self) -> None:
-        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 51.0})
+        parent = Candidate(fitness_objectives={case: 1.0 for case in LEXICASE_CASES}, code_quality_result={"code_quality": 51.0})
         self.assertEqual(choose_mutation(parent, random.Random(1)), "strategy")
 
     def test_high_code_quality_uses_code_mutation_for_tail(self) -> None:
-        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 51.0})
+        parent = Candidate(fitness_objectives={case: 1.0 for case in LEXICASE_CASES}, code_quality_result={"code_quality": 51.0})
 
         class TailRandom:
             def random(self) -> float:
@@ -224,7 +223,7 @@ population_size: 3
         self.assertEqual(choose_mutation(parent, TailRandom()), "code")
 
     def test_code_quality_threshold_is_strictly_greater_than_50(self) -> None:
-        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 50.0})
+        parent = Candidate(fitness_objectives={case: 1.0 for case in LEXICASE_CASES}, code_quality_result={"code_quality": 50.0})
 
         class TailRandom:
             def random(self) -> float:
@@ -244,9 +243,9 @@ population_size: 3
 
     def test_selection_binary_tournament_returns_candidates(self) -> None:
         population = [
-            Candidate(id="a", fitness_objectives={"game_performance": 1.0, "code_quality": 0.1}),
-            Candidate(id="b", fitness_objectives={"game_performance": 2.0, "code_quality": 0.2}),
-            Candidate(id="c", fitness_objectives={"game_performance": 3.0, "code_quality": 0.3}),
+            Candidate(id="a", fitness_objectives={case: 1.0 for case in LEXICASE_CASES}),
+            Candidate(id="b", fitness_objectives={case: 2.0 for case in LEXICASE_CASES}),
+            Candidate(id="c", fitness_objectives={case: 3.0 for case in LEXICASE_CASES}),
         ]
         selected = [select_parent(population, random.Random(index)) for index in range(5)]
         self.assertEqual(len(selected), 5)
@@ -329,7 +328,7 @@ population_size: 3
         self.assertIn("one CandidateAgent.java file", config.seed_prompts[0])
         self.assertIn("six fixed action helpers", config.seed_prompts[0])
 
-    def test_mock_search_writes_nsga2_artifacts(self) -> None:
+    def test_mock_search_writes_lexicase_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             config_path = root / "config.yaml"
@@ -358,7 +357,7 @@ population_size: 3
             self.assertTrue((result.run_dir / "generated_agents").is_dir())
             self.assertFalse((result.run_dir / "results.jsonl").exists())
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
-            self.assertEqual(summary["objectives"], ["game_performance", "code_quality"])
+            self.assertEqual(summary["objectives"], list(LEXICASE_CASES))
             self.assertEqual(len(summary["final_population"]), 3)
             self.assertTrue((result.run_dir / "resolved_config.json").exists())
             candidate_dir = next((result.run_dir / "candidates").iterdir())
@@ -384,19 +383,19 @@ population_size: 3
             individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
             self.assertNotIn("prompt_length", individual["fitness_objectives"])
 
-    def test_front_zero_signature_tracks_objectives_not_candidate_ids(self) -> None:
+    def test_population_signature_tracks_opponent_cases_not_candidate_ids(self) -> None:
         first = [
-            Candidate(id="front-a", fitness_objectives={"game_performance": 10.0, "code_quality": 20.0}),
-            Candidate(id="dominated-a", fitness_objectives={"game_performance": 1.0, "code_quality": 2.0}),
+            Candidate(id="front-a", fitness_objectives={case: 10.0 for case in LEXICASE_CASES}),
+            Candidate(id="dominated-a", fitness_objectives={case: 1.0 for case in LEXICASE_CASES}),
         ]
         second = [
-            Candidate(id="front-b", fitness_objectives={"game_performance": 10.0, "code_quality": 20.0}),
-            Candidate(id="dominated-b", fitness_objectives={"game_performance": 1.0, "code_quality": 2.0}),
+            Candidate(id="front-b", fitness_objectives={case: 10.0 for case in LEXICASE_CASES}),
+            Candidate(id="dominated-b", fitness_objectives={case: 1.0 for case in LEXICASE_CASES}),
         ]
 
-        self.assertEqual(front_zero_signature(first), front_zero_signature(second))
+        self.assertEqual(population_signature(first), population_signature(second))
 
-    def test_search_stops_when_front_zero_stagnates(self) -> None:
+    def test_search_stops_when_population_stagnates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             config_path = root / "config.yaml"
@@ -409,7 +408,7 @@ population_size: 3
                         "population_size: 1",
                         'generation_backend: "mock"',
                         'alignment_backend: "mock"',
-                        "front0_stagnation_generations: 2",
+                        "stagnation_generations: 2",
                         f'runs_dir: "{(root / "runs").as_posix()}"',
                     ]
                 ),
@@ -422,7 +421,7 @@ population_size: 3
                     Candidate(
                         id=f"evaluated-{generation}",
                         generation=generation,
-                        fitness_objectives={"game_performance": 10.0, "code_quality": 20.0},
+                        fitness_objectives={case: 10.0 for case in LEXICASE_CASES},
                     )
                 ]
 
@@ -434,10 +433,10 @@ population_size: 3
 
             self.assertEqual(evaluate.call_count, 3)
             self.assertEqual(result.completed_generation, 2)
-            self.assertEqual(result.stop_reason, "front0_stagnation_2_generations")
+            self.assertEqual(result.stop_reason, "stagnation_2_generations")
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["completed_generation"], 2)
-            self.assertEqual(summary["stop_reason"], "front0_stagnation_2_generations")
+            self.assertEqual(summary["stop_reason"], "stagnation_2_generations")
             self.assertTrue((result.run_dir / "generations" / "generation_0002.json").exists())
             self.assertFalse((result.run_dir / "generations" / "generation_0003.json").exists())
             self.assertFalse((result.run_dir / "generation_002_population.json").exists())
@@ -773,8 +772,7 @@ population_size: 3
             evaluation = evaluate_candidate(Candidate(strategy_prompt="Generate an agent."), config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}), backend=FailingBackend(), generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Backend request failure")
-        self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
-        self.assertIn("code_quality", evaluation.candidate.fitness_objectives)
+        self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in evaluation.candidate.fitness_objectives.values()))
 
     def test_non_java_response_fails_before_compile_or_matches(self) -> None:
         class NonJavaBackend(GenerationBackend):
@@ -801,21 +799,15 @@ population_size: 3
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
         self.assertIn("package must be ai.generated", evaluation.result.failure_reason or "")
         self.assertEqual(evaluation.candidate.compile_status, "not_run")
-        self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in evaluation.candidate.fitness_objectives.values()))
         self.assertEqual(evaluation.candidate.failure_stage, "validation")
         self.assertTrue(evaluation.result.validation_result.error)
 
-    def test_dominates_uses_objective_vector(self) -> None:
-        strong = Candidate(fitness_objectives={"game_performance": 2, "code_quality": 0.8})
-        weak = Candidate(fitness_objectives={"game_performance": 1, "code_quality": 0.8})
-        tradeoff = Candidate(fitness_objectives={"game_performance": 3, "code_quality": 0.2})
-        self.assertTrue(dominates(strong, weak))
-        self.assertFalse(dominates(strong, tradeoff))
-
-    def test_higher_code_quality_dominates_when_game_performance_is_equal(self) -> None:
-        simpler = Candidate(fitness_objectives={"game_performance": 10.0, "code_quality": 80.0})
-        complex_candidate = Candidate(fitness_objectives={"game_performance": 10.0, "code_quality": 40.0})
-        self.assertTrue(dominates(simpler, complex_candidate))
+    def test_lexicase_cases_are_the_only_selection_dimensions(self) -> None:
+        strong_passive = Candidate(id="passive", fitness_objectives={"passive": 10.0, "random": 0.0})
+        strong_random = Candidate(id="random", fitness_objectives={"passive": 0.0, "random": 10.0})
+        selected = select_parent([strong_passive, strong_random], random.Random(4))
+        self.assertIn(selected, (strong_passive, strong_random))
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,9 +1,8 @@
 ﻿schema_version: experiment-v1
-algorithm: nsga2
+algorithm: lexicase
 application: microrts
 objectives:
-  game_performance: maximize
-  code_quality: maximize
+  opponent_cases: maximize
 seed_prompt_template: microrts_blank_strategy_agent
 generations: 50
 population_size: 10
@@ -14,17 +13,17 @@ crossover_rate: 0.75
 mutation_rate: 0.85
 random_seed: 7
 llm:
-  roles:
-    match_commentator:
-      enabled: true
-      temperature: 0.2
-      chunk_ticks: 200
+  temperature: 0.2
+  match_commentator:
+    enabled: true
+    temperature: 0.2
+    chunk_ticks: 200
 microrts_dir: third_party/microrts
 tick_limit: 5000
 map_path: maps/8x8/basesWorkers8x8.xml
 match_timeout_seconds: 120
 match_artifact_mode: compact
-front0_stagnation_generations: 10
+stagnation_generations: 10
 evaluation:
   maps:
     - maps/8x8/basesWorkers8x8.xml
@@ -32,30 +31,3 @@ evaluation:
     - maps/24x24/basesWorkers24x24.xml
   rounds_per_map: 3
   swap_player_sides: true
-evaluation_opponents:
-  - id: passive
-    weight: 0.5
-  - id: random
-    weight: 0.5
-  - id: randombias
-    weight: 0.5
-  - id: lightrush
-    weight: 1.0
-  - id: heavyrush
-    weight: 1.0
-  - id: workerrush
-    weight: 1.0
-  - id: allibot
-    weight: 2.0
-  - id: mayari
-    weight: 2.0
-  - id: coac
-    weight: 2.0
-  - id: tma
-    weight: 2.0
-eagle_opponent:
-  enabled: true
-  source: previous_generation_best_game_performance
-  schedule: quadratic
-  min_weight: 0.5
-  max_weight: 4.0

@@ -32,7 +32,7 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Code Quality | `[0,100]` simplicity score from four weighted complexity penalties, persisted details, diagnostic separation, and `-1000` failure sentinel for both objectives |
 | Artifacts | golden tree, schemas, hashes, resolved config, readback reconstruction, interruption safety; generation/final snapshots preserve fitness and timing while excluding raw match output and full mutation envelopes; evolution writes no duplicate `results.jsonl` or flat population snapshot |
 | Timing | UTC fields, monotonic durations, attempts, optional null stages, 10 match durations |
-| NSGA-II | exactly two maximized objectives; failure candidates retained; rank/crowding survivor behavior |
+| Opponent-wise lexicase | exactly ten maximized opponent cases; seeded case-order filtering; fixed-size elite plus lexicase survivor behavior |
 | Operations | readers reject/migrate unsupported schema versions; legacy names never leak into active output |
 | Offline analysis | explicit/latest run resolution is deterministic; only direct canonical children are eligible; partial runs produce derived outputs; unsupported or historical schemas fail explicitly; `results.jsonl` is never read |
 | LLM server lifecycle | missing executable/model; immediate exit; bounded loading/readiness; occupied port; bind/client host separation; local/remote launch ownership; durable stdout/stderr; useful failure state; process-group stop; topology/client URL identity; no READY on process creation |
@@ -69,4 +69,7 @@ When tests reveal a code/spec discrepancy, update [`../implementation/architectu
 
 Server-management tests must cover explicit CPU/CUDA/remote backend resolution, capability rejection of CPU-only binaries in CUDA mode, device-list parsing, logical GPU-layer/VRAM-fit argument mapping, and the invariant that CPU commands contain no GPU-specific arguments.
 
-Focused tests must prove that coder-profile updates preserve the general section, general-profile updates preserve the coder section, updates are atomic, placeholder or unsafe coder URLs are rejected, aliases and ports may differ, and stage identity records Reflection/Rewrite as general and Generation as coder. Single-machine tests must opt into coder loopback explicitly.
+Focused runtime tests must prove that the default GGUF path is accepted, a
+direct `--model` override is accepted, the selected model is passed to
+llama.cpp, unrelated processes are never stopped, and all EA LLM operations
+use the same endpoint/model identity.

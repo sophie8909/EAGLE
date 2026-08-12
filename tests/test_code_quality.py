@@ -201,11 +201,12 @@ class CodeQualityTests(unittest.TestCase):
         )
         self.assertEqual(clean_quality.code_quality, warning_quality.code_quality)
 
-    def test_optimizer_vector_uses_code_quality(self):
+    def test_optimizer_vector_contains_only_opponent_cases(self):
         candidate = Candidate(
-            fitness_objectives={"game_performance": 4, "code_quality": 108}
+            fitness_objectives={"passive": 4, "random": 108}
         )
-        self.assertEqual(candidate.objective_vector(), (4.0, 108.0))
+        self.assertEqual(candidate.objective_vector()[:2], (4.0, 108.0))
+        self.assertEqual(len(candidate.objective_vector()), 10)
 
 if __name__ == "__main__":
     unittest.main()

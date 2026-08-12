@@ -12,7 +12,7 @@ from eagle.runtime.processes import RuntimeManager, build_server_command
 
 
 class RuntimeWorkflowTests(unittest.TestCase):
-    def make_config(self, root: Path, *, model_name="qwen3.5-9b", missing_model=False) -> Path:
+    def make_config(self, root: Path, *, missing_model=False) -> Path:
         binary = root / "llama-server"
         binary.write_text("#!/bin/sh\n", encoding="utf-8")
         binary.chmod(0o755)
@@ -25,7 +25,6 @@ class RuntimeWorkflowTests(unittest.TestCase):
             "schema_version": "runtime-v1",
             "conda_env": "eagle",
             "llm": {
-                "model_name": model_name,
                 "model_path": str(model),
                 "server_binary": str(binary),
                 "host": "127.0.0.1",
@@ -38,7 +37,10 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 "startup_timeout_seconds": 5,
                 "health_timeout_seconds": 1,
             },
-            "runtime": {"log_path": "runtime/logs/llm-server.log", "pid_path": "runtime/pids/llm-server.pid"},
+            "runtime": {
+                "log_path": str(root / "runtime" / "logs" / "llm-server.log"),
+                "pid_path": str(root / "runtime" / "pids" / "llama-server.pid"),
+            },
         }
         path = root / "runtime.yaml"
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
@@ -47,16 +49,15 @@ class RuntimeWorkflowTests(unittest.TestCase):
     def test_valid_qwen_runtime_and_command(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = load_runtime_config(self.make_config(Path(directory)))
-            self.assertEqual(runtime.llm.model_name, "qwen3.5-9b")
+            self.assertEqual(runtime.llm.model_path, Path(directory) / "qwen3.5-9b.gguf")
             command = build_server_command(runtime)
             self.assertEqual(command[1:5], ["--model", str(runtime.llm.model_path), "--host", "127.0.0.1"])
             self.assertIn("--n-gpu-layers", command)
+            self.assertIn("--no-cache-prompt", command)
 
     def test_wrong_model_missing_model_and_legacy_keys_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with self.assertRaisesRegex(ValueError, "exactly 'qwen3.5-9b'"):
-                load_runtime_config(self.make_config(root, model_name="qwen2.5"))
             with self.assertRaisesRegex(ValueError, "does not exist"):
                 load_runtime_config(self.make_config(root, missing_model=True))
             path = self.make_config(root)
@@ -65,6 +66,20 @@ class RuntimeWorkflowTests(unittest.TestCase):
             path.write_text(yaml.safe_dump(payload), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Unsupported legacy multi-model"):
                 load_runtime_config(path)
+
+    def test_model_override_is_direct_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.make_config(root)
+            alternate = root / "other-model.gguf"
+            alternate.write_bytes(b"model")
+            runtime = load_runtime_config(path, model_override=alternate)
+            self.assertEqual(runtime.llm.model_path, alternate)
+            runtime.active_model_path.parent.mkdir(parents=True, exist_ok=True)
+            runtime.active_model_path.write_text(str(alternate), encoding="utf-8")
+            runtime.pid_path.parent.mkdir(parents=True, exist_ok=True)
+            runtime.pid_path.write_text("123\n", encoding="ascii")
+            self.assertEqual(load_runtime_config(path).llm.model_path, alternate)
 
     def test_unknown_schema_invalid_port_and_non_executable_binary_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -108,6 +123,8 @@ class RuntimeWorkflowTests(unittest.TestCase):
             manager = RuntimeManager(runtime)
             manager.write_pid(123)
             with patch("eagle.runtime.processes.process_alive", return_value=True), patch(
+                "eagle.runtime.processes.managed_command_matches", return_value=True
+            ), patch(
                 "eagle.runtime.processes.command_matches", return_value=True
             ), patch("eagle.runtime.processes.health_check", return_value=(True, "ok")):
                 status = manager.start()

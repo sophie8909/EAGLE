@@ -1,86 +1,50 @@
 # Evaluation pipeline
 
-## Normative source
+`eagle/evaluation.py` owns the candidate evaluation boundary. It performs Java
+generation, validation, compilation, integration, the complete MicroRTS
+matrix, diagnostics, objective construction, and candidate artifact writing.
 
-See specification sections 13, 19, and 26. Objective formulas are owned by [`game_performance.md`](game_performance.md), [`code_quality.md`](code_quality.md), and [`failure_classification.md`](failure_classification.md).
+## Active stages
 
-## Stage contract
+| Stage | Success output | Failure evidence |
+| --- | --- | --- |
+| Java generation | complete `CandidateAgent.java` | generation response and validation failure |
+| Source validation | validated source | validation diagnostics |
+| Compilation | isolated class directory | compiler stdout/stderr and structured errors |
+| Integration | loadable MicroRTS agent | seven integration checks |
+| Match execution | 180 matches across ten opponents | retained match results and runtime failure |
+| Objective construction | ten opponent scores | ten `-1000.0` case scores on failure |
 
-| Stage | Input | Success output | Terminal evidence on failure |
-| --- | --- | --- | --- |
-| Java generation | complete child genotype | raw, extracted, and normalized full Java | backend/extraction failure |
-| Source validation | normalized source | validated runtime contract | validation result and reason |
-| Compilation | validated source | one isolated class set | command and diagnostics |
-| Integration | compiled classes | loadable/constructible/callable MicroRTS AI | failed checks and ratio |
-| Match execution | integrated class set | 180 valid fixed-roster results in generation 0; 198 including `eagle_previous_best` in later generations | completed evidence and runtime failure |
-| Objective aggregation | all required evidence | `game_performance`, `code_quality` | failure values for the terminal stage |
+## Match protocol
 
-No stage may erase artifacts from an earlier stage.
+The fixed roster is defined by `eagle/opponent_cases.py` and resolved by
+`eagle/opponents.py`. Each opponent receives three configured maps, three
+rounds, and both candidate player positions. The matrix is owned by
+`evaluation/match_matrix.py`; execution is owned by
+`evaluation/microrts_runner.py`.
 
-## Integration contract
+The evaluator groups match results by opponent in
+`evaluation/game_metrics.py`. It retains per-opponent, per-map, per-side, and
+per-match summaries, then computes the weighted aggregate only for reporting.
+The aggregate denominator is the fixed weight sum `12.5`.
 
-Integration is a distinct pre-match stage. It loads `ai.generated.CandidateAgent`, verifies the MicroRTS `AI`/`AbstractionLayerAI` type contract, invokes both required constructors, calls `reset()`, validates the non-null `AI` returned by `clone()`, calls `getAction()` with a minimal valid `GameState`, and validates the non-null `PlayerAction` result.
+## Objective and diagnostics
 
-Persist all seven ordered check results. A failed prerequisite marks downstream checks `blocked`; `integration_pass_ratio` is `passed_check_count / 7`. Integration starts no evaluation match. Only a candidate passing all seven checks proceeds to the expected 180/198-match batch.
+`evaluation/objectives.py` returns exactly one evolutionary score for each of
+the ten cases. `code_quality`, compiler diagnostics, function coverage,
+strategy alignment, and runtime failure details remain in their diagnostic
+artifacts and reflection context; none is inserted into the evolutionary
+objective vector.
 
-## MicroRTS protocol
+## Artifacts
 
-- Candidate: generated Java, always evaluated as the configured candidate player.
-- Opponents: weighted `passive`, `random`, `randombias`, `lightrush`, `heavyrush`,
-  `workerrush`, `allibot`, `mayari`, `coac`, and `tma` (fixed weight sum 12.5).
-  `workerrush` is provided by a run-local `ai.abstraction.WorkerRush` adapter
-  because the vendored runtime has no class with that name.
-  From generation 1 onward, append one frozen previous-generation champion under
-  `eagle_previous_best` with the configured quadratic weight schedule.
-- Match count: exactly 180 in generation 0 and 198 thereafter; each opponent has three maps × three rounds × both candidate sides.
-- Compilation count: once per generated source.
-- Java generation count during evaluation: zero.
-- Source/class set: identical across the candidate's fixed matches; the optional
-  dynamic opponent uses one separately compiled, persisted alias class set shared
-  by every candidate in that generation.
-- Seeds: distinct where MicroRTS supports them and persisted in resolved configuration and match metadata.
-- Each match has a separate artifact directory.
+Per-candidate evaluation artifacts include:
 
-Any candidate with fewer than the expected 180 or 198 valid completed matches has failed evaluation. Preserve completed match evidence and assign failure objectives through the canonical failure contract.
+- `evaluation/game_performance.json`: aggregate Game Performance, opponent
+  score mapping, opponent summaries, map/side summaries, and match summaries;
+- `evaluation/objectives.json`: ten-case objective mapping;
+- `evaluation/code_quality.json`: code-quality diagnostics;
+- `evaluation/matches.json`: compact individual match records.
 
-## Match result requirements
-
-Each match must make the following available for aggregation and mutation feedback:
-
-- result and winner;
-- candidate/opponent identity and player side;
-- map, seed, `max_cycles`, and final tick;
-- final player/enemy resources;
-- per-tick material traces and configured unit values;
-- survival evidence;
-- replay, round state, stdout, stderr, return code, duration, status, and failure reason.
-
-## Aggregation invariants
-
-- Aggregate each opponent's 18 results first, then apply its weight; aggregate only after all expected 180 or 198 matches are valid.
-- A draw, loss, or tick-limit result that satisfies the match result contract is not automatically a runtime failure.
-- Invalid/missing/unparseable results, process failures, exceptions, deadlocks, or partial batches are runtime failures.
-- Run valid simplicity scoring only after complete 180/198-match execution. Function Capability and Strategy Alignment still persist as diagnostics, but neither contributes to valid `code_quality`.
-- Keep `strategy_alignment` out of the optimizer; NSGA-II receives only maximized `game_performance` and `code_quality`.
-
-## Module responsibility target
-
-- `eagle/evaluation.py`: stage orchestration and terminal routing only.
-- `generation/`: generation and source validation.
-- `evaluation/compiler.py`: compilation and diagnostic capture.
-- `evaluation/microrts_runner.py`: integration and per-match process execution.
-- `evaluation/game_performance.py`: canonical gameplay formula.
-- `evaluation/code_quality.py` and `evaluation/canonical_code_quality.py`: deterministic simplicity metrics and score assembly.
-- `evaluation/nsga2_objectives.py`: two-objective assembly and failure constants.
-- `eagle/artifacts.py`: serialization only.
-
-The active implementation follows these stage boundaries; older gap notes in `architecture_gaps.md` describe superseded protocols and are not runtime authority.
-
-## Tests
-
-- Verify the stage order and that downstream stages do not run after terminal failure.
-- Verify exactly one compile and 180/198 match calls per successful candidate depending on generation.
-- Verify the same source hash and class directory are used for all matches.
-- Verify the ten-opponent roster and distinct match directories/seeds.
-- Verify a nine-match partial batch fails while retaining all nine results.
-- Verify each pipeline stage maps to the correct failure classification.
+Run-level `generation_metrics.jsonl` stores objective statistics for every
+opponent case and the per-opponent reporting summaries used by analysis.

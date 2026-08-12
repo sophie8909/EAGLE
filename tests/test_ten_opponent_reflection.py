@@ -8,6 +8,7 @@ from eagle.mutation import build_strategy_reflection_prompt
 from eagle.opponents import EVALUATION_ROSTER, EXTERNAL_OPPONENTS
 from eagle.run_artifacts import generation_metrics
 from eagle.search import mutation_context_from_candidate
+from eagle.opponent_cases import OPPONENT_WEIGHTS
 from evaluation.game_metrics import FAILED_GAME_PERFORMANCE, compute_game_metrics
 from evaluation.game_performance import GamePerformanceBreakdown
 from evaluation.microrts_runner import MatchResult
@@ -19,17 +20,23 @@ class TenOpponentReflectionTests(unittest.TestCase):
         self.assertEqual(len({item.opponent_id for item in EVALUATION_ROSTER}), 10)
         self.assertEqual(
             [item.opponent_id for item in EVALUATION_ROSTER],
-            ["passive", "random", "randombias", "lightrush", "heavyrush", "workerrush", "allibot", "mayari", "coac", "tma"],
+            ["passive", "random", "randombias", "lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma"],
         )
         self.assertFalse(any("self" in item.opponent_id.lower() for item in EVALUATION_ROSTER))
         self.assertFalse(any("historical" in item.class_name.lower() for item in EVALUATION_ROSTER))
 
     def test_metrics_keep_all_opponents_and_aggregate_valid_scores(self):
         results = [self._match(item.opponent_id, 10.0 + index) for index, item in enumerate(EVALUATION_ROSTER)]
-        metrics = compute_game_metrics(results)
+        metrics = compute_game_metrics(
+            results,
+            fixed_opponent_weights=dict(OPPONENT_WEIGHTS),
+            expected_match_count=10,
+            expected_matches_per_opponent=1,
+        )
         self.assertEqual(len(metrics.opponent_results), 10)
         self.assertEqual(metrics.opponent_scores, [10.0 + index for index in range(10)])
-        self.assertEqual(metrics.objective, round(statistics.fmean(metrics.opponent_scores), 6))
+        expected = sum(OPPONENT_WEIGHTS[item.opponent_id] * item.score for item in metrics.opponent_results) / sum(OPPONENT_WEIGHTS.values())
+        self.assertEqual(metrics.objective, round(expected, 6))
 
     def test_failed_opponent_is_retained_with_failure_score(self):
         results = [self._match(item.opponent_id, 20.0 + index) for index, item in enumerate(EVALUATION_ROSTER)]
@@ -58,11 +65,11 @@ class TenOpponentReflectionTests(unittest.TestCase):
             status="evaluated",
             generated_java="parent Java",
             game_eval_result=metrics.to_json_dict(),
-            fitness_objectives={"game_performance": metrics.objective, "code_quality": 590.0},
+            fitness_objectives={item.opponent_id: item.score for item in metrics.opponent_results},
             metadata={
                 "reflection_evidence": {
                     "candidate_id": "reflection-candidate",
-                    "objectives": {"game_performance": metrics.objective, "code_quality": 590.0},
+                    "objectives": {item.opponent_id: item.score for item in metrics.opponent_results},
                     "evaluation_status": "evaluated",
                     "game": metrics.to_json_dict(),
                 }
@@ -89,7 +96,7 @@ class TenOpponentReflectionTests(unittest.TestCase):
             game_eval_result={"objective": 12.0},
         )
         payload = generation_metrics(0, [candidate])
-        self.assertEqual(payload["opponent_scores"]["by_candidate"]["old-candidate"]["opponent_scores"], [])
+        self.assertEqual(payload["opponent_scores"]["by_candidate"]["old-candidate"]["opponent_scores"], {})
 
     @staticmethod
     def _match(opponent_id: str, score: float) -> MatchResult:
