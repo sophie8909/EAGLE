@@ -10,7 +10,7 @@ In scope:
 
 - strategy prompt, previous/generated code context, and code-generation prompt;
 - crossover, Strategy Reflection, Code Reflection, and final Java generation;
-- validation, compilation, integration, and the fixed ten-opponent evaluation;
+- validation, compilation, integration, and the fixed seven-opponent evaluation;
 - opponent-wise fitness, seeded lexicase selection, artifacts, and analysis.
 
 Code quality, compiler output, function coverage, alignment, and match
@@ -29,17 +29,17 @@ flowchart TD
     SR --> G
     CR --> G
     G --> V["Validation"] --> C["Compile"] --> I["Integration"]
-    I --> E["180 MicroRTS matches"]
-    E --> O["10 opponent scores + reporting aggregate"]
-    O --> N["Elite + lexicase survivor selection"] --> P
+    I --> E["126 MicroRTS matches"]
+    E --> O["7 opponent scores + reporting aggregate"]
+    O --> N["Lexicase survivor selection"] --> P
 ```
 
 ## Invariants
 
-- One generated source and one compiled class directory serve all 180 matches.
-- Fitness is the ten-case mapping in `Candidate.fitness_objectives`.
-- The reporting aggregate uses the fixed `0.5/1/2` weights and denominator
-  `12.5`, but does not participate in lexicase case filtering.
+- One generated source and one compiled class directory serve all 126 matches.
+- Fitness is the seven-case mapping in `Candidate.fitness_objectives`.
+- The reporting aggregate uses the fixed `1/2` weights and denominator `11.0`,
+  but does not participate in lexicase case filtering.
 - Failed candidates remain available to selection with `-1000.0` case scores.
 - No previous-generation EAGLE opponent or dynamic EAGLE weight exists in the
   active path.

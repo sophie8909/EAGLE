@@ -37,17 +37,17 @@ Strategy Reflection is a sports-team workflow:
 4. Persist `reflection/match_selection.json`, delete unselected raw logs, and run Match
    Commentator only for the selected matches. Delete each selected raw log after terminal
    commentary handling.
-5. Manager receives complete aggregate evaluation evidence plus only the selected analyses.
-6. Coach receives the parent strategy, Manager plan, and one deterministic
+5. Coach receives complete aggregate evaluation evidence plus only the selected analyses.
+6. Coach receives the parent strategy, selected diagnoses, and one deterministic
    mutation intent, then replaces the parent `strategy_prompt` and emits a
    categorical strategy signature.
 7. Generator receives the new strategy and the existing code-generation prompt.
 
-The Match Commentator never rewrites strategy or Java. The Manager knows that
+The Match Commentator never rewrites strategy or Java. The Coach knows that
 commentary is a biased worst-outcome sample and never treats it as the complete
-evaluation distribution. The Manager never writes
-the final prompt or Java. The Coach never writes Java. Raw ticks are never sent
-to Manager or Coach. See [`../strategy-reflection.md`](../strategy-reflection.md)
+evaluation distribution. The Coach writes the replacement strategy prompt but
+never writes Java. Raw ticks are never sent
+to Coach. See [`../strategy-reflection.md`](../strategy-reflection.md)
 for schemas, artifact ownership, failure semantics, and budgeting.
 
 The four mutation intents are `REFINE` (local evidence-backed improvement),

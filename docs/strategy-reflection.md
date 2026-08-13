@@ -1,6 +1,6 @@
 # Strategy Reflection
 
-Strategy Reflection is a four-role workflow over the evaluated parent's gameplay
+Strategy Reflection is a Commentator-to-Coach workflow over the evaluated parent's gameplay
 evidence. It uses the shared LLM endpoint and client; role settings may change
 only role-local enablement and temperature.
 
@@ -8,16 +8,14 @@ only role-local enablement and temperature.
 all configured evaluation matches -> aggregate Game Performance
 temporary complete logs -> strict loss/draw/win selection -> match_selection.json
 selected logs only -> Match Commentator -> selected match_analysis.json
-aggregate results + selected analyses -> Manager -> manager_analysis.json
-parent strategy + manager plan -> Coach -> new_strategy_prompt
+parent strategy + selected analyses + aggregate metadata -> Coach -> new_strategy_prompt
 new strategy + existing code-generation prompt -> Generator -> Java candidate
 ```
 
 | Role | Input | Output | Must not do |
 | --- | --- | --- | --- |
 | Match Commentator | At most three selected complete matches | Selected match analyses | Modify strategy or code; generalize one match to the whole candidate |
-| Manager | Complete aggregate results + selected analyses + selection metadata | Improvement plan | Write final prompt or code; treat selected matches as unbiased |
-| Coach | Parent strategy + Manager plan | New strategy prompt | Write Java |
+| Coach | Parent strategy + selected analyses + aggregate results + selection metadata | New strategy prompt | Write Java or inspect raw ticks |
 | Generator | Strategy + code-generation prompt | Java | Analyze matches |
 
 ## Match-log lifecycle
@@ -46,9 +44,6 @@ artifacts live under `reflection/`:
 
 ```text
 reflection/
-  manager_request.json
-  manager_response.json
-  manager_analysis.json
   coach_request.json
   coach_response.json
   coach_result.json
@@ -60,16 +55,16 @@ Coach results retain both the parent and replacement strategy prompts.
 
 ## Failure and budgeting rules
 
-Commentator failure does not change fitness; Manager receives an unavailable
-entry for that selected match. Manager receives the full aggregate win/draw/loss
+Commentator failure does not change fitness; Coach receives an unavailable
+entry for that selected match. Coach receives the full aggregate win/draw/loss
 distribution and selection metadata, so selected commentary is never mistaken
-for the complete evaluation distribution. Manager or Coach failure leaves the parent strategy
+for the complete evaluation distribution. Coach failure leaves the parent strategy
 unchanged and records a role-attributed failure. Generator failures follow the
 existing Java-generation failure contract.
 
 Commentator budgeting prioritizes metadata, complete tick coverage, and schema;
-Manager receives compact analyses and aggregate results but never raw ticks;
-Coach receives only the parent strategy and Manager plan. Generator budgeting is
+Coach receives compact analyses, aggregate results, parent strategy, and selection
+metadata but never raw ticks. Generator budgeting is
 unchanged.
 
 Code Reflection remains a separate mutation path for Java validation,
@@ -96,15 +91,15 @@ Every Strategy Mutation receives exactly one intent from the run RNG:
 | Intent | Default probability | Meaning |
 | --- | ---: | --- |
 | `REFINE` | 0.40 | Preserve strategic identity and make evidence-backed local changes. |
-| `COUNTER` | 0.25 | Respond to the opponent behavior identified by the Manager. |
+| `COUNTER` | 0.25 | Respond to opponent behavior identified by the selected diagnoses. |
 | `STRUCTURAL` | 0.20 | Reorganize major opening/economy/production/timing/expansion/defense relationships. |
-| `ALTERNATIVE` | 0.15 | Solve the same Manager problem with a different strategic approach. |
+| `ALTERNATIVE` | 0.15 | Solve the diagnosed problem with a different strategic approach. |
 
 The run-level `strategy_archive.json` keeps one successfully evaluated
 representative per known niche, replacing it only when game performance is
 better (then code quality and deterministic candidate-ID tie-breaking). It is
 storage and analysis metadata only; it is not a population and never enters
-the ten opponent-wise lexicase cases.
+the seven opponent-wise lexicase cases.
 
 Generation snapshots include analysis-only metrics under
 `strategy_diversity`: unique niches, dominant niche ratio, new and revisited
@@ -112,5 +107,11 @@ niches, mean categorical signature distance, and overall/per-intent niche
 change rates. `./analyze.sh` emits `strategy_diversity.csv`,
 `strategy_niches.csv`. Strategy diversity remains available as CSV analysis
 metadata; it does not add plots to the compact current plot set. These metrics do not alter
-the ten opponent scores, aggregate reporting, survivor selection, crossover,
+the seven opponent scores, aggregate reporting, survivor selection, crossover,
 or parent selection.
+
+Generation snapshots also expose `light_rush_win_rate` and
+`heavy_rush_win_rate`: the number of candidates whose canonical opponent-level
+record has more wins than losses against that opponent, divided by the full
+generation population. They are reporting/regression metrics only and are
+included in `generation_metrics.csv` by `./analyze.sh`.

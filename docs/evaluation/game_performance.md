@@ -16,24 +16,24 @@ opponent and retains map, player-side, and individual-match evidence.
 
 ## Candidate reporting aggregate
 
-Each opponent has 18 records (three maps × three rounds × p0/p1). The fixed
-weights are:
+Each active opponent has 18 records (three maps × three rounds × p0/p1). The
+fixed weights are:
 
 ```text
-passive/random/randombias = 0.5 each
 lightrush/heavyrush/workerrush = 1 each
 allinbot/mayari/coac/tma = 2 each
 ```
 
-The denominator is `12.5`. The weighted mean is stored as
+PassiveAI, RandomAI, and RandomBiasedAI are not part of the EA roster. The
+denominator is `11.0`. The weighted mean is stored as
 `game_eval_result.game_performance` and is reporting-only. It is not an
-evolutionary objective and does not replace the ten opponent scores stored in
+evolutionary objective and does not replace the seven opponent scores stored in
 `Candidate.fitness_objectives`.
 
 ## Failure behavior
 
 If generation, validation, compilation, integration, runtime, or matrix
-completion fails, each of the ten opponent fitness cases is `-1000.0`. Partial
+completion fails, each of the seven opponent fitness cases is `-1000.0`. Partial
 match results and failure diagnostics remain in the candidate artifacts.
 
 ## Analysis

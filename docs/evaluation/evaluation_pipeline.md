@@ -12,8 +12,8 @@ matrix, diagnostics, objective construction, and candidate artifact writing.
 | Source validation | validated source | validation diagnostics |
 | Compilation | isolated class directory | compiler stdout/stderr and structured errors |
 | Integration | loadable MicroRTS agent | seven integration checks |
-| Match execution | 180 matches across ten opponents | retained match results and runtime failure |
-| Objective construction | ten opponent scores | ten `-1000.0` case scores on failure |
+| Match execution | 126 matches across seven opponents | retained match results and runtime failure |
+| Objective construction | seven opponent scores | seven `-1000.0` case scores on failure |
 
 ## Match protocol
 
@@ -26,12 +26,12 @@ rounds, and both candidate player positions. The matrix is owned by
 The evaluator groups match results by opponent in
 `evaluation/game_metrics.py`. It retains per-opponent, per-map, per-side, and
 per-match summaries, then computes the weighted aggregate only for reporting.
-The aggregate denominator is the fixed weight sum `12.5`.
+The aggregate denominator is the fixed weight sum `11.0`.
 
 ## Objective and diagnostics
 
 `evaluation/objectives.py` returns exactly one evolutionary score for each of
-the ten cases. `code_quality`, compiler diagnostics, function coverage,
+the seven cases. `code_quality`, compiler diagnostics, function coverage,
 strategy alignment, and runtime failure details remain in their diagnostic
 artifacts and reflection context; none is inserted into the evolutionary
 objective vector.
@@ -42,7 +42,7 @@ Per-candidate evaluation artifacts include:
 
 - `evaluation/game_performance.json`: aggregate Game Performance, opponent
   score mapping, opponent summaries, map/side summaries, and match summaries;
-- `evaluation/objectives.json`: ten-case objective mapping;
+- `evaluation/objectives.json`: seven-case objective mapping;
 - `evaluation/code_quality.json`: code-quality diagnostics;
 - `evaluation/matches.json`: compact individual match records.
 

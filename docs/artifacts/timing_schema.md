@@ -78,7 +78,7 @@ Each match-level `timing.json` records at least start, finish, duration, process
 - Attempt count/order matches persisted raw request/response artifacts.
 - Skipped/no-mutation stages are null with empty attempts.
 - Failure timestamps close at the terminal stage and preserve earlier durations.
-- Exactly 180 match durations on successful evaluation.
+- Exactly 126 match durations on successful evaluation.
 - Candidate total is not less than any contained stage duration.
 
 
@@ -92,7 +92,7 @@ when Java extraction or validation fails after Reflection and Rewrite have compl
 
 ## Phase 4 implementation note
 
-Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 180 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
+Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 126 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
 
 ## Canonical runtime timing additions
 
@@ -111,6 +111,6 @@ timing records needed by resume and analysis.
 ## Strategy Reflection role timing
 
 Strategy Reflection attempt records use the canonical role names
-`match_commentator`, `manager`, `coach`, and `generator`. The Generator timing
-is the existing Java-generation timing; Commentator, Manager, and Coach timing
+`match_commentator`, `coach`, and `generator`. The Generator timing
+is the existing Java-generation timing; Commentator and Coach timing
 is stored in their role request/response envelopes.

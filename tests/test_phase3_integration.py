@@ -125,9 +125,10 @@ class Phase3IntegrationTests(unittest.TestCase):
     def test_successful_integration_precedes_match_execution(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
+            config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
             evaluation = evaluate_candidate(
                 Candidate(id="integration-success"),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
+                config=config,
                 backend=MockGenerationBackend(),
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",
@@ -141,7 +142,7 @@ class Phase3IntegrationTests(unittest.TestCase):
             tuple(check.name for check in evaluation.integration_result.checks),
             INTEGRATION_CHECK_NAMES,
         )
-        self.assertEqual(len(evaluation.match_results), 180)
+        self.assertEqual(len(evaluation.match_results), config.expected_match_count)
         self.assertIsNone(evaluation.candidate.failure_stage)
 
 

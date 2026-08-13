@@ -48,14 +48,14 @@ class ReflectionContextTests(unittest.TestCase):
         self.assertEqual(context.objectives, evaluation.candidate.fitness_objectives)
         self.assertEqual(context.compilation_result["status"], "success")
         self.assertEqual(context.validation_result["status"], "passed")
-        self.assertEqual(context.completed_match_count, 180)
+        self.assertEqual(context.completed_match_count, 126)
 
     def test_failed_context_preserves_sentinel_and_root_cause(self):
         candidate = Candidate(
             status="failed",
             failure_stage="compilation",
             failure_reason="missing symbol: commandAttack",
-            fitness_objectives={case: FAILED_GAME_PERFORMANCE for case in ("passive", "random", "randombias", "lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma")},
+                    fitness_objectives={case: FAILED_GAME_PERFORMANCE for case in ("lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma")},
             metadata={
                 "reflection_evidence": {
                     "candidate_id": "failed-candidate",
@@ -66,7 +66,7 @@ class ReflectionContextTests(unittest.TestCase):
                     "failure_reason": "missing symbol: commandAttack",
                     "generation": {"raw_response": "raw invalid response", "validation": {"status": "passed"}},
                     "compilation": {"status": "failed", "errors": ["missing symbol: commandAttack"]},
-                    "game": {"objective": FAILED_GAME_PERFORMANCE, "completed_match_count": 0},
+                        "game": {"objective": FAILED_GAME_PERFORMANCE, "completed_match_count": 0},
                     "code_quality": {"code_quality": -805.0, "failure_stage": "compilation", "compiler_errors": ["missing symbol: commandAttack"]},
                     "code_quality_payload": {},
                 }
@@ -89,7 +89,7 @@ class ReflectionContextTests(unittest.TestCase):
                     "reflection_evidence": {
                         "evaluation_status": "evaluated",
                         "objectives": {"game_performance": 1.0, "code_quality": 500.0 + alignment},
-                        "game": {"completed_match_count": 180},
+                        "game": {"completed_match_count": 126},
                         "code_quality": {
                             "function_score": 80,
                             "strategy_alignment_score": alignment,
@@ -111,7 +111,7 @@ class ReflectionContextTests(unittest.TestCase):
             candidate_id="feedback-parent",
             objectives={"game_performance": 12.5, "code_quality": 590.0},
             evaluation_status="evaluated",
-            game_evidence={"completed_match_count": 180, "objective": 12.5},
+            game_evidence={"completed_match_count": 126, "objective": 12.5},
             match_summary={"wins": 6},
         )
         prompt = build_strategy_reflection_prompt(candidate, context)

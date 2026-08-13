@@ -68,10 +68,13 @@ MICRORTS_VARIANT_OPPONENTS = (
 )
 
 # The search-time roster is resolved from this registry in the canonical order
-# supplied by the experiment configuration.  External entries are intentionally
-# available here; setup/preflight must fail if one is unavailable.
+# supplied by the experiment configuration. PassiveAI, RandomAI, and
+# RandomBiasedAI remain available as basic definitions for compatibility and
+# visual inspection, but are intentionally excluded from EA evolution.
 SEARCH_OPPONENT_REGISTRY = (
-    *BASIC_OPPONENTS,
+    BASIC_OPPONENTS[3],
+    BASIC_OPPONENTS[4],
+    BASIC_OPPONENTS[5],
     ALLINBOT_SEARCH_OPPONENT,
     EXTERNAL_OPPONENTS[1],
     EXTERNAL_OPPONENTS[2],
@@ -88,7 +91,7 @@ GUI_ONLY_OPPONENTS = ALLIBOT_OPPONENTS
 def gui_opponent_by_id(opponent_id: str) -> OpponentSpec:
     """Resolve an opponent supported by the visual inspection utility."""
 
-    for item in EVALUATION_ROSTER + EXTERNAL_OPPONENTS + ALLIBOT_OPPONENTS:
+    for item in BASIC_OPPONENTS + EVALUATION_ROSTER + EXTERNAL_OPPONENTS + ALLIBOT_OPPONENTS:
         if item.opponent_id == opponent_id:
             return item
     raise KeyError(opponent_id)

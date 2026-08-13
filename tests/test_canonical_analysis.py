@@ -119,6 +119,23 @@ class CanonicalAnalysisTests(unittest.TestCase):
             self.assertIn("mid-mixed-balanced", niches)
             self.assertFalse(list((output / "plots").glob("*.png")))
 
+    def test_outputs_capability_regression_metrics_in_generation_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = self.make_run(root, "run", stamp=datetime.now(timezone.utc))
+            (run / "generation_metrics.jsonl").write_text(json.dumps({
+                "generation": 0,
+                "population_size": 2,
+                "light_rush_win_rate": 0.5,
+                "heavy_rush_win_rate": 0.0,
+                "objectives": {},
+            }) + "\n", encoding="utf-8")
+            output = generate_analysis(load_run(run), force=True)
+            rows = (output / "generation_metrics.csv").read_text(encoding="utf-8")
+            self.assertIn("light_rush_win_rate", rows)
+            self.assertIn("heavy_rush_win_rate", rows)
+            self.assertIn("0.5", rows)
+
     def test_plot_set_contains_only_objectives_agents_and_opponents(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -301,10 +301,16 @@ def generation_metrics(
             "count": len(values),
         }
 
+    light_rush_wins = sum(_candidate_beats_opponent(candidate, "lightrush") for candidate in population)
+    heavy_rush_wins = sum(_candidate_beats_opponent(candidate, "heavyrush") for candidate in population)
+    population_size = len(population)
+
     payload = {
         "schema_version": "eagle-generation-metrics-v1",
         "generation": generation,
-        "population_size": len(population),
+        "population_size": population_size,
+        "light_rush_win_rate": light_rush_wins / population_size if population_size else 0.0,
+        "heavy_rush_win_rate": heavy_rush_wins / population_size if population_size else 0.0,
         "fixed_weight_sum": first_game.get("fixed_weight_sum"),
         "total_weight": first_game.get("total_weight"),
         "weighted_numerator": first_game.get("weighted_numerator"),
@@ -325,6 +331,23 @@ def generation_metrics(
     if diversity is not None:
         payload["strategy_diversity"] = dict(diversity)
     return payload
+
+
+def _candidate_beats_opponent(candidate: Candidate, opponent_id: str) -> bool:
+    """Return whether the canonical opponent-level result is a winning record."""
+
+    game = candidate.game_eval_result or {}
+    rows = game.get("opponent_results") or []
+    for row in rows:
+        if not isinstance(row, dict) or str(row.get("opponent_id") or "") != opponent_id:
+            continue
+        if str(row.get("status") or "").lower() != "completed":
+            return False
+        try:
+            return int(row.get("wins") or 0) > int(row.get("losses") or 0)
+        except (TypeError, ValueError):
+            return False
+    return False
 
 
 def load_resume_population(run_dir: Path) -> tuple[int, list[Candidate]]:

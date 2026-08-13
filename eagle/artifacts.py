@@ -329,7 +329,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "ea_random_seed": config.random_seed,
         "microrts_match_seeds": list(config.resolved_match_seeds),
         "round_seed_schedule": list(config.resolved_match_seeds),
-        "match_seed_policy": "all ten fixed opponents reuse the canonical round seed schedule",
+        "match_seed_policy": "all seven fixed opponents reuse the canonical round seed schedule",
         "match_timeout_seconds": config.match_timeout_seconds,
         "match_artifact_mode": config.match_artifact_mode,
         "unit_material_values": dict(config.unit_material_values),

@@ -113,7 +113,7 @@ def _validate_experiment_document(path: Path) -> dict:
     if payload.get("application", "microrts") != "microrts":
         raise ValueError("The configured application plugin is not supported.")
     if payload.get("objectives", {"opponent_cases": "maximize"}) != {"opponent_cases": "maximize"}:
-        raise ValueError("The evolutionary objective contract is the ten fixed opponent cases.")
+        raise ValueError("The evolutionary objective contract is the seven fixed opponent cases.")
     forbidden = {
         "llm_base_url", "llm_model", "llm_role_topology_path", "required_llm_roles",
         "servers", "server_binary", "role_mapping", "endpoints", "endpoint",

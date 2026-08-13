@@ -37,7 +37,7 @@ not a fifth EA entrypoint. `scripts/setup_allibot.py` and
 | `eagle/crossover.py` | Three-component uniform crossover and provenance recording. |
 | `eagle/mutation.py` | Mutation context, reflection/rewrite dispatch, and mutation records. |
 | `eagle/rewrite.py` | Prompt-only Code/Strategy rewrite handling. |
-| `eagle/strategy_reflection.py` | Sports-role Strategy Reflection: strict match selection, Match Commentator, Manager, Coach, strategy signature, niche, and intent artifacts. |
+| `eagle/strategy_reflection.py` | Sports-role Strategy Reflection: strict match selection, Match Commentator, direct Coach input, strategy signature, niche, and intent artifacts. |
 | `eagle/reflection_context.py` | Structured evidence passed to Strategy and Code Reflection. |
 | `eagle/reflection_prompts.py` | Code Reflection prompt construction. |
 | `eagle/strategy_diversity.py` | Deterministic signature normalization, niche derivation, distance, diversity metrics, and the run-level representative archive. |

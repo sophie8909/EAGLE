@@ -149,11 +149,12 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertEqual(len(selection["selected_match_ids"]), 2)
             self.assertEqual(len({item for item in selection["selected_match_ids"]}), 2)
             self.assertTrue(all(not Path(row["match_log_path"]).exists() for row in rows))
-            manager_prompt = next(prompt for prompt in backend.prompts if "ROLE: manager" in prompt)
-            self.assertIn('"selected_outcome_class": "loss"', manager_prompt)
-            self.assertIn('"total_losses": 2', manager_prompt)
+            coach_prompt = next(prompt for prompt in backend.prompts if "ROLE: coach" in prompt)
+            self.assertIn('"selected_outcome_class": "loss"', coach_prompt)
+            self.assertIn('"total_losses": 2', coach_prompt)
+            self.assertNotIn("ROLE: manager", "\n".join(backend.prompts))
 
-    def test_commentator_manager_coach_delete_trace_and_preserve_artifacts(self) -> None:
+    def test_commentator_direct_coach_delete_trace_and_preserve_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             states = root / "states"
@@ -199,14 +200,15 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             result = mutation.run(candidate, context, artifact_dir=root / "child")
 
             self.assertEqual(result.status, "success")
-            self.assertIsNotNone(result.manager)
             self.assertIsNotNone(result.coach)
             self.assertFalse(log_path.exists())
             self.assertTrue((root / "child" / "commentary" / "match-1" / "match_analysis.json").exists())
             self.assertTrue((root / "child" / "commentary" / "match-1" / "commentary_status.json").exists())
-            self.assertTrue((root / "child" / "reflection" / "manager_analysis.json").exists())
             self.assertTrue((root / "child" / "reflection" / "coach_result.json").exists())
-            self.assertNotIn("match_log", json.loads((root / "child" / "reflection" / "manager_request.json").read_text(encoding="utf-8"))["prompt"])
+            coach_request = json.loads((root / "child" / "reflection" / "coach_request.json").read_text(encoding="utf-8"))["prompt"]
+            self.assertIn("commentator_diagnoses_and_evaluation_metadata", coach_request)
+            self.assertIn("stable opening", coach_request)
+            self.assertNotIn("ROLE: manager", "\n".join(mutation.backend.prompts))
             self.assertIn("If the first combat group is ready", result.candidate.strategy_prompt)
 
     def test_commentary_failure_deletes_trace_without_changing_candidate(self) -> None:

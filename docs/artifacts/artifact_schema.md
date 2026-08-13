@@ -76,13 +76,13 @@ The specification calls this layout recommended while making the underlying evid
 
 ## Run-level contracts
 
-`config.yaml` preserves the supplied configuration. `resolved_config.json` records actual runtime values, including population/generation sizes, operator rates/policy, the fixed ten-opponent × 18-match evaluation matrix, maps/rounds/sides/seeds, LLM/retry/prompt versions, objective/artifact versions, and Git commit. `summary.json` records completion state, selected population, ten opponent objective names, reporting metrics, and failure counts.
+`config.yaml` preserves the supplied configuration. `resolved_config.json` records actual runtime values, including population/generation sizes, operator rates/policy, the fixed seven-opponent × 18-match evaluation matrix, maps/rounds/sides/seeds, LLM/retry/prompt versions, objective/artifact versions, and Git commit. `summary.json` records completion state, selected population, seven opponent objective names, reporting metrics, and failure counts.
 
 `generations/generation_<nnnn>.json` is the only surviving-population snapshot for a generation. It uses `eagle-generation-v2`; `final_population.json` uses `eagle-final-population-v2`. Both retain the resumable genotype/phenotype, fitness objectives, and timing, but omit raw process output, telemetry, and full mutation LLM envelopes. The run root does not write a second flat `generation_<n>_population.json` or an evolution-level `results.jsonl`.
 
 `strategy_archive.json` is an analysis-only, schema-versioned map from known
 strategy niche to one successfully evaluated representative. It does not
-    participate in the ten-case fitness, lexicase survivor selection, or parent
+    participate in the seven-case fitness, lexicase survivor selection, or parent
 selection. `genotype/strategy_signature.json` contains the structured Coach
 signature and mutation metadata. Legacy snapshots without these fields are
 read as `unknown`; no signature is inferred from prompt text.
@@ -93,7 +93,7 @@ Never silently override an input without writing the resolved value.
 
 For a mutated candidate, retain both mutation interactions even if Rewrite or final generation fails. `metadata.json` records `applied`, mutation `type`, model identifiers, attempt counts, status, and errors. For no mutation, record `applied: false` and `type: null`.
 
-Every offspring persists final generation request, every raw response/retry, extracted source, normalized source, and generation error. Accepted source must be byte-identifiable (for example with SHA-256) across compile and all 180/198 match records.
+Every offspring persists final generation request, every raw response/retry, extracted source, normalized source, and generation error. Accepted source must be byte-identifiable (for example with SHA-256) across compile and all 126 match records.
 
 ## Stage result payloads
 
@@ -104,7 +104,7 @@ Each stage result JSON records:
 - validation checks or compiler/integration diagnostics;
 - source/class hashes where applicable.
 
-`candidate_result.json` is an index/summary, not a replacement for stage evidence. It includes identity, lineage reference, status/failure stage, objective values, completed-match count, and artifact references. `mutation/reflection_context.json` is the immutable evidence snapshot used to build the Reflection request; it retains the ten opponent objective values, reporting aggregate, and normalized stage/failure evidence without recalculating fitness.
+`candidate_result.json` is an index/summary, not a replacement for stage evidence. It includes identity, lineage reference, status/failure stage, objective values, completed-match count, and artifact references. `mutation/reflection_context.json` is the immutable evidence snapshot used to build the Reflection request; it retains the seven opponent objective values, reporting aggregate, and normalized stage/failure evidence without recalculating fitness.
 
 Strategy Reflection additionally persists `reflection/match_selection.json` before
 deleting temporary raw match logs. It records the available loss/draw/win counts,
@@ -229,15 +229,12 @@ handling. Permanent compact evidence is:
 matches/<match_id>/match_result.json
 candidates/<candidate_id>/commentary/<match_id>/match_analysis.json
 candidates/<candidate_id>/commentary/<match_id>/commentary_status.json
-candidates/<candidate_id>/reflection/manager_request.json
-candidates/<candidate_id>/reflection/manager_response.json
-candidates/<candidate_id>/reflection/manager_analysis.json
 candidates/<candidate_id>/reflection/coach_request.json
 candidates/<candidate_id>/reflection/coach_response.json
 candidates/<candidate_id>/reflection/coach_result.json
 ```
 
 Role envelopes contain the role, candidate and generation identity, request ID,
-model-configuration identity, prompt version, and schema version. Manager and
-Coach artifacts never contain raw tick logs. Coach results retain both parent
+model-configuration identity, prompt version, and schema version. Coach artifacts
+never contain raw tick logs. Coach results retain both parent
 and replacement strategy prompts.

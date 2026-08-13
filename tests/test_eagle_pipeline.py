@@ -288,7 +288,7 @@ population_size: 3
         self.assertIsNotNone(evaluation.agent)
         self.assertTrue(evaluation.compile_result and evaluation.compile_result.ok)
         self.assertTrue(evaluation.integration_result and evaluation.integration_result.ok)
-        self.assertEqual(len(evaluation.match_results), 180)
+        self.assertEqual(len(evaluation.match_results), config.expected_match_count)
         self.assertEqual(evaluation.candidate.status, "evaluated")
         self.assertIsNone(evaluation.result.failure_category)
         self.assertTrue(evaluation.code_quality_breakdown.compile_success)

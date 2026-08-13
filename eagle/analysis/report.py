@@ -83,6 +83,8 @@ def _generation_rows(data: RunData) -> list[dict[str, Any]]:
         base = {
             "generation": item.get("generation"),
             "population_size": item.get("population_size"),
+            "light_rush_win_rate": item.get("light_rush_win_rate"),
+            "heavy_rush_win_rate": item.get("heavy_rush_win_rate"),
             "failure_count": item.get("failure_count"),
             "expected_match_count": item.get("expected_match_count"),
             "completed_match_count": item.get("completed_match_count"),

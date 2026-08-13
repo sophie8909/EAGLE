@@ -5,7 +5,7 @@ objectives:
   opponent_cases: maximize
 seed_prompt_template: microrts_blank_strategy_agent
 generations: 50
-population_size: 10
+population_size: 20
 generation_backend: openai
 alignment_backend: openai
 mutation_max_attempts: 3

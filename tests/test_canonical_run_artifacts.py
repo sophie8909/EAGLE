@@ -45,7 +45,7 @@ class CanonicalRunArtifactTests(unittest.TestCase):
             record_generation(run, 0, self.population(0))
             lines = (run / "generation_metrics.jsonl").read_text(encoding="utf-8").splitlines()
             self.assertEqual(len(lines), 1)
-            metric = json.loads(lines[0])["objectives"]["passive"]
+            metric = json.loads(lines[0])["objectives"]["lightrush"]
             self.assertEqual(metric["valid_count"], 1)
             self.assertEqual(metric["failure_count"], 1)
             self.assertEqual(metric["best"], 5.0)
@@ -82,7 +82,7 @@ class CanonicalRunArtifactTests(unittest.TestCase):
             self.assertEqual(manifest["last_completed_generation"], 0)
 
     def test_all_required_objective_fields_exist(self):
-        values = generation_metrics(0, self.population(0))["objectives"]["passive"]
+        values = generation_metrics(0, self.population(0))["objectives"]["lightrush"]
         self.assertEqual(
             set(values),
             {
@@ -97,21 +97,41 @@ class CanonicalRunArtifactTests(unittest.TestCase):
             id="first", status="evaluated",
                 fitness_objectives={case: 5.0 for case in LEXICASE_CASES},
             game_eval_result={"opponent_results": [
-                {"opponent_id": "passive", "score": 10.0, "status": "completed"},
-                {"opponent_id": "random", "score": -2.0, "status": "completed"},
+                {"opponent_id": "lightrush", "score": 10.0, "status": "completed"},
+                {"opponent_id": "heavyrush", "score": -2.0, "status": "completed"},
             ]},
         )
         second = Candidate(
             id="second", status="evaluated",
                 fitness_objectives={case: 6.0 for case in LEXICASE_CASES},
             game_eval_result={"opponent_results": [
-                {"opponent_id": "passive", "score": 20.0, "status": "completed"},
-                {"opponent_id": "random", "score": 4.0, "status": "completed"},
+                {"opponent_id": "lightrush", "score": 20.0, "status": "completed"},
+                {"opponent_id": "heavyrush", "score": 4.0, "status": "completed"},
             ]},
         )
         by_opponent = generation_metrics(3, [first, second])["opponent_scores"]["by_opponent"]
-        self.assertEqual(by_opponent["passive"]["game_performance"], 15.0)
-        self.assertEqual(by_opponent["random"]["game_performance"], 1.0)
+        self.assertEqual(by_opponent["lightrush"]["game_performance"], 15.0)
+        self.assertEqual(by_opponent["heavyrush"]["game_performance"], 1.0)
+
+    def test_generation_metrics_record_light_and_heavy_rush_capability_rates(self):
+        candidates = [
+            Candidate(id="light-winner", game_eval_result={"opponent_results": [
+                {"opponent_id": "lightrush", "wins": 3, "losses": 0, "status": "completed"},
+                {"opponent_id": "heavyrush", "wins": 0, "losses": 3, "status": "completed"},
+            ]}),
+            Candidate(id="heavy-winner", game_eval_result={"opponent_results": [
+                {"opponent_id": "lightrush", "wins": 0, "losses": 3, "status": "completed"},
+                {"opponent_id": "heavyrush", "wins": 2, "losses": 1, "status": "completed"},
+            ]}),
+            Candidate(id="failed", status="failed", game_eval_result={"opponent_results": [
+                {"opponent_id": "lightrush", "wins": 3, "losses": 0, "status": "failed"},
+                {"opponent_id": "heavyrush", "wins": 3, "losses": 0, "status": "failed"},
+            ]}),
+        ]
+        metrics = generation_metrics(3, candidates)
+        self.assertEqual(metrics["population_size"], 3)
+        self.assertAlmostEqual(metrics["light_rush_win_rate"], 1 / 3)
+        self.assertAlmostEqual(metrics["heavy_rush_win_rate"], 1 / 3)
 
     def test_population_snapshot_is_compact_but_keeps_fitness_and_timing(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -143,5 +163,5 @@ class CanonicalRunArtifactTests(unittest.TestCase):
 
             self.assertLess(snapshot_path.stat().st_size, 50_000)
             self.assertNotIn("verbose-match-output", snapshot_text)
-            self.assertEqual(payload["fitness_objectives"]["passive"], 12.5)
+            self.assertEqual(payload["fitness_objectives"]["lightrush"], 12.5)
             self.assertEqual(payload["timing"]["child_total"]["duration_seconds"], 3.25)

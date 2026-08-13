@@ -36,7 +36,7 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             write_candidate_artifacts(candidates_dir, evaluation)
             candidate_dir = candidates_dir / candidate.id
 
-            self.assertEqual(len(evaluation.match_results), 180)
+            self.assertEqual(len(evaluation.match_results), config.expected_match_count)
             self.assertTrue(all(result.ok for result in evaluation.match_results))
             self.assertIsNone(evaluation.result.failure_stage)
             self.assertEqual(set(evaluation.candidate.fitness_objectives), set(LEXICASE_CASES))
@@ -47,14 +47,14 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             self.assertEqual(evaluation.candidate.game_eval_result["game_performance"], evaluation.game_metrics.objective)
 
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
-            self.assertEqual(len(timing["match_durations_seconds"]), 180)
+            self.assertEqual(len(timing["match_durations_seconds"]), config.expected_match_count)
             self.assertEqual(timing["evaluation"]["status"], "success")
             self.assertEqual(timing["strategy_alignment_llm"]["attempts"][0]["attempt"], 1)
             self.assertGreaterEqual(timing["objective_calculation_duration_seconds"], 0)
             self.assertGreaterEqual(timing["matches_total_duration_seconds"], 0)
 
             seeds = set()
-            for index in range(180):
+            for index in range(config.expected_match_count):
                 match_dir = candidate_dir / "matches" / f"match_{index:02d}"
                 result = json.loads((match_dir / "result.json").read_text(encoding="utf-8"))
                 match_timing = json.loads((match_dir / "timing.json").read_text(encoding="utf-8"))
@@ -74,7 +74,7 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             self.assertEqual(capability["function_score"], evaluation.code_quality_breakdown.function_score)
             self.assertEqual(objectives["objective_names"], list(LEXICASE_CASES))
             self.assertEqual(set(objectives["opponent_scores"]), set(LEXICASE_CASES))
-            self.assertEqual(summary["completed_match_count"], 180)
+            self.assertEqual(summary["completed_match_count"], config.expected_match_count)
 
     def test_partial_runtime_failure_uses_progress_score_and_retains_evidence(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -126,7 +126,7 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             write_candidate_artifacts(candidates_dir, evaluation)
             candidate_dir = candidates_dir / candidate.id
 
-            self.assertEqual(calls, list(range(180)))
+            self.assertEqual(calls, list(range(config.expected_match_count)))
             self.assertEqual(evaluation.result.failure_stage, "runtime")
             self.assertEqual(evaluation.result.failure_category, "runtime_exception")
             self.assertEqual(set(evaluation.candidate.fitness_objectives), set(LEXICASE_CASES))
@@ -136,11 +136,11 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             runtime_failure = json.loads((candidate_dir / "evaluation" / "runtime_failure.json").read_text(encoding="utf-8"))
             game_performance = json.loads((candidate_dir / "evaluation" / "game_performance.json").read_text(encoding="utf-8"))
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
-            self.assertEqual(runtime_failure["completed_match_count"], 179)
-            self.assertEqual(len(runtime_failure["retained_matches"]), 180)
-            self.assertEqual(game_performance["completed_match_count"], 179)
-            self.assertEqual(len(game_performance["opponent_results"]), 10)
-            self.assertEqual(len(timing["match_durations_seconds"]), 180)
+            self.assertEqual(runtime_failure["completed_match_count"], config.expected_match_count - 1)
+            self.assertEqual(len(runtime_failure["retained_matches"]), config.expected_match_count)
+            self.assertEqual(game_performance["completed_match_count"], config.expected_match_count - 1)
+            self.assertEqual(len(game_performance["opponent_results"]), len(LEXICASE_CASES))
+            self.assertEqual(len(timing["match_durations_seconds"]), config.expected_match_count)
             self.assertEqual(timing["evaluation"]["status"], "failed")
             self.assertEqual(timing["strategy_alignment_llm"]["attempts"], [])
 

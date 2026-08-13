@@ -26,6 +26,7 @@ from eagle.strategy_reflection import (
 )
 from eagle.mutation import ReflectionContext
 from eagle.reflection_context import EvolutionContext
+from eagle.opponent_cases import LEXICASE_CASES
 
 
 def candidate(
@@ -62,7 +63,7 @@ def candidate(
         parent_strategy_niche=parent_niche,
         niche_changed=changed,
         status="evaluated",
-        fitness_objectives={case: game for case in ("passive", "random", "randombias", "lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma")},
+        fitness_objectives={case: game for case in LEXICASE_CASES},
         game_eval_result={"game_performance": game},
         code_quality_result={"code_quality": quality},
     )

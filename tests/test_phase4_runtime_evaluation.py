@@ -17,7 +17,7 @@ from generation.java_agent_generator import GeneratedJavaAgent
 
 
 class Phase4RuntimeEvaluationTests(unittest.TestCase):
-    def test_config_resolves_exact_ten_roster_matches_and_distinct_seeds(self):
+    def test_config_resolves_exact_search_roster_matches_and_distinct_seeds(self):
         config = ExperimentConfig.from_mapping(
             {
                 "seed_prompts": ["seed"],
@@ -31,7 +31,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertEqual(len(config.resolved_match_seeds), FIXED_MATCHES_PER_OPPONENT // 6)
         self.assertEqual(len(set(config.resolved_match_seeds)), 3)
 
-    def test_one_source_and_class_set_serves_ten_seeded_matches(self):
+    def test_one_source_and_class_set_serves_search_roster_matches(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source = root / "CandidateAgent.java"

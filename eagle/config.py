@@ -16,8 +16,8 @@ from .opponent_cases import LEXICASE_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SU
 
 
 TRAINING_OPPONENT = "ai.abstraction.LightRush"
-# Canonical fixed search: ten opponents × three maps × three rounds × two sides.
-MATCHES_PER_CANDIDATE = 180
+# Canonical fixed search: seven opponents × three maps × three rounds × two sides.
+MATCHES_PER_CANDIDATE = 126
 FIXED_MATCHES_PER_OPPONENT = 18
 DEFAULT_EVALUATION_MAPS = (
     "maps/8x8/basesWorkers8x8.xml",
@@ -127,7 +127,7 @@ class ExperimentConfig:
             raise ValueError("evaluation_opponents is fixed by eagle.opponent_cases and must not be overridden.")
         evaluation_opponents = DEFAULT_SEARCH_OPPONENTS
         if "eagle_opponent" in payload:
-            raise ValueError("eagle_opponent is obsolete; evolutionary evaluation uses only the ten fixed opponents.")
+            raise ValueError("eagle_opponent is obsolete; evolutionary evaluation uses only the seven fixed opponents.")
         return cls(
             seed_prompts=seed_prompts,
             generations=int(payload.get("generations", 1)),
@@ -213,7 +213,7 @@ class ExperimentConfig:
         if self.match_artifact_mode not in {"compact", "full"}:
             raise ValueError("match_artifact_mode must be compact or full.")
         if tuple(item[0] for item in self.evaluation_opponents) != LEXICASE_CASES:
-            raise ValueError("evaluation_opponents must use the canonical ten-opponent order.")
+            raise ValueError("evaluation_opponents must use the canonical seven-opponent order.")
         if any(weight <= 0 for _, weight in self.evaluation_opponents):
             raise ValueError("evaluation opponent weights must be positive.")
         if abs(self.fixed_opponent_weight_sum - FIXED_OPPONENT_WEIGHT_SUM) > 1e-9:

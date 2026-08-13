@@ -82,7 +82,7 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path, run_dir:
     classes_dir = run_dir / "classes"
     for directory in (candidates_dir, generated_agents_dir, classes_dir):
         directory.mkdir(parents=True, exist_ok=True)
-    enabled_roles = {"manager", "coach"}
+    enabled_roles = {"coach"}
     if config.match_commentator_enabled:
         enabled_roles.add("match_commentator")
     strategy_role_backend = MockRoleBackend() if mock else client.prompt_backend(operation="match_commentator", temperature=config.match_commentator_temperature)

@@ -392,14 +392,11 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertEqual(payload["crossover_rate"], 0.25)
         self.assertEqual(payload["mutation_rate"], 0.5)
         self.assertEqual(payload["stagnation_generations"], 10)
-        self.assertEqual(payload["matches_per_candidate"], 180)
+        self.assertEqual(payload["matches_per_candidate"], 126)
         self.assertEqual(payload["opponent"], "ai.abstraction.LightRush")
         self.assertEqual(
             [item["class_name"] for item in payload["evaluation_opponents"]],
             [
-                "ai.PassiveAI",
-                "ai.RandomAI",
-                "ai.RandomBiasedAI",
                 "ai.abstraction.LightRush",
                 "ai.abstraction.HeavyRush",
                 "ai.abstraction.WorkerRush",

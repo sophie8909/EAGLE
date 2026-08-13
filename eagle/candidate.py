@@ -73,7 +73,7 @@ class Candidate:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def objective_vector(self) -> tuple[float, ...]:
-        """Return the ten opponent cases used by lexicase selection."""
+        """Return the fixed opponent cases used by lexicase selection."""
 
         return tuple(float(self.fitness_objectives.get(case, FAILED_OPPONENT_SCORE)) for case in LEXICASE_CASES)
 

@@ -1,4 +1,4 @@
-"""Ten-match aggregation for the canonical game-performance objective."""
+"""Opponent-matrix aggregation for the canonical game-performance objective."""
 
 from __future__ import annotations
 

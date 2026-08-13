@@ -1,8 +1,8 @@
-"""Four-role Strategy Reflection pipeline.
+"""Commentator-to-Coach Strategy Reflection pipeline.
 
-The pipeline deliberately separates match understanding, candidate-level
-strategy diagnosis, strategy mutation, and Java generation.  Code Reflection
-continues to use :mod:`eagle.rewrite` and is not routed through this module.
+The Commentator diagnoses selected matches and the Coach directly converts
+those diagnoses plus canonical matchup metadata into a revised strategy.
+Java generation remains outside this module.
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ from .prompts import normalize_prompt
 from .strategy_diversity import build_strategy_niche, normalize_strategy_signature
 
 
-CANONICAL_ROLES = ("match_commentator", "manager", "coach", "generator")
-ROLE_SCHEMA_VERSION = "strategy-reflection-v1"
-PROMPT_VERSION = "sports-team-v1"
+CANONICAL_ROLES = ("match_commentator", "coach", "generator")
+ROLE_SCHEMA_VERSION = "strategy-reflection-v2"
+PROMPT_VERSION = "sports-team-v2"
 
 STRATEGY_MUTATION_INTENT_DISTRIBUTION = (
     ("REFINE", 0.40),
@@ -37,10 +37,10 @@ STRATEGY_MUTATION_INTENT_DISTRIBUTION = (
     ("ALTERNATIVE", 0.15),
 )
 COACH_INTENT_INSTRUCTIONS = {
-    "REFINE": "Preserve the parent's overall strategic identity. Modify only the strategic behaviors required to address the Manager's highest-priority findings.",
-    "COUNTER": "Focus on the opponent behavior identified by the Manager as causing the important failures. Create concrete conditional responses to that behavior. Preserve unrelated successful strategy components.",
-    "STRUCTURAL": "You may substantially reorganize the opening, economy, production, attack timing, expansion, or defense strategy. Do not merely rewrite the parent using different wording. Use the Manager evidence to create a materially different strategic structure.",
-    "ALTERNATIVE": "Solve the Manager's identified problems using a different strategic approach from the parent. Avoid reproducing the parent's core strategy unless the evidence makes it necessary.",
+    "REFINE": "Preserve the parent's overall strategic identity. Modify only the strategic behaviors required to address the highest-priority findings in the selected match diagnoses.",
+    "COUNTER": "Focus on opponent behavior identified by the selected match diagnoses as causing important failures. Create concrete conditional responses while preserving unrelated successful strategy components.",
+    "STRUCTURAL": "You may substantially reorganize the opening, economy, production, attack timing, expansion, or defense strategy. Do not merely rewrite the parent using different wording; use the evidence to create a materially different strategic structure.",
+    "ALTERNATIVE": "Solve the diagnosed problems using a different strategic approach from the parent. Avoid reproducing the parent's core strategy unless the evidence makes it necessary.",
 }
 
 
@@ -93,22 +93,6 @@ class MatchAnalysis:
 
 
 @dataclass(frozen=True)
-class ManagerPlan:
-    overall_assessment: str
-    strengths_to_preserve: tuple[str, ...]
-    recurring_weaknesses: tuple[dict[str, Any], ...]
-    opponent_specific_findings: tuple[dict[str, Any], ...]
-    priority_improvements: tuple[dict[str, Any], ...]
-    strategy_constraints: tuple[str, ...]
-
-    def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        for key in ("strengths_to_preserve", "recurring_weaknesses", "opponent_specific_findings", "priority_improvements", "strategy_constraints"):
-            payload[key] = list(payload[key])
-        return payload
-
-
-@dataclass(frozen=True)
 class CoachResult:
     strategy_changes: dict[str, list[str]]
     strategy_signature: dict[str, Any]
@@ -124,7 +108,6 @@ class StrategyReflectionResult:
     candidate: Candidate
     status: str
     analyses: tuple[MatchAnalysis, ...] = ()
-    manager: ManagerPlan | None = None
     coach: CoachResult | None = None
     error: str | None = None
 
@@ -149,15 +132,6 @@ class MockRoleBackend:
                 "win_loss_analysis": {"result": "draw", "primary_reason": "mock evidence", "secondary_reasons": []},
                 "strategy_observations": ["mock observation"],
             })
-        if "ROLE: manager" in prompt:
-            return json.dumps({
-                "overall_assessment": "Preserve the opening and improve timely pressure.",
-                "strengths_to_preserve": ["stable opening"],
-                "recurring_weaknesses": [],
-                "opponent_specific_findings": [],
-                "priority_improvements": [{"priority": 1, "problem": "late pressure", "recommended_direction": "attack after the first combat group is ready", "supporting_matches": []}],
-                "strategy_constraints": [],
-            })
         if "ROLE: coach" in prompt:
             parent = _text_value(prompt, "parent_strategy_prompt")
             return json.dumps({
@@ -170,9 +144,9 @@ class MockRoleBackend:
 
 
 # Strategy Reflection role pipeline: selected match evidence -> commentator ->
-# manager -> coach. Java generation remains outside this module.
+# coach. Java generation remains outside this module.
 class StrategyReflectionPipeline:
-    """Run Commentator -> Manager -> Coach using shared backend plumbing."""
+    """Run Commentator -> Coach using shared backend plumbing."""
 
     def __init__(self, backend: RoleBackend, *, max_attempts: int = 3, max_prompt_chars: int = 60_000, model_identity: str | None = None, enabled_roles: set[str] | None = None, selection_seed: int = 0) -> None:
         if max_attempts < 1:
@@ -181,7 +155,7 @@ class StrategyReflectionPipeline:
         self.max_attempts = max_attempts
         self.max_prompt_chars = max_prompt_chars
         self.model_identity = model_identity
-        self.enabled_roles = frozenset(("match_commentator", "manager", "coach") if enabled_roles is None else enabled_roles)
+        self.enabled_roles = frozenset(("match_commentator", "coach") if enabled_roles is None else enabled_roles)
         self.selection_seed = int(selection_seed)
 
     def mutate(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> Candidate:
@@ -189,7 +163,7 @@ class StrategyReflectionPipeline:
         return result.candidate
 
     def run(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> StrategyReflectionResult:
-        required_roles = {"match_commentator", "manager", "coach"}
+        required_roles = {"match_commentator", "coach"}
         intent = normalize_mutation_intent(mutation_intent) or select_strategy_mutation_intent(
             seed=_intent_seed(self.selection_seed, context.evolution.generation_index, candidate.id, context.index)
         )
@@ -242,16 +216,9 @@ class StrategyReflectionPipeline:
             analyses.append(analysis)
             _delete_raw_match_artifacts(item)
 
-        manager_payload = _manager_payload(candidate, context, analyses, selection, failures)
         try:
-            manager_raw = self._call_role("manager", _manager_prompt(manager_payload), candidate, artifact_dir, extra={"candidate_id": candidate.id})
-            manager = _parse_manager(manager_raw)
-            _write_json(artifact_dir, "reflection/manager_analysis.json", manager.to_dict())
-        except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
-            return _failed_result(candidate, artifact_dir, f"manager: {exc}", analyses)
-
-        try:
-            coach_request = _coach_prompt(candidate.strategy_prompt, manager, intent)
+            coach_payload = _coach_payload(candidate, context, analyses, selection, failures)
+            coach_request = _coach_prompt(candidate.strategy_prompt, coach_payload, intent)
             coach_raw = self._call_role("coach", coach_request, candidate, artifact_dir, extra={"parent_candidate_id": candidate.id})
             coach = _parse_coach(coach_raw, parent_strategy_prompt=candidate.strategy_prompt)
             child_signature = normalize_strategy_signature(coach.strategy_signature)
@@ -272,7 +239,7 @@ class StrategyReflectionPipeline:
                         "schema_version": ROLE_SCHEMA_VERSION,
                         "parent_candidate_id": candidate.id,
                         "analyses": [item.to_dict() for item in analyses],
-                        "manager_analysis": manager.to_dict(),
+                        "coach_input": coach_payload,
                         "coach_result": coach.to_dict(),
                         "mutation_intent": intent,
                         "parent_strategy_niche": parent_niche,
@@ -291,9 +258,9 @@ class StrategyReflectionPipeline:
                 "child_strategy_niche": child_niche,
                 "niche_changed": niche_changed,
             })
-            return StrategyReflectionResult(child, "success", tuple(analyses), manager, coach, None)
+            return StrategyReflectionResult(child, "success", tuple(analyses), coach, None)
         except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
-            return _failed_result(candidate, artifact_dir, f"coach: {exc}", analyses, manager=manager)
+            return _failed_result(candidate, artifact_dir, f"coach: {exc}", analyses)
 
     def _commentate(self, candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, log_path: Path, artifact_dir: Path | None) -> MatchAnalysis:
         chunks = read_match_log_chunks(log_path, max_chars=self.max_prompt_chars)
@@ -507,8 +474,8 @@ def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: 
         "You are the Match Commentator for an evolutionary MicroRTS team.",
         "Analyze one completed match only. Analyze both candidate and opponent.",
         "Do not generalize this single match to the candidate's entire strategy.",
-        "Analyze only the supplied match. The Manager will compare multiple match analyses with aggregate evaluation results.",
-        "Do not modify strategy, write Java, calculate fitness, or act as Manager or Coach.",
+        "Analyze only the supplied match. The Coach will receive this diagnosis together with aggregate evaluation metadata.",
+        "Do not modify strategy, write Java, calculate fitness, or act as Coach.",
         f"match_id: {json.dumps(match_id)}",
         f"candidate_basic_strategy: {json.dumps(candidate.strategy_prompt, ensure_ascii=False)}",
         f"opponent_basic_strategy: {json.dumps({'identity': item.get('opponent_name') or item.get('opponent') or 'unknown', 'class': item.get('opponent') or 'unknown'}, ensure_ascii=False, sort_keys=True)}",
@@ -530,27 +497,14 @@ def _commentator_synthesis_prompt(match_id: str, item: dict[str, Any], partials:
     ])
 
 
-def _manager_prompt(payload: dict[str, Any]) -> str:
-    return "\n".join([
-        "ROLE: manager",
-        "You are the Manager of an evolutionary MicroRTS team.",
-        "You receive complete aggregate evaluation results and a small selected subset of detailed Match Commentator analyses.",
-        "Detailed matches use strict categorical priority: loss > draw > win.",
-        "If any losses existed, only losses were eligible. If no losses but draws existed, only draws were eligible. Wins were eligible only when there were no losses or draws.",
-        "Do not treat selected commentary as an unbiased sample or as the full evaluation distribution.",
-        "Use aggregate results to preserve successful opponents, maps, player positions, and other strong behaviors.",
-        "Use selected commentary to explain problematic matches and identify recurring strategic weaknesses.",
-        "Do not inspect raw ticks, Java, compiler logs, or write the final strategy prompt.",
-        "Return JSON with priority_improvements limited to at most three items.",
-        json.dumps(payload, ensure_ascii=False, sort_keys=True),
-    ])
-
-
-def _coach_prompt(parent_strategy: str, manager: ManagerPlan, mutation_intent: str) -> str:
+def _coach_prompt(parent_strategy: str, payload: dict[str, Any], mutation_intent: str) -> str:
     return "\n".join([
         "ROLE: coach",
         "You are the Coach of an evolutionary MicroRTS team.",
-        "Revise the parent strategy prompt using the Manager improvement plan.",
+        "Revise the parent strategy prompt directly from the selected Match Commentator diagnoses and canonical evaluation metadata.",
+        "Commentator diagnoses are evidence about selected matches, not a replacement for the aggregate opponent results.",
+        "Preserve successful behaviors identified by aggregate results, and use the detailed diagnoses to make concrete conditional changes.",
+        "Detailed-match selection uses strict categorical priority: loss > draw > win, with at most three samples and no outcome backfill.",
         "Return a replacement strategy prompt with concrete conditional behavioral rules.",
         f"Mutation Intent: {mutation_intent}",
         COACH_INTENT_INSTRUCTIONS[mutation_intent],
@@ -560,11 +514,11 @@ def _coach_prompt(parent_strategy: str, manager: ManagerPlan, mutation_intent: s
         "Do not append reflection history recursively.",
         "Do not write Java, discuss implementation details, or return analysis outside the schema.",
         "parent_strategy_prompt: " + json.dumps(parent_strategy, ensure_ascii=False),
-        "manager_analysis: " + json.dumps(manager.to_dict(), ensure_ascii=False, sort_keys=True),
+        "commentator_diagnoses_and_evaluation_metadata: " + json.dumps(payload, ensure_ascii=False, sort_keys=True),
     ])
 
 
-def _manager_payload(candidate: Candidate, context: ReflectionContext, analyses: list[MatchAnalysis], selection: dict[str, Any], failures: list[str]) -> dict[str, Any]:
+def _coach_payload(candidate: Candidate, context: ReflectionContext, analyses: list[MatchAnalysis], selection: dict[str, Any], failures: list[str]) -> dict[str, Any]:
     game = context.game_evidence or {}
     selection_metadata = dict(selection)
     selection_metadata.update({
@@ -579,7 +533,7 @@ def _manager_payload(candidate: Candidate, context: ReflectionContext, analyses:
         "candidate_id": candidate.id,
         "game_performance": context.aggregate_game_performance,
         "opponent_results": [item.to_dict() for item in context.opponents],
-        "matches": [
+        "commentator_diagnoses": [
             {
                 "match_id": item.match_id,
                 "opponent": _match_value(context, item.match_id, "opponent_name"),
@@ -616,23 +570,6 @@ def _parse_commentary(payload: dict[str, Any], match_id: str) -> MatchAnalysis:
         candidate_weaknesses=_strings(payload.get("candidate_weaknesses")),
         win_loss_analysis=dict(payload.get("win_loss_analysis") or {}),
         strategy_observations=_strings(payload.get("strategy_observations")),
-    )
-
-
-def _parse_manager(payload: str) -> ManagerPlan:
-    data = _parse_json(payload)
-    priorities = tuple(item for item in data.get("priority_improvements", []) if isinstance(item, dict))[:3]
-    if not isinstance(data.get("overall_assessment"), str) or not data["overall_assessment"].strip():
-        raise ValueError("manager output must contain an overall assessment")
-    if "new_strategy_prompt" in data or "java" in json.dumps(data).lower():
-        raise ValueError("manager output crossed its responsibility boundary")
-    return ManagerPlan(
-        overall_assessment=data["overall_assessment"].strip(),
-        strengths_to_preserve=_strings(data.get("strengths_to_preserve")),
-        recurring_weaknesses=tuple(item for item in data.get("recurring_weaknesses", []) if isinstance(item, dict)),
-        opponent_specific_findings=tuple(item for item in data.get("opponent_specific_findings", []) if isinstance(item, dict)),
-        priority_improvements=priorities,
-        strategy_constraints=_strings(data.get("strategy_constraints")),
     )
 
 
@@ -694,10 +631,10 @@ def _write_json(root: Path | None, relative: str, payload: object) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def _failed_result(candidate: Candidate, root: Path | None, error: str, analyses: list[MatchAnalysis], *, manager: ManagerPlan | None = None) -> StrategyReflectionResult:
+def _failed_result(candidate: Candidate, root: Path | None, error: str, analyses: list[MatchAnalysis]) -> StrategyReflectionResult:
     _write_json(root, "reflection/commentary_failure.json", {"role": error.split(":", 1)[0], "candidate_id": candidate.id, "generation_index": candidate.generation, "error": error, "schema_version": ROLE_SCHEMA_VERSION})
     child = replace(candidate, metadata={**candidate.metadata, "mutation": {"applied": False, "type": "strategy", "reflection_error": error, "rewrite_error": error}})
-    return StrategyReflectionResult(child, "failed", tuple(analyses), manager, None, error)
+    return StrategyReflectionResult(child, "failed", tuple(analyses), None, error)
 
 
 def _json_value(prompt: str, key: str) -> str | None:

@@ -28,11 +28,18 @@ class LexicaseOpponentTests(unittest.TestCase):
         config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
         self.assertEqual(config.evaluation_opponent_ids, LEXICASE_CASES)
         self.assertEqual(config.fixed_opponent_weight_sum, FIXED_OPPONENT_WEIGHT_SUM)
-        self.assertEqual(config.expected_match_count, 180)
+        self.assertEqual(config.expected_match_count, 126)
+        self.assertEqual(
+            config.evaluation_opponent_ids,
+            ("lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma"),
+        )
+        self.assertNotIn("passive", config.evaluation_opponent_ids)
+        self.assertNotIn("random", config.evaluation_opponent_ids)
+        self.assertNotIn("randombias", config.evaluation_opponent_ids)
 
     def test_lexicase_is_reproducible_and_uses_all_cases(self) -> None:
-        left = candidate("left", {case: 10.0 if case == "passive" else 0.0 for case in LEXICASE_CASES})
-        right = candidate("right", {case: 10.0 if case == "random" else 0.0 for case in LEXICASE_CASES})
+        left = candidate("left", {case: 10.0 if case == "lightrush" else 0.0 for case in LEXICASE_CASES})
+        right = candidate("right", {case: 10.0 if case == "heavyrush" else 0.0 for case in LEXICASE_CASES})
         first = lexicase_select([left, right], random.Random(17)).id
         second = lexicase_select([left, right], random.Random(17)).id
         self.assertEqual(first, second)
@@ -47,6 +54,19 @@ class LexicaseOpponentTests(unittest.TestCase):
         self.assertEqual(len(selected), 2)
         self.assertEqual(selected[0].id, "child-b")
 
+    def test_opponent_capability_can_be_retained_or_lost_by_lexicase_replacement(self) -> None:
+        capability_winner = candidate("light-capability", {case: 20.0 for case in LEXICASE_CASES})
+        retained = select_next_generation(
+            [capability_winner], [], population_size=1, rng=random.Random(1)
+        )
+        self.assertEqual(retained[0].id, "light-capability")
+
+        aggregate_challenger = candidate("aggregate-challenger-wins", {case: 2.0 for case in LEXICASE_CASES})
+        lost = select_next_generation(
+            [capability_winner], [aggregate_challenger], population_size=1, rng=random.Random(1)
+        )
+        self.assertEqual(lost[0].id, "aggregate-challenger-wins")
+
     def test_per_opponent_archive_keeps_best_score_without_code_quality_tie_break(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
@@ -56,7 +76,7 @@ class LexicaseOpponentTests(unittest.TestCase):
             update_opponent_archive(run, [low])
             update_opponent_archive(run, [high])
             payload = json.loads((run / "opponent_archive.json").read_text())
-            self.assertEqual(payload["opponents"]["passive"]["candidate_id"], "a-high")
+        self.assertEqual(payload["opponents"]["lightrush"]["candidate_id"], "a-high")
 
 
 if __name__ == "__main__":

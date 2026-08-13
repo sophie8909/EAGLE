@@ -4,18 +4,19 @@ Snapshot: 2026-08-12. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
-- The search roster is exactly ten fixed opponents: `passive`, `random`,
-  `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
-  `coac`, and `tma`.
-- Every candidate runs 180 matches: three maps × three rounds × both sides
+- The search roster is exactly seven fixed opponents: `lightrush`, `heavyrush`,
+  `workerrush`, `allinbot`, `mayari`, `coac`, and `tma`. `PassiveAI`, `RandomAI`,
+  and `RandomBiasedAI` remain available as definitions but are excluded from EA.
+- Every candidate runs 126 matches: three maps × three rounds × both sides
   for each opponent.
-- Candidate fitness is a ten-field opponent score mapping. Failed or
+- Candidate fitness is a seven-field opponent score mapping. Failed or
   incomplete candidates receive `-1000.0` for every case.
-- Parent selection is seeded lexicase. Survivor selection keeps the aggregate
-  reporting elite and fills the remaining fixed-size population with seeded
-  lexicase-selected offspring.
-- The weighted aggregate Game Performance uses the fixed `0.5/1/2` opponent
-  weights and denominator `12.5` for reporting only.
+- Parent selection is seeded lexicase. Survivor selection fills the fixed-size
+  population with seeded lexicase-selected offspring, using parent fallback only
+  when offspring are insufficient; aggregate Game Performance is reporting-only.
+- The weighted aggregate Game Performance uses weights `1` for the three rush
+  cases and `2` for AllInBot/Mayari/COAC/TMA, with denominator `11.0`, for
+  reporting only.
 - `code_quality` is a diagnostic and failure-routing signal, not an objective.
 - Previous-generation EAGLE self-play and dynamic opponent weights are absent
   from the active evaluation path.
@@ -38,7 +39,7 @@ Snapshot: 2026-08-12. This file describes executable repository behavior.
 
 ## Persisted per-generation evidence
 
-Each `generations/generation_*.json` candidate stores its ten
+Each `generations/generation_*.json` candidate stores its seven
 `fitness_objectives` and `game_eval_result.opponent_scores`. Each line in
 `generation_metrics.jsonl` stores an objective-statistics object for every
 opponent case and `opponent_scores.by_opponent` with generation-level means.

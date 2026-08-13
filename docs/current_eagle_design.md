@@ -13,36 +13,34 @@ llama.cpp model for all LLM roles.
 ## Evolutionary evaluation
 
 The canonical experiment is `configs/experiments/microrts.yaml`. Every
-candidate is evaluated against exactly these ten cases:
+candidate is evaluated against exactly these seven cases:
 
 ```text
-passive random randombias lightrush heavyrush
-workerrush allinbot mayari coac tma
+lightrush heavyrush workerrush allinbot mayari coac tma
 ```
 
-Each case runs on three maps, three rounds, and both p0/p1 positions, for 180
+Each case runs on three maps, three rounds, and both p0/p1 positions, for 126
 matches per candidate. No previous-generation EAGLE opponent is appended.
 
-`Candidate.fitness_objectives` contains the ten opponent scores. These are the
+`Candidate.fitness_objectives` contains the seven opponent scores. These are the
 only evolutionary dimensions and are consumed by seeded lexicase selection.
 Code quality is retained under `code_quality_result` as diagnostics and is not
 an objective.
 
-The reporting-only aggregate uses weights `0.5` for the first three cases,
-`1` for Light/Heavy/Worker Rush, and `2` for AllInBot/Mayari/COAC/TMA. Its
-denominator is `12.5`.
+The reporting-only aggregate uses weights `1` for Light/Heavy/Worker Rush and
+`2` for AllInBot/Mayari/COAC/TMA. Its denominator is `11.0`.
 
 ## Evolution flow
 
 ```text
 seed candidates
   -> generate/validate/compile/integrate
-  -> evaluate 180 matches
-  -> persist ten opponent scores and reporting aggregate
+  -> evaluate 126 matches
+  -> persist seven opponent scores and reporting aggregate
   -> seeded lexicase parent selection
   -> crossover/copy and optional mutation
   -> evaluate children
-  -> aggregate-reporting elite + lexicase offspring survivors
+  -> lexicase offspring survivors with parent fallback
   -> persist generation snapshot and metrics
 ```
 
@@ -62,7 +60,7 @@ The live implementation is split by ownership:
 
 ## Run artifacts and analysis
 
-Each generation snapshot persists ten `fitness_objectives` per surviving
+Each generation snapshot persists seven `fitness_objectives` per surviving
 candidate. `generation_metrics.jsonl` stores per-case best/mean/median/worst
 statistics and `opponent_scores.by_opponent` generation means. The analysis
 command writes `opponent_game_performance.csv`, aggregate/diagnostic plots,

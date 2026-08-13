@@ -141,7 +141,7 @@ def _run_search_impl(
         logger=llm_logger,
         backend_name=backend_name,
     )
-    enabled_roles = {"manager", "coach"}
+    enabled_roles = {"coach"}
     if config.match_commentator_enabled:
         enabled_roles.add("match_commentator")
     strategy_role_backend = MockRoleBackend() if mock else client.prompt_backend(operation="match_commentator", temperature=config.match_commentator_temperature)
@@ -458,7 +458,7 @@ def choose_mutation(feedback_parent: Candidate, rng: random.Random) -> str:
         return "code"
     game = evidence.get("game") or feedback_parent.game_eval_result or {}
     if evidence and (
-        int(game.get("completed_match_count") or 0) != int(game.get("expected_match_count") or 180)
+        int(game.get("completed_match_count") or 0) != int(game.get("expected_match_count") or 126)
         or any(
             number_or_none(feedback_parent.fitness_objectives.get(case)) == FAILED_OPPONENT_SCORE
             for case in LEXICASE_CASES

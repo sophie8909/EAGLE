@@ -2,7 +2,7 @@
 
 Audit date: 2026-08-06. This document describes the executable repository path.
 The Match Commentator role is analysis context only: it does not calculate
-`game_performance`, `code_quality`, candidate validity, or the ten opponent
+`game_performance`, `code_quality`, candidate validity, or the seven opponent
 objectives. Aggregate Game Performance is reporting-only.
 
 ## Current flow
@@ -16,7 +16,7 @@ MicroRTS Game.start
   → delete unselected logs
   → eagle/strategy_reflection.py Match Commentator
   → delete selected logs after terminal commentary
-  → Manager → Coach → Strategy Reflection child
+  → Coach (directly from Commentator output + aggregate metadata) → Strategy Reflection child
 ```
 
 The existing game-performance scorer still owns match scoring. It continues to
@@ -117,20 +117,20 @@ before raw log deletion. Lower-priority outcomes never backfill the sample.
 
 `eagle/reflection_context.py:build_reflection_context` exposes complete
 per-match compact result summaries and complete opponent results to the sports
-pipeline. The Manager receives aggregate counts and summaries plus only the
+pipeline. The Coach receives aggregate counts and summaries plus only the
 selected Match Commentator analyses and selection metadata.
 The active sports-role prompts are assembled by
 `eagle/strategy_reflection.py:_commentator_prompt`,
-`_commentator_synthesis_prompt`, `_manager_prompt`, and `_coach_prompt` in this
+`_commentator_synthesis_prompt` and `_coach_prompt` in this
 order:
 
 1. aggregate evaluation and opponent results;
 2. strict-priority selection metadata;
 3. selected Match Commentator analyses;
 4. parent comparison when available;
-5. behaviors and aggregate strengths to preserve in the Manager input.
+5. behaviors and aggregate strengths to preserve in the Coach input.
 
-Raw traces are not inserted into the Manager or Coach prompts. Selected tick
+Raw traces are not inserted into the Coach prompt. Selected tick
 records are inserted into Commentator requests, and the complete compact match
 record is inserted alongside each selected chunk. Every role request passes
 through `eagle/strategy_reflection.py:_call_role`, which applies the configured
@@ -138,8 +138,8 @@ prompt-character bound before the LLM request. Role request artifacts retain the
 bounded prompt actually sent to the LLM.
 
 The sports-role output is parsed in
-`eagle/strategy_reflection.py:_parse_commentary`, `_parse_manager`, and
-`_parse_coach`. It produces `MatchAnalysis`, `ManagerPlan`, and `CoachResult`;
+`eagle/strategy_reflection.py:_parse_commentary` and `_parse_coach`. It produces
+`MatchAnalysis` and `CoachResult`;
 the Coach result replaces only `strategy_prompt`. The separate generic
 prompt-only reflection path in `eagle/mutation.py:ReflectionStage` still parses
 the following compatibility shape when that path is invoked:
@@ -153,7 +153,7 @@ the following compatibility shape when that path is invoked:
 ```
 
 `eagle/rewrite.py` remains the active code-mutation reflection/rewrite owner.
-The sports-role Strategy Reflection path persists Manager/Coach artifacts and
+The sports-role Strategy Reflection path persists Commentator/Coach artifacts and
 updates only `strategy_prompt`; the final Java generation stage remains
 separate.
 
@@ -215,8 +215,8 @@ available for older run artifacts. No GUI is involved (`eagle/cli/analyze.py`).
 ## Active Strategy Reflection path
 
 The active Strategy Reflection path is the sports-team pipeline documented in
-[`strategy-reflection.md`](strategy-reflection.md): Match Commentator, Manager,
-Coach, then the existing Generator.
+[`strategy-reflection.md`](strategy-reflection.md): Match Commentator, Coach,
+then the existing Generator.
 
 The old monolithic strategy reflector/re-writer path is no longer used for
 Strategy Mutation. Code Reflection still owns implementation-level mutation and

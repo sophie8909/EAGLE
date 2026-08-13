@@ -39,18 +39,17 @@ def select_next_generation(
     population_size: int,
     rng: random.Random,
 ) -> list[Candidate]:
-    """Keep one reporting elite, then fill the generation from offspring.
+    """Select a fixed-size generation using opponent-wise lexicase only.
 
-    The elite is selected by aggregate reporting Game Performance only. The
-    remaining slots use seeded lexicase over offspring cases; code quality is
-    never consulted.
+    Offspring are preferred, with the previous population used only when the
+    offspring list is too small. Aggregate Game Performance is reporting-only;
+    code quality is never consulted.
     """
 
     if not offspring:
         return list(population[:population_size])
-    elite = best_candidate(population + offspring)
-    selected: list[Candidate] = [] if elite is None else [elite]
-    available = [candidate for candidate in offspring if candidate.id != getattr(elite, "id", None)]
+    selected: list[Candidate] = []
+    available = list(offspring)
     while len(selected) < population_size and available:
         chosen = lexicase_select(available, rng)
         selected.append(chosen)
