@@ -12,8 +12,10 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 4. Select parents with seeded lexicase selection. A random case order is drawn
    from the EA `random.Random` instance, and candidates are filtered to the
    best score for each case until one remains.
-5. Apply crossover/copy and at most one mutation to each child.
-6. Evaluate every child through the same complete pipeline.
+5. Apply crossover/copy and let AOS choose Strategy Reflection or
+   Generate-Code Reflection before any prompt-only mutation.
+6. Evaluate every child through the same complete pipeline, then assign
+   parent-child operator rewards and update AOS once for the generation.
 7. Fill the fixed population from offspring with seeded lexicase selection,
    using parent fallback only when offspring are insufficient.
 8. Persist the surviving population and generation metrics.
@@ -47,7 +49,11 @@ EAGLE opponent or dynamic opponent weight.
 opponent case. `generation_metrics.jsonl` stores objective statistics for all
 seven cases and `opponent_scores.by_opponent` stores reporting summaries. The
 offline analysis writes `opponent_game_performance.csv` and one
-`game_performance_by_generation_<opponent>.png` per opponent.
+`game_performance_by_generation_<opponent>.png` per opponent. It also writes
+per-agent, per-opponent win-rate rows/plots and `match_game_performance.csv` for the
+light, semi-transparent single-match distribution overlay on aggregate
+Game Performance plots. It also writes `aos_operator_statistics.csv` and an
+AOS probability plot.
 
 See [`../../opponent-wise-lexicase.md`](../../opponent-wise-lexicase.md) for
 the complete data and artifact contract.

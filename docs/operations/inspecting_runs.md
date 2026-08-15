@@ -28,6 +28,10 @@ generation, use:
 ./analyze.sh --run-dir <run_dir> --agent <candidate_id>
 ```
 
+Individual agent win rates are written separately to
+`analysis/agent_win_rate.csv` and one
+`analysis/plots/win_rate_by_generation_<opponent>.png` per opponent.
+
 Per-opponent Game Performance is recorded for every completed generation in
 `analysis/opponent_game_performance.csv`. The plot set contains
 `code_quality_by_generation.png`, `game_performance_by_generation.png`,
@@ -36,7 +40,13 @@ Per-opponent Game Performance is recorded for every completed generation in
 the generation metrics. The per-opponent values are the mean raw Game
 Performance score across that generation's surviving population; the main
 aggregate Game Performance objective remains weighted as recorded by the
-evaluation artifact.
+evaluation artifact. `analysis/match_game_performance.csv` retains the
+single-match scores used as the light distribution overlay on the Game
+Performance plots.
+
+`analysis/aos_operator_statistics.csv` and
+`analysis/plots/aos_operator_probabilities.png` contain AOS usage, rewards,
+credits, and probabilities.
 
 Historical layouts are rejected. The canonical command surface intentionally has
 no migration subcommand; migrate or inspect old data outside the EAGLE runtime

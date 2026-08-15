@@ -44,6 +44,7 @@ runs/<run_id>/
         ├── reflection/
         │   ├── match_selection.json
         │   └── mutation_intent.json
+        ├── aos/reward.json
         ├── generation/
         │   ├── request.txt
         │   ├── response_raw.txt
@@ -92,6 +93,14 @@ Never silently override an input without writing the resolved value.
 ## Variation and generation contracts
 
 For a mutated candidate, retain both mutation interactions even if Rewrite or final generation fails. `metadata.json` records `applied`, mutation `type`, model identifiers, attempt counts, status, and errors. For no mutation, record `applied: false` and `type: null`.
+
+Each mutated offspring also records `aos/reward.json` after evaluation. The
+payload identifies `parent_candidate_id`, `child_candidate_id`, and
+`operator_used`, then records the parent/child runnable status, execution
+transition, opponent-case improvements/regressions, and `operator_reward`.
+Generation-level AOS state is stored in the `aos` field of
+`generation_metrics.jsonl`, including selection probability, usage count,
+reward count, mean reward, recent credit, and execution-transition counts.
 
 Every offspring persists final generation request, every raw response/retry, extracted source, normalized source, and generation error. Accepted source must be byte-identifiable (for example with SHA-256) across compile and all 126 match records.
 

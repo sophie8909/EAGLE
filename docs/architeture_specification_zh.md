@@ -49,14 +49,13 @@ A1 + B2 + C1
 flowchart TD
     P["Evaluated Population"] --> S["Binary Tournament Selection"]
     S --> X["Uniform Crossover over A, B, C"]
-    X --> M{"Apply Mutation?"}
-    M -->|No| G["Final Java Generation LLM"]
-    M -->|Strategy Mutation| SR["Strategy Reflection LLM"] --> SW["Strategy Prompt Rewrite LLM"] --> G
-    M -->|Code Mutation| CR["Code Reflection LLM"] --> CW["Code Generation Prompt Rewrite LLM"] --> G
+    X --> AOS["AOS selects reflection operator"]
+    AOS -->|Strategy Reflection| SR["Strategy Reflection LLM"] --> SW["Strategy Prompt Rewrite LLM"] --> G
+    AOS -->|Generate-Code Reflection| CR["Code Reflection LLM"] --> CW["Code Generation Prompt Rewrite LLM"] --> G
     G --> V["Source Validation"] --> C["Compile once"] --> I["MicroRTS Integration Check"]
     I --> E["10 matches vs fixed evaluation roster; no regeneration"]
     E --> O["game_performance + code_quality"]
-    O --> N["NSGA-II Survivor Selection"] --> P
+    O --> R["Parent-child reward and AOS update"] --> N["Lexicase Survivor Selection"] --> P
 ```
 
 ???Offspring嚗?隢??Crossover???copy嚗?????Mutation嚗敹??? Final Java Generation LLM?rossover ??Mutation 靽格? Genotype嚗???亦???靽格?敺? Java source??

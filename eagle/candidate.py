@@ -258,6 +258,9 @@ def compact_candidate_metadata(
     for key in ("seed_index", "failure_category", "failure_reason"):
         if key in metadata:
             compact[key] = metadata[key]
+    aos = metadata.get("aos")
+    if isinstance(aos, dict):
+        compact["aos"] = dict(aos)
     history = metadata.get("reflection_history")
     if isinstance(history, list):
         compact["reflection_history"] = [dict(item) for item in history[-1:] if isinstance(item, dict)]

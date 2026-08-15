@@ -138,6 +138,7 @@ def record_generation(
     population: list[Candidate],
     *,
     diversity: dict[str, Any] | None = None,
+    aos: dict[str, Any] | None = None,
 ) -> None:
     """Record the surviving population after selection exactly once."""
     snapshot = {
@@ -149,7 +150,7 @@ def record_generation(
     generations_dir.mkdir(parents=True, exist_ok=True)
     snapshot_path = generations_dir / f"generation_{generation:04d}.json"
     atomic_json(snapshot_path, snapshot)
-    metrics = generation_metrics(generation, population, diversity=diversity)
+    metrics = generation_metrics(generation, population, diversity=diversity, aos=aos)
     metrics_path = run_dir / "generation_metrics.jsonl"
     existing = _jsonl_by_key(metrics_path, "generation")
     existing[generation] = metrics
@@ -183,6 +184,7 @@ def generation_metrics(
     population: list[Candidate],
     *,
     diversity: dict[str, Any] | None = None,
+    aos: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     objectives: dict[str, Any] = {}
     opponent_by_candidate: dict[str, Any] = {}
@@ -330,7 +332,26 @@ def generation_metrics(
     }
     if diversity is not None:
         payload["strategy_diversity"] = dict(diversity)
+    if aos is not None:
+        payload["aos"] = dict(aos)
     return payload
+
+
+def load_aos_state(run_dir: Path) -> dict[str, Any] | None:
+    """Load the latest persisted AOS state for deterministic resume."""
+
+    path = run_dir / "generation_metrics.jsonl"
+    if not path.exists():
+        return None
+    latest: dict[str, Any] | None = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        payload = json.loads(line)
+        aos = payload.get("aos")
+        if isinstance(aos, dict) and isinstance(aos.get("state"), dict):
+            latest = dict(aos["state"])
+    return latest
 
 
 def _candidate_beats_opponent(candidate: Candidate, opponent_id: str) -> bool:

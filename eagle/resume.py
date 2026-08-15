@@ -8,6 +8,7 @@ from pathlib import Path
 
 from generation.backend import MockGenerationBackend
 
+from .aos import AdaptiveOperatorSelection
 from .artifacts import write_summary
 from .config import ExperimentConfig
 from .crossover import CrossoverContext
@@ -18,12 +19,13 @@ from .rewrite import PromptRewriteMutation
 from .run_artifacts import (
     finalize_run,
     load_error_memory,
+    load_aos_state,
     load_resume_population,
     mark_run_interrupted,
     record_error_memory,
     record_generation,
 )
-from .search import SearchResult, create_offspring
+from .search import SearchResult, apply_aos_rewards, create_offspring
 from .strategy_diversity import (
     archive_niches,
     diversity_console_summary,
@@ -102,6 +104,7 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path, run_dir:
         ),
     }
     rng = random.Random(f"{config.random_seed}:{completed_generation}")
+    aos = AdaptiveOperatorSelection.from_state(config.aos, load_aos_state(run_dir))
     population_state_signature = population_signature(population)
     stagnation = 0
     error_memory = load_error_memory(run_dir)
@@ -109,7 +112,7 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path, run_dir:
     for generation in range(completed_generation + 1, config.generations):
         offspring = create_offspring(
             population, config=config, generation=generation, rng=rng,
-            mutations=mutations, artifact_root=candidates_dir, error_memory=error_memory,
+            mutations=mutations, aos=aos, artifact_root=candidates_dir, error_memory=error_memory,
         )
         span = Stopwatch.start()
         evaluated = evaluate_population(
@@ -118,6 +121,10 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path, run_dir:
             candidates_dir=candidates_dir,
             mock=mock, llm_client=shared_client,
         )
+        evaluated, rewards = apply_aos_rewards(
+            population, evaluated, config=config, aos=aos, candidates_dir=candidates_dir,
+        )
+        aos_record = aos.update_generation(rewards)
         archive_before = archive_niches(run_dir)
         update_strategy_archive(run_dir, evaluated)
         update_opponent_archive(run_dir, evaluated)
@@ -141,6 +148,7 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path, run_dir:
             generation,
             population,
             diversity=generation_diversity,
+            aos=aos_record,
         )
         print(diversity_console_summary(generation, generation_diversity), flush=True)
         completed_generation = generation
@@ -177,6 +185,8 @@ def _validate_resume_config(config: ExperimentConfig, run_dir: Path) -> None:
         "max_cycles": config.tick_limit,
         "microrts_match_seeds": list(config.resolved_match_seeds),
     }
+    if "aos" in resolved and resolved.get("aos") != config.aos.to_dict():
+        expected["aos"] = config.aos.to_dict()
     mismatches = [
         f"{key}: run={resolved.get(key)!r}, config={value!r}"
         for key, value in expected.items()

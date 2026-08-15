@@ -85,10 +85,19 @@ next inherited state: A1 + B3 + C2
 
 ## Mutation selection
 
-- Use Strategy Mutation when reliable completed-game evidence exists.
-- Prefer Code Mutation for generation, validation, compilation, integration, or runtime failures; low capability/alignment; or excessive compiler warnings.
-- A candidate without reliable gameplay results must not use Strategy Mutation as its primary operator.
-- Select feedback evidence by component provenance and mutation responsibility, not by prompt equality.
+Lexicase selects the parent. A generation-level Adaptive Operator Selection
+(AOS) then selects exactly one of the two mutation operators:
+
+- `strategy_reflection` → Strategy Reflection → Commentator/Coach → strategy prompt rewrite;
+- `generate_code_reflection` → Generate-Code Reflection → generation prompt rewrite.
+
+AOS starts at Strategy `0.20` / Generate-Code `0.80`, keeps every operator at
+or above `0.10`, and updates a lightweight credit EMA only after the complete
+offspring batch has been evaluated. The reward first handles execution repair
+or breakage, then compares the child's LOSS/DRAW/WIN result against its AOS
+parent for each active opponent case. Lexicase remains solely responsible for
+parent selection. Select reflection evidence by component provenance and
+mutation responsibility, not by prompt equality.
 
 ## Persistence checklist
 

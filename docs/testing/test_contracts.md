@@ -33,6 +33,7 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Artifacts | golden tree, schemas, hashes, resolved config, readback reconstruction, interruption safety; generation/final snapshots preserve fitness and timing while excluding raw match output and full mutation envelopes; evolution writes no duplicate `results.jsonl` or flat population snapshot |
 | Timing | UTC fields, monotonic durations, attempts, optional null stages, 10 match durations |
 | Opponent-wise lexicase | exactly ten maximized opponent cases; seeded case-order filtering; fixed-size elite plus lexicase survivor behavior |
+| Adaptive Operator Selection | Lexicase selects parents; AOS selects the two reflection operators; execution-first parent-child rewards, opponent-case transitions, generation-level updates, floor, normalization, and persisted statistics |
 | Operations | readers reject/migrate unsupported schema versions; legacy names never leak into active output |
 | Offline analysis | explicit/latest run resolution is deterministic; only direct canonical children are eligible; partial runs produce derived outputs; unsupported or historical schemas fail explicitly; `results.jsonl` is never read |
 | LLM server lifecycle | missing executable/model; immediate exit; bounded loading/readiness; occupied port; bind/client host separation; local/remote launch ownership; durable stdout/stderr; useful failure state; process-group stop; topology/client URL identity; no READY on process creation |

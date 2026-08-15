@@ -1,13 +1,12 @@
 import tempfile
 import unittest
-import random
 from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation import evaluate_candidate
 from eagle.mutation import build_code_reflection_prompt, build_strategy_reflection_prompt, ReflectionContext
-from eagle.search import choose_mutation, mutation_context_from_candidate
+from eagle.search import mutation_context_from_candidate
 from generation.backend import MockGenerationBackend
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE as FAILED_GAME_PERFORMANCE
 from evaluation.code_quality import build_failure_code_quality
@@ -76,32 +75,8 @@ class ReflectionContextTests(unittest.TestCase):
         self.assertEqual(context.game_performance, FAILED_GAME_PERFORMANCE)
         self.assertEqual(context.failure_stage, "compilation")
         self.assertIn("missing symbol", context.error_message)
-        self.assertEqual(choose_mutation(candidate, random.Random(1)), "code")
         prompt = build_code_reflection_prompt(candidate, context)
         self.assertIn("missing symbol: commandAttack", prompt)
-
-    def test_selection_uses_canonical_code_evidence(self):
-        def candidate_with_quality(alignment, warnings=0):
-            return Candidate(
-                status="evaluated",
-                fitness_objectives={"game_performance": 1.0, "code_quality": 500.0 + alignment},
-                metadata={
-                    "reflection_evidence": {
-                        "evaluation_status": "evaluated",
-                        "objectives": {"game_performance": 1.0, "code_quality": 500.0 + alignment},
-                        "game": {"completed_match_count": 126},
-                        "code_quality": {
-                            "function_score": 80,
-                            "strategy_alignment_score": alignment,
-                            "warning_count": warnings,
-                        },
-                    }
-                },
-            )
-
-        self.assertEqual(choose_mutation(candidate_with_quality(8), random.Random(1)), "strategy")
-        self.assertEqual(choose_mutation(candidate_with_quality(3), random.Random(1)), "code")
-        self.assertEqual(choose_mutation(candidate_with_quality(8, warnings=1), random.Random(1)), "code")
 
     def test_strategy_template_keeps_canonical_envelope_in_stable_field(self):
         candidate = Candidate(id="strategy-parent", strategy_prompt="play economy")

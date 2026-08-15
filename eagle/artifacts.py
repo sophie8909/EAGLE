@@ -65,6 +65,18 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
         )
 
 
+def write_aos_reward_artifact(candidates_dir: Path, reward: dict) -> None:
+    """Persist post-evaluation AOS credit beside the mutated candidate."""
+
+    candidate_id = str(reward.get("child_candidate_id") or "")
+    if not candidate_id:
+        return
+    write_json(candidates_dir / candidate_id / "aos" / "reward.json", {
+        "schema_version": "eagle-aos-reward-v1",
+        **reward,
+    })
+
+
 def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluation) -> None:
     """Save per-candidate state plus the Phase 2A mutation evidence."""
 
@@ -300,7 +312,8 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "generation_count": config.generations,
         "crossover_rate": config.crossover_rate,
         "mutation_rate": config.mutation_rate,
-        "mutation_selection_policy": "failed_game_to_code_otherwise_seeded_random",
+        "mutation_selection_policy": "adaptive_operator_selection",
+        "aos": config.aos.to_dict(),
         "stagnation_generations": config.stagnation_generations,
         "matches_per_candidate": config.matches_per_candidate,
         "matches_per_opponent": config.fixed_matches_per_opponent,

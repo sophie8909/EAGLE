@@ -242,10 +242,13 @@ At most one mutation is attempted per offspring, after crossover/copy, with prod
 
 | Operator | Routing | LLM sequence | Genotype change |
 | --- | --- | --- | --- |
-| Strategy Mutation | `eagle/search.py::choose_mutation`; selected on reliable successful evidence, or by 50/50 / 90/10 random routing depending on code quality; failed candidates are forced to Code Mutation | selected match Commentator calls → Coach | Changes only `strategy_prompt` plus strategy metadata |
-| Code Mutation | Same router; addresses generation/validation/compile/integration/runtime evidence, warnings, low capability/alignment | Code Reflection → prompt Rewrite | Changes only `generation_prompt` |
+| Strategy Reflection | `eagle/aos.py::AdaptiveOperatorSelection` selects `strategy_reflection` | selected match Commentator calls → Coach | Changes only `strategy_prompt` plus strategy metadata |
+| Generate-Code Reflection | `eagle/aos.py::AdaptiveOperatorSelection` selects `generate_code_reflection` | Code Reflection → prompt Rewrite | Changes only `generation_prompt` |
 
-The routing details are implemented, not inferred from the name: failures or any `-1000` opponent case force code mutation; when valid code quality is strictly greater than 50, strategy is chosen with probability 0.9 and code with probability 0.1; otherwise the split is 0.5/0.5. The quality value is used for mutation routing only, not fitness selection.
+AOS starts at Strategy `0.20` / Generate-Code `0.80`, enforces a `0.10`
+exploration floor, and learns from execution-first parent-child rewards and
+opponent-wise LOSS/DRAW/WIN changes. It is updated once per generation; no
+win-rate or code-quality schedule controls operator choice.
 
 Strategy mutation additionally samples one intent from the EA RNG distribution: `REFINE` 0.40, `COUNTER` 0.25, `STRUCTURAL` 0.20, `ALTERNATIVE` 0.15. The active sports-role Coach directly emits the replacement strategy prompt; the generic two-call `PromptRewriteMutation` strategy path exists but is not the strategy operator wired by `eagle/search.py`.
 
@@ -263,11 +266,13 @@ for generation = 1 .. configured_generations-1:
         child ← component_crossover(parent_a, parent_b) with probability crossover_rate
                 otherwise copy(parent_a)
         if random() < mutation_rate:
-            operator ← route_from_failure_and_code_quality(parent_a/component parent)
+            operator ← AOS.select(current_generation_probabilities)
             child ← operator(child, structured evidence)
         offspring.append(child)
 
     evaluate(offspring)  # generation → validation → compile → integration → 126 matches
+    reward each selected operator from parent-child execution/case changes
+    update AOS credits and probabilities once for the next generation
     population ← lexicase-selected distinct offspring, then parent fallback
                     + old-population fallback if needed
     persist generation
@@ -709,6 +714,9 @@ Implementation: `eagle/artifacts.py`, `eagle/run_artifacts.py`, `eagle/llm.py::L
 - generation metrics CSV;
 - candidate summary CSV;
 - individual agent Game Performance CSV and scatter plot;
+- individual agent win-rate CSV and one opponent-specific scatter plot per opponent;
+- single-match Game Performance CSV used for the light distribution overlay;
+- AOS operator statistics CSV and probability plot;
 - aggregate Game Performance best/mean/median/worst line plot;
 - code-quality diagnostic line plot;
 - per-opponent generation CSV and one line plot per opponent;

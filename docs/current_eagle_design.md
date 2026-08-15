@@ -38,8 +38,10 @@ seed candidates
   -> evaluate 126 matches
   -> persist seven opponent scores and reporting aggregate
   -> seeded lexicase parent selection
-  -> crossover/copy and optional mutation
+  -> crossover/copy
+  -> AOS selects Strategy Reflection or Generate-Code Reflection
   -> evaluate children
+  -> parent-child reward and generation-level AOS update
   -> lexicase offspring survivors with parent fallback
   -> persist generation snapshot and metrics
 ```
@@ -64,7 +66,13 @@ Each generation snapshot persists seven `fitness_objectives` per surviving
 candidate. `generation_metrics.jsonl` stores per-case best/mean/median/worst
 statistics and `opponent_scores.by_opponent` generation means. The analysis
 command writes `opponent_game_performance.csv`, aggregate/diagnostic plots,
-and one `game_performance_by_generation_<opponent>.png` per case.
+`agent_win_rate.csv`, `match_game_performance.csv`, individual-agent
+per-opponent win-rate/Game Performance plots, and one
+`game_performance_by_generation_<opponent>.png` per case. Aggregate Game
+Performance plots retain their curves, overlay single-match scores as light
+semi-transparent points, and mark the neutral aggregate baseline at `0`.
+AOS usage, rewards, credits, and probabilities are also written to
+`aos_operator_statistics.csv` and `aos_operator_probabilities.png`.
 
 ## Reflection and diagnostics
 

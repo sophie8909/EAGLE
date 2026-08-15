@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +12,7 @@ import yaml
 from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH, get_seed_prompt_template
 
 from .candidate import DEFAULT_GENERATION_PROMPT
+from .aos import AOSConfig
 from .opponent_cases import LEXICASE_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SUM
 
 
@@ -83,6 +84,7 @@ class ExperimentConfig:
     resource_scale: float = 10.0
     unit_material_values: tuple[tuple[str, float], ...] = DEFAULT_UNIT_MATERIAL_VALUES
     stagnation_generations: int = 10
+    aos: AOSConfig = field(default_factory=AOSConfig)
     raw_config: str = ""
 
     @classmethod
@@ -126,6 +128,7 @@ class ExperimentConfig:
         if "evaluation_opponents" in payload:
             raise ValueError("evaluation_opponents is fixed by eagle.opponent_cases and must not be overridden.")
         evaluation_opponents = DEFAULT_SEARCH_OPPONENTS
+        aos = AOSConfig.from_mapping(payload.get("aos"))
         if "eagle_opponent" in payload:
             raise ValueError("eagle_opponent is obsolete; evolutionary evaluation uses only the seven fixed opponents.")
         return cls(
@@ -173,6 +176,7 @@ class ExperimentConfig:
             resource_scale=float(payload.get("resource_scale", 10.0)),
             unit_material_values=_parse_unit_material_values(payload.get("unit_material_values")),
             stagnation_generations=int(payload.get("stagnation_generations", 10)),
+            aos=aos,
             raw_config=raw_config,
         )
 
@@ -189,6 +193,7 @@ class ExperimentConfig:
             raise ValueError("mutation_max_attempts must be at least 1.")
         if self.stagnation_generations < 0:
             raise ValueError("stagnation_generations must be at least 0.")
+        self.aos.validate()
         if self.tick_limit < 1:
             raise ValueError("tick_limit must be at least 1.")
         if self.alignment_backend not in {"mock", "openai"}:

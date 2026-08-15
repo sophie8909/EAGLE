@@ -19,9 +19,18 @@ from shutil import copy2
 from typing import Callable
 
 from generation.backend import MockGenerationBackend, build_generation_backend
-from .opponent_cases import FAILED_OPPONENT_SCORE, LEXICASE_CASES
-
-from .artifacts import write_prompt_snapshot, write_resolved_config, write_summary
+from .aos import (
+    AdaptiveOperatorSelection,
+    OPERATOR_TO_MUTATION,
+    OperatorReward,
+    calculate_operator_reward,
+)
+from .artifacts import (
+    write_aos_reward_artifact,
+    write_prompt_snapshot,
+    write_resolved_config,
+    write_summary,
+)
 from .run_artifacts import (
     finalize_run,
     initialize_run_manifest,
@@ -101,6 +110,7 @@ def _run_search_impl(
     config.validate()
     preflight_evaluation_opponents(config, mock=mock)
     rng = random.Random(config.random_seed)
+    aos = AdaptiveOperatorSelection(config.aos)
 
     backend_name = "mock" if mock else config.generation_backend
     client = LLMClient(config.llm_base_url, config.llm_model, temperature=config.llm_temperature, max_output_tokens=config.llm_max_tokens)
@@ -191,6 +201,7 @@ def _run_search_impl(
         0,
         evaluated_population,
         diversity=generation_diversity,
+        aos=aos.initial_generation_record(),
     )
     print(diversity_console_summary(0, generation_diversity), flush=True)
     error_memory = record_error_memory(run_dir, evaluated_population)
@@ -210,6 +221,7 @@ def _run_search_impl(
             generation=generation,
             rng=rng,
             mutations={"strategy": strategy_reflection_mutation, "code": code_mutation},
+            aos=aos,
             artifact_root=candidates_dir,
             error_memory=error_memory,
         )
@@ -226,6 +238,14 @@ def _run_search_impl(
             mock=mock,
             llm_client=shared_client,
         )
+        evaluated_offspring, rewards = apply_aos_rewards(
+            evaluated_population,
+            evaluated_offspring,
+            config=config,
+            aos=aos,
+            candidates_dir=candidates_dir,
+        )
+        aos_record = aos.update_generation(rewards)
         archive_before = archive_niches(run_dir)
         update_strategy_archive(run_dir, evaluated_offspring)
         update_opponent_archive(run_dir, evaluated_offspring)
@@ -256,6 +276,7 @@ def _run_search_impl(
             generation,
             evaluated_population,
             diversity=generation_diversity,
+            aos=aos_record,
         )
         print(diversity_console_summary(generation, generation_diversity), flush=True)
         completed_generation = generation
@@ -321,7 +342,12 @@ def initialize_population(config: ExperimentConfig) -> list[Candidate]:
     return population[: config.population_size]
 
 
-def create_offspring(population: list[Candidate], *, config: ExperimentConfig, generation: int, rng: random.Random, mutations: dict[str, PromptRewriteMutation], artifact_root: Path | None = None, error_memory: tuple[dict[str, object], ...] = ()) -> list[Candidate]:
+def create_offspring(
+    population: list[Candidate], *, config: ExperimentConfig, generation: int,
+    rng: random.Random, mutations: dict[str, PromptRewriteMutation],
+    aos: AdaptiveOperatorSelection, artifact_root: Path | None = None,
+    error_memory: tuple[dict[str, object], ...] = (),
+) -> list[Candidate]:
     """Create the next generation's genotypes without evaluating them.
 
     Parent selection, optional three-component crossover, and optional
@@ -369,7 +395,8 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
             )
         if rng.random() < config.mutation_rate:
             feedback_parent = parent_for_component(child.strategy_parent_id, (parent_a, parent_b))
-            mutation_name = choose_mutation(feedback_parent, rng)
+            operator_used = aos.select_operator(rng)
+            mutation_name = OPERATOR_TO_MUTATION[operator_used]
             mutation = mutations[mutation_name]
             mutation_intent = None
             if mutation_name == "strategy":
@@ -427,6 +454,15 @@ def create_offspring(population: list[Candidate], *, config: ExperimentConfig, g
                     "error": mutation_error,
                 },
             })
+            child = replace(child, metadata={
+                **child.metadata,
+                "aos": {
+                    "parent_candidate_id": parent_a.id,
+                    "child_candidate_id": child.id,
+                    "operator_used": operator_used,
+                    "selection_probability": aos.probability(operator_used),
+                },
+            })
         offspring.append(child)
     return offspring
 
@@ -437,46 +473,6 @@ def parent_for_component(parent_id: str | None, parents: tuple[Candidate, Candid
             return parent
     raise ValueError(f"Recorded component parent {parent_id!r} is not a direct parent.")
 
-
-def choose_mutation(feedback_parent: Candidate, rng: random.Random) -> str:
-    """Choose a mutation type from the parent's latest evaluation.
-
-    A failed game still takes the code-mutation path so the generated agent
-    can address implementation-level failures. Once simplicity is above 50,
-    the code is considered strong enough to favor strategy exploration:
-    90% strategy mutation and 10% code mutation. All other successful
-    candidates retain the default 50/50 split.
-    """
-    evidence = feedback_parent.metadata.get("reflection_evidence") or {}
-    failure_stage = evidence.get("failure_stage") or feedback_parent.failure_stage
-    if failure_stage or feedback_parent.status == "failed":
-        return "code"
-    if any(
-        number_or_none(feedback_parent.fitness_objectives.get(case)) == FAILED_OPPONENT_SCORE
-        for case in LEXICASE_CASES
-    ):
-        return "code"
-    game = evidence.get("game") or feedback_parent.game_eval_result or {}
-    if evidence and (
-        int(game.get("completed_match_count") or 0) != int(game.get("expected_match_count") or 126)
-        or any(
-            number_or_none(feedback_parent.fitness_objectives.get(case)) == FAILED_OPPONENT_SCORE
-            for case in LEXICASE_CASES
-        )
-    ):
-        return "code"
-    quality = evidence.get("code_quality") or feedback_parent.code_quality_result.get("code_quality_breakdown") or {}
-    if evidence and (
-        int(quality.get("warning_count") or 0) > 0
-        or (number_or_none(quality.get("function_score")) is not None and number_or_none(quality.get("function_score")) < 50)
-        or (number_or_none(quality.get("strategy_alignment_score")) is not None and number_or_none(quality.get("strategy_alignment_score")) < 5)
-    ):
-        return "code"
-    # Valid simplicity scores are in [0, 100]; retain the old midpoint-style
-    # routing threshold after removing the obsolete +500 score base.
-    if (number_or_none((feedback_parent.code_quality_result or {}).get("code_quality")) or 0.0) > 50:
-        return "strategy" if rng.random() < 0.9 else "code"
-    return "strategy" if rng.random() < 0.5 else "code"
 
 def mutation_context_from_candidate(
     candidate: Candidate,
@@ -501,5 +497,32 @@ def mutation_context_from_candidate(
     )
 
 
-def number_or_none(value: object) -> float | None:
-    return float(value) if isinstance(value, int | float) else None
+def apply_aos_rewards(
+    parents: list[Candidate],
+    children: list[Candidate],
+    *,
+    config: ExperimentConfig,
+    aos: AdaptiveOperatorSelection,
+    candidates_dir: Path,
+) -> tuple[list[Candidate], list[OperatorReward]]:
+    """Assign rewards only after all children in the generation are evaluated."""
+
+    parent_by_id = {candidate.id: candidate for candidate in parents}
+    updated: list[Candidate] = []
+    rewards: list[OperatorReward] = []
+    for child in children:
+        aos_metadata = child.metadata.get("aos") or {}
+        operator = aos_metadata.get("operator_used")
+        parent_id = aos_metadata.get("parent_candidate_id")
+        if not operator or not parent_id or parent_id not in parent_by_id:
+            updated.append(child)
+            continue
+        reward = calculate_operator_reward(
+            parent_by_id[parent_id], child, operator=operator, config=config.aos,
+        )
+        reward_metadata = {**aos_metadata, **reward.to_dict()}
+        child = replace(child, metadata={**child.metadata, "aos": reward_metadata})
+        write_aos_reward_artifact(candidates_dir, reward_metadata)
+        updated.append(child)
+        rewards.append(reward)
+    return updated, rewards

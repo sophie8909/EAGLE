@@ -6,8 +6,10 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 from eagle.analysis.loader import load_run, resolve_explicit_run, resolve_latest_run
+from eagle.analysis import report
 from eagle.analysis.report import OUTPUT_FILES, generate_analysis
 from eagle.run_artifacts import atomic_json
 
@@ -136,6 +138,72 @@ class CanonicalAnalysisTests(unittest.TestCase):
             self.assertIn("heavy_rush_win_rate", rows)
             self.assertIn("0.5", rows)
 
+    def test_aggregate_game_performance_plot_adds_neutral_baseline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "plot.png"
+            with mock.patch.object(report.plt, "axhline") as axhline:
+                report._line_plot(
+                    output,
+                    [{"generation": 0, "game_performance_mean": 0.0}],
+                    "generation",
+                    ("game_performance_mean",),
+                    "Game Performance",
+                    neutral_line=True,
+                )
+            self.assertEqual([call.args[0] for call in axhline.call_args_list], [0.0])
+            self.assertEqual(axhline.call_args_list[0].kwargs["linestyle"], "--")
+
+    def test_analysis_writes_agent_win_rates_and_match_distribution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = self.make_run(root, "run", stamp=datetime.now(timezone.utc))
+            (run / "generations").mkdir()
+            atomic_json(run / "generations" / "generation_0000.json", {
+                "schema_version": "eagle-generation-v2",
+                "generation": 0,
+                "population": [{
+                    "candidate_id": "agent-a", "generation": 0, "status": "evaluated",
+                    "game_eval_result": {
+                        "game_performance": 0.0, "win_rate": 0.5,
+                        "opponent_results": [{
+                            "opponent_id": "lightrush", "wins": 1, "draws": 1, "losses": 1,
+                            "expected_match_count": 3, "completed_match_count": 3,
+                            "match_scores": [-100.0, 0.0, 100.0],
+                        }],
+                    },
+                }],
+            })
+            (run / "generation_metrics.jsonl").write_text(json.dumps({
+                "generation": 0,
+                "population_size": 1,
+                "game_performance": {"best": 0.0, "mean": 0.0, "median": 0.0, "worst": 0.0},
+                "opponent_scores": {"by_opponent": {"lightrush": {"game_performance": 0.0}}},
+                "objectives": {},
+                "aos": {"operators": {
+                    "strategy_reflection": {
+                        "usage_count": 0, "reward_count": 0, "mean_reward": None,
+                        "recent_credit": 0.0, "selection_probability": 0.2,
+                        "selection_probability_before": 0.2,
+                    },
+                    "generate_code_reflection": {
+                        "usage_count": 1, "reward_count": 1, "mean_reward": 1.0,
+                        "recent_credit": 0.2, "selection_probability": 0.8,
+                        "selection_probability_before": 0.8,
+                    },
+                }},
+            }) + "\n", encoding="utf-8")
+            output = generate_analysis(load_run(run), force=True)
+            win_rates = (output / "agent_win_rate.csv").read_text(encoding="utf-8")
+            match_scores = (output / "match_game_performance.csv").read_text(encoding="utf-8")
+            self.assertIn("agent-a", win_rates)
+            self.assertIn("lightrush", win_rates)
+            self.assertIn("0.333333", win_rates)
+            self.assertIn("-100.0", match_scores)
+            self.assertIn("100.0", match_scores)
+            self.assertTrue((output / "plots" / "win_rate_by_generation_lightrush.png").is_file())
+            self.assertTrue((output / "plots" / "aos_operator_probabilities.png").is_file())
+            self.assertIn("strategy_reflection", (output / "aos_operator_statistics.csv").read_text(encoding="utf-8"))
+
     def test_plot_set_contains_only_objectives_agents_and_opponents(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -147,6 +215,13 @@ class CanonicalAnalysisTests(unittest.TestCase):
                 "population": [{
                     "candidate_id": "agent-a", "generation": 0, "status": "evaluated",
                     "fitness_objectives": {"game_performance": 12.5, "code_quality": 80.0},
+                    "game_eval_result": {
+                        "game_performance": 12.5,
+                        "opponent_results": [
+                            {"opponent_id": "passive", "wins": 1, "expected_match_count": 1, "completed_match_count": 1},
+                            {"opponent_id": "random", "wins": 0, "expected_match_count": 1, "completed_match_count": 1},
+                        ],
+                    },
                 }],
             })
             (run / "generation_metrics.jsonl").write_text(json.dumps({
@@ -168,6 +243,8 @@ class CanonicalAnalysisTests(unittest.TestCase):
                 "game_performance_by_generation.png",
                 "game_performance_by_generation_passive.png",
                 "game_performance_by_generation_random.png",
+                "win_rate_by_generation_passive.png",
+                "win_rate_by_generation_random.png",
             })
             opponent_rows = (output / "opponent_game_performance.csv").read_text(encoding="utf-8")
             self.assertIn("passive", opponent_rows)

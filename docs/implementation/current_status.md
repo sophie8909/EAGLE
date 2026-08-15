@@ -14,10 +14,15 @@ Snapshot: 2026-08-12. This file describes executable repository behavior.
 - Parent selection is seeded lexicase. Survivor selection fills the fixed-size
   population with seeded lexicase-selected offspring, using parent fallback only
   when offspring are insufficient; aggregate Game Performance is reporting-only.
+- AOS selects between `strategy_reflection` and `generate_code_reflection`.
+  It starts at `0.20/0.80`, has a `0.10` exploration floor, and updates once
+  per generation from execution-first parent-child rewards. Lexicase remains
+  the parent selector.
 - The weighted aggregate Game Performance uses weights `1` for the three rush
   cases and `2` for AllInBot/Mayari/COAC/TMA, with denominator `11.0`, for
   reporting only.
-- `code_quality` is a diagnostic and failure-routing signal, not an objective.
+- `code_quality` is a diagnostic and mutation-evidence signal, not an objective
+  and not an AOS operator schedule.
 - Previous-generation EAGLE self-play and dynamic opponent weights are absent
   from the active evaluation path.
 
@@ -44,7 +49,10 @@ Each `generations/generation_*.json` candidate stores its seven
 `generation_metrics.jsonl` stores an objective-statistics object for every
 opponent case and `opponent_scores.by_opponent` with generation-level means.
 The analysis command turns these records into
-`opponent_game_performance.csv` and per-opponent generation plots.
+`agent_win_rate.csv`, `match_game_performance.csv`,
+`opponent_game_performance.csv`, individual-agent per-opponent win-rate/Game
+Performance plots, per-opponent generation plots with single-match score
+overlays, and AOS operator statistics/probability plots.
 
 ## Reflection boundary
 

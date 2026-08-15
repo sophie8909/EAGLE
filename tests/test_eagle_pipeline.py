@@ -16,7 +16,7 @@ from eagle.crossover import CrossoverContext, crossover
 from eagle.evaluation import evaluate_candidate, print_progress
 from eagle.mutation import MutationContext
 from eagle.prompts import normalize_prompt
-from eagle.search import choose_mutation, population_signature, run_search
+from eagle.search import population_signature, run_search
 from eagle.selection import select_parent
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_performance import (
@@ -205,32 +205,6 @@ population_size: 3
         prompt = "  first\n\n\n\nsecond\n\n\nthird  "
         normalized = normalize_prompt(prompt, max_chars=100, max_lines=10)
         self.assertEqual(normalized, "first\n\nsecond\n\nthird")
-    def test_failed_game_performance_selects_code_mutation(self) -> None:
-        failed_parent = Candidate(fitness_objectives={case: FAILED_GAME_PERFORMANCE for case in LEXICASE_CASES})
-        self.assertEqual(choose_mutation(failed_parent, random.Random(1)), "code")
-
-    def test_high_code_quality_favors_strategy_mutation(self) -> None:
-        parent = Candidate(fitness_objectives={case: 1.0 for case in LEXICASE_CASES}, code_quality_result={"code_quality": 51.0})
-        self.assertEqual(choose_mutation(parent, random.Random(1)), "strategy")
-
-    def test_high_code_quality_uses_code_mutation_for_tail(self) -> None:
-        parent = Candidate(fitness_objectives={case: 1.0 for case in LEXICASE_CASES}, code_quality_result={"code_quality": 51.0})
-
-        class TailRandom:
-            def random(self) -> float:
-                return 0.95
-
-        self.assertEqual(choose_mutation(parent, TailRandom()), "code")
-
-    def test_code_quality_threshold_is_strictly_greater_than_50(self) -> None:
-        parent = Candidate(fitness_objectives={case: 1.0 for case in LEXICASE_CASES}, code_quality_result={"code_quality": 50.0})
-
-        class TailRandom:
-            def random(self) -> float:
-                return 0.95
-
-        self.assertEqual(choose_mutation(parent, TailRandom()), "code")
-
     def test_crossover_uniform_selects_complete_java_source(self) -> None:
         source_a = load_java_template(JavaTemplatePaths()).replace("private void decide", "private void decideA", 1)
         source_b = load_java_template(JavaTemplatePaths()).replace("private void decide", "private void decideB", 1)
@@ -382,6 +356,20 @@ population_size: 3
             self.assertTrue((candidate_dir / "candidate_result.json").exists())
             individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
             self.assertNotIn("prompt_length", individual["fitness_objectives"])
+            metrics = [
+                json.loads(line)
+                for line in (result.run_dir / "generation_metrics.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            generation_one_aos = next(item["aos"] for item in metrics if item["generation"] == 1)
+            self.assertEqual(
+                set(generation_one_aos["operators"]),
+                {"strategy_reflection", "generate_code_reflection"},
+            )
+            self.assertAlmostEqual(
+                sum(generation_one_aos["post_update_probabilities"].values()), 1.0
+            )
+            self.assertTrue(list((result.run_dir / "candidates").glob("*/aos/reward.json")))
 
     def test_population_signature_tracks_opponent_cases_not_candidate_ids(self) -> None:
         first = [

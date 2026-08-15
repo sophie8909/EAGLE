@@ -12,6 +12,20 @@ mutation_max_attempts: 3
 crossover_rate: 0.75
 mutation_rate: 0.85
 random_seed: 7
+
+aos:
+  enabled: true
+  initial_probabilities:
+    strategy_reflection: 0.20
+    generate_code_reflection: 0.80
+  min_probability: 0.10
+  credit:
+    alpha: 0.20
+  reward:
+    repaired_execution: 1.0
+    broke_execution: -1.0
+    still_failed: -0.1
+
 llm:
   temperature: 0.2
   match_commentator:

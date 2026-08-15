@@ -30,7 +30,7 @@ the Strategy Reflection selection. Match Commentator is not called from
 | Source and symbol | Caller | Trigger | Operator | Reflects | Candidate state |
 | --- | --- | --- | --- | --- | --- |
 | `eagle/search.py:create_offspring` | `run_search` / resume path | `rng.random() < config.mutation_rate` | selected mutation from `mutations` | strategy or code | successful or failed parent can be selected |
-| `eagle/search.py:choose_mutation` | `create_offspring` | failure, warnings, low capability/alignment, or mutation policy | strategy/code selector | neither; chooses path | failure evidence routes preferentially to code mutation |
+| `eagle/aos.py:AdaptiveOperatorSelection` | `create_offspring` | current generation probabilities | `strategy_reflection` or `generate_code_reflection` | neither; chooses path | probabilities update after evaluated parent-child rewards |
 | `eagle/search.py:mutation_context_from_candidate` | `create_offspring` | immediately before mutation | shared context adapter | strategy or code | feedback parent plus equivalent references |
 | `eagle/rewrite.py:PromptRewriteMutation.mutate` | `create_offspring` | one mutation selected | strategy or code mutation | strategy or code | Reflection then prompt-only Rewrite |
 | `eagle/mutation.py:ReflectionStage.run` | `PromptRewriteMutation.mutate` | every selected mutation | `strategy_reflection` / `code_reflection` | one component at a time | bounded retries; raw response persisted |
