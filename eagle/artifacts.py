@@ -356,7 +356,7 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "commentator": {
             "enabled": config.match_commentator_enabled,
             "temperature": config.match_commentator_temperature,
-            "chunk_ticks": config.match_commentator_chunk_ticks,
+            "sample_count": config.match_commentator_sample_count,
         },
         "retry_policy": {
             "max_attempts": 1 if is_mock_backend else 3,

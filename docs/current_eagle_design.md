@@ -84,3 +84,12 @@ reinterpreted by selection.
 
 For the detailed current contract, see
 [`opponent-wise-lexicase.md`](opponent-wise-lexicase.md).
+
+## Strategy Reflection coverage
+
+Strategy Reflection samples up to 10 evaluated matches using opponent coverage,
+then map/player-side coverage, then LOSS/DRAW/WIN priority. Each selected raw
+log receives one independent Commentator call. The Coach receives those local
+diagnoses plus a deterministic global summary built from all matches; fully
+beaten opponents are marked as capabilities to preserve. This changes reflection
+evidence only and does not add a fitness objective or alter AOS.

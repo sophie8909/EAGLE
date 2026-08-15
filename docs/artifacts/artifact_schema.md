@@ -43,6 +43,7 @@ runs/<run_id>/
         │   └── rewriter_response_raw.txt
         ├── reflection/
         │   ├── match_selection.json
+        │   ├── global_evaluation_summary.json
         │   └── mutation_intent.json
         ├── aos/reward.json
         ├── generation/
@@ -116,12 +117,14 @@ Each stage result JSON records:
 `candidate_result.json` is an index/summary, not a replacement for stage evidence. It includes identity, lineage reference, status/failure stage, objective values, completed-match count, and artifact references. `mutation/reflection_context.json` is the immutable evidence snapshot used to build the Reflection request; it retains the seven opponent objective values, reporting aggregate, and normalized stage/failure evidence without recalculating fitness.
 
 Strategy Reflection additionally persists `reflection/match_selection.json` before
-deleting temporary raw match logs. It records the available loss/draw/win counts,
-the strict priority rule, eligible and selected match IDs, requested/actual sample
-size, generation/candidate identity, and the run-derived random provenance. Within
-the selected outcome class it also records descending `opponent_weight` tiers;
-higher tiers are selected before lower tiers without treating weights as sampling
-probabilities.
+deleting temporary raw match logs. It records the coverage-aware selection rule,
+eligible and selected match IDs, sampled opponents/maps/player positions/results,
+coverage counts, requested/actual sample size, generation/candidate identity, and
+the run-derived random provenance. The sampler uses opponent coverage, then map
+coverage, then LOSS/DRAW/WIN priority with seeded random tie breaking.
+`reflection/global_evaluation_summary.json` is a deterministic breadth summary built
+from all evaluated match summaries; it records every active opponent, map and player
+side counts, overall W/D/L totals, win rate, and fully-beaten diagnostics.
 
 `evaluation/game_performance.json` and `evaluation/objectives.json` retain both the
 aggregate `game_performance` and ordered `opponent_scores`. The former also contains

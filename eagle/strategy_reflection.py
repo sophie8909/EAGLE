@@ -17,18 +17,19 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
-from evaluation.match_logs import read_match_log_chunks
+from evaluation.match_logs import iter_match_log
 
 from .candidate import Candidate
 from .llm import truncate_prompt
 from .mutation import ReflectionContext, utc_now
+from .opponent_cases import LEXICASE_CASES
 from .prompts import normalize_prompt
 from .strategy_diversity import build_strategy_niche, normalize_strategy_signature
 
 
 CANONICAL_ROLES = ("match_commentator", "coach", "generator")
-ROLE_SCHEMA_VERSION = "strategy-reflection-v2"
-PROMPT_VERSION = "sports-team-v2"
+ROLE_SCHEMA_VERSION = "strategy-reflection-v3"
+PROMPT_VERSION = "sports-team-v3"
 
 STRATEGY_MUTATION_INTENT_DISTRIBUTION = (
     ("REFINE", 0.40),
@@ -148,15 +149,18 @@ class MockRoleBackend:
 class StrategyReflectionPipeline:
     """Run Commentator -> Coach using shared backend plumbing."""
 
-    def __init__(self, backend: RoleBackend, *, max_attempts: int = 3, max_prompt_chars: int = 60_000, model_identity: str | None = None, enabled_roles: set[str] | None = None, selection_seed: int = 0) -> None:
+    def __init__(self, backend: RoleBackend, *, max_attempts: int = 3, max_prompt_chars: int = 60_000, model_identity: str | None = None, enabled_roles: set[str] | None = None, selection_seed: int = 0, sample_budget: int = 10) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
+        if sample_budget < 1:
+            raise ValueError("sample_budget must be at least 1")
         self.backend = backend
         self.max_attempts = max_attempts
         self.max_prompt_chars = max_prompt_chars
         self.model_identity = model_identity
         self.enabled_roles = frozenset(("match_commentator", "coach") if enabled_roles is None else enabled_roles)
         self.selection_seed = int(selection_seed)
+        self.sample_budget = int(sample_budget)
 
     def mutate(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> Candidate:
         result = self.run(candidate, context, artifact_dir=artifact_dir, mutation_intent=mutation_intent)
@@ -189,15 +193,19 @@ class StrategyReflectionPipeline:
             generation_index=context.evolution.generation_index,
             candidate_id=candidate.id,
             reflection_invocation=context.index,
+            sample_budget=self.sample_budget,
         )
         _write_json(artifact_dir, "reflection/match_selection.json", selection)
+        global_summary = build_global_evaluation_summary(context.game_evidence or {}, context.per_match_results)
+        _write_json(artifact_dir, "reflection/global_evaluation_summary.json", global_summary)
         selected_ids = set(selection["selected_match_ids"])
         for item in context.per_match_results:
             match_id = _match_id(item)
             if match_id not in selected_ids:
                 _delete_raw_match_artifacts(item)
 
-        selected_items = [item for item in context.per_match_results if _match_id(item) in selected_ids]
+        by_id = {_match_id(item): item for item in context.per_match_results}
+        selected_items = [by_id[match_id] for match_id in selection["selected_match_ids"] if match_id in by_id]
         for item in selected_items:
             match_id = str(item.get("match_id") or f"match_{item.get('match_index', len(analyses)):03d}")
             log_path = _resolve_path(item.get("match_log_path"))
@@ -217,7 +225,7 @@ class StrategyReflectionPipeline:
             _delete_raw_match_artifacts(item)
 
         try:
-            coach_payload = _coach_payload(candidate, context, analyses, selection, failures)
+            coach_payload = _coach_payload(candidate, context, analyses, selection, failures, global_summary)
             coach_request = _coach_prompt(candidate.strategy_prompt, coach_payload, intent)
             coach_raw = self._call_role("coach", coach_request, candidate, artifact_dir, extra={"parent_candidate_id": candidate.id})
             coach = _parse_coach(coach_raw, parent_strategy_prompt=candidate.strategy_prompt)
@@ -263,22 +271,12 @@ class StrategyReflectionPipeline:
             return _failed_result(candidate, artifact_dir, f"coach: {exc}", analyses)
 
     def _commentate(self, candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, log_path: Path, artifact_dir: Path | None) -> MatchAnalysis:
-        chunks = read_match_log_chunks(log_path, max_chars=self.max_prompt_chars)
-        if not chunks:
+        raw_log = list(iter_match_log(log_path))
+        if not raw_log:
             raise ValueError("match log contains no ticks")
-        partials: list[dict[str, Any]] = []
-        for chunk_index, chunk in enumerate(chunks):
-            request = _commentator_prompt(candidate, context, item, match_id, chunk, chunk_index, "unknown")
-            raw = self._call_role("match_commentator", request, candidate, artifact_dir, match_id=match_id)
-            partials.append(_parse_json(raw))
-        if not partials:
-            raise ValueError("match log contains no ticks")
-        if len(partials) == 1:
-            analysis = _parse_commentary(partials[0], match_id)
-        else:
-            request = _commentator_synthesis_prompt(match_id, item, partials)
-            raw = self._call_role("match_commentator", request, candidate, artifact_dir, match_id=match_id, suffix="synthesis")
-            analysis = _parse_commentary(_parse_json(raw), match_id)
+        request = _commentator_prompt(candidate, context, item, match_id, raw_log)
+        raw = self._call_role("match_commentator", request, candidate, artifact_dir, match_id=match_id)
+        analysis = _parse_commentary(_parse_json(raw), match_id)
         _write_json(artifact_dir, f"commentary/{match_id}/match_analysis.json", analysis.to_dict())
         _write_status(artifact_dir, match_id, "succeeded", None)
         return analysis
@@ -319,46 +317,98 @@ def select_reflection_matches(
     generation_index: int,
     candidate_id: str,
     reflection_invocation: int = 0,
+    sample_budget: int = 10,
 ) -> dict[str, Any]:
-    """Select up to three detailed matches using reproducible loss/draw/win priority."""
+    """Select a deterministic, coverage-aware sample without replacement."""
 
+    if sample_budget < 1:
+        raise ValueError("sample_budget must be at least 1")
     rows = [item for item in match_results if isinstance(item, dict)]
     pools: dict[str, list[dict[str, Any]]] = {"loss": [], "draw": [], "win": []}
+    unique_rows: dict[str, dict[str, Any]] = {}
     for item in rows:
         outcome = _match_outcome(item)
-        if outcome is not None:
-            pools[outcome].append(item)
-    if pools["loss"]:
-        selected_outcome = "loss"
-    elif pools["draw"]:
-        selected_outcome = "draw"
-    elif pools["win"]:
-        selected_outcome = "win"
-    else:
-        selected_outcome = None
-
-    eligible = pools[selected_outcome] if selected_outcome is not None else []
+        if outcome is None:
+            continue
+        match_id = _match_id(item)
+        if match_id in unique_rows:
+            continue
+        unique_rows[match_id] = item
+        pools[outcome].append(item)
+    eligible = list(unique_rows.values())
     seed = _selection_seed(
         run_seed=run_seed,
         generation_index=generation_index,
         candidate_id=candidate_id,
         reflection_invocation=reflection_invocation,
     )
-    sample_size = min(3, len(eligible))
-    selected, weight_tiers = _sample_by_opponent_weight(eligible, sample_size, seed)
+    rng = random.Random(seed)
+    sample_size = min(sample_budget, len(eligible))
+    selected: list[dict[str, Any]] = []
+
+    # First cover every opponent with a failure if possible. A draw is the
+    # fallback only for an opponent with no loss; fully winning opponents wait
+    # until the map/fill passes when there is spare budget.
+    for opponent in _ordered_values(eligible, _match_opponent):
+        if len(selected) >= sample_size:
+            break
+        candidates = [item for item in eligible if _match_opponent(item) == opponent and item not in selected]
+        losses = [item for item in candidates if _match_outcome(item) == "loss"]
+        draws = [item for item in candidates if _match_outcome(item) == "draw"]
+        representative_pool = losses or draws
+        if representative_pool:
+            selected.append(_choose_coverage_candidate(representative_pool, selected, rng, prefer_map=True))
+
+    # Then introduce maps that have not appeared yet. Coverage wins this pass;
+    # result priority is used only among candidates with comparable coverage.
+    while len(selected) < sample_size:
+        remaining = [item for item in eligible if item not in selected]
+        unseen_maps = [item for item in remaining if _match_map(item) not in {_match_map(row) for row in selected}]
+        if not unseen_maps:
+            break
+        selected.append(_choose_coverage_candidate(unseen_maps, selected, rng, prefer_map=True))
+
+    # Finally fill the budget with diverse opponent/map/side combinations and
+    # LOSS > DRAW > WIN priority. The seeded RNG only breaks exact ties.
+    while len(selected) < sample_size:
+        remaining = [item for item in eligible if item not in selected]
+        if not remaining:
+            break
+        selected.append(_choose_coverage_candidate(remaining, selected, rng))
+
+    selected_outcomes = [_match_outcome(item) for item in selected]
+    sampled_opponents = [_match_opponent(item) for item in selected]
+    sampled_maps = [_match_map(item) for item in selected]
+    sampled_sides = [_player_position(item) for item in selected]
     return {
-        "schema_version": "strategy-reflection-match-selection-v1",
+        "schema_version": "strategy-reflection-match-selection-v2",
         "candidate_id": candidate_id,
         "generation_index": generation_index,
         "total_match_count": len(rows),
         "available_results": {key: len(pools[key]) for key in ("loss", "draw", "win")},
-        "selected_outcome_class": selected_outcome,
-        "selection_rule": "strict_priority_loss_draw_win",
-        "sampling_priority": "descending_opponent_weight_within_selected_outcome",
+        "eligible_match_count": len(eligible),
         "eligible_match_ids": [_match_id(item) for item in eligible],
         "selected_match_ids": [_match_id(item) for item in selected],
-        "opponent_weight_tiers": weight_tiers,
-        "requested_sample_size": 3,
+        "selected_outcome_class": selected_outcomes[0] if selected_outcomes and len(set(selected_outcomes)) == 1 else ("mixed" if selected_outcomes else None),
+        "selection_rule": "opponent_coverage_then_map_coverage_then_loss_draw_win",
+        "sampling_priority": "opponent_coverage_then_map_coverage_then_loss_draw_win_then_seeded_random_ties",
+        "sample_count": len(selected),
+        "sampled_match_ids": [_match_id(item) for item in selected],
+        "sampled_opponents": sampled_opponents,
+        "sampled_maps": sampled_maps,
+        "sampled_player_positions": sampled_sides,
+        "sampled_results": selected_outcomes,
+        "unique_opponents_sampled": len(set(sampled_opponents)),
+        "unique_maps_sampled": len(set(sampled_maps)),
+        "losses_sampled": selected_outcomes.count("loss"),
+        "draws_sampled": selected_outcomes.count("draw"),
+        "wins_sampled": selected_outcomes.count("win"),
+        "coverage_counts": {
+            "opponents": len(set(sampled_opponents)),
+            "maps": len(set(sampled_maps)),
+            "opponent_map_side_combinations": len({_coverage_key(item) for item in selected}),
+        },
+        "requested_sample_size": sample_budget,
         "actual_sample_size": sample_size,
         "random_provenance": {
             "seed": seed,
@@ -370,34 +420,150 @@ def select_reflection_matches(
     }
 
 
-def _sample_by_opponent_weight(
-    eligible: list[dict[str, Any]], sample_size: int, seed: int
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Sample from descending opponent-weight tiers without replacement."""
+def _choose_coverage_candidate(
+    candidates: list[dict[str, Any]],
+    selected: list[dict[str, Any]],
+    rng: random.Random,
+    *,
+    prefer_map: bool = False,
+) -> dict[str, Any]:
+    seen_maps = {_match_map(item) for item in selected}
+    seen_opponents = {_match_opponent(item) for item in selected}
+    seen_combinations = {_coverage_key(item) for item in selected}
 
-    tiers: dict[float, list[dict[str, Any]]] = {}
-    for item in eligible:
-        weight = _opponent_weight(item)
-        tiers.setdefault(weight, []).append(item)
-    ordered_tiers = sorted(tiers.items(), key=lambda pair: pair[0], reverse=True)
-    rng = random.Random(seed)
-    selected: list[dict[str, Any]] = []
-    metadata: list[dict[str, Any]] = []
-    remaining = sample_size
-    for weight, items in ordered_tiers:
-        tier_ids = [_match_id(item) for item in items]
-        chosen_count = min(remaining, len(items))
-        chosen = rng.sample(items, chosen_count)
-        selected.extend(chosen)
-        metadata.append({
-            "opponent_weight": weight,
-            "eligible_match_ids": tier_ids,
-            "selected_match_ids": [_match_id(item) for item in chosen],
+    def score(item: dict[str, Any]) -> tuple[int, int, int, int, float]:
+        outcome = _match_outcome(item)
+        result_priority = {"loss": 2, "draw": 1, "win": 0}.get(outcome or "win", 0)
+        combination_priority = int(_coverage_key(item) not in seen_combinations)
+        opponent_priority = int(_match_opponent(item) not in seen_opponents)
+        map_priority = int(_match_map(item) not in seen_maps)
+        if prefer_map:
+            return (map_priority, result_priority, combination_priority, opponent_priority, rng.random())
+        return (combination_priority, result_priority, opponent_priority, map_priority, rng.random())
+
+    return max(candidates, key=score)
+
+
+def _ordered_values(rows: list[dict[str, Any]], getter) -> list[str]:
+    values = {getter(item) for item in rows}
+    return sorted(values, key=lambda value: (LEXICASE_CASES.index(value) if value in LEXICASE_CASES else len(LEXICASE_CASES), value))
+
+
+def _match_opponent(item: dict[str, Any]) -> str:
+    return str(item.get("opponent_id") or item.get("opponent_name") or item.get("opponent") or "unknown")
+
+
+def _match_map(item: dict[str, Any]) -> str:
+    return str(item.get("map_id") or item.get("map_name") or item.get("map") or "unknown")
+
+
+def _player_position(item: dict[str, Any]) -> str:
+    value = item.get("candidate_player")
+    if value in (0, 1):
+        return f"p{value}"
+    return str(item.get("candidate_side") or "unknown")
+
+
+def _coverage_key(item: dict[str, Any]) -> tuple[str, str, str]:
+    return (_match_opponent(item), _match_map(item), _player_position(item))
+
+
+def build_global_evaluation_summary(
+    game: dict[str, Any],
+    match_results: tuple[dict[str, Any], ...] | list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build deterministic breadth evidence from every evaluated match."""
+
+    rows = [item for item in match_results if isinstance(item, dict)]
+    completed = [item for item in rows if _match_outcome(item) is not None]
+    opponent_payloads = {
+        str(item.get("opponent_id")): item
+        for item in game.get("opponent_results") or ()
+        if isinstance(item, dict) and item.get("opponent_id")
+    }
+    configuration = game.get("evaluation_configuration") if isinstance(game.get("evaluation_configuration"), dict) else {}
+    configured_maps = configuration.get("maps") or game.get("evaluation_maps") or ()
+    map_ids = [f"map_{index}" for index, _ in enumerate(configured_maps, start=1)]
+    map_ids.extend(_match_map(item) for item in rows if _match_map(item) not in map_ids)
+    map_ids = list(dict.fromkeys(map_ids))
+    rounds = int(configuration.get("rounds_per_map") or game.get("rounds_per_map") or 3)
+    side_count = 2 if bool(configuration.get("swap_player_sides", game.get("swap_player_sides", True))) else 1
+    default_required_cases = len(map_ids) * rounds * side_count
+
+    opponent_summaries: list[dict[str, Any]] = []
+    for opponent_id in LEXICASE_CASES:
+        opponent_rows = [item for item in completed if _match_opponent(item) == opponent_id]
+        source = opponent_payloads.get(opponent_id, {})
+        expected = int(source.get("expected_match_count") or default_required_cases or 0)
+        name = str(source.get("opponent_name") or (opponent_rows[0].get("opponent_name") if opponent_rows else opponent_id))
+        map_summary = _grouped_match_summary(opponent_rows, _match_map)
+        for map_id in map_ids:
+            map_summary.setdefault(map_id, _empty_match_summary())
+        side_summary = _grouped_match_summary(opponent_rows, _player_position)
+        for side in ("p0", "p1") if side_count == 2 else ("p0",):
+            side_summary.setdefault(side, _empty_match_summary())
+        opponent_summaries.append({
+            "opponent": name,
+            "opponent_id": opponent_id,
+            "wins": sum(_match_outcome(item) == "win" for item in opponent_rows),
+            "draws": sum(_match_outcome(item) == "draw" for item in opponent_rows),
+            "losses": sum(_match_outcome(item) == "loss" for item in opponent_rows),
+            "win_rate": _win_rate(opponent_rows),
+            "completed_matches": len(opponent_rows),
+            "expected_matches": expected,
+            "maps": map_summary,
+            "player_sides": side_summary,
+            "fully_beaten_opponent": bool(opponent_rows) and len(opponent_rows) == expected and all(_match_outcome(item) == "win" for item in opponent_rows),
         })
-        remaining -= chosen_count
-        if remaining == 0:
-            break
-    return selected, metadata
+
+    fully_beaten = [item["opponent_id"] for item in opponent_summaries if item["fully_beaten_opponent"]]
+    total_wins = sum(_match_outcome(item) == "win" for item in completed)
+    total_draws = sum(_match_outcome(item) == "draw" for item in completed)
+    total_losses = sum(_match_outcome(item) == "loss" for item in completed)
+    return {
+        "schema_version": "strategy-reflection-global-summary-v1",
+        "source": "all_evaluated_match_results",
+        "total_matches": len(rows),
+        "evaluated_match_count": len(completed),
+        "failed_or_unresolved_match_count": len(rows) - len(completed),
+        "total_wins": total_wins,
+        "total_draws": total_draws,
+        "total_losses": total_losses,
+        "competitive_win_rate": _win_rate(completed),
+        "fully_beaten_opponents_count": len(fully_beaten),
+        "fully_beaten_opponents": fully_beaten,
+        "evaluation_configuration": {
+            "maps": list(configured_maps),
+            "rounds_per_map": rounds,
+            "swap_player_sides": side_count == 2,
+            "required_cases_per_opponent": default_required_cases,
+        },
+        "opponents": opponent_summaries,
+    }
+
+
+def _grouped_match_summary(rows: list[dict[str, Any]], key_getter) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in rows:
+        grouped.setdefault(str(key_getter(item)), []).append(item)
+    return {
+        key: {
+            "wins": sum(_match_outcome(item) == "win" for item in values),
+            "draws": sum(_match_outcome(item) == "draw" for item in values),
+            "losses": sum(_match_outcome(item) == "loss" for item in values),
+            "matches": len(values),
+            "win_rate": _win_rate(values),
+        }
+        for key, values in grouped.items()
+    }
+
+
+def _empty_match_summary() -> dict[str, Any]:
+    return {"wins": 0, "draws": 0, "losses": 0, "matches": 0, "win_rate": 0.0}
+
+
+def _win_rate(rows: list[dict[str, Any]]) -> float:
+    return round(sum(_match_outcome(item) == "win" for item in rows) / len(rows), 6) if rows else 0.0
 
 
 def _selection_seed(*, run_seed: int, generation_index: int, candidate_id: str, reflection_invocation: int) -> int:
@@ -412,14 +578,6 @@ def _intent_seed(run_seed: int, generation_index: int, candidate_id: str, invoca
 
 def _match_id(item: dict[str, Any]) -> str:
     return str(item.get("match_id") or f"match_{int(item.get('match_index', -1)):03d}")
-
-
-def _opponent_weight(item: dict[str, Any]) -> float:
-    try:
-        weight = float(item.get("opponent_weight", 1.0))
-    except (TypeError, ValueError):
-        return 1.0
-    return weight if weight == weight else 1.0
 
 
 def _match_outcome(item: dict[str, Any]) -> str | None:
@@ -468,32 +626,25 @@ def _delete_raw_match_artifacts(item: dict[str, Any]) -> None:
 
 
 # Role prompt construction and response parsing -----------------------------
-def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, chunk: list[dict[str, Any]], chunk_index: int, chunk_count: object) -> str:
+def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, raw_log: list[dict[str, Any]]) -> str:
     return "\n".join([
         "ROLE: match_commentator",
         "You are the Match Commentator for an evolutionary MicroRTS team.",
-        "Analyze one completed match only. Analyze both candidate and opponent.",
+        "Analyze exactly one completed match only. Analyze both candidate and opponent.",
         "Do not generalize this single match to the candidate's entire strategy.",
-        "Analyze only the supplied match. The Coach will receive this diagnosis together with aggregate evaluation metadata.",
+        "The Coach will receive this local diagnosis together with a deterministic global evaluation summary.",
         "Do not modify strategy, write Java, calculate fitness, or act as Coach.",
         f"match_id: {json.dumps(match_id)}",
+        f"opponent: {json.dumps(item.get('opponent_name') or item.get('opponent_id') or item.get('opponent') or 'unknown')}",
+        f"map: {json.dumps(item.get('map_name') or item.get('map_id') or item.get('map') or 'unknown')}",
+        f"player_position: {json.dumps(_player_position(item))}",
+        f"result: {json.dumps(_match_outcome(item) or 'unknown')}",
         f"candidate_basic_strategy: {json.dumps(candidate.strategy_prompt, ensure_ascii=False)}",
         f"opponent_basic_strategy: {json.dumps({'identity': item.get('opponent_name') or item.get('opponent') or 'unknown', 'class': item.get('opponent') or 'unknown'}, ensure_ascii=False, sort_keys=True)}",
         f"complete_match_record: {json.dumps(item, ensure_ascii=False, sort_keys=True)}",
-        f"coverage_chunk: {chunk_index + 1}/{chunk_count}",
+        "Return a concise evidence-based tactical diagnosis for this match.",
         "Return the compact match_analysis JSON schema.",
-        json.dumps(chunk, ensure_ascii=False, sort_keys=True),
-    ])
-
-
-def _commentator_synthesis_prompt(match_id: str, item: dict[str, Any], partials: list[dict[str, Any]]) -> str:
-    return "\n".join([
-        "ROLE: match_commentator",
-        "Synthesize the complete match analysis from all non-overlapping chunks.",
-        "Analyze only the supplied match and do not generalize it to the candidate's entire strategy.",
-        f"match_id: {json.dumps(match_id)}",
-        f"complete_match_record: {json.dumps(item, ensure_ascii=False, sort_keys=True)}",
-        json.dumps(partials, ensure_ascii=False, sort_keys=True),
+        "raw_game_log: " + json.dumps(raw_log, ensure_ascii=False, sort_keys=True),
     ])
 
 
@@ -501,10 +652,12 @@ def _coach_prompt(parent_strategy: str, payload: dict[str, Any], mutation_intent
     return "\n".join([
         "ROLE: coach",
         "You are the Coach of an evolutionary MicroRTS team.",
-        "Revise the parent strategy prompt directly from the selected Match Commentator diagnoses and canonical evaluation metadata.",
-        "Commentator diagnoses are evidence about selected matches, not a replacement for the aggregate opponent results.",
-        "Preserve successful behaviors identified by aggregate results, and use the detailed diagnoses to make concrete conditional changes.",
-        "Detailed-match selection uses strict categorical priority: loss > draw > win, with at most three samples and no outcome backfill.",
+        "Revise the parent strategy prompt from the deterministic Global Evaluation Summary and the selected Match Commentator diagnoses.",
+        "The Global Evaluation Summary provides breadth across all evaluated matches; Commentator diagnoses provide depth for representative individual matches.",
+        "Treat fully beaten opponents as capabilities that must be preserved.",
+        "Prioritize recurring failures across different opponents and maps, preserve successful behavior, and avoid fixing one sampled game by introducing regressions elsewhere.",
+        "Prefer general strategy rules when multiple diagnoses share a cause; use opponent-specific branching only when necessary.",
+        "Do not write Java or implementation instructions.",
         "Return a replacement strategy prompt with concrete conditional behavioral rules.",
         f"Mutation Intent: {mutation_intent}",
         COACH_INTENT_INSTRUCTIONS[mutation_intent],
@@ -518,8 +671,7 @@ def _coach_prompt(parent_strategy: str, payload: dict[str, Any], mutation_intent
     ])
 
 
-def _coach_payload(candidate: Candidate, context: ReflectionContext, analyses: list[MatchAnalysis], selection: dict[str, Any], failures: list[str]) -> dict[str, Any]:
-    game = context.game_evidence or {}
+def _coach_payload(candidate: Candidate, context: ReflectionContext, analyses: list[MatchAnalysis], selection: dict[str, Any], failures: list[str], global_summary: dict[str, Any]) -> dict[str, Any]:
     selection_metadata = dict(selection)
     selection_metadata.update({
         "selected_match_count": selection.get("actual_sample_size", 0),
@@ -527,12 +679,11 @@ def _coach_payload(candidate: Candidate, context: ReflectionContext, analyses: l
         "total_draws": (selection.get("available_results") or {}).get("draw", 0),
         "total_wins": (selection.get("available_results") or {}).get("win", 0),
         "commentary_failures": list(failures),
-        "selection_is_biased_toward_worse_outcomes": True,
+        "selection_is_coverage_aware": True,
     })
     return {
         "candidate_id": candidate.id,
-        "game_performance": context.aggregate_game_performance,
-        "opponent_results": [item.to_dict() for item in context.opponents],
+        "global_evaluation_summary": global_summary,
         "commentator_diagnoses": [
             {
                 "match_id": item.match_id,
@@ -549,7 +700,6 @@ def _coach_payload(candidate: Candidate, context: ReflectionContext, analyses: l
             }
             for item in analyses
         ],
-        "aggregate_summary": {key: game.get(key) for key in ("wins", "draws", "losses", "completed_match_count", "score_stddev")},
         "parent_comparison": context.parent_comparison or {"available": False},
         "match_selection": selection_metadata,
     }

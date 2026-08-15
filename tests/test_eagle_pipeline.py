@@ -121,9 +121,17 @@ population_size: 3
         config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
         self.assertEqual(config.max_prompt_chars, 4000)
         self.assertEqual(config.max_prompt_lines, 80)
+        self.assertEqual(config.match_commentator_sample_count, 10)
         self.assertEqual(config.result_win_score, 100.0)
         self.assertEqual(config.result_draw_score, 0.0)
         self.assertEqual(config.result_loss_score, -100.0)
+
+    def test_strategy_reflection_sample_budget_is_configurable(self) -> None:
+        config = ExperimentConfig.from_mapping({
+            "seed_prompts": ["Generate an agent."],
+            "llm": {"match_commentator": {"sample_count": 6}},
+        })
+        self.assertEqual(config.match_commentator_sample_count, 6)
 
     def test_training_opponent_defaults_to_lightrush_player1(self) -> None:
         config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})

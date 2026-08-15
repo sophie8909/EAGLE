@@ -290,17 +290,17 @@ Relevant tests: `tests/test_lexicase_opponents.py`, `tests/test_eagle_pipeline.p
 The active Strategy Mutation is `eagle/strategy_reflection.py::StrategyReflectionPipeline.run`, instantiated as `StrategyReflectionMutation` by `eagle/search.py`. Its active role sequence is:
 
 ```text
-selected match log + compact match record
-    → Match Commentator
-    → Coach (directly consumes diagnoses + aggregate metadata)
+all evaluated match summaries → Global Evaluation Summary
+coverage-aware sample (up to 10) → one Match Commentator call per log
+    → Coach (parent strategy + global summary + diagnoses)
     → replacement strategy_prompt
     → separate final Java Generation stage
 ```
 
 | Active role | Input | Responsibility | Output / next consumer |
 | --- | --- | --- | --- |
-| `match_commentator` | One selected match record, candidate strategy text, opponent identity/class, bounded tick-log chunks | Describe both strategies, turning points, strengths, weaknesses, and win/loss causes for that match only | `MatchAnalysis`; Coach consumes selected analyses |
-| `coach` | Parent `strategy_prompt`, selected `MatchAnalysis` records, aggregate opponent results, selection metadata, one mutation intent | Convert evidence into concrete conditional strategic rules and a replacement prompt; emit categorical signature | New `strategy_prompt`, signature/niche, and strategy mutation metadata |
+| `match_commentator` | One selected match record, candidate strategy text, opponent identity/class, one bounded raw tick log | Describe both strategies, turning points, strengths, weaknesses, and win/loss causes for that match only | `MatchAnalysis`; Coach consumes selected analyses |
+| `coach` | Parent `strategy_prompt`, deterministic global summary, selected `MatchAnalysis` records, selection metadata, one mutation intent | Convert evidence into concrete conditional strategic rules and a replacement prompt; emit categorical signature | New `strategy_prompt`, signature/niche, and strategy mutation metadata |
 | Generator | The complete mutated genotype | Generate full Java phenotype | Separate `generation/java_generation` stage; not called inside `strategy_reflection.py` |
 
 `CANONICAL_ROLES` also lists `generator`, but the strategy-reflection module does not invoke a generator role. The actual generator is `generation/backend.py` through `eagle/evaluation.py` after mutation. The inline prompts use `ROLE: match_commentator` and `ROLE: coach`.
@@ -309,14 +309,12 @@ selected match log + compact match record
 
 `select_reflection_matches` operates globally over the candidate’s completed match summaries:
 
-1. Partition matches by candidate-perspective outcome into `loss`, `draw`, and `win`.
-2. Select exactly one outcome pool using strict priority: losses if any exist; otherwise draws if any exist; otherwise wins.
-3. Sample up to three matches without replacement from that one pool.
-4. Within the selected outcome pool, consume descending `opponent_weight` tiers first and sample randomly within each tier. Weights are categorical tier priority, not probabilities.
+1. Select one representative loss for each opponent with losses; use a draw when that opponent has no loss.
+2. Use remaining slots to introduce unseen maps, prioritizing `LOSS > DRAW > WIN` among comparable coverage.
+3. Fill remaining slots with diverse opponent/map/player-side combinations, then `LOSS > DRAW > WIN`.
+4. Use the deterministic run-derived seed only for equivalent tie breaking; never duplicate a match ID.
 
-Thus `loss > draw > win` means **only losses are eligible when any loss exists; draws are not backfilled; wins are considered only when no losses or draws exist**. Sampling is not independent per opponent. It is one global sample over all available opponents/maps/sides, with a deterministic seed derived from run seed, generation, candidate ID, and reflection invocation.
-
-The active production evaluator makes 126 match records available, so the requested sample is at most 3 of 126. If fewer eligible matches exist, it uses the smaller number; there is no outcome-class backfill.
+The default budget is 10 (`llm.match_commentator.sample_count`), or fewer when fewer eligible matches exist. The Coach receives a deterministic global summary built from all evaluated matches, not only the sampled logs.
 
 ### Strategy Reflection diagram
 
@@ -765,7 +763,7 @@ Evidence: `eagle/__main__.py`, `eagle/opponents.py`, `eagle/evaluation.py::prefl
 | Limitation | Why it occurs now | Relevant implementation |
 | --- | --- | --- |
 | High evaluation cost | Every candidate runs 126 MicroRTS processes/matches, plus source generation, compile, integration, and successful-candidate alignment | `eagle/config.py`, `evaluation/match_matrix.py`, `eagle/evaluation.py` |
-| Reflection evidence bottleneck | At most three matches are selected globally, strictly from one outcome class; raw logs/traces are then deleted | `eagle/strategy_reflection.py::select_reflection_matches`, `_delete_raw_match_artifacts` |
+| Reflection evidence bottleneck | Up to ten matches are selected globally with opponent/map coverage before outcome priority; raw logs/traces are then deleted | `eagle/strategy_reflection.py::select_reflection_matches`, `_delete_raw_match_artifacts` |
 | Opponent overfitting risk | Lexicase preserves specialists on fixed opponent cases; the same deterministic maps/seeds are reused each generation | `eagle/selection.py`, `evaluation/match_matrix.py` |
 | Weak exploration pressure outside cases | Diversity archive/niches are analysis-only; there is no novelty objective or duplicate prevention | `eagle/strategy_diversity.py`, `eagle/selection.py`, `initialize_population` |
 | Expensive and fragile LLM mutation | Strategy mutation can issue multiple commentator calls per log chunk plus Coach; Code Mutation uses Reflection and Rewrite; all depend on one server | `eagle/strategy_reflection.py`, `eagle/rewrite.py`, `eagle/runtime/*` |
@@ -788,7 +786,7 @@ These are architectural consequences visible in the implementation, not redesign
 | Crossover | Verified: active three-component uniform crossover, rate 0.75 in production config |
 | Mutation operators | Verified: Strategy Reflection path and Code Reflection/Rewrite path, trigger 0.85 |
 | Reflection roles | Verified: Match Commentator, Coach; final Generator is separate |
-| Match sampling | Verified: at most three, strict loss/draw/win pool, descending weight tiers |
+| Match sampling | Verified: up to 10, opponent/map coverage-aware, then LOSS/DRAW/WIN priority |
 | Active opponents | Verified in code: seven fixed cases; PassiveAI/RandomAI/RandomBiasedAI excluded from EA; real external asset availability not verified |
 | Previous-generation EAGLE opponent | Verified absent from active matrix |
 | Maps / sides / repetitions / seeds | Verified: 3 × 2 sides × 3 rounds, seeds 0/1/2 |
@@ -911,13 +909,13 @@ Purpose: Show how evidence becomes a new strategy prompt.
 
 Key points:
 
-- Strict selection: losses, else draws, else wins; at most three detailed matches.
-- Match Commentator analyzes selected logs, Coach directly consumes aggregate + selected evidence and rewrites strategy.
+- Coverage-aware selection samples up to 10 logs across opponents/maps/sides.
+- Each selected log gets one independent Commentator call; Coach consumes the all-match global summary plus selected evidence and rewrites strategy.
 - Code mutation separately uses Code Reflection + generation-prompt Rewrite.
 
 Suggested visual: Reflection Mermaid diagram with the temporary-log deletion boundary marked.
 
-Important numbers/formulas: `loss > draw > win` is categorical priority, not probabilistic weighting; sample size ≤ 3.
+Important numbers/formulas: default sample budget 10; `loss > draw > win` is a tie-break priority after opponent/map coverage.
 
 ## Slide 9 — Artifacts and analysis
 
@@ -941,10 +939,10 @@ Key points:
 
 - 126 matches per candidate still makes evaluation expensive.
 - Fixed maps/seeds and lexicase cases can encourage opponent overfitting.
-- Reflection sees at most three worst-class matches and diversity metadata does not affect selection.
+- Reflection sees up to ten coverage-aware matches, while the deterministic global summary preserves all-match breadth.
 - There is no held-out post-evolution final test in the current repository.
 
-Suggested visual: Cost/evidence bottleneck diagram: 126 matches → ≤3 detailed reflection matches → next prompt.
+Suggested visual: Cost/evidence bottleneck diagram: 126 matches → ≤10 detailed reflection matches + all-match summary → next prompt.
 
 Important numbers/formulas: production run requests up to 50 generations × 10 candidates × 126 matches, before early stagnation or failures.
 

@@ -162,6 +162,7 @@ def _run_search_impl(
         model_identity=None if backend_name == "mock" else client.model,
         enabled_roles=enabled_roles,
         selection_seed=config.random_seed,
+        sample_budget=config.match_commentator_sample_count,
     )
     write_resolved_config(
         run_dir,

@@ -28,25 +28,27 @@ stage after either mutation.
 Strategy Reflection is a sports-team workflow:
 
 1. Complete the configured evaluation matrix and compute Game Performance from every match.
-2. Temporarily retain complete match logs, partition completed results into losses, draws,
-   and wins, and select one pool with strict `loss > draw > win` priority.
-3. Use the run-derived reproducible RNG to sample at most three matches from that pool
-   without replacement. Within the selected outcome pool, higher `opponent_weight`
-   tiers are selected before lower-weight tiers; lower-priority outcomes never
-   backfill the sample and weights are not sampling probabilities.
-4. Persist `reflection/match_selection.json`, delete unselected raw logs, and run Match
-   Commentator only for the selected matches. Delete each selected raw log after terminal
-   commentary handling.
-5. Coach receives complete aggregate evaluation evidence plus only the selected analyses.
+2. Temporarily retain complete match logs and use a deterministic greedy sampler with a
+   budget of up to 10 matches. It first covers opponents with losses (or draws when an
+   opponent has no loss), then unseen maps, then fills with diverse opponent/map/side
+   combinations using `LOSS > DRAW > WIN` and seeded random tie breaking.
+3. Persist `reflection/match_selection.json` and
+   `reflection/global_evaluation_summary.json`, delete unselected raw logs, and run
+   exactly one Match Commentator call per selected match. Delete each selected raw log
+   after its terminal commentary handling.
+4. Build the Global Evaluation Summary deterministically from all evaluated matches;
+   it provides breadth while the independent Commentator diagnoses provide depth.
+5. Coach receives the parent strategy, the global summary, and only the selected
+   Commentator analyses.
 6. Coach receives the parent strategy, selected diagnoses, and one deterministic
    mutation intent, then replaces the parent `strategy_prompt` and emits a
    categorical strategy signature.
 7. Generator receives the new strategy and the existing code-generation prompt.
 
 The Match Commentator never rewrites strategy or Java. The Coach knows that
-commentary is a biased worst-outcome sample and never treats it as the complete
-evaluation distribution. The Coach writes the replacement strategy prompt but
-never writes Java. Raw ticks are never sent
+commentary is representative evidence and never treats it as the complete evaluation
+distribution. Fully beaten opponents are explicitly marked as capabilities to preserve.
+The Coach writes the replacement strategy prompt but never writes Java. Raw ticks are never sent
 to Coach. See [`../strategy-reflection.md`](../strategy-reflection.md)
 for schemas, artifact ownership, failure semantics, and budgeting.
 

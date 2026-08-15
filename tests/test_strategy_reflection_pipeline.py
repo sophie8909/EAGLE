@@ -8,31 +8,47 @@ from pathlib import Path
 from eagle.candidate import Candidate
 from eagle.mutation import ReflectionContext
 from eagle.reflection_context import EvolutionContext
-from eagle.strategy_reflection import MockRoleBackend, StrategyReflectionMutation, select_reflection_matches
+from eagle.strategy_reflection import (
+    MockRoleBackend,
+    StrategyReflectionMutation,
+    build_global_evaluation_summary,
+    select_reflection_matches,
+)
 from evaluation.match_logs import iter_match_log, write_match_log
 from evaluation.microrts_runner import write_mock_round_state
 
 
 class StrategyReflectionPipelineTests(unittest.TestCase):
     @staticmethod
-    def _result(match_id: str, outcome: str) -> dict[str, object]:
-        winner = {"win": 0, "loss": 1, "draw": -1}[outcome]
+    def _result(
+        match_id: str,
+        outcome: str,
+        *,
+        opponent: str = "lightrush",
+        map_id: str = "map_1",
+        candidate_player: int = 0,
+    ) -> dict[str, object]:
+        winner = (
+            candidate_player
+            if outcome == "win"
+            else 1 - candidate_player
+            if outcome == "loss"
+            else -1
+        )
         return {
             "match_id": match_id,
             "match_index": int(match_id.rsplit("-", 1)[-1]),
-            "candidate_player": 0,
+            "opponent_id": opponent,
+            "opponent_name": opponent,
+            "map_id": map_id,
+            "candidate_player": candidate_player,
+            "candidate_side": f"p{candidate_player}",
             "winner": winner,
             "result": "timeout_draw" if outcome == "draw" else f"p{winner}_win",
         }
 
-    def test_selection_uses_one_strict_priority_pool_without_backfill(self) -> None:
-        rows = [
-            self._result("loss-0", "loss"),
-            self._result("loss-1", "loss"),
-            self._result("draw-0", "draw"),
-            self._result("draw-1", "draw"),
-            self._result("win-0", "win"),
-        ]
+    def test_selection_budget_and_no_duplicates(self) -> None:
+        rows = [self._result(f"loss-{index}", "loss") for index in range(20)]
         selection = select_reflection_matches(
             rows,
             run_seed=7,
@@ -40,72 +56,50 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             candidate_id="candidate",
             reflection_invocation=2,
         )
-        self.assertEqual(selection["selected_outcome_class"], "loss")
-        self.assertEqual(selection["available_results"], {"loss": 2, "draw": 2, "win": 1})
-        self.assertEqual(selection["eligible_match_ids"], ["loss-0", "loss-1"])
-        self.assertEqual(selection["actual_sample_size"], 2)
-        self.assertEqual(set(selection["selected_match_ids"]), {"loss-0", "loss-1"})
+        self.assertEqual(selection["sample_count"], 10)
+        self.assertEqual(selection["requested_sample_size"], 10)
         self.assertEqual(len(selection["selected_match_ids"]), len(set(selection["selected_match_ids"])))
 
-    def test_selection_is_reproducible_and_applies_draw_then_win_priority(self) -> None:
-        rows = [self._result(f"draw-{index}", "draw") for index in range(5)]
-        rows.extend(self._result(f"win-{index}", "win") for index in range(5))
+    def test_selection_uses_all_available_matches_below_budget(self) -> None:
+        rows = [self._result(f"match-{index}", "draw") for index in range(6)]
+        selection = select_reflection_matches(
+            rows,
+            run_seed=7,
+            generation_index=4,
+            candidate_id="candidate",
+            reflection_invocation=2,
+        )
+        self.assertEqual(selection["actual_sample_size"], 6)
+        self.assertEqual(selection["sample_count"], 6)
+
+    def test_selection_covers_losing_opponents_before_repeating_one(self) -> None:
+        opponents = ("lightrush", "heavyrush", "workerrush", "allinbot", "mayari")
+        rows = [
+            self._result(f"{opponent}-0", "loss", opponent=opponent)
+            for opponent in opponents
+        ]
+        rows.extend(self._result(f"heavy-extra-{index}", "loss", opponent="heavyrush") for index in range(4))
+        selection = select_reflection_matches(rows, run_seed=7, generation_index=4, candidate_id="candidate", sample_budget=5)
+        self.assertEqual(set(selection["sampled_opponents"]), set(opponents))
+        self.assertEqual(selection["sample_count"], 5)
+
+    def test_selection_prefers_unseen_maps_then_loss_draw_win(self) -> None:
+        rows = [
+            self._result("map-loss-0", "loss", map_id="map_1"),
+            self._result("map-loss-1", "loss", map_id="map_2"),
+            self._result("map-loss-2", "loss", map_id="map_3"),
+            self._result("same-map-draw-3", "draw", map_id="map_1"),
+            self._result("same-map-win-4", "win", map_id="map_1"),
+        ]
+        selection = select_reflection_matches(rows, run_seed=7, generation_index=4, candidate_id="candidate", sample_budget=3)
+        self.assertEqual(set(selection["sampled_maps"]), {"map_1", "map_2", "map_3"})
+        self.assertEqual(selection["losses_sampled"], 3)
+
+    def test_selection_is_reproducible(self) -> None:
+        rows = [self._result(f"loss-{index}", "loss", map_id=f"map_{index % 3 + 1}") for index in range(12)]
         first = select_reflection_matches(rows, run_seed=7, generation_index=4, candidate_id="candidate", reflection_invocation=2)
         second = select_reflection_matches(rows, run_seed=7, generation_index=4, candidate_id="candidate", reflection_invocation=2)
         self.assertEqual(first, second)
-        self.assertEqual(first["selected_outcome_class"], "draw")
-        self.assertEqual(first["actual_sample_size"], 3)
-        self.assertTrue(all(item.startswith("draw-") for item in first["selected_match_ids"]))
-
-        wins = [self._result(f"win-{index}", "win") for index in range(4)]
-        only_wins = select_reflection_matches(wins, run_seed=7, generation_index=4, candidate_id="candidate", reflection_invocation=2)
-        self.assertEqual(only_wins["selected_outcome_class"], "win")
-        self.assertEqual(only_wins["actual_sample_size"], 3)
-
-        one_loss = select_reflection_matches(
-            [self._result("loss-0", "loss"), *[self._result(f"draw-{index}", "draw") for index in range(5)]],
-            run_seed=7,
-            generation_index=4,
-            candidate_id="candidate",
-            reflection_invocation=2,
-        )
-        self.assertEqual(one_loss["selected_outcome_class"], "loss")
-        self.assertEqual(one_loss["selected_match_ids"], ["loss-0"])
-
-        one_draw = select_reflection_matches(
-            [self._result("draw-0", "draw"), *[self._result(f"win-{index}", "win") for index in range(5)]],
-            run_seed=7,
-            generation_index=4,
-            candidate_id="candidate",
-            reflection_invocation=2,
-        )
-        self.assertEqual(one_draw["selected_outcome_class"], "draw")
-        self.assertEqual(one_draw["selected_match_ids"], ["draw-0"])
-
-    def test_selection_prioritizes_high_weight_opponents_within_outcome_pool(self) -> None:
-        rows = []
-        for index in range(3):
-            row = self._result(f"high-{index}", "loss")
-            row["opponent_weight"] = 2.0
-            rows.append(row)
-        for index in range(3):
-            row = self._result(f"low-{index}", "loss")
-            row["opponent_weight"] = 0.5
-            rows.append(row)
-
-        selection = select_reflection_matches(
-            rows,
-            run_seed=7,
-            generation_index=4,
-            candidate_id="candidate",
-            reflection_invocation=2,
-        )
-
-        self.assertEqual(selection["selected_outcome_class"], "loss")
-        self.assertEqual(selection["sampling_priority"], "descending_opponent_weight_within_selected_outcome")
-        self.assertEqual(selection["actual_sample_size"], 3)
-        self.assertTrue(all(item.startswith("high-") for item in selection["selected_match_ids"]))
-        self.assertEqual(selection["opponent_weight_tiers"][0]["opponent_weight"], 2.0)
 
     def test_strategy_pipeline_commentates_only_selected_matches(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -142,17 +136,75 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
 
             self.assertEqual(result.status, "success")
             selection = json.loads((root / "child" / "reflection" / "match_selection.json").read_text(encoding="utf-8"))
-            self.assertEqual(selection["selected_outcome_class"], "loss")
-            self.assertEqual(selection["actual_sample_size"], 2)
+            self.assertEqual(selection["selected_outcome_class"], "mixed")
+            self.assertEqual(selection["actual_sample_size"], 5)
             commentator_prompts = [prompt for prompt in backend.prompts if "ROLE: match_commentator" in prompt]
-            self.assertEqual(len(commentator_prompts), 2)
-            self.assertEqual(len(selection["selected_match_ids"]), 2)
-            self.assertEqual(len({item for item in selection["selected_match_ids"]}), 2)
+            self.assertEqual(len(commentator_prompts), 5)
+            self.assertEqual(len(selection["selected_match_ids"]), 5)
+            self.assertEqual(len({item for item in selection["selected_match_ids"]}), 5)
             self.assertTrue(all(not Path(row["match_log_path"]).exists() for row in rows))
             coach_prompt = next(prompt for prompt in backend.prompts if "ROLE: coach" in prompt)
-            self.assertIn('"selected_outcome_class": "loss"', coach_prompt)
-            self.assertIn('"total_losses": 2', coach_prompt)
+            self.assertIn('"global_evaluation_summary"', coach_prompt)
+            self.assertIn('"total_matches": 5', coach_prompt)
+            self.assertNotIn("raw_game_log:", coach_prompt)
             self.assertNotIn("ROLE: manager", "\n".join(backend.prompts))
+
+    def test_ten_selected_logs_have_ten_independent_commentator_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            rows = []
+            for index in range(10):
+                states = root / f"states-{index}"
+                write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
+                log_path = root / f"match-{index}.jsonl.gz"
+                write_match_log(
+                    log_path,
+                    metadata={"match_id": f"match-{index}", "candidate_side": "p0", "opponent_name": "LightRush", "map_name": f"map_{index + 1}"},
+                    round_state_dir=states,
+                    raw_result={"final_tick": 0, "players": {"p0": {"resource_total": 10}, "p1": {"resource_total": 10}}},
+                    tick_limit=0,
+                )
+                row = self._result(f"match-{index}", "loss", map_id=f"map_{index + 1}")
+                row["match_log_path"] = str(log_path)
+                rows.append(row)
+            candidate = Candidate(id="candidate-ten", generation=4, strategy_prompt="Preserve the opening.")
+            context = ReflectionContext(evolution=EvolutionContext(generation_index=4), per_match_results=tuple(rows))
+            backend = MockRoleBackend()
+            result = StrategyReflectionMutation(backend, max_attempts=1, sample_budget=10).run(candidate, context, artifact_dir=root / "child")
+
+            self.assertEqual(result.status, "success")
+            commentator_prompts = [prompt for prompt in backend.prompts if "ROLE: match_commentator" in prompt]
+            self.assertEqual(len(commentator_prompts), 10)
+            self.assertTrue(all(prompt.count("raw_game_log:") == 1 for prompt in commentator_prompts))
+            coach_prompt = next(prompt for prompt in backend.prompts if "ROLE: coach" in prompt)
+            self.assertIn('"total_matches": 10', coach_prompt)
+            self.assertIn('"commentator_diagnoses"', coach_prompt)
+            self.assertNotIn("raw_game_log:", coach_prompt)
+
+    def test_global_summary_uses_all_matches_and_requires_full_canonical_matrix_for_beaten(self) -> None:
+        rows = []
+        for index in range(18):
+            rows.append(self._result(f"lightrush-{index}", "win", opponent="lightrush", map_id=f"map_{index // 6 + 1}", candidate_player=index % 2))
+        for index in range(17):
+            rows.append(self._result(f"heavyrush-{index}", "win", opponent="heavyrush", map_id=f"map_{index // 6 + 1}", candidate_player=index % 2))
+        rows.append(self._result("heavyrush-17", "loss", opponent="heavyrush", map_id="map_3", candidate_player=1))
+        summary = build_global_evaluation_summary(
+            {
+                "evaluation_configuration": {"maps": ["map-a", "map-b", "map-c"], "rounds_per_map": 3, "swap_player_sides": True},
+                "opponent_results": [
+                    {"opponent_id": "lightrush", "opponent_name": "LightRush", "expected_match_count": 18},
+                    {"opponent_id": "heavyrush", "opponent_name": "HeavyRush", "expected_match_count": 18},
+                ],
+            },
+            rows,
+        )
+        by_id = {item["opponent_id"]: item for item in summary["opponents"]}
+        self.assertEqual(summary["total_matches"], 36)
+        self.assertEqual(summary["total_wins"], 35)
+        self.assertEqual(summary["total_losses"], 1)
+        self.assertTrue(by_id["lightrush"]["fully_beaten_opponent"])
+        self.assertFalse(by_id["heavyrush"]["fully_beaten_opponent"])
+        self.assertEqual(summary["fully_beaten_opponents_count"], 1)
 
     def test_commentator_direct_coach_delete_trace_and_preserve_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

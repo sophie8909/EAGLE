@@ -39,7 +39,7 @@ class CanonicalRunCliTests(unittest.TestCase):
     def test_experiment_allows_commentator_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             payload = _validate_experiment_document(
-                self.experiment(Path(directory), llm={"match_commentator": {"enabled": True, "temperature": 0.2, "chunk_ticks": 200}})
+                self.experiment(Path(directory), llm={"match_commentator": {"enabled": True, "temperature": 0.2, "sample_count": 10}})
             )
             self.assertTrue(payload["llm"]["match_commentator"]["enabled"])
 

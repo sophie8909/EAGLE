@@ -57,7 +57,7 @@ class ExperimentConfig:
     llm_model_path: str | None = None
     match_commentator_enabled: bool = True
     match_commentator_temperature: float = 0.2
-    match_commentator_chunk_ticks: int = 200
+    match_commentator_sample_count: int = 10
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
@@ -149,7 +149,7 @@ class ExperimentConfig:
             llm_model_path=None,
             match_commentator_enabled=bool(commentator_settings.get("enabled", True)),
             match_commentator_temperature=float(commentator_settings.get("temperature", 0.2)),
-            match_commentator_chunk_ticks=int(commentator_settings.get("chunk_ticks", 200)),
+            match_commentator_sample_count=int(commentator_settings.get("sample_count", 10)),
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
@@ -229,8 +229,8 @@ class ExperimentConfig:
             raise ValueError("llm.max_tokens must be positive.")
         if self.match_commentator_temperature < 0:
             raise ValueError("llm.match_commentator.temperature must not be negative.")
-        if self.match_commentator_chunk_ticks < 1:
-            raise ValueError("llm.match_commentator.chunk_ticks must be positive.")
+        if self.match_commentator_sample_count < 1:
+            raise ValueError("llm.match_commentator.sample_count must be positive.")
         if len(self.resolved_match_seeds) != self.rounds_per_map:
             raise ValueError("match_seeds must contain exactly one seed per round.")
         if self.resolved_match_seeds != tuple(range(self.rounds_per_map)):

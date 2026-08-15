@@ -34,7 +34,7 @@ the Strategy Reflection selection. Match Commentator is not called from
 | `eagle/search.py:mutation_context_from_candidate` | `create_offspring` | immediately before mutation | shared context adapter | strategy or code | feedback parent plus equivalent references |
 | `eagle/rewrite.py:PromptRewriteMutation.mutate` | `create_offspring` | one mutation selected | strategy or code mutation | strategy or code | Reflection then prompt-only Rewrite |
 | `eagle/mutation.py:ReflectionStage.run` | `PromptRewriteMutation.mutate` | every selected mutation | `strategy_reflection` / `code_reflection` | one component at a time | bounded retries; raw response persisted |
-| `eagle/strategy_reflection.py:StrategyReflectionPipeline.run` | `eagle/search.py:create_offspring` | selected strategy mutation after complete parent evaluation; at most 3 matches from one strict outcome pool | `match_commentator` | selected completed matches only | never a mutation parent and never a fitness input |
+| `eagle/strategy_reflection.py:StrategyReflectionPipeline.run` | `eagle/search.py:create_offspring` | selected strategy mutation after complete parent evaluation; coverage-aware sample of up to 10 matches plus all-match global summary | `match_commentator` | selected completed matches only | never a mutation parent and never a fitness input |
 
 The shared reflection transport is `eagle/mutation.py:ReflectionBackend`,
 `build_reflection_backend`, and `OpenAICompatibleReflectionBackend`. The
@@ -77,16 +77,13 @@ records the failure.
 
 ## Commentator execution
 
-`eagle/strategy_reflection.py:StrategyReflectionPipeline._commentate` loads
-metadata/integrity through `evaluation.match_logs:read_match_log_chunks` and
-partitions the gzip rows using `llm.match_commentator.chunk_ticks`. It
-does not use the removed standalone commentator module. Each chunk request is
-assembled by `_commentator_prompt`; multi-chunk matches receive one additional
-`_commentator_synthesis_prompt` request.
+`eagle/strategy_reflection.py:StrategyReflectionPipeline._commentate` loads one
+selected gzip log through `evaluation.match_logs:iter_match_log` and sends the
+complete selected match as one bounded Commentator request. It does not use the
+removed standalone commentator module or a chunk-synthesis request.
 
 The effective role instructions are the strings in
-`eagle/strategy_reflection.py:_commentator_prompt` and
-`_commentator_synthesis_prompt`. They prohibit Java/strategy rewriting and
+`eagle/strategy_reflection.py:_commentator_prompt`. They prohibit Java/strategy rewriting and
 fitness calculation, require analysis of only the supplied match, and require
 structured JSON parsed by `_parse_commentary`.
 
@@ -106,33 +103,32 @@ match IDs.
 
 ## Candidate aggregation and Strategy Reflection
 
-`eagle/strategy_reflection.py:select_reflection_matches` partitions completed
-match summaries into losses, draws, and wins. It chooses exactly one pool in
-strict `loss > draw > win` order, samples up to three entries without
-replacement using a seed derived from run seed, generation, candidate, and
-reflection invocation. Within that selected outcome pool, higher
-`opponent_weight` tiers are selected first; this is categorical priority rather
-than numerical weighted sampling. It writes `reflection/match_selection.json`
-before raw log deletion. Lower-priority outcomes never backfill the sample.
+`eagle/strategy_reflection.py:select_reflection_matches` uses a deterministic
+greedy sampler with a configurable budget that defaults to 10. It first covers
+opponents with losses (or draws when an opponent has no loss), then unseen maps,
+then fills diverse opponent/map/player-side combinations using LOSS > DRAW > WIN
+and seeded random tie breaking. It writes `reflection/match_selection.json`
+before raw log deletion and records sample coverage metadata.
+`build_global_evaluation_summary` separately derives breadth from all evaluated
+matches and records fully-beaten opponents.
 
 `eagle/reflection_context.py:build_reflection_context` exposes complete
 per-match compact result summaries and complete opponent results to the sports
-pipeline. The Coach receives aggregate counts and summaries plus only the
-selected Match Commentator analyses and selection metadata.
+pipeline. The Coach receives the all-match global summary plus only the selected
+Match Commentator analyses and selection metadata.
 The active sports-role prompts are assembled by
-`eagle/strategy_reflection.py:_commentator_prompt`,
-`_commentator_synthesis_prompt` and `_coach_prompt` in this
+`eagle/strategy_reflection.py:_commentator_prompt` and `_coach_prompt` in this
 order:
 
-1. aggregate evaluation and opponent results;
-2. strict-priority selection metadata;
+1. parent strategy and deterministic global evaluation summary;
+2. coverage-aware selection metadata;
 3. selected Match Commentator analyses;
 4. parent comparison when available;
 5. behaviors and aggregate strengths to preserve in the Coach input.
 
 Raw traces are not inserted into the Coach prompt. Selected tick
-records are inserted into Commentator requests, and the complete compact match
-record is inserted alongside each selected chunk. Every role request passes
+records are inserted into one Commentator request per selected match, and the
+complete compact match record is inserted alongside that log. Every role request passes
 through `eagle/strategy_reflection.py:_call_role`, which applies the configured
 prompt-character bound before the LLM request. Role request artifacts retain the
 bounded prompt actually sent to the LLM.
@@ -195,8 +191,9 @@ available for older run artifacts. No GUI is involved (`eagle/cli/analyze.py`).
 - Parent comparison is unavailable for legacy candidates without the persisted
   evaluation-configuration signature.
 - Match Commentator selection is not a fitness sampler: Game Performance still
-  uses every configured evaluation match, while Strategy Reflection samples one
-  strict-priority outcome class and at most three detailed matches.
+  uses every configured evaluation match, while Strategy Reflection samples up
+  to ten coverage-aware detailed matches and builds its global summary from all
+  evaluated matches.
 
 ## Evidence map
 

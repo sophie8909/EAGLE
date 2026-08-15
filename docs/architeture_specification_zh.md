@@ -59,6 +59,12 @@ flowchart TD
 ```
 
 ???Offspring嚗?隢??Crossover???copy嚗?????Mutation嚗敹??? Final Java Generation LLM?rossover ??Mutation 靽格? Genotype嚗???亦???靽格?敺? Java source??
+Strategy Reflection 目前使用最多 10 場的 coverage-aware sampling：先覆蓋有 LOSS
+的 opponent，再覆蓋 map 與 player side，最後才使用 LOSS > DRAW > WIN 作為填充優先序。
+每個 selected raw log 只送出一次獨立 Commentator call；Coach 同時收到所有已完成比賽
+產生的 deterministic Global Evaluation Summary 與各場 diagnosis。此流程沒有 Manager role，
+也不會改變 fitness objective 或 AOS operator selection。
+
 ## 4. Parent Selection ??NSGA-II
 
 Parent 雿輻 Binary Tournament Selection??頛?摨嚗?

@@ -61,7 +61,11 @@ Reflection receives the structured candidate context from
 reporting metric and opponent-specific summaries; code evidence remains in
 the separate diagnostics structure. Strategy Reflection and Code Reflection
 share transport/parsing support but use separate prompt builders and role
-pipelines.
+pipelines. Strategy Reflection samples up to 10 matches with opponent/map-aware
+coverage, calls one Commentator per selected log, and gives the Coach a
+deterministic all-match global summary. Coverage and fully-beaten diagnostics are
+stored under candidate reflection artifacts; this does not add a fitness objective
+or change AOS.
 
 ## Verification
 

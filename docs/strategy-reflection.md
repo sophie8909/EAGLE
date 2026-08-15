@@ -2,40 +2,42 @@
 
 Strategy Reflection is a Commentator-to-Coach workflow over the evaluated parent's gameplay
 evidence. It uses the shared LLM endpoint and client; role settings may change
-only role-local enablement and temperature.
+role-local enablement, temperature, and the configurable sample budget
+(`llm.match_commentator.sample_count`, default `10`).
 
 ```text
-all configured evaluation matches -> aggregate Game Performance
-temporary complete logs -> strict loss/draw/win selection -> match_selection.json
-selected logs only -> Match Commentator -> selected match_analysis.json
-parent strategy + selected analyses + aggregate metadata -> Coach -> new_strategy_prompt
+all configured evaluation matches -> deterministic Global Evaluation Summary
+temporary complete logs -> coverage-aware sample up to 10 -> match_selection.json
+each selected log -> one independent Match Commentator -> match_analysis.json
+parent strategy + global summary + selected analyses -> Coach -> new_strategy_prompt
 new strategy + existing code-generation prompt -> Generator -> Java candidate
 ```
 
 | Role | Input | Output | Must not do |
 | --- | --- | --- | --- |
-| Match Commentator | At most three selected complete matches | Selected match analyses | Modify strategy or code; generalize one match to the whole candidate |
-| Coach | Parent strategy + selected analyses + aggregate results + selection metadata | New strategy prompt | Write Java or inspect raw ticks |
+| Match Commentator | One selected complete match per call | One local match analysis | Modify strategy or code; generalize one match to the whole candidate |
+| Coach | Parent strategy + global summary + selected analyses + selection metadata | New strategy prompt | Write Java or inspect raw ticks |
 | Generator | Strategy + code-generation prompt | Java | Analyze matches |
 
 ## Match-log lifecycle
 
 MicroRTS round-state files are streamed into a stable `match_log.jsonl.gz` with
-one record per executed tick. After all matches finish, completed outcomes are
-partitioned into `loss`, `draw`, and `win`. The first non-empty pool in that order
-is the only eligible pool; up to three entries are sampled without replacement
-using a seed derived from the EA run seed, generation, candidate, and reflection
-invocation. Within that one outcome pool, higher `opponent_weight` tiers are
-sampled first; this is categorical priority, not numerical weighted random
-sampling. `reflection/match_selection.json` records the counts, eligible IDs,
-selected IDs, opponent-weight tiers, rule, and RNG provenance.
+one record per executed tick. After all matches finish, a deterministic greedy
+sampler selects up to 10 completed matches without replacement. It first covers
+opponents with losses (or draws when no loss exists), then unseen maps, then fills
+diverse opponent/map/player-side combinations using LOSS > DRAW > WIN. Seeded
+randomness only breaks equivalent choices. `reflection/match_selection.json`
+records the counts, eligible IDs, selected IDs, coverage metadata, rule, and RNG
+provenance. `reflection/global_evaluation_summary.json` records deterministic
+breadth across all evaluated matches, including fully-beaten opponents.
 
 Unselected raw logs are deleted before any commentary call. Selected logs are
 deleted after successful commentary or bounded terminal failure. Compact result,
 performance, opponent, map, side, round, and winner artifacts remain permanent.
 
-Long traces are chunked on complete tick records. Chunks are non-overlapping and
-the final Commentator synthesis represents the entire trace.
+Each selected raw log is sent to exactly one independent Commentator call. The
+Coach receives only the resulting diagnoses and the deterministic global summary;
+raw game logs are never concatenated into the Coach request.
 
 ## Artifacts and traceability
 
@@ -62,9 +64,9 @@ for the complete evaluation distribution. Coach failure leaves the parent strate
 unchanged and records a role-attributed failure. Generator failures follow the
 existing Java-generation failure contract.
 
-Commentator budgeting prioritizes metadata, complete tick coverage, and schema;
-Coach receives compact analyses, aggregate results, parent strategy, and selection
-metadata but never raw ticks. Generator budgeting is
+Commentator budgeting prioritizes metadata, the selected raw log, and schema;
+Coach receives compact analyses, the all-match global summary, parent strategy,
+and selection metadata but never raw ticks. Generator budgeting is
 unchanged.
 
 Code Reflection remains a separate mutation path for Java validation,

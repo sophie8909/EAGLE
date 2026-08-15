@@ -31,7 +31,7 @@ llm:
   match_commentator:
     enabled: true
     temperature: 0.2
-    chunk_ticks: 200
+    sample_count: 10
 microrts_dir: third_party/microrts
 tick_limit: 5000
 map_path: maps/8x8/basesWorkers8x8.xml

@@ -2127,12 +2127,13 @@ results are ordinary `game_performance` evidence.
 
 The canonical Strategy Reflection path may emit the auxiliary `match_commentator`
 role only after a candidate's complete evaluation matrix is available. It
-temporarily retains complete tick logs, selects one outcome class using strict
-`loss > draw > win` priority, and samples at most three matches without
-replacement using reproducible run-derived randomness. It deletes unselected
-logs before commentary and selected logs after terminal commentary handling.
-The Manager receives complete aggregate evaluation results plus only the selected
-analyses. This role does not alter either optimizer objective, match scoring,
+temporarily retains complete tick logs and uses a reproducible coverage-aware
+greedy sampler for up to ten matches: opponent coverage first, map coverage
+second, then `LOSS > DRAW > WIN` with seeded random tie breaking. It deletes
+unselected logs before commentary and selected logs after terminal commentary
+handling. Each selected log receives one independent Commentator call. The Coach
+receives the deterministic summary of all evaluated matches plus only the selected
+analyses. There is no Manager role. This role does not alter either optimizer objective, match scoring,
 candidate validity, or selection. Trace and commentary ownership remains in the
 match directory; the schema and failure semantics are defined in
 `docs/match-commentator.md`.

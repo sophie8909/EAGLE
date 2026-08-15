@@ -96,6 +96,7 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path, run_dir:
             model_identity=None if mock else client.model,
             enabled_roles=enabled_roles,
             selection_seed=config.random_seed,
+            sample_budget=config.match_commentator_sample_count,
         ),
         "code": PromptRewriteMutation(
             config, mutation_type="code", reflection_backend=reflection_backend,
