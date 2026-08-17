@@ -55,7 +55,8 @@ flowchart TD
     G --> V["Source Validation"] --> C["Compile once"] --> I["MicroRTS Integration Check"]
     I --> E["10 matches vs fixed evaluation roster; no regeneration"]
     E --> O["game_performance + code_quality"]
-    O --> R["Parent-child reward and AOS update"] --> N["Lexicase Survivor Selection"] --> P
+    O --> H["18 direct Parent-A vs Offspring matches"]
+    H --> R["Head-to-head reward and AOS EMA update"] --> N["Lexicase Survivor Selection"] --> P
 ```
 
 ???Offspring嚗?隢??Crossover???copy嚗?????Mutation嚗敹??? Final Java Generation LLM?rossover ??Mutation 靽格? Genotype嚗???亦???靽格?敺? Java source??
@@ -64,6 +65,15 @@ Strategy Reflection 目前使用最多 10 場的 coverage-aware sampling：先�
 每個 selected raw log 只送出一次獨立 Commentator call；Coach 同時收到所有已完成比賽
 產生的 deterministic Global Evaluation Summary 與各場 diagnosis。此流程沒有 Manager role，
 也不會改變 fitness objective 或 AOS operator selection。
+
+目前 AOS 的比較父代明確固定為 parent A（既有 credit-assignment path 的第一個
+lexicase reproductive parent）。正常 offspring evaluation 成功後，重用 parent 與
+offspring 已編譯的 class，在相同 3 張 map、3 個 round/seed 與雙方位置執行 18 場
+直接比賽。reward 為 `(offspring wins + 0.5 × draws) / valid matches`，範圍
+`[0,1]`；offspring 執行失敗時不啟動直接比賽，reward 為 `0.0`。AOS 維持
+alpha `0.20` 的 EMA、Strategy/Code 初始機率 `0.20/0.80`，以及每個 operator
+至少 `0.10` 的探索機率。七個 opponent scores 只供 lexicase fitness 使用，不再
+決定 AOS reward；18 場直接比賽也不會成為新的 objective。
 
 ## 4. Parent Selection ??NSGA-II
 

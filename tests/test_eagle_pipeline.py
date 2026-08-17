@@ -378,6 +378,19 @@ population_size: 3
                 sum(generation_one_aos["post_update_probabilities"].values()), 1.0
             )
             self.assertTrue(list((result.run_dir / "candidates").glob("*/aos/reward.json")))
+            aos_reward_path = next((result.run_dir / "candidates").glob("*/aos/reward.json"))
+            aos_reward = json.loads(aos_reward_path.read_text(encoding="utf-8"))
+            self.assertEqual(aos_reward["schema_version"], "eagle-aos-reward-v2")
+            self.assertEqual(aos_reward["offspring_id"], aos_reward_path.parents[1].name)
+            self.assertIn(aos_reward["operator"], {"strategy", "code"})
+            self.assertIn(aos_reward["operator_id"], generation_one_aos["operators"])
+            self.assertTrue(
+                aos_reward_path.parents[2].joinpath(aos_reward["comparison_parent_id"]).is_dir()
+            )
+            self.assertEqual(aos_reward["head_to_head"]["total_matches"], 18)
+            self.assertEqual(aos_reward["reward_source"], "parent_vs_offspring")
+            self.assertIn("operator_quality_before", aos_reward)
+            self.assertIn("operator_quality_after", aos_reward)
 
     def test_population_signature_tracks_opponent_cases_not_candidate_ids(self) -> None:
         first = [

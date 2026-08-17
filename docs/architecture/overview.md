@@ -31,7 +31,9 @@ flowchart TD
     G --> V["Validation"] --> C["Compile"] --> I["Integration"]
     I --> E["126 MicroRTS matches"]
     E --> O["7 opponent scores + reporting aggregate"]
-    O --> N["Lexicase survivor selection"] --> P
+    O --> H["18 parent-vs-offspring matches for AOS"]
+    H --> A["EMA operator update"]
+    A --> N["Lexicase survivor selection"] --> P
 ```
 
 ## Invariants
@@ -41,6 +43,8 @@ flowchart TD
 - The reporting aggregate uses the fixed `1/2` weights and denominator `11.0`,
   but does not participate in lexicase case filtering.
 - Failed candidates remain available to selection with `-1000.0` case scores.
+- The direct parent-vs-offspring result is AOS-only evidence; it is not an
+  eighth objective and the seven opponent scores do not determine AOS reward.
 - No previous-generation EAGLE opponent or dynamic EAGLE weight exists in the
   active path.
 

@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-08-12. This file describes executable repository behavior.
+Snapshot: 2026-08-17. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -16,8 +16,11 @@ Snapshot: 2026-08-12. This file describes executable repository behavior.
   when offspring are insufficient; aggregate Game Performance is reporting-only.
 - AOS selects between `strategy_reflection` and `generate_code_reflection`.
   It starts at `0.20/0.80`, has a `0.10` exploration floor, and updates once
-  per generation from execution-first parent-child rewards. Lexicase remains
-  the parent selector.
+  per generation with EMA alpha `0.20`. After normal evaluation, each runnable
+  mutated child plays parent A over the configured 18 map/round/side matches;
+  `(wins + 0.5 × draws) / valid matches` is the AOS reward. Failed offspring
+  skip direct matches and receive `0.0`. Lexicase remains the parent selector,
+  and its seven opponent scores no longer determine AOS reward.
 - The weighted aggregate Game Performance uses weights `1` for the three rush
   cases and `2` for AllInBot/Mayari/COAC/TMA, with denominator `11.0`, for
   reporting only.
@@ -34,6 +37,7 @@ Snapshot: 2026-08-12. This file describes executable repository behavior.
 | Candidate state and objective vector | `eagle/candidate.py` |
 | Evaluation orchestration | `eagle/evaluation.py` |
 | Match matrix | `evaluation/match_matrix.py` |
+| AOS parent-vs-offspring evaluation | `evaluation/parent_offspring.py` |
 | Match aggregation | `evaluation/game_metrics.py` |
 | Objective construction | `evaluation/objectives.py` |
 | Parent and survivor selection | `eagle/selection.py` |

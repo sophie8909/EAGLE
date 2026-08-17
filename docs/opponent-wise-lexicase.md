@@ -43,6 +43,11 @@ tie-break in the active selection path.
 offspring, then uses lexicase-selected parents only if offspring are insufficient.
 Aggregate Game Performance remains reporting-only and does not select survivors.
 
+Adaptive Operator Selection is a separate credit path. Its reward is the
+offspring's win-plus-half-draw rate over direct matches against parent A, not a
+comparison of these seven case scores. Direct parent-vs-offspring matches never
+become lexicase cases.
+
 ## Artifacts and analysis
 
 The following records are written after each generation:

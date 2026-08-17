@@ -18,3 +18,13 @@
 Remaining live verification is host-specific: the checked-in model paths require a
 local Ubuntu or WSL2 Conda installation, llama.cpp binary, GGUF file, ports, and
 any intentionally configured remote hosts.
+
+## Direct AOS credit assignment (completed 2026-08-17)
+
+- Parent A remains the explicit canonical AOS comparison parent.
+- Runnable mutated offspring play the comparison parent on the configured
+  three maps, three round seeds, and both sides using existing compiled classes.
+- Direct W/D/L points replace seven-opponent rank changes as the sole AOS
+  performance reward; lexicase fitness remains unchanged.
+- `eagle-aos-v2` and `eagle-aos-reward-v2` preserve EMA/probability transitions
+  and reconstructable head-to-head totals.

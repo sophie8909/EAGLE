@@ -59,6 +59,7 @@ not a fifth EA entrypoint. `scripts/setup_allibot.py` and
 | `evaluation/game_metrics.py` | Match telemetry component extraction and aggregate game metrics. |
 | `evaluation/game_performance.py` | Weighted Game Performance calculation. |
 | `evaluation/match_matrix.py` | Deterministic opponent/map/round/side matrix construction. |
+| `evaluation/parent_offspring.py` | AOS-only direct parent-A-vs-offspring matrix, W/D/L reward, and compact match references. |
 | `evaluation/match_logs.py` | Temporary match-log reading and chunking for reflection. |
 | `evaluation/match_trace.py` | Match trace serialization/read helpers. |
 | `evaluation/microrts_runner.py` | MicroRTS integration probe and compatibility façade for canonical match execution. |

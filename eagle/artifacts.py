@@ -68,11 +68,11 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
 def write_aos_reward_artifact(candidates_dir: Path, reward: dict) -> None:
     """Persist post-evaluation AOS credit beside the mutated candidate."""
 
-    candidate_id = str(reward.get("child_candidate_id") or "")
+    candidate_id = str(reward.get("offspring_id") or "")
     if not candidate_id:
         return
     write_json(candidates_dir / candidate_id / "aos" / "reward.json", {
-        "schema_version": "eagle-aos-reward-v1",
+        "schema_version": "eagle-aos-reward-v2",
         **reward,
     })
 
@@ -314,6 +314,15 @@ def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool
         "mutation_rate": config.mutation_rate,
         "mutation_selection_policy": "adaptive_operator_selection",
         "aos": config.aos.to_dict(),
+        "aos_parent_vs_offspring": {
+            "comparison_parent_rule": "parent_a",
+            "maps": list(config.evaluation_maps),
+            "round_seeds": list(config.resolved_match_seeds),
+            "sides": ["offspring_p0_parent_p1", "parent_p0_offspring_p1"],
+            "matches_per_credited_offspring": len(config.evaluation_maps) * config.rounds_per_map * 2,
+            "reward_formula": "(wins + 0.5 * draws) / valid_matches",
+            "execution_failure_reward": config.aos.failure_reward,
+        },
         "stagnation_generations": config.stagnation_generations,
         "matches_per_candidate": config.matches_per_candidate,
         "matches_per_opponent": config.fixed_matches_per_opponent,

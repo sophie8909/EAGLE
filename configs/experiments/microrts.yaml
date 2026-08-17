@@ -22,9 +22,7 @@ aos:
   credit:
     alpha: 0.20
   reward:
-    repaired_execution: 1.0
-    broke_execution: -1.0
-    still_failed: -0.1
+    execution_failure: 0.0
 
 llm:
   temperature: 0.2

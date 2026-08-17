@@ -14,8 +14,10 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    best score for each case until one remains.
 5. Apply crossover/copy and let AOS choose Strategy Reflection or
    Generate-Code Reflection before any prompt-only mutation.
-6. Evaluate every child through the same complete pipeline, then assign
-   parent-child operator rewards and update AOS once for the generation.
+6. Evaluate every child through the same complete pipeline. Runnable mutated
+   children then play an 18-match map/round/side matrix against their canonical
+   comparison parent (parent A); use the direct W/D/L result for AOS credit and
+   update AOS once for the generation.
 7. Fill the fixed population from offspring with seeded lexicase selection,
    using parent fallback only when offspring are insufficient.
 8. Persist the surviving population and generation metrics.
@@ -42,6 +44,12 @@ the convenient final representative only; it does not replace the seven cases.
 Each candidate runs all seven opponents over three maps, three rounds, and both
 player positions: `7 × 3 × 3 × 2 = 126` matches. There is no previous-generation
 EAGLE opponent or dynamic opponent weight.
+
+The AOS-only parent-vs-offspring matrix separately runs `3 × 3 × 2 = 18`
+matches for each runnable mutated child. It uses the same maps, round seeds, and
+side-swap configuration and reuses both compiled class directories. These
+matches never enter `Candidate.fitness_objectives`, the opponent archive, or
+lexicase. The seven ordinary opponent scores do not determine AOS reward.
 
 ## Archive and analysis
 

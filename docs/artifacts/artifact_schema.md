@@ -45,7 +45,9 @@ runs/<run_id>/
         │   ├── match_selection.json
         │   ├── global_evaluation_summary.json
         │   └── mutation_intent.json
-        ├── aos/reward.json
+        ├── aos/
+        │   ├── reward.json
+        │   └── head_to_head/matches/match_<index>/
         ├── generation/
         │   ├── request.txt
         │   ├── response_raw.txt
@@ -96,12 +98,19 @@ Never silently override an input without writing the resolved value.
 For a mutated candidate, retain both mutation interactions even if Rewrite or final generation fails. `metadata.json` records `applied`, mutation `type`, model identifiers, attempt counts, status, and errors. For no mutation, record `applied: false` and `type: null`.
 
 Each mutated offspring also records `aos/reward.json` after evaluation. The
-payload identifies `parent_candidate_id`, `child_candidate_id`, and
-`operator_used`, then records the parent/child runnable status, execution
-transition, opponent-case improvements/regressions, and `operator_reward`.
+`eagle-aos-reward-v2` payload identifies `generation`, `offspring_id`,
+`comparison_parent_id`, and `operator` (`strategy` or `code`), with the stable
+internal `operator_id` retained for generation-statistic joins. It records `reward_source`, reward,
+parent/offspring runnable status, the direct matrix maps/rounds/sides and W/D/L/
+error totals, match-artifact references, and operator quality/probability before
+and after the generation-level update. Detailed direct matches remain owned by
+`aos/head_to_head/matches/`; `reward.json` does not duplicate their process or
+telemetry payloads.
 Generation-level AOS state is stored in the `aos` field of
 `generation_metrics.jsonl`, including selection probability, usage count,
-reward count, mean reward, recent credit, and execution-transition counts.
+reward count, mean reward, quality before/after, direct W/D/L/error totals, and
+execution-transition counts. Analysis can therefore reconstruct each
+generation's Strategy/Code probability, reward, and parent-vs-offspring record.
 
 Every offspring persists final generation request, every raw response/retry, extracted source, normalized source, and generation error. Accepted source must be byte-identifiable (for example with SHA-256) across compile and all 126 match records.
 

@@ -48,3 +48,18 @@ Per-candidate evaluation artifacts include:
 
 Run-level `generation_metrics.jsonl` stores objective statistics for every
 opponent case and the per-opponent reporting summaries used by analysis.
+
+## AOS-only parent-vs-offspring evaluation
+
+After normal evaluation succeeds for a mutated offspring,
+`evaluation/parent_offspring.py` reuses the offspring and comparison parent's
+compiled class directories. It uses `evaluation/match_matrix.py` with the same
+three configured maps, three round seeds, and both player positions, producing
+18 direct matches. `ComparisonParentAgent` isolates the parent's already
+compiled same-named `ai.generated.CandidateAgent`; it does not regenerate or
+recompile either generated source.
+
+The direct W/D/L summary is consumed only by AOS. It is not added to the seven
+opponent objectives, Game Performance, lexicase, or the opponent archive. An
+offspring that fails generation, validation, compilation, integration, or its
+normal runtime matrix does not launch this evaluator.

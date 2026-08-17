@@ -23,7 +23,9 @@ from .aos import (
     AdaptiveOperatorSelection,
     OPERATOR_TO_MUTATION,
     OperatorReward,
+    can_run_as_comparison_parent,
     calculate_operator_reward,
+    is_runnable,
 )
 from .artifacts import (
     write_aos_reward_artifact,
@@ -42,6 +44,7 @@ from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import CrossoverContext, crossover
 from .evaluation import evaluate_population, preflight_evaluation_opponents
+from evaluation.parent_offspring import evaluate_parent_vs_offspring
 from .mutation import ReflectionContext, build_reflection_backend
 from .reflection_context import build_reflection_context
 from .llm import LLMCallLogger
@@ -245,8 +248,16 @@ def _run_search_impl(
             config=config,
             aos=aos,
             candidates_dir=candidates_dir,
+            classes_dir=classes_dir,
+            mock=mock,
         )
         aos_record = aos.update_generation(rewards)
+        evaluated_offspring = persist_aos_reward_outcomes(
+            evaluated_offspring,
+            rewards,
+            aos_record=aos_record,
+            candidates_dir=candidates_dir,
+        )
         archive_before = archive_niches(run_dir)
         update_strategy_archive(run_dir, evaluated_offspring)
         update_opponent_archive(run_dir, evaluated_offspring)
@@ -458,10 +469,12 @@ def create_offspring(
             child = replace(child, metadata={
                 **child.metadata,
                 "aos": {
-                    "parent_candidate_id": parent_a.id,
-                    "child_candidate_id": child.id,
-                    "operator_used": operator_used,
-                    "selection_probability": aos.probability(operator_used),
+                    "generation": generation,
+                    "comparison_parent_id": parent_a.id,
+                    "offspring_id": child.id,
+                    "operator": OPERATOR_TO_MUTATION[operator_used],
+                    "operator_id": operator_used,
+                    "probability_before": aos.probability(operator_used),
                 },
             })
         offspring.append(child)
@@ -505,25 +518,87 @@ def apply_aos_rewards(
     config: ExperimentConfig,
     aos: AdaptiveOperatorSelection,
     candidates_dir: Path,
+    classes_dir: Path,
+    mock: bool,
 ) -> tuple[list[Candidate], list[OperatorReward]]:
-    """Assign rewards only after all children in the generation are evaluated."""
+    """Collect execution or direct-match evidence after normal evaluation."""
 
     parent_by_id = {candidate.id: candidate for candidate in parents}
     updated: list[Candidate] = []
     rewards: list[OperatorReward] = []
     for child in children:
         aos_metadata = child.metadata.get("aos") or {}
-        operator = aos_metadata.get("operator_used")
-        parent_id = aos_metadata.get("parent_candidate_id")
+        operator = aos_metadata.get("operator_id")
+        parent_id = aos_metadata.get("comparison_parent_id")
         if not operator or not parent_id or parent_id not in parent_by_id:
             updated.append(child)
             continue
+        parent = parent_by_id[parent_id]
+        head_to_head = {
+            "maps": list(config.evaluation_maps),
+            "rounds": list(config.resolved_match_seeds),
+            "sides": ["offspring_p0_parent_p1", "parent_p0_offspring_p1"],
+            "total_matches": 0,
+            "valid_matches": 0,
+            "wins": 0,
+            "draws": 0,
+            "losses": 0,
+            "errors": 0,
+            "skipped_reason": (
+                "execution_failure"
+                if not is_runnable(child)
+                else "comparison_parent_execution_failure"
+            ),
+        }
+        if is_runnable(child) and can_run_as_comparison_parent(parent):
+            direct_result = evaluate_parent_vs_offspring(
+                child,
+                parent,
+                config=config,
+                classes_dir=classes_dir,
+                match_artifacts_dir=candidates_dir / child.id / "aos" / "head_to_head" / "matches",
+                mock=mock,
+            )
+            head_to_head = {"reward": direct_result.reward, **direct_result.to_dict()}
         reward = calculate_operator_reward(
-            parent_by_id[parent_id], child, operator=operator, config=config.aos,
+            parent,
+            child,
+            operator=operator,
+            config=config.aos,
+            head_to_head=head_to_head,
         )
         reward_metadata = {**aos_metadata, **reward.to_dict()}
         child = replace(child, metadata={**child.metadata, "aos": reward_metadata})
-        write_aos_reward_artifact(candidates_dir, reward_metadata)
         updated.append(child)
         rewards.append(reward)
     return updated, rewards
+
+
+def persist_aos_reward_outcomes(
+    children: list[Candidate],
+    rewards: list[OperatorReward],
+    *,
+    aos_record: dict,
+    candidates_dir: Path,
+) -> list[Candidate]:
+    """Attach the once-per-generation EMA/probability result and persist it."""
+
+    rewards_by_offspring = {reward.offspring_id: reward for reward in rewards}
+    updated: list[Candidate] = []
+    for child in children:
+        reward = rewards_by_offspring.get(child.id)
+        if reward is None:
+            updated.append(child)
+            continue
+        operator_stats = (aos_record.get("operators") or {}).get(reward.operator) or {}
+        reward_metadata = {
+            **reward.to_dict(),
+            "operator_quality_before": operator_stats.get("operator_quality_before"),
+            "operator_quality_after": operator_stats.get("operator_quality_after"),
+            "probability_before": operator_stats.get("selection_probability_before"),
+            "probability_after": operator_stats.get("selection_probability"),
+        }
+        child = replace(child, metadata={**child.metadata, "aos": reward_metadata})
+        write_aos_reward_artifact(candidates_dir, reward_metadata)
+        updated.append(child)
+    return updated

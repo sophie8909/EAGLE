@@ -95,11 +95,27 @@ Lexicase selects the parent. A generation-level Adaptive Operator Selection
 
 AOS starts at Strategy `0.20` / Generate-Code `0.80`, keeps every operator at
 or above `0.10`, and updates a lightweight credit EMA only after the complete
-offspring batch has been evaluated. The reward first handles execution repair
-or breakage, then compares the child's LOSS/DRAW/WIN result against its AOS
-parent for each active opponent case. Lexicase remains solely responsible for
-parent selection. Select reflection evidence by component provenance and
-mutation responsibility, not by prompt equality.
+offspring batch has been evaluated. For every mutated child, the canonical AOS
+comparison parent is parent A: the first lexicase-selected reproductive parent
+already recorded by the active credit path. This remains true when crossover
+selects individual genotype components from parent B.
+
+After a runnable child completes its normal 126-match evaluation, its already
+compiled class plays parent A's already compiled class on the normal three maps,
+three rounds/seeds, and both player sides: `3 × 3 × 2 = 18` matches. No Java is
+regenerated and no LLM or seven-opponent matrix is rerun. AOS reward is
+
+```text
+(offspring wins + 0.5 × draws) / valid direct matches
+```
+
+and is therefore in `[0, 1]`. An offspring execution failure skips direct
+matches and receives `0.0`. A parent that has no loadable compiled phenotype is
+an execution repair and receives `1.0`; that exceptional source is recorded
+separately. EMA uses `Q_new = 0.8 × Q_old + 0.2 × reward`, then probability
+matching reapplies the `0.10` floor. The seven opponent scores remain exclusively
+lexicase fitness and no longer determine AOS reward. Select reflection evidence
+by component provenance and mutation responsibility, not by prompt equality.
 
 ## Persistence checklist
 

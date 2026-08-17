@@ -363,18 +363,28 @@ def _aos_rows(data: RunData) -> list[dict[str, Any]]:
         for operator, stats in sorted(operators.items()):
             if not isinstance(stats, dict):
                 continue
+            head_to_head = stats.get("head_to_head") or {}
+            if not isinstance(head_to_head, dict):
+                head_to_head = {}
             rows.append({
                 "generation": item.get("generation"),
                 "operator": operator,
                 "usage_count": stats.get("usage_count", 0),
                 "reward_count": stats.get("reward_count", 0),
                 "mean_reward": stats.get("mean_reward"),
+                "operator_quality_before": stats.get("operator_quality_before"),
+                "operator_quality_after": stats.get("operator_quality_after", stats.get("recent_credit")),
                 "recent_credit": stats.get("recent_credit"),
                 "selection_probability_before": stats.get("selection_probability_before"),
                 "selection_probability": stats.get("selection_probability"),
                 "cumulative_usage_count": stats.get("cumulative_usage_count", 0),
                 "cumulative_reward_count": stats.get("cumulative_reward_count", 0),
                 "cumulative_mean_reward": stats.get("cumulative_mean_reward"),
+                "parent_vs_offspring_wins": head_to_head.get("wins", 0),
+                "parent_vs_offspring_draws": head_to_head.get("draws", 0),
+                "parent_vs_offspring_losses": head_to_head.get("losses", 0),
+                "parent_vs_offspring_errors": head_to_head.get("errors", 0),
+                "parent_vs_offspring_total_matches": head_to_head.get("total_matches", 0),
                 **{
                     transition: transition_counts.get(transition, 0)
                     for transition in (

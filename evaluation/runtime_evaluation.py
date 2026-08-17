@@ -17,7 +17,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from .game_performance import (
     GamePerformanceBreakdown,
@@ -222,6 +222,7 @@ def run_microrts_match(
     opponent_source_generation: int | None = None,
     opponent_source_candidate_id: str | None = None,
     opponent_weight: float = 1.0,
+    java_system_properties: Mapping[str, str] | None = None,
 ) -> MatchResult:
     """Run one bounded match and persist its independent evidence immediately."""
 
@@ -248,8 +249,13 @@ def run_microrts_match(
     )
     ai1 = agent_class if candidate_player == 0 else opponent
     ai2 = opponent if candidate_player == 0 else agent_class
+    system_properties = [
+        f"-D{key}={value}"
+        for key, value in sorted((java_system_properties or {}).items())
+    ]
     command = [
         "java",
+        *system_properties,
         f"-Deagle.match.seed={seed_value}",
         f"-Dmicrorts.trace.path={replay_path}",
         f"-Dmicrorts.round_state_dir={round_state_dir}",

@@ -25,7 +25,7 @@ from .run_artifacts import (
     record_error_memory,
     record_generation,
 )
-from .search import SearchResult, apply_aos_rewards, create_offspring
+from .search import SearchResult, apply_aos_rewards, create_offspring, persist_aos_reward_outcomes
 from .strategy_diversity import (
     archive_niches,
     diversity_console_summary,
@@ -123,9 +123,21 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path, run_dir:
             mock=mock, llm_client=shared_client,
         )
         evaluated, rewards = apply_aos_rewards(
-            population, evaluated, config=config, aos=aos, candidates_dir=candidates_dir,
+            population,
+            evaluated,
+            config=config,
+            aos=aos,
+            candidates_dir=candidates_dir,
+            classes_dir=classes_dir,
+            mock=mock,
         )
         aos_record = aos.update_generation(rewards)
+        evaluated = persist_aos_reward_outcomes(
+            evaluated,
+            rewards,
+            aos_record=aos_record,
+            candidates_dir=candidates_dir,
+        )
         archive_before = archive_niches(run_dir)
         update_strategy_archive(run_dir, evaluated)
         update_opponent_archive(run_dir, evaluated)

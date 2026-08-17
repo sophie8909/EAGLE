@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .candidate import Candidate
-from .opponent_cases import LEXICASE_CASES
 
 
 STRATEGY_REFLECTION = "strategy_reflection"
@@ -36,9 +35,7 @@ class AOSConfig:
     )
     min_probability: float = 0.10
     credit_alpha: float = 0.20
-    repaired_execution_reward: float = 1.0
-    broke_execution_reward: float = -1.0
-    still_failed_reward: float = -0.1
+    failure_reward: float = 0.0
 
     @classmethod
     def from_mapping(cls, payload: object) -> "AOSConfig":
@@ -64,9 +61,7 @@ class AOSConfig:
             initial_probabilities=tuple(values.items()),
             min_probability=float(payload.get("min_probability", 0.10)),
             credit_alpha=float(credit.get("alpha", 0.20)),
-            repaired_execution_reward=float(reward.get("repaired_execution", 1.0)),
-            broke_execution_reward=float(reward.get("broke_execution", -1.0)),
-            still_failed_reward=float(reward.get("still_failed", -0.1)),
+            failure_reward=float(reward.get("execution_failure", 0.0)),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -75,11 +70,7 @@ class AOSConfig:
             "initial_probabilities": dict(self.initial_probabilities),
             "min_probability": self.min_probability,
             "credit": {"alpha": self.credit_alpha},
-            "reward": {
-                "repaired_execution": self.repaired_execution_reward,
-                "broke_execution": self.broke_execution_reward,
-                "still_failed": self.still_failed_reward,
-            },
+            "reward": {"execution_failure": self.failure_reward},
         }
 
     def validate(self) -> None:
@@ -94,34 +85,35 @@ class AOSConfig:
             raise ValueError("aos.min_probability must be in [0, 0.5).")
         if not 0.0 < self.credit_alpha <= 1.0:
             raise ValueError("aos.credit.alpha must be in (0, 1].")
+        if self.failure_reward != 0.0:
+            raise ValueError("aos.reward.execution_failure must be 0.0 for the [0, 1] contract.")
 
 
 @dataclass(frozen=True)
 class OperatorReward:
     operator: str
-    parent_candidate_id: str
-    child_candidate_id: str
+    comparison_parent_id: str
+    offspring_id: str
     reward: float
-    parent_runnable: bool
-    child_runnable: bool
-    improved_cases: tuple[str, ...] = ()
-    regressed_cases: tuple[str, ...] = ()
-    unchanged_cases: tuple[str, ...] = ()
-    compared_cases: int = 0
+    reward_source: str
+    comparison_parent_runnable: bool
+    offspring_runnable: bool
+    generation: int = 0
+    head_to_head: dict[str, Any] = field(default_factory=dict)
     transition: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "operator_used": self.operator,
-            "parent_candidate_id": self.parent_candidate_id,
-            "child_candidate_id": self.child_candidate_id,
-            "operator_reward": self.reward,
-            "parent_runnable": self.parent_runnable,
-            "child_runnable": self.child_runnable,
-            "improved_cases": list(self.improved_cases),
-            "regressed_cases": list(self.regressed_cases),
-            "unchanged_cases": list(self.unchanged_cases),
-            "compared_cases": self.compared_cases,
+            "generation": self.generation,
+            "offspring_id": self.offspring_id,
+            "comparison_parent_id": self.comparison_parent_id,
+            "operator": OPERATOR_TO_MUTATION[self.operator],
+            "operator_id": self.operator,
+            "reward": self.reward,
+            "reward_source": self.reward_source,
+            "comparison_parent_runnable": self.comparison_parent_runnable,
+            "offspring_runnable": self.offspring_runnable,
+            "head_to_head": dict(self.head_to_head),
             "transition": self.transition,
         }
 
@@ -162,22 +154,34 @@ class AdaptiveOperatorSelection:
 
     def initial_generation_record(self) -> dict[str, Any]:
         probabilities = dict(self.probabilities)
+        qualities = dict(self.credits)
         return {
-            "schema_version": "eagle-aos-v1",
+            "schema_version": "eagle-aos-v2",
             "selection_probabilities": probabilities,
             "post_update_probabilities": probabilities,
-            "operators": self._operator_records(probabilities, probabilities, self._empty_generation_record()),
+            "operators": self._operator_records(
+                probabilities, probabilities, qualities, self._empty_generation_record()
+            ),
             "transition_counts": {transition: 0 for transition in TRANSITIONS},
             "state": self.state_dict(),
         }
 
     def update_generation(self, rewards: list[OperatorReward]) -> dict[str, Any]:
         before = dict(self.probabilities)
+        quality_before = dict(self.credits)
         grouped = {operator: [] for operator in OPERATORS}
+        head_to_head = {
+            operator: {"wins": 0, "draws": 0, "losses": 0, "errors": 0, "total_matches": 0}
+            for operator in OPERATORS
+        }
         transition_counts = {transition: 0 for transition in TRANSITIONS}
         for reward in rewards:
             if reward.operator in grouped:
+                if not 0.0 <= float(reward.reward) <= 1.0:
+                    raise ValueError("AOS rewards must be in [0, 1].")
                 grouped[reward.operator].append(float(reward.reward))
+                for key in head_to_head[reward.operator]:
+                    head_to_head[reward.operator][key] += int(reward.head_to_head.get(key) or 0)
             if reward.transition in transition_counts:
                 transition_counts[reward.transition] += 1
         generation_stats = self._empty_generation_record()
@@ -187,6 +191,7 @@ class AdaptiveOperatorSelection:
                 "usage_count": self._generation_usage[operator],
                 "reward_count": len(values),
                 "mean_reward": statistics.fmean(values) if values else None,
+                "head_to_head": head_to_head[operator],
             }
             if values:
                 self.credits[operator] = (
@@ -201,10 +206,10 @@ class AdaptiveOperatorSelection:
             self.probabilities = self._probability_match(self.credits)
         after = dict(self.probabilities)
         record = {
-            "schema_version": "eagle-aos-v1",
+            "schema_version": "eagle-aos-v2",
             "selection_probabilities": before,
             "post_update_probabilities": after,
-            "operators": self._operator_records(before, after, generation_stats),
+            "operators": self._operator_records(before, after, quality_before, generation_stats),
             "transition_counts": transition_counts,
             "cumulative_transition_counts": dict(self.total_transition_counts),
             "state": self.state_dict(),
@@ -233,12 +238,14 @@ class AdaptiveOperatorSelection:
             ("total_usage", 0),
             ("total_reward_count", 0),
             ("total_reward_sum", 0.0),
-            ("total_transition_counts", 0),
         ):
             values = state.get(attribute) or {}
             target = getattr(self, attribute)
             for operator in OPERATORS:
                 target[operator] = type(default)(values.get(operator, default))
+        transition_values = state.get("total_transition_counts") or {}
+        for transition in TRANSITIONS:
+            self.total_transition_counts[transition] = int(transition_values.get(transition, 0))
 
     def _normalize(self, values: dict[str, float]) -> dict[str, float]:
         values = {operator: max(0.0, values[operator]) for operator in OPERATORS}
@@ -267,7 +274,18 @@ class AdaptiveOperatorSelection:
 
     def _empty_generation_record(self) -> dict[str, Any]:
         return {
-            operator: {"usage_count": 0, "reward_count": 0, "mean_reward": None}
+            operator: {
+                "usage_count": 0,
+                "reward_count": 0,
+                "mean_reward": None,
+                "head_to_head": {
+                    "wins": 0,
+                    "draws": 0,
+                    "losses": 0,
+                    "errors": 0,
+                    "total_matches": 0,
+                },
+            }
             for operator in OPERATORS
         }
 
@@ -275,11 +293,14 @@ class AdaptiveOperatorSelection:
         self,
         before: dict[str, float],
         after: dict[str, float],
+        quality_before: dict[str, float],
         generation_stats: dict[str, Any],
     ) -> dict[str, Any]:
         return {
             operator: {
                 **generation_stats[operator],
+                "operator_quality_before": quality_before[operator],
+                "operator_quality_after": self.credits[operator],
                 "recent_credit": self.credits[operator],
                 "selection_probability_before": before[operator],
                 "selection_probability": after[operator],
@@ -305,28 +326,14 @@ def is_runnable(candidate: Candidate) -> bool:
     return bool(game) and expected > 0 and completed == expected and not int(game.get("missing_match_count") or 0)
 
 
-def opponent_result_ranks(candidate: Candidate) -> dict[str, int | None]:
-    """Map canonical opponent summaries to LOSS=0, DRAW=1, WIN=2."""
+def can_run_as_comparison_parent(candidate: Candidate) -> bool:
+    """Return whether compiled parent bytecode can enter a direct match."""
 
-    rows = {
-        str(row.get("opponent_id")): row
-        for row in (candidate.game_eval_result or {}).get("opponent_results") or []
-        if isinstance(row, dict) and row.get("opponent_id")
-    }
-    ranks: dict[str, int | None] = {}
-    for case in LEXICASE_CASES:
-        row = rows.get(case)
-        if row is None or str(row.get("status") or "").lower() != "completed":
-            ranks[case] = None
-            continue
-        try:
-            wins = int(row.get("wins") or 0)
-            losses = int(row.get("losses") or 0)
-        except (TypeError, ValueError):
-            ranks[case] = None
-            continue
-        ranks[case] = 2 if wins > losses else 0 if losses > wins else 1
-    return ranks
+    return bool(
+        candidate.generated_java
+        and candidate.compile_status == "success"
+        and candidate.failure_stage not in {"generation", "validation", "compilation", "integration"}
+    )
 
 
 def calculate_operator_reward(
@@ -335,30 +342,55 @@ def calculate_operator_reward(
     *,
     operator: str,
     config: AOSConfig,
+    head_to_head: dict[str, Any] | None = None,
 ) -> OperatorReward:
-    """Assign execution-first, then opponent-case parent-child credit."""
+    """Assign execution-first credit, then direct parent-match credit."""
 
     parent_runnable = is_runnable(parent)
     child_runnable = is_runnable(child)
     transition = f"{'runnable' if parent_runnable else 'failed'}_parent_to_{'runnable' if child_runnable else 'failed'}_child"
-    if not parent_runnable and child_runnable:
-        reward = config.repaired_execution_reward
-        return OperatorReward(operator, parent.id, child.id, reward, parent_runnable, child_runnable, transition=transition)
-    if parent_runnable and not child_runnable:
-        reward = config.broke_execution_reward
-        return OperatorReward(operator, parent.id, child.id, reward, parent_runnable, child_runnable, transition=transition)
-    if not parent_runnable and not child_runnable:
-        reward = config.still_failed_reward
-        return OperatorReward(operator, parent.id, child.id, reward, parent_runnable, child_runnable, transition=transition)
-
-    parent_ranks = opponent_result_ranks(parent)
-    child_ranks = opponent_result_ranks(child)
-    improved = tuple(case for case in LEXICASE_CASES if parent_ranks[case] is not None and child_ranks[case] is not None and child_ranks[case] > parent_ranks[case])
-    regressed = tuple(case for case in LEXICASE_CASES if parent_ranks[case] is not None and child_ranks[case] is not None and child_ranks[case] < parent_ranks[case])
-    unchanged = tuple(case for case in LEXICASE_CASES if parent_ranks[case] is not None and child_ranks[case] is not None and child_ranks[case] == parent_ranks[case])
-    compared = len(improved) + len(regressed) + len(unchanged)
-    reward = (len(improved) - len(regressed)) / compared if compared else 0.0
-    return OperatorReward(
-        operator, parent.id, child.id, reward, parent_runnable, child_runnable,
-        improved, regressed, unchanged, compared, transition,
-    )
+    if not child_runnable:
+        return OperatorReward(
+            operator=operator,
+            comparison_parent_id=parent.id,
+            offspring_id=child.id,
+            reward=config.failure_reward,
+            reward_source="execution_failure",
+            comparison_parent_runnable=parent_runnable,
+            offspring_runnable=False,
+            generation=child.generation,
+            head_to_head={} if head_to_head is None else {
+                key: value for key, value in head_to_head.items() if key != "reward"
+            },
+            transition=transition,
+        )
+    if head_to_head is not None and "reward" in head_to_head:
+        reward = float(head_to_head.get("reward", 0.0))
+        if not 0.0 <= reward <= 1.0:
+            raise ValueError("Head-to-head reward must be in [0, 1].")
+        return OperatorReward(
+            operator=operator,
+            comparison_parent_id=parent.id,
+            offspring_id=child.id,
+            reward=reward,
+            reward_source="parent_vs_offspring",
+            comparison_parent_runnable=parent_runnable,
+            offspring_runnable=True,
+            generation=child.generation,
+            head_to_head={key: value for key, value in head_to_head.items() if key != "reward"},
+            transition=transition,
+        )
+    if not can_run_as_comparison_parent(parent):
+        return OperatorReward(
+            operator=operator,
+            comparison_parent_id=parent.id,
+            offspring_id=child.id,
+            reward=1.0,
+            reward_source="comparison_parent_execution_failure",
+            comparison_parent_runnable=False,
+            offspring_runnable=True,
+            generation=child.generation,
+            head_to_head={} if head_to_head is None else dict(head_to_head),
+            transition=transition,
+        )
+    raise ValueError("Runnable offspring and comparison parent require head-to-head evidence.")

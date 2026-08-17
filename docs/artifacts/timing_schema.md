@@ -72,6 +72,11 @@ Attempt order is stable and one-based. The owning stage artifact provides model/
 
 Each match-level `timing.json` records at least start, finish, duration, process start/finish if distinct, timeout limit, and status. Candidate totals must agree with the match duration list within documented measurement boundaries.
 
+AOS parent-vs-offspring matches use the same match-level timing schema under
+`aos/head_to_head/matches/`. They are separate from the 126 normal-evaluation
+durations in candidate `timing.json`; their aggregate is reconstructable from
+the 18 AOS-owned match timing files and does not change normal evaluation counts.
+
 ## Tests
 
 - UTC formatting and non-negative finite durations.
