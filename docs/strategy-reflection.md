@@ -7,7 +7,7 @@ role-local enablement, temperature, and the configurable sample budget
 
 ```text
 all configured evaluation matches -> deterministic Global Evaluation Summary
-temporary complete logs -> coverage-aware sample up to 10 -> match_selection.json
+canonical match traces -> coverage-aware sample up to 10 -> match_selection.json
 each selected log -> one independent Match Commentator -> match_analysis.json
 parent strategy + global summary + selected analyses -> Coach -> new_strategy_prompt
 new strategy + existing code-generation prompt -> Generator -> Java candidate
@@ -19,10 +19,12 @@ new strategy + existing code-generation prompt -> Generator -> Java candidate
 | Coach | Parent strategy + global summary + selected analyses + selection metadata | New strategy prompt | Write Java or inspect raw ticks |
 | Generator | Strategy + code-generation prompt | Java | Analyze matches |
 
-## Match-log lifecycle
+## Match-trace lifecycle
 
-MicroRTS round-state files are streamed into a stable `match_log.jsonl.gz` with
-one record per executed tick. After all matches finish, a deterministic greedy
+MicroRTS round-state files are streamed into the canonical
+`match_trace.jsonl.gz`, with one structured record and its raw source state per
+available tick. If the engine emits no round-state file, the final result creates
+one explicit fallback record. After all matches finish, a deterministic greedy
 sampler selects up to 10 completed matches without replacement. It first covers
 opponents with losses (or draws when no loss exists), then unseen maps, then fills
 diverse opponent/map/player-side combinations using LOSS > DRAW > WIN. Seeded
@@ -31,7 +33,7 @@ records the counts, eligible IDs, selected IDs, coverage metadata, rule, and RNG
 provenance. `reflection/global_evaluation_summary.json` records deterministic
 breadth across all evaluated matches, including fully-beaten opponents.
 
-Unselected raw logs are deleted before any commentary call. Selected logs are
+Unselected traces are deleted before any commentary call. Selected traces are
 deleted after successful commentary or bounded terminal failure. Compact result,
 performance, opponent, map, side, round, and winner artifacts remain permanent.
 
@@ -97,7 +99,7 @@ Every Strategy Mutation receives exactly one intent from the run RNG:
 | `STRUCTURAL` | 0.20 | Reorganize major opening/economy/production/timing/expansion/defense relationships. |
 | `ALTERNATIVE` | 0.15 | Solve the diagnosed problem with a different strategic approach. |
 
-The run-level `strategy_archive.json` keeps one successfully evaluated
+The run-level `archives/strategy.json` keeps one successfully evaluated
 representative per known niche, replacing it only when game performance is
 better (then code quality and deterministic candidate-ID tie-breaking). It is
 storage and analysis metadata only; it is not a population and never enters

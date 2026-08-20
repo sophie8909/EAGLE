@@ -10,7 +10,7 @@ the expected complete batch receives the same objective sentinel:
 | `game_performance` | `-1000` | maximize |
 | `code_quality` | `-1000` | maximize |
 
-`evaluation/canonical_code_quality.py::failure_code_quality` deliberately
+`evaluation/code_quality.py::failure_code_quality` deliberately
 returns `-1000` for every supported failure stage. It no longer ranks failures
 by progress. `failure_stage`, `failure_category`, `failure_reason`, compiler
 diagnostics, validation diagnostics, integration results, retained matches,

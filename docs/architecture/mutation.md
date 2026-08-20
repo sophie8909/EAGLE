@@ -87,23 +87,41 @@ next inherited state: A1 + B3 + C2
 
 ## Mutation selection
 
-Lexicase selects the parent. A generation-level Adaptive Operator Selection
-(AOS) then selects exactly one of the two mutation operators:
+Lexicase selects the parent. One `ReflectionOperatorController` then selects
+exactly one of the two mutation operators:
 
 - `strategy_reflection` → Strategy Reflection → Commentator/Coach → strategy prompt rewrite;
 - `generate_code_reflection` → Generate-Code Reflection → generation prompt rewrite.
 
-AOS starts at Strategy `0.20` / Generate-Code `0.80`, keeps every operator at
-or above `0.10`, and updates a lightweight credit EMA only after the complete
-offspring batch has been evaluated. For every mutated child, the canonical AOS
-comparison parent is parent A: the first lexicase-selected reproductive parent
-already recorded by the active credit path. This remains true when crossover
-selects individual genotype components from parent B.
+`reflection_operator_mode` has exactly three values:
 
-After a runnable child completes its normal 126-match evaluation, its already
-compiled class plays parent A's already compiled class on the normal three maps,
-three rounds/seeds, and both player sides: `3 × 3 × 2 = 18` matches. No Java is
-regenerated and no LLM or seven-opponent matrix is rerun. AOS reward is
+- `static`: fixed Strategy/Code probabilities for the whole run. No reward,
+  EMA update, opponent comparison, or parent-vs-offspring match is performed.
+- `aos_opponent`: adaptive probabilities using the historical execution-first
+  change in performance against the seven evolutionary opponents.
+- `aos_head2head`: adaptive probabilities using direct offspring-vs-parent-A
+  MicroRTS matches.
+
+`strategy_reflection_probability` and `code_reflection_probability` are fixed
+probabilities in `static` and initial probabilities in both AOS modes. They
+must each be in `[0,1]` and sum to `1.0`. `aos_minimum_probability` is parsed
+for every mode but affects only adaptive updates; with two operators it must be
+in `[0,0.5]`. Production starts at Strategy `0.20` / Generate-Code `0.80` and
+uses a `0.10` adaptive floor.
+
+For `aos_opponent`, candidate execution is compared first: failed parent to
+runnable child is `+1.0`, runnable parent to failed child is `-1.0`, and two
+failed candidates are `-0.1`. If both are runnable, each completed opponent
+case is ranked LOSS=`0`, DRAW=`1`, WIN=`2`, where wins greater than losses is a
+WIN, losses greater than wins is a LOSS, and a tied record is a DRAW. The exact
+reward is `(improved cases - regressed cases) / compared cases`, or `0.0` when
+no case is comparable. This mode reuses normal evaluation and launches no
+additional matches.
+
+For `aos_head2head`, after a runnable child completes its normal 126-match
+evaluation, its compiled class plays parent A's compiled class on the configured
+maps, rounds, and both player sides (currently `3 × 3 × 2 = 18` matches).
+No Java is regenerated and no seven-opponent matrix is rerun. Its reward is
 
 ```text
 (offspring wins + 0.5 × draws) / valid direct matches
@@ -113,9 +131,10 @@ and is therefore in `[0, 1]`. An offspring execution failure skips direct
 matches and receives `0.0`. A parent that has no loadable compiled phenotype is
 an execution repair and receives `1.0`; that exceptional source is recorded
 separately. EMA uses `Q_new = 0.8 × Q_old + 0.2 × reward`, then probability
-matching reapplies the `0.10` floor. The seven opponent scores remain exclusively
-lexicase fitness and no longer determine AOS reward. Select reflection evidence
-by component provenance and mutation responsibility, not by prompt equality.
+matching reapplies the configured floor. Both AOS reward providers feed this
+same updater; alpha remains `0.20`. Direct matches never alter the seven-case
+fitness, weighted Game Performance, lexicase, or final test. Select reflection
+evidence by component provenance and mutation responsibility, not prompt equality.
 
 ## Persistence checklist
 

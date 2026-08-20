@@ -12,6 +12,7 @@ In scope:
 - crossover, Strategy Reflection, Code Reflection, and final Java generation;
 - validation, compilation, integration, and the fixed seven-opponent evaluation;
 - opponent-wise fitness, seeded lexicase selection, artifacts, and analysis.
+- one resolved experiment config and one owned llama.cpp lifecycle.
 
 Code quality, compiler output, function coverage, alignment, and match
 telemetry remain diagnostics. They are not additional evolutionary objectives.
@@ -20,6 +21,10 @@ telemetry remain diagnostics. They are not additional evolutionary objectives.
 
 ```mermaid
 flowchart TD
+    CFG["Config YAML or directory"] --> L["Experiment orchestrator"]
+    L --> RI["experiment.yaml run index"]
+    L --> RT["Owned llama.cpp runtime"]
+    RT --> P
     P["Evaluated population"] --> S["Seeded lexicase parent selection"]
     S --> X["Crossover or copy"]
     X --> M{"Mutation?"}
@@ -31,9 +36,16 @@ flowchart TD
     G --> V["Validation"] --> C["Compile"] --> I["Integration"]
     I --> E["126 MicroRTS matches"]
     E --> O["7 opponent scores + reporting aggregate"]
-    O --> H["18 parent-vs-offspring matches for AOS"]
-    H --> A["EMA operator update"]
-    A --> N["Lexicase survivor selection"] --> P
+    O --> R{"Reflection operator mode"}
+    R -->|static| F["Fixed probabilities"]
+    R -->|aos_opponent| Q["Seven-opponent rank reward"]
+    R -->|aos_head2head| H["Configured parent-vs-offspring matches"]
+    Q --> A["Shared EMA operator update"]
+    H --> A
+    F --> N["Lexicase survivor selection"]
+    A --> N --> P
+    N --> FT["Final test"]
+    FT --> CL["Stop owned runtime"]
 ```
 
 ## Invariants
@@ -43,8 +55,9 @@ flowchart TD
 - The reporting aggregate uses the fixed `1/2` weights and denominator `11.0`,
   but does not participate in lexicase case filtering.
 - Failed candidates remain available to selection with `-1000.0` case scores.
-- The direct parent-vs-offspring result is AOS-only evidence; it is not an
-  eighth objective and the seven opponent scores do not determine AOS reward.
+- `static` uses fixed probabilities; `aos_opponent` reuses seven-opponent rank
+  changes; `aos_head2head` uses a separate direct matrix. Neither reward path
+  creates another objective or changes normal selection.
 - No previous-generation EAGLE opponent or dynamic EAGLE weight exists in the
   active path.
 

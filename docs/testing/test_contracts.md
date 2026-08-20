@@ -27,16 +27,16 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, and no fixed internal layout |
 | Compilation | isolated output; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; `passed`/`failed`/`blocked`; no match execution |
-| Matches | compile once; same source/class hash; exactly 10 roster matches (5 vendored basic, 5 vendored pathfinding variants); distinct directories/seeds; no regeneration |
+| Matches | compile once; same source/class hash; complete configured matrix; distinct directories and round indices; both sides; no fake match-seed property; no regeneration |
 | Game Performance | exact canonical component math, clamps, bands, aggregation, partial-batch failure |
 | Code Quality | `[0,100]` simplicity score from four weighted complexity penalties, persisted details, diagnostic separation, and `-1000` failure sentinel for both objectives |
-| Artifacts | golden tree, schemas, hashes, resolved config, readback reconstruction, interruption safety; generation/final snapshots preserve fitness and timing while excluding raw match output and full mutation envelopes; evolution writes no duplicate `results.jsonl` or flat population snapshot |
-| Timing | UTC fields, monotonic durations, attempts, optional null stages, 10 match durations |
-| Opponent-wise lexicase | exactly ten maximized opponent cases; seeded case-order filtering; fixed-size elite plus lexicase survivor behavior |
-| Adaptive Operator Selection | Lexicase selects parents; AOS selects two reflection operators; parent A is the explicit comparison parent; runnable offspring use 18 direct map/round/side matches and `[0,1]` W/D/L reward; failed offspring skip matches for reward `0`; seven-case fitness separation, EMA, floor, generation update, artifacts, and analysis totals are covered |
-| Operations | readers reject/migrate unsupported schema versions; legacy names never leak into active output |
+| Artifacts | v2 root allowlist; one resolved `config.yaml`; referenced generation/candidate reconstruction; interruption safety; absence of obsolete config, population, candidate-summary, and match-result duplicates |
+| Timing | UTC fields, monotonic durations, attempts, optional null stages, 126 match durations |
+| Opponent-wise lexicase | exactly seven maximized opponent cases; seeded case-order filtering; offspring-first fixed-size lexicase survivor behavior |
+| Reflection operator selection | Exactly `static`, `aos_opponent`, and `aos_head2head`; config validation and resume identity; fixed static probabilities with no credit matches; historical execution-first seven-case rank reward without direct matches; configured head-to-head matrix with `[0,1]` W/D/L reward; shared EMA/floor; common artifacts and mode-labelled analysis |
+| Operations | shell positional mapping; sorted non-recursive directory batch; single YAML; mock port isolation; start/reuse/switch/owned-stop ordering; failure/interrupt cleanup; foreign-process safety; stale-state reconciliation; experiment-state isolation; skip-final-test |
 | Offline analysis | explicit/latest run resolution is deterministic; only direct canonical children are eligible; partial runs produce derived outputs; unsupported or historical schemas fail explicitly; `results.jsonl` is never read |
-| LLM server lifecycle | missing executable/model; immediate exit; bounded loading/readiness; occupied port; bind/client host separation; local/remote launch ownership; durable stdout/stderr; useful failure state; process-group stop; topology/client URL identity; no READY on process creation |
+| LLM server lifecycle | missing executable/model; bounded readiness; occupied port; configured endpoint identity; durable logs; and stopping only the process created by the experiment orchestrator |
 
 ## Failure fixtures
 
@@ -60,17 +60,19 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
 - Mock LLM calls must record stage/order/attempts and return realistic raw payloads.
 - Test no-regeneration by counting backend calls and comparing source hashes across matches.
 - Test formulas only in their canonical test module; other tests assert references/results, not copied arithmetic.
-- Use a schema-version fixture for every supported legacy reader.
+- Unsupported run schemas must fail explicitly; no legacy reader may silently activate.
+- Compact v3 analysis fixtures must prove candidate references recover
+  `opponent_results.match_scores` from the canonical evaluation artifact as
+  narrow per-generation violin distributions while
+  leaving bulky raw per-match payloads out of the in-memory analysis view.
 - A mock search is a smoke test, not proof of real Java/MicroRTS integration.
 
 ## Documentation completion
 
 When tests reveal a code/spec discrepancy, update [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md). When documented behavior changes by explicit decision, update the authoritative/canonical docs and the Chinese overview according to [`../README.md`](../README.md).
-## Dual-host LLM deployment
-
-Server-management tests must cover explicit CPU/CUDA/remote backend resolution, capability rejection of CPU-only binaries in CUDA mode, device-list parsing, logical GPU-layer/VRAM-fit argument mapping, and the invariant that CPU commands contain no GPU-specific arguments.
-
-Focused runtime tests must prove that the default GGUF path is accepted, a
-direct `--model` override is accepted, the selected model is passed to
-llama.cpp, unrelated processes are never stopped, and all EA LLM operations
-use the same endpoint/model identity.
+Focused runtime tests prove that the selected experiment GGUF is passed to
+llama.cpp, an identical folder-batch runtime is started only once, A/A/B/B/A
+switching is exact, PID reuse cannot satisfy ownership, unrelated processes are
+never stopped, verified stale state is cleaned, and all EA LLM operations use
+the same resolved endpoint/model identity. Actual shell and direct-Python mock
+commands remain required workflow checks in addition to unit tests.

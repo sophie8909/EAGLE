@@ -25,7 +25,7 @@ Output is one complete `CandidateAgent.java` source file. Accept no patch, diff,
 7. Compile once with `javac` and explicit warning diagnostics.
 8. Persist command, stdout, stderr, return code, errors, warnings, and compiled output location.
 9. Perform a distinct MicroRTS load/initialization/invocation integration check.
-10. Reuse that compiled result for all 10 matches.
+10. Reuse that compiled result for all 126 matches.
 
 ## Runtime contract
 
@@ -80,6 +80,5 @@ Classify failures at the stage where progress stops: generation/backend, source 
 - Each prohibited capability is rejected.
 - Package/class/superclass/constructor/method/load failures reach the correct stage.
 - `javac` warnings are structured, deduplicated, counted, and capped by scoring policy.
-- Compilation occurs once and the same class directory is passed to all 10 matches.
+- Compilation occurs once and the same class directory is passed to all 126 matches.
 - No generation backend call occurs between match 0 and match 9.
-

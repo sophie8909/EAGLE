@@ -47,7 +47,7 @@ Valid logical states are:
 4. `validated`: source contract passed.
 5. `compiled`: one class set is available.
 6. `integrated`: MicroRTS can load and initialize the class.
-7. `evaluated`: all 10 matches and both objectives completed.
+7. `evaluated`: all 126 matches and all seven fitness cases completed.
 8. `failed`: a terminal failure records the exact `failure_stage` and retains earlier evidence.
 
 These labels are a documentation model, not newly mandated serialized enum values. Serialized status values must be versioned and map unambiguously to the required pipeline stages.
@@ -64,4 +64,3 @@ These labels are a documentation model, not newly mandated serialized enum value
 ## Implementation mapping
 
 Current code centers the record in `eagle/candidate.py` and reconstructs it in `eagle/evaluation.py`. The active dataclass lacks several first-class contract fields and artifact writing overwrites the pre-generation evidence. Treat [`../implementation/current_status.md`](../implementation/current_status.md) and gap `G-01` in [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md) as migration evidence, not normative behavior.
-

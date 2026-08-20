@@ -46,20 +46,30 @@ Per-candidate evaluation artifacts include:
 - `evaluation/code_quality.json`: code-quality diagnostics;
 - `evaluation/matches.json`: compact individual match records.
 
-Run-level `generation_metrics.jsonl` stores objective statistics for every
+Each run-level generation JSON stores objective statistics for every
 opponent case and the per-opponent reporting summaries used by analysis.
 
-## AOS-only parent-vs-offspring evaluation
+## `aos_head2head`-only parent-vs-offspring evaluation
 
 After normal evaluation succeeds for a mutated offspring,
 `evaluation/parent_offspring.py` reuses the offspring and comparison parent's
 compiled class directories. It uses `evaluation/match_matrix.py` with the same
-three configured maps, three round seeds, and both player positions, producing
+three configured maps, three round indices, and both player positions, producing
 18 direct matches. `ComparisonParentAgent` isolates the parent's already
 compiled same-named `ai.generated.CandidateAgent`; it does not regenerate or
 recompile either generated source.
+
+MicroRTS match seeds are not part of the active contract. The old
+`match_seeds` values were only written to an unread JVM system property, so
+they never controlled MicroRTS randomness. Repeated games are identified by
+`round_index`; match artifacts do not claim seeded reproducibility.
 
 The direct W/D/L summary is consumed only by AOS. It is not added to the seven
 opponent objectives, Game Performance, lexicase, or the opponent archive. An
 offspring that fails generation, validation, compilation, integration, or its
 normal runtime matrix does not launch this evaluator.
+
+`aos_opponent` launches no direct matches: its credit provider reuses the seven
+completed opponent summaries from normal evaluation. `static` calculates no
+reward at all. Both adaptive providers feed the updater in `eagle/aos.py` and
+do not alter the normal evaluation vector.

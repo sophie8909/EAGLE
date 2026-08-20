@@ -1,51 +1,43 @@
 # EAGLE
 
-EAGLE (Evolutionary Algorithm for Game-playing with LLM-Enabled Agents) evolves
-prompts that generate complete Java MicroRTS agents.
+EAGLE (Evolutionary Algorithm for Game-playing with LLM-Enabled Agents) evolves prompts that generate complete Java MicroRTS agents.
 
 ## Canonical workflow
 
+Each experiment folder owns its EA, reflection, evaluation, model, endpoint, and llama.cpp launch settings:
+
 ```bash
-./run_env.sh
-./run.sh configs/experiments/microrts.yaml
-./analyze.sh
-./run_env.sh stop
-./watchdog.sh
+./experiment.sh configs/experiments/qwen3_5_9b/
+./analyze.sh --latest
 ```
 
-`configs/runtime.yaml` is the only runtime source of truth. It selects the
-existing Qwen3.5-9B GGUF model, one CUDA-enabled `llama-server`, and
-`http://127.0.0.1:8080`. `run_env.sh` only manages that one process; it never
-starts the EA or analysis. `run.sh` validates that endpoint and runs the EA.
+`experiment.sh` is a thin wrapper for `python -m eagle experiment`. The Python orchestrator validates the selected GGUF and llama-server, checks port ownership, starts the configured model, waits for health and a chat-completion preflight, runs the EA and production final test, then stops only the process it started. Cleanup also runs after EA/final-test failure and Ctrl+C.
 
-`watchdog.sh` is an optional independent foreground connectivity monitor. It
-checks the local network interface used by the default route and cycles the
-interface down/up when it is disconnected. It does not start, stop, or restart
-the LLM server. Use `run_env.sh` for server lifecycle, `./watchdog.sh --once`
-for one probe/recovery attempt, or `--interval SECONDS` to change the default
-five-minute polling interval. Set `EAGLE_WATCHDOG_INTERFACE` to pin a specific
-interface. Non-root execution requires passwordless `sudo` for `ip link`.
+Resume does not require the original experiment folder:
 
-Runtime state is intentionally small:
+```bash
+./experiment.sh --resume runs/<run_id>
+```
+
+It reloads `runs/<run_id>/config.yaml`, including the exact model and reflection mode.
+
+New runs use one resolved config snapshot and a compact root:
 
 ```text
-runtime/
-├── logs/llm-server.log
-└── pids/llm-server.pid
+runs/<run_id>/
+├── manifest.json
+├── config.yaml
+├── summary.json
+├── timing.jsonl
+├── generations/
+├── candidates/
+├── generated_agents/
+├── classes/
+├── archives/
+├── llm_logs/
+└── final_test/
 ```
 
-No model menus, endpoint discovery, remote mode, or fallback model is supported.
-The optional `scripts/run_gui_match.py` utility remains available for visual
-inspection of one persisted candidate and is outside EA evaluation. The
-watchdog is only a shell-level local-interface monitor/recovery script; it is
-not a server lifecycle manager, second server, or endpoint router.
+Only `eagle-run-v2` is supported by writers, resume, and offline analysis.
 
-## Analysis
-
-`./analyze.sh` performs offline analysis of the latest valid run, or a supplied
-run directory. It retains candidate fitness, objective trends, failures,
-operation timing, request counts, token counts, and total LLM time. Historical
-run records may still be read by the analysis readers. Individual agent
-`game_performance` values are exported to
-`<run>/analysis/agent_game_performance.csv`; use
-`./analyze.sh --agent <candidate_id>` to print one agent's values by generation.
+`watchdog.sh` remains an optional independent network-interface monitor. It does not manage the model server or experiment lifecycle.

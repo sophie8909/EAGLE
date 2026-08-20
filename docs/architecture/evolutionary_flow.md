@@ -12,12 +12,12 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 4. Select parents with seeded lexicase selection. A random case order is drawn
    from the EA `random.Random` instance, and candidates are filtered to the
    best score for each case until one remains.
-5. Apply crossover/copy and let AOS choose Strategy Reflection or
-   Generate-Code Reflection before any prompt-only mutation.
-6. Evaluate every child through the same complete pipeline. Runnable mutated
-   children then play an 18-match map/round/side matrix against their canonical
-   comparison parent (parent A); use the direct W/D/L result for AOS credit and
-   update AOS once for the generation.
+5. Apply crossover/copy and let the configured reflection-operator controller
+   choose Strategy Reflection or Generate-Code Reflection.
+6. Evaluate every child through the same complete pipeline. `static` performs
+   no credit update; `aos_opponent` reuses the seven normal opponent summaries;
+   `aos_head2head` runs the configured direct parent-A matrix. Both adaptive
+   modes feed one shared generation-level EMA updater.
 7. Fill the fixed population from offspring with seeded lexicase selection,
    using parent fallback only when offspring are insufficient.
 8. Persist the surviving population and generation metrics.
@@ -45,23 +45,24 @@ Each candidate runs all seven opponents over three maps, three rounds, and both
 player positions: `7 × 3 × 3 × 2 = 126` matches. There is no previous-generation
 EAGLE opponent or dynamic opponent weight.
 
-The AOS-only parent-vs-offspring matrix separately runs `3 × 3 × 2 = 18`
-matches for each runnable mutated child. It uses the same maps, round seeds, and
-side-swap configuration and reuses both compiled class directories. These
-matches never enter `Candidate.fitness_objectives`, the opponent archive, or
-lexicase. The seven ordinary opponent scores do not determine AOS reward.
+Only `aos_head2head` runs the separate `3 × 3 × 2 = 18` parent-vs-offspring
+matrix for each runnable mutated child. It reuses the configured maps, round
+indices, sides, and compiled classes. These matches never enter fitness, the
+opponent archive, lexicase, weighted Game Performance, or final testing.
+`aos_opponent` instead compares the existing seven normal opponent records;
+`static` performs neither form of credit assignment.
 
 ## Archive and analysis
 
-`runs/<run>/opponent_archive.json` keeps one best valid representative per
-opponent case. `generation_metrics.jsonl` stores objective statistics for all
+`runs/<run>/archives/opponents.json` keeps one best valid representative per
+opponent case. Each generation JSON stores objective statistics for all
 seven cases and `opponent_scores.by_opponent` stores reporting summaries. The
 offline analysis writes `opponent_game_performance.csv` and one
 `game_performance_by_generation_<opponent>.png` per opponent. It also writes
 per-agent, per-opponent win-rate rows/plots and `match_game_performance.csv` for the
-light, semi-transparent single-match distribution overlay on aggregate
+small, semi-transparent single-match violin distributions on aggregate
 Game Performance plots. It also writes `aos_operator_statistics.csv` and an
 AOS probability plot.
 
-See [`../../opponent-wise-lexicase.md`](../../opponent-wise-lexicase.md) for
+See [`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md) for
 the complete data and artifact contract.

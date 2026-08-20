@@ -2,16 +2,15 @@
 
 | Responsibility | Canonical owner |
 | --- | --- |
-| Runtime configuration | `configs/runtime.yaml` |
-| Runtime shell command | `run_env.sh` |
-| Optional runtime watchdog | `watchdog.sh` |
-| Runtime CLI | `eagle.cli.runtime` |
+| Experiment/model configuration | `configs/experiments/<group>/*.yaml`, excluding a generated run index |
+| Directory-batch run index | `configs/experiments/<group>/experiment.yaml` when that name is not an existing config |
+| Production shell command | `experiment.sh` |
+| Experiment CLI/lifecycle | `eagle.cli.experiment`, `eagle.experiment` |
+| Runtime adaptation and validation | `eagle.runtime.config` |
 | Health check | `eagle.runtime.endpoints` |
-| Process/PID/log ownership | `eagle.runtime.processes` |
-| Experiment shell command | `run.sh` |
-| Experiment CLI and EA | `eagle.cli.run`, `eagle.search`, `eagle.evaluation` |
-| Offline analysis shell command | `analyze.sh` |
+| Owned process/PID/log lifecycle | `eagle.runtime.processes` |
+| EA search/resume | `eagle.search`, `eagle.resume` |
+| Offline analysis | `analyze.sh`, `eagle.cli.analyze` |
+| Optional network watchdog | `watchdog.sh` |
 
-Runtime files are only `runtime/logs/llm-server.log` and
-`runtime/pids/llm-server.pid`; the independent watchdog additionally uses
-`runtime/pids/watchdog.pid` while it is running.
+Runtime PID/log names include the resolved model name and port. They are transient process state, not configuration.

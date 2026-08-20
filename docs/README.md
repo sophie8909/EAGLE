@@ -4,10 +4,9 @@ This directory is the implementation entry point for EAGLE (Evolutionary Algorit
 
 ## Authority and document classes
 
-1. [`eagle_architecture_spec.md`](eagle_architecture_spec.md) is the baseline architecture contract; the current opponent-wise fitness and lexicase replacement contract is [`opponent-wise-lexicase.md`](opponent-wise-lexicase.md).
+1. [`eagle_architecture_spec.md`](eagle_architecture_spec.md) is the current architecture contract. [`opponent-wise-lexicase.md`](opponent-wise-lexicase.md) provides the detailed selection formula.
 2. Files under [`architecture/`](architecture/overview.md), [`evaluation/`](evaluation/evaluation_pipeline.md), and [`artifacts/`](artifacts/artifact_schema.md) are canonical, responsibility-focused implementation contracts derived from the specification. They are normative only where they restate or link to the specification and are always subordinate to it.
 3. Files under [`implementation/`](implementation/current_status.md) describe repository reality, gaps, migration work, and the current [architecture traceability matrix](implementation/architecture_traceability_matrix.md). They are non-normative.
-   The Linux / WSL2 runtime audit records the two supported Linux deployment environments and their shared runtime assumptions.
 4. Files under [`operations/`](operations/running_eagle.md) and [`testing/`](testing/test_contracts.md) describe workflows and verification.
 5. [`architeture_specification_zh.md`](architeture_specification_zh.md) is the user-facing Traditional Chinese overview.
 
@@ -73,6 +72,6 @@ When code and the specification differ, preserve the specification and update [`
 
 ## Post-run analysis
 
-There is no separate champion-comparison executable in the current repository.
-Opponent setup/assets referenced by the active evolution roster are owned by the
-normal evaluation pipeline.
+The production experiment orchestrator runs `eagle.final_test` after a successful
+search unless explicitly skipped. Its artifacts remain specialized under the
+run's `final_test/` directory and never feed evolutionary fitness.

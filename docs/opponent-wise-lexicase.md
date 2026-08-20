@@ -43,10 +43,10 @@ tie-break in the active selection path.
 offspring, then uses lexicase-selected parents only if offspring are insufficient.
 Aggregate Game Performance remains reporting-only and does not select survivors.
 
-Adaptive Operator Selection is a separate credit path. Its reward is the
-offspring's win-plus-half-draw rate over direct matches against parent A, not a
-comparison of these seven case scores. Direct parent-vs-offspring matches never
-become lexicase cases.
+Reflection operator selection is a separate credit path. `static` has no
+reward; `aos_opponent` compares the existing seven case W/D/L ranks with parent
+A; `aos_head2head` uses the offspring win-plus-half-draw rate over configured
+direct matches against parent A. Neither reward becomes a lexicase case.
 
 ## Artifacts and analysis
 
@@ -54,12 +54,12 @@ The following records are written after each generation:
 
 - `generations/generation_<n>.json`: surviving candidates and their seven
   `fitness_objectives`;
-- `generation_metrics.jsonl`: seven objective statistics plus
+- `generations/generation_*.json`: seven objective statistics plus
   `opponent_scores.by_candidate` and `opponent_scores.by_opponent`;
 - `candidates/<id>/evaluation/objectives.json`: seven-case objective mapping;
 - `candidates/<id>/evaluation/game_performance.json`: aggregate reporting
   metric and detailed opponent/match summaries;
-- `opponent_archive.json`: one best valid representative per opponent case.
+- `archives/opponents.json`: one best valid representative per opponent case.
 
 `python -m eagle analyze --run-dir <run>` writes
 `opponent_game_performance.csv` and one

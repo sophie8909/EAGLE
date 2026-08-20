@@ -38,12 +38,13 @@ match results and failure diagnostics remain in the candidate artifacts.
 
 ## Analysis
 
-`generation_metrics.jsonl` stores per-case objective statistics and
+Each `generations/generation_*.json` stores per-case objective statistics and
 `opponent_scores.by_opponent` generation summaries. The analysis command
 exports `opponent_game_performance.csv` and one per-opponent generation plot.
 The canonical per-match ranges are loss `-110` to `-90`, draw `-10` to `+10`,
 and win `+90` to `+110`. Aggregate plots use a dashed `0` neutral baseline
-and overlay retained single-match scores as light,
-semi-transparent points. Individual agent win rates are exported by opponent
+and overlay retained single-match scores as narrow, semi-transparent violin
+distributions with a median marker. A generation with only one value or no
+variance uses a short horizontal degenerate-distribution marker. Individual agent win rates are exported by opponent
 in `agent_win_rate.csv` and
 `win_rate_by_generation_<opponent>.png`.

@@ -1,136 +1,99 @@
 # Repository and responsibility map
 
-This is the current executable repository map. The only user-facing entrypoints
-are `run_env.sh`, `run.sh`, `analyze.sh`, and `watchdog.sh`. Python modules are
-grouped below by the entrypoint dependency closure; files outside that closure
-are not part of the runtime contract.
+This map lists active executable owners. Removed compatibility files are not
+kept as documentation entries.
 
 ## Entrypoints
 
-| Path | Responsibility | Calls |
-| --- | --- | --- |
-| `run_env.sh` | Start, stop, restart, inspect, or health-check the one local LLM server | `python -m eagle runtime` |
-| `run.sh` | Validate experiment/runtime configuration and run or resume EA search | `python -m eagle run` |
-| `analyze.sh` | Select a canonical run and generate offline CSV/JSON/Markdown/PNG reports | `python -m eagle analyze` |
-| `watchdog.sh` | Poll the local default-route network interface and recover it with `ip link` | Shell commands only; no Python or LLM lifecycle |
+| Path | Responsibility |
+| --- | --- |
+| `experiment.sh` | Positional wrapper for `python -m eagle experiment` |
+| `analyze.sh` | Wrapper for `python -m eagle analyze` |
+| `watchdog.sh` | Optional network-interface monitor; no model lifecycle ownership |
+| `scripts/run_gui_match.py` | Optional read-only visual match inspection |
 
-`scripts/run_gui_match.py` is a retained, read-only visual inspection utility,
-not a fifth EA entrypoint. `scripts/setup_allibot.py` and
-`scripts/allibot_llama_cpp_adapter.py` prepare its optional AlliBot dependency.
-
-## Python command and orchestration layer
+## Experiment and search
 
 | Path | Responsibility |
 | --- | --- |
-| `eagle/__main__.py` | Dispatches only `runtime`, `run`, and `analyze`. |
-| `eagle/cli/runtime.py` | Runtime command parsing and status exit codes. |
-| `eagle/cli/run.py` | Experiment document checks, runtime endpoint preflight, and search/resume dispatch. |
-| `eagle/cli/analyze.py` | Canonical run selection, agent Game Performance view, commentary view, and report dispatch. |
-| `eagle/runtime/config.py` | Loads and validates `configs/runtime.yaml`. |
-| `eagle/runtime/endpoints.py` | Local endpoint URL construction and health checks. |
-| `eagle/runtime/processes.py` | PID-validated local `llama-server` process lifecycle. |
-| `eagle/config.py` | Experiment configuration parsing, defaults, validation, and resolved settings. |
-| `eagle/search.py` | Population initialization, generation loop, variation/evaluation orchestration, lexicase survivor update, and final run status. |
-| `eagle/resume.py` | Resumes a canonical run while preserving its persisted state and artifact ownership. |
-| `eagle/prompts.py` | Canonical prompt templates plus genotype prompt normalization. |
-| `eagle/candidate.py` | Candidate genotype/phenotype state, identity, lineage, failure, objective, and artifact metadata. |
-| `eagle/crossover.py` | Three-component uniform crossover and provenance recording. |
-| `eagle/mutation.py` | Mutation context, reflection/rewrite dispatch, and mutation records. |
-| `eagle/rewrite.py` | Prompt-only Code/Strategy rewrite handling. |
-| `eagle/strategy_reflection.py` | Sports-role Strategy Reflection: strict match selection, Match Commentator, direct Coach input, strategy signature, niche, and intent artifacts. |
-| `eagle/reflection_context.py` | Structured evidence passed to Strategy and Code Reflection. |
-| `eagle/reflection_prompts.py` | Code Reflection prompt construction. |
-| `eagle/strategy_diversity.py` | Deterministic signature normalization, niche derivation, distance, diversity metrics, and the run-level representative archive. |
-| `eagle/opponents.py` | Evolution opponent identities, roster constants, JAR paths, and opponent setup errors. |
+| `eagle/__main__.py` | Dispatches only `experiment` and `analyze` |
+| `eagle/cli/experiment.py` | Experiment arguments and exit codes |
+| `eagle/cli/analyze.py` | Run selection and report dispatch |
+| `eagle/experiment.py` | Config discovery, batch run index, owned runtime, search/resume, final test, cleanup |
+| `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |
+| `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
+| `eagle/config.py` | File-only prompts, one execution mode, EA/model/evaluation validation |
+| `eagle/search_runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
+| `eagle/search.py` | Initialization and evolutionary generation loop |
+| `eagle/resume.py` | v2 snapshot resume |
+| `eagle/selection.py` | Seeded seven-case lexicase selection |
+| `eagle/aos.py` | Static and adaptive reflection-operator selection |
 
-## Evaluation and generation layer
+## Candidate and mutation
 
 | Path | Responsibility |
 | --- | --- |
-| `eagle/evaluation.py` | Single child pipeline: generate result handling, validation, compilation, integration, all-match evaluation, objective construction, and candidate artifact persistence. |
-| `eagle/artifacts.py` | Candidate input, stage, match, objective, and compact artifact serialization. |
-| `eagle/run_artifacts.py` | Run manifest, generation snapshots, generation metrics, error memory, final population, and atomic JSON/JSONL writes. |
-| `eagle/timing.py` | Candidate/stage timing events. |
-| `eagle/llm.py` | Shared one-endpoint/one-model transport, prompt bounds, request progress, errors, and durable request/timing logging. |
-| `evaluation/compiler.py` | `javac` invocation and compiler diagnostic parsing. |
-| `evaluation/code_quality.py` | Static metrics, strategy-region diagnostics, and compatibility exports for the canonical quality implementation. |
-| `evaluation/canonical_code_quality.py` | Failure-aware Code Quality objective formula and diagnostic breakdown. |
-| `evaluation/function_capability.py` | Generated-function capability checks. |
-| `evaluation/game_metrics.py` | Match telemetry component extraction and aggregate game metrics. |
-| `evaluation/game_performance.py` | Weighted Game Performance calculation. |
-| `evaluation/match_matrix.py` | Deterministic opponent/map/round/side matrix construction. |
-| `evaluation/parent_offspring.py` | AOS-only direct parent-A-vs-offspring matrix, W/D/L reward, and compact match references. |
-| `evaluation/match_logs.py` | Temporary match-log reading and chunking for reflection. |
-| `evaluation/match_trace.py` | Match trace serialization/read helpers. |
-| `evaluation/microrts_runner.py` | MicroRTS integration probe and compatibility façade for canonical match execution. |
-| `evaluation/runtime_evaluation.py` | Canonical MicroRTS match process, result validation, hashes, and runtime failure classification. |
-| `evaluation/objectives.py` | Ten opponent objectives and reporting aggregate. |
-| `eagle/opponent_cases.py` | Fixed opponent cases, reporting weights, and failure values. |
-| `evaluation/strategy_alignment.py` | Strategy-alignment diagnostic evaluation. |
-| `generation/agent_template.py` | Complete Java-agent template paths and source contract. |
-| `generation/backend.py` | Mock/OpenAI-compatible generation backend. |
-| `generation/java_agent_generator.py` | Complete Java generation, extraction, validation, and source persistence. |
+| `eagle/candidate.py` | Candidate genotype, phenotype, lineage, failure, fitness, references |
+| `eagle/crossover.py` | Three-component uniform crossover and provenance |
+| `eagle/mutation.py` | Reflection context and transport contracts |
+| `eagle/rewrite.py` | Prompt-only mutation rewrite |
+| `eagle/strategy_reflection.py` | Match sampling, Commentator, Coach, trace lifecycle |
+| `eagle/reflection_context.py` | Structured mutation evidence |
+| `eagle/reflection_prompts.py` | Code Reflection prompt rendering |
+| `eagle/prompts.py` | Prompt manifest loading, rendering, and bounds |
+| `eagle/strategy_diversity.py` | Strategy signature/niche/archive diagnostics |
 
-## Analysis layer
+## Generation and evaluation
 
 | Path | Responsibility |
 | --- | --- |
-| `eagle/analysis/loader.py` | Reads only versioned compact run artifacts and resolves latest/explicit runs. |
-| `eagle/analysis/report.py` | Produces static CSV, JSON, Markdown, and Matplotlib reports, including per-agent `game_performance`. |
-| `eagle/analysis/__init__.py` | Lightweight loader exports; report import is lazy so run selection does not load Matplotlib. |
+| `generation/backend.py` | Mock/OpenAI-compatible complete-source generation |
+| `generation/java_agent_generator.py` | Extraction, normalization, validation, source persistence |
+| `generation/agent_template.py` | Java template contract |
+| `eagle/evaluation.py` | Canonical child evaluation orchestration |
+| `evaluation/compiler.py` | Isolated javac and diagnostics |
+| `evaluation/microrts_runner.py` | Standalone seven-check integration probe only |
+| `evaluation/runtime_evaluation.py` | Sole MicroRTS match process owner |
+| `evaluation/match_trace.py` | Sole compressed tick-stream format and integrity report |
+| `evaluation/match_matrix.py` | Opponent/map/round/side schedule |
+| `evaluation/game_performance.py` | Per-match Game Performance formula |
+| `evaluation/game_metrics.py` | Matrix aggregation and compact summaries |
+| `evaluation/code_quality.py` | Static metrics and canonical simplicity diagnostic |
+| `evaluation/function_capability.py` | Function-capability diagnostic |
+| `evaluation/strategy_alignment.py` | Strategy-alignment diagnostic |
+| `evaluation/objectives.py` | Seven opponent fitness cases and reporting aggregate |
+| `evaluation/parent_offspring.py` | Head-to-head AOS evidence only |
 
-## Configuration and runtime assets
+## Persistence and analysis
 
 | Path | Responsibility |
 | --- | --- |
-| `configs/runtime.yaml` | Single local LLM runtime source of truth. |
-| `configs/experiments/microrts.yaml` | Canonical production EA experiment. |
-| `configs/experiments/microrts-smoke.yaml` | Small mock/contract smoke configuration. |
-| `config/prompt_templates.toml` | Canonical repository-backed prompt templates for reflection, rewrite, generation, and strategy alignment. |
-| `runtime/` | Ignored local PID/log state for `run_env.sh`; not source code. |
-| `experiment_env/` | Local Conda/model/llama.cpp runtime assets; external dependency, not EAGLE Python logic. |
-| `third_party/microrts/` | Vendored MicroRTS runtime, maps, libraries, and Java sources used by evaluation. |
-| `third_party/final_test_opponents/` | External opponent manifests/JAR/adapters still referenced by the active ten-opponent evolution roster. The final-test executor was removed. |
-| `third_party/gui_opponents/` | AlliBot runtime assets referenced by active evaluation and the retained GUI inspection utility. |
+| `eagle/artifacts.py` | Candidate/stage artifact serialization |
+| `eagle/run_artifacts.py` | v2 manifest, compact generation, candidate reconstruction, atomic writes |
+| `eagle/timing.py` | Timing events |
+| `eagle/analysis/loader.py` | v2-only run discovery and bounded materialization |
+| `eagle/analysis/report.py` | CSV/JSON/Markdown/PNG reports |
+| `eagle/final_test.py` | Post-search final evaluation; never fitness |
 
-## Tests and documentation
+## Configuration and assets
 
 | Path | Responsibility |
 | --- | --- |
-| `tests/` | Unit and contract tests for the four-entrypoint dependency closure plus the retained GUI inspection utility. Tests for removed final-test and standalone commentator paths were deleted. |
-| `docs/architecture/` | Architecture and ownership contracts. |
-| `docs/evaluation/` | Active evaluation and objective contracts. |
-| `docs/artifacts/` | Persisted artifact and timing contracts. |
-| `docs/implementation/` | Current implementation map/status/gaps/traceability. |
-| `docs/operations/` | Four-entrypoint operating and analysis instructions. |
-| `docs/testing/` | Test contracts. |
-| `docs/reflection-current-state.md`, `docs/strategy-reflection.md` | Current reflection behavior and strategy-reflection contract. |
-
-## Removed legacy surface
-
-The following were not reachable from the four entrypoints and were removed:
-
-- `eagle/cli/migrate_run.py` and the `migrate-run` dispatcher branch;
-- `eagle/final_test/` and `configs/final_test_champions.yaml`;
-- `scripts/` utilities for final tests and legacy plotting; GUI match and AlliBot setup utilities are retained;
-- `eagle/analysis/{errors,final_tests,objectives,records,timing}.py`;
-- `eagle/match_commentator.py` and `eagle/commentary_aggregation.py` standalone APIs;
-- unused `agents/` and `generation/parsing.py` scaffolding;
-- unused historical `configs/eagle_*.yaml` files.
-
-These deletions do not remove active in-pipeline Match Commentator behavior: that
-behavior remains implemented by `eagle/strategy_reflection.py`.
+| `configs/experiments/*/*.yaml` | Production/static definitions plus generated directory-batch `experiment.yaml` indexes |
+| `prompts/manifest.toml` | Prompt metadata and placeholder contracts only |
+| `prompts/*.txt` | One executable prompt body per file |
+| `third_party/microrts/` | Vendored MicroRTS runtime/maps/libraries |
+| `third_party/final_test_opponents/` | Final-test opponent dependencies |
+| `third_party/gui_opponents/` | Optional GUI/external opponent assets |
 
 ## Dependency direction
 
 ```text
-shell entrypoints
-    -> eagle CLI/runtime/search/analysis orchestration
-        -> generation/evaluation/mutation operators
-            -> artifact serializers and timing
+experiment/analyze entrypoints
+  -> lifecycle/search/analysis orchestration
+    -> mutation/generation/evaluation
+      -> artifact and timing owners
 ```
 
-Scoring modules return data; artifact writers serialize it; search owns
-orchestration; prompt formatting remains in reflection/rewrite modules. External
-runtime trees and generated run evidence are dependencies or outputs, not Python
-entrypoints.
+Scoring modules return data, artifact modules persist it, search owns population
+transitions, and prompt resources remain outside executable Python source.
