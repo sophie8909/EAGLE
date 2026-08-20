@@ -7,35 +7,25 @@ is ``run_search``.
 
 from __future__ import annotations
 
-import json
 import random
 import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from shutil import copy2
 from typing import Callable
 
-from generation.backend import MockGenerationBackend, build_generation_backend
 from .aos import (
-    AdaptiveOperatorSelection,
     OPERATOR_TO_MUTATION,
-    OperatorReward,
-    can_run_as_comparison_parent,
-    calculate_operator_reward,
-    is_runnable,
+    ReflectionOperatorController,
 )
 from .artifacts import (
-    write_aos_reward_artifact,
-    write_prompt_snapshot,
-    write_resolved_config,
+    write_run_config,
     write_summary,
 )
 from .run_artifacts import (
     finalize_run,
     initialize_run_manifest,
+    mark_run_failed,
     mark_run_interrupted,
     record_error_memory,
     record_generation,
@@ -44,15 +34,13 @@ from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import CrossoverContext, crossover
 from .evaluation import evaluate_population, preflight_evaluation_opponents
-from evaluation.parent_offspring import evaluate_parent_vs_offspring
-from .mutation import ReflectionContext, build_reflection_backend
+from .mutation import ReflectionContext
 from .reflection_context import build_reflection_context
-from .llm import LLMCallLogger
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
-from .llm import LLMClient, LLMServerError
 from .prompts import normalize_prompt
 from .rewrite import PromptRewriteMutation
-from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation, select_strategy_mutation_intent
+from .strategy_reflection import select_strategy_mutation_intent
+from .search_runtime import build_search_runtime
 from .strategy_diversity import (
     archive_niches,
     diversity_console_summary,
@@ -78,28 +66,45 @@ class SearchResult:
     stop_reason: str | None = None
 
 
-def run_search(config: ExperimentConfig, *, config_path: Path, mock: bool = False, run_id: str | None = None) -> SearchResult:
+def run_search(
+    config: ExperimentConfig,
+    *,
+    config_path: Path | None = None,
+    mock: bool = False,
+    run_id: str | None = None,
+    on_run_created: Callable[[Path], None] | None = None,
+) -> SearchResult:
     """Run the EA and preserve the last completed generation on Ctrl-C."""
 
     active_run: list[Path | None] = [None]
+
+    def remember_run(path: Path) -> None:
+        active_run[0] = path
+        if on_run_created is not None:
+            on_run_created(path)
+
     try:
         return _run_search_impl(
             config,
             config_path=config_path,
             mock=mock,
             run_id=run_id,
-            on_run_created=lambda path: active_run.__setitem__(0, path),
+            on_run_created=remember_run,
         )
     except KeyboardInterrupt:
         if active_run[0] is not None:
             mark_run_interrupted(active_run[0])
+        raise
+    except Exception as exc:
+        if active_run[0] is not None:
+            mark_run_failed(active_run[0], exc)
         raise
 
 
 def _run_search_impl(
     config: ExperimentConfig,
     *,
-    config_path: Path,
+    config_path: Path | None,
     mock: bool = False,
     run_id: str | None = None,
     on_run_created: Callable[[Path], None] | None = None,
@@ -113,14 +118,6 @@ def _run_search_impl(
     config.validate()
     preflight_evaluation_opponents(config, mock=mock)
     rng = random.Random(config.random_seed)
-    aos = AdaptiveOperatorSelection(config.aos)
-
-    backend_name = "mock" if mock else config.generation_backend
-    client = LLMClient(config.llm_base_url, config.llm_model, temperature=config.llm_temperature, max_output_tokens=config.llm_max_tokens)
-    shared_client = client
-    if not mock:
-        _preflight_llm_endpoint(client)
-
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = config.runs_dir / active_run_id
     candidates_dir = run_dir / "candidates"
@@ -130,50 +127,22 @@ def _run_search_impl(
     candidates_dir.mkdir()
     generated_agents_dir.mkdir()
     classes_dir.mkdir()
-    copy2(config_path, run_dir / "config.yaml")
-    initialize_run_manifest(run_dir, config_path=config_path)
+    initialize_run_manifest(run_dir, config=config)
     if on_run_created is not None:
         on_run_created(run_dir)
+    write_run_config(run_dir, config, mock=mock)
     ensure_strategy_archive(run_dir)
     ensure_opponent_archive(run_dir)
 
-    llm_logger = LLMCallLogger(run_dir / "llm_logs", run_id=active_run_id, timing_path=run_dir / "timing.jsonl")
-    generation_backend = MockGenerationBackend() if mock else client.generation_backend(logger=llm_logger)
-    if mock:
-        reflection_backend = build_reflection_backend("mock")
-        rewrite_backend = reflection_backend
-    else:
-        reflection_backend = client.prompt_backend(operation="reflection")
-        rewrite_backend = client.prompt_backend(operation="rewrite")
-    code_mutation = PromptRewriteMutation(
-        config,
-        mutation_type="code",
-        reflection_backend=reflection_backend,
-        rewrite_backend=rewrite_backend,
-        artifact_root=candidates_dir,
-        logger=llm_logger,
-        backend_name=backend_name,
-    )
-    enabled_roles = {"coach"}
-    if config.match_commentator_enabled:
-        enabled_roles.add("match_commentator")
-    strategy_role_backend = MockRoleBackend() if mock else client.prompt_backend(operation="match_commentator", temperature=config.match_commentator_temperature)
-    strategy_reflection_mutation = StrategyReflectionMutation(
-        strategy_role_backend,
-        max_attempts=config.mutation_max_attempts,
-        max_prompt_chars=60_000,
-        model_identity=None if backend_name == "mock" else client.model,
-        enabled_roles=enabled_roles,
-        selection_seed=config.random_seed,
-        sample_budget=config.match_commentator_sample_count,
-    )
-    write_resolved_config(
-        run_dir,
+    runtime = build_search_runtime(
         config,
         mock=mock,
-        client=client,
+        run_dir=run_dir,
+        candidates_dir=candidates_dir,
     )
-    write_prompt_snapshot(run_dir, config)
+    generation_backend = runtime.generation_backend
+    shared_client = runtime.client
+    operator_controller = runtime.operator_controller
     # Initialization is followed by the same evaluation boundary used for
     # every later offspring generation.
     population = initialize_population(config)
@@ -205,7 +174,7 @@ def _run_search_impl(
         0,
         evaluated_population,
         diversity=generation_diversity,
-        aos=aos.initial_generation_record(),
+        aos=operator_controller.initial_generation_record(),
     )
     print(diversity_console_summary(0, generation_diversity), flush=True)
     error_memory = record_error_memory(run_dir, evaluated_population)
@@ -217,15 +186,17 @@ def _run_search_impl(
 
     # One fixed EA step per iteration: select parents -> create offspring ->
     # evaluate offspring -> select survivors.
-    for generation in range(1, config.generations):
+    # Generation 0 is initialization only; ``generations`` counts evolutionary
+    # offspring generations, so generations=20 runs gen1 through gen20.
+    for generation in range(1, config.generations + 1):
         # Operators produce only child genotypes; evaluation starts at the shared boundary below.
         offspring = create_offspring(
             evaluated_population,
             config=config,
             generation=generation,
             rng=rng,
-            mutations={"strategy": strategy_reflection_mutation, "code": code_mutation},
-            aos=aos,
+            mutations=runtime.mutations,
+            operator_controller=operator_controller,
             artifact_root=candidates_dir,
             error_memory=error_memory,
         )
@@ -242,20 +213,19 @@ def _run_search_impl(
             mock=mock,
             llm_client=shared_client,
         )
-        evaluated_offspring, rewards = apply_aos_rewards(
+        evaluated_offspring, rewards = operator_controller.collect_rewards(
             evaluated_population,
             evaluated_offspring,
             config=config,
-            aos=aos,
             candidates_dir=candidates_dir,
             classes_dir=classes_dir,
             mock=mock,
         )
-        aos_record = aos.update_generation(rewards)
-        evaluated_offspring = persist_aos_reward_outcomes(
+        aos_record = operator_controller.update_generation(rewards)
+        evaluated_offspring = operator_controller.persist_reward_outcomes(
             evaluated_offspring,
             rewards,
-            aos_record=aos_record,
+            record=aos_record,
             candidates_dir=candidates_dir,
         )
         archive_before = archive_niches(run_dir)
@@ -319,33 +289,6 @@ def _run_search_impl(
     )
 
 
-def _preflight_llm_endpoint(client: LLMClient) -> None:
-    """Verify the one configured endpoint with one small request."""
-    api_root = client.base_url.rstrip("/")
-    if not api_root.endswith("/v1"):
-        api_root += "/v1"
-    url = f"{api_root}/chat/completions"
-    request = urllib.request.Request(
-        url,
-        data=json.dumps({
-            "model": client.model,
-            "messages": [{"role": "user", "content": "Reply OK."}],
-            "temperature": 0,
-            "max_tokens": 1,
-            "chat_template_kwargs": {"enable_thinking": False},
-        }).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=min(15.0, client.timeout_seconds)) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        if not isinstance(payload.get("choices"), list):
-            raise RuntimeError("response has no choices array")
-    except (OSError, urllib.error.URLError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
-        raise LLMServerError(f"Configured llama.cpp endpoint preflight failed at {url}: {exc}") from exc
-
-
 def initialize_population(config: ExperimentConfig) -> list[Candidate]:
     population = [Candidate(generation=0, strategy_prompt=prompt, previous_code="", generation_prompt=config.generation_prompt, operator="seed", metadata={"seed_index": index}) for index, prompt in enumerate(config.seed_prompts)]
     while len(population) < config.population_size:
@@ -357,7 +300,7 @@ def initialize_population(config: ExperimentConfig) -> list[Candidate]:
 def create_offspring(
     population: list[Candidate], *, config: ExperimentConfig, generation: int,
     rng: random.Random, mutations: dict[str, PromptRewriteMutation],
-    aos: AdaptiveOperatorSelection, artifact_root: Path | None = None,
+    operator_controller: ReflectionOperatorController, artifact_root: Path | None = None,
     error_memory: tuple[dict[str, object], ...] = (),
 ) -> list[Candidate]:
     """Create the next generation's genotypes without evaluating them.
@@ -407,7 +350,7 @@ def create_offspring(
             )
         if rng.random() < config.mutation_rate:
             feedback_parent = parent_for_component(child.strategy_parent_id, (parent_a, parent_b))
-            operator_used = aos.select_operator(rng)
+            operator_used = operator_controller.select_operator(rng)
             mutation_name = OPERATOR_TO_MUTATION[operator_used]
             mutation = mutations[mutation_name]
             mutation_intent = None
@@ -474,7 +417,8 @@ def create_offspring(
                     "offspring_id": child.id,
                     "operator": OPERATOR_TO_MUTATION[operator_used],
                     "operator_id": operator_used,
-                    "probability_before": aos.probability(operator_used),
+                    "mode": operator_controller.mode.value,
+                    "probability_before": operator_controller.probability(operator_used),
                 },
             })
         offspring.append(child)
@@ -509,96 +453,3 @@ def mutation_context_from_candidate(
         parent_objectives=parent_objectives,
         reference_candidates=reference_candidates,
     )
-
-
-def apply_aos_rewards(
-    parents: list[Candidate],
-    children: list[Candidate],
-    *,
-    config: ExperimentConfig,
-    aos: AdaptiveOperatorSelection,
-    candidates_dir: Path,
-    classes_dir: Path,
-    mock: bool,
-) -> tuple[list[Candidate], list[OperatorReward]]:
-    """Collect execution or direct-match evidence after normal evaluation."""
-
-    parent_by_id = {candidate.id: candidate for candidate in parents}
-    updated: list[Candidate] = []
-    rewards: list[OperatorReward] = []
-    for child in children:
-        aos_metadata = child.metadata.get("aos") or {}
-        operator = aos_metadata.get("operator_id")
-        parent_id = aos_metadata.get("comparison_parent_id")
-        if not operator or not parent_id or parent_id not in parent_by_id:
-            updated.append(child)
-            continue
-        parent = parent_by_id[parent_id]
-        head_to_head = {
-            "maps": list(config.evaluation_maps),
-            "rounds": list(config.resolved_match_seeds),
-            "sides": ["offspring_p0_parent_p1", "parent_p0_offspring_p1"],
-            "total_matches": 0,
-            "valid_matches": 0,
-            "wins": 0,
-            "draws": 0,
-            "losses": 0,
-            "errors": 0,
-            "skipped_reason": (
-                "execution_failure"
-                if not is_runnable(child)
-                else "comparison_parent_execution_failure"
-            ),
-        }
-        if is_runnable(child) and can_run_as_comparison_parent(parent):
-            direct_result = evaluate_parent_vs_offspring(
-                child,
-                parent,
-                config=config,
-                classes_dir=classes_dir,
-                match_artifacts_dir=candidates_dir / child.id / "aos" / "head_to_head" / "matches",
-                mock=mock,
-            )
-            head_to_head = {"reward": direct_result.reward, **direct_result.to_dict()}
-        reward = calculate_operator_reward(
-            parent,
-            child,
-            operator=operator,
-            config=config.aos,
-            head_to_head=head_to_head,
-        )
-        reward_metadata = {**aos_metadata, **reward.to_dict()}
-        child = replace(child, metadata={**child.metadata, "aos": reward_metadata})
-        updated.append(child)
-        rewards.append(reward)
-    return updated, rewards
-
-
-def persist_aos_reward_outcomes(
-    children: list[Candidate],
-    rewards: list[OperatorReward],
-    *,
-    aos_record: dict,
-    candidates_dir: Path,
-) -> list[Candidate]:
-    """Attach the once-per-generation EMA/probability result and persist it."""
-
-    rewards_by_offspring = {reward.offspring_id: reward for reward in rewards}
-    updated: list[Candidate] = []
-    for child in children:
-        reward = rewards_by_offspring.get(child.id)
-        if reward is None:
-            updated.append(child)
-            continue
-        operator_stats = (aos_record.get("operators") or {}).get(reward.operator) or {}
-        reward_metadata = {
-            **reward.to_dict(),
-            "operator_quality_before": operator_stats.get("operator_quality_before"),
-            "operator_quality_after": operator_stats.get("operator_quality_after"),
-            "probability_before": operator_stats.get("selection_probability_before"),
-            "probability_after": operator_stats.get("selection_probability"),
-        }
-        child = replace(child, metadata={**child.metadata, "aos": reward_metadata})
-        write_aos_reward_artifact(candidates_dir, reward_metadata)
-        updated.append(child)
-    return updated

@@ -128,7 +128,7 @@ class Phase3ValidationTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+            config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
                 Candidate(id="invalid-package"),
                 config=config,

@@ -1,8 +1,7 @@
-"""Canonical, repository-backed LLM prompt templates."""
+"""Canonical loader for the repository's one-file-per-prompt resources."""
 
 from __future__ import annotations
 
-import json
 import re
 import string
 import tomllib
@@ -37,7 +36,10 @@ def normalize_prompt(prompt: str, *, max_chars: int, max_lines: int) -> str:
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PROMPT_TEMPLATE_PATH = REPOSITORY_ROOT / "config" / "prompt_templates.toml"
+DEFAULT_PROMPT_DIR = REPOSITORY_ROOT / "prompts"
+DEFAULT_PROMPT_MANIFEST_PATH = DEFAULT_PROMPT_DIR / "manifest.toml"
+# Compatibility name for callers that used the old combined TOML path.
+DEFAULT_PROMPT_TEMPLATE_PATH = DEFAULT_PROMPT_MANIFEST_PATH
 
 
 class PromptTemplateError(ValueError):
@@ -87,35 +89,56 @@ class PromptTemplate:
         return {name: f"<{name}>" for name in self.required_variables}
 
 
-def load_prompt_templates(path: str | Path = DEFAULT_PROMPT_TEMPLATE_PATH) -> dict[str, PromptTemplate]:
+def _manifest_path(path: str | Path) -> Path:
     source = Path(path)
+    return source / "manifest.toml" if source.is_dir() else source
+
+
+def load_prompt_templates(path: str | Path = DEFAULT_PROMPT_MANIFEST_PATH) -> dict[str, PromptTemplate]:
+    source = _manifest_path(path)
     try:
         payload = tomllib.loads(source.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as exc:
-        raise PromptTemplateError(f"Cannot load prompt templates from {source}: {exc}") from exc
-    raw_templates = payload.get("templates")
+        raise PromptTemplateError(f"Cannot load prompt manifest from {source}: {exc}") from exc
+    raw_templates = payload.get("prompts")
     if not isinstance(raw_templates, dict) or not raw_templates:
-        raise PromptTemplateError(f"Prompt template file has no [templates.*] sections: {source}")
+        raise PromptTemplateError(f"Prompt manifest has no [prompts.*] sections: {source}")
     templates: dict[str, PromptTemplate] = {}
+    seen_files: set[Path] = set()
     for prompt_id, raw in raw_templates.items():
         if not isinstance(raw, dict):
-            raise PromptTemplateError(f"{prompt_id}: template section must be a table.")
+            raise PromptTemplateError(f"{prompt_id}: prompt metadata must be a table.")
+        filename = str(raw.get("file", "")).strip()
+        if not filename:
+            raise PromptTemplateError(f"{prompt_id}: file is required.")
+        prompt_path = (source.parent / filename).resolve()
+        try:
+            prompt_path.relative_to(source.parent.resolve())
+        except ValueError as exc:
+            raise PromptTemplateError(f"{prompt_id}: prompt file must stay inside {source.parent}.") from exc
+        if prompt_path in seen_files:
+            raise PromptTemplateError(f"{prompt_id}: prompt file is already assigned: {prompt_path.name}")
+        seen_files.add(prompt_path)
+        try:
+            body = prompt_path.read_text(encoding="utf-8").rstrip()
+        except OSError as exc:
+            raise PromptTemplateError(f"{prompt_id}: cannot read prompt file {prompt_path}: {exc}") from exc
         item = PromptTemplate(
             prompt_id=str(prompt_id),
             role=str(raw.get("role", "")),
             stages=tuple(str(value) for value in raw.get("stages", ())),
             required_variables=tuple(str(value) for value in raw.get("required_variables", ())),
-            template=str(raw.get("template", "")),
-            source_path=source,
+            template=body,
+            source_path=prompt_path,
         )
-        if item.role not in {"reflector", "rewriter", "generator"}:
-            raise PromptTemplateError(f"{prompt_id}: role must be reflector, rewriter, or generator.")
+        if item.role not in {"reflector", "rewriter", "generator", "match_commentator", "coach", "seed", "preflight"}:
+            raise PromptTemplateError(f"{prompt_id}: unsupported role {item.role!r}.")
         item.validate()
         templates[item.prompt_id] = item
     return templates
 
 
-def render_prompt(prompt_id: str, values: Mapping[str, object], *, path: str | Path = DEFAULT_PROMPT_TEMPLATE_PATH) -> str:
+def render_prompt(prompt_id: str, values: Mapping[str, object], *, path: str | Path = DEFAULT_PROMPT_MANIFEST_PATH) -> str:
     try:
         template = load_prompt_templates(path)[prompt_id]
     except KeyError as exc:
@@ -123,32 +146,21 @@ def render_prompt(prompt_id: str, values: Mapping[str, object], *, path: str | P
     return template.render(values)
 
 
-def save_prompt_template(prompt_id: str, body: str, *, path: str | Path = DEFAULT_PROMPT_TEMPLATE_PATH) -> None:
-    """Replace one body while preserving other TOML sections and comments."""
-    source = Path(path)
-    templates = load_prompt_templates(source)
+def load_prompt(prompt_id: str, *, path: str | Path = DEFAULT_PROMPT_MANIFEST_PATH) -> str:
+    """Load a static prompt or prompt fragment that has no variables."""
+
+    return render_prompt(prompt_id, {}, path=path)
+
+
+def save_prompt_template(prompt_id: str, body: str, *, path: str | Path = DEFAULT_PROMPT_MANIFEST_PATH) -> None:
+    """Replace exactly one prompt body without rewriting any other prompt file."""
+
+    templates = load_prompt_templates(path)
     if prompt_id not in templates:
         raise PromptTemplateError(f"Unknown prompt template: {prompt_id}")
-    templates[prompt_id].validate(body)
-    lines = source.read_text(encoding="utf-8").splitlines()
-    section = f"[templates.{prompt_id}]"
-    start = next((index for index, line in enumerate(lines) if line.strip() == section), None)
-    if start is None:
-        raise PromptTemplateError(f"Cannot locate {section} in {source}")
-    end = next((index for index in range(start + 1, len(lines)) if lines[index].strip().startswith("[templates.")), len(lines))
-    template_start = next((index for index in range(start + 1, end) if lines[index].lstrip().startswith("template =")), None)
-    if template_start is None:
-        raise PromptTemplateError(f"{prompt_id}: template assignment is missing.")
-    assignment = lines[template_start].split("=", 1)[1].strip()
-    template_end = template_start + 1
-    if assignment.startswith(('"""', "'''")):
-        delimiter = assignment[:3]
-        if assignment.count(delimiter) < 2:
-            while template_end < end and delimiter not in lines[template_end]:
-                template_end += 1
-            template_end += 1
-    lines[template_start:template_end] = [f"template = {json.dumps(body, ensure_ascii=False)}"]
-    source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    template = templates[prompt_id]
+    template.validate(body)
+    template.source_path.write_text(body.rstrip() + "\n", encoding="utf-8")
 
 
 def _placeholders(template: str) -> list[str]:

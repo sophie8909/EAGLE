@@ -25,7 +25,7 @@ def candidate(candidate_id: str, scores: dict[str, float], *, generation: int = 
 
 class LexicaseOpponentTests(unittest.TestCase):
     def test_fixed_roster_and_reporting_weights(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+        config = ExperimentConfig.from_mapping({})
         self.assertEqual(config.evaluation_opponent_ids, LEXICASE_CASES)
         self.assertEqual(config.fixed_opponent_weight_sum, FIXED_OPPONENT_WEIGHT_SUM)
         self.assertEqual(config.expected_match_count, 126)
@@ -75,7 +75,7 @@ class LexicaseOpponentTests(unittest.TestCase):
             high = candidate("a-high", {case: 2.0 for case in LEXICASE_CASES})
             update_opponent_archive(run, [low])
             update_opponent_archive(run, [high])
-            payload = json.loads((run / "opponent_archive.json").read_text())
+            payload = json.loads((run / "archives" / "opponents.json").read_text())
         self.assertEqual(payload["opponents"]["lightrush"]["candidate_id"], "a-high")
 
 

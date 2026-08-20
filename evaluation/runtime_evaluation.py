@@ -1,8 +1,8 @@
 """Canonical post-integration MicroRTS match execution.
 
 This module owns one bounded process invocation and one lossless artifact directory
-per match.  It is re-exported by :mod:`evaluation.microrts_runner` so the
-standalone Phase 3 integration adapter remains unchanged.
+per match. The standalone integration adapter is intentionally separate in
+:mod:`evaluation.microrts_runner`.
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ from .game_performance import (
     write_telemetry_json,
 )
 from .match_trace import TraceArtifact, write_match_trace
-from .match_logs import write_match_log
 
 
 DEFAULT_MAP_PATH = "maps/8x8/basesWorkers8x8.xml"
@@ -73,7 +72,6 @@ class MatchResult:
     opponent_name: str | None = None
     opponent_id: str | None = None
     map_path: str = DEFAULT_MAP_PATH
-    seed: int | None = None
     max_cycles: int = 0
     source_hash: str | None = None
     class_hash: str | None = None
@@ -94,7 +92,6 @@ class MatchResult:
     trace_integrity_path: str | None = None
     match_metadata_path: str | None = None
     match_result_path: str | None = None
-    match_log_path: str | None = None
 
     def to_json_dict(
         self,
@@ -127,7 +124,6 @@ class MatchResult:
             "opponent_source_generation": self.opponent_source_generation,
             "opponent_source_candidate_id": self.opponent_source_candidate_id,
             "opponent_weight": self.opponent_weight,
-            "seed": self.seed,
             "max_cycles": self.max_cycles,
             "source_hash": self.source_hash,
             "class_hash": self.class_hash,
@@ -173,7 +169,6 @@ class MatchResult:
                 "performance_breakdown": self.summary_path,
                 "timing": "timing.json",
             },
-            "match_log_path": self.match_log_path,
             "timing": {
                 "started_at": self.started_at,
                 "finished_at": self.finished_at,
@@ -206,7 +201,6 @@ def run_microrts_match(
     mock: bool = False,
     mock_score: float = 0.0,
     generation_index: int = 0,
-    seed: int | None = None,
     timeout_seconds: float = 120.0,
     map_path: str = DEFAULT_MAP_PATH,
     candidate_id: str | None = None,
@@ -242,7 +236,6 @@ def run_microrts_match(
     replay_path = match_dir / "replay.xml"
     telemetry_path = match_dir / ("telemetry.json.gz" if artifact_mode == "compact" else "telemetry.json")
     breakdown_path = match_dir / "performance_breakdown.json"
-    seed_value = match_index if seed is None else int(seed)
     additional_classpath = [str(Path(value).resolve()) for value in extra_classpath_entries]
     classpath = os.pathsep.join(
         [str(classes_dir), *additional_classpath, str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")]
@@ -256,7 +249,6 @@ def run_microrts_match(
     command = [
         "java",
         *system_properties,
-        f"-Deagle.match.seed={seed_value}",
         f"-Dmicrorts.trace.path={replay_path}",
         f"-Dmicrorts.round_state_dir={round_state_dir}",
         "-cp",
@@ -289,23 +281,25 @@ def run_microrts_match(
             ai1=ai1,
             ai2=ai2,
             candidate_player=candidate_player,
-            seed=seed_value,
         )
         raw_result_path.write_text(json.dumps(raw_result, indent=2), encoding="utf-8")
-        for tick in range(tick_limit + 1):
+        # Two complete snapshots are sufficient for deterministic mock scoring.
+        # Writing every synthetic tick made production-size mock experiments
+        # create hundreds of thousands of disposable files per candidate.
+        for tick in sorted({0, tick_limit}):
             progress = mock_score * (tick / max(1, tick_limit))
             write_mock_round_state(
                 round_state_dir,
                 tick=tick,
                 p0_resource=50.0 + (progress if candidate_player == 0 else 0.0),
                 p1_resource=50.0 + (progress if candidate_player == 1 else 0.0),
-                trace_only=tick not in {0, tick_limit},
+                trace_only=False,
             )
         replay_path.write_text("<mock-replay />\n", encoding="utf-8")
         return _finish_match(
             raw_result=raw_result,
             command=command,
-            stdout=f"mock match {match_index} seed={seed_value} score={mock_score}",
+            stdout=f"mock match {match_index} score={mock_score}",
             stderr="",
             returncode=0,
             started_at=started_at,
@@ -324,7 +318,6 @@ def run_microrts_match(
             opponent=opponent,
             candidate_player=candidate_player,
             map_path=map_path,
-            seed=seed_value,
             tick_limit=tick_limit,
             agent_class=agent_class,
             source_hash=source_hash,
@@ -369,7 +362,6 @@ def run_microrts_match(
             opponent=opponent,
             candidate_player=candidate_player,
             map_path=map_path,
-            seed=seed_value,
             tick_limit=tick_limit,
             agent_class=agent_class,
             source_hash=source_hash,
@@ -390,7 +382,6 @@ def run_microrts_match(
             tick_limit=tick_limit,
             ai1=ai1,
             ai2=ai2,
-            seed=seed_value,
         )
     return _finish_match(
         raw_result=raw_result,
@@ -414,7 +405,6 @@ def run_microrts_match(
         opponent=opponent,
         candidate_player=candidate_player,
         map_path=map_path,
-        seed=seed_value,
         tick_limit=tick_limit,
         agent_class=agent_class,
         source_hash=source_hash,
@@ -451,7 +441,6 @@ def _finish_match(
     opponent: str,
     candidate_player: int,
     map_path: str,
-    seed: int,
     tick_limit: int,
     agent_class: str,
     source_hash: str | None,
@@ -537,7 +526,6 @@ def _finish_match(
                 "terrain": None,
                 "round_index": round_index,
                 "generation_index": generation,
-                "seed": seed,
                 "evaluation_configuration": {
                     "tick_limit": tick_limit,
                     "candidate_player": candidate_player,
@@ -550,29 +538,6 @@ def _finish_match(
         )
     except (OSError, TypeError, ValueError) as exc:
         persistence_error = f"failed to persist match trace: {exc}"
-    match_log_path = match_dir / "match_log.jsonl.gz"
-    try:
-        write_match_log(
-            match_log_path,
-            metadata={
-                "match_id": match_dir.name,
-                "candidate_id": candidate_id,
-                "generation_index": generation_index,
-                "candidate_side": "p0" if candidate_player == 0 else "p1",
-                "opponent_name": opponent,
-                "opponent_agent": opponent,
-                "map_name": map_path,
-                "map_width": 8,
-                "map_height": 8,
-                "round_index": match_index,
-                "seed": seed,
-            },
-            round_state_dir=round_state_dir,
-            raw_result=raw_result,
-            tick_limit=tick_limit,
-        )
-    except (OSError, TypeError, ValueError) as exc:
-        persistence_error = f"failed to persist match log: {exc}"
     cleanup_error = None
     if artifact_mode == "compact" and (telemetry is None or telemetry_persisted):
         cleanup_error = _remove_raw_match_artifacts(round_state_dir, replay_path)
@@ -599,7 +564,6 @@ def _finish_match(
         candidate_player=candidate_player,
         opponent=opponent,
         map_path=map_path,
-        seed=seed,
         max_cycles=tick_limit,
         source_hash=source_hash,
         class_hash=class_hash,
@@ -620,7 +584,6 @@ def _finish_match(
         trace_integrity_path=None if trace_artifact is None else str(trace_artifact.integrity_path),
         match_metadata_path=None if trace_artifact is None else str(trace_artifact.metadata_path),
         match_result_path=None if trace_artifact is None else str(trace_artifact.result_path),
-        match_log_path=str(match_log_path) if match_log_path.exists() else None,
         **values,
     )
     _persist_result(match_dir, result)
@@ -667,7 +630,6 @@ def parse_stdout_result(
     tick_limit: int,
     ai1: str,
     ai2: str,
-    seed: int,
 ) -> dict[str, Any]:
     """Recover a minimal valid result from runtimes that omit result-json.
 
@@ -705,7 +667,6 @@ def parse_stdout_result(
         "tick_timeout": final_tick >= tick_limit,
         "ai1": ai1,
         "ai2": ai2,
-        "match_seed": seed,
         "players": {"p0": dict(player_template), "p1": dict(player_template)},
         "result_source": "stdout_fallback",
     }
@@ -772,10 +733,6 @@ def _persist_result(match_dir: Path, result: MatchResult) -> None:
             json.dumps(result.to_json_dict(include_telemetry=False), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        (match_dir / "match_result.json").write_text(
-            json.dumps(result.to_json_dict(include_telemetry=False), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
         timing = result.to_json_dict(include_telemetry=False)["timing"]
         (match_dir / "timing.json").write_text(json.dumps(timing, indent=2), encoding="utf-8")
     except OSError:
@@ -795,7 +752,7 @@ def _remove_raw_match_artifacts(round_state_dir: Path, replay_path: Path) -> str
     return None
 
 
-def _mock_result(*, score: float, tick_limit: int, ai1: str, ai2: str, candidate_player: int, seed: int) -> dict[str, Any]:
+def _mock_result(*, score: float, tick_limit: int, ai1: str, ai2: str, candidate_player: int) -> dict[str, Any]:
     winner = candidate_player if score >= 0 else 1 - candidate_player
     return {
         "gameover": True,
@@ -808,7 +765,6 @@ def _mock_result(*, score: float, tick_limit: int, ai1: str, ai2: str, candidate
         "termination_reason": "gameover",
         "ai1": ai1,
         "ai2": ai2,
-        "match_seed": seed,
         "players": {
             "p0": {
                 "unit_count": 1,

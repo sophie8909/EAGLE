@@ -29,8 +29,10 @@ from evaluation.game_performance import GamePerformanceConfig
 from evaluation.function_capability import FunctionCapabilityResult, evaluate_function_capability
 from evaluation.microrts_runner import (
     IntegrationResult,
-    MatchResult,
     integrate_microrts_agent,
+)
+from evaluation.runtime_evaluation import (
+    MatchResult,
     hash_class_directory,
     hash_file,
     run_microrts_match,
@@ -335,7 +337,7 @@ def evaluate_candidate(
     if failure_stage is None:
         capability_result = evaluate_function_capability(generation.assembled_java, matches)
         alignment_backend = build_strategy_alignment_backend(
-            "mock" if mock else config.alignment_backend,
+            "mock" if mock else config.execution_mode,
             base_url=getattr(llm_client, "base_url", config.llm_base_url),
             model=getattr(llm_client, "model", config.llm_model),
             timeout_seconds=getattr(llm_client, "timeout_seconds", 120.0),
@@ -692,7 +694,6 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
             canonical_evaluation_maps(config.evaluation_maps),
             rounds_per_map=config.rounds_per_map,
             swap_player_sides=config.swap_player_sides,
-            round_seeds=config.resolved_match_seeds,
         )
         expected_matches = len(specifications)
         if len(opponents) != len(config.evaluation_opponents):
@@ -710,8 +711,10 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                     tick_limit=config.tick_limit, match_index=specification.match_index,
                     match_artifacts_dir=match_artifacts_dir,
                     scoring_config=scoring_config_from_experiment(config), mock=mock,
-                    mock_score=config.mock_score_base + config.mock_score_step * (ordinal + specification.match_index),
-                    seed=specification.seed, timeout_seconds=config.match_timeout_seconds,
+                    mock_score=config.mock_score_base + config.mock_score_step * (
+                        ordinal + specification.match_index
+                    ),
+                    timeout_seconds=config.match_timeout_seconds,
                     map_path=specification.map_path, candidate_id=candidate.id,
                     generation=candidate.generation,
                     candidate_player=specification.candidate_player,
@@ -730,7 +733,6 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                     command=[],
                     match_index=specification.match_index,
                     generation=candidate.generation,
-                    seed=specification.seed,
                     opponent=opponent.class_name,
                     candidate_player=specification.candidate_player,
                     map_path=specification.map_path,
@@ -809,7 +811,7 @@ def _prepare_worker_rush_adapter(config: ExperimentConfig, *, classes_dir: Path)
     compatibility subclass so the roster remains loadable and deterministic.
     """
 
-    root = classes_dir.resolve().parent / "opponent_adapters" / "worker_rush"
+    root = classes_dir.resolve() / "_opponent_adapters" / "worker_rush"
     source = root / "WorkerRush.java"
     output = root / "classes"
     class_file = output / "ai" / "abstraction" / "WorkerRush.class"
@@ -859,10 +861,6 @@ def _repository_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def _resolved_config_path(repository_root: Path, path: Path) -> Path:
-    return path.resolve() if path.is_absolute() else (repository_root / path).resolve()
-
-
 def scoring_config_from_experiment(config: ExperimentConfig) -> GamePerformanceConfig:
     return GamePerformanceConfig(
         result_win_score=config.result_win_score,
@@ -891,13 +889,6 @@ def match_error_message(result: MatchResult) -> str:
     if stderr:
         return stderr.splitlines()[0]
     return f"match returned {result.returncode}"
-
-
-def match_failure_category(reason: str) -> str:
-    lowered = reason.lower()
-    if "timed out" in lowered or "timeout" in lowered:
-        return "Timeout"
-    return "Runtime match failure"
 
 
 def print_progress(*, generation: int, index: int, population_size: int, evaluation: CandidateEvaluation) -> None:

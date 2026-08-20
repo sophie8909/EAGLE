@@ -14,8 +14,19 @@ from eagle.strategy_reflection import (
     build_global_evaluation_summary,
     select_reflection_matches,
 )
-from evaluation.match_logs import iter_match_log, write_match_log
-from evaluation.microrts_runner import write_mock_round_state
+from evaluation.match_trace import iter_match_trace, write_match_trace
+from evaluation.runtime_evaluation import write_mock_round_state
+
+
+def _write_trace(path: Path, *, metadata, round_state_dir, raw_result, tick_limit) -> None:
+    artifact = write_match_trace(
+        round_state_dir=round_state_dir,
+        match_dir=path.parent,
+        metadata=metadata,
+        result=raw_result,
+        expected_last_tick=tick_limit,
+    )
+    artifact.trace_path.replace(path)
 
 
 class StrategyReflectionPipelineTests(unittest.TestCase):
@@ -109,7 +120,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                 states = root / f"states-{index}"
                 write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
                 log_path = root / f"match-{index}.jsonl.gz"
-                write_match_log(
+                _write_trace(
                     log_path,
                     metadata={"match_id": f"match-{index}", "candidate_side": "p0", "opponent_name": "LightRush"},
                     round_state_dir=states,
@@ -117,7 +128,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                     tick_limit=0,
                 )
                 row = self._result(f"match-{index}", outcome)
-                row["match_log_path"] = str(log_path)
+                row["match_trace_path"] = str(log_path)
                 row["opponent_name"] = "LightRush"
                 row["map_name"] = "map_1"
                 row["candidate_side"] = "p0"
@@ -142,7 +153,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertEqual(len(commentator_prompts), 5)
             self.assertEqual(len(selection["selected_match_ids"]), 5)
             self.assertEqual(len({item for item in selection["selected_match_ids"]}), 5)
-            self.assertTrue(all(not Path(row["match_log_path"]).exists() for row in rows))
+            self.assertTrue(all(not Path(row["match_trace_path"]).exists() for row in rows))
             coach_prompt = next(prompt for prompt in backend.prompts if "ROLE: coach" in prompt)
             self.assertIn('"global_evaluation_summary"', coach_prompt)
             self.assertIn('"total_matches": 5', coach_prompt)
@@ -157,7 +168,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                 states = root / f"states-{index}"
                 write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
                 log_path = root / f"match-{index}.jsonl.gz"
-                write_match_log(
+                _write_trace(
                     log_path,
                     metadata={"match_id": f"match-{index}", "candidate_side": "p0", "opponent_name": "LightRush", "map_name": f"map_{index + 1}"},
                     round_state_dir=states,
@@ -165,7 +176,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                     tick_limit=0,
                 )
                 row = self._result(f"match-{index}", "loss", map_id=f"map_{index + 1}")
-                row["match_log_path"] = str(log_path)
+                row["match_trace_path"] = str(log_path)
                 rows.append(row)
             candidate = Candidate(id="candidate-ten", generation=4, strategy_prompt="Preserve the opening.")
             context = ReflectionContext(evolution=EvolutionContext(generation_index=4), per_match_results=tuple(rows))
@@ -212,8 +223,8 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             states = root / "states"
             for tick in range(4):
                 write_mock_round_state(states, tick=tick, p0_resource=10 + tick, p1_resource=10)
-            log_path = root / "match_log.jsonl.gz"
-            write_match_log(
+            log_path = root / "match_trace.jsonl.gz"
+            _write_trace(
                 log_path,
                 metadata={
                     "match_id": "match-1",
@@ -226,13 +237,12 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                     "map_width": 8,
                     "map_height": 8,
                     "round_index": 0,
-                    "seed": 7,
                 },
                 round_state_dir=states,
                 raw_result={"final_tick": 3, "players": {"p0": {"resource_total": 13}, "p1": {"resource_total": 10}}},
                 tick_limit=3,
             )
-            self.assertEqual([item["tick"] for item in iter_match_log(log_path)], [0, 1, 2, 3])
+            self.assertEqual([item["tick"] for item in iter_match_trace(log_path)], [0, 1, 2, 3])
             candidate = Candidate(id="candidate-1", generation=1, strategy_prompt="Open with workers and defend the base.")
             context = ReflectionContext(
                 generation=1,
@@ -242,7 +252,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                 per_match_results=({
                     "match_id": "match-1",
                     "match_index": 0,
-                    "match_log_path": str(log_path),
+                    "match_trace_path": str(log_path),
                     "opponent_name": "LightRush",
                     "map_name": "maps/8x8/basesWorkers8x8.xml",
                     "candidate_side": "p0",
@@ -272,10 +282,10 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             root = Path(temp_dir)
             states = root / "states"
             write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
-            log_path = root / "match_log.jsonl.gz"
-            write_match_log(log_path, metadata={"match_id": "match-2"}, round_state_dir=states, raw_result={}, tick_limit=0)
+            log_path = root / "match_trace.jsonl.gz"
+            _write_trace(log_path, metadata={"match_id": "match-2"}, round_state_dir=states, raw_result={}, tick_limit=0)
             candidate = Candidate(id="candidate-2", strategy_prompt="Keep the base safe.")
-            context = ReflectionContext(generation=1, index=0, candidate_id=candidate.id, per_match_results=({"match_id": "match-2", "match_log_path": str(log_path)},))
+            context = ReflectionContext(generation=1, index=0, candidate_id=candidate.id, per_match_results=({"match_id": "match-2", "match_trace_path": str(log_path)},))
             result = StrategyReflectionMutation(BadBackend(), max_attempts=1).run(candidate, context, artifact_dir=root / "child")
 
             self.assertEqual(result.status, "failed")

@@ -1,0 +1,22 @@
+EAGLE Generation Prompt Rewrite stage.
+
+Return only the revised generation_prompt for full-file regeneration. Do not return Java,
+analysis, JSON, a patch, a diff, or Markdown fences. Preserve valid MicroRTS constraints,
+address confirmed failures, remove contradictions, and keep historical error text bounded.
+
+Original generation_prompt:
+$generation_prompt
+
+code_reflection:
+$reflection
+
+strategy_prompt:
+$strategy_prompt
+
+Parent generated_java:
+$parent_java
+
+Code-quality summary:
+$code_quality_summary
+
+Output only the new generation prompt.

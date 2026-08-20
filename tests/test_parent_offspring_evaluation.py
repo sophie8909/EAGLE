@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from evaluation.microrts_runner import MatchResult
+from evaluation.runtime_evaluation import MatchResult
 from evaluation.parent_offspring import evaluate_parent_vs_offspring, head_to_head_reward
 
 
@@ -28,7 +28,7 @@ class ParentOffspringEvaluationTests(unittest.TestCase):
                 )
 
     def test_matrix_runs_both_sides_for_every_map_round_pair(self):
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+        config = ExperimentConfig.from_mapping({})
         offspring = Candidate(
             id="offspring",
             generation=1,
@@ -67,11 +67,11 @@ class ParentOffspringEvaluationTests(unittest.TestCase):
         self.assertEqual(result.wins, 18)
         self.assertEqual(result.reward, 1.0)
         grouped = {
-            (item["map_path"], item["round_index"], item["seed"]): []
+            (item["map_path"], item["round_index"]): []
             for item in observed
         }
         for item in observed:
-            grouped[(item["map_path"], item["round_index"], item["seed"])].append(
+            grouped[(item["map_path"], item["round_index"])].append(
                 item["candidate_player"]
             )
         self.assertEqual(len(grouped), 9)

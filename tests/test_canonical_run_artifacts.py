@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 
 from eagle.candidate import Candidate
+from eagle.config import ExperimentConfig
+from eagle.artifacts import write_candidate_inputs, write_candidate_snapshot
 from eagle.opponent_cases import LEXICASE_CASES
 from eagle.run_artifacts import (
     finalize_run,
@@ -18,6 +20,17 @@ from eagle.run_artifacts import (
 
 
 class CanonicalRunArtifactTests(unittest.TestCase):
+    def initialize(self, run: Path) -> None:
+        initialize_run_manifest(
+            run,
+            config=ExperimentConfig.from_mapping({}),
+        )
+
+    def checkpoint(self, run: Path, population: list[Candidate]) -> None:
+        for candidate in population:
+            write_candidate_inputs(run / "candidates", candidate)
+            write_candidate_snapshot(run / "candidates", candidate)
+
     def population(self, generation: int) -> list[Candidate]:
         scores = {case: 5.0 for case in LEXICASE_CASES}
         return [
@@ -38,14 +51,15 @@ class CanonicalRunArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory) / "run"
             run.mkdir()
-            config = Path(directory) / "config.yaml"
-            config.write_text("generations: 2\n", encoding="utf-8")
-            initialize_run_manifest(run, config_path=config)
-            record_generation(run, 0, self.population(0))
-            record_generation(run, 0, self.population(0))
-            lines = (run / "generation_metrics.jsonl").read_text(encoding="utf-8").splitlines()
-            self.assertEqual(len(lines), 1)
-            metric = json.loads(lines[0])["objectives"]["lightrush"]
+            self.initialize(run)
+            population = self.population(0)
+            self.checkpoint(run, population)
+            record_generation(run, 0, population)
+            record_generation(run, 0, population)
+            self.assertFalse((run / "source_config").exists())
+            self.assertFalse((run / "source_config.json").exists())
+            snapshot = json.loads((run / "generations" / "generation_0000.json").read_text())
+            metric = snapshot["metrics"]["objectives"]["lightrush"]
             self.assertEqual(metric["valid_count"], 1)
             self.assertEqual(metric["failure_count"], 1)
             self.assertEqual(metric["best"], 5.0)
@@ -57,13 +71,11 @@ class CanonicalRunArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory) / "run"
             run.mkdir()
-            config = Path(directory) / "config.yaml"
-            config.write_text("", encoding="utf-8")
-            initialize_run_manifest(run, config_path=config)
+            self.initialize(run)
             population = self.population(0)
             record_generation(run, 0, population)
             finalize_run(run, population, stop_reason=None)
-            self.assertTrue((run / "final_population.json").is_file())
+            self.assertFalse((run / "final_population.json").exists())
             manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["status"], "complete")
 
@@ -71,15 +83,13 @@ class CanonicalRunArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory) / "run"
             run.mkdir()
-            config = Path(directory) / "config.yaml"
-            config.write_text("", encoding="utf-8")
-            initialize_run_manifest(run, config_path=config)
+            self.initialize(run)
             record_generation(run, 0, self.population(0))
             mark_run_interrupted(run)
             manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["status"], "interrupted")
             self.assertTrue(manifest["resumable"])
-            self.assertEqual(manifest["last_completed_generation"], 0)
+            self.assertEqual(manifest["latest_generation"], 0)
 
     def test_all_required_objective_fields_exist(self):
         values = generation_metrics(0, self.population(0))["objectives"]["lightrush"]
@@ -137,9 +147,7 @@ class CanonicalRunArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory) / "run"
             run.mkdir()
-            config = Path(directory) / "config.yaml"
-            config.write_text("", encoding="utf-8")
-            initialize_run_manifest(run, config_path=config)
+            self.initialize(run)
             marker = "verbose-match-output-" * 50_000
             candidate = Candidate(
                 id="compact",
@@ -164,4 +172,4 @@ class CanonicalRunArtifactTests(unittest.TestCase):
             self.assertLess(snapshot_path.stat().st_size, 50_000)
             self.assertNotIn("verbose-match-output", snapshot_text)
             self.assertEqual(payload["fitness_objectives"]["lightrush"], 12.5)
-            self.assertEqual(payload["timing"]["child_total"]["duration_seconds"], 3.25)
+            self.assertNotIn("timing", payload)

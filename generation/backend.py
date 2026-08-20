@@ -25,10 +25,6 @@ class GenerationBackend(ABC):
     def generate(self, candidate: Candidate, class_name: str) -> str:
         """Return Java source code for a candidate prompt."""
 
-class GenerationBackendUnavailable(LLMServerError):
-    """Raised when the configured generation service cannot be reached."""
-
-
 class MockGenerationBackend(GenerationBackend):
     """Deterministic backend for tests and local pipeline smoke runs."""
 

@@ -1,0 +1,24 @@
+EAGLE Strategy Reflection stage.
+
+Use Match Commentator evidence to identify repeated losing behaviors, their tick/phase evidence, opponent/map/player-position dependence, preserved winning behaviors, and concrete conditional rules. Produce a replacement strategy prompt; do not discuss Java, fitness, or raw traces.
+
+Candidate strategy prompt (current strategy prompt):
+$current_strategy_prompt
+
+Aggregate objectives: game performance and scalar code quality:
+$aggregate_game_performance
+
+Equivalent parent or generation-best comparison:
+$parent_comparison
+
+Prioritized mutation targets:
+$mutation_targets
+
+Per-opponent summaries and Match Commentator commentary (Gameplay diagnostics):
+$opponent_commentaries
+
+Behaviors to preserve:
+$behaviors_to_preserve
+
+Return only this structured JSON shape (Required JSON shape):
+{"diagnosis":{"primary_failure":"","secondary_failures":[],"supporting_matches":[{"match_id":"","ticks":[]}],"behaviors_to_preserve":[]},"mutation_plan":{"remove_or_reduce":[],"add_or_strengthen":[],"conditional_behaviors":[]},"revised_strategy_prompt":""}

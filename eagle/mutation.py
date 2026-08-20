@@ -426,14 +426,6 @@ class ReflectionStage:
 
 
 
-def _validate_reflection(response: str) -> None:
-    if not isinstance(response, str) or not response.strip():
-        raise ValueError("Reflection response must contain non-empty reflection text.")
-    lowered = response.lower()
-    if "```java" in lowered or "package ai.generated" in lowered or "public class candidateagent" in lowered:
-        raise ValueError("Reflection response must not contain generated Java.")
-
-
 def _timing_payload(attempts: tuple[ReflectionAttempt, ...]) -> dict[str, object]:
     if not attempts:
         return {"started_at": None, "finished_at": None, "duration_seconds": None, "attempts": []}

@@ -11,7 +11,7 @@ from eagle.search import mutation_context_from_candidate
 from eagle.opponent_cases import OPPONENT_WEIGHTS
 from evaluation.game_metrics import FAILED_GAME_PERFORMANCE, compute_game_metrics
 from evaluation.game_performance import GamePerformanceBreakdown
-from evaluation.microrts_runner import MatchResult
+from evaluation.runtime_evaluation import MatchResult
 
 
 class OpponentReflectionTests(unittest.TestCase):

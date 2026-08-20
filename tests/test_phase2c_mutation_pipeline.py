@@ -70,7 +70,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
     def test_mutation_artifacts_survive_final_generation_failure(self):
         backend = ScriptedMutationBackend((self._code_reflection(), "rewritten prompt"))
         config = ExperimentConfig.from_mapping(
-            {"seed_prompts": ["seed"], "mutation_max_attempts": 1}
+            {"mutation_max_attempts": 1}
         )
         candidate = self._candidate()
         mutated = PromptRewriteMutation(
@@ -105,7 +105,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
         reflection = self._strategy_reflection() if mutation_type == "strategy" else self._code_reflection()
         backend = ScriptedMutationBackend((reflection, rewritten))
         config = ExperimentConfig.from_mapping(
-            {"seed_prompts": ["seed"], "mutation_max_attempts": 1}
+            {"mutation_max_attempts": 1}
         )
         candidate = self._candidate()
         mutation = PromptRewriteMutation(

@@ -6,7 +6,7 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from .microrts_runner import MatchResult
+from .runtime_evaluation import MatchResult
 
 
 CAPABILITY_NAMES = (

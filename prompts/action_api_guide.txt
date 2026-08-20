@@ -1,0 +1,16 @@
+Fixed action helpers already implemented in CandidateAgent.java:
+- commandMove(Unit unit, int x, int y)
+- commandHarvest(Unit worker, Unit resource, Unit base)
+- commandTrain(Unit producer, UnitType unitType)
+- commandBuild(Unit worker, UnitType buildingType, int x, int y)
+- commandAttack(Unit attacker, Unit target)
+- commandIdle(Unit unit)
+
+Fixed lookup helpers:
+- isIdleAlly(Unit unit, AgentContext context)
+- nearestEnemy(Unit source, AgentContext context)
+- nearestResource(Unit source, AgentContext context)
+- ownBase(AgentContext context)
+
+AgentContext exposes context.player, context.gs, and the snapshot context.units.
+Known UnitType fields are resourceType, workerType, lightType, heavyType, rangedType, baseType, and barracksType.

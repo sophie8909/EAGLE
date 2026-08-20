@@ -9,27 +9,19 @@ from pathlib import Path
 from unittest.mock import patch
 
 from eagle.candidate import Candidate
-from eagle.config import ExperimentConfig, MATCHES_PER_CANDIDATE, FIXED_MATCHES_PER_OPPONENT, TRAINING_OPPONENT
+from eagle.config import ExperimentConfig
 from eagle.evaluation import preflight_evaluation_opponents, evaluate_matches
 from eagle.opponents import EVALUATION_ROSTER
-from evaluation.microrts_runner import MatchResult, run_microrts_match
+from evaluation.runtime_evaluation import MatchResult, run_microrts_match
 from generation.java_agent_generator import GeneratedJavaAgent
 
 
 class Phase4RuntimeEvaluationTests(unittest.TestCase):
-    def test_config_resolves_exact_search_roster_matches_and_distinct_seeds(self):
-        config = ExperimentConfig.from_mapping(
-            {
-                "seed_prompts": ["seed"],
-                "matches_per_candidate": 1,
-                "opponent": "ai.RandomAI",
-            }
-        )
+    def test_config_resolves_exact_search_roster_and_match_count(self):
+        config = ExperimentConfig.from_mapping({})
 
-        self.assertEqual(config.matches_per_candidate, MATCHES_PER_CANDIDATE)
-        self.assertEqual(config.opponent, TRAINING_OPPONENT)
-        self.assertEqual(len(config.resolved_match_seeds), FIXED_MATCHES_PER_OPPONENT // 6)
-        self.assertEqual(len(set(config.resolved_match_seeds)), 3)
+        self.assertEqual(config.expected_match_count, 126)
+        self.assertEqual(config.rounds_per_map, 3)
 
     def test_one_source_and_class_set_serves_search_roster_matches(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -45,7 +37,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 source=source.read_text(encoding="utf-8"),
                 source_path=source,
             )
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+            config = ExperimentConfig.from_mapping({})
             observed: list[dict] = []
 
             def fake_match(**kwargs):
@@ -56,7 +48,6 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     score=100.0,
                     command=["java"],
                     match_index=index,
-                    seed=kwargs["seed"],
                     source_hash=kwargs["source_hash"],
                     class_hash=kwargs["class_hash"],
                 )
@@ -73,19 +64,22 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 )
 
         self.assertIsNone(error)
-        self.assertEqual(len(results), MATCHES_PER_CANDIDATE)
-        self.assertEqual([item["match_index"] for item in observed], list(range(MATCHES_PER_CANDIDATE)))
+        self.assertEqual(len(results), config.expected_match_count)
+        self.assertEqual([item["match_index"] for item in observed], list(range(config.expected_match_count)))
         self.assertEqual([item["opponent"] for item in observed[::18]], [item.class_name for item in EVALUATION_ROSTER])
         self.assertEqual([item.opponent_id for item in results[::18]], [item.opponent_id for item in EVALUATION_ROSTER])
         self.assertTrue(all(item.get("extra_classpath_entries", ()) == () for item in observed))
-        self.assertEqual([item["seed"] for item in observed[:18]], [0, 0, 1, 1, 2, 2] * 3)
+        self.assertEqual(
+            [(item["round_index"], item["candidate_player"]) for item in observed[:18]],
+            [(round_index, side) for _ in range(3) for round_index in range(3) for side in (0, 1)],
+        )
         self.assertEqual(len({item["source_hash"] for item in observed}), 1)
         self.assertEqual(len({item["class_hash"] for item in observed}), 1)
         self.assertEqual(len({str(item["classes_dir"]) for item in observed}), 1)
 
     def test_real_mode_preflight_reports_missing_search_opponent(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+            config = ExperimentConfig.from_mapping({})
             with self.assertRaisesRegex(Exception, "allibot"):
                 preflight_evaluation_opponents(config, mock=False, repository_root=Path(temp_dir))
 
@@ -97,7 +91,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
             classes = root / "classes" / "candidate"
             classes.mkdir(parents=True)
             agent = GeneratedJavaAgent("CandidateAgent", "ai.generated", "source", source)
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+            config = ExperimentConfig.from_mapping({})
             calls = 0
 
             def fake_match(**kwargs):
@@ -125,11 +119,11 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     ordinal=0,
                 )
 
-        self.assertEqual(len(results), MATCHES_PER_CANDIDATE)
+        self.assertEqual(len(results), config.expected_match_count)
         self.assertFalse(results[2].ok)
         self.assertEqual(results[2].opponent_id, EVALUATION_ROSTER[0].opponent_id)
         self.assertEqual(error, "boom")
-        self.assertEqual(sum(item.ok for item in results), MATCHES_PER_CANDIDATE - 1)
+        self.assertEqual(sum(item.ok for item in results), config.expected_match_count - 1)
 
     def test_runtime_timeout_is_classified_and_persisted(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -142,11 +136,10 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     microrts_dir=root,
                     classes_dir=root / "classes",
                     agent_class="ai.generated.CandidateAgent",
-                    opponent=TRAINING_OPPONENT,
+                    opponent="ai.abstraction.LightRush",
                     tick_limit=100,
                     match_index=0,
                     match_artifacts_dir=root / "matches",
-                    seed=7,
                     timeout_seconds=0.01,
                 )
             payload = json.loads((root / "matches" / "match_00" / "result.json").read_text(encoding="utf-8"))
@@ -171,11 +164,10 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     microrts_dir=root,
                     classes_dir=root / "classes",
                     agent_class="ai.generated.CandidateAgent",
-                    opponent=TRAINING_OPPONENT,
+                    opponent="ai.abstraction.LightRush",
                     tick_limit=100,
                     match_index=0,
                     match_artifacts_dir=root / "matches",
-                    seed=7,
                 )
 
         self.assertFalse(result.ok)
@@ -203,7 +195,6 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                     tick_limit=5000,
                     match_index=6,
                     match_artifacts_dir=root / "matches",
-                    seed=7,
                 )
 
             match_dir = root / "matches" / "match_06"
@@ -221,11 +212,10 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 microrts_dir=root,
                 classes_dir=root / "classes",
                 agent_class="ai.generated.CandidateAgent",
-                opponent=TRAINING_OPPONENT,
+                opponent="ai.abstraction.LightRush",
                 tick_limit=100,
                 match_index=0,
                 match_artifacts_dir=root / "matches",
-                seed=7,
                 mock=True,
                 artifact_mode="compact",
             )
@@ -242,6 +232,9 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertIsNone(result.round_state_path)
         self.assertFalse(replay_exists)
         self.assertFalse(rounds_exist)
+        self.assertFalse(any(argument.startswith("-Deagle.match.seed=") for argument in result.command))
+        self.assertNotIn("seed", persisted)
+        self.assertNotIn("match_seed", result.raw_result)
         self.assertEqual([item["tick"] for item in telemetry["ticks"]], [0, 100])
         self.assertIsNone(persisted["telemetry"])
         self.assertEqual(persisted["unit_material_trace"], [])
@@ -257,11 +250,10 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
                 microrts_dir=root,
                 classes_dir=root / "classes",
                 agent_class="ai.generated.CandidateAgent",
-                opponent=TRAINING_OPPONENT,
+                opponent="ai.abstraction.LightRush",
                 tick_limit=100,
                 match_index=0,
                 match_artifacts_dir=root / "matches",
-                seed=7,
                 mock=True,
                 artifact_mode="full",
             )

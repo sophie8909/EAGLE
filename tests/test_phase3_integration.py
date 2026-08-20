@@ -88,7 +88,7 @@ class Phase3IntegrationTests(unittest.TestCase):
             candidates_dir = root / "candidates"
             evaluation = evaluate_candidate(
                 Candidate(id="integration-failure"),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
+                config=ExperimentConfig.from_mapping({}),
                 backend=MockGenerationBackend(),
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",
@@ -103,7 +103,7 @@ class Phase3IntegrationTests(unittest.TestCase):
             )
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
             candidate_result = json.loads(
-                (candidate_dir / "candidate_result.json").read_text(encoding="utf-8")
+                (candidate_dir / "candidate.json").read_text(encoding="utf-8")
             )
 
         evaluate_matches.assert_not_called()
@@ -125,7 +125,7 @@ class Phase3IntegrationTests(unittest.TestCase):
     def test_successful_integration_precedes_match_execution(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+            config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
                 Candidate(id="integration-success"),
                 config=config,

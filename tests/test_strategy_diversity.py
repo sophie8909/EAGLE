@@ -18,7 +18,6 @@ from eagle.strategy_diversity import (
     update_strategy_archive,
 )
 from eagle.strategy_reflection import (
-    COACH_INTENT_INSTRUCTIONS,
     STRATEGY_MUTATION_INTENT_DISTRIBUTION,
     MockRoleBackend,
     StrategyReflectionMutation,
@@ -113,17 +112,22 @@ class StrategyDiversityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             states = root / "states"
-            from evaluation.microrts_runner import write_mock_round_state
-            from evaluation.match_logs import write_match_log
+            from evaluation.match_trace import write_match_trace
+            from evaluation.runtime_evaluation import write_mock_round_state
             write_mock_round_state(states, tick=0, p0_resource=1, p1_resource=1)
-            log = root / "match.jsonl.gz"
-            write_match_log(log, metadata={"match_id": "m", "opponent_name": "passive"}, round_state_dir=states, raw_result={}, tick_limit=0)
+            log = write_match_trace(
+                round_state_dir=states,
+                match_dir=root / "match",
+                metadata={"match_id": "m", "opponent_name": "passive"},
+                result={},
+                expected_last_tick=0,
+            ).trace_path
             backend = MockRoleBackend()
             result = StrategyReflectionMutation(backend, max_attempts=1, selection_seed=4).run(
                 candidate("parent", "early-light-rush", generation=2),
                 ReflectionContext(
                     evolution=EvolutionContext(generation_index=2),
-                    per_match_results=({"match_id": "m", "winner": 0, "candidate_player": 0, "match_log_path": str(log)},),
+                    per_match_results=({"match_id": "m", "winner": 0, "candidate_player": 0, "match_trace_path": str(log)},),
                 ),
                 artifact_dir=root / "child",
                 mutation_intent="STRUCTURAL",

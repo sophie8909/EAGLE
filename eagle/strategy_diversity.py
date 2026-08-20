@@ -31,7 +31,7 @@ STRATEGY_SIGNATURE_FIELDS = (
 )
 UNKNOWN = "unknown"
 ARCHIVE_SCHEMA_VERSION = "eagle-strategy-archive-v1"
-ARCHIVE_FILENAME = "strategy_archive.json"
+ARCHIVE_FILENAME = "archives/strategy.json"
 
 _SYNONYMS = {
     "worker first": "worker_first",

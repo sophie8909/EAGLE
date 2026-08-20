@@ -29,7 +29,6 @@ class MatchSpecification:
     round_index: int
     candidate_player: int
     opponent_player: int
-    seed: int
 
 
 def build_match_matrix(
@@ -38,31 +37,26 @@ def build_match_matrix(
     *,
     rounds_per_map: int = 3,
     swap_player_sides: bool = True,
-    round_seeds: Iterable[int] = (0, 1, 2),
 ) -> tuple[MatchSpecification, ...]:
     """Build map-major, round-major, side-paired specifications.
 
     The ordering is deterministic: all rounds and both sides for one map and
-    opponent are emitted before moving to the next map/opponent. P0 and P1
-    matches in one round share the same round seed.
+    opponent are emitted before moving to the next map/opponent.
     """
 
     maps = tuple(maps)
     opponents = tuple(opponents)
-    seeds = tuple(int(seed) for seed in round_seeds)
     if len(maps) != 3:
         raise ValueError("evaluation requires exactly three maps")
     if rounds_per_map != 3:
         raise ValueError("evaluation requires exactly three rounds per map")
-    if len(seeds) != rounds_per_map:
-        raise ValueError("round seed schedule must contain one seed per round")
     if not swap_player_sides:
         raise ValueError("evaluation requires candidate/opponent side swapping")
     specifications: list[MatchSpecification] = []
     match_index = 0
     for opponent in opponents:
         for evaluation_map in maps:
-            for round_index, seed in enumerate(seeds):
+            for round_index in range(rounds_per_map):
                 for candidate_player in (0, 1):
                     specifications.append(
                         MatchSpecification(
@@ -74,7 +68,6 @@ def build_match_matrix(
                             round_index=round_index,
                             candidate_player=candidate_player,
                             opponent_player=1 - candidate_player,
-                            seed=seed,
                         )
                     )
                     match_index += 1

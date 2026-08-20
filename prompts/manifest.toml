@@ -1,0 +1,91 @@
+# Prompt metadata only. Prompt bodies live in one UTF-8 text file per entry.
+
+[prompts.strategy_reflection]
+file = "strategy_reflection.txt"
+role = "reflector"
+stages = ["strategy_reflection"]
+required_variables = ["current_strategy_prompt", "aggregate_game_performance", "parent_comparison", "mutation_targets", "opponent_commentaries", "behaviors_to_preserve"]
+
+[prompts.code_reflection]
+file = "code_reflection.txt"
+role = "reflector"
+stages = ["code_reflection"]
+required_variables = ["candidate_prompts", "generated_code", "code_diagnostics", "gameplay_note", "evolution", "previous_reflection"]
+
+[prompts.strategy_rewrite]
+file = "strategy_rewrite.txt"
+role = "rewriter"
+stages = ["strategy_rewrite"]
+required_variables = ["strategy_prompt", "reflection", "parent_java", "game_summary"]
+
+[prompts.code_rewrite]
+file = "code_rewrite.txt"
+role = "rewriter"
+stages = ["generation_prompt_rewrite"]
+required_variables = ["generation_prompt", "reflection", "strategy_prompt", "parent_java", "code_quality_summary"]
+
+[prompts.java_generation]
+file = "java_generation.txt"
+role = "generator"
+stages = ["seed_generation", "mutation_generation", "crossover_generation"]
+required_variables = ["strategy_prompt", "action_api_guide", "generation_prompt", "current_source"]
+
+[prompts.strategy_alignment]
+file = "strategy_alignment.txt"
+role = "reflector"
+stages = ["strategy_alignment"]
+required_variables = ["strategy_prompt", "generated_java", "behavior_summary"]
+
+[prompts.match_commentator]
+file = "match_commentator.txt"
+role = "match_commentator"
+stages = ["strategy_reflection"]
+required_variables = ["match_id", "opponent", "map", "player_position", "result", "candidate_basic_strategy", "opponent_basic_strategy", "complete_match_record", "raw_game_log"]
+
+[prompts.coach_refine]
+file = "coach_refine.txt"
+role = "coach"
+stages = ["strategy_reflection"]
+required_variables = ["parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
+
+[prompts.coach_counter]
+file = "coach_counter.txt"
+role = "coach"
+stages = ["strategy_reflection"]
+required_variables = ["parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
+
+[prompts.coach_structural]
+file = "coach_structural.txt"
+role = "coach"
+stages = ["strategy_reflection"]
+required_variables = ["parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
+
+[prompts.coach_alternative]
+file = "coach_alternative.txt"
+role = "coach"
+stages = ["strategy_reflection"]
+required_variables = ["parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
+
+[prompts.initial_strategy]
+file = "initial_strategy.txt"
+role = "seed"
+stages = ["population_initialization"]
+required_variables = []
+
+[prompts.initial_generation]
+file = "initial_generation.txt"
+role = "seed"
+stages = ["population_initialization"]
+required_variables = []
+
+[prompts.action_api_guide]
+file = "action_api_guide.txt"
+role = "generator"
+stages = ["seed_generation", "mutation_generation", "crossover_generation"]
+required_variables = []
+
+[prompts.endpoint_preflight]
+file = "endpoint_preflight.txt"
+role = "preflight"
+stages = ["endpoint_preflight"]
+required_variables = []

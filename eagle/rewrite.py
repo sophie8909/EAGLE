@@ -217,15 +217,15 @@ class PromptRewriteMutation:
             reflection_backend,
             max_attempts=config.mutation_max_attempts,
             logger=logger,
-            model=None if config.generation_backend == "mock" else config.llm_model,
-            backend_name=backend_name or config.generation_backend,
+            model=None if config.execution_mode == "mock" else config.llm_model,
+            backend_name=backend_name or config.execution_mode,
         )
         self.rewrite = PromptRewriteStage(
             rewrite_backend,
             max_attempts=config.mutation_max_attempts,
             logger=logger,
-            model=None if config.generation_backend == "mock" else config.llm_model,
-            backend_name=backend_name or config.generation_backend,
+            model=None if config.execution_mode == "mock" else config.llm_model,
+            backend_name=backend_name or config.execution_mode,
         )
 
     def mutate(

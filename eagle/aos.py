@@ -1,12 +1,18 @@
-"""Minimal adaptive operator selection for EAGLE reflection mutations."""
+"""Reflection-operator selection and adaptive credit assignment for EAGLE."""
 
 from __future__ import annotations
 
+import math
 import statistics
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass, field, replace
+from enum import Enum
+from pathlib import Path
+from typing import Any, Protocol
+
+from evaluation.parent_offspring import evaluate_parent_vs_offspring
 
 from .candidate import Candidate
+from .opponent_cases import LEXICASE_CASES
 
 
 STRATEGY_REFLECTION = "strategy_reflection"
@@ -23,70 +29,85 @@ OPERATOR_TO_MUTATION = {
     GENERATE_CODE_REFLECTION: "code",
 }
 
+# These are historical algorithm constants, not experiment configuration.
+AOS_CREDIT_ALPHA = 0.20
+OPPONENT_REPAIRED_EXECUTION_REWARD = 1.0
+OPPONENT_BROKE_EXECUTION_REWARD = -1.0
+OPPONENT_STILL_FAILED_REWARD = -0.1
+HEAD_TO_HEAD_EXECUTION_FAILURE_REWARD = 0.0
 
-@dataclass(frozen=True)
-class AOSConfig:
-    """Small, research-facing configuration surface for probability matching."""
 
-    enabled: bool = True
-    initial_probabilities: tuple[tuple[str, float], ...] = (
-        (STRATEGY_REFLECTION, 0.20),
-        (GENERATE_CODE_REFLECTION, 0.80),
-    )
-    min_probability: float = 0.10
-    credit_alpha: float = 0.20
-    failure_reward: float = 0.0
+class ReflectionOperatorMode(str, Enum):
+    """The three canonical reflection-operator experimental conditions."""
+
+    STATIC = "static"
+    AOS_OPPONENT = "aos_opponent"
+    AOS_HEAD2HEAD = "aos_head2head"
 
     @classmethod
-    def from_mapping(cls, payload: object) -> "AOSConfig":
-        if payload is None:
-            return cls()
-        if not isinstance(payload, dict):
-            raise ValueError("aos must be a mapping.")
-        initial = payload.get("initial_probabilities", {})
-        if not isinstance(initial, dict):
-            raise ValueError("aos.initial_probabilities must be a mapping.")
-        values = {
-            STRATEGY_REFLECTION: float(initial.get(STRATEGY_REFLECTION, 0.20)),
-            GENERATE_CODE_REFLECTION: float(initial.get(GENERATE_CODE_REFLECTION, 0.80)),
-        }
-        credit = payload.get("credit", {})
-        if not isinstance(credit, dict):
-            raise ValueError("aos.credit must be a mapping.")
-        reward = payload.get("reward", {})
-        if not isinstance(reward, dict):
-            raise ValueError("aos.reward must be a mapping.")
-        return cls(
-            enabled=bool(payload.get("enabled", True)),
-            initial_probabilities=tuple(values.items()),
-            min_probability=float(payload.get("min_probability", 0.10)),
-            credit_alpha=float(credit.get("alpha", 0.20)),
-            failure_reward=float(reward.get("execution_failure", 0.0)),
-        )
+    def parse(cls, value: object) -> "ReflectionOperatorMode":
+        if isinstance(value, cls):
+            return value
+        try:
+            return cls(str(value))
+        except ValueError as exc:
+            allowed = ", ".join(item.value for item in cls)
+            raise ValueError(
+                f"reflection_operator_mode must be one of: {allowed}; got {value!r}."
+            ) from exc
 
-    def to_dict(self) -> dict[str, Any]:
+    @property
+    def adaptive(self) -> bool:
+        return self is not ReflectionOperatorMode.STATIC
+
+    @property
+    def reward_source(self) -> str:
         return {
-            "enabled": self.enabled,
-            "initial_probabilities": dict(self.initial_probabilities),
-            "min_probability": self.min_probability,
-            "credit": {"alpha": self.credit_alpha},
-            "reward": {"execution_failure": self.failure_reward},
+            ReflectionOperatorMode.STATIC: "static",
+            ReflectionOperatorMode.AOS_OPPONENT: "opponent",
+            ReflectionOperatorMode.AOS_HEAD2HEAD: "head2head",
+        }[self]
+
+
+@dataclass(frozen=True)
+class ReflectionOperatorSettings:
+    """Validated internal settings shared by operator selectors."""
+
+    mode: ReflectionOperatorMode = ReflectionOperatorMode.AOS_HEAD2HEAD
+    strategy_probability: float = 0.20
+    code_probability: float = 0.80
+    minimum_probability: float = 0.10
+    credit_alpha: float = AOS_CREDIT_ALPHA
+
+    @property
+    def initial_probabilities(self) -> dict[str, float]:
+        return {
+            STRATEGY_REFLECTION: self.strategy_probability,
+            GENERATE_CODE_REFLECTION: self.code_probability,
         }
 
     def validate(self) -> None:
-        configured = dict(self.initial_probabilities)
-        if tuple(configured) != OPERATORS:
-            raise ValueError(f"aos.initial_probabilities must contain exactly {OPERATORS}.")
-        if any(value < 0 for value in configured.values()):
-            raise ValueError("aos initial probabilities must be non-negative.")
-        if sum(configured.values()) <= 0:
-            raise ValueError("aos initial probabilities must have a positive sum.")
-        if not 0.0 <= self.min_probability < 0.5:
-            raise ValueError("aos.min_probability must be in [0, 0.5).")
+        values = {
+            "strategy_reflection_probability": self.strategy_probability,
+            "code_reflection_probability": self.code_probability,
+        }
+        for name, value in values.items():
+            if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be a finite number in [0, 1]; got {value!r}.")
+        if not math.isclose(sum(values.values()), 1.0, rel_tol=0.0, abs_tol=1e-9):
+            raise ValueError(
+                "strategy_reflection_probability + code_reflection_probability "
+                f"must equal 1.0; got {sum(values.values()):.12g}."
+            )
+        if not math.isfinite(self.minimum_probability):
+            raise ValueError("aos_minimum_probability must be finite.")
+        if self.mode.adaptive and not 0.0 <= self.minimum_probability <= 0.5:
+            raise ValueError(
+                "aos_minimum_probability must be in [0, 0.5] for two operators "
+                f"in {self.mode.value} mode; got {self.minimum_probability!r}."
+            )
         if not 0.0 < self.credit_alpha <= 1.0:
-            raise ValueError("aos.credit.alpha must be in (0, 1].")
-        if self.failure_reward != 0.0:
-            raise ValueError("aos.reward.execution_failure must be 0.0 for the [0, 1] contract.")
+            raise ValueError("Internal AOS credit alpha must be in (0, 1].")
 
 
 @dataclass(frozen=True)
@@ -100,7 +121,9 @@ class OperatorReward:
     offspring_runnable: bool
     generation: int = 0
     head_to_head: dict[str, Any] = field(default_factory=dict)
+    opponent_comparison: dict[str, Any] = field(default_factory=dict)
     transition: str = ""
+    reward_reason: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -111,40 +134,38 @@ class OperatorReward:
             "operator_id": self.operator,
             "reward": self.reward,
             "reward_source": self.reward_source,
+            "reward_reason": self.reward_reason,
             "comparison_parent_runnable": self.comparison_parent_runnable,
             "offspring_runnable": self.offspring_runnable,
             "head_to_head": dict(self.head_to_head),
+            "opponent_comparison": dict(self.opponent_comparison),
             "transition": self.transition,
         }
 
 
 class AdaptiveOperatorSelection:
-    """Generation-level probability matching over the two reflection operators."""
+    """The one canonical EMA/probability-matching updater for both AOS modes."""
 
-    def __init__(self, config: AOSConfig, *, state: dict[str, Any] | None = None) -> None:
-        config.validate()
-        self.config = config
-        self.probabilities = self._normalize(dict(config.initial_probabilities))
+    def __init__(self, settings: ReflectionOperatorSettings, *, state: dict[str, Any] | None = None) -> None:
+        settings.validate()
+        if not settings.mode.adaptive:
+            raise ValueError("AdaptiveOperatorSelection requires an adaptive reflection operator mode.")
+        self.settings = settings
+        # Valid config already sums to one. The floor applies only to adaptive
+        # updates, so the configured initial probabilities remain exact.
+        self.probabilities = dict(settings.initial_probabilities)
         self.credits = {operator: 0.0 for operator in OPERATORS}
         self.total_usage = {operator: 0 for operator in OPERATORS}
         self.total_reward_count = {operator: 0 for operator in OPERATORS}
         self.total_reward_sum = {operator: 0.0 for operator in OPERATORS}
         self.total_transition_counts = {transition: 0 for transition in TRANSITIONS}
         self._generation_usage = {operator: 0 for operator in OPERATORS}
-        self._last_generation: dict[str, Any] = self._empty_generation_record()
         if state:
             self._restore(state)
 
-    @classmethod
-    def from_state(cls, config: AOSConfig, state: dict[str, Any] | None) -> "AdaptiveOperatorSelection":
-        return cls(config, state=state)
-
     def select_operator(self, rng) -> str:
-        """Select using the probabilities fixed for the current generation."""
-
         draw = rng.random()
-        boundary = self.probabilities[OPERATORS[0]]
-        operator = OPERATORS[0] if draw < boundary else OPERATORS[1]
+        operator = OPERATORS[0] if draw < self.probabilities[OPERATORS[0]] else OPERATORS[1]
         self._generation_usage[operator] += 1
         self.total_usage[operator] += 1
         return operator
@@ -152,36 +173,23 @@ class AdaptiveOperatorSelection:
     def probability(self, operator: str) -> float:
         return float(self.probabilities[operator])
 
-    def initial_generation_record(self) -> dict[str, Any]:
-        probabilities = dict(self.probabilities)
-        qualities = dict(self.credits)
-        return {
-            "schema_version": "eagle-aos-v2",
-            "selection_probabilities": probabilities,
-            "post_update_probabilities": probabilities,
-            "operators": self._operator_records(
-                probabilities, probabilities, qualities, self._empty_generation_record()
-            ),
-            "transition_counts": {transition: 0 for transition in TRANSITIONS},
-            "state": self.state_dict(),
-        }
-
     def update_generation(self, rewards: list[OperatorReward]) -> dict[str, Any]:
         before = dict(self.probabilities)
         quality_before = dict(self.credits)
         grouped = {operator: [] for operator in OPERATORS}
-        head_to_head = {
-            operator: {"wins": 0, "draws": 0, "losses": 0, "errors": 0, "total_matches": 0}
-            for operator in OPERATORS
-        }
+        head_to_head = {operator: _empty_head_to_head_totals() for operator in OPERATORS}
+        opponent_comparison = {operator: _empty_opponent_totals() for operator in OPERATORS}
         transition_counts = {transition: 0 for transition in TRANSITIONS}
         for reward in rewards:
             if reward.operator in grouped:
-                if not 0.0 <= float(reward.reward) <= 1.0:
-                    raise ValueError("AOS rewards must be in [0, 1].")
                 grouped[reward.operator].append(float(reward.reward))
                 for key in head_to_head[reward.operator]:
                     head_to_head[reward.operator][key] += int(reward.head_to_head.get(key) or 0)
+                for key in opponent_comparison[reward.operator]:
+                    value = reward.opponent_comparison.get(key) or ()
+                    opponent_comparison[reward.operator][key] += (
+                        len(value) if isinstance(value, (list, tuple)) else int(value or 0)
+                    )
             if reward.transition in transition_counts:
                 transition_counts[reward.transition] += 1
         generation_stats = self._empty_generation_record()
@@ -192,29 +200,25 @@ class AdaptiveOperatorSelection:
                 "reward_count": len(values),
                 "mean_reward": statistics.fmean(values) if values else None,
                 "head_to_head": head_to_head[operator],
+                "opponent_comparison": opponent_comparison[operator],
             }
             if values:
+                mean_reward = statistics.fmean(values)
                 self.credits[operator] = (
-                    (1.0 - self.config.credit_alpha) * self.credits[operator]
-                    + self.config.credit_alpha * statistics.fmean(values)
+                    (1.0 - self.settings.credit_alpha) * self.credits[operator]
+                    + self.settings.credit_alpha * mean_reward
                 )
                 self.total_reward_count[operator] += len(values)
                 self.total_reward_sum[operator] += sum(values)
         for transition, count in transition_counts.items():
             self.total_transition_counts[transition] += count
-        if self.config.enabled:
-            self.probabilities = self._probability_match(self.credits)
+        self.probabilities = self._probability_match(self.credits)
         after = dict(self.probabilities)
         record = {
-            "schema_version": "eagle-aos-v2",
-            "selection_probabilities": before,
-            "post_update_probabilities": after,
             "operators": self._operator_records(before, after, quality_before, generation_stats),
             "transition_counts": transition_counts,
             "cumulative_transition_counts": dict(self.total_transition_counts),
-            "state": self.state_dict(),
         }
-        self._last_generation = record
         self._generation_usage = {operator: 0 for operator in OPERATORS}
         return record
 
@@ -229,48 +233,52 @@ class AdaptiveOperatorSelection:
         }
 
     def _restore(self, state: dict[str, Any]) -> None:
-        self.probabilities = self._normalize({
+        restored = {
             operator: float((state.get("probabilities") or {}).get(operator, self.probabilities[operator]))
             for operator in OPERATORS
-        })
-        for attribute, default in (
-            ("credits", 0.0),
-            ("total_usage", 0),
-            ("total_reward_count", 0),
-            ("total_reward_sum", 0.0),
+        }
+        if any(not math.isfinite(value) or value < 0.0 for value in restored.values()) or not math.isclose(
+            sum(restored.values()), 1.0, rel_tol=0.0, abs_tol=1e-9
+        ):
+            raise ValueError("Persisted reflection-operator probabilities are invalid.")
+        self.probabilities = restored
+        for attribute, converter in (
+            ("credits", float),
+            ("total_usage", int),
+            ("total_reward_count", int),
+            ("total_reward_sum", float),
         ):
             values = state.get(attribute) or {}
             target = getattr(self, attribute)
             for operator in OPERATORS:
-                target[operator] = type(default)(values.get(operator, default))
+                target[operator] = converter(values.get(operator, target[operator]))
         transition_values = state.get("total_transition_counts") or {}
         for transition in TRANSITIONS:
             self.total_transition_counts[transition] = int(transition_values.get(transition, 0))
 
-    def _normalize(self, values: dict[str, float]) -> dict[str, float]:
-        values = {operator: max(0.0, values[operator]) for operator in OPERATORS}
-        total = sum(values.values())
+    def _normalize_with_floor(self, values: dict[str, float]) -> dict[str, float]:
+        positive = {operator: max(0.0, values[operator]) for operator in OPERATORS}
+        total = sum(positive.values())
         if total <= 0:
-            values = {operator: 1.0 for operator in OPERATORS}
-            total = float(len(OPERATORS))
-        normalized = {operator: values[operator] / total for operator in OPERATORS}
-        floor = self.config.min_probability
+            positive = dict(self.probabilities)
+            total = sum(positive.values())
+        normalized = {operator: positive[operator] / total for operator in OPERATORS}
+        floor = self.settings.minimum_probability
         below_floor = [operator for operator in OPERATORS if normalized[operator] < floor]
         if not below_floor:
             return normalized
         fixed_total = floor * len(below_floor)
         remaining = 1.0 - fixed_total
         above_total = sum(normalized[operator] for operator in OPERATORS if operator not in below_floor)
+        if above_total <= 0:
+            return {operator: 1.0 / len(OPERATORS) for operator in OPERATORS}
         return {
             operator: floor if operator in below_floor else remaining * normalized[operator] / above_total
             for operator in OPERATORS
         }
 
     def _probability_match(self, credits: dict[str, float]) -> dict[str, float]:
-        positive = {operator: max(0.0, credits[operator]) for operator in OPERATORS}
-        if sum(positive.values()) <= 0:
-            return self._normalize(self.probabilities)
-        return self._normalize(positive)
+        return self._normalize_with_floor({operator: max(0.0, credits[operator]) for operator in OPERATORS})
 
     def _empty_generation_record(self) -> dict[str, Any]:
         return {
@@ -278,13 +286,8 @@ class AdaptiveOperatorSelection:
                 "usage_count": 0,
                 "reward_count": 0,
                 "mean_reward": None,
-                "head_to_head": {
-                    "wins": 0,
-                    "draws": 0,
-                    "losses": 0,
-                    "errors": 0,
-                    "total_matches": 0,
-                },
+                "head_to_head": _empty_head_to_head_totals(),
+                "opponent_comparison": _empty_opponent_totals(),
             }
             for operator in OPERATORS
         }
@@ -315,6 +318,290 @@ class AdaptiveOperatorSelection:
         }
 
 
+class RewardProvider(Protocol):
+    source: str
+
+    def collect(
+        self,
+        parents: list[Candidate],
+        children: list[Candidate],
+        *,
+        config: Any,
+        candidates_dir: Path,
+        classes_dir: Path,
+        mock: bool,
+    ) -> tuple[list[Candidate], list[OperatorReward]]: ...
+
+
+class OpponentRewardProvider:
+    """Historical reward restored from 5d8a30d^ (tree 7e7604c; introduced e481954)."""
+
+    source = "opponent"
+
+    def collect(self, parents, children, *, config, candidates_dir, classes_dir, mock):
+        del config, candidates_dir, classes_dir, mock
+        return _collect_selected_rewards(parents, children, calculate_opponent_reward)
+
+
+class HeadToHeadRewardProvider:
+    """Current direct parent-vs-offspring reward provider."""
+
+    source = "head2head"
+
+    def collect(self, parents, children, *, config, candidates_dir, classes_dir, mock):
+        parent_by_id = {candidate.id: candidate for candidate in parents}
+        updated: list[Candidate] = []
+        rewards: list[OperatorReward] = []
+        for child in children:
+            selection = child.metadata.get("aos") or {}
+            operator = selection.get("operator_id")
+            parent_id = selection.get("comparison_parent_id")
+            if not operator or not parent_id or parent_id not in parent_by_id:
+                updated.append(child)
+                continue
+            parent = parent_by_id[parent_id]
+            evidence = {
+                "maps": list(config.evaluation_maps),
+                "rounds": list(range(config.rounds_per_map)),
+                "sides": ["offspring_p0_parent_p1", "parent_p0_offspring_p1"],
+                **_empty_head_to_head_totals(),
+                "valid_matches": 0,
+                "skipped_reason": (
+                    "execution_failure" if not is_runnable(child)
+                    else "comparison_parent_execution_failure"
+                ),
+            }
+            if is_runnable(child) and can_run_as_comparison_parent(parent):
+                direct = evaluate_parent_vs_offspring(
+                    child,
+                    parent,
+                    config=config,
+                    classes_dir=classes_dir,
+                    match_artifacts_dir=candidates_dir / child.id / "aos" / "head_to_head" / "matches",
+                    mock=mock,
+                )
+                evidence = {"reward": direct.reward, **direct.to_dict()}
+            reward = calculate_head_to_head_reward(parent, child, operator=operator, head_to_head=evidence)
+            child = _attach_reward(child, selection, reward)
+            updated.append(child)
+            rewards.append(reward)
+        return updated, rewards
+
+
+class ReflectionOperatorController:
+    """Mode-independent interface used by the evolutionary search."""
+
+    def __init__(self, settings: ReflectionOperatorSettings) -> None:
+        settings.validate()
+        self.settings = settings
+
+    @property
+    def mode(self) -> ReflectionOperatorMode:
+        return self.settings.mode
+
+    def select_operator(self, rng) -> str:
+        raise NotImplementedError
+
+    def probability(self, operator: str) -> float:
+        raise NotImplementedError
+
+    def initial_generation_record(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def collect_rewards(self, parents, children, *, config, candidates_dir, classes_dir, mock):
+        raise NotImplementedError
+
+    def update_generation(self, rewards: list[OperatorReward]) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def persist_reward_outcomes(
+        self,
+        children: list[Candidate],
+        rewards: list[OperatorReward],
+        *,
+        record: dict[str, Any],
+        candidates_dir: Path,
+    ) -> list[Candidate]:
+        from .artifacts import write_aos_reward_artifact, write_candidate_snapshot
+
+        rewards_by_offspring = {reward.offspring_id: reward for reward in rewards}
+        updated: list[Candidate] = []
+        for child in children:
+            reward = rewards_by_offspring.get(child.id)
+            if reward is None:
+                updated.append(child)
+                continue
+            stats = (record.get("operators") or {}).get(reward.operator) or {}
+            metadata = {
+                **reward.to_dict(),
+                "mode": self.mode.value,
+                "operator_quality_before": stats.get("operator_quality_before"),
+                "operator_quality_after": stats.get("operator_quality_after"),
+                "probability_before": stats.get("selection_probability_before"),
+                "probability_after": stats.get("selection_probability"),
+            }
+            child = replace(child, metadata={**child.metadata, "aos": metadata})
+            write_aos_reward_artifact(candidates_dir, metadata)
+            write_candidate_snapshot(candidates_dir, child)
+            updated.append(child)
+        return updated
+
+
+class StaticOperatorSelector(ReflectionOperatorController):
+    """Fixed-probability selector that never computes or updates AOS credit."""
+
+    def __init__(self, settings: ReflectionOperatorSettings, *, state: dict[str, Any] | None = None) -> None:
+        super().__init__(settings)
+        self.probabilities = dict(settings.initial_probabilities)
+        self.total_usage = {operator: 0 for operator in OPERATORS}
+        self._generation_usage = {operator: 0 for operator in OPERATORS}
+        if state:
+            for operator in OPERATORS:
+                self.total_usage[operator] = int((state.get("total_usage") or {}).get(operator, 0))
+
+    def select_operator(self, rng) -> str:
+        operator = OPERATORS[0] if rng.random() < self.probabilities[OPERATORS[0]] else OPERATORS[1]
+        self._generation_usage[operator] += 1
+        self.total_usage[operator] += 1
+        return operator
+
+    def probability(self, operator: str) -> float:
+        return float(self.probabilities[operator])
+
+    def collect_rewards(self, parents, children, *, config, candidates_dir, classes_dir, mock):
+        del parents, config, candidates_dir, classes_dir, mock
+        return children, []
+
+    def update_generation(self, rewards: list[OperatorReward]) -> dict[str, Any]:
+        if rewards:
+            raise ValueError("Static reflection operator mode must not receive adaptive rewards.")
+        record = self._record(self._generation_usage)
+        self._generation_usage = {operator: 0 for operator in OPERATORS}
+        return record
+
+    def initial_generation_record(self) -> dict[str, Any]:
+        return self._record({operator: 0 for operator in OPERATORS})
+
+    def _record(self, usage: dict[str, int]) -> dict[str, Any]:
+        operators = {
+            operator: {
+                "usage_count": usage[operator],
+                "reward_count": 0,
+                "mean_reward": None,
+                "operator_quality_before": None,
+                "operator_quality_after": None,
+                "recent_credit": None,
+                "selection_probability_before": self.probabilities[operator],
+                "selection_probability": self.probabilities[operator],
+                "cumulative_usage_count": self.total_usage[operator],
+                "cumulative_reward_count": 0,
+                "cumulative_mean_reward": None,
+                "head_to_head": _empty_head_to_head_totals(),
+                "opponent_comparison": _empty_opponent_totals(),
+            }
+            for operator in OPERATORS
+        }
+        return _canonical_generation_record(
+            self.settings,
+            before=self.probabilities,
+            after=self.probabilities,
+            operators=operators,
+            transitions={transition: 0 for transition in TRANSITIONS},
+            state={
+                "mode": self.mode.value,
+                "probabilities": dict(self.probabilities),
+                "total_usage": dict(self.total_usage),
+            },
+        )
+
+
+class AdaptiveOperatorSelector(ReflectionOperatorController):
+    """Adaptive controller: one reward provider feeding one shared updater."""
+
+    def __init__(
+        self,
+        settings: ReflectionOperatorSettings,
+        provider: RewardProvider,
+        *,
+        state: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(settings)
+        self.provider = provider
+        self.updater = AdaptiveOperatorSelection(settings, state=state)
+
+    def select_operator(self, rng) -> str:
+        return self.updater.select_operator(rng)
+
+    def probability(self, operator: str) -> float:
+        return self.updater.probability(operator)
+
+    def collect_rewards(self, parents, children, *, config, candidates_dir, classes_dir, mock):
+        return self.provider.collect(
+            parents,
+            children,
+            config=config,
+            candidates_dir=candidates_dir,
+            classes_dir=classes_dir,
+            mock=mock,
+        )
+
+    def initial_generation_record(self) -> dict[str, Any]:
+        probabilities = dict(self.updater.probabilities)
+        stats = self.updater._empty_generation_record()
+        operators = self.updater._operator_records(
+            probabilities, probabilities, dict(self.updater.credits), stats
+        )
+        return _canonical_generation_record(
+            self.settings,
+            before=probabilities,
+            after=probabilities,
+            operators=operators,
+            transitions={transition: 0 for transition in TRANSITIONS},
+            state=self._state_dict(),
+        )
+
+    def update_generation(self, rewards: list[OperatorReward]) -> dict[str, Any]:
+        base = self.updater.update_generation(rewards)
+        return _canonical_generation_record(
+            self.settings,
+            before={
+                operator: base["operators"][operator]["selection_probability_before"]
+                for operator in OPERATORS
+            },
+            after=dict(self.updater.probabilities),
+            operators=base["operators"],
+            transitions=base["transition_counts"],
+            cumulative_transitions=base["cumulative_transition_counts"],
+            state=self._state_dict(),
+        )
+
+    def _state_dict(self) -> dict[str, Any]:
+        return {"mode": self.mode.value, **self.updater.state_dict()}
+
+
+def build_reflection_operator_controller(
+    config: Any,
+    *,
+    state: dict[str, Any] | None = None,
+) -> ReflectionOperatorController:
+    """Create the only mode-specific object used by search and resume."""
+
+    settings = config.reflection_operator_settings
+    if state and state.get("mode") != settings.mode.value:
+        raise ValueError(
+            "Persisted reflection operator mode does not match the resume config: "
+            f"run={state.get('mode')!r}, config={settings.mode.value!r}."
+        )
+    if settings.mode is ReflectionOperatorMode.STATIC:
+        return StaticOperatorSelector(settings, state=state)
+    provider: RewardProvider = (
+        OpponentRewardProvider()
+        if settings.mode is ReflectionOperatorMode.AOS_OPPONENT
+        else HeadToHeadRewardProvider()
+    )
+    return AdaptiveOperatorSelector(settings, provider, state=state)
+
+
 def is_runnable(candidate: Candidate) -> bool:
     """Return true only for a candidate that completed the actual matrix."""
 
@@ -336,61 +623,209 @@ def can_run_as_comparison_parent(candidate: Candidate) -> bool:
     )
 
 
-def calculate_operator_reward(
+def opponent_result_ranks(candidate: Candidate) -> dict[str, int | None]:
+    """Historical W/D/L rank: LOSS=0, DRAW=1, WIN=2 for each canonical case."""
+
+    rows = {
+        str(row.get("opponent_id")): row
+        for row in (candidate.game_eval_result or {}).get("opponent_results") or []
+        if isinstance(row, dict) and row.get("opponent_id")
+    }
+    ranks: dict[str, int | None] = {}
+    for case in LEXICASE_CASES:
+        row = rows.get(case)
+        if row is None or str(row.get("status") or "").lower() != "completed":
+            ranks[case] = None
+            continue
+        try:
+            wins = int(row.get("wins") or 0)
+            losses = int(row.get("losses") or 0)
+        except (TypeError, ValueError):
+            ranks[case] = None
+            continue
+        ranks[case] = 2 if wins > losses else 0 if losses > wins else 1
+    return ranks
+
+
+def calculate_opponent_reward(parent: Candidate, child: Candidate, *, operator: str) -> OperatorReward:
+    """Restore the exact execution-first opponent reward from repository history."""
+
+    parent_runnable = is_runnable(parent)
+    child_runnable = is_runnable(child)
+    transition = _transition(parent_runnable, child_runnable)
+    if not parent_runnable and child_runnable:
+        return _reward(
+            parent, child, operator, OPPONENT_REPAIRED_EXECUTION_REWARD, "opponent",
+            parent_runnable, child_runnable, transition, "execution_repair",
+        )
+    if parent_runnable and not child_runnable:
+        return _reward(
+            parent, child, operator, OPPONENT_BROKE_EXECUTION_REWARD, "opponent",
+            parent_runnable, child_runnable, transition, "execution_regression",
+        )
+    if not parent_runnable and not child_runnable:
+        return _reward(
+            parent, child, operator, OPPONENT_STILL_FAILED_REWARD, "opponent",
+            parent_runnable, child_runnable, transition, "both_failed",
+        )
+
+    parent_ranks = opponent_result_ranks(parent)
+    child_ranks = opponent_result_ranks(child)
+    improved = tuple(
+        case for case in LEXICASE_CASES
+        if parent_ranks[case] is not None and child_ranks[case] is not None
+        and child_ranks[case] > parent_ranks[case]
+    )
+    regressed = tuple(
+        case for case in LEXICASE_CASES
+        if parent_ranks[case] is not None and child_ranks[case] is not None
+        and child_ranks[case] < parent_ranks[case]
+    )
+    unchanged = tuple(
+        case for case in LEXICASE_CASES
+        if parent_ranks[case] is not None and child_ranks[case] is not None
+        and child_ranks[case] == parent_ranks[case]
+    )
+    compared = len(improved) + len(regressed) + len(unchanged)
+    reward_value = (len(improved) - len(regressed)) / compared if compared else 0.0
+    evidence = {
+        "improved_cases": list(improved),
+        "regressed_cases": list(regressed),
+        "unchanged_cases": list(unchanged),
+        "compared_cases": compared,
+        "parent_ranks": parent_ranks,
+        "offspring_ranks": child_ranks,
+    }
+    return _reward(
+        parent, child, operator, reward_value, "opponent",
+        True, True, transition, "opponent_rank_change", opponent_comparison=evidence,
+    )
+
+
+def calculate_head_to_head_reward(
     parent: Candidate,
     child: Candidate,
     *,
     operator: str,
-    config: AOSConfig,
     head_to_head: dict[str, Any] | None = None,
 ) -> OperatorReward:
-    """Assign execution-first credit, then direct parent-match credit."""
+    """Preserve the current [0,1] direct-match reward and failure behavior."""
 
     parent_runnable = is_runnable(parent)
     child_runnable = is_runnable(child)
-    transition = f"{'runnable' if parent_runnable else 'failed'}_parent_to_{'runnable' if child_runnable else 'failed'}_child"
+    transition = _transition(parent_runnable, child_runnable)
+    evidence = {} if head_to_head is None else {key: value for key, value in head_to_head.items() if key != "reward"}
     if not child_runnable:
-        return OperatorReward(
-            operator=operator,
-            comparison_parent_id=parent.id,
-            offspring_id=child.id,
-            reward=config.failure_reward,
-            reward_source="execution_failure",
-            comparison_parent_runnable=parent_runnable,
-            offspring_runnable=False,
-            generation=child.generation,
-            head_to_head={} if head_to_head is None else {
-                key: value for key, value in head_to_head.items() if key != "reward"
-            },
-            transition=transition,
+        return _reward(
+            parent, child, operator, HEAD_TO_HEAD_EXECUTION_FAILURE_REWARD, "head2head",
+            parent_runnable, False, transition, "execution_failure", head_to_head=evidence,
         )
     if head_to_head is not None and "reward" in head_to_head:
-        reward = float(head_to_head.get("reward", 0.0))
-        if not 0.0 <= reward <= 1.0:
+        reward_value = float(head_to_head["reward"])
+        if not 0.0 <= reward_value <= 1.0:
             raise ValueError("Head-to-head reward must be in [0, 1].")
-        return OperatorReward(
-            operator=operator,
-            comparison_parent_id=parent.id,
-            offspring_id=child.id,
-            reward=reward,
-            reward_source="parent_vs_offspring",
-            comparison_parent_runnable=parent_runnable,
-            offspring_runnable=True,
-            generation=child.generation,
-            head_to_head={key: value for key, value in head_to_head.items() if key != "reward"},
-            transition=transition,
+        return _reward(
+            parent, child, operator, reward_value, "head2head",
+            parent_runnable, True, transition, "direct_matches", head_to_head=evidence,
         )
     if not can_run_as_comparison_parent(parent):
-        return OperatorReward(
-            operator=operator,
-            comparison_parent_id=parent.id,
-            offspring_id=child.id,
-            reward=1.0,
-            reward_source="comparison_parent_execution_failure",
-            comparison_parent_runnable=False,
-            offspring_runnable=True,
-            generation=child.generation,
-            head_to_head={} if head_to_head is None else dict(head_to_head),
-            transition=transition,
+        return _reward(
+            parent, child, operator, 1.0, "head2head",
+            False, True, transition, "comparison_parent_execution_failure", head_to_head=evidence,
         )
     raise ValueError("Runnable offspring and comparison parent require head-to-head evidence.")
+
+
+def _collect_selected_rewards(parents, children, calculator):
+    parent_by_id = {candidate.id: candidate for candidate in parents}
+    updated: list[Candidate] = []
+    rewards: list[OperatorReward] = []
+    for child in children:
+        selection = child.metadata.get("aos") or {}
+        operator = selection.get("operator_id")
+        parent_id = selection.get("comparison_parent_id")
+        if not operator or not parent_id or parent_id not in parent_by_id:
+            updated.append(child)
+            continue
+        reward = calculator(parent_by_id[parent_id], child, operator=operator)
+        updated.append(_attach_reward(child, selection, reward))
+        rewards.append(reward)
+    return updated, rewards
+
+
+def _attach_reward(child: Candidate, selection: dict[str, Any], reward: OperatorReward) -> Candidate:
+    return replace(child, metadata={**child.metadata, "aos": {**selection, **reward.to_dict()}})
+
+
+def _reward(
+    parent,
+    child,
+    operator,
+    reward_value,
+    source,
+    parent_runnable,
+    child_runnable,
+    transition,
+    reason,
+    *,
+    head_to_head=None,
+    opponent_comparison=None,
+):
+    return OperatorReward(
+        operator=operator,
+        comparison_parent_id=parent.id,
+        offspring_id=child.id,
+        reward=reward_value,
+        reward_source=source,
+        comparison_parent_runnable=parent_runnable,
+        offspring_runnable=child_runnable,
+        generation=child.generation,
+        head_to_head={} if head_to_head is None else head_to_head,
+        opponent_comparison={} if opponent_comparison is None else opponent_comparison,
+        transition=transition,
+        reward_reason=reason,
+    )
+
+
+def _transition(parent_runnable: bool, child_runnable: bool) -> str:
+    return (
+        f"{'runnable' if parent_runnable else 'failed'}_parent_to_"
+        f"{'runnable' if child_runnable else 'failed'}_child"
+    )
+
+
+def _empty_head_to_head_totals() -> dict[str, int]:
+    return {"wins": 0, "draws": 0, "losses": 0, "errors": 0, "total_matches": 0}
+
+
+def _empty_opponent_totals() -> dict[str, int]:
+    return {"improved_cases": 0, "regressed_cases": 0, "unchanged_cases": 0, "compared_cases": 0}
+
+
+def _canonical_generation_record(
+    settings: ReflectionOperatorSettings,
+    *,
+    before: dict[str, float],
+    after: dict[str, float],
+    operators: dict[str, Any],
+    transitions: dict[str, int],
+    state: dict[str, Any],
+    cumulative_transitions: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": "eagle-reflection-operator-v3",
+        "mode": settings.mode.value,
+        "reward_source": settings.mode.reward_source,
+        "strategy_probability_before": before[STRATEGY_REFLECTION],
+        "code_probability_before": before[GENERATE_CODE_REFLECTION],
+        "strategy_probability_after": after[STRATEGY_REFLECTION],
+        "code_probability_after": after[GENERATE_CODE_REFLECTION],
+        "strategy_reward": operators[STRATEGY_REFLECTION].get("mean_reward"),
+        "code_reward": operators[GENERATE_CODE_REFLECTION].get("mean_reward"),
+        "selection_probabilities": dict(before),
+        "post_update_probabilities": dict(after),
+        "operators": operators,
+        "transition_counts": transitions,
+        "cumulative_transition_counts": cumulative_transitions or {transition: 0 for transition in TRANSITIONS},
+        "state": state,
+    }

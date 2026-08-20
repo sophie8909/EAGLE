@@ -9,17 +9,14 @@ from typing import Any
 
 import yaml
 
-from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH, get_seed_prompt_template
+from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH
 
 from .candidate import DEFAULT_GENERATION_PROMPT
-from .aos import AOSConfig
+from .aos import ReflectionOperatorMode, ReflectionOperatorSettings
 from .opponent_cases import LEXICASE_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SUM
+from .prompts import DEFAULT_PROMPT_DIR
 
 
-TRAINING_OPPONENT = "ai.abstraction.LightRush"
-# Canonical fixed search: seven opponents × three maps × three rounds × two sides.
-MATCHES_PER_CANDIDATE = 126
-FIXED_MATCHES_PER_OPPONENT = 18
 DEFAULT_EVALUATION_MAPS = (
     "maps/8x8/basesWorkers8x8.xml",
     "maps/16x16/basesWorkers16x16.xml",
@@ -38,23 +35,68 @@ DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Ranged", 2.0),
 )
 
+
+@dataclass(frozen=True)
+class ModelConfig:
+    """The one llama.cpp model/runtime selected by an experiment."""
+
+    name: str = "unconfigured"
+    path: Path | None = None
+    llama_server: Path | None = None
+    host: str = "127.0.0.1"
+    port: int = 8080
+    context_size: int = 32768
+    gpu_layers: int = -1
+    threads: int = 8
+    batch_size: int = 512
+    parallel: int = 1
+    startup_timeout_seconds: float = 180.0
+    health_timeout_seconds: float = 5.0
+
+    @property
+    def base_url(self) -> str:
+        host = f"[{self.host}]" if ":" in self.host else self.host
+        return f"http://{host}:{self.port}"
+
+    def validate(self, *, require_files: bool = False) -> None:
+        if not self.name.strip():
+            raise ValueError("model.name is required.")
+        if not self.host or any(character.isspace() for character in self.host):
+            raise ValueError(f"model.host is invalid: {self.host!r}")
+        if not 1 <= self.port <= 65535:
+            raise ValueError("model.port must be between 1 and 65535.")
+        for field_name in ("context_size", "threads", "batch_size", "parallel"):
+            if int(getattr(self, field_name)) <= 0:
+                raise ValueError(f"model.{field_name} must be positive.")
+        if self.startup_timeout_seconds <= 0 or self.health_timeout_seconds <= 0:
+            raise ValueError("model startup and health timeouts must be positive.")
+        if require_files:
+            if self.path is None or not self.path.is_file():
+                raise ValueError(f"model.path does not exist or is not a file: {self.path}")
+            if self.llama_server is None or not self.llama_server.is_file():
+                raise ValueError(
+                    "model.llama_server does not exist or is not a file: "
+                    f"{self.llama_server}"
+                )
+            import os
+            if not os.access(self.llama_server, os.X_OK):
+                raise ValueError(f"model.llama_server is not executable: {self.llama_server}")
+
 @dataclass(frozen=True)
 class ExperimentConfig:
     seed_prompts: tuple[str, ...]
+    seed_prompt_files: tuple[Path, ...] = ()
+    experiment_name: str = "eagle_experiment"
+    model: ModelConfig = field(default_factory=ModelConfig)
     generations: int = 1
     population_size: int = 4
-    mutation_suffix: str = "Adjust the strategy while keeping the generated Java agent simple and compilable."
     mutation_max_attempts: int = 3
     crossover_rate: float = 0.75
     mutation_rate: float = 0.85
     random_seed: int = 7
-    generation_backend: str = "mock"
-    alignment_backend: str = "mock"
-    llm_base_url: str = "http://localhost:8080"
-    llm_model: str = ""
+    execution_mode: str = "openai"
     llm_temperature: float = 0.2
     llm_max_tokens: int | None = None
-    llm_model_path: str | None = None
     match_commentator_enabled: bool = True
     match_commentator_temperature: float = 0.2
     match_commentator_sample_count: int = 10
@@ -62,12 +104,8 @@ class ExperimentConfig:
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
     tick_limit: int = 100
-    opponent: str = TRAINING_OPPONENT
-    matches_per_candidate: int = MATCHES_PER_CANDIDATE
-    map_path: str = DEFAULT_EVALUATION_MAPS[0]
     match_timeout_seconds: float = 120.0
     match_artifact_mode: str = "compact"
-    match_seeds: tuple[int, ...] = ()
     evaluation_maps: tuple[str, ...] = DEFAULT_EVALUATION_MAPS
     rounds_per_map: int = 3
     swap_player_sides: bool = True
@@ -75,6 +113,7 @@ class ExperimentConfig:
     max_prompt_chars: int = 4000
     max_prompt_lines: int = 80
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
+    generation_prompt_file: Path = DEFAULT_PROMPT_DIR / "initial_generation.txt"
     mock_score_base: float = 10.0
     mock_score_step: float = 1.0
     result_win_score: float = 100.0
@@ -84,8 +123,10 @@ class ExperimentConfig:
     resource_scale: float = 10.0
     unit_material_values: tuple[tuple[str, float], ...] = DEFAULT_UNIT_MATERIAL_VALUES
     stagnation_generations: int = 10
-    aos: AOSConfig = field(default_factory=AOSConfig)
-    raw_config: str = ""
+    reflection_operator_mode: ReflectionOperatorMode = ReflectionOperatorMode.AOS_HEAD2HEAD
+    strategy_reflection_probability: float = 0.20
+    code_reflection_probability: float = 0.80
+    aos_minimum_probability: float = 0.10
 
     @classmethod
     def from_file(cls, path: str | Path) -> "ExperimentConfig":
@@ -94,20 +135,61 @@ class ExperimentConfig:
         payload = json.loads(raw_config) if config_path.suffix.lower() == ".json" else yaml.safe_load(raw_config)
         if not isinstance(payload, dict):
             raise ValueError("Experiment config must contain a YAML mapping.")
-        return cls.from_mapping(payload, raw_config=raw_config)
+        return cls.from_mapping(payload, base_dir=Path(__file__).resolve().parents[1])
 
     @classmethod
-    def from_mapping(cls, payload: dict[str, Any], *, raw_config: str = "") -> "ExperimentConfig":
-        forbidden = {"llm_base_url", "llm_role_topology_path", "servers", "role_mapping", "endpoints"}
+    def from_mapping(
+        cls,
+        payload: dict[str, Any],
+        *,
+        base_dir: Path | None = None,
+    ) -> "ExperimentConfig":
+        schema_version = payload.get("schema_version")
+        if schema_version not in {None, "experiment-v1", "experiment-v2"}:
+            raise ValueError(f"Unsupported experiment schema version: {schema_version!r}")
+        if payload.get("algorithm", "lexicase") != "lexicase":
+            raise ValueError("The canonical EAGLE parent-selection algorithm is lexicase.")
+        if payload.get("application", "microrts") != "microrts":
+            raise ValueError("The configured application is not supported.")
+        if payload.get("objectives", {"opponent_cases": "maximize"}) != {"opponent_cases": "maximize"}:
+            raise ValueError("The evolutionary objective contract is the seven fixed opponent cases.")
+        if schema_version == "experiment-v2" and not isinstance(payload.get("model"), dict):
+            raise ValueError("experiment-v2 requires a model mapping.")
+        forbidden = {
+            "llm_base_url", "llm_model", "llm_model_path", "model_path",
+            "llm_role_topology_path", "servers", "role_mapping", "endpoints",
+        }
         found = sorted(forbidden.intersection(payload))
         if found:
             raise ValueError("Experiment config cannot define runtime endpoint fields: " + ", ".join(found))
-        seed_prompts = tuple(str(item) for item in payload.get("seed_prompts", []))
-        template_name = payload.get("seed_prompt_template")
-        if template_name:
-            seed_prompts = (get_seed_prompt_template(str(template_name)), *seed_prompts)
+        repository_root = base_dir or Path(__file__).resolve().parents[1]
+        obsolete_fields = {
+            "seed_prompts", "seed_prompt_template", "generation_prompt",
+            "generation_backend", "alignment_backend", "opponent",
+            "matches_per_candidate", "map_path",
+        }
+        obsolete = sorted(obsolete_fields.intersection(payload))
+        if obsolete:
+            raise ValueError(
+                "Obsolete experiment fields are not supported: " + ", ".join(obsolete)
+                + ". Store prompts in prompts/*.txt and use execution_mode."
+            )
+        seed_prompt_files = _parse_prompt_files(
+            payload.get("seed_prompt_files", (DEFAULT_PROMPT_DIR / "initial_strategy.txt",)),
+            repository_root,
+            "seed_prompt_files",
+        )
+        seed_prompts = tuple(path.read_text(encoding="utf-8").strip() for path in seed_prompt_files)
         if not seed_prompts:
-            raise ValueError("Experiment config must define at least one seed prompt or seed_prompt_template.")
+            raise ValueError("Experiment config must define at least one seed_prompt_files entry.")
+        generation_prompt_file_value = payload.get("generation_prompt_file")
+        generation_prompt_file = (
+            _parse_prompt_files((generation_prompt_file_value,), repository_root, "generation_prompt_file")[0]
+            if generation_prompt_file_value is not None
+            else DEFAULT_PROMPT_DIR / "initial_generation.txt"
+        )
+        generation_prompt = generation_prompt_file.read_text(encoding="utf-8").strip()
+        model = _parse_model(payload.get("model"), repository_root)
         llm_settings = payload.get("llm", {})
         if not isinstance(llm_settings, dict):
             raise ValueError("Experiment llm settings must be a mapping.")
@@ -120,6 +202,10 @@ class ExperimentConfig:
         evaluation_settings = payload.get("evaluation", {})
         if not isinstance(evaluation_settings, dict):
             raise ValueError("evaluation must be a mapping.")
+        if "matches_per_candidate" in evaluation_settings:
+            raise ValueError(
+                "evaluation.matches_per_candidate is derived from maps, rounds, sides, and opponents."
+            )
         evaluation_maps = _parse_evaluation_maps(
             evaluation_settings.get("maps", payload.get("evaluation_maps", DEFAULT_EVALUATION_MAPS))
         )
@@ -128,25 +214,41 @@ class ExperimentConfig:
         if "evaluation_opponents" in payload:
             raise ValueError("evaluation_opponents is fixed by eagle.opponent_cases and must not be overridden.")
         evaluation_opponents = DEFAULT_SEARCH_OPPONENTS
-        aos = AOSConfig.from_mapping(payload.get("aos"))
+        configured_opponents = evaluation_settings.get("opponents")
+        if configured_opponents is not None:
+            parsed_opponents = _parse_evaluation_opponents(configured_opponents)
+            if parsed_opponents != evaluation_opponents:
+                raise ValueError("evaluation.opponents must equal the canonical seven-opponent roster and weights.")
+        if "aos" in payload:
+            raise ValueError(
+                "The nested aos config is obsolete. Use reflection_operator_mode, "
+                "strategy_reflection_probability, code_reflection_probability, and "
+                "aos_minimum_probability at the top level."
+            )
+        reflection_operator_mode = ReflectionOperatorMode.parse(
+            payload.get("reflection_operator_mode", ReflectionOperatorMode.AOS_HEAD2HEAD.value)
+        )
         if "eagle_opponent" in payload:
             raise ValueError("eagle_opponent is obsolete; evolutionary evaluation uses only the seven fixed opponents.")
+        if "match_seeds" in payload:
+            raise ValueError(
+                "match_seeds is obsolete: MicroRTS never consumed the configured values. "
+                "Remove match_seeds and use round_index to identify repeated matches."
+            )
         return cls(
             seed_prompts=seed_prompts,
+            seed_prompt_files=seed_prompt_files,
+            experiment_name=str(payload.get("experiment_name", "eagle_experiment")),
+            model=model,
             generations=int(payload.get("generations", 1)),
             population_size=int(payload.get("population_size", max(1, len(seed_prompts)))),
-            mutation_suffix=str(payload.get("mutation_suffix", cls.mutation_suffix)),
             mutation_max_attempts=int(payload.get("mutation_max_attempts", cls.mutation_max_attempts)),
             crossover_rate=float(payload.get("crossover_rate", 0.75)),
             mutation_rate=float(payload.get("mutation_rate", 0.85)),
             random_seed=int(payload.get("random_seed", 7)),
-            generation_backend=str(payload.get("generation_backend", "mock")),
-            alignment_backend=str(payload.get("alignment_backend", payload.get("generation_backend", "mock"))),
-            llm_base_url=str(payload.get("llm_base_url", "http://localhost:8080")),
-            llm_model=str(payload.get("llm_model", "")),
+            execution_mode=str(payload.get("execution_mode", "openai")),
             llm_temperature=float(llm_settings.get("temperature", 0.2)),
             llm_max_tokens=None if max_tokens is None else int(max_tokens),
-            llm_model_path=None,
             match_commentator_enabled=bool(commentator_settings.get("enabled", True)),
             match_commentator_temperature=float(commentator_settings.get("temperature", 0.2)),
             match_commentator_sample_count=int(commentator_settings.get("sample_count", 10)),
@@ -154,19 +256,16 @@ class ExperimentConfig:
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
             tick_limit=int(payload.get("tick_limit", 100)),
-            opponent=TRAINING_OPPONENT,
-            matches_per_candidate=len(evaluation_maps) * rounds_per_map * 2 * len(evaluation_opponents),
-            map_path=str(payload.get("map_path", evaluation_maps[0])),
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
             match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
-            match_seeds=tuple(int(value) for value in payload.get("match_seeds", ())),
             evaluation_maps=evaluation_maps,
             rounds_per_map=rounds_per_map,
             swap_player_sides=swap_player_sides,
             evaluation_opponents=evaluation_opponents,
             max_prompt_chars=int(payload.get("max_prompt_chars", 4000)),
             max_prompt_lines=int(payload.get("max_prompt_lines", 80)),
-            generation_prompt=str(payload.get("generation_prompt", DEFAULT_GENERATION_PROMPT)),
+            generation_prompt=generation_prompt,
+            generation_prompt_file=generation_prompt_file,
             mock_score_base=float(payload.get("mock_score_base", 10.0)),
             mock_score_step=float(payload.get("mock_score_step", 1.0)),
             result_win_score=float(payload.get("result_win_score", 100.0)),
@@ -176,11 +275,16 @@ class ExperimentConfig:
             resource_scale=float(payload.get("resource_scale", 10.0)),
             unit_material_values=_parse_unit_material_values(payload.get("unit_material_values")),
             stagnation_generations=int(payload.get("stagnation_generations", 10)),
-            aos=aos,
-            raw_config=raw_config,
+            reflection_operator_mode=reflection_operator_mode,
+            strategy_reflection_probability=float(payload.get("strategy_reflection_probability", 0.20)),
+            code_reflection_probability=float(payload.get("code_reflection_probability", 0.80)),
+            aos_minimum_probability=float(payload.get("aos_minimum_probability", 0.10)),
         )
 
     def validate(self) -> None:
+        if not self.experiment_name.strip():
+            raise ValueError("experiment_name must not be empty.")
+        self.model.validate()
         if self.generations < 1:
             raise ValueError("generations must be at least 1.")
         if self.population_size < 1:
@@ -193,22 +297,17 @@ class ExperimentConfig:
             raise ValueError("mutation_max_attempts must be at least 1.")
         if self.stagnation_generations < 0:
             raise ValueError("stagnation_generations must be at least 0.")
-        self.aos.validate()
+        self.reflection_operator_settings.validate()
         if self.tick_limit < 1:
             raise ValueError("tick_limit must be at least 1.")
-        if self.alignment_backend not in {"mock", "openai"}:
-            raise ValueError("alignment_backend must be mock or openai.")
+        if self.execution_mode not in {"mock", "openai"}:
+            raise ValueError("execution_mode must be mock or openai.")
         if len(self.evaluation_maps) != 3:
             raise ValueError("evaluation.maps must contain exactly three maps.")
         if self.rounds_per_map != 3:
             raise ValueError("evaluation.rounds_per_map must be exactly 3.")
         if not self.swap_player_sides:
             raise ValueError("evaluation.swap_player_sides must be true.")
-        if self.matches_per_candidate != FIXED_MATCHES_PER_OPPONENT * len(self.evaluation_opponents):
-            raise ValueError(
-                "matches_per_candidate must equal 18 matches per fixed opponent "
-                f"({FIXED_MATCHES_PER_OPPONENT * len(self.evaluation_opponents)})."
-            )
         microrts_root = self.microrts_dir
         for map_path in self.evaluation_maps:
             if not (microrts_root / map_path).is_file():
@@ -231,10 +330,6 @@ class ExperimentConfig:
             raise ValueError("llm.match_commentator.temperature must not be negative.")
         if self.match_commentator_sample_count < 1:
             raise ValueError("llm.match_commentator.sample_count must be positive.")
-        if len(self.resolved_match_seeds) != self.rounds_per_map:
-            raise ValueError("match_seeds must contain exactly one seed per round.")
-        if self.resolved_match_seeds != tuple(range(self.rounds_per_map)):
-            raise ValueError("round seeds must be the canonical deterministic schedule 0, 1, 2.")
         from generation.agent_template import JavaTemplatePaths, validate_java_template
         if self.material_scale <= 0 or self.resource_scale <= 0:
             raise ValueError("material_scale and resource_scale must be greater than zero.")
@@ -244,11 +339,104 @@ class ExperimentConfig:
             raise ValueError("unit material values must be non-negative.")
         validate_java_template(JavaTemplatePaths(self.agent_template_path))
 
-    @property
-    def resolved_match_seeds(self) -> tuple[int, ...]:
-        """Return the stable round seed schedule shared by side-swapped pairs."""
+    def validate_runtime_files(self) -> None:
+        """Validate external model assets immediately before a production launch."""
 
-        return tuple(self.match_seeds) if self.match_seeds else tuple(range(self.rounds_per_map))
+        self.model.validate(require_files=True)
+
+    def to_mapping(self, *, mock: bool = False) -> dict[str, Any]:
+        """Return the complete resolved experiment document persisted by a run."""
+
+        return {
+            "schema_version": "experiment-v2",
+            "experiment_name": self.experiment_name,
+            "algorithm": "lexicase",
+            "application": "microrts",
+            "objectives": {"opponent_cases": "maximize"},
+            "model": {
+                "name": self.model.name,
+                "path": None if self.model.path is None else str(self.model.path),
+                "llama_server": None if self.model.llama_server is None else str(self.model.llama_server),
+                "host": self.model.host,
+                "port": self.model.port,
+                "context_size": self.model.context_size,
+                "gpu_layers": self.model.gpu_layers,
+                "threads": self.model.threads,
+                "batch_size": self.model.batch_size,
+                "parallel": self.model.parallel,
+                "startup_timeout_seconds": self.model.startup_timeout_seconds,
+                "health_timeout_seconds": self.model.health_timeout_seconds,
+            },
+            "seed_prompt_files": [str(path) for path in self.seed_prompt_files],
+            "generations": self.generations,
+            "population_size": self.population_size,
+            "mutation_max_attempts": self.mutation_max_attempts,
+            "crossover_rate": self.crossover_rate,
+            "mutation_rate": self.mutation_rate,
+            "random_seed": self.random_seed,
+            "execution_mode": "mock" if mock else self.execution_mode,
+            "reflection_operator_mode": self.reflection_operator_mode.value,
+            "strategy_reflection_probability": self.strategy_reflection_probability,
+            "code_reflection_probability": self.code_reflection_probability,
+            "aos_minimum_probability": self.aos_minimum_probability,
+            "llm": {
+                "temperature": self.llm_temperature,
+                "max_tokens": self.llm_max_tokens,
+                "match_commentator": {
+                    "enabled": self.match_commentator_enabled,
+                    "temperature": self.match_commentator_temperature,
+                    "sample_count": self.match_commentator_sample_count,
+                },
+            },
+            "microrts_dir": str(self.microrts_dir.resolve()),
+            "runs_dir": str(self.runs_dir.resolve()),
+            "agent_template_path": str(self.agent_template_path.resolve()),
+            "tick_limit": self.tick_limit,
+            "match_timeout_seconds": self.match_timeout_seconds,
+            "match_artifact_mode": self.match_artifact_mode,
+            "evaluation": {
+                "maps": list(self.evaluation_maps),
+                "rounds_per_map": self.rounds_per_map,
+                "swap_player_sides": self.swap_player_sides,
+                "opponents": [
+                    {"id": opponent_id, "weight": weight}
+                    for opponent_id, weight in self.evaluation_opponents
+                ],
+            },
+            "max_prompt_chars": self.max_prompt_chars,
+            "max_prompt_lines": self.max_prompt_lines,
+            "generation_prompt_file": str(self.generation_prompt_file),
+            "mock_score_base": self.mock_score_base,
+            "mock_score_step": self.mock_score_step,
+            "result_win_score": self.result_win_score,
+            "result_draw_score": self.result_draw_score,
+            "result_loss_score": self.result_loss_score,
+            "material_scale": self.material_scale,
+            "resource_scale": self.resource_scale,
+            "unit_material_values": dict(self.unit_material_values),
+            "stagnation_generations": self.stagnation_generations,
+        }
+
+    @property
+    def llm_base_url(self) -> str:
+        return self.model.base_url
+
+    @property
+    def llm_model(self) -> str:
+        return self.model.name
+
+    @property
+    def llm_model_path(self) -> str | None:
+        return None if self.model.path is None else str(self.model.path)
+
+    @property
+    def reflection_operator_settings(self) -> ReflectionOperatorSettings:
+        return ReflectionOperatorSettings(
+            mode=ReflectionOperatorMode.parse(self.reflection_operator_mode),
+            strategy_probability=self.strategy_reflection_probability,
+            code_probability=self.code_reflection_probability,
+            minimum_probability=self.aos_minimum_probability,
+        )
 
     @property
     def fixed_matches_per_opponent(self) -> int:
@@ -285,6 +473,57 @@ def _parse_evaluation_opponents(value: object) -> tuple[tuple[str, float], ...]:
     return tuple(parsed)
 
 
+def _parse_prompt_files(value: object, base_dir: Path, field_name: str) -> tuple[Path, ...]:
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f"{field_name} must be a list of prompt file paths.")
+    paths: list[Path] = []
+    for item in value:
+        path = Path(str(item)).expanduser()
+        path = path.resolve() if path.is_absolute() else (base_dir / path).resolve()
+        if path.suffix != ".txt":
+            raise ValueError(f"{field_name} entries must be .txt files: {path}")
+        if not path.is_file():
+            raise ValueError(f"{field_name} prompt file does not exist: {path}")
+        if not path.read_text(encoding="utf-8").strip():
+            raise ValueError(f"{field_name} prompt file must not be empty: {path}")
+        paths.append(path)
+    return tuple(paths)
+
+
+def _parse_model(value: object, base_dir: Path) -> ModelConfig:
+    if value is None:
+        return ModelConfig()
+    if not isinstance(value, dict):
+        raise ValueError("model must be a mapping.")
+
+    def path_value(key: str) -> Path | None:
+        raw = value.get(key)
+        if raw in (None, ""):
+            return None
+        path = Path(str(raw)).expanduser()
+        return path.resolve() if path.is_absolute() else (base_dir / path).resolve()
+
+    try:
+        result = ModelConfig(
+            name=str(value.get("name", "")).strip(),
+            path=path_value("path"),
+            llama_server=path_value("llama_server"),
+            host=str(value.get("host", "127.0.0.1")).strip(),
+            port=int(value.get("port", 8080)),
+            context_size=int(value.get("context_size", 32768)),
+            gpu_layers=int(value.get("gpu_layers", -1)),
+            threads=int(value.get("threads", 8)),
+            batch_size=int(value.get("batch_size", 512)),
+            parallel=int(value.get("parallel", 1)),
+            startup_timeout_seconds=float(value.get("startup_timeout_seconds", 180)),
+            health_timeout_seconds=float(value.get("health_timeout_seconds", 5)),
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid model configuration: {exc}") from exc
+    result.validate()
+    return result
+
+
 def _parse_evaluation_maps(value: object) -> tuple[str, ...]:
     if not isinstance(value, (list, tuple)):
         raise ValueError("evaluation.maps must be a list of map paths.")
@@ -313,50 +552,3 @@ def _repository_path(value: object | None, default: Path) -> Path:
         return default
     path = Path(str(value))
     return path if path.is_absolute() else DEFAULT_AGENT_TEMPLATE_PATH.parents[2] / path
-
-
-def parse_minimal_yaml(raw: str) -> dict[str, Any]:
-    """Parse the small YAML subset used by EAGLE configs."""
-
-    payload: dict[str, Any] = {}
-    current_key: str | None = None
-    for raw_line in raw.splitlines():
-        line = raw_line.split("#", 1)[0].rstrip()
-        if not line.strip():
-            continue
-        stripped = line.strip()
-        if stripped.startswith("- "):
-            if current_key is None:
-                raise ValueError("YAML list item has no key.")
-            payload.setdefault(current_key, []).append(_parse_scalar(stripped[2:].strip()))
-            continue
-        if ":" not in line:
-            raise ValueError(f"Unsupported YAML line: {raw_line}")
-        key, value = line.split(":", 1)
-        current_key = key.strip()
-        value = value.strip()
-        payload[current_key] = [] if value == "" else _parse_scalar(value)
-    return payload
-
-
-def _parse_scalar(value: str) -> Any:
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        if value[0] == '"':
-            try:
-                return json.loads(value)
-            except json.JSONDecodeError:
-                pass
-        return value[1:-1]
-    lowered = value.lower()
-    if lowered == "true":
-        return True
-    if lowered == "false":
-        return False
-    try:
-        return int(value)
-    except ValueError:
-        pass
-    try:
-        return float(value)
-    except ValueError:
-        return value

@@ -29,7 +29,7 @@ class ScriptedRewriteBackend:
 
 class Phase2BPromptRewriteTests(unittest.TestCase):
     def setUp(self):
-        self.config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"], "mutation_max_attempts": 2})
+        self.config = ExperimentConfig.from_mapping({"mutation_max_attempts": 2})
         self.candidate = Candidate(
             id="rewrite-child",
             strategy_prompt="old strategy",

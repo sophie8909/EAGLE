@@ -22,7 +22,7 @@ class ReflectionContextTests(unittest.TestCase):
         self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in objectives.values()))
 
     def test_evaluation_propagates_canonical_evidence_to_next_reflection(self):
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+        config = ExperimentConfig.from_mapping({})
         candidate = Candidate(strategy_prompt="Use economy before combat.")
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

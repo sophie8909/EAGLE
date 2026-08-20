@@ -14,14 +14,12 @@ from .reflection_context import ReflectionContext, coerce_structured_context
 
 REFLECTION_PROMPT_SCHEMA_VERSION = "reflection-prompt-v1"
 STRATEGY_BUDGETS = {
-    "mutation_task": 2_000,
     "current_strategy_prompt": 12_000,
     "aggregate_game_performance": 4_000,
     "parent_comparison": 2_000,
     "mutation_targets": 4_000,
     "opponent_commentaries": 18_000,
     "behaviors_to_preserve": 3_000,
-    "output_schema": 1_800,
 }
 CODE_BUDGETS = {
     "candidate_prompts": 8_000,
@@ -92,11 +90,6 @@ def build_strategy_reflection_prompt_bundle(candidate: Candidate, context: Refle
     truncated: list[str] = []
     omitted: list[str] = []
     aggregation = context.commentary_aggregation or {}
-    mutation_task = (
-        "Use Match Commentator evidence to identify repeated losing behaviors, their tick/phase evidence, "
-        "opponent/map/player-position dependence, preserved winning behaviors, and concrete conditional rules. "
-        "Produce a replacement strategy prompt; do not discuss Java, fitness, or raw traces."
-    )
     objective = context.objectives.to_dict() | {
         "commented_match_count": aggregation.get("commented_match_count", 0),
         "failed_commentary_count": aggregation.get("failed_commentary_count", 0),
@@ -105,25 +98,13 @@ def build_strategy_reflection_prompt_bundle(candidate: Candidate, context: Refle
     targets = aggregation.get("priority_strategy_changes") or []
     opponents = aggregation.get("opponent_summaries") or [item.to_dict() for item in context.opponents]
     preserve = aggregation.get("behaviors_to_preserve") or []
-    output_schema = {
-        "diagnosis": {
-            "primary_failure": "",
-            "secondary_failures": [],
-            "supporting_matches": [{"match_id": "", "ticks": []}],
-            "behaviors_to_preserve": [],
-        },
-        "mutation_plan": {"remove_or_reduce": [], "add_or_strengthen": [], "conditional_behaviors": []},
-        "revised_strategy_prompt": "",
-    }
     sections = {
-        "mutation_task": mutation_task,
         "current_strategy_prompt": f"candidate_id: {context.candidate.candidate_id}\n{context.candidate.strategy_prompt}",
         "aggregate_game_performance": _bounded_text(_json(objective), STRATEGY_BUDGETS["aggregate_game_performance"], section="aggregate_game_performance", truncated=truncated),
         "parent_comparison": _bounded_text(parent, STRATEGY_BUDGETS["parent_comparison"], section="parent_comparison", truncated=truncated),
         "mutation_targets": _bounded_text(_json(targets[:8]), STRATEGY_BUDGETS["mutation_targets"], section="mutation_targets", truncated=truncated),
         "opponent_commentaries": _bounded_text(_json(opponents), STRATEGY_BUDGETS["opponent_commentaries"], section="opponent_commentaries", truncated=truncated),
         "behaviors_to_preserve": _bounded_text(_json(preserve), STRATEGY_BUDGETS["behaviors_to_preserve"], section="behaviors_to_preserve", truncated=truncated),
-        "output_schema": _json(output_schema),
     }
     text = render_prompt("strategy_reflection", sections)
     return ReflectionPrompt(text, _metadata(sections, omitted, truncated, text))

@@ -1,0 +1,12 @@
+Evaluate how well the generated MicroRTS Java implements the intended strategy.
+Return only one JSON object with exactly:
+{"score": <number from 0 to 10>, "reason": "<concise evidence-based reason>"}
+
+Strategy prompt:
+$strategy_prompt
+
+Generated CandidateAgent.java:
+$generated_java
+
+Optional behavior summary:
+$behavior_summary

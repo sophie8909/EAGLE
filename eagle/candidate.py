@@ -7,32 +7,11 @@ from typing import Any
 from uuid import uuid4
 
 from .opponent_cases import LEXICASE_CASES, FAILED_OPPONENT_SCORE
+from .prompts import load_prompt
 
 
-ACTION_API_GUIDE = """Fixed action helpers already implemented in CandidateAgent.java:
-- commandMove(Unit unit, int x, int y)
-- commandHarvest(Unit worker, Unit resource, Unit base)
-- commandTrain(Unit producer, UnitType unitType)
-- commandBuild(Unit worker, UnitType buildingType, int x, int y)
-- commandAttack(Unit attacker, Unit target)
-- commandIdle(Unit unit)
-
-Fixed lookup helpers:
-- isIdleAlly(Unit unit, AgentContext context)
-- nearestEnemy(Unit source, AgentContext context)
-- nearestResource(Unit source, AgentContext context)
-- ownBase(AgentContext context)
-
-AgentContext exposes context.player, context.gs, and the snapshot context.units.
-Known UnitType fields are resourceType, workerType, lightType, heavyType, rangedType, baseType, and barracksType."""
-
-DEFAULT_GENERATION_PROMPT = (
-    "Generate one complete, compilable CandidateAgent.java source file. "
-    "Return the entire Java file from the package declaration through the final class brace. "
-    "Return raw Java only: no markdown fence, JSON wrapper, explanation, placeholder, ellipsis, or omitted section. "
-    "Preserve the package, class name, lifecycle methods, strategy-region comments, six action helpers, lookup helpers, and imports. "
-    "Implement the marked strategy region with deterministic Java and do not call network, file, subprocess, environment, or runtime LLM APIs."
-)
+ACTION_API_GUIDE = load_prompt("action_api_guide")
+DEFAULT_GENERATION_PROMPT = load_prompt("initial_generation")
 
 LINEAGE_SCHEMA_VERSION = "1.0"
 CANDIDATE_SNAPSHOT_SCHEMA_VERSION = "eagle-candidate-v2"

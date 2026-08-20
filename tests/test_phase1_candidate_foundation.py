@@ -5,12 +5,14 @@ import unittest
 from itertools import product
 from pathlib import Path
 
+import yaml
+
 from eagle.artifacts import (
     ARTIFACT_SCHEMA_VERSION,
     OBJECTIVE_FORMULA_VERSION,
     write_candidate_artifacts,
     write_candidate_inputs,
-    write_resolved_config,
+    write_run_config,
 )
 from eagle.candidate import Candidate, LINEAGE_SCHEMA_VERSION
 from eagle.config import ExperimentConfig
@@ -40,7 +42,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             root = Path(temp_dir)
             evaluation = evaluate_candidate(
                 Candidate(id="candidate-a", previous_code=previous_code),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
+                config=ExperimentConfig.from_mapping({}),
                 backend=MockGenerationBackend(),
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",
@@ -210,7 +212,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
     def test_every_generation_zero_candidate_has_seed_lineage(self) -> None:
         population = initialize_population(
             ExperimentConfig.from_mapping(
-                {"seed_prompts": ["seed"], "population_size": 4}
+                {"population_size": 4}
             )
         )
 
@@ -290,9 +292,6 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             config_path.write_text(
                 "\n".join(
                     (
-                        "seed_prompts:",
-                        '  - "seed-a"',
-                        '  - "seed-b"',
                         "generations: 2",
                         "population_size: 2",
                         "crossover_rate: 1.0",
@@ -315,7 +314,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             ]
 
         by_id = {record["candidate_id"]: record for record in lineage_records}
-        self.assertEqual(len(by_id), 4)
+        self.assertEqual(len(by_id), 6)
         for record in lineage_records:
             for parent_id in record["parent_ids"]:
                 self.assertIn(parent_id, by_id)
@@ -343,7 +342,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             root = Path(temp_dir)
             evaluation = evaluate_candidate(
                 Candidate(id="candidate-a", previous_code=previous_code),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
+                config=ExperimentConfig.from_mapping({}),
                 backend=MockGenerationBackend(),
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",
@@ -364,67 +363,41 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertEqual(phenotype, evaluation.candidate.generated_java)
         self.assertNotEqual(genotype, phenotype)
 
-    def test_resolved_config_reflects_parsed_values_and_runtime_overrides(self) -> None:
+    def test_run_config_is_the_resolved_single_source_of_truth(self) -> None:
         config = ExperimentConfig.from_mapping(
             {
-                "seed_prompts": ["seed"],
                 "generations": 4,
                 "population_size": 6,
                 "crossover_rate": 0.25,
                 "mutation_rate": 0.5,
                 "random_seed": 41,
-                "generation_backend": "openai",
-                "llm_model": "configured-model",
                 "tick_limit": 345,
-                "opponent": "ai.PassiveAI",
-                "matches_per_candidate": 3,
             }
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             run_dir = Path(temp_dir)
-            write_resolved_config(run_dir, config, mock=True)
-            payload = json.loads(
-                (run_dir / "resolved_config.json").read_text(encoding="utf-8")
-            )
+            write_run_config(run_dir, config, mock=True)
+            payload = yaml.safe_load((run_dir / "config.yaml").read_text(encoding="utf-8"))
 
         self.assertEqual(payload["population_size"], 6)
-        self.assertEqual(payload["generation_count"], 4)
+        self.assertEqual(payload["generations"], 4)
         self.assertEqual(payload["crossover_rate"], 0.25)
         self.assertEqual(payload["mutation_rate"], 0.5)
+        self.assertEqual(payload["reflection_operator_mode"], "aos_head2head")
+        self.assertEqual(payload["strategy_reflection_probability"], 0.2)
+        self.assertEqual(payload["code_reflection_probability"], 0.8)
+        self.assertEqual(payload["aos_minimum_probability"], 0.1)
         self.assertEqual(payload["stagnation_generations"], 10)
-        self.assertEqual(payload["matches_per_candidate"], 126)
-        self.assertEqual(payload["opponent"], "ai.abstraction.LightRush")
-        self.assertEqual(
-            [item["class_name"] for item in payload["evaluation_opponents"]],
-            [
-                "ai.abstraction.LightRush",
-                "ai.abstraction.HeavyRush",
-                "ai.abstraction.WorkerRush",
-                "ai.abstraction.submissions.allibot.alli",
-                "mayariBot.mayari",
-                "ai.coac.CoacAI",
-                "ai.tma.TMA",
-            ],
-        )
-        self.assertEqual(payload["max_cycles"], 345)
-        self.assertEqual(payload["ea_random_seed"], 41)
-        self.assertEqual(payload["llm_backend"], "mock")
-        self.assertIsNone(payload["llm_model"])
-        self.assertIsNone(payload["llm_temperature"])
-        self.assertEqual(payload["commentator"]["enabled"], True)
-        self.assertIsNone(payload["model_path"])
-        self.assertEqual(payload["retry_policy"]["max_attempts"], 1)
-        self.assertEqual(payload["artifact_schema_version"], ARTIFACT_SCHEMA_VERSION)
-        self.assertEqual(
-            payload["objective_formula_version"],
-            OBJECTIVE_FORMULA_VERSION,
-        )
-        self.assertRegex(payload["git_commit_hash"], r"^[0-9a-f]{40}$")
-        self.assertEqual(len(payload["microrts_match_seeds"]), 3)
-        self.assertEqual(len(set(payload["microrts_match_seeds"])), 3)
-        self.assertIsNone(payload["prompt_version"])
-        self.assertNotIn("microrts_match_seeds", payload["unsupported"])
-        self.assertIn("prompt_version", payload["unsupported"])
+        self.assertEqual(payload["tick_limit"], 345)
+        self.assertEqual(payload["random_seed"], 41)
+        self.assertEqual(payload["execution_mode"], "mock")
+        self.assertTrue(payload["llm"]["match_commentator"]["enabled"])
+        self.assertFalse((run_dir / "resolved_config.json").exists())
+        self.assertNotIn("match_seeds", payload)
+
+    def test_obsolete_match_seeds_are_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "match_seeds is obsolete"):
+            ExperimentConfig.from_mapping({"match_seeds": [0, 1, 2]})
 
     def test_generic_metadata_is_not_needed_to_reconstruct_lineage(self) -> None:
         candidate = Candidate(

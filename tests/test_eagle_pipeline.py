@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from eagle.artifacts import write_candidate_artifacts
 from eagle.candidate import Candidate
-from eagle.config import ExperimentConfig, parse_minimal_yaml
+from eagle.config import ExperimentConfig
 from eagle.crossover import CrossoverContext, crossover
 from eagle.evaluation import evaluate_candidate, print_progress
 from eagle.mutation import MutationContext
@@ -28,7 +28,7 @@ from evaluation.game_performance import (
     tick_telemetry,
 )
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
-from evaluation.microrts_runner import MatchResult, persist_match_artifacts, run_microrts_match
+from evaluation.runtime_evaluation import MatchResult, run_microrts_match
 from evaluation.objectives import build_objectives
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE as FAILED_GAME_PERFORMANCE, LEXICASE_CASES
 from evaluation.code_quality import CodeQualityBreakdown
@@ -36,7 +36,6 @@ from generation.agent_template import (
     STRATEGY_START_MARKER,
     JavaTemplatePaths,
     load_java_template,
-    microrts_blank_strategy_prompt,
     render_blank_strategy_agent,
 )
 from generation.backend import GenerationBackend, MockGenerationBackend, generated_class_name
@@ -104,21 +103,8 @@ class EaglePipelineTests(unittest.TestCase):
         self.assertIn("complexity_penalty=0.0", text)
         self.assertIn("game_performance_matches=[100.0, -90.0]", text)
         self.assertIn("aggregate_game_performance=None", text)
-    def test_parse_minimal_yaml(self) -> None:
-        payload = parse_minimal_yaml(
-            """
-seed_prompts:
-  - "Generate an agent."
-generations: 2
-population_size: 3
-"""
-        )
-        self.assertEqual(payload["seed_prompts"], ["Generate an agent."])
-        self.assertEqual(payload["generations"], 2)
-        self.assertEqual(payload["population_size"], 3)
-
     def test_config_defaults_limit_evolved_prompt_length(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
+        config = ExperimentConfig.from_mapping({})
         self.assertEqual(config.max_prompt_chars, 4000)
         self.assertEqual(config.max_prompt_lines, 80)
         self.assertEqual(config.match_commentator_sample_count, 10)
@@ -128,23 +114,9 @@ population_size: 3
 
     def test_strategy_reflection_sample_budget_is_configurable(self) -> None:
         config = ExperimentConfig.from_mapping({
-            "seed_prompts": ["Generate an agent."],
             "llm": {"match_commentator": {"sample_count": 6}},
         })
         self.assertEqual(config.match_commentator_sample_count, 6)
-
-    def test_training_opponent_defaults_to_lightrush_player1(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
-        self.assertEqual(config.opponent, "ai.abstraction.LightRush")
-
-    def test_training_config_ignores_non_lightrush_opponent(self) -> None:
-        config = ExperimentConfig.from_mapping(
-            {
-                "seed_prompts": ["Generate an agent."],
-                "opponent": "ai.PassiveAI",
-            }
-        )
-        self.assertEqual(config.opponent, "ai.abstraction.LightRush")
 
     def test_training_match_command_uses_candidate_player0_and_lightrush_player1(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -256,7 +228,7 @@ population_size: 3
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
+            config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
                 Candidate(strategy_prompt="Generate an agent."),
                 config=config,
@@ -283,7 +255,7 @@ population_size: 3
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
+            config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
                 Candidate(strategy_prompt="Generate an agent."),
                 config=config,
@@ -303,13 +275,6 @@ population_size: 3
         self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
         self.assertIn("strategy region", " ".join(evaluation.strategy_region_score_result.strategy_region_validation["agent_strategy_region"].errors).lower())
 
-    def test_seed_prompt_template_expands_to_blank_strategy_prompt(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompt_template": "microrts_blank_strategy_agent"})
-        self.assertEqual(len(config.seed_prompts), 1)
-        self.assertEqual(config.seed_prompts[0], microrts_blank_strategy_prompt())
-        self.assertIn("one CandidateAgent.java file", config.seed_prompts[0])
-        self.assertIn("six fixed action helpers", config.seed_prompts[0])
-
     def test_mock_search_writes_lexicase_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -317,31 +282,37 @@ population_size: 3
             config_path.write_text(
                 "\n".join(
                     [
-                        "seed_prompts:",
-                        '  - "Generate a Java MicroRTS economy agent."',
-                        '  - "Generate a Java MicroRTS defensive agent."',
                         "generations: 2",
                         "population_size: 3",
                         "crossover_rate: 1.0",
                         "mutation_rate: 1.0",
-                        'generation_backend: "mock"',
-                        'alignment_backend: "mock"',
                         f'runs_dir: "{(root / "runs").as_posix()}"',
-                        "matches_per_candidate: 1",
                     ]
                 ),
                 encoding="utf-8",
             )
             config = ExperimentConfig.from_file(config_path)
             result = run_search(config, config_path=config_path, mock=True, run_id="test_run")
+            self.assertEqual(
+                {path.name for path in result.run_dir.iterdir()},
+                {
+                    "manifest.json", "config.yaml", "summary.json", "timing.jsonl",
+                    "generations", "candidates", "generated_agents", "classes",
+                    "archives", "llm_logs", "final_test",
+                },
+            )
             self.assertTrue((result.run_dir / "config.yaml").exists())
             self.assertTrue((result.run_dir / "candidates").is_dir())
             self.assertTrue((result.run_dir / "generated_agents").is_dir())
             self.assertFalse((result.run_dir / "results.jsonl").exists())
+            self.assertFalse((result.run_dir / "source_config").exists())
+            self.assertFalse((result.run_dir / "source_config.json").exists())
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["objectives"], list(LEXICASE_CASES))
-            self.assertEqual(len(summary["final_population"]), 3)
-            self.assertTrue((result.run_dir / "resolved_config.json").exists())
+            self.assertEqual(len(summary["final_population_ids"]), 3)
+            self.assertFalse((result.run_dir / "resolved_config.json").exists())
+            self.assertFalse((result.run_dir / "prompt_snapshot.json").exists())
+            self.assertFalse((result.run_dir / "final_population.json").exists())
             candidate_dir = next((result.run_dir / "candidates").iterdir())
             self.assertTrue((candidate_dir / "lineage.json").exists())
             self.assertTrue((candidate_dir / "genotype" / "strategy_prompt.txt").exists())
@@ -350,7 +321,7 @@ population_size: 3
             )
             self.assertFalse((candidate_dir / "CandidateBehaviors.java").exists())
             self.assertTrue((candidate_dir / "compilation" / "compilation_result.json").exists())
-            self.assertTrue((candidate_dir / "evaluation" / "matches.json").exists())
+            self.assertFalse((candidate_dir / "evaluation" / "matches.json").exists())
             self.assertTrue((candidate_dir / "evaluation" / "game_performance.json").exists())
             self.assertTrue((candidate_dir / "evaluation" / "code_quality.json").exists())
             quality = json.loads((candidate_dir / "evaluation" / "code_quality.json").read_text(encoding="utf-8"))
@@ -361,13 +332,12 @@ population_size: 3
                 round(100 - quality["code_quality_details"]["complexity_penalty"], 6),
             )
             self.assertTrue((candidate_dir / "evaluation" / "objectives.json").exists())
-            self.assertTrue((candidate_dir / "candidate_result.json").exists())
-            individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
+            self.assertTrue((candidate_dir / "candidate.json").exists())
+            individual = json.loads((candidate_dir / "candidate.json").read_text(encoding="utf-8"))
             self.assertNotIn("prompt_length", individual["fitness_objectives"])
             metrics = [
-                json.loads(line)
-                for line in (result.run_dir / "generation_metrics.jsonl").read_text(encoding="utf-8").splitlines()
-                if line.strip()
+                json.loads(path.read_text(encoding="utf-8"))
+                for path in sorted((result.run_dir / "generations").glob("generation_*.json"))
             ]
             generation_one_aos = next(item["aos"] for item in metrics if item["generation"] == 1)
             self.assertEqual(
@@ -380,7 +350,7 @@ population_size: 3
             self.assertTrue(list((result.run_dir / "candidates").glob("*/aos/reward.json")))
             aos_reward_path = next((result.run_dir / "candidates").glob("*/aos/reward.json"))
             aos_reward = json.loads(aos_reward_path.read_text(encoding="utf-8"))
-            self.assertEqual(aos_reward["schema_version"], "eagle-aos-reward-v2")
+            self.assertEqual(aos_reward["schema_version"], "eagle-aos-reward-v3")
             self.assertEqual(aos_reward["offspring_id"], aos_reward_path.parents[1].name)
             self.assertIn(aos_reward["operator"], {"strategy", "code"})
             self.assertIn(aos_reward["operator_id"], generation_one_aos["operators"])
@@ -388,7 +358,7 @@ population_size: 3
                 aos_reward_path.parents[2].joinpath(aos_reward["comparison_parent_id"]).is_dir()
             )
             self.assertEqual(aos_reward["head_to_head"]["total_matches"], 18)
-            self.assertEqual(aos_reward["reward_source"], "parent_vs_offspring")
+            self.assertEqual(aos_reward["reward_source"], "head2head")
             self.assertIn("operator_quality_before", aos_reward)
             self.assertIn("operator_quality_after", aos_reward)
 
@@ -411,12 +381,8 @@ population_size: 3
             config_path.write_text(
                 "\n".join(
                     [
-                        "seed_prompts:",
-                        '  - "seed"',
                         "generations: 10",
                         "population_size: 1",
-                        'generation_backend: "mock"',
-                        'alignment_backend: "mock"',
                         "stagnation_generations: 2",
                         f'runs_dir: "{(root / "runs").as_posix()}"',
                     ]
@@ -747,38 +713,13 @@ population_size: 3
             + breakdown.final_resource_diff,
         )
 
-    def test_persistence_failure_reports_error_without_false_loss(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            round_state_dir = root / "round_states"
-            round_state_dir.mkdir()
-            (round_state_dir / "round_000000.log").write_text(
-                "current time 0 p0 player 0(5) p1 player 1(5)\n",
-                encoding="utf-8",
-            )
-            telemetry_path = root / "telemetry.json"
-            telemetry_path.mkdir()
-            telemetry, summary, error = persist_match_artifacts(
-                raw_result={"winner": 0, "final_tick": 0, "result": "p0_win"},
-                round_state_dir=round_state_dir,
-                replay_path=root / "replay.xml",
-                telemetry_path=telemetry_path,
-                summary_path=root / "summary.json",
-                match_dir=root,
-                tick_limit=10,
-                scoring_config=GamePerformanceConfig(),
-            )
-        self.assertIsNotNone(error)
-        self.assertEqual(summary["result"], "p0_win")
-        self.assertEqual(telemetry.performance.result_score, 100)
-
     def test_backend_failure_gets_failed_game_performance(self) -> None:
         class FailingBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 raise RuntimeError("backend down")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            evaluation = evaluate_candidate(Candidate(strategy_prompt="Generate an agent."), config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}), backend=FailingBackend(), generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
+            evaluation = evaluate_candidate(Candidate(strategy_prompt="Generate an agent."), config=ExperimentConfig.from_mapping({}), backend=FailingBackend(), generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Backend request failure")
         self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in evaluation.candidate.fitness_objectives.values()))
@@ -793,7 +734,7 @@ population_size: 3
             candidate = Candidate(id="badjson", strategy_prompt="Generate an agent.")
             evaluation = evaluate_candidate(
                 candidate,
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}),
+                config=ExperimentConfig.from_mapping({}),
                 backend=NonJavaBackend(),
                 generated_agents_dir=root / "generated_agents",
                 classes_dir=root / "classes",

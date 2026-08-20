@@ -47,7 +47,7 @@ def write_match_trace(
     metadata_path = match_dir / "match_metadata.json"
     trace_path = match_dir / "match_trace.jsonl.gz"
     integrity_path = match_dir / "match_trace_integrity.json"
-    result_path = match_dir / "match_result.json"
+    result_path = match_dir / "result.json"
 
     static = {
         "trace_schema_version": TRACE_SCHEMA_VERSION,
@@ -56,7 +56,7 @@ def write_match_trace(
     }
     for field in (
         "match_id", "candidate_id", "candidate_side", "opponent_name", "opponent_agent",
-        "map_name", "map_width", "map_height", "terrain", "round_index", "generation_index", "seed",
+        "map_name", "map_width", "map_height", "terrain", "round_index", "generation_index",
         "evaluation_configuration",
     ):
         static.setdefault(field, None)
@@ -67,7 +67,8 @@ def write_match_trace(
     try:
         with gzip.open(trace_path, "wt", encoding="utf-8", newline="\n") as handle:
             for path in sorted(round_state_dir.glob("round_*.log")):
-                row = _parse_round_state(path.read_text(encoding="utf-8"))
+                raw_state = path.read_text(encoding="utf-8", errors="replace")
+                row = _parse_round_state(raw_state)
                 if row is None:
                     continue
                 final_tick = result.get("final_tick")
@@ -80,7 +81,15 @@ def write_match_trace(
                 ticks.append(int(row["tick"]))
                 row.pop("map_width", None)
                 row.pop("map_height", None)
+                row["state_source"] = path.name
+                row["raw_state"] = raw_state
                 handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+                handle.write("\n")
+            if not ticks:
+                fallback_tick = int(result.get("final_tick") or expected_last_tick or 0)
+                fallback = _fallback_row(result, fallback_tick)
+                ticks.append(fallback_tick)
+                handle.write(json.dumps(fallback, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
                 handle.write("\n")
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
         write_error = str(exc) or type(exc).__name__
@@ -135,6 +144,34 @@ def iter_match_trace(path: Path) -> Iterator[dict[str, Any]]:
                 if not isinstance(value, dict):
                     raise ValueError("match trace rows must be JSON objects")
                 yield value
+
+
+def _fallback_row(result: dict[str, Any], tick: int) -> dict[str, Any]:
+    players = result.get("players") or {}
+    snapshots = []
+    for player_id in (0, 1):
+        values = players.get(f"p{player_id}") or {}
+        snapshots.append({
+            "player_id": player_id,
+            "resources": values.get("resource_total"),
+            "unit_count": values.get("unit_count", 0),
+            "worker_count": 0,
+            "combat_unit_count": 0,
+            "building_count": 0,
+            "base_count": 0,
+            "barracks_count": 0,
+            "unit_types": dict(values.get("unit_types") or {}),
+        })
+    return {
+        "tick": tick,
+        "game_time": tick,
+        "terminal": True,
+        "winner": result.get("winner"),
+        "players": snapshots,
+        "units": [],
+        "state_source": "result_json_fallback",
+        "raw_state": None,
+    }
 
 
 def _parse_round_state(text: str) -> dict[str, Any] | None:

@@ -17,13 +17,13 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
-from evaluation.match_logs import iter_match_log
+from evaluation.match_trace import iter_match_trace
 
 from .candidate import Candidate
 from .llm import truncate_prompt
 from .mutation import ReflectionContext, utc_now
 from .opponent_cases import LEXICASE_CASES
-from .prompts import normalize_prompt
+from .prompts import normalize_prompt, render_prompt
 from .strategy_diversity import build_strategy_niche, normalize_strategy_signature
 
 
@@ -37,14 +37,6 @@ STRATEGY_MUTATION_INTENT_DISTRIBUTION = (
     ("STRUCTURAL", 0.20),
     ("ALTERNATIVE", 0.15),
 )
-COACH_INTENT_INSTRUCTIONS = {
-    "REFINE": "Preserve the parent's overall strategic identity. Modify only the strategic behaviors required to address the highest-priority findings in the selected match diagnoses.",
-    "COUNTER": "Focus on opponent behavior identified by the selected match diagnoses as causing important failures. Create concrete conditional responses while preserving unrelated successful strategy components.",
-    "STRUCTURAL": "You may substantially reorganize the opening, economy, production, attack timing, expansion, or defense strategy. Do not merely rewrite the parent using different wording; use the evidence to create a materially different strategic structure.",
-    "ALTERNATIVE": "Solve the diagnosed problems using a different strategic approach from the parent. Avoid reproducing the parent's core strategy unless the evidence makes it necessary.",
-}
-
-
 # Mutation-intent selection is part of the EA RNG stream; the role pipeline
 # below consumes that selected intent but never creates a second RNG system.
 def normalize_mutation_intent(value: object) -> str | None:
@@ -208,7 +200,7 @@ class StrategyReflectionPipeline:
         selected_items = [by_id[match_id] for match_id in selection["selected_match_ids"] if match_id in by_id]
         for item in selected_items:
             match_id = str(item.get("match_id") or f"match_{item.get('match_index', len(analyses)):03d}")
-            log_path = _resolve_path(item.get("match_log_path"))
+            log_path = _resolve_path(item.get("match_trace_path"))
             if log_path is None or not log_path.exists():
                 failures.append(f"{match_id}: commentary unavailable")
                 _write_status(artifact_dir, match_id, "unavailable", failures[-1])
@@ -271,7 +263,7 @@ class StrategyReflectionPipeline:
             return _failed_result(candidate, artifact_dir, f"coach: {exc}", analyses)
 
     def _commentate(self, candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, log_path: Path, artifact_dir: Path | None) -> MatchAnalysis:
-        raw_log = list(iter_match_log(log_path))
+        raw_log = list(iter_match_trace(log_path))
         if not raw_log:
             raise ValueError("match log contains no ticks")
         request = _commentator_prompt(candidate, context, item, match_id, raw_log)
@@ -609,7 +601,7 @@ def _match_outcome(item: dict[str, Any]) -> str | None:
 def _delete_raw_match_artifacts(item: dict[str, Any]) -> None:
     """Delete temporary commentator logs while preserving compact score artifacts."""
 
-    paths = [item.get("match_log_path"), item.get("match_trace_path")]
+    paths = [item.get("match_trace_path")]
     match_dir: Path | None = None
     for value in paths:
         if value:
@@ -627,48 +619,28 @@ def _delete_raw_match_artifacts(item: dict[str, Any]) -> None:
 
 # Role prompt construction and response parsing -----------------------------
 def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, raw_log: list[dict[str, Any]]) -> str:
-    return "\n".join([
-        "ROLE: match_commentator",
-        "You are the Match Commentator for an evolutionary MicroRTS team.",
-        "Analyze exactly one completed match only. Analyze both candidate and opponent.",
-        "Do not generalize this single match to the candidate's entire strategy.",
-        "The Coach will receive this local diagnosis together with a deterministic global evaluation summary.",
-        "Do not modify strategy, write Java, calculate fitness, or act as Coach.",
-        f"match_id: {json.dumps(match_id)}",
-        f"opponent: {json.dumps(item.get('opponent_name') or item.get('opponent_id') or item.get('opponent') or 'unknown')}",
-        f"map: {json.dumps(item.get('map_name') or item.get('map_id') or item.get('map') or 'unknown')}",
-        f"player_position: {json.dumps(_player_position(item))}",
-        f"result: {json.dumps(_match_outcome(item) or 'unknown')}",
-        f"candidate_basic_strategy: {json.dumps(candidate.strategy_prompt, ensure_ascii=False)}",
-        f"opponent_basic_strategy: {json.dumps({'identity': item.get('opponent_name') or item.get('opponent') or 'unknown', 'class': item.get('opponent') or 'unknown'}, ensure_ascii=False, sort_keys=True)}",
-        f"complete_match_record: {json.dumps(item, ensure_ascii=False, sort_keys=True)}",
-        "Return a concise evidence-based tactical diagnosis for this match.",
-        "Return the compact match_analysis JSON schema.",
-        "raw_game_log: " + json.dumps(raw_log, ensure_ascii=False, sort_keys=True),
-    ])
+    return render_prompt("match_commentator", {
+        "match_id": json.dumps(match_id),
+        "opponent": json.dumps(item.get("opponent_name") or item.get("opponent_id") or item.get("opponent") or "unknown"),
+        "map": json.dumps(item.get("map_name") or item.get("map_id") or item.get("map") or "unknown"),
+        "player_position": json.dumps(_player_position(item)),
+        "result": json.dumps(_match_outcome(item) or "unknown"),
+        "candidate_basic_strategy": json.dumps(candidate.strategy_prompt, ensure_ascii=False),
+        "opponent_basic_strategy": json.dumps({
+            "identity": item.get("opponent_name") or item.get("opponent") or "unknown",
+            "class": item.get("opponent") or "unknown",
+        }, ensure_ascii=False, sort_keys=True),
+        "complete_match_record": json.dumps(item, ensure_ascii=False, sort_keys=True),
+        "raw_game_log": json.dumps(raw_log, ensure_ascii=False, sort_keys=True),
+    })
 
 
 def _coach_prompt(parent_strategy: str, payload: dict[str, Any], mutation_intent: str) -> str:
-    return "\n".join([
-        "ROLE: coach",
-        "You are the Coach of an evolutionary MicroRTS team.",
-        "Revise the parent strategy prompt from the deterministic Global Evaluation Summary and the selected Match Commentator diagnoses.",
-        "The Global Evaluation Summary provides breadth across all evaluated matches; Commentator diagnoses provide depth for representative individual matches.",
-        "Treat fully beaten opponents as capabilities that must be preserved.",
-        "Prioritize recurring failures across different opponents and maps, preserve successful behavior, and avoid fixing one sampled game by introducing regressions elsewhere.",
-        "Prefer general strategy rules when multiple diagnoses share a cause; use opponent-specific branching only when necessary.",
-        "Do not write Java or implementation instructions.",
-        "Return a replacement strategy prompt with concrete conditional behavioral rules.",
-        f"Mutation Intent: {mutation_intent}",
-        COACH_INTENT_INSTRUCTIONS[mutation_intent],
-        "Return exactly one JSON object with strategy_changes, strategy_signature, parent_strategy_prompt, and new_strategy_prompt.",
-        "strategy_changes must contain preserved, removed_or_reduced, and added_or_strengthened arrays.",
-        "strategy_signature must contain short categorical opening, economy, production, attack_timing, combat_style, expansion, defense, and target_priority fields.",
-        "Do not append reflection history recursively.",
-        "Do not write Java, discuss implementation details, or return analysis outside the schema.",
-        "parent_strategy_prompt: " + json.dumps(parent_strategy, ensure_ascii=False),
-        "commentator_diagnoses_and_evaluation_metadata: " + json.dumps(payload, ensure_ascii=False, sort_keys=True),
-    ])
+    prompt_id = f"coach_{mutation_intent.lower()}"
+    return render_prompt(prompt_id, {
+        "parent_strategy_prompt": json.dumps(parent_strategy, ensure_ascii=False),
+        "commentator_diagnoses_and_evaluation_metadata": json.dumps(payload, ensure_ascii=False, sort_keys=True),
+    })
 
 
 def _coach_payload(candidate: Candidate, context: ReflectionContext, analyses: list[MatchAnalysis], selection: dict[str, Any], failures: list[str], global_summary: dict[str, Any]) -> dict[str, Any]:

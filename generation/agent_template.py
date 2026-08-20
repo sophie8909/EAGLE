@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from eagle.prompts import load_prompt
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_AGENT_TEMPLATE_PATH = (
@@ -23,14 +25,7 @@ ACTION_HELPER_METHODS: tuple[str, ...] = (
     "commandAttack",
     "commandIdle",
 )
-MICRORTS_BLANK_STRATEGY_PROMPT = (
-    "Design one complete MicroRTS strategy in one CandidateAgent.java file. "
-    "The Java template marks the editable strategy region with "
-    "EAGLE_AGENT_STRATEGY_START and EAGLE_AGENT_STRATEGY_END comments. "
-    "Control units through the six fixed action helpers: commandMove, "
-    "commandHarvest, commandTrain, commandBuild, commandAttack, and commandIdle. "
-    "Return the entire compilable Java source file, not JSON or partial method bodies."
-)
+MICRORTS_BLANK_STRATEGY_PROMPT = load_prompt("initial_strategy")
 
 
 @dataclass(frozen=True)
@@ -104,12 +99,6 @@ def extract_strategy_region(source: str) -> str:
     if not region:
         raise ValueError("Agent strategy region must not be empty.")
     return region
-
-
-def get_seed_prompt_template(name: str) -> str:
-    if name == "microrts_blank_strategy_agent":
-        return MICRORTS_BLANK_STRATEGY_PROMPT
-    raise ValueError(f"Unknown seed_prompt_template: {name}")
 
 
 def microrts_blank_strategy_prompt() -> str:

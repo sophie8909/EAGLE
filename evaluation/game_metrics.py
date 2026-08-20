@@ -14,7 +14,7 @@ from .game_performance import (
     telemetry_temporal_summary,
     tick_from_result,
 )
-from .microrts_runner import MatchResult
+from .runtime_evaluation import MatchResult
 FAILED_GAME_PERFORMANCE = -1000.0
 OBJECTIVE_FORMULA_VERSION = "eagle-objectives-phase4-v1"
 
@@ -445,7 +445,6 @@ def summarize_match(result: MatchResult) -> dict[str, Any]:
         "match_id": match_id,
         "candidate_id": getattr(result, "candidate_id", None),
         "candidate_side": "p0" if getattr(result, "candidate_player", 0) == 0 else "p1",
-        "seed": result.seed,
         "opponent_weight": getattr(result, "opponent_weight", 1.0),
         "winner": _winner(result),
         "result": result.raw_result.get("result"),
@@ -463,7 +462,6 @@ def summarize_match(result: MatchResult) -> dict[str, Any]:
         "match_commentary_path": (
             None if getattr(result, "match_dir", None) is None else f"{result.match_dir}/commentary/match_commentary.json"
         ),
-        "match_log_path": getattr(result, "match_log_path", None),
     }
 
 
@@ -534,18 +532,6 @@ def match_to_dict(result: MatchResult) -> dict[str, Any]:
         "final_cycle": result.final_cycle,
         "raw_result": result.raw_result,
     }
-
-
-def average_breakdowns(results: list[MatchResult]) -> dict[str, float]:
-    breakdowns = [result.performance_breakdown for result in results if result.performance_breakdown]
-    return {
-        "result_score": _mean([item.result_score for item in breakdowns]),
-        "unit_material_score": _mean([item.unit_material_score for item in breakdowns]),
-        "final_resource_score": _mean([item.final_resource_score for item in breakdowns]),
-        "survival_score": _mean([item.survival_score for item in breakdowns]),
-        "shaping_score": _mean([item.shaping_score for item in breakdowns]),
-        "match_score": _mean([item.match_score for item in breakdowns]),
-    } if breakdowns else {}
 
 
 def fallback_performance_breakdown(result: MatchResult, payload: dict[str, Any]) -> GamePerformanceBreakdown:

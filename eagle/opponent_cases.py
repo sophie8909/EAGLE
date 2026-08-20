@@ -36,10 +36,3 @@ def aggregate_game_performance(scores: Mapping[str, float]) -> float:
         / OPPONENT_WEIGHT_SUM,
         6,
     )
-
-
-def opponent_score_vector(scores: Mapping[str, float], *, failed: bool = False) -> dict[str, float]:
-    """Return all lexicase cases, using the canonical failure sentinel."""
-
-    fallback = FAILED_OPPONENT_SCORE if failed else 0.0
-    return {case: float(scores.get(case, fallback)) for case in LEXICASE_CASES}

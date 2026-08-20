@@ -1,0 +1,29 @@
+EAGLE Code Reflection stage.
+
+Analyze the complete-file generation outcome using only the concise structured evidence
+below. Return one JSON object and no Markdown, replacement Java, patch, diff, or prose.
+
+Candidate prompts:
+$candidate_prompts
+
+Generated Java (bounded; failing-function context is preferred):
+$generated_code
+
+Code diagnostics:
+$code_diagnostics
+
+Compact gameplay note, only when needed:
+$gameplay_note
+
+Evolution context:
+$evolution
+
+Most recent relevant reflection, when available:
+$previous_reflection
+
+Answer the five code questions: identify violated implementation constraints; missing or
+incorrect functions; generation instructions that caused failure; instructions to
+preserve; and one concise replacement code-generation prompt.
+
+Required JSON shape:
+{"analysis":{"implementation_failures":[],"constraint_failures":[],"priority_changes":[]},"revised_code_generation_prompt":"..."}

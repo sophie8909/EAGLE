@@ -37,6 +37,30 @@ class MatchTraceTests(unittest.TestCase):
             self.assertNotIn("terrain", row)
             self.assertIn("terrain", metadata)
             self.assertEqual(metadata["candidate_side"], "p1")
+            self.assertIn("ROUND_TICK", row["raw_state"])
+
+    def test_result_fallback_keeps_commentary_trace_nonempty(self):
+        with tempfile.TemporaryDirectory() as value:
+            root = Path(value)
+            artifact = write_match_trace(
+                round_state_dir=root / "missing-states",
+                match_dir=root / "match",
+                metadata=self._metadata(),
+                result={
+                    "final_tick": 7,
+                    "winner": 0,
+                    "players": {
+                        "p0": {"resource_total": 9},
+                        "p1": {"resource_total": 3},
+                    },
+                },
+                expected_last_tick=7,
+            )
+            row = next(iter_match_trace(artifact.trace_path))
+            self.assertEqual(row["tick"], 7)
+            self.assertEqual(row["state_source"], "result_json_fallback")
+            self.assertIsNone(row["raw_state"])
+            self.assertTrue(artifact.integrity["complete"])
 
     def test_integrity_reports_missing_duplicate_and_out_of_order_ticks(self):
         with tempfile.TemporaryDirectory() as value:

@@ -9,7 +9,7 @@ from typing import Any
 from eagle.candidate import Candidate
 from evaluation.game_performance import GamePerformanceConfig
 from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
-from evaluation.microrts_runner import MatchResult, hash_class_directory, hash_file, run_microrts_match
+from evaluation.runtime_evaluation import MatchResult, hash_class_directory, hash_file, run_microrts_match
 
 
 COMPARISON_PARENT_CLASS = "ai.eagle.ComparisonParentAgent"
@@ -90,7 +90,6 @@ def evaluate_parent_vs_offspring(
         canonical_evaluation_maps(config.evaluation_maps),
         rounds_per_map=config.rounds_per_map,
         swap_player_sides=config.swap_player_sides,
-        round_seeds=config.resolved_match_seeds,
     )
     source_path = Path(offspring.generated_java_path) if offspring.generated_java_path else None
     source_hash = hash_file(source_path) if source_path is not None and source_path.is_file() else None
@@ -118,7 +117,6 @@ def evaluate_parent_vs_offspring(
                 ),
                 mock=mock,
                 mock_score=1.0,
-                seed=specification.seed,
                 timeout_seconds=config.match_timeout_seconds,
                 map_path=specification.map_path,
                 candidate_id=offspring.id,
@@ -141,7 +139,6 @@ def evaluate_parent_vs_offspring(
                 command=[],
                 match_index=specification.match_index,
                 generation=offspring.generation,
-                seed=specification.seed,
                 opponent=COMPARISON_PARENT_CLASS,
                 candidate_player=specification.candidate_player,
                 map_path=specification.map_path,
@@ -158,7 +155,6 @@ def evaluate_parent_vs_offspring(
             "match_index": specification.match_index,
             "map": specification.map_path,
             "round": specification.round_index,
-            "seed": specification.seed,
             "offspring_player": specification.candidate_player,
             "comparison_parent_player": specification.opponent_player,
             "status": "completed" if result.ok else "error",
@@ -174,7 +170,7 @@ def evaluate_parent_vs_offspring(
         offspring_id=offspring.id,
         comparison_parent_id=comparison_parent.id,
         maps=tuple(config.evaluation_maps),
-        rounds=tuple(config.resolved_match_seeds),
+        rounds=tuple(range(config.rounds_per_map)),
         sides=("offspring_p0_parent_p1", "parent_p0_offspring_p1"),
         total_matches=len(specifications),
         wins=wins,

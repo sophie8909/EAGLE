@@ -13,9 +13,10 @@ from evaluation.objectives import OBJECTIVE_DIRECTIONS
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE
 
 from .candidate import Candidate
+from .config import ExperimentConfig
 
-RUN_SCHEMA_VERSION = "eagle-run-v1"
-GENERATION_SCHEMA_VERSION = "eagle-generation-v2"
+RUN_SCHEMA_VERSION = "eagle-run-v2"
+GENERATION_SCHEMA_VERSION = "eagle-generation-v3"
 ERROR_MEMORY_SCHEMA_VERSION = "eagle-error-memory-v1"
 
 
@@ -23,22 +24,27 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def initialize_run_manifest(run_dir: Path, *, config_path: Path) -> None:
-    for directory in (run_dir / "generations",):
+def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
+    for name in (
+        "generations", "candidates", "generated_agents", "classes", "archives",
+        "llm_logs", "final_test",
+    ):
+        directory = run_dir / name
         directory.mkdir(parents=True, exist_ok=True)
-    for artifact in (run_dir / "generation_metrics.jsonl", run_dir / "errors.jsonl"):
-        artifact.touch(exist_ok=True)
+    (run_dir / "timing.jsonl").touch(exist_ok=True)
 
     atomic_json(
         run_dir / "manifest.json",
         {
             "schema_version": RUN_SCHEMA_VERSION,
             "run_id": run_dir.name,
+            "created_at": utc_now(),
             "status": "initialized",
-            "configuration": "resolved_config.json",
-            "source_config": str(config_path.resolve()),
-            "completed_generations": [],
-            "last_update_time": utc_now(),
+            "experiment_name": config.experiment_name,
+            "model_name": config.model.name,
+            "reflection_operator_mode": config.reflection_operator_mode.value,
+            "latest_generation": None,
+            "updated_at": utc_now(),
         },
     )
 
@@ -49,19 +55,37 @@ def mark_run_interrupted(run_dir: Path) -> None:
     manifest = load_manifest(run_dir)
     if manifest.get("status") == "complete":
         return
-    completed = [int(value) for value in manifest.get("completed_generations", [])]
+    completed = manifest.get("latest_generation")
     manifest.update(
         status="interrupted",
-        resumable=bool(completed),
+        resumable=completed is not None,
         interrupted_at=utc_now(),
-        last_update_time=utc_now(),
+        updated_at=utc_now(),
+    )
+    atomic_json(run_dir / "manifest.json", manifest)
+
+
+def mark_run_failed(run_dir: Path, error: BaseException) -> None:
+    """Close a non-complete run after an exception without losing resume state."""
+
+    manifest = load_manifest(run_dir)
+    if manifest.get("status") == "complete":
+        return
+    completed = manifest.get("latest_generation")
+    manifest.update(
+        status="failed",
+        resumable=completed is not None,
+        failure_type=type(error).__name__,
+        failure_reason=str(error) or type(error).__name__,
+        failed_at=utc_now(),
+        updated_at=utc_now(),
     )
     atomic_json(run_dir / "manifest.json", manifest)
 
 
 def record_error_memory(run_dir: Path, candidates: list[Candidate]) -> tuple[dict[str, object], ...]:
-    """Merge bounded failure signatures from evaluated candidates into errors.jsonl."""
-    path = run_dir / "errors.jsonl"
+    """Merge bounded failure signatures into the canonical archive."""
+    path = run_dir / "archives" / "error_memory.jsonl"
     records: dict[str, dict[str, Any]] = {}
     if path.exists():
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -98,7 +122,7 @@ def record_error_memory(run_dir: Path, candidates: list[Candidate]) -> tuple[dic
 
 
 def load_error_memory(run_dir: Path, *, limit: int = 3) -> tuple[dict[str, object], ...]:
-    path = run_dir / "errors.jsonl"
+    path = run_dir / "archives" / "error_memory.jsonl"
     if not path.exists():
         return ()
     records = []
@@ -141,41 +165,43 @@ def record_generation(
     aos: dict[str, Any] | None = None,
 ) -> None:
     """Record the surviving population after selection exactly once."""
+    metrics = generation_metrics(generation, population, diversity=diversity)
     snapshot = {
         "schema_version": GENERATION_SCHEMA_VERSION,
         "generation": generation,
-        "population": [candidate.to_json_dict() for candidate in population],
+        "population": [
+            {
+                "candidate_id": candidate.id,
+                "fitness_objectives": dict(candidate.fitness_objectives),
+                "status": candidate.status,
+            }
+            for candidate in population
+        ],
+        "best_candidate_id": _best_candidate_id(population),
+        "metrics": metrics,
+        "aos": None if aos is None else dict(aos),
+        "timing": {
+            "artifact": "../timing.jsonl",
+            "event_type": "generation",
+            "generation": generation,
+        },
     }
     generations_dir = run_dir / "generations"
     generations_dir.mkdir(parents=True, exist_ok=True)
     snapshot_path = generations_dir / f"generation_{generation:04d}.json"
     atomic_json(snapshot_path, snapshot)
-    metrics = generation_metrics(generation, population, diversity=diversity, aos=aos)
-    metrics_path = run_dir / "generation_metrics.jsonl"
-    existing = _jsonl_by_key(metrics_path, "generation")
-    existing[generation] = metrics
-    atomic_jsonl(metrics_path, [existing[key] for key in sorted(existing)])
     manifest = load_manifest(run_dir)
-    completed = sorted({int(value) for value in manifest.get("completed_generations", [])} | {generation})
     manifest.update(
         status="running",
-        completed_generations=completed,
-        last_completed_generation=max(completed),
-        last_update_time=utc_now(),
+        latest_generation=generation,
+        updated_at=utc_now(),
     )
     atomic_json(run_dir / "manifest.json", manifest)
 
 
 def finalize_run(run_dir: Path, population: list[Candidate], *, stop_reason: str | None) -> None:
-    atomic_json(
-        run_dir / "final_population.json",
-        {
-            "schema_version": "eagle-final-population-v2",
-            "population": [candidate.to_json_dict() for candidate in population],
-        },
-    )
     manifest = load_manifest(run_dir)
-    manifest.update(status="complete", stop_reason=stop_reason, last_update_time=utc_now())
+    manifest.update(status="complete", stop_reason=stop_reason, updated_at=utc_now())
     atomic_json(run_dir / "manifest.json", manifest)
 
 
@@ -340,18 +366,12 @@ def generation_metrics(
 def load_aos_state(run_dir: Path) -> dict[str, Any] | None:
     """Load the latest persisted AOS state for deterministic resume."""
 
-    path = run_dir / "generation_metrics.jsonl"
-    if not path.exists():
+    generations = sorted((run_dir / "generations").glob("generation_*.json"))
+    if not generations:
         return None
-    latest: dict[str, Any] | None = None
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        payload = json.loads(line)
-        aos = payload.get("aos")
-        if isinstance(aos, dict) and isinstance(aos.get("state"), dict):
-            latest = dict(aos["state"])
-    return latest
+    payload = json.loads(generations[-1].read_text(encoding="utf-8"))
+    aos = payload.get("aos") or (payload.get("metrics") or {}).get("aos")
+    return dict(aos["state"]) if isinstance(aos, dict) and isinstance(aos.get("state"), dict) else None
 
 
 def _candidate_beats_opponent(candidate: Candidate, opponent_id: str) -> bool:
@@ -373,25 +393,73 @@ def _candidate_beats_opponent(candidate: Candidate, opponent_id: str) -> bool:
 
 def load_resume_population(run_dir: Path) -> tuple[int, list[Candidate]]:
     manifest = load_manifest(run_dir)
-    completed = [int(value) for value in manifest.get("completed_generations", [])]
-    if not completed:
+    latest = manifest.get("latest_generation")
+    if latest is None:
         raise ValueError(f"Run has no completed generation to resume: {run_dir}")
-    generation = max(completed)
+    generation = int(latest)
     path = run_dir / "generations" / f"generation_{generation:04d}.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
     population = payload.get("population")
     if not isinstance(population, list):
         raise ValueError(f"Invalid generation snapshot: {path}")
-    return generation, [candidate_from_dict(item) for item in population]
+    candidates = []
+    for item in population:
+        candidate_id = str(item.get("candidate_id") or item.get("id") or "")
+        if not candidate_id:
+            raise ValueError(f"Generation snapshot contains an invalid candidate reference: {path}")
+        candidates.append(load_candidate(run_dir, candidate_id))
+    return generation, candidates
 
 
-def candidate_from_dict(payload: dict[str, Any]) -> Candidate:
-    field_names = set(Candidate.__dataclass_fields__)
-    values = {key: value for key, value in payload.items() if key in field_names}
-    values["id"] = str(payload.get("candidate_id") or payload.get("id"))
-    for key in ("parent_ids", "source_candidate_ids"):
-        values[key] = tuple(values.get(key, ()))
-    return Candidate(**values)
+def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
+    candidate_dir = run_dir / "candidates" / candidate_id
+    path = candidate_dir / "candidate.json"
+    if not path.is_file():
+        raise ValueError(f"Candidate snapshot is missing: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+
+    def text(relative: str) -> str:
+        target = candidate_dir / relative
+        return target.read_text(encoding="utf-8") if target.is_file() else ""
+
+    def object_json(relative: str) -> dict[str, Any]:
+        target = candidate_dir / relative
+        if not target.is_file():
+            return {}
+        value = json.loads(target.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {}
+
+    return Candidate(
+        id=candidate_id,
+        generation=int(payload.get("generation") or 0),
+        parent_ids=tuple(payload.get("parent_ids") or ()),
+        strategy_prompt=text("genotype/strategy_prompt.txt"),
+        previous_code=text("genotype/previous_code.java"),
+        generation_prompt=text("genotype/generation_prompt.txt"),
+        generated_java=text("generation/normalized_candidate.java"),
+        generated_java_path=str(candidate_dir / "generation" / "normalized_candidate.java"),
+        operator=str(payload.get("operator") or "seed"),
+        mutation_type=payload.get("mutation_type"),
+        strategy_parent_id=payload.get("strategy_parent_id"),
+        previous_code_parent_id=payload.get("previous_code_parent_id"),
+        generation_prompt_parent_id=payload.get("generation_prompt_parent_id"),
+        source_candidate_ids=tuple(payload.get("source_candidate_ids") or ()),
+        compile_status=str(payload.get("compile_status") or "pending"),
+        game_eval_result=object_json("evaluation/game_performance.json"),
+        code_quality_result=object_json("evaluation/code_quality.json"),
+        fitness_objectives={str(k): float(v) for k, v in (payload.get("fitness_objectives") or {}).items()},
+        strategy_signature=dict(payload.get("strategy_signature") or {}),
+        strategy_niche=str(payload.get("strategy_niche") or "unknown"),
+        mutation_intent=payload.get("mutation_intent"),
+        parent_strategy_niche=payload.get("parent_strategy_niche"),
+        niche_changed=payload.get("niche_changed"),
+        status=str(payload.get("status") or "pending"),
+        failure_stage=payload.get("failure_stage"),
+        failure_reason=payload.get("failure_reason"),
+        artifacts=dict(payload.get("artifacts") or {}),
+        timing=object_json("timing.json"),
+        metadata=dict(payload.get("metadata") or {}),
+    )
 
 
 def load_manifest(run_dir: Path) -> dict[str, Any]:
@@ -400,6 +468,13 @@ def load_manifest(run_dir: Path) -> dict[str, Any]:
     if payload.get("schema_version") != RUN_SCHEMA_VERSION:
         raise ValueError(f"Unsupported run manifest schema in {path}.")
     return payload
+
+
+def _best_candidate_id(population: list[Candidate]) -> str | None:
+    valid = [candidate for candidate in population if candidate.status != "failed"]
+    if not valid:
+        return None
+    return max(valid, key=lambda item: tuple(item.objective_vector())).id
 
 
 def atomic_json(path: Path, payload: object) -> None:
@@ -414,14 +489,3 @@ def atomic_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text("".join(json.dumps(item, ensure_ascii=False) + "\n" for item in records), encoding="utf-8")
     temporary.replace(path)
-
-
-def _jsonl_by_key(path: Path, key: str) -> dict[int, dict[str, Any]]:
-    if not path.exists():
-        return {}
-    return {
-        int(payload[key]): payload
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-        for payload in [json.loads(line)]
-    }

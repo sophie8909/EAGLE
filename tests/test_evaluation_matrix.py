@@ -13,10 +13,10 @@ class EvaluationMatrixTests(unittest.TestCase):
         )
         self.assertEqual(len(matrix), 18)
         self.assertEqual(
-            [(item.map_id, item.round_index, item.candidate_player, item.seed) for item in matrix[:6]],
-            [("map_1", 0, 0, 0), ("map_1", 0, 1, 0),
-             ("map_1", 1, 0, 1), ("map_1", 1, 1, 1),
-             ("map_1", 2, 0, 2), ("map_1", 2, 1, 2)],
+            [(item.map_id, item.round_index, item.candidate_player) for item in matrix[:6]],
+            [("map_1", 0, 0), ("map_1", 0, 1),
+             ("map_1", 1, 0), ("map_1", 1, 1),
+             ("map_1", 2, 0), ("map_1", 2, 1)],
         )
         self.assertEqual([(item.candidate_player, item.opponent_player) for item in matrix[::2]], [(0, 1)] * 9)
 

@@ -89,7 +89,7 @@ GUI_ONLY_OPPONENTS = ALLIBOT_OPPONENTS
 
 
 def gui_opponent_by_id(opponent_id: str) -> OpponentSpec:
-    """Resolve an opponent supported by the visual inspection utility."""
+    """Resolve an opponent supported by the optional visual inspection utility."""
 
     for item in BASIC_OPPONENTS + EVALUATION_ROSTER + EXTERNAL_OPPONENTS + ALLIBOT_OPPONENTS:
         if item.opponent_id == opponent_id:

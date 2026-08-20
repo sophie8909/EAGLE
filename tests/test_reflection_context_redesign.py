@@ -173,7 +173,10 @@ class ReflectionContextRedesignTests(unittest.TestCase):
     def test_error_memory_deduplicates_and_is_bounded(self):
         with tempfile.TemporaryDirectory() as temp:
             run_dir = Path(temp)
-            initialize_run_manifest(run_dir, config_path=Path("config/test.yaml"))
+            initialize_run_manifest(
+                run_dir,
+                config=ExperimentConfig.from_mapping({}),
+            )
             failed = [Candidate(id=f"failed-{index}", generation=index, status="failed", failure_stage="compilation", failure_reason="/tmp/CandidateAgent.java:42: cannot find symbol") for index in range(4)]
             record_error_memory(run_dir, failed)
             memory = load_error_memory(run_dir)
@@ -187,7 +190,7 @@ class ReflectionContextRedesignTests(unittest.TestCase):
         self.assertIn("latest strategy advice", context.previous_reflection)
         backend = ScriptedBackend((strategy_response(), "rewritten strategy"))
         mutation = PromptRewriteMutation(
-            ExperimentConfig.from_mapping({"seed_prompts": ["seed"], "mutation_max_attempts": 1}),
+            ExperimentConfig.from_mapping({"mutation_max_attempts": 1}),
             mutation_type="strategy",
             reflection_backend=backend,
             rewrite_backend=backend,
