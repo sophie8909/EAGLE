@@ -368,6 +368,8 @@ def _aos_rows(data: RunData) -> list[dict[str, Any]]:
                 head_to_head = {}
             rows.append({
                 "generation": item.get("generation"),
+                "mode": aos.get("mode"),
+                "reward_source": aos.get("reward_source"),
                 "operator": operator,
                 "usage_count": stats.get("usage_count", 0),
                 "reward_count": stats.get("reward_count", 0),
@@ -461,8 +463,8 @@ def _plots(path: Path, generation_rows, candidates, agent_game_rows, opponent_ga
     _line_plot(
         path / "game_performance_by_generation.png", generation_rows, "generation",
         ("game_performance_best", "game_performance_mean", "game_performance_median", "game_performance_worst"),
-        "Aggregate Game Performance by generation", scatter_rows=match_game_rows,
-        scatter_y="game_performance", neutral_line=True,
+        "Aggregate Game Performance by generation", distribution_rows=match_game_rows,
+        distribution_y="game_performance", neutral_line=True,
     )
     _agent_game_performance_plot(path / "agent_game_performance.png", agent_game_rows)
     _agent_win_rate_plots(path, agent_win_rate_rows)
@@ -476,12 +478,22 @@ def _plots(path: Path, generation_rows, candidates, agent_game_rows, opponent_ga
             rows,
             "generation",
             ("game_performance",),
-            f"Game Performance vs {opponent_id}", scatter_rows=match_rows,
-            scatter_y="game_performance", neutral_line=True,
+            f"Game Performance vs {opponent_id}", distribution_rows=match_rows,
+            distribution_y="game_performance", neutral_line=True,
         )
 
 
-def _line_plot(path: Path, rows, x, ys, title, *, scatter_rows=None, scatter_y: str | None = None, neutral_line: bool = False) -> None:
+def _line_plot(
+    path: Path,
+    rows,
+    x,
+    ys,
+    title,
+    *,
+    distribution_rows=None,
+    distribution_y: str | None = None,
+    neutral_line: bool = False,
+) -> None:
     if not rows:
         return
     plotted = []
@@ -492,17 +504,8 @@ def _line_plot(path: Path, rows, x, ys, title, *, scatter_rows=None, scatter_y: 
     if not plotted:
         return
     plt.figure()
-    if scatter_rows and scatter_y:
-        points = [
-            (row.get(x), row.get(scatter_y)) for row in scatter_rows
-            if row.get(x) is not None and row.get(scatter_y) is not None
-        ]
-        if points:
-            plt.scatter(
-                [item[0] for item in points], [item[1] for item in points],
-                color="#9ecae1", alpha=0.28, s=12, linewidths=0,
-                label="Single-match scores",
-            )
+    if distribution_rows and distribution_y:
+        _match_violin_overlay(distribution_rows, x=x, y=distribution_y)
     for y, points in plotted:
         plt.plot([item[0] for item in points], [item[1] for item in points], marker="o", label=y)
     if neutral_line:
@@ -513,18 +516,73 @@ def _line_plot(path: Path, rows, x, ys, title, *, scatter_rows=None, scatter_y: 
     plt.tight_layout(); plt.savefig(path); plt.close()
 
 
+def _match_violin_overlay(rows, *, x: str, y: str) -> None:
+    """Draw narrow per-generation match distributions behind aggregate lines."""
+
+    grouped: dict[Any, list[float]] = defaultdict(list)
+    for row in rows:
+        position = row.get(x)
+        score = row.get(y)
+        if position is None or not isinstance(score, (int, float)):
+            continue
+        grouped[position].append(float(score))
+
+    distributions: list[list[float]] = []
+    positions: list[Any] = []
+    degenerate: list[tuple[Any, float]] = []
+    for position in sorted(grouped):
+        values = grouped[position]
+        if len(values) >= 2 and min(values) != max(values):
+            positions.append(position)
+            distributions.append(values)
+        elif values:
+            degenerate.append((position, values[0]))
+
+    if distributions:
+        violin = plt.violinplot(
+            distributions,
+            positions=positions,
+            widths=0.42,
+            showmeans=False,
+            showmedians=True,
+            showextrema=False,
+        )
+        for index, body in enumerate(violin["bodies"]):
+            body.set_facecolor("#9ecae1")
+            body.set_edgecolor("#4a90b8")
+            body.set_alpha(0.32)
+            body.set_linewidth(0.8)
+            body.set_zorder(1)
+            if index == 0:
+                body.set_label("Single-match distribution")
+        medians = violin.get("cmedians")
+        if medians is not None:
+            medians.set_color("#39789d")
+            medians.set_linewidth(1.0)
+            medians.set_alpha(0.8)
+            medians.set_zorder(2)
+
+    for index, (position, value) in enumerate(degenerate):
+        plt.hlines(
+            value,
+            position - 0.10,
+            position + 0.10,
+            colors="#4a90b8",
+            linewidth=1.4,
+            alpha=0.65,
+            zorder=2,
+            label=(
+                "Degenerate match distribution"
+                if index == 0 and not distributions
+                else None
+            ),
+        )
+
+
 def _add_aggregate_neutral_line() -> None:
     """Mark zero as the neutral reference for aggregate scores."""
 
     plt.axhline(0.0, color="#666666", linestyle="--", linewidth=1.0, alpha=0.75, label="Aggregate neutral (0)")
-
-
-def _bar_plot(path: Path, rows, x, y, title) -> None:
-    points = [(str(row.get(x)), row.get(y)) for row in rows if row.get(y) is not None]
-    if not points:
-        return
-    plt.figure(); plt.bar([item[0] for item in points], [item[1] for item in points])
-    plt.title(title); plt.xticks(rotation=30, ha="right"); plt.tight_layout(); plt.savefig(path); plt.close()
 
 
 def _agent_game_performance_plot(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -579,7 +637,10 @@ def _aos_plot(path: Path, rows: list[dict[str, Any]]) -> None:
     plt.xlabel("Generation")
     plt.ylabel("Selection probability")
     plt.ylim(0.0, 1.0)
-    plt.title("AOS operator probabilities by generation")
+    modes = sorted({str(row.get("mode")) for row in rows if row.get("mode")})
+    mode_label = ", ".join(modes) if modes else "unknown"
+    prefix = "Reflection operator" if modes == ["static"] else "AOS operator"
+    plt.title(f"{prefix} probabilities by generation — {mode_label}")
     plt.grid(True, alpha=0.2)
     plt.legend()
     plt.tight_layout()

@@ -3,17 +3,16 @@ set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CALLER_DIR="$PWD"
-RUNTIME_CONFIG="$ROOT_DIR/configs/runtime.yaml"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/eagle-matplotlib}"
 mkdir -p "$MPLCONFIGDIR"
 cd "$ROOT_DIR"
 
 if [[ $# -eq 0 ]]; then
-    exec python -m eagle analyze --runtime-config "$RUNTIME_CONFIG" --latest
+    exec python -m eagle analyze --latest
 fi
 if [[ "$1" = "--latest" ]]; then
     shift
-    exec python -m eagle analyze --runtime-config "$RUNTIME_CONFIG" --latest "$@"
+    exec python -m eagle analyze --latest "$@"
 fi
 if [[ "$1" = "--run-dir" ]]; then
     shift
@@ -30,13 +29,13 @@ if [[ "$1" = "--run-dir" ]]; then
             RUN_DIR="$ROOT_DIR/runs/$RUN_DIR"
         fi
     fi
-    exec python -m eagle analyze --runtime-config "$RUNTIME_CONFIG" --run-dir "$RUN_DIR" "$@"
+    exec python -m eagle analyze --run-dir "$RUN_DIR" "$@"
 fi
 if [[ "$1" = "--candidate" ]]; then
-    exec python -m eagle analyze --runtime-config "$RUNTIME_CONFIG" --latest "$@"
+    exec python -m eagle analyze --latest "$@"
 fi
 if [[ "$1" = "--agent" ]]; then
-    exec python -m eagle analyze --runtime-config "$RUNTIME_CONFIG" --latest "$@"
+    exec python -m eagle analyze --latest "$@"
 fi
 RUN_DIR="$1"
 if [[ "$RUN_DIR" != /* ]]; then
@@ -47,4 +46,4 @@ if [[ "$RUN_DIR" != /* ]]; then
     fi
 fi
 shift
-exec python -m eagle analyze --runtime-config "$RUNTIME_CONFIG" --run-dir "$RUN_DIR" "$@"
+exec python -m eagle analyze --run-dir "$RUN_DIR" "$@"

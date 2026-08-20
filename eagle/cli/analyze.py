@@ -7,12 +7,10 @@ import sys
 from pathlib import Path
 
 from eagle.analysis.loader import load_run, resolve_explicit_run, resolve_latest_run
-from eagle.runtime.config import load_runtime_config
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m eagle analyze")
-    parser.add_argument("--runtime-config", default="configs/runtime.yaml")
     target = parser.add_mutually_exclusive_group(required=True)
     target.add_argument("--latest", action="store_true")
     target.add_argument("--run-dir")
@@ -24,8 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--commentary", action="store_true")
     args = parser.parse_args(argv)
     try:
-        runtime = load_runtime_config(args.runtime_config, validate_files=False)
-        run_dir = resolve_latest_run(runtime.run_root) if args.latest else resolve_explicit_run(args.run_dir)
+        run_dir = resolve_latest_run(Path("runs").resolve()) if args.latest else resolve_explicit_run(args.run_dir)
         if args.agent:
             return _print_agent_game_performance(load_run(run_dir), args.agent)
         if args.candidate and (args.match_commentaries or args.commentary):
@@ -34,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Analyzing run: {run_dir}")
         output = generate_analysis(
             load_run(run_dir),
-            output_name=runtime.analysis_output_directory_name,
+            output_name="analysis",
             force=args.force,
         )
         print(f"Analysis written to: {output}")
