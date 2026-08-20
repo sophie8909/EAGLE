@@ -7,15 +7,12 @@ import sys
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
-        print("Usage: python -m eagle {runtime|run|analyze} ...")
+        print("Usage: python -m eagle {experiment|analyze} ...")
         return 2
     command, rest = args[0], args[1:]
-    if command == "runtime":
-        from eagle.cli.runtime import main as runtime_main
-        return runtime_main(rest)
-    if command == "run":
-        from eagle.cli.run import main as run_main
-        return run_main(rest)
+    if command == "experiment":
+        from eagle.cli.experiment import main as experiment_main
+        return experiment_main(rest)
     if command == "analyze":
         from eagle.cli.analyze import main as analyze_main
         return analyze_main(rest)

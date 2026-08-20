@@ -11,8 +11,8 @@ usage() {
     cat <<'EOF'
 Usage: ./watchdog.sh [--once] [--interval SECONDS]
 
-Monitor and recover the local network interface. This watchdog does not start,
-stop, or restart llama-server; use run_env.sh for that.
+Monitor and recover the local network interface. This watchdog does not manage
+llama-server; the experiment launcher owns that lifecycle.
 
 Environment:
   EAGLE_WATCHDOG_INTERVAL_SECONDS  Poll interval when --interval is omitted.
