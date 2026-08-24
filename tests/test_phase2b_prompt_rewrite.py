@@ -63,7 +63,10 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertEqual(child.metadata["mutation"]["original_strategy_prompt"], "old strategy")
 
     def test_code_rewrite_changes_only_generation_prompt(self):
-        backend = ScriptedRewriteBackend((self._code_reflection(), "new generation prompt"))
+        backend = ScriptedRewriteBackend((
+            self._code_reflection(),
+            json.dumps({"rewritten_prompt": "new generation prompt"}),
+        ))
         mutation = PromptRewriteMutation(
             self.config,
             mutation_type="code",
@@ -74,6 +77,32 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertEqual(child.strategy_prompt, self.candidate.strategy_prompt)
         self.assertEqual(child.generation_prompt, "new generation prompt")
         self.assertEqual(child.mutation_type, "code")
+
+    def test_code_rewrite_requires_exact_json_contract_and_retries(self):
+        backend = ScriptedRewriteBackend((
+            json.dumps({"rewritten_prompt": "bad", "analysis": "extra"}),
+            "```json\n{\"rewritten_prompt\":\"usable generation prompt\"}\n```",
+        ))
+        result = PromptRewriteStage(backend, max_attempts=2).run(
+            rewrite_type="generation_prompt_rewrite",
+            candidate=self.candidate,
+            request="rewrite request",
+        )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.rewritten_prompt, "usable generation prompt")
+        self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
+
+    def test_code_rewrite_rejects_java_inside_json(self):
+        backend = ScriptedRewriteBackend((
+            json.dumps({"rewritten_prompt": "package ai.generated; public class CandidateAgent {}"}),
+        ))
+        result = PromptRewriteStage(backend, max_attempts=1).run(
+            rewrite_type="generation_prompt_rewrite",
+            candidate=self.candidate,
+            request="rewrite request",
+        )
+        self.assertFalse(result.succeeded)
+        self.assertIn("only the rewritten prompt", result.error)
     def test_rewrite_prompt_builders_include_reflection_and_original_component(self):
         backend = ScriptedRewriteBackend((self._strategy_reflection(),))
         reflection = ReflectionStage(backend, max_attempts=1).run(

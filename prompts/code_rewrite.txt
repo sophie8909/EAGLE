@@ -1,8 +1,12 @@
 EAGLE Code Generation Prompt Rewrite stage.
 
 Improve the reusable instructions that translate a policy prompt into complete Java.
-Return only the replacement code_generation_prompt. Do not return Java, analysis, JSON,
-a patch, a diff, or Markdown. Do not alter or improve the policy.
+Return exactly one JSON object with this schema:
+{"rewritten_prompt":"<replacement code_generation_prompt>"}
+
+The object must contain exactly that one key. The value must be a non-empty string.
+Do not return Java, analysis, a patch, a diff, or Markdown. Do not alter or improve
+the policy.
 
 Current code_generation_prompt:
 $code_generation_prompt
@@ -10,4 +14,4 @@ $code_generation_prompt
 Policy-Code Alignment Review:
 $alignment_review
 
-Output only the replacement code-generation prompt.
+Output only the JSON object.

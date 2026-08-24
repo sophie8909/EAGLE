@@ -26,6 +26,7 @@ from .mutation import (
     build_code_reflection_prompt_bundle,
     build_strategy_reflection_prompt,
     build_strategy_reflection_prompt_bundle,
+    parse_json_object_response,
     _timing_payload,
     utc_now,
 )
@@ -125,7 +126,7 @@ class PromptRewriteStage:
             try:
                 response = self.backend.generate(request)
                 last_response = response
-                _validate_rewritten_prompt(response)
+                rewritten_prompt = _parse_rewritten_prompt(response, rewrite_type)
             except LLMServerError:
                 raise
             except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
@@ -172,7 +173,7 @@ class PromptRewriteStage:
                     rewrite_type=rewrite_type,
                     request=request,
                     raw_response=response,
-                    rewritten_prompt=response.strip(),
+                    rewritten_prompt=rewritten_prompt,
                     status="success",
                     attempts=tuple(attempts),
                     model=self.model,
@@ -443,19 +444,29 @@ def build_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult
     })
 
 
-def _validate_rewritten_prompt(response: str) -> None:
+def _parse_rewritten_prompt(response: str, rewrite_type: str) -> str:
     if not isinstance(response, str) or not response.strip():
         raise ValueError("Rewrite response must contain a non-empty prompt.")
+    if rewrite_type == "generation_prompt_rewrite":
+        payload = parse_json_object_response(response)
+        if set(payload) != {"rewritten_prompt"}:
+            raise ValueError(
+                "Code Rewrite response must contain exactly the rewritten_prompt key."
+            )
+        rewritten = payload["rewritten_prompt"]
+        if not isinstance(rewritten, str) or not rewritten.strip():
+            raise ValueError("Code Rewrite rewritten_prompt must be a non-empty string.")
+        response = rewritten
     lowered = response.lower().strip()
     if (
         "```" in lowered
         or "package ai.generated" in lowered
         or "public class candidateagent" in lowered
-        or lowered.startswith("{")
         or lowered.startswith("new_strategy_prompt:")
         or lowered.startswith("new_generation_prompt:")
     ):
         raise ValueError("Rewrite response must contain only the rewritten prompt.")
+    return response.strip()
 
 
 def _mutation_metadata_record(record: dict[str, Any]) -> dict[str, Any]:

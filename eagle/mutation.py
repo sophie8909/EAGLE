@@ -309,6 +309,13 @@ class MockReflectionBackend:
                 "alignment_review": [],
                 "required_generation_behaviors": [],
             })
+        if "Code Generation Prompt Rewrite stage" in prompt:
+            return json.dumps({
+                "rewritten_prompt": (
+                    "Preserve the validated constraints and apply only the "
+                    "evidence-backed code-generation revision."
+                ),
+            })
         if "MATCH_COMMENTATOR_OUTPUT=chunk" in prompt:
             source = prompt.split("MATCH_COMMENTATOR_OUTPUT=chunk", 1)[1]
             request = json.loads(source)

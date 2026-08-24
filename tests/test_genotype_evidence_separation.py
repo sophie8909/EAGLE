@@ -108,7 +108,10 @@ class GenotypeEvidenceSeparationTests(unittest.TestCase):
             generation_prompt_parent_id=source.id,
         )
         context = build_reflection_context(source, generation=3, index=0, reflection_type="code")
-        backend = ScriptedBackend((code_review(), "new reusable translation instructions"))
+        backend = ScriptedBackend((
+            code_review(),
+            json.dumps({"rewritten_prompt": "new reusable translation instructions"}),
+        ))
         mutation = PromptRewriteMutation(
             ExperimentConfig.from_mapping({"mutation_max_attempts": 1}),
             mutation_type="code",
@@ -165,7 +168,10 @@ Attack the enemy Base."}
 
     def test_code_mutation_cannot_modify_policy_prompt(self) -> None:
         candidate = self.candidate()
-        backend = ScriptedBackend((code_review(), "new reusable translation instructions"))
+        backend = ScriptedBackend((
+            code_review(),
+            json.dumps({"rewritten_prompt": "new reusable translation instructions"}),
+        ))
         mutation = PromptRewriteMutation(
             ExperimentConfig.from_mapping({"mutation_max_attempts": 1}),
             mutation_type="code",
