@@ -57,24 +57,6 @@ from .opponents import EVALUATION_ROSTER, OpponentSetupError, OpponentSpec, SEAR
 from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
 
 
-WORKER_RUSH_ADAPTER_SOURCE = """package ai.abstraction;
-
-import ai.abstraction.pathfinding.PathFinding;
-import rts.units.UnitTypeTable;
-
-/** Compatibility identity for the canonical EAGLE workerrush roster entry. */
-public final class WorkerRush extends LightRush {
-    public WorkerRush(UnitTypeTable utt) {
-        super(utt);
-    }
-
-    public WorkerRush(UnitTypeTable utt, PathFinding pathFinding) {
-        super(utt, pathFinding);
-    }
-}
-"""
-
-
 @dataclass(frozen=True)
 class CandidateEvaluation:
     """In-memory envelope joining stage results for one evaluated candidate.
@@ -773,7 +755,7 @@ def _resolved_static_evaluation_opponents(
     configured_weights = dict(config.evaluation_opponents)
     registry = {item.opponent_id: item for item in SEARCH_OPPONENT_REGISTRY}
     worker_rush_classes = (
-        _prepare_worker_rush_adapter(config, classes_dir=classes_dir)
+        _prepare_worker_rush_opponent(config, classes_dir=classes_dir)
         if not mock and classes_dir is not None
         else None
     )
@@ -802,23 +784,29 @@ def _resolved_static_evaluation_opponents(
     return tuple(opponents)
 
 
-def _prepare_worker_rush_adapter(config: ExperimentConfig, *, classes_dir: Path) -> Path:
-    """Compile the missing vendored WorkerRush identity once per run.
-
-    The checked-in MicroRTS runtime provides LightRush and HeavyRush but no
-    WorkerRush class. The canonical EAGLE ID is retained by a small Java
-    compatibility subclass so the roster remains loadable and deterministic.
-    """
+def _prepare_worker_rush_opponent(config: ExperimentConfig, *, classes_dir: Path) -> Path:
+    """Compile the vendored upstream WorkerRush implementation once per run."""
 
     root = classes_dir.resolve() / "_opponent_adapters" / "worker_rush"
-    source = root / "WorkerRush.java"
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "third_party" / "microrts" / "src" / "ai" / "abstraction" / "WorkerRush.java"
+    )
     output = root / "classes"
     class_file = output / "ai" / "abstraction" / "WorkerRush.class"
-    if class_file.is_file():
-        return output
+    manifest_path = root / "manifest.json"
+    if not source.is_file():
+        raise OpponentSetupError(f"Canonical WorkerRush source is missing: {source}")
+    source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+    if class_file.is_file() and manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            manifest = {}
+        if manifest.get("source_sha256") == source_hash:
+            return output
     root.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
-    source.write_text(WORKER_RUSH_ADAPTER_SOURCE, encoding="utf-8")
     microrts_dir = config.microrts_dir.resolve()
     classpath = os.pathsep.join((str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")))
     completed = subprocess.run(
@@ -830,16 +818,22 @@ def _prepare_worker_rush_adapter(config: ExperimentConfig, *, classes_dir: Path)
     )
     if completed.returncode != 0 or not class_file.is_file():
         raise OpponentSetupError(
-            "Canonical workerrush adapter could not be compiled: "
+            "Canonical WorkerRush implementation could not be compiled: "
             f"{(completed.stderr or completed.stdout).strip()}"
         )
-    (root / "manifest.json").write_text(
+    manifest_path.write_text(
         json.dumps(
             {
-                "schema_version": "eagle-search-opponent-adapter-v1",
+                "schema_version": "eagle-search-opponent-source-v1",
                 "opponent_id": "workerrush",
                 "class_name": "ai.abstraction.WorkerRush",
-                "implementation": "subclass of vendored ai.abstraction.LightRush",
+                "implementation": "vendored drchangliu/MicroRTS WorkerRush",
+                "source_url": (
+                    "https://github.com/drchangliu/MicroRTS/blob/master/"
+                    "src/ai/abstraction/WorkerRush.java"
+                ),
+                "source_path": str(source),
+                "source_sha256": source_hash,
                 "classes_dir": str(output),
             },
             indent=2,

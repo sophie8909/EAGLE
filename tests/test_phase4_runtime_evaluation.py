@@ -10,7 +10,11 @@ from unittest.mock import patch
 
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
-from eagle.evaluation import preflight_evaluation_opponents, evaluate_matches
+from eagle.evaluation import (
+    _prepare_worker_rush_opponent,
+    evaluate_matches,
+    preflight_evaluation_opponents,
+)
 from eagle.opponents import EVALUATION_ROSTER
 from evaluation.runtime_evaluation import MatchResult, run_microrts_match
 from generation.java_agent_generator import GeneratedJavaAgent
@@ -82,6 +86,47 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
             config = ExperimentConfig.from_mapping({})
             with self.assertRaisesRegex(Exception, "allibot"):
                 preflight_evaluation_opponents(config, mock=False, repository_root=Path(temp_dir))
+
+    def test_worker_rush_uses_vendored_upstream_implementation(self):
+        config = ExperimentConfig.from_mapping({})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            classes_dir = Path(temp_dir) / "classes"
+            stale_root = classes_dir / "_opponent_adapters" / "worker_rush"
+            stale_class = stale_root / "classes" / "ai" / "abstraction" / "WorkerRush.class"
+            stale_class.parent.mkdir(parents=True)
+            stale_class.write_bytes(b"old-light-rush-adapter")
+            (stale_root / "manifest.json").write_text(
+                json.dumps({"source_sha256": "stale"}),
+                encoding="utf-8",
+            )
+            output = _prepare_worker_rush_opponent(
+                config,
+                classes_dir=classes_dir,
+            )
+            class_file = output / "ai" / "abstraction" / "WorkerRush.class"
+            manifest = json.loads(
+                (output.parent / "manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(class_file.is_file())
+            self.assertNotEqual(class_file.read_bytes(), b"old-light-rush-adapter")
+            class_mtime = class_file.stat().st_mtime_ns
+            self.assertEqual(
+                _prepare_worker_rush_opponent(
+                    config,
+                    classes_dir=classes_dir,
+                ),
+                output,
+            )
+            self.assertEqual(class_file.stat().st_mtime_ns, class_mtime)
+
+        source = Path("third_party/microrts/src/ai/abstraction/WorkerRush.java").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("extends AbstractionLayerAI", source)
+        self.assertIn("workersBehavior", source)
+        self.assertNotIn("extends LightRush", source)
+        self.assertEqual(manifest["implementation"], "vendored drchangliu/MicroRTS WorkerRush")
+        self.assertEqual(len(manifest["source_sha256"]), 64)
 
     def test_partial_runtime_failure_retains_completed_matches(self):
         with tempfile.TemporaryDirectory() as temp_dir:

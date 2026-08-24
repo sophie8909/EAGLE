@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from eagle.evaluation import (
-    _prepare_worker_rush_adapter,
+    _prepare_worker_rush_opponent,
     hash_class_directory,
     hash_file,
     preflight_evaluation_opponents,
@@ -214,12 +214,12 @@ def _run_final_matrix(
     class_hash = hash_class_directory(classes_dir)
     maps = canonical_evaluation_maps(config.evaluation_maps)
     scoring_config = scoring_config_from_experiment(config)
-    worker_adapter = _prepare_worker_rush_adapter(config, classes_dir=output_dir / "classes")
+    worker_classes = _prepare_worker_rush_opponent(config, classes_dir=output_dir / "classes")
     opponent_classpaths = {
         item.opponent_id: _opponent_classpath(
             item.opponent_id,
             repository_root=repository_root,
-            worker_adapter=worker_adapter,
+            worker_classes=worker_classes,
         )
         for item in FINAL_TEST_OPPONENTS
     }
@@ -285,10 +285,10 @@ def _opponent_classpath(
     opponent_id: str,
     *,
     repository_root: Path,
-    worker_adapter: Path,
+    worker_classes: Path,
 ) -> tuple[Path, ...]:
     if opponent_id == "workerrush":
-        return (worker_adapter,)
+        return (worker_classes,)
     spec = next(item for item in FINAL_TEST_OPPONENTS if item.opponent_id == opponent_id)
     jar_path = rooted_jar_path(repository_root, spec)
     if jar_path is None:
