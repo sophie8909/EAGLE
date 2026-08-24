@@ -12,11 +12,17 @@ from unittest.mock import patch
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation import (
+    _prepare_safe_allinbot_opponent,
     _prepare_worker_rush_opponent,
+    _resolved_static_evaluation_opponents,
     evaluate_matches,
     preflight_evaluation_opponents,
 )
-from eagle.opponents import EVALUATION_ROSTER
+from eagle.opponents import (
+    ALLINBOT_UPSTREAM_CLASS_NAME,
+    EVALUATION_ROSTER,
+    SAFE_ALLINBOT_CLASS_NAME,
+)
 from evaluation.runtime_evaluation import MatchResult, run_microrts_match
 from generation.java_agent_generator import GeneratedJavaAgent
 
@@ -126,6 +132,153 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
             config = ExperimentConfig.from_mapping({})
             with self.assertRaisesRegex(Exception, "allibot"):
                 preflight_evaluation_opponents(config, mock=False, repository_root=Path(temp_dir))
+
+    def test_allinbot_uses_reflection_wrapper_while_preflight_pins_upstream(self):
+        config = ExperimentConfig.from_mapping({})
+        preflight_evaluation_opponents(config, mock=False, repository_root=Path.cwd())
+        with tempfile.TemporaryDirectory() as temp_dir:
+            classes_dir = Path(temp_dir) / "classes"
+            adapter_classes = _prepare_safe_allinbot_opponent(
+                config,
+                classes_dir=classes_dir,
+            )
+            manifest = json.loads(
+                (adapter_classes.parent / "manifest.json").read_text(encoding="utf-8")
+            )
+            opponents = _resolved_static_evaluation_opponents(
+                config,
+                mock=False,
+                classes_dir=classes_dir,
+            )
+            allinbot = next(item for item in opponents if item.opponent_id == "allinbot")
+            adapter_class_exists = (
+                adapter_classes / "ai" / "eagle" / "SafeAllInBot.class"
+            ).is_file()
+
+        self.assertEqual(allinbot.class_name, SAFE_ALLINBOT_CLASS_NAME)
+        self.assertEqual(allinbot.classpath_entries[0], adapter_classes)
+        self.assertEqual(manifest["delegate_class"], ALLINBOT_UPSTREAM_CLASS_NAME)
+        self.assertTrue(adapter_class_exists)
+        source = Path("eagle/opponent_adapters/SafeAllInBot.java").read_text(encoding="utf-8")
+        self.assertNotIn("import ai.abstraction.submissions.allibot", source)
+        self.assertIn("Class.forName(DELEGATE_CLASS)", source)
+        self.assertIn("action.integrityCheck()", source)
+        self.assertNotIn("catch (Throwable", source)
+        self.assertNotIn("catch (LinkageError", source)
+        self.assertNotIn("| LinkageError", source)
+
+    @unittest.skipUnless(
+        Path("runs/20260824_233743_100100/classes/gen_0001_9215463a6e5d/ai/generated/CandidateAgent.class").is_file(),
+        "observed AllInBot regression candidate classes are unavailable",
+    )
+    def test_observed_allinbot_24x24_crash_is_contained_and_persisted(self):
+        repository_root = Path.cwd()
+        config = ExperimentConfig.from_mapping({})
+        candidate_classes = (
+            repository_root
+            / "runs/20260824_233743_100100/classes/gen_0001_9215463a6e5d"
+        )
+        jar = repository_root / "third_party/gui_opponents/jars/allibot.jar"
+        libraries = tuple(sorted((repository_root / "third_party/gui_opponents/src/allibot/lib").glob("*.jar")))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            adapter_classes = _prepare_safe_allinbot_opponent(
+                config,
+                classes_dir=root / "classes",
+                repository_root=repository_root,
+            )
+            normal_original = run_microrts_match(
+                microrts_dir=config.microrts_dir,
+                classes_dir=candidate_classes,
+                agent_class="ai.generated.CandidateAgent",
+                opponent=ALLINBOT_UPSTREAM_CLASS_NAME,
+                opponent_id="allinbot",
+                tick_limit=100,
+                match_index=64,
+                match_artifacts_dir=root / "normal-original",
+                map_path="maps/8x8/basesWorkers8x8.xml",
+                candidate_player=0,
+                extra_classpath_entries=(jar, *libraries),
+                timeout_seconds=30,
+            )
+            normal_wrapped = run_microrts_match(
+                microrts_dir=config.microrts_dir,
+                classes_dir=candidate_classes,
+                agent_class="ai.generated.CandidateAgent",
+                opponent=SAFE_ALLINBOT_CLASS_NAME,
+                opponent_id="allinbot",
+                tick_limit=100,
+                match_index=64,
+                match_artifacts_dir=root / "normal-wrapped",
+                map_path="maps/8x8/basesWorkers8x8.xml",
+                candidate_player=0,
+                extra_classpath_entries=(adapter_classes, jar, *libraries),
+                timeout_seconds=30,
+            )
+            original = run_microrts_match(
+                microrts_dir=config.microrts_dir,
+                classes_dir=candidate_classes,
+                agent_class="ai.generated.CandidateAgent",
+                opponent=ALLINBOT_UPSTREAM_CLASS_NAME,
+                opponent_id="allinbot",
+                tick_limit=5000,
+                match_index=66,
+                match_artifacts_dir=root / "original",
+                map_path="maps/24x24/basesWorkers24x24.xml",
+                candidate_player=0,
+                extra_classpath_entries=(jar, *libraries),
+                timeout_seconds=30,
+            )
+            wrapped = run_microrts_match(
+                microrts_dir=config.microrts_dir,
+                classes_dir=candidate_classes,
+                agent_class="ai.generated.CandidateAgent",
+                opponent=SAFE_ALLINBOT_CLASS_NAME,
+                opponent_id="allinbot",
+                tick_limit=5000,
+                match_index=66,
+                match_artifacts_dir=root / "wrapped",
+                map_path="maps/24x24/basesWorkers24x24.xml",
+                candidate_player=0,
+                extra_classpath_entries=(adapter_classes, jar, *libraries),
+                timeout_seconds=30,
+            )
+            persisted_stderr = (root / "wrapped/match_66/stderr.txt").read_text(encoding="utf-8")
+            persisted_result = json.loads(
+                (root / "wrapped/match_66/result.json").read_text(encoding="utf-8")
+            )
+
+        self.assertFalse(original.ok)
+        self.assertIn("Harvest.execute", original.stderr)
+        self.assertTrue(normal_original.ok, normal_original.stderr)
+        self.assertTrue(normal_wrapped.ok, normal_wrapped.stderr)
+        self.assertFalse(normal_wrapped.opponent_fault_contained)
+        normal_original_result = dict(normal_original.raw_result)
+        normal_wrapped_result = dict(normal_wrapped.raw_result)
+        normal_original_result.pop("ai2", None)
+        normal_wrapped_result.pop("ai2", None)
+        self.assertEqual(normal_wrapped_result, normal_original_result)
+        self.assertTrue(wrapped.ok, wrapped.stderr)
+        self.assertIn("EAGLE_SAFE_ALLINBOT_FALLBACK", wrapped.stderr)
+        self.assertEqual(wrapped.stderr.count("EAGLE_SAFE_ALLINBOT_FALLBACK"), 1)
+        self.assertTrue(wrapped.opponent_fault_contained)
+        self.assertEqual(wrapped.fault_scope, "opponent")
+        self.assertTrue(wrapped.opponent_fault_recovered)
+        self.assertEqual(wrapped.opponent_fault_reason, "delegate_get_action")
+        self.assertTrue(wrapped.scoring_neutralized)
+        self.assertEqual(wrapped.winner, -1)
+        self.assertEqual(wrapped.score, 0.0)
+        self.assertIsNotNone(wrapped.performance_breakdown)
+        self.assertEqual(wrapped.performance_breakdown.match_score, 0.0)
+        self.assertIn("EAGLE_SAFE_ALLINBOT_FALLBACK", persisted_stderr)
+        self.assertTrue(persisted_result["opponent_fault_contained"])
+        self.assertEqual(persisted_result["fault_scope"], "opponent")
+        self.assertTrue(persisted_result["opponent_fault_recovered"])
+        self.assertTrue(persisted_result["scoring_neutralized"])
+        self.assertEqual(persisted_result["winner"], -1)
+        self.assertEqual(persisted_result["result"], "draw")
+        self.assertEqual(persisted_result["opponent_fault_reason"], "delegate_get_action")
+        self.assertEqual(persisted_result["opponent"], SAFE_ALLINBOT_CLASS_NAME)
 
     def test_worker_rush_uses_vendored_upstream_implementation(self):
         config = ExperimentConfig.from_mapping({})

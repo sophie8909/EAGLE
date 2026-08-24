@@ -271,3 +271,26 @@ their selected attempts were 2, 2, 2, 3, and 4. The production-failing policy
 was rejected at validation for unsafe direct map access, repaired on attempt 2,
 and passed Integration. The owned model server and ownership record were
 cleaned after the smoke, clearing the runtime restart gate.
+
+Cycle 5 addresses a separate pinned-upstream opponent fault in restarted batch
+`runs/20260824_233743_100100`: candidate `gen_0001_9215463a6e5d` reached
+AllInBot on 24×24 map 3 as p0 (matches 66/68/70) and the upstream
+`ai.abstraction.submissions.allibot.alli` crashed in
+`WorkerRush -> Harvest.execute` because its target was null. This is not a
+candidate phenotype fault. EAGLE now preflights that same pinned original class
+and JAR hash, but compiles `eagle/opponent_adapters/SafeAllInBot.java` in a
+dedicated adapter tree outside candidate source/class hashing and complexity.
+The adapter reflection-loads the original delegate without a compile-time JAR
+dependency, catches only recoverable `Exception` paths (including reflection
+lookup/constructor failures), logs one
+`EAGLE_SAFE_ALLINBOT_FALLBACK` marker, then permanently returns legal passive
+actions. Reflection lookup failures are contained, while linkage and other
+serious JVM errors are not swallowed.
+
+Successful containment keeps the match and raw evidence, but canonical
+`result.json`/trace metadata report `fault_scope=opponent`, contained/recovered
+state, marker/reason, and `scoring_neutralized=true`. Its candidate score and
+W/L/D contribution are a zero-score draw, never an accidental candidate win;
+final-test JSON/CSV/Markdown count these upstream-contained matches separately.
+The targeted real regression first reproduces the original 24×24 crash, then
+proves wrapper completion, one-time marker persistence, and neutral scoring.

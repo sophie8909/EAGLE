@@ -216,6 +216,9 @@ excludes this generated index. For compatibility, a pre-existing
 Folder-level resume reads this mapping without reinitializing it. An indexed
 entry is lifecycle-complete when its run manifest is `complete` and, for a
 non-mock invocation that does not use `--skip-final-test`, a canonical
-`final_test/final_test_summary.json` exists. Incomplete indexed entries are
+`final_test/final_test_summary.json` exists and has the current
+`eagle-final-test-v2` schema. The summary records contained upstream-opponent
+faults separately; a recovered containment is an explicit neutral draw rather
+than a candidate win. Incomplete indexed entries are
 resumed before unindexed configs; completed entries are skipped. Index paths
 written by new batches and accepted by folder resume are absolute.

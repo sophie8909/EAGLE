@@ -67,7 +67,15 @@ from .artifacts import (
 from .candidate import Candidate, compact_candidate_metadata
 from .config import ExperimentConfig
 from .prompts import load_prompt, render_prompt
-from .opponents import EVALUATION_ROSTER, OpponentSetupError, OpponentSpec, SEARCH_OPPONENT_REGISTRY, rooted_jar_path
+from .opponents import (
+    ALLINBOT_UPSTREAM_CLASS_NAME,
+    EVALUATION_ROSTER,
+    OpponentSetupError,
+    OpponentSpec,
+    SEARCH_OPPONENT_REGISTRY,
+    SAFE_ALLINBOT_CLASS_NAME,
+    rooted_jar_path,
+)
 from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
 
 
@@ -1130,8 +1138,14 @@ def preflight_evaluation_opponents(
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as exc:
                 raise OpponentSetupError(f"AlliBot resolution manifest is missing or invalid: {manifest_path}") from exc
-            if manifest.get("schema_version") != "eagle-allibot-v2" or manifest.get("class_name") != item.class_name:
-                raise OpponentSetupError(f"AllInBot resolution manifest does not match {item.class_name}: {manifest_path}")
+            if (
+                manifest.get("schema_version") != "eagle-allibot-v2"
+                or manifest.get("class_name") != ALLINBOT_UPSTREAM_CLASS_NAME
+            ):
+                raise OpponentSetupError(
+                    "AllInBot resolution manifest does not match its pinned upstream "
+                    f"class {ALLINBOT_UPSTREAM_CLASS_NAME}: {manifest_path}"
+                )
             digest = hashlib.sha256(jar_path.read_bytes()).hexdigest() if jar_path is not None else ""
             if digest != manifest.get("jar_sha256"):
                 raise OpponentSetupError(f"AllInBot JAR hash does not match its resolution manifest: {jar_path}")
@@ -1253,6 +1267,15 @@ def _resolved_static_evaluation_opponents(
         if not mock and classes_dir is not None
         else None
     )
+    safe_allinbot_classes = (
+        _prepare_safe_allinbot_opponent(
+            config,
+            classes_dir=classes_dir,
+            repository_root=repository_root,
+        )
+        if not mock and classes_dir is not None
+        else None
+    )
     for opponent_id in config.evaluation_opponent_ids:
         item = registry.get(opponent_id)
         if item is None:
@@ -1273,9 +1296,85 @@ def _resolved_static_evaluation_opponents(
                     libraries = tuple(sorted(path.resolve() for path in source_lib.glob("*.jar") if path.is_file()))
                     if not mock and not libraries:
                         raise OpponentSetupError(f"AlliBot upstream libraries are missing: {source_lib}")
-                    classpath_entries = (jar_path, *libraries)
+                    if safe_allinbot_classes is None:
+                        raise OpponentSetupError("SafeAllInBot adapter was not prepared for real evaluation.")
+                    classpath_entries = (safe_allinbot_classes, jar_path, *libraries)
         opponents.append(EvaluationOpponent(item.opponent_id, item.class_name, classpath_entries, configured_weights[item.opponent_id]))
     return tuple(opponents)
+
+
+def _prepare_safe_allinbot_opponent(
+    config: ExperimentConfig,
+    *,
+    classes_dir: Path,
+    repository_root: Path | None = None,
+) -> Path:
+    """Compile the fault-containing reflection adapter once per run/final test.
+
+    The adapter deliberately imports no AlliBot classes. The original pinned JAR
+    is verified in preflight and stays on the match classpath only for reflective
+    runtime delegation.
+    """
+
+    repository_root = (repository_root or _repository_root()).resolve()
+    root = classes_dir.resolve() / "_opponent_adapters" / "safe_allinbot"
+    source = repository_root / "eagle" / "opponent_adapters" / "SafeAllInBot.java"
+    output = root / "classes"
+    class_file = output / "ai" / "eagle" / "SafeAllInBot.class"
+    manifest_path = root / "manifest.json"
+    jar_path = repository_root / "third_party" / "gui_opponents" / "jars" / "allibot.jar"
+    if not source.is_file():
+        raise OpponentSetupError(f"SafeAllInBot adapter source is missing: {source}")
+    if not jar_path.is_file():
+        raise OpponentSetupError(f"Pinned AllInBot JAR is missing: {jar_path}")
+    source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+    jar_hash = hashlib.sha256(jar_path.read_bytes()).hexdigest()
+    if class_file.is_file() and manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            manifest = {}
+        if (
+            manifest.get("source_sha256") == source_hash
+            and manifest.get("delegate_class") == ALLINBOT_UPSTREAM_CLASS_NAME
+            and manifest.get("upstream_jar_sha256") == jar_hash
+        ):
+            return output
+    root.mkdir(parents=True, exist_ok=True)
+    output.mkdir(parents=True, exist_ok=True)
+    microrts_dir = config.microrts_dir.resolve()
+    classpath = os.pathsep.join((str(microrts_dir / "bin"), str(microrts_dir / "lib" / "*")))
+    completed = subprocess.run(
+        ["javac", "-cp", classpath, "-d", str(output), str(source)],
+        cwd=microrts_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0 or not class_file.is_file():
+        raise OpponentSetupError(
+            "SafeAllInBot adapter could not be compiled: "
+            f"{(completed.stderr or completed.stdout).strip()}"
+        )
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "eagle-search-opponent-source-v1",
+                "opponent_id": "allinbot",
+                "class_name": SAFE_ALLINBOT_CLASS_NAME,
+                "delegate_class": ALLINBOT_UPSTREAM_CLASS_NAME,
+                "implementation": "reflection adapter with permanent passive fallback",
+                "source_path": str(source),
+                "source_sha256": source_hash,
+                "upstream_jar_path": str(jar_path),
+                "upstream_jar_sha256": jar_hash,
+                "classes_dir": str(output),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return output
 
 
 def _prepare_worker_rush_opponent(config: ExperimentConfig, *, classes_dir: Path) -> Path:

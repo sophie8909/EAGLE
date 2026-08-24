@@ -48,6 +48,18 @@ The evaluator groups match results by opponent in
 per-match summaries, then computes the weighted aggregate only for reporting.
 The aggregate denominator is the fixed weight sum `11.0`.
 
+AllInBot remains the pinned upstream implementation: preflight verifies its
+original class and JAR hash.  Real search and final-test matches instantiate a
+separately compiled reflection-only `ai.eagle.SafeAllInBot` adapter, which does
+not enter candidate source/class hashing or strategy complexity.  If the
+upstream delegate throws an `Exception`, returns null, or returns an invalid
+action, it emits one `EAGLE_SAFE_ALLINBOT_FALLBACK` stderr marker and permanently
+issues legal passive actions.  A recovered marker leaves the match `ok=true`
+but is recorded as `fault_scope="opponent"`, `opponent_fault_contained=true`,
+`opponent_fault_recovered=true`, and `scoring_neutralized=true`; the candidate
+contribution is a zero-score draw. Raw result and telemetry evidence are kept,
+so an upstream defect can neither crash the JVM nor become a candidate win.
+
 ## Objective and diagnostics
 
 `evaluation/objectives.py` returns exactly one evolutionary score for each of
@@ -68,6 +80,9 @@ Per-candidate evaluation artifacts include:
 
 Each run-level generation JSON stores objective statistics for every
 opponent case and the per-opponent reporting summaries used by analysis.
+Final-test JSON/CSV/Markdown also count contained upstream-opponent faults
+separately (`OF` in the Markdown table); they are not candidate runtime
+failures.
 
 ## `aos_head2head`-only parent-vs-offspring evaluation
 

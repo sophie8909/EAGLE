@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+ALLINBOT_UPSTREAM_CLASS_NAME = "ai.abstraction.submissions.allibot.alli"
+SAFE_ALLINBOT_CLASS_NAME = "ai.eagle.SafeAllInBot"
+
+
 class OpponentSetupError(RuntimeError):
     """A configured evaluation opponent cannot be prepared or loaded."""
 
@@ -42,8 +46,8 @@ ALLIBOT_OPPONENTS = (
 
 ALLINBOT_SEARCH_OPPONENT = OpponentSpec(
     "allinbot",
-    "AllInBot (upstream runtime)",
-    "ai.abstraction.submissions.allibot.alli",
+    "AllInBot (upstream runtime, fault-contained)",
+    SAFE_ALLINBOT_CLASS_NAME,
     "external",
     "third_party/gui_opponents/jars/allibot.jar",
 )

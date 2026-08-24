@@ -14,7 +14,7 @@ import re
 import shutil
 import subprocess
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -88,6 +88,12 @@ class MatchResult:
     opponent_source_generation: int | None = None
     opponent_source_candidate_id: str | None = None
     opponent_weight: float = 1.0
+    fault_scope: str | None = None
+    opponent_fault_contained: bool = False
+    opponent_fault_recovered: bool = False
+    opponent_fault_marker: str | None = None
+    opponent_fault_reason: str | None = None
+    scoring_neutralized: bool = False
     trace_path: str | None = None
     trace_integrity_path: str | None = None
     match_metadata_path: str | None = None
@@ -124,6 +130,12 @@ class MatchResult:
             "opponent_source_generation": self.opponent_source_generation,
             "opponent_source_candidate_id": self.opponent_source_candidate_id,
             "opponent_weight": self.opponent_weight,
+            "fault_scope": self.fault_scope,
+            "opponent_fault_contained": self.opponent_fault_contained,
+            "opponent_fault_recovered": self.opponent_fault_recovered,
+            "opponent_fault_marker": self.opponent_fault_marker,
+            "opponent_fault_reason": self.opponent_fault_reason,
+            "scoring_neutralized": self.scoring_neutralized,
             "max_cycles": self.max_cycles,
             "source_hash": self.source_hash,
             "class_hash": self.class_hash,
@@ -132,7 +144,9 @@ class MatchResult:
             "failure_category": self.failure_category,
             "failure_reason": self.failure_reason,
             "winner": self.winner,
-            "result": self.raw_result.get("result"),
+            "result": "draw" if self.scoring_neutralized else self.raw_result.get("result"),
+            "observed_winner": self.raw_result.get("winner"),
+            "observed_result": self.raw_result.get("result"),
             "final_tick": self.final_cycle,
             "player_final_resources": self.player0_resource,
             "enemy_final_resources": self.player1_resource,
@@ -473,6 +487,10 @@ def _finish_match(
         opponent=opponent,
         candidate_player=candidate_player,
     )
+    opponent_fault_reason = _safe_allinbot_fallback_reason(stderr)
+    opponent_fault_contained = opponent_fault_reason is not None
+    fault_scope = "opponent" if opponent_fault_contained else None
+    opponent_fault_recovered = opponent_fault_contained and failure is None
     telemetry: MatchTelemetry | None = None
     telemetry_persisted = False
     persistence_error: str | None = None
@@ -495,6 +513,8 @@ def _finish_match(
                 replay_path=(str(replay_path.name) if artifact_mode == "full" else None),
                 scoring_config=scoring_config,
             )
+            if opponent_fault_recovered:
+                telemetry = _neutralize_contained_opponent_fault(telemetry)
             write_telemetry_json(telemetry_path, telemetry)
             write_summary_json(
                 breakdown_path,
@@ -512,6 +532,11 @@ def _finish_match(
             persistence_error = f"failed to persist match telemetry: {exc}"
 
     values = final_match_values(raw_result, candidate_player=candidate_player)
+    if opponent_fault_recovered:
+        # The process completed only because an upstream opponent was contained.
+        # Keep the observed raw result, but make the candidate's contribution an
+        # explicit neutral draw rather than an accidental win or loss.
+        values["winner"] = -1
     performance = None if telemetry is None else telemetry.performance
     score = 0.0 if performance is None else performance.total_performance
     duration = max(0.0, time.monotonic() - started)
@@ -541,6 +566,12 @@ def _finish_match(
                     "tick_limit": tick_limit,
                     "candidate_player": candidate_player,
                     "opponent_weight": opponent_weight,
+                    "opponent_fault_contained": opponent_fault_contained,
+                    "opponent_fault_recovered": opponent_fault_recovered,
+                    "opponent_fault_marker": SAFE_ALLINBOT_FALLBACK_MARKER if opponent_fault_contained else None,
+                    "opponent_fault_reason": opponent_fault_reason,
+                    "fault_scope": fault_scope,
+                    "scoring_neutralized": opponent_fault_recovered,
                 },
                 "start_timestamp": started_at,
             },
@@ -593,6 +624,12 @@ def _finish_match(
         opponent_source_generation=opponent_source_generation,
         opponent_source_candidate_id=opponent_source_candidate_id,
         opponent_weight=opponent_weight,
+        fault_scope=fault_scope,
+        opponent_fault_contained=opponent_fault_contained,
+        opponent_fault_recovered=opponent_fault_recovered,
+        opponent_fault_marker=SAFE_ALLINBOT_FALLBACK_MARKER if opponent_fault_contained else None,
+        opponent_fault_reason=opponent_fault_reason,
+        scoring_neutralized=opponent_fault_recovered,
         trace_path=None if trace_artifact is None else str(trace_artifact.trace_path),
         trace_integrity_path=None if trace_artifact is None else str(trace_artifact.integrity_path),
         match_metadata_path=None if trace_artifact is None else str(trace_artifact.metadata_path),
@@ -601,6 +638,42 @@ def _finish_match(
     )
     _persist_result(match_dir, result)
     return result
+
+
+SAFE_ALLINBOT_FALLBACK_MARKER = "EAGLE_SAFE_ALLINBOT_FALLBACK"
+_SAFE_ALLINBOT_FALLBACK_PATTERN = re.compile(
+    rf"\b{SAFE_ALLINBOT_FALLBACK_MARKER}\s+reason=(?P<reason>[A-Za-z0-9_:-]+)"
+)
+
+
+def _safe_allinbot_fallback_reason(stderr: str) -> str | None:
+    """Extract the adapter's explicit non-fatal fallback diagnostic once."""
+
+    match = _SAFE_ALLINBOT_FALLBACK_PATTERN.search(stderr)
+    return None if match is None else match.group("reason")
+
+
+def _neutralize_contained_opponent_fault(telemetry: MatchTelemetry) -> MatchTelemetry:
+    """Keep observed telemetry, but remove a recovered opponent fault from scoring.
+
+    The match remains successful evidence: raw result, replay, and tick telemetry
+    are all retained.  Its evaluation contribution is nevertheless the canonical
+    neutral draw (zero result and shaping terms), because the upstream opponent
+    did not complete its configured policy.
+    """
+
+    neutral = GamePerformanceBreakdown(
+        result_score=0.0,
+        unit_material_score=0.0,
+        final_resource_score=0.0,
+        survival_score=0.0,
+        shaping_score=0.0,
+        match_score=0.0,
+        mean_material_difference=0.0,
+        final_resource_difference=0.0,
+        survival_ratio=0.0,
+    )
+    return replace(telemetry, result="draw", performance=neutral)
 
 
 def classify_runtime_failure(

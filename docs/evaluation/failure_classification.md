@@ -36,3 +36,15 @@ validation/compilation retry.
 Valid losses and draws are not failures when the complete expected match batch
 is present. A partial, missing, invalid, unparseable, timed-out, or runtime-
 failed batch is incomplete and receives both sentinels.
+
+The pinned AllInBot upstream policy has a narrow fault-containment boundary.
+Its reflection adapter catches only delegate `Exception` failures (never
+`Throwable`/serious JVM errors), null actions, and integrity-invalid actions.
+When it recovers a completed match, artifacts carry
+`fault_scope="opponent"`, `opponent_fault_contained=true`,
+`opponent_fault_recovered=true`, the one-time marker/reason, and
+`scoring_neutralized=true`. The runner preserves the observed raw result but
+uses a neutral zero-score draw for all candidate metrics and final-test W/L/D
+reporting. Therefore this is neither a candidate runtime failure nor evidence
+of a candidate win; an actual incomplete/failed process still follows the
+normal failure sentinel path.

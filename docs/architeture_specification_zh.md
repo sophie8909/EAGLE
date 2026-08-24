@@ -130,6 +130,15 @@ WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的�
 充當 identity adapter。每代的 expected/completed match count 是所有 candidate
 的加總，而不是第一個 candidate 的值。
 
+AllInBot 的 preflight 仍驗證 pinned upstream 原始 class 與 JAR hash；實際 search
+與 final test 則在 candidate class tree 之外編譯 reflection-only
+`ai.eagle.SafeAllInBot`。adapter 僅在 upstream delegate 拋出 `Exception`、回傳
+null 或無效 action 時，寫出一次 stderr marker 並永久改為合法 passive action；
+不捕捉 `Throwable` 或嚴重 JVM error。若該隔離使對局完成，artifact 明確保存
+`fault_scope=opponent`、contained/recovered、marker/reason 與
+`scoring_neutralized=true`；保留原始 observed result，但 candidate 的計分一律是
+零分 draw。它不會變成 candidate win，也不是 candidate runtime failure。
+
 Code Quality 也是 diagnostic，不是 lexicase objective。成功分數為：
 
 `100 - (40C + 25N + 20L + 15F)`

@@ -74,7 +74,7 @@ class ExperimentLauncherTests(unittest.TestCase):
             final_dir = run_dir / "final_test"
             final_dir.mkdir()
             (final_dir / "final_test_summary.json").write_text(
-                json.dumps({"schema_version": "eagle-final-test-v1"}),
+                json.dumps({"schema_version": "eagle-final-test-v2"}),
                 encoding="utf-8",
             )
         return run_dir

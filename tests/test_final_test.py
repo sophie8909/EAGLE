@@ -5,13 +5,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from eagle.config import ExperimentConfig
 from eagle.final_test import (
     FINAL_TEST_GAMES_PER_SIDE,
     FINAL_TEST_OPPONENTS,
+    _build_summary,
     _empty_cell,
     _markdown_table,
     _select_candidate,
 )
+from eagle.opponents import SAFE_ALLINBOT_CLASS_NAME
 
 
 class FinalTestTests(unittest.TestCase):
@@ -25,6 +28,10 @@ class FinalTestTests(unittest.TestCase):
             ],
         )
         self.assertEqual(FINAL_TEST_GAMES_PER_SIDE, 10)
+        self.assertEqual(
+            next(item.class_name for item in FINAL_TEST_OPPONENTS if item.opponent_id == "allinbot"),
+            SAFE_ALLINBOT_CLASS_NAME,
+        )
 
     def test_markdown_table_contains_wins_losses_draws_and_side_breakdown(self):
         cell = _empty_cell()
@@ -45,6 +52,32 @@ class FinalTestTests(unittest.TestCase):
         self.assertIn("11/7/2/0", table)
         self.assertIn("p0 6/3/1", table)
         self.assertIn("p1 5/4/1", table)
+
+    def test_summary_counts_contained_opponent_fault_as_neutral_draw(self):
+        with tempfile.TemporaryDirectory() as directory:
+            summary = _build_summary(
+                config=ExperimentConfig.from_mapping({}),
+                run_dir=Path(directory),
+                output_dir=Path(directory),
+                candidate={"candidate_id": "candidate-a"},
+                integration=type("Integration", (), {"to_json_dict": lambda self: {}})(),
+                results=[
+                    {
+                        "opponent_id": "allinbot",
+                        "map_id": "map_1",
+                        "candidate_player": 0,
+                        "result": "draw",
+                        "opponent_fault_contained": True,
+                        "opponent_fault_recovered": True,
+                    }
+                ],
+            )
+
+        cell = summary["table"]["allinbot"]["map_1"]
+        self.assertEqual(cell["draws"], 1)
+        self.assertEqual(cell["opponent_fault_contained"], 1)
+        self.assertEqual(cell["opponent_fault_recovered"], 1)
+        self.assertEqual(summary["opponent_fault_contained_matches"], 1)
 
     def test_summary_best_candidate_does_not_override_failed_selection(self):
         with tempfile.TemporaryDirectory() as directory:

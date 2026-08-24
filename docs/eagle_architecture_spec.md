@@ -188,6 +188,14 @@ The fixed search roster is:
 Every runnable candidate uses the same source and compiled classes for 126
 matches: seven opponents × three maps × three rounds × two player sides.
 
+AllInBot preflight verifies the pinned upstream class/JAR before execution.
+Its separately compiled reflection adapter is outside the candidate phenotype
+and only contains upstream `Exception`, null-action, or invalid-action faults
+with a permanent legal passive fallback. A completed contained match retains
+its observed raw evidence but has canonical opponent-fault fields and a neutral
+zero-score draw for candidate scoring; it is neither a candidate win nor a
+candidate runtime failure.
+
 Fitness is a maximized mapping with exactly the seven opponent IDs. Failed or
 incomplete candidates receive `-1000.0` for every case. Aggregate Game
 Performance is reporting-only, using weights `1` for the three rush opponents

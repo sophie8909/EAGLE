@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from eagle.evaluation import (
+    _prepare_safe_allinbot_opponent,
     _prepare_worker_rush_opponent,
     hash_class_directory,
     hash_file,
@@ -34,7 +35,7 @@ from evaluation.runtime_evaluation import run_microrts_match
 from eagle.config import ExperimentConfig
 
 
-FINAL_TEST_SCHEMA_VERSION = "eagle-final-test-v1"
+FINAL_TEST_SCHEMA_VERSION = "eagle-final-test-v2"
 FINAL_TEST_GAMES_PER_SIDE = 10
 AGENT_CLASS = "ai.generated.CandidateAgent"
 FINAL_TEST_OPPONENTS = (*SEARCH_OPPONENT_REGISTRY, *BASIC_OPPONENTS[:3])
@@ -215,11 +216,17 @@ def _run_final_matrix(
     maps = canonical_evaluation_maps(config.evaluation_maps)
     scoring_config = scoring_config_from_experiment(config)
     worker_classes = _prepare_worker_rush_opponent(config, classes_dir=output_dir / "classes")
+    safe_allinbot_classes = _prepare_safe_allinbot_opponent(
+        config,
+        classes_dir=output_dir / "classes",
+        repository_root=repository_root,
+    )
     opponent_classpaths = {
         item.opponent_id: _opponent_classpath(
             item.opponent_id,
             repository_root=repository_root,
             worker_classes=worker_classes,
+            safe_allinbot_classes=safe_allinbot_classes,
         )
         for item in FINAL_TEST_OPPONENTS
     }
@@ -274,6 +281,11 @@ def _run_final_matrix(
                             "ok": result.ok,
                             "failure_category": result.failure_category,
                             "failure_reason": result.failure_reason,
+                            "fault_scope": result.fault_scope,
+                            "opponent_fault_contained": result.opponent_fault_contained,
+                            "opponent_fault_recovered": result.opponent_fault_recovered,
+                            "opponent_fault_reason": result.opponent_fault_reason,
+                            "scoring_neutralized": result.scoring_neutralized,
                             "match": result.to_json_dict(),
                         }
                     )
@@ -286,6 +298,7 @@ def _opponent_classpath(
     *,
     repository_root: Path,
     worker_classes: Path,
+    safe_allinbot_classes: Path,
 ) -> tuple[Path, ...]:
     if opponent_id == "workerrush":
         return (worker_classes,)
@@ -297,6 +310,7 @@ def _opponent_classpath(
         raise ValueError(f"Opponent JAR is missing for {opponent_id}: {jar_path}")
     entries: list[Path] = [jar_path]
     if opponent_id == "allinbot":
+        entries.insert(0, safe_allinbot_classes)
         source_lib = repository_root / "third_party" / "gui_opponents" / "src" / "allibot" / "lib"
         entries.extend(sorted(path.resolve() for path in source_lib.glob("*.jar") if path.is_file()))
     return tuple(entries)
@@ -327,6 +341,10 @@ def _build_summary(
         side = f"p{item['candidate_player']}"
         cell[side][item["result"]] += 1
         cell[{"win": "wins", "loss": "losses", "draw": "draws", "error": "errors"}[item["result"]]] += 1
+        if item.get("opponent_fault_contained"):
+            cell["opponent_fault_contained"] += 1
+        if item.get("opponent_fault_recovered"):
+            cell["opponent_fault_recovered"] += 1
     return {
         "schema_version": FINAL_TEST_SCHEMA_VERSION,
         "run_dir": str(run_dir),
@@ -345,6 +363,12 @@ def _build_summary(
         "maps": [{"id": item.map_id, "path": item.path} for item in canonical_evaluation_maps(config.evaluation_maps)],
         "games_per_side_per_map": FINAL_TEST_GAMES_PER_SIDE,
         "total_matches": len(results),
+        "opponent_fault_contained_matches": sum(
+            bool(item.get("opponent_fault_contained")) for item in results
+        ),
+        "opponent_fault_recovered_matches": sum(
+            bool(item.get("opponent_fault_recovered")) for item in results
+        ),
         "integration": integration.to_json_dict(),
         "table": table,
         "matches": results,
@@ -357,6 +381,8 @@ def _empty_cell() -> dict[str, Any]:
         "losses": 0,
         "draws": 0,
         "errors": 0,
+        "opponent_fault_contained": 0,
+        "opponent_fault_recovered": 0,
         "p0": {"win": 0, "loss": 0, "draw": 0, "error": 0},
         "p1": {"win": 0, "loss": 0, "draw": 0, "error": 0},
     }
@@ -379,6 +405,8 @@ def _write_outputs(output_dir: Path, summary: dict[str, Any]) -> None:
                     "losses": cell["losses"],
                     "draws": cell["draws"],
                     "errors": cell["errors"],
+                    "opponent_fault_contained": cell["opponent_fault_contained"],
+                    "opponent_fault_recovered": cell["opponent_fault_recovered"],
                     "p0_wins": cell["p0"]["win"],
                     "p0_losses": cell["p0"]["loss"],
                     "p0_draws": cell["p0"]["draw"],
@@ -400,6 +428,7 @@ def _markdown_table(summary: dict[str, Any]) -> str:
         f"# EAGLE Final Test — {summary['candidate']['candidate_id']}",
         "",
         f"Each cell contains total `W/L/D/E` across p0 and p1, followed by side-specific counts. "
+        f"`OF` is contained upstream-opponent faults; recovered OF matches are neutral draws. "
         f"Each side has {summary['games_per_side_per_map']} games per map.",
         "",
         "| Opponent | " + " | ".join(item["id"] for item in maps) + " |",
@@ -411,6 +440,7 @@ def _markdown_table(summary: dict[str, Any]) -> str:
             cell = summary["table"][opponent["id"]][evaluation_map["id"]]
             cells.append(
                 f"{cell['wins']}/{cell['losses']}/{cell['draws']}/{cell['errors']} "
+                f"OF {cell['opponent_fault_contained']} "
                 f"(p0 {cell['p0']['win']}/{cell['p0']['loss']}/{cell['p0']['draw']}; "
                 f"p1 {cell['p1']['win']}/{cell['p1']['loss']}/{cell['p1']['draw']})"
             )
