@@ -14,7 +14,7 @@ model:
   threads: 8
   batch_size: 512
   parallel: 1
-seed_prompt_files: [prompts/initial_strategy.txt]
+seed_prompt_files: [seeds/blank_policy.txt]
 generation_prompt_file: prompts/initial_generation.txt
 generations: 20
 population_size: 10

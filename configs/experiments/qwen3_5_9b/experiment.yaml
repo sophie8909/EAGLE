@@ -19,7 +19,7 @@ model:
   startup_timeout_seconds: 180
   health_timeout_seconds: 5
 
-seed_prompt_files: [prompts/initial_strategy.txt]
+seed_prompt_files: [seeds/blank_policy.txt]
 generation_prompt_file: prompts/initial_generation.txt
 generations: 20
 population_size: 10

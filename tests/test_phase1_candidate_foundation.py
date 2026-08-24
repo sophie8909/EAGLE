@@ -16,6 +16,7 @@ from eagle.search import initialize_population, run_search
 from eagle.run_artifacts import load_candidate
 from generation.agent_template import JavaTemplatePaths, load_java_template
 from generation.backend import MockGenerationBackend
+from generation.backend import InitialJavaSeedBackend
 
 
 class Phase1CandidateFoundationTests(unittest.TestCase):
@@ -181,6 +182,15 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         population = initialize_population(ExperimentConfig.from_mapping({"population_size": 4}))
         self.assertEqual(len(population), 4)
         self.assertTrue(all(candidate.lineage_to_json_dict()["source_candidate_ids"] == [] for candidate in population))
+        self.assertTrue(all(candidate.strategy_prompt == "" for candidate in population))
+
+    def test_initial_java_seed_backend_is_generation_zero_only(self) -> None:
+        config = ExperimentConfig.from_mapping({})
+        backend = InitialJavaSeedBackend(config.initial_java_seed_path)
+        source = backend.generate(Candidate(generation=0), "CandidateAgent")
+        self.assertEqual(source, config.initial_java_seed_path.read_text(encoding="utf-8"))
+        with self.assertRaisesRegex(ValueError, "generation-zero only"):
+            backend.generate(Candidate(generation=1), "CandidateAgent")
 
     def test_run_lineage_ids_resolve_to_earlier_acyclic_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

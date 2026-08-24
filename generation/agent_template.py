@@ -6,9 +6,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from eagle.prompts import load_prompt
-
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_AGENT_TEMPLATE_PATH = (
     REPOSITORY_ROOT / "eagle" / "java_templates" / "CandidateAgent.java"
@@ -25,7 +22,6 @@ ACTION_HELPER_METHODS: tuple[str, ...] = (
     "commandAttack",
     "commandIdle",
 )
-MICRORTS_BLANK_STRATEGY_PROMPT = load_prompt("initial_strategy")
 
 
 @dataclass(frozen=True)
@@ -102,7 +98,7 @@ def extract_strategy_region(source: str) -> str:
 
 
 def microrts_blank_strategy_prompt() -> str:
-    return MICRORTS_BLANK_STRATEGY_PROMPT
+    return ""
 
 
 def render_blank_strategy_agent(class_name: str = "CandidateAgent") -> str:

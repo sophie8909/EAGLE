@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from generation.backend import InitialJavaSeedBackend
+
 from .aos import (
     OPERATOR_TO_MUTATION,
     ReflectionOperatorController,
@@ -152,7 +154,7 @@ def _run_search_impl(
         population,
         generation=0,
         config=config,
-        backend=generation_backend,
+        backend=InitialJavaSeedBackend(config.initial_java_seed_path),
         generated_agents_dir=generated_agents_dir,
         classes_dir=classes_dir,
         candidates_dir=candidates_dir,

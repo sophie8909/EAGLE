@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from eagle.config import ExperimentConfig
+from eagle.config import DEFAULT_SEED_POLICY_PATH, ExperimentConfig
 from eagle.prompts import (
     DEFAULT_PROMPT_DIR,
     load_prompt,
@@ -61,15 +61,20 @@ class PromptResourceTests(unittest.TestCase):
             save_prompt_template("example", "after $value", path=root)
             self.assertEqual(render_prompt("example", {"value": "ok"}, path=root), "after ok")
 
-    def test_production_configs_reference_initial_individual_prompt_files(self) -> None:
+    def test_production_configs_use_blank_policy_and_checked_in_java_seed(self) -> None:
         config_paths = sorted(Path("configs/experiments").glob("**/*.yaml"))
         self.assertTrue(config_paths)
         for path in config_paths:
             config = ExperimentConfig.from_file(path)
-            self.assertEqual(config.seed_prompt_files, (DEFAULT_PROMPT_DIR / "initial_strategy.txt",), path)
+            self.assertEqual(config.seed_prompt_files, (DEFAULT_SEED_POLICY_PATH,), path)
             self.assertEqual(config.generation_prompt_file, DEFAULT_PROMPT_DIR / "initial_generation.txt", path)
-            self.assertEqual(config.seed_prompts, (load_prompt("initial_strategy"),), path)
+            self.assertEqual(config.seed_prompts, ("",), path)
             self.assertEqual(config.generation_prompt, load_prompt("initial_generation"), path)
+            self.assertEqual(
+                config.initial_java_seed_path,
+                Path("eagle/java_templates/CandidateAgent.java").resolve(),
+                path,
+            )
 
     def test_inline_prompt_and_template_fields_are_rejected(self) -> None:
         for field, value in (

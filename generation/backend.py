@@ -8,6 +8,7 @@ import time
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from eagle.candidate import Candidate
@@ -34,6 +35,23 @@ class MockGenerationBackend(GenerationBackend):
         if class_name != "CandidateAgent":
             raise ValueError("Repository template declares only CandidateAgent.")
         return load_java_template(JavaTemplatePaths())
+
+
+class InitialJavaSeedBackend(GenerationBackend):
+    """Return the checked-in generation-zero phenotype without an LLM call."""
+
+    operation = "initial_java_seed"
+    model = None
+
+    def __init__(self, source_path: Path) -> None:
+        self.source_path = source_path
+
+    def generate(self, candidate: Candidate, class_name: str) -> str:
+        if candidate.generation != 0:
+            raise ValueError("The initial Java seed backend is generation-zero only.")
+        if class_name != "CandidateAgent":
+            raise ValueError("The initial Java seed declares only CandidateAgent.")
+        return self.source_path.read_text(encoding="utf-8")
 
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""

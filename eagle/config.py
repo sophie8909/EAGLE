@@ -22,6 +22,7 @@ DEFAULT_EVALUATION_MAPS = (
     "maps/16x16/basesWorkers16x16.xml",
     "maps/24x24/basesWorkers24x24.xml",
 )
+DEFAULT_SEED_POLICY_PATH = Path(__file__).resolve().parents[1] / "seeds" / "blank_policy.txt"
 DEFAULT_SEARCH_OPPONENTS = tuple((case, OPPONENT_WEIGHTS[case]) for case in LEXICASE_CASES)
 FIXED_OPPONENT_WEIGHT_SUM = OPPONENT_WEIGHT_SUM
 
@@ -103,6 +104,7 @@ class ExperimentConfig:
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
+    initial_java_seed_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
     tick_limit: int = 100
     match_timeout_seconds: float = 120.0
     match_artifact_mode: str = "compact"
@@ -175,9 +177,10 @@ class ExperimentConfig:
                 + ". Store prompts in prompts/*.txt and use execution_mode."
             )
         seed_prompt_files = _parse_prompt_files(
-            payload.get("seed_prompt_files", (DEFAULT_PROMPT_DIR / "initial_strategy.txt",)),
+            payload.get("seed_prompt_files", (DEFAULT_SEED_POLICY_PATH,)),
             repository_root,
             "seed_prompt_files",
+            allow_empty=True,
         )
         seed_prompts = tuple(path.read_text(encoding="utf-8").strip() for path in seed_prompt_files)
         if not seed_prompts:
@@ -255,6 +258,10 @@ class ExperimentConfig:
             microrts_dir=Path(payload.get("microrts_dir", "third_party/microrts")),
             runs_dir=Path(payload.get("runs_dir", "runs")),
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
+            initial_java_seed_path=_repository_path(
+                payload.get("initial_java_seed_path"),
+                DEFAULT_AGENT_TEMPLATE_PATH,
+            ),
             tick_limit=int(payload.get("tick_limit", 100)),
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
             match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
@@ -338,6 +345,7 @@ class ExperimentConfig:
         if any(value < 0 for _, value in self.unit_material_values):
             raise ValueError("unit material values must be non-negative.")
         validate_java_template(JavaTemplatePaths(self.agent_template_path))
+        validate_java_template(JavaTemplatePaths(self.initial_java_seed_path))
 
     def validate_runtime_files(self) -> None:
         """Validate external model assets immediately before a production launch."""
@@ -391,6 +399,7 @@ class ExperimentConfig:
             "microrts_dir": str(self.microrts_dir.resolve()),
             "runs_dir": str(self.runs_dir.resolve()),
             "agent_template_path": str(self.agent_template_path.resolve()),
+            "initial_java_seed_path": str(self.initial_java_seed_path.resolve()),
             "tick_limit": self.tick_limit,
             "match_timeout_seconds": self.match_timeout_seconds,
             "match_artifact_mode": self.match_artifact_mode,
@@ -473,7 +482,13 @@ def _parse_evaluation_opponents(value: object) -> tuple[tuple[str, float], ...]:
     return tuple(parsed)
 
 
-def _parse_prompt_files(value: object, base_dir: Path, field_name: str) -> tuple[Path, ...]:
+def _parse_prompt_files(
+    value: object,
+    base_dir: Path,
+    field_name: str,
+    *,
+    allow_empty: bool = False,
+) -> tuple[Path, ...]:
     if not isinstance(value, (list, tuple)):
         raise ValueError(f"{field_name} must be a list of prompt file paths.")
     paths: list[Path] = []
@@ -484,7 +499,7 @@ def _parse_prompt_files(value: object, base_dir: Path, field_name: str) -> tuple
             raise ValueError(f"{field_name} entries must be .txt files: {path}")
         if not path.is_file():
             raise ValueError(f"{field_name} prompt file does not exist: {path}")
-        if not path.read_text(encoding="utf-8").strip():
+        if not allow_empty and not path.read_text(encoding="utf-8").strip():
             raise ValueError(f"{field_name} prompt file must not be empty: {path}")
         paths.append(path)
     return tuple(paths)
