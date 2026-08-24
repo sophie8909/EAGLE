@@ -57,7 +57,9 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         return f"{self.base_url}/v1/chat/completions"
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
+        genotype_before = (candidate.strategy_prompt, candidate.generation_prompt)
         prompt = truncate_prompt(candidate.generation_input(class_name=class_name))
+        assert (candidate.strategy_prompt, candidate.generation_prompt) == genotype_before
         module_name = "complete_java_agent"
         payload = {
             "model": self.model,

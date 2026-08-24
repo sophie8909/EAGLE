@@ -15,6 +15,16 @@ from eagle.prompts import (
 
 
 class PromptResourceTests(unittest.TestCase):
+    def test_initial_strategy_is_a_concrete_worker_rush_policy(self) -> None:
+        policy = load_prompt("initial_strategy")
+        self.assertIn("continuously produce Workers", policy)
+        self.assertIn("harvest", policy)
+        self.assertIn("attack the enemy Base", policy)
+        self.assertNotIn("Define a concrete", policy)
+        for coach_name in ("coach_refine", "coach_counter", "coach_structural", "coach_alternative"):
+            coach = load_prompt_templates()[coach_name].template
+            self.assertIn("concrete game-playing policy itself", coach)
+
     def test_every_prompt_is_one_registered_text_file(self) -> None:
         templates = load_prompt_templates()
         registered = {template.source_path.resolve() for template in templates.values()}

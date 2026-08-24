@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 # Writers are grouped by lifecycle boundary: genotype inputs first,
 # stage/evaluation evidence next, and run summaries/configuration last.
-ARTIFACT_SCHEMA_VERSION = "phase4-v3"
+ARTIFACT_SCHEMA_VERSION = "phase4-v4"
 
 
 def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
@@ -33,7 +33,7 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
     candidate_dir = candidates_dir / candidate.id
     genotype_dir = candidate_dir / "genotype"
     genotype_dir.mkdir(parents=True, exist_ok=True)
-    (genotype_dir / "strategy_prompt.txt").write_text(candidate.strategy_prompt, encoding="utf-8")
+    (genotype_dir / "policy_prompt.txt").write_text(candidate.strategy_prompt, encoding="utf-8")
     write_json(
         genotype_dir / "strategy_signature.json",
         {
@@ -45,8 +45,17 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
             "niche_changed": candidate.niche_changed,
         },
     )
-    (genotype_dir / "previous_code.java").write_text(candidate.previous_code, encoding="utf-8")
-    (genotype_dir / "generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
+    (genotype_dir / "code_generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
+    reflection_dir = candidate_dir / "mutation" / "strategy_reflection"
+    if (reflection_dir / "metadata.json").is_file():
+        # ``Candidate.generation_input`` supplies the strategy placeholder with
+        # this stripped value.  Record it at the last persistence boundary
+        # before the Generator call, including when Reflection fell back to the
+        # inherited strategy after a role failure.
+        (reflection_dir / "generator_strategy_input.txt").write_text(
+            candidate.strategy_prompt.strip(),
+            encoding="utf-8",
+        )
     write_json(candidate_dir / "lineage.json", candidate.lineage_to_json_dict())
     if candidate.operator in {"crossover", "crossover+mutation"}:
         crossover_dir = candidate_dir / "crossover"
@@ -57,7 +66,6 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
                 "lineage_schema_version": candidate.lineage_to_json_dict()["lineage_schema_version"],
                 "candidate_id": candidate.id,
                 "strategy_parent_id": candidate.strategy_parent_id,
-                "previous_code_parent_id": candidate.previous_code_parent_id,
                 "generation_prompt_parent_id": candidate.generation_prompt_parent_id,
             },
         )
@@ -116,10 +124,11 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     (integration_dir / "stderr.txt").write_text("" if integration is None else integration.stderr, encoding="utf-8")
     mutation_record = evaluation.candidate.metadata.get("mutation")
     if mutation_record is not None:
-        mutation_path = candidate_dir / "mutation" / "metadata.json"
+        mutation_type = str(mutation_record.get("type") or evaluation.candidate.mutation_type or "unknown")
+        mutation_path = candidate_dir / "mutation" / f"{mutation_type}_reflection" / "metadata.json"
         if not mutation_path.exists():
-            write_json(mutation_path, mutation_record)
             _write_mutation_artifacts(candidate_dir, mutation_record)
+            write_json(mutation_path, _mutation_metadata_record(mutation_record))
     write_json(candidate_dir / "timing.json", evaluation.candidate.timing)
     _write_evaluation_artifacts(candidate_dir, evaluation)
     write_candidate_snapshot(candidates_dir, evaluation.candidate)
@@ -222,7 +231,8 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
 def _write_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> None:
     """Persist reflector and rewriter evidence from the canonical mutation record."""
 
-    mutation_dir = candidate_dir / "mutation"
+    mutation_type = str(mutation_record.get("type") or "unknown")
+    mutation_dir = candidate_dir / "mutation" / f"{mutation_type}_reflection"
     if "evidence" in mutation_record:
         write_json(mutation_dir / "reflection_context.json", mutation_record["evidence"])
     reflection = mutation_record.get("reflection") or {}
@@ -242,6 +252,19 @@ def _write_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> Non
             str(rewrite.get("raw_response") or ""), encoding="utf-8"
         )
 
+
+def _mutation_metadata_record(record: dict) -> dict:
+    payload = dict(record)
+    for key in ("reflection", "rewrite"):
+        stage = payload.get(key)
+        if isinstance(stage, dict):
+            payload[key] = {
+                name: value
+                for name, value in stage.items()
+                if name not in {"request", "raw_response"}
+            }
+    return payload
+
 def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvaluation) -> None:
     """Persist the complete final Java-generation request and response envelope."""
 
@@ -253,6 +276,12 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     (generation_dir / "response_raw.txt").write_text(result.raw_llm_output or "", encoding="utf-8")
     (generation_dir / "extracted_candidate.java").write_text(result.extracted_code or "", encoding="utf-8")
     (generation_dir / "normalized_candidate.java").write_text(
+        result.assembled_java or evaluation.candidate.generated_java or "",
+        encoding="utf-8",
+    )
+    phenotype_dir = candidate_dir / "phenotype"
+    phenotype_dir.mkdir(parents=True, exist_ok=True)
+    (phenotype_dir / "CandidateAgent.java").write_text(
         result.assembled_java or evaluation.candidate.generated_java or "",
         encoding="utf-8",
     )
@@ -317,15 +346,37 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
     """Write the lightweight canonical candidate index and resumable references."""
 
     game = candidate.game_eval_result or {}
+    artifact_references = {
+        "lineage": "lineage.json",
+        "policy_prompt": "genotype/policy_prompt.txt",
+        "code_generation_prompt": "genotype/code_generation_prompt.txt",
+        "generated_java": "phenotype/CandidateAgent.java",
+        "generation": "generation/result.json",
+        "validation": "validation/validation_result.json",
+        "compilation": "compilation/compilation_result.json",
+        "integration": "integration/integration_result.json",
+        "matches": "matches/",
+        "game_performance": "evaluation/game_performance.json",
+        "function_capability": "evaluation/function_capability.json",
+        "strategy_alignment": "strategy_alignment/result.json",
+        "code_quality": "evaluation/code_quality.json",
+        "objectives": "evaluation/objectives.json",
+        "timing": "timing.json",
+    }
+    candidate_dir = candidates_dir / candidate.id
+    if (candidate_dir / "mutation" / "strategy_reflection" / "metadata.json").is_file():
+        artifact_references.update({
+            "strategy_reflection": "mutation/strategy_reflection/metadata.json",
+            "generator_strategy_input": "mutation/strategy_reflection/generator_strategy_input.txt",
+        })
     payload = {
-        "candidate_schema_version": "eagle-candidate-v3",
+        "candidate_schema_version": "eagle-candidate-v4",
         "candidate_id": candidate.id,
         "generation": candidate.generation,
         "parent_ids": list(candidate.parent_ids),
         "operator": candidate.operator,
         "mutation_type": candidate.mutation_type,
         "strategy_parent_id": candidate.strategy_parent_id,
-        "previous_code_parent_id": candidate.previous_code_parent_id,
         "generation_prompt_parent_id": candidate.generation_prompt_parent_id,
         "source_candidate_ids": list(candidate.resolved_source_candidate_ids()),
         "compile_status": candidate.compile_status,
@@ -342,24 +393,7 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "niche_changed": candidate.niche_changed,
         "metadata": compact_candidate_metadata(candidate.metadata),
         "timing_summary": dict(candidate.timing),
-        "artifacts": {
-            "lineage": "lineage.json",
-            "strategy_prompt": "genotype/strategy_prompt.txt",
-            "previous_code": "genotype/previous_code.java",
-            "generation_prompt": "genotype/generation_prompt.txt",
-            "generated_java": "generation/normalized_candidate.java",
-            "generation": "generation/result.json",
-            "validation": "validation/validation_result.json",
-            "compilation": "compilation/compilation_result.json",
-            "integration": "integration/integration_result.json",
-            "matches": "matches/",
-            "game_performance": "evaluation/game_performance.json",
-            "function_capability": "evaluation/function_capability.json",
-            "strategy_alignment": "strategy_alignment/result.json",
-            "code_quality": "evaluation/code_quality.json",
-            "objectives": "evaluation/objectives.json",
-            "timing": "timing.json",
-        },
+        "artifacts": artifact_references,
     }
     write_json(candidates_dir / candidate.id / "candidate.json", payload)
 

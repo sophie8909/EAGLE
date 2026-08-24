@@ -317,7 +317,7 @@ def _archive_entry(candidate: Candidate) -> dict[str, Any]:
         "generation": candidate.generation,
         "best_game_performance": (candidate.game_eval_result or {}).get("game_performance"),
         "code_quality": (candidate.code_quality_result or {}).get("code_quality"),
-        "strategy_prompt_path": f"candidates/{candidate.id}/genotype/strategy_prompt.txt",
+        "policy_prompt_path": f"candidates/{candidate.id}/genotype/policy_prompt.txt",
     }
 
 

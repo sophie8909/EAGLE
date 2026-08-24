@@ -118,7 +118,46 @@ def _select_candidate(run_dir: Path, candidate_id: str | None) -> dict[str, Any]
         latest = max(completed) if completed else None
     if latest is None:
         raise ValueError(f"Run has no completed generation: {run_dir}")
-    generation = int(latest)
+    generation_numbers = list(range(int(latest), -1, -1))
+    if candidate_id is not None:
+        for generation in generation_numbers:
+            candidates = _load_generation_candidates(run_dir, generation)
+            by_id = {str(item.get("candidate_id") or item.get("id")): item for item in candidates}
+            selected = by_id.get(candidate_id)
+            if selected is None:
+                continue
+            if _candidate_is_runnable(run_dir, selected):
+                return selected
+            raise ValueError(f"Candidate {candidate_id!r} is not runnable in generation {generation}")
+        raise ValueError(f"Candidate {candidate_id!r} is not in the run: {run_dir}")
+
+    summary_best_id: str | None = None
+    summary_path = run_dir / "summary.json"
+    if summary_path.is_file():
+        best = _read_json(summary_path).get("best_candidate") or {}
+        summary_best_id = str(best.get("candidate_id") or "") or None
+
+    for generation in generation_numbers:
+        candidates = _load_generation_candidates(run_dir, generation)
+        by_id = {str(item.get("candidate_id") or item.get("id")): item for item in candidates}
+        if summary_best_id and generation == int(latest):
+            selected = by_id.get(summary_best_id)
+            if selected is not None and _candidate_is_runnable(run_dir, selected):
+                return selected
+        runnable = [item for item in candidates if _candidate_is_runnable(run_dir, item)]
+        if runnable:
+            return max(
+                runnable,
+                key=lambda item: tuple(
+                    float((item.get("fitness_objectives") or {}).get(case, -1000.0))
+                    for case in ("lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma")
+                ),
+            )
+
+    raise ValueError(f"No runnable candidate found in run: {run_dir}")
+
+
+def _load_generation_candidates(run_dir: Path, generation: int) -> list[dict[str, Any]]:
     snapshot = _read_json(run_dir / "generations" / f"generation_{generation:04d}.json")
     references = [item for item in snapshot.get("population", []) if isinstance(item, dict)]
     candidates = []
@@ -127,31 +166,25 @@ def _select_candidate(run_dir: Path, candidate_id: str | None) -> dict[str, Any]
         candidate_path = run_dir / "candidates" / identity / "candidate.json"
         candidate = _read_json(candidate_path) if candidate_path.is_file() else dict(reference)
         candidates.append(candidate)
-    by_id = {str(item.get("candidate_id") or item.get("id")): item for item in candidates}
-    selected_id = candidate_id
-    if selected_id is None:
-        summary_path = run_dir / "summary.json"
-        if summary_path.is_file():
-            best = _read_json(summary_path).get("best_candidate") or {}
-            selected_id = str(best.get("candidate_id") or "") or None
-    if selected_id and selected_id in by_id:
-        return by_id[selected_id]
-    valid = [
-        item for item in candidates
-        if item.get("status") != "failed"
-        and str(item.get("candidate_id") or item.get("id"))
-    ]
-    if not valid:
-        raise ValueError(f"No runnable candidate found in final generation: {run_dir}")
-    if candidate_id:
-        raise ValueError(f"Candidate {candidate_id!r} is not in final generation {generation}")
-    return max(
-        valid,
-        key=lambda item: tuple(
-            float((item.get("fitness_objectives") or {}).get(case, -1000.0))
-            for case in ("lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma")
-        ),
-    )
+    return candidates
+
+
+def _candidate_source_path(classes_dir: Path, candidate_id: str) -> Path:
+    candidate_dir = classes_dir.parent.parent / "candidates" / candidate_id
+    phenotype = candidate_dir / "phenotype" / "CandidateAgent.java"
+    if phenotype.is_file():
+        return phenotype
+    # Isolated read compatibility for pre-v4 candidate artifacts.
+    return candidate_dir / "generation" / "normalized_candidate.java"
+
+
+def _candidate_is_runnable(run_dir: Path, candidate: dict[str, Any]) -> bool:
+    candidate_id = str(candidate.get("candidate_id") or candidate.get("id") or "")
+    if not candidate_id or candidate.get("status") == "failed":
+        return False
+    class_file = run_dir / "classes" / candidate_id / "ai" / "generated" / "CandidateAgent.class"
+    source = _candidate_source_path(run_dir / "classes" / candidate_id, candidate_id)
+    return class_file.is_file() and source.is_file() and source.read_text(encoding="utf-8").strip() != ""
 
 
 def _validate_candidate_artifacts(classes_dir: Path, candidate: dict[str, Any]) -> None:
@@ -162,7 +195,7 @@ def _validate_candidate_artifacts(classes_dir: Path, candidate: dict[str, Any]) 
             "Use a completed EAGLE run with preserved classes/ artifacts."
         )
     candidate_id = str(candidate.get("candidate_id") or candidate.get("id"))
-    source = classes_dir.parent.parent / "candidates" / candidate_id / "generation" / "normalized_candidate.java"
+    source = _candidate_source_path(classes_dir, candidate_id)
     if not source.is_file() or not source.read_text(encoding="utf-8").strip():
         raise ValueError(f"Candidate {candidate_id} has no generated Java source artifact.")
 
@@ -177,7 +210,7 @@ def _run_final_matrix(
 ) -> list[dict[str, Any]]:
     candidate_id = str(candidate.get("candidate_id") or candidate.get("id"))
     candidate_generation = int(candidate.get("generation") or 0)
-    source_hash = hash_file(classes_dir.parent.parent / "candidates" / candidate_id / "generation" / "normalized_candidate.java")
+    source_hash = hash_file(_candidate_source_path(classes_dir, candidate_id))
     class_hash = hash_class_directory(classes_dir)
     maps = canonical_evaluation_maps(config.evaluation_maps)
     scoring_config = scoring_config_from_experiment(config)

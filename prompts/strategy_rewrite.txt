@@ -10,9 +10,6 @@ $strategy_prompt
 strategy_reflection:
 $reflection
 
-Parent generated_java:
-$parent_java
-
 Game evaluation summary:
 $game_summary
 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: ./experiment.sh CONFIG_FOLDER_OR_YAML [--mock] [--skip-final-test] | ./experiment.sh --resume RUN_DIR [--mock] [--skip-final-test]" >&2
+  echo "Usage: ./experiment.sh CONFIG_FOLDER_OR_YAML [--mock] [--skip-final-test] | ./experiment.sh --resume RUN_DIR_OR_CONFIG_FOLDER [--mock] [--skip-final-test]" >&2
   exit 2
 fi
 

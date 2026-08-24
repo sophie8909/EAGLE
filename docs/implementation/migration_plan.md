@@ -15,6 +15,10 @@
 - file-only prompt configuration and one `execution_mode`;
 - shared fresh/resume search bootstrap;
 - removal of obsolete run/runtime CLI wrappers and `eagle-run-v1` analysis.
+- removal of inherited `previous_code` and phenotype-parent provenance;
+- two-gene crossover, fixed-scaffold generation, and separated Strategy/Code evidence;
+- genotype/phenotype and responsibility-specific mutation artifact layout.
+- resumable config-folder batches driven by the atomic `experiment.yaml` index.
 
 ## Remaining optional hardening
 

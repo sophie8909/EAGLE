@@ -22,12 +22,9 @@ STRATEGY_BUDGETS = {
     "behaviors_to_preserve": 3_000,
 }
 CODE_BUDGETS = {
-    "candidate_prompts": 8_000,
-    "generated_code": 16_000,
-    "code_diagnostics": 9_000,
-    "gameplay_note": 1_500,
-    "evolution": 2_000,
-    "previous_reflection": 2_400,
+    "policy_prompt": 8_000,
+    "generated_java": 24_000,
+    "structural_evidence": 9_000,
 }
 
 
@@ -114,39 +111,37 @@ def build_code_reflection_prompt_bundle(candidate: Candidate, context: Reflectio
     context = coerce_structured_context(context, candidate)
     truncated: list[str] = []
     omitted: list[str] = []
-    diagnostics = context.code_diagnostics.to_dict()
-    candidate_prompts = _json({
-        "candidate_id": context.candidate.candidate_id,
-        "strategy_prompt": context.candidate.strategy_prompt,
-        "code_generation_prompt": context.candidate.code_generation_prompt,
-    })
-    # Candidate prompts are highest priority and are never truncated.
-    generated_code = _bounded_code(context.candidate.generated_code, CODE_BUDGETS["generated_code"], diagnostics, truncated)
-    code_diagnostics = _bounded_text(_json(diagnostics), CODE_BUDGETS["code_diagnostics"], section="code_diagnostics", truncated=truncated)
-    game_performance = context.objectives.game_performance
-    game_note = "(omitted: code reflection is driven by code diagnostics)"
-    if context.code_diagnostics.runtime_failure or (
-        context.code_diagnostics.compile_success is True and game_performance is not None
-    ):
-        weakest = min(context.opponents, key=lambda item: item.raw_score if item.raw_score is not None else float("inf"), default=None)
-        game_note = _json({
-            "game_performance": game_performance,
-            "runtime_failure": context.code_diagnostics.runtime_failure,
-            "weakest_opponent": None if weakest is None else {"name": weakest.opponent_name, "score": weakest.raw_score},
-        })
-    else:
-        omitted.append("gameplay_note")
-    evolution = _json(context.evolution.to_dict())
-    previous = context.previous_reflection or "(none)"
-    if previous == "(none)":
-        omitted.append("previous_reflection")
+    all_diagnostics = context.code_diagnostics.to_dict()
+    diagnostics = {
+        key: all_diagnostics.get(key)
+        for key in (
+            "generation_failure",
+            "validation_failure",
+            "compile_success",
+            "compile_errors",
+            "compile_warnings",
+            "missing_functions",
+            "invalid_functions",
+        )
+        if all_diagnostics.get(key) not in (None, (), [], {}, "")
+    }
+    policy_prompt = context.candidate.strategy_prompt
+    generated_code = _bounded_code(
+        context.candidate.generated_code,
+        CODE_BUDGETS["generated_java"],
+        diagnostics,
+        truncated,
+    )
+    structural_evidence = _bounded_text(
+        _json(diagnostics),
+        CODE_BUDGETS["structural_evidence"],
+        section="structural_evidence",
+        truncated=truncated,
+    )
     sections = {
-        "candidate_prompts": candidate_prompts,
-        "generated_code": generated_code,
-        "code_diagnostics": code_diagnostics,
-        "gameplay_note": _bounded_text(game_note, CODE_BUDGETS["gameplay_note"], section="gameplay_note", truncated=truncated),
-        "evolution": _bounded_text(evolution, CODE_BUDGETS["evolution"], section="evolution", truncated=truncated),
-        "previous_reflection": _bounded_text(previous, CODE_BUDGETS["previous_reflection"], section="previous_reflection", truncated=truncated),
+        "policy_prompt": policy_prompt,
+        "generated_java": generated_code,
+        "structural_evidence": structural_evidence,
     }
     text = render_prompt("code_reflection", sections)
     return ReflectionPrompt(text, _metadata(sections, omitted, truncated, text))

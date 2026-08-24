@@ -192,6 +192,8 @@ def evaluate_candidate(
     receives explicit failure scores and remains available to lexicase.
     """
 
+    genotype_before = (candidate.strategy_prompt, candidate.generation_prompt)
+
     # Stage 1: ask the generation backend for a complete Java phenotype and
     # preserve its raw response and validation evidence.
     generation_started_at = _utc_now()
@@ -427,9 +429,7 @@ def evaluate_candidate(
         "failure_category": failure_category,
         "failure_reason": failure_reason,
         "generation": {
-            "raw_response": generation.raw_llm_output,
-            "extracted_code": generation.extracted_code,
-            "assembled_java": generation.assembled_java,
+            "phenotype_artifact": "phenotype/CandidateAgent.java",
             "validation": generation.validation_result.to_json_dict(),
             "strategy_region_validation": {
                 key: value.to_json_dict()
@@ -515,14 +515,12 @@ def evaluate_candidate(
         generation=candidate.generation,
         parent_ids=candidate.parent_ids,
         strategy_prompt=candidate.strategy_prompt,
-        previous_code=candidate.previous_code,
         generation_prompt=candidate.generation_prompt,
         generated_java=generation.assembled_java,
         generated_java_path=str(agent.source_path) if agent else None,
         operator=candidate.operator,
         mutation_type=candidate.mutation_type,
         strategy_parent_id=candidate.strategy_parent_id,
-        previous_code_parent_id=candidate.previous_code_parent_id,
         generation_prompt_parent_id=candidate.generation_prompt_parent_id,
         source_candidate_ids=candidate.source_candidate_ids,
         compile_status=compile_result.status if compile_result else "not_run",
@@ -549,6 +547,7 @@ def evaluate_candidate(
             preserve_unpersisted_mutation=True,
         ),
     )
+    assert (evaluated_candidate.strategy_prompt, evaluated_candidate.generation_prompt) == genotype_before
     result = CandidateResult(
         candidate_id=candidate.id,
         parent_ids=candidate.parent_ids,

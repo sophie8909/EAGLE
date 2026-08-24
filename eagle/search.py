@@ -290,10 +290,10 @@ def _run_search_impl(
 
 
 def initialize_population(config: ExperimentConfig) -> list[Candidate]:
-    population = [Candidate(generation=0, strategy_prompt=prompt, previous_code="", generation_prompt=config.generation_prompt, operator="seed", metadata={"seed_index": index}) for index, prompt in enumerate(config.seed_prompts)]
+    population = [Candidate(generation=0, strategy_prompt=prompt, generation_prompt=config.generation_prompt, operator="seed", metadata={"seed_index": index}) for index, prompt in enumerate(config.seed_prompts)]
     while len(population) < config.population_size:
         seed_index = len(population)
-        population.append(Candidate(generation=0, strategy_prompt=config.seed_prompts[seed_index % len(config.seed_prompts)], previous_code="", generation_prompt=config.generation_prompt, operator="seed", metadata={"seed_index": seed_index}))
+        population.append(Candidate(generation=0, strategy_prompt=config.seed_prompts[seed_index % len(config.seed_prompts)], generation_prompt=config.generation_prompt, operator="seed", metadata={"seed_index": seed_index}))
     return population[: config.population_size]
 
 
@@ -305,7 +305,7 @@ def create_offspring(
 ) -> list[Candidate]:
     """Create the next generation's genotypes without evaluating them.
 
-    Parent selection, optional three-component crossover, and optional
+    Parent selection, optional two-component crossover, and optional
     prompt-only mutation happen here. Java generation, compilation, matches,
     and objective calculation remain in :func:`evaluate_population`.
     """
@@ -340,19 +340,25 @@ def create_offspring(
                 strategy_prompt=normalize_prompt(parent_a.strategy_prompt, max_chars=config.max_prompt_chars, max_lines=config.max_prompt_lines),
                 strategy_signature=dict(parent_a.strategy_signature),
                 strategy_niche=parent_a.strategy_niche,
-                previous_code=parent_a.generated_java,
                 generation_prompt=parent_a.generation_prompt,
                 operator="copy",
                 strategy_parent_id=parent_a.id,
-                previous_code_parent_id=parent_a.id,
                 generation_prompt_parent_id=parent_a.id,
                 source_candidate_ids=(parent_a.id,),
             )
         if rng.random() < config.mutation_rate:
-            feedback_parent = parent_for_component(child.strategy_parent_id, (parent_a, parent_b))
             operator_used = operator_controller.select_operator(rng)
             mutation_name = OPERATOR_TO_MUTATION[operator_used]
             mutation = mutations[mutation_name]
+            evidence_parent_id = (
+                child.strategy_parent_id
+                if mutation_name == "strategy"
+                else child.generation_prompt_parent_id
+            )
+            # Reflection evidence must describe the evaluated source of the
+            # gene being mutated.  This avoids reviewing one parent's Java as
+            # if it had been produced by the other parent's translation gene.
+            feedback_parent = parent_for_component(evidence_parent_id, (parent_a, parent_b))
             mutation_intent = None
             if mutation_name == "strategy":
                 mutation_intent = select_strategy_mutation_intent(rng=rng)

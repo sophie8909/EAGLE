@@ -1,6 +1,6 @@
 # Architecture overview
 
-EAGLE evolves a three-component prompt genotype that generates one complete
+EAGLE evolves a two-component prompt genotype that generates one complete
 Java MicroRTS agent. The active evolutionary contract is documented in
 [`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md).
 
@@ -8,7 +8,7 @@ Java MicroRTS agent. The active evolutionary contract is documented in
 
 In scope:
 
-- strategy prompt, previous/generated code context, and code-generation prompt;
+- a game-playing policy prompt and a policy-to-Java code-generation prompt;
 - crossover, Strategy Reflection, Code Reflection, and final Java generation;
 - validation, compilation, integration, and the fixed seven-opponent evaluation;
 - opponent-wise fitness, seeded lexicase selection, artifacts, and analysis.

@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 import shutil
 import time
 from dataclasses import asdict, dataclass, replace
@@ -21,15 +22,15 @@ from evaluation.match_trace import iter_match_trace
 
 from .candidate import Candidate
 from .llm import truncate_prompt
-from .mutation import ReflectionContext, utc_now
+from .mutation import ReflectionContext, parse_json_object_response, utc_now
 from .opponent_cases import LEXICASE_CASES
 from .prompts import normalize_prompt, render_prompt
 from .strategy_diversity import build_strategy_niche, normalize_strategy_signature
 
 
 CANONICAL_ROLES = ("match_commentator", "coach", "generator")
-ROLE_SCHEMA_VERSION = "strategy-reflection-v3"
-PROMPT_VERSION = "sports-team-v3"
+ROLE_SCHEMA_VERSION = "strategy-reflection-v4"
+PROMPT_VERSION = "sports-team-v4"
 
 STRATEGY_MUTATION_INTENT_DISTRIBUTION = (
     ("REFINE", 0.40),
@@ -156,13 +157,29 @@ class StrategyReflectionPipeline:
 
     def mutate(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> Candidate:
         result = self.run(candidate, context, artifact_dir=artifact_dir, mutation_intent=mutation_intent)
+        assert result.candidate.generation_prompt == candidate.generation_prompt
         return result.candidate
 
     def run(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> StrategyReflectionResult:
         required_roles = {"match_commentator", "coach"}
+        original_generation_prompt = candidate.generation_prompt
         intent = normalize_mutation_intent(mutation_intent) or select_strategy_mutation_intent(
             seed=_intent_seed(self.selection_seed, context.evolution.generation_index, candidate.id, context.index)
         )
+        strategy_source_parent_id = _strategy_source_parent_id(candidate, context)
+        coach_prompt_name = f"coach_{intent.lower()}"
+        _write_text(artifact_dir, "reflection/parent_strategy_prompt.txt", candidate.strategy_prompt)
+        base_metadata = {
+            "schema_version": "strategy-reflection-artifacts-v1",
+            "generation": candidate.generation,
+            "child_candidate_id": candidate.id,
+            "mutation_operator": "strategy_reflection",
+            "commentator_prompt_name": "match_commentator",
+            "coach_prompt_name": coach_prompt_name,
+        }
+        if strategy_source_parent_id is not None:
+            base_metadata["parent_candidate_id"] = strategy_source_parent_id
+        _write_json(artifact_dir, "reflection/metadata.json", base_metadata)
         parent_niche = candidate.strategy_niche or "unknown"
         candidate = replace(
             candidate,
@@ -198,6 +215,17 @@ class StrategyReflectionPipeline:
 
         by_id = {_match_id(item): item for item in context.per_match_results}
         selected_items = [by_id[match_id] for match_id in selection["selected_match_ids"] if match_id in by_id]
+        _write_json(
+            artifact_dir,
+            "reflection/selected_matches.json",
+            [_selected_match_record(item) for item in selected_items],
+        )
+        metadata = {
+            **base_metadata,
+            "selected_match_count": len(selected_items),
+        }
+        _write_json(artifact_dir, "reflection/metadata.json", metadata)
+        commentator_call_count = 0
         for item in selected_items:
             match_id = str(item.get("match_id") or f"match_{item.get('match_index', len(analyses)):03d}")
             log_path = _resolve_path(item.get("match_trace_path"))
@@ -207,7 +235,16 @@ class StrategyReflectionPipeline:
                 _delete_raw_match_artifacts(item)
                 continue
             try:
-                analysis = self._commentate(candidate, context, item, match_id, log_path, artifact_dir)
+                commentator_call_count += 1
+                analysis = self._commentate(
+                    candidate,
+                    context,
+                    item,
+                    match_id,
+                    log_path,
+                    artifact_dir,
+                    artifact_index=commentator_call_count,
+                )
             except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
                 failures.append(f"{match_id}: {exc}")
                 _write_status(artifact_dir, match_id, "failed", str(exc))
@@ -216,10 +253,48 @@ class StrategyReflectionPipeline:
             analyses.append(analysis)
             _delete_raw_match_artifacts(item)
 
+        _write_json(
+            artifact_dir,
+            "reflection/metadata.json",
+            {
+                **metadata,
+                "commentator_call_count": commentator_call_count,
+                "successful_commentator_count": len(analyses),
+            },
+        )
         try:
             coach_payload = _coach_payload(candidate, context, analyses, selection, failures, global_summary)
             coach_request = _coach_prompt(candidate.strategy_prompt, coach_payload, intent)
-            coach_raw = self._call_role("coach", coach_request, candidate, artifact_dir, extra={"parent_candidate_id": candidate.id})
+            bounded_coach_request = truncate_prompt(coach_request, max_chars=self.max_prompt_chars)
+            _write_json(artifact_dir, "reflection/coach_input.json", {
+                "prompt_name": coach_prompt_name,
+                "render_variables": {
+                    "parent_strategy_prompt": json.dumps(candidate.strategy_prompt, ensure_ascii=False),
+                    "commentator_diagnoses_and_evaluation_metadata": json.dumps(
+                        coach_payload,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
+                },
+                "semantic_payload": {
+                    "parent_strategy_prompt": candidate.strategy_prompt,
+                    "commentator_diagnoses_and_evaluation_metadata": coach_payload,
+                },
+            })
+            _write_text(artifact_dir, "reflection/coach_prompt.txt", bounded_coach_request)
+            coach_extra = {}
+            if strategy_source_parent_id is not None:
+                coach_extra["parent_candidate_id"] = strategy_source_parent_id
+            coach_raw = self._call_role(
+                "coach",
+                bounded_coach_request,
+                candidate,
+                artifact_dir,
+                extra=coach_extra,
+            )
+            _write_text(artifact_dir, "reflection/coach_raw.txt", coach_raw)
+            coach_output = parse_json_object_response(coach_raw)
+            _write_json(artifact_dir, "reflection/coach_output.json", coach_output)
             coach = _parse_coach(coach_raw, parent_strategy_prompt=candidate.strategy_prompt)
             child_signature = normalize_strategy_signature(coach.strategy_signature)
             child_niche = build_strategy_niche(child_signature)
@@ -237,7 +312,7 @@ class StrategyReflectionPipeline:
                     **candidate.metadata,
                     "strategy_reflection": {
                         "schema_version": ROLE_SCHEMA_VERSION,
-                        "parent_candidate_id": candidate.id,
+                        "parent_candidate_id": strategy_source_parent_id,
                         "analyses": [item.to_dict() for item in analyses],
                         "coach_input": coach_payload,
                         "coach_result": coach.to_dict(),
@@ -251,6 +326,11 @@ class StrategyReflectionPipeline:
                     "mutation": {"applied": True, "type": "strategy", "reflection_error": None, "rewrite_error": None},
                 },
             )
+            _write_text(
+                artifact_dir,
+                "reflection/child_strategy_prompt.txt",
+                child.strategy_prompt,
+            )
             _write_json(artifact_dir, "reflection/coach_result.json", coach.to_dict())
             _write_json(artifact_dir, "reflection/mutation_intent.json", {
                 "mutation_intent": intent,
@@ -258,17 +338,36 @@ class StrategyReflectionPipeline:
                 "child_strategy_niche": child_niche,
                 "niche_changed": niche_changed,
             })
+            assert child.generation_prompt == original_generation_prompt
             return StrategyReflectionResult(child, "success", tuple(analyses), coach, None)
         except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
             return _failed_result(candidate, artifact_dir, f"coach: {exc}", analyses)
 
-    def _commentate(self, candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, log_path: Path, artifact_dir: Path | None) -> MatchAnalysis:
+    def _commentate(
+        self,
+        candidate: Candidate,
+        context: ReflectionContext,
+        item: dict[str, Any],
+        match_id: str,
+        log_path: Path,
+        artifact_dir: Path | None,
+        *,
+        artifact_index: int,
+    ) -> MatchAnalysis:
         raw_log = list(iter_match_trace(log_path))
         if not raw_log:
             raise ValueError("match log contains no ticks")
         request = _commentator_prompt(candidate, context, item, match_id, raw_log)
         raw = self._call_role("match_commentator", request, candidate, artifact_dir, match_id=match_id)
-        analysis = _parse_commentary(_parse_json(raw), match_id)
+        parsed_output = parse_json_object_response(raw)
+        _write_json(
+            artifact_dir,
+            f"reflection/commentator_{artifact_index:02d}.json",
+            parsed_output,
+        )
+        if not isinstance(parsed_output, dict):
+            raise ValueError("role response must be a JSON object")
+        analysis = _parse_commentary(parsed_output, match_id)
         _write_json(artifact_dir, f"commentary/{match_id}/match_analysis.json", analysis.to_dict())
         _write_status(artifact_dir, match_id, "succeeded", None)
         return analysis
@@ -289,9 +388,21 @@ class StrategyReflectionPipeline:
                 envelope = {**trace, "attempt": attempt, "status": "success", "duration_seconds": max(0.0, time.monotonic() - started), "response": raw}
                 response_name = "response.json" if not suffix else f"response_{suffix}.json"
                 _write_json(artifact_dir, f"commentary/{match_id}/{response_name}" if match_id else f"reflection/{role}_{response_name}", envelope)
+                attempt_name = f"response_attempt_{attempt:03d}.json"
+                _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
                 return raw
             except (OSError, RuntimeError, ValueError) as exc:
                 last_error = str(exc) or type(exc).__name__
+                envelope = {
+                    **trace,
+                    "attempt": attempt,
+                    "status": "error",
+                    "duration_seconds": max(0.0, time.monotonic() - started),
+                    "response": "",
+                    "error": last_error,
+                }
+                attempt_name = f"response_attempt_{attempt:03d}.json"
+                _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
         raise RuntimeError(last_error or f"{role} failed after {self.max_attempts} attempts")
 
 
@@ -630,7 +741,7 @@ def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: 
             "identity": item.get("opponent_name") or item.get("opponent") or "unknown",
             "class": item.get("opponent") or "unknown",
         }, ensure_ascii=False, sort_keys=True),
-        "complete_match_record": json.dumps(item, ensure_ascii=False, sort_keys=True),
+        "complete_match_record": json.dumps(_selected_match_record(item), ensure_ascii=False, sort_keys=True),
         "raw_game_log": json.dumps(raw_log, ensure_ascii=False, sort_keys=True),
     })
 
@@ -680,18 +791,51 @@ def _coach_payload(candidate: Candidate, context: ReflectionContext, analyses: l
 def _parse_commentary(payload: dict[str, Any], match_id: str) -> MatchAnalysis:
     if "new_strategy_prompt" in payload or "java" in json.dumps(payload).lower():
         raise ValueError("commentator output crossed its responsibility boundary")
-    turning_points = tuple(item for item in payload.get("turning_points", []) if isinstance(item, dict) and item.get("tick") is not None)
+
+    wrapped = payload.get("match_analysis")
+    if wrapped is not None and not isinstance(wrapped, dict):
+        raise ValueError("commentator match_analysis wrapper must be an object")
+    analysis = wrapped if isinstance(wrapped, dict) else payload
+    turning_points = _commentary_turning_points(analysis)
     if not turning_points:
         raise ValueError("commentator output must contain tick-backed turning points")
+
+    weaknesses = _strings(analysis.get("candidate_weaknesses"))
+    if not weaknesses:
+        weaknesses = _structured_strings(
+            analysis.get("strategic_failures"),
+            fields=("category", "issue"),
+        )
+
+    opponent_strategy = analysis.get("opponent_strategy")
+    if opponent_strategy is None:
+        opponent_summary = _structured_strings(
+            analysis.get("opponent_strengths"),
+            fields=("tactic", "impact"),
+        )
+        opponent_strategy = {
+            "summary": "; ".join(opponent_summary)
+            or str(analysis.get("opponent") or "observed opponent strategy")
+        }
+
+    win_loss_analysis = analysis.get("win_loss_analysis")
+    if win_loss_analysis is None:
+        win_loss_analysis = {
+            "result": str(analysis.get("result") or "unknown"),
+            "decisive_causes": list(weaknesses),
+        }
+    if not isinstance(win_loss_analysis, dict):
+        raise ValueError("commentator win_loss_analysis must be an object")
+
     return MatchAnalysis(
-        match_id=str(payload.get("match_id") or match_id),
-        candidate_strategy=_strategy_section(payload.get("candidate_strategy")),
-        opponent_strategy=_strategy_section(payload.get("opponent_strategy")),
+        match_id=str(analysis.get("match_id") or match_id),
+        candidate_strategy=_strategy_section(analysis.get("candidate_strategy")),
+        opponent_strategy=_strategy_section(opponent_strategy),
         turning_points=turning_points,
-        candidate_strengths=_strings(payload.get("candidate_strengths")),
-        candidate_weaknesses=_strings(payload.get("candidate_weaknesses")),
-        win_loss_analysis=dict(payload.get("win_loss_analysis") or {}),
-        strategy_observations=_strings(payload.get("strategy_observations")),
+        candidate_strengths=_strings(analysis.get("candidate_strengths")),
+        candidate_weaknesses=weaknesses,
+        win_loss_analysis=dict(win_loss_analysis),
+        strategy_observations=_strings(analysis.get("strategy_observations")),
     )
 
 
@@ -712,19 +856,114 @@ def _parse_coach(payload: str, *, parent_strategy_prompt: str) -> CoachResult:
 
 
 def _parse_json(raw: str) -> dict[str, Any]:
-    payload = json.loads(raw)
-    if not isinstance(payload, dict):
-        raise ValueError("role response must be a JSON object")
-    return payload
+    return parse_json_object_response(raw)
 
 
 def _strategy_section(value: Any) -> dict[str, str]:
+    if isinstance(value, str) and value.strip():
+        return {"summary": value.strip()}
     if not isinstance(value, dict):
         raise ValueError("commentator strategy sections must be objects")
     return {str(key): str(item) for key, item in value.items() if isinstance(item, str)}
 
 
+def _commentary_turning_points(payload: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    """Normalize the two bounded Commentator timeline shapes seen in production."""
+
+    source = payload.get("turning_points")
+    legacy_observations = False
+    if not isinstance(source, list) or not source:
+        source = payload.get("key_observations")
+        legacy_observations = True
+    if not isinstance(source, list):
+        return ()
+
+    normalized: list[dict[str, Any]] = []
+    for item in source:
+        if not isinstance(item, dict):
+            continue
+        raw_tick = item.get("tick")
+        if raw_tick is None:
+            raw_tick = item.get("time")
+        tick = _commentary_tick(raw_tick)
+        if tick is None:
+            continue
+        if not legacy_observations:
+            point = dict(item)
+            point["tick"] = tick
+            normalized.append(point)
+            continue
+
+        point: dict[str, Any] = {
+            "tick": tick,
+            "event": str(item.get("event") or item.get("summary") or "observed turning point").strip(),
+        }
+        if raw_tick is not None:
+            point["source_time"] = str(raw_tick)
+        impact = _commentary_analysis_summary(item.get("analysis") or item.get("impact"))
+        if impact:
+            point["impact"] = impact
+        normalized.append(point)
+    return tuple(normalized)
+
+
+def _commentary_tick(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, float) and value.is_integer() and value >= 0:
+        return int(value)
+    match = re.search(r"\d+", str(value or ""))
+    return int(match.group(0)) if match else None
+
+
+def _commentary_analysis_summary(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if not isinstance(value, dict):
+        return ""
+    parts: list[str] = []
+    for role in ("candidate", "opponent"):
+        section = value.get(role)
+        if not isinstance(section, dict):
+            continue
+        for field in ("behavior", "issue", "strength", "tactic", "impact"):
+            detail = section.get(field)
+            if isinstance(detail, str) and detail.strip():
+                parts.append(f"{role} {field}: {detail.strip()}")
+    for field in ("behavior", "issue", "impact"):
+        detail = value.get(field)
+        if isinstance(detail, str) and detail.strip():
+            parts.append(f"{field}: {detail.strip()}")
+    return "; ".join(dict.fromkeys(parts))
+
+
+def _structured_strings(value: Any, *, fields: tuple[str, ...]) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return _strings(value)
+    results: list[str] = []
+    for item in value:
+        if isinstance(item, str) and item.strip():
+            results.append(item.strip())
+            continue
+        if not isinstance(item, dict):
+            continue
+        parts = [
+            str(item.get(field)).strip()
+            for field in fields
+            if isinstance(item.get(field), str) and str(item.get(field)).strip()
+        ]
+        if parts:
+            results.append(": ".join(parts))
+    return tuple(results)
+
+
 def _strings(value: Any) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return (value.strip(),) if value.strip() else ()
+    if not isinstance(value, (list, tuple, set)):
+        return ()
     return tuple(str(item).strip() for item in value or () if str(item).strip())
 
 
@@ -741,16 +980,67 @@ def _match_value(context: ReflectionContext, match_id: str, key: str) -> Any:
     return None
 
 
+def _strategy_source_parent_id(candidate: Candidate, context: ReflectionContext) -> str | None:
+    """Return recorded strategy-component provenance without comparing prompt text."""
+
+    if candidate.strategy_parent_id:
+        return candidate.strategy_parent_id
+    if context.candidate.candidate_id:
+        return context.candidate.candidate_id
+    return context.candidate_id or None
+
+
+def _selected_match_record(item: dict[str, Any]) -> dict[str, Any]:
+    """Copy only available compact match fields in Commentator selection order."""
+
+    record: dict[str, Any] = {"match_id": _match_id(item)}
+    for key in (
+        "match_index",
+        "opponent_id",
+        "opponent_name",
+        "opponent",
+        "map_id",
+        "map_name",
+        "map",
+        "candidate_player",
+        "candidate_side",
+        "winner",
+        "result",
+        "performance",
+        "score",
+        "match_trace_path",
+    ):
+        if key not in item or item[key] is None:
+            continue
+        value = item[key]
+        record[key] = str(value) if isinstance(value, Path) else value
+    return record
+
+
 def _write_status(root: Path | None, match_id: str, status: str, error: str | None) -> None:
     _write_json(root, f"commentary/{match_id}/commentary_status.json", {"role": "match_commentator", "match_id": match_id, "status": status, "error": error, "schema_version": ROLE_SCHEMA_VERSION})
+
+
+def _write_text(root: Path | None, relative: str, value: str) -> None:
+    if root is None:
+        return
+    path = _artifact_path(root, relative)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(value, encoding="utf-8")
 
 
 def _write_json(root: Path | None, relative: str, payload: object) -> None:
     if root is None:
         return
-    path = root / relative
+    path = _artifact_path(root, relative)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _artifact_path(root: Path, relative: str) -> Path:
+    if relative.startswith("reflection/"):
+        relative = relative.removeprefix("reflection/")
+    return root / "mutation" / "strategy_reflection" / relative
 
 
 def _failed_result(candidate: Candidate, root: Path | None, error: str, analyses: list[MatchAnalysis]) -> StrategyReflectionResult:

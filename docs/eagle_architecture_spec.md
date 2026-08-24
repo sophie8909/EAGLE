@@ -17,20 +17,24 @@ surrogate fitness models, or previous-generation self-play opponents.
 
 ## 2. Candidate model
 
-The genotype has exactly three evolving values:
+The genotype has exactly two evolving prompt values:
 
-1. `strategy_prompt`
-2. `previous_code`
-3. `generation_prompt`
+1. `strategy_prompt` — the game-playing policy gene (`policy_prompt` conceptually)
+2. `generation_prompt` — the reusable policy-to-Java translation gene (`code_generation_prompt` conceptually)
 
-The phenotype is the latest complete generated Java source. Child construction
-uses the selected parent's latest evaluated Java as `previous_code`; evaluation
-does not overwrite the pre-generation genotype.
+The phenotype is the latest complete generated Java source. Java source is
+evidence, never an inherited genotype component. Child construction inherits
+only the two prompt genes; evaluation does not overwrite either gene.
 
 First-class candidate state includes identity, generation, direct parents,
 operator, mutation type, component-source IDs, generated Java, validation and
 compile status, seven-case fitness, diagnostics, failure state, artifact
 references, and timing.
+
+New candidate identities are generation-qualified as
+`gen_<zero-padded-generation>_<random-suffix>` so run artifacts remain unique
+and easy to navigate. Persisted IDs are opaque references and are never renamed
+while loading or resuming a run.
 
 ## 3. Evolution lifecycle
 
@@ -39,7 +43,7 @@ generates Java, and passes every candidate through the canonical evaluation
 boundary. Each later generation performs:
 
 1. seeded lexicase parent selection;
-2. optional uniform three-component crossover;
+2. optional uniform two-component crossover;
 3. optional Strategy or Code mutation;
 4. final complete-file Java generation;
 5. validation, compilation, integration, and evaluation;
@@ -59,10 +63,10 @@ reproducibility and does not pass a match-seed JVM property.
 
 ## 5. Crossover and lineage
 
-Uniform crossover independently selects `strategy_prompt`, evaluated Java for
-`previous_code`, and `generation_prompt` from the two parents. Lineage persists
-the direct parent IDs and the source candidate ID for every component, even when
-the selected text values are equal.
+Uniform crossover independently selects `strategy_prompt` and
+`generation_prompt` from the two parents. Lineage persists the direct parent IDs
+and the source candidate ID for both prompt components, even when selected text
+values are equal. It records no phenotype-parent component.
 
 ## 6. Mutation
 
@@ -80,8 +84,9 @@ Strategy mutation performs Match Commentator sampling, Coach reflection, and a
 Strategy Prompt rewrite before final Java generation. It changes only
 `strategy_prompt`.
 
-Code mutation performs Code Reflection and Code Generation Prompt Rewrite before
-final Java generation. It changes only `generation_prompt`.
+Code mutation compares the current policy with the current Java phenotype, then
+performs Code Generation Prompt Rewrite before final Java generation. It changes
+only `generation_prompt`; game logs are not Code Reflection evidence.
 
 All executable prompt bodies live as individual UTF-8 text files under
 `prompts/`. Python and YAML may reference, render, bound, transport, and validate
@@ -89,8 +94,9 @@ prompt resources but may not contain alternate executable prompt bodies.
 
 ## 7. Java generation and validation
 
-Final generation consumes the full three-part genotype and returns exactly one
-complete Java source file. Raw response, extracted source, normalized source,
+Final generation consumes the two prompt genes plus the fixed checked-in Java
+scaffold/API constraints and returns exactly one complete Java source file. It
+does not receive parent Java or game logs. Raw response, extracted source, normalized source,
 attempts, model identity, errors, and timing are persisted.
 
 Validation requires:
@@ -176,10 +182,20 @@ New and supported runs use only `eagle-run-v2`:
 - `final_test/`
 
 Generation files contain compact candidate references, metrics, AOS state, and
-timing references. Candidate state lives once under
-`candidates/<id>/candidate.json`, with specialized genotype, generation,
-validation, compilation, integration, evaluation, mutation, lineage, and timing
-artifacts beside it.
+timing references. Each generation also has a policy JSONL sidecar containing
+artifact references for every population member with a non-empty
+`strategy_prompt`; it does not duplicate strategy text. Candidate state lives once under
+`candidates/<id>/candidate.json`, with `genotype/policy_prompt.txt`,
+`genotype/code_generation_prompt.txt`, `phenotype/CandidateAgent.java`, and
+specialized generation, validation, compilation, integration, evaluation,
+mutation, lineage, and timing artifacts beside it.
+
+Strategy Reflection candidates additionally retain under
+`mutation/strategy_reflection/` the exact parent strategy
+prompt, ordered selected-match records, each parsed Commentator response, the
+structured and rendered Coach input, raw and parsed Coach output, the normalized
+child strategy prompt, and the strategy value supplied to Generator. These are
+observability artifacts only and do not introduce a separate policy state.
 
 `resolved_config.json`, `generation_metrics.jsonl`, `final_population.json`,
 root `errors.jsonl`, duplicate match results, and `eagle-run-v1` readers are not
@@ -191,7 +207,7 @@ The production entrypoint is:
 
 ```bash
 ./experiment.sh CONFIG_FOLDER_OR_YAML [--mock] [--skip-final-test]
-./experiment.sh --resume RUN_DIR [--mock] [--skip-final-test]
+./experiment.sh --resume RUN_DIR_OR_CONFIG_FOLDER [--mock] [--skip-final-test]
 ```
 
 It delegates to `python -m eagle experiment`. Python owns sorted config
@@ -205,6 +221,18 @@ The index is updated as soon as a run is created, is excluded from config
 discovery, and therefore preserves resumable partial runs. A pre-existing
 `experiment.yaml` with `schema_version: experiment-v2` remains a config and is
 never overwritten by the index writer.
+
+When `--resume` targets such a config directory, Python reads the existing
+index instead of resetting it. Indexed runs that have not completed their
+required lifecycle are processed first: interrupted/failed search resumes from
+its latest atomic generation, while a search-complete run without a required
+final-test summary resumes at final testing. Fully completed indexed configs
+are skipped. The remaining unindexed configs then start as fresh runs in
+filename order, with every new run added atomically to the same index. A direct
+run-directory target retains the single-run resume behavior. If interruption
+occurred before generation 0 was atomically recorded, folder resume starts a
+replacement run for that config and updates the index because no resumable
+population exists.
 
 `python -m eagle analyze` and `analyze.sh` are the only offline analysis
 entrypoints. Separate `run`, `runtime`, `run.sh`, and `run_env.sh` compatibility

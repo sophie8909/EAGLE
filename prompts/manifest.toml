@@ -10,25 +10,25 @@ required_variables = ["current_strategy_prompt", "aggregate_game_performance", "
 file = "code_reflection.txt"
 role = "reflector"
 stages = ["code_reflection"]
-required_variables = ["candidate_prompts", "generated_code", "code_diagnostics", "gameplay_note", "evolution", "previous_reflection"]
+required_variables = ["policy_prompt", "generated_java", "structural_evidence"]
 
 [prompts.strategy_rewrite]
 file = "strategy_rewrite.txt"
 role = "rewriter"
 stages = ["strategy_rewrite"]
-required_variables = ["strategy_prompt", "reflection", "parent_java", "game_summary"]
+required_variables = ["strategy_prompt", "reflection", "game_summary"]
 
 [prompts.code_rewrite]
 file = "code_rewrite.txt"
 role = "rewriter"
 stages = ["generation_prompt_rewrite"]
-required_variables = ["generation_prompt", "reflection", "strategy_prompt", "parent_java", "code_quality_summary"]
+required_variables = ["code_generation_prompt", "alignment_review"]
 
 [prompts.java_generation]
 file = "java_generation.txt"
 role = "generator"
 stages = ["seed_generation", "mutation_generation", "crossover_generation"]
-required_variables = ["strategy_prompt", "action_api_guide", "generation_prompt", "current_source"]
+required_variables = ["policy_prompt", "action_api_guide", "code_generation_prompt", "java_scaffold"]
 
 [prompts.strategy_alignment]
 file = "strategy_alignment.txt"

@@ -10,6 +10,7 @@ from eagle.mutation import (
     ReflectionStage,
     build_code_reflection_prompt,
     build_strategy_reflection_prompt,
+    parse_reflection_response,
 )
 from eagle.llm import truncate_prompt
 
@@ -33,7 +34,6 @@ class Phase2AReflectionTests(unittest.TestCase):
             id="candidate-reflection",
             generation=2,
             strategy_prompt="Prioritize workers, then a fast ranged attack.",
-            previous_code="parent generated Java",
             generation_prompt="Return one complete CandidateAgent.java file.",
         )
         self.context = MutationContext(
@@ -83,10 +83,11 @@ class Phase2AReflectionTests(unittest.TestCase):
     def test_code_prompt_contains_complete_failure_evidence(self):
         prompt = build_code_reflection_prompt(self.candidate, self.context)
         for expected in (
-            "Candidate prompts",
-            "Generated Java",
-            "Code diagnostics",
-            "Required JSON shape",
+            "Current policy prompt",
+            "Generated CandidateAgent.java",
+            "Optional structural/compiler evidence",
+            "Return exactly one JSON object",
+            "Every value inside an alignment_review item must be one JSON string",
             "missing symbol",
         ):
             self.assertIn(expected, prompt)
@@ -110,6 +111,44 @@ class Phase2AReflectionTests(unittest.TestCase):
         self.assertEqual(result.attempts[0].status, "error")
         self.assertEqual(result.attempts[1].status, "success")
 
+    def test_code_reflection_accepts_full_json_markdown_fence(self):
+        response = "```json\n" + json.dumps({
+            "assessment": "java_faithfully_implements_policy",
+            "alignment_review": [],
+            "required_generation_behaviors": [],
+        }) + "\n```"
+        parsed, _summary, _revised = parse_reflection_response(response, "code")
+        self.assertEqual(parsed["assessment"], "java_faithfully_implements_policy")
+
+    def test_code_reflection_normalizes_0823_array_corrections(self):
+        response = json.dumps({
+            "assessment": "policy_clear_but_java_violates",
+            "alignment_review": [{
+                "policy_requirement": "Keep one Worker harvesting.",
+                "observed_java_behavior": "The Worker may remain idle.",
+                "mismatch": "Idle does not mean harvesting.",
+                "required_generation_behavior": [
+                    "Issue a harvest command.",
+                    "Prioritize returning resources.",
+                ],
+            }],
+            "required_generation_behaviors": [
+                {"area": "Economy", "requirement": "Encode active harvesting."},
+            ],
+        })
+
+        parsed, summary, _revised = parse_reflection_response(response, "code")
+        item = parsed["alignment_review"][0]
+        self.assertEqual(
+            item["required_generation_behavior"],
+            "Issue a harvest command.; Prioritize returning resources.",
+        )
+        self.assertEqual(
+            parsed["required_generation_behaviors"],
+            ["Economy: Encode active harvesting."],
+        )
+        self.assertEqual(json.loads(summary), parsed)
+
     def test_reflection_failure_retains_raw_response_and_error(self):
         backend = ScriptedBackend(("", ""))
         with tempfile.TemporaryDirectory() as temp:
@@ -119,7 +158,7 @@ class Phase2AReflectionTests(unittest.TestCase):
                 request="full request",
                 artifact_dir=Path(temp),
             )
-            mutation_dir = Path(temp) / "mutation"
+            mutation_dir = Path(temp) / "mutation" / "code_reflection"
             self.assertEqual(result.status, "failed")
             self.assertEqual(len(result.attempts), 2)
             self.assertTrue((mutation_dir / "reflector_request.txt").exists())

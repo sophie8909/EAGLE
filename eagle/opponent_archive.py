@@ -43,7 +43,7 @@ def update_opponent_archive(run_dir: Path, candidates: list[Candidate]) -> None:
                 "game_performance": aggregate,
                 "strategy_niche": candidate.strategy_niche,
                 "strategy_signature": dict(candidate.strategy_signature),
-                "strategy_prompt": f"candidates/{candidate.id}/genotype/strategy_prompt.txt",
+                "policy_prompt": f"candidates/{candidate.id}/genotype/policy_prompt.txt",
             }
     _write(run_dir / ARCHIVE_PATH, payload)
 

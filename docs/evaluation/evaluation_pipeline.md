@@ -73,3 +73,12 @@ normal runtime matrix does not launch this evaluator.
 completed opponent summaries from normal evaluation. `static` calculates no
 reward at all. Both adaptive providers feed the updater in `eagle/aos.py` and
 do not alter the normal evaluation vector.
+
+## Final-test candidate recovery
+
+The production final test accepts only candidates whose status is not failed
+and whose canonical Java phenotype and compiled `CandidateAgent.class` are both
+present. If the terminal generation has no runnable candidate, it searches
+completed generations newest-first and tests the newest available runnable
+representative. An explicitly requested candidate ID never falls back to a
+different candidate.

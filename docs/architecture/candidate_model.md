@@ -1,66 +1,48 @@
 # Candidate model
 
-## Normative source
-
-See specification sections 2, 3, 24, 28, and 29. Lineage serialization is owned by [`../artifacts/lineage_schema.md`](../artifacts/lineage_schema.md).
-
 ## Genotype and phenotype
 
-| Symbol | Field | Meaning |
+The canonical genotype has exactly two evolvable prompt components:
+
+| Concept | Current field | Meaning |
 | --- | --- | --- |
-| `A` | `strategy_prompt` | High-level MicroRTS behavior intent. |
-| `B` | `previous_code` | Complete Java source most recently generated for and evaluated as the source parent. |
-| `C` | `generation_prompt` | Instructions controlling complete-file Java generation. |
+| Policy gene | `strategy_prompt` | Concrete MicroRTS game-playing policy (`policy_prompt` conceptually). |
+| Translation gene | `generation_prompt` | Reusable instructions for faithfully translating policy into Java (`code_generation_prompt` conceptually). |
 
-The genotype is `A + B + C`. The phenotype is the new complete `CandidateAgent.java` produced by the final Java Generation LLM.
-
-`previous_code` is not a static seed snapshot. If genotype `A1 + B1 + C1` generates and evaluates Java `B2`, the inheritable evaluated state is `A1 + B2 + C1`.
+The phenotype is the generated complete `ai.generated.CandidateAgent` Java
+source. Java source is evaluation and Code Reflection evidence; it is never a
+genotype component and is never inherited into a child Generator request.
 
 ## Required logical fields
-
-An implementation may use nested records, but it must expose and persist these names or an explicitly versioned lossless mapping:
 
 | Group | Fields |
 | --- | --- |
 | Identity | `candidate_id`, `generation`, `parent_ids` |
-| Genotype | `strategy_prompt`, `previous_code`, `generation_prompt` |
+| Genotype | `strategy_prompt`, `generation_prompt` |
 | Phenotype | `generated_java`, `generated_java_path` |
 | Variation | `operator`, `mutation_type` |
-| Component provenance | `strategy_parent_id`, `previous_code_parent_id`, `generation_prompt_parent_id` |
+| Component provenance | `strategy_parent_id`, `generation_prompt_parent_id` |
 | State/failure | `status`, `failure_stage`, `failure_reason` |
-| Objectives | `game_performance`, `code_quality` |
+| Objectives/evidence | opponent fitness cases, game/code diagnostics |
 | Persistence references | `artifacts`, `timing` |
 
-Recommended internal separation:
-
-- `CandidateGenotype`: the three heritable components;
-- `CandidatePhenotype`: the newly generated complete Java;
-- `CandidateEvaluation`: match evidence, objective values, and failure data.
-
-## Lifecycle
-
-Valid logical states are:
-
-1. `constructed`: genotype and lineage are complete.
-2. `generation_started`: final Java request has been persisted.
-3. `generated`: raw response, extracted source, and normalized source are persisted.
-4. `validated`: source contract passed.
-5. `compiled`: one class set is available.
-6. `integrated`: MicroRTS can load and initialize the class.
-7. `evaluated`: all 126 matches and all seven fitness cases completed.
-8. `failed`: a terminal failure records the exact `failure_stage` and retains earlier evidence.
-
-These labels are a documentation model, not newly mandated serialized enum values. Serialized status values must be versioned and map unambiguously to the required pipeline stages.
+New runtime IDs use `gen_<zero-padded-generation>_<12-hex-random-suffix>`.
+Explicit IDs loaded from supported artifacts remain opaque and unchanged.
 
 ## Construction invariants
 
-- A child is not complete until all three genotype components and component-level provenance are known.
-- Crossover reads the evaluated parent phenotype for the `previous_code` component.
-- Mutation changes only the component owned by its mutation type. See [`mutation.md`](mutation.md).
-- The final generation result is stored separately from the pre-generation `previous_code`; artifact writing must not overwrite either value.
-- The next generation inherits the child phenotype as its `previous_code` only after that phenotype has been evaluated.
-- A failure does not erase genotype, partial phenotype, lineage, mutation output, or timing.
+- A child genotype is complete only when both prompt genes and their provenance are known.
+- Whole-component uniform crossover makes exactly two independent parent choices.
+- Strategy Reflection may change only `strategy_prompt`.
+- Code Reflection may change only `generation_prompt`.
+- Generator and Evaluation do not modify either prompt gene.
+- Generator uses the canonical checked-in scaffold, never a parent phenotype.
+- Failure never erases genotype, partial phenotype, lineage, mutation evidence, or timing.
 
-## Implementation mapping
+## Compatibility
 
-Current code centers the record in `eagle/candidate.py` and reconstructs it in `eagle/evaluation.py`. The active dataclass lacks several first-class contract fields and artifact writing overwrites the pre-generation evidence. Treat [`../implementation/current_status.md`](../implementation/current_status.md) and gap `G-01` in [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md) as migration evidence, not normative behavior.
+New candidate artifacts use `genotype/policy_prompt.txt`,
+`genotype/code_generation_prompt.txt`, and `phenotype/CandidateAgent.java`.
+The resume loader may read the old prompt/phenotype paths, but ignores legacy
+`previous_code` and `previous_code_parent_id`; compatibility cannot reintroduce
+the old third gene into active state.

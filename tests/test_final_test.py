@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from eagle.final_test import (
     FINAL_TEST_GAMES_PER_SIDE,
     FINAL_TEST_OPPONENTS,
     _empty_cell,
     _markdown_table,
+    _select_candidate,
 )
 
 
@@ -41,3 +45,43 @@ class FinalTestTests(unittest.TestCase):
         self.assertIn("11/7/2/0", table)
         self.assertIn("p0 6/3/1", table)
         self.assertIn("p1 5/4/1", table)
+
+    def test_summary_best_candidate_does_not_override_failed_selection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            (run_dir / "manifest.json").write_text(
+                json.dumps({"latest_generation": 2}),
+                encoding="utf-8",
+            )
+            generation_dir = run_dir / "generations"
+            generation_dir.mkdir()
+            (generation_dir / "generation_0001.json").write_text(
+                json.dumps({
+                    "population": [
+                        {"candidate_id": "fallback-candidate", "status": "evaluated"},
+                    ]
+                }),
+                encoding="utf-8",
+            )
+            (generation_dir / "generation_0002.json").write_text(
+                json.dumps({
+                    "population": [
+                        {"candidate_id": "failed-candidate", "status": "failed"},
+                    ]
+                }),
+                encoding="utf-8",
+            )
+            (run_dir / "summary.json").write_text(
+                json.dumps({"best_candidate": {"candidate_id": "failed-candidate"}}),
+                encoding="utf-8",
+            )
+            fallback_classes = run_dir / "classes" / "fallback-candidate" / "ai" / "generated"
+            fallback_classes.mkdir(parents=True)
+            (fallback_classes / "CandidateAgent.class").write_bytes(b"compiled")
+            fallback_candidate = run_dir / "candidates" / "fallback-candidate"
+            (fallback_candidate / "phenotype").mkdir(parents=True)
+            (fallback_candidate / "phenotype" / "CandidateAgent.java").write_text("class CandidateAgent {}", encoding="utf-8")
+
+            selected = _select_candidate(run_dir, None)
+
+            self.assertEqual(selected["candidate_id"], "fallback-candidate")

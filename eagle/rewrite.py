@@ -109,8 +109,10 @@ class PromptRewriteStage:
         artifact_dir: Path | None = None,
     ) -> RewriteResult:
         stage = "rewriter"
+        stage_dir = None if artifact_dir is None else _rewrite_artifact_dir(artifact_dir, rewrite_type)
         if artifact_dir is not None:
-            _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
+            assert stage_dir is not None
+            _write_text(stage_dir / f"{stage}_request.txt", request)
         attempts: list[ReflectionAttempt] = []
         last_response = ""
         last_error: str | None = None
@@ -142,9 +144,10 @@ class PromptRewriteStage:
                 )
             )
             if artifact_dir is not None:
-                _write_text(artifact_dir / "mutation" / f"{stage}_attempt_{attempt_number:03d}_response_raw.txt", response)
+                assert stage_dir is not None
+                _write_text(stage_dir / f"{stage}_attempt_{attempt_number:03d}_response_raw.txt", response)
                 if response:
-                    _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", response)
+                    _write_text(stage_dir / f"{stage}_response_raw.txt", response)
             if self.logger is not None:
                 self.logger.write(
                     stage=stage,
@@ -178,7 +181,8 @@ class PromptRewriteStage:
                 )
             time.sleep(0)
         if artifact_dir is not None:
-            _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", last_response)
+            assert stage_dir is not None
+            _write_text(stage_dir / f"{stage}_response_raw.txt", last_response)
         return RewriteResult(
             stage=stage,
             rewrite_type=rewrite_type,
@@ -297,7 +301,7 @@ class PromptRewriteMutation:
             max_chars=self.config.max_prompt_chars,
             max_lines=self.config.max_prompt_lines,
         )
-        return self._result_candidate(
+        result = self._result_candidate(
             candidate,
             context=context,
             reflection=reflection,
@@ -309,6 +313,11 @@ class PromptRewriteMutation:
             original_strategy=original_strategy,
             original_generation=original_generation,
         )
+        if self.mutation_type == "strategy":
+            assert result.generation_prompt == original_generation
+        else:
+            assert result.strategy_prompt == original_strategy
+        return result
 
     def _result_candidate(
         self,
@@ -325,17 +334,33 @@ class PromptRewriteMutation:
         original_generation: str,
     ) -> Candidate:
         operator = "crossover+mutation" if candidate.operator == "crossover" else "mutation"
+        feedback_candidate_id = context.candidate.candidate_id or candidate.id
         mutation_record = {
             "schema_version": REWRITE_SCHEMA_VERSION,
             "reflection_schema_version": REFLECTION_SCHEMA_VERSION,
             "candidate_id": candidate.id,
-            "feedback_candidate_id": context.candidate.candidate_id or candidate.id,
+            "feedback_candidate_id": feedback_candidate_id,
             "operation": f"{self.mutation_type}_mutation",
             "applied": applied,
             "type": self.mutation_type,
             "objectives": context.objectives.to_dict(),
             "evaluation_status": context.candidate.status,
-            "evidence": context.to_dict(),
+            "evidence": (
+                {
+                    "candidate_id": feedback_candidate_id,
+                    "policy_prompt": context.candidate.strategy_prompt,
+                    "reviewed_phenotype_artifact": (
+                        f"candidates/{feedback_candidate_id}/phenotype/CandidateAgent.java"
+                    ),
+                    "structural_evidence": _structural_code_evidence(context),
+                }
+                if self.mutation_type == "code"
+                else {
+                    "candidate_id": feedback_candidate_id,
+                    "policy_prompt": context.candidate.strategy_prompt,
+                    "objectives": context.objectives.to_dict(),
+                }
+            ),
             "token_counts": {"reflection": None, "rewrite": None},
             "prompt_metadata": reflection.prompt_metadata,
             "model": reflection.model or (None if rewrite is None else rewrite.model),
@@ -356,7 +381,7 @@ class PromptRewriteMutation:
         history = [item for item in history if isinstance(item, dict) and item.get("reflection_type") == self.mutation_type][-1:]
         history.append({
             "reflection_type": self.mutation_type,
-            "parent_candidate_id": context.candidate.candidate_id or candidate.id,
+            "parent_candidate_id": feedback_candidate_id,
             "analysis_summary": reflection.analysis_summary,
             "revised_prompt": reflection.revised_prompt,
             "generation_index": candidate.generation,
@@ -371,9 +396,10 @@ class PromptRewriteMutation:
         )
         metadata = dict(candidate.metadata)
         if target_dir is not None:
-            _write_text(target_dir / "mutation" / "original_strategy_prompt.txt", original_strategy)
-            _write_text(target_dir / "mutation" / "original_generation_prompt.txt", original_generation)
-            _write_json(target_dir / "mutation" / "metadata.json", mutation_record)
+            mutation_dir = target_dir / "mutation" / f"{self.mutation_type}_reflection"
+            _write_text(mutation_dir / "original_policy_prompt.txt", original_strategy)
+            _write_text(mutation_dir / "original_code_generation_prompt.txt", original_generation)
+            _write_json(mutation_dir / "metadata.json", _mutation_metadata_record(mutation_record))
             _write_json(target_dir / "timing.json", timing)
         if target_dir is not None and self.artifact_root is not None:
             metadata["mutation"] = compact_mutation_record(mutation_record)
@@ -382,7 +408,7 @@ class PromptRewriteMutation:
             # complete record so a later artifact writer can persist it.
             metadata["mutation"] = mutation_record
         metadata["reflection_history"] = history[-1:]
-        return replace(
+        result = replace(
             candidate,
             strategy_prompt=strategy_prompt,
             generation_prompt=generation_prompt,
@@ -391,6 +417,11 @@ class PromptRewriteMutation:
             timing=timing,
             metadata=metadata,
         )
+        if self.mutation_type == "strategy":
+            assert result.generation_prompt == original_generation
+        else:
+            assert result.strategy_prompt == original_strategy
+        return result
 
 
 def build_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult, context: ReflectionContext) -> str:
@@ -399,7 +430,6 @@ def build_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionRe
     return render_prompt("strategy_rewrite", {
         "strategy_prompt": candidate.strategy_prompt,
         "reflection": json.dumps({"analysis": reflection.parsed_response.get("analysis", {}) if reflection.parsed_response else {}, "proposed_revised_strategy_prompt": reflection.revised_prompt}, ensure_ascii=False),
-        "parent_java": candidate.generated_java or candidate.previous_code,
         "game_summary": context.objectives.to_dict(),
     })
 
@@ -408,11 +438,8 @@ def build_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult
     from .prompts import render_prompt
 
     return render_prompt("code_rewrite", {
-        "generation_prompt": candidate.generation_prompt,
-        "reflection": json.dumps({"analysis": reflection.parsed_response.get("analysis", {}) if reflection.parsed_response else {}, "proposed_revised_code_generation_prompt": reflection.revised_prompt}, ensure_ascii=False),
-        "strategy_prompt": candidate.strategy_prompt,
-        "parent_java": candidate.generated_java or candidate.previous_code,
-        "code_quality_summary": context.code_diagnostics.to_dict(),
+        "code_generation_prompt": candidate.generation_prompt,
+        "alignment_review": json.dumps(reflection.parsed_response or {}, ensure_ascii=False),
     })
 
 
@@ -429,6 +456,44 @@ def _validate_rewritten_prompt(response: str) -> None:
         or lowered.startswith("new_generation_prompt:")
     ):
         raise ValueError("Rewrite response must contain only the rewritten prompt.")
+
+
+def _mutation_metadata_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Keep request/response bodies in their text artifacts, not metadata JSON."""
+
+    payload = dict(record)
+    for key in ("reflection", "rewrite"):
+        stage = payload.get(key)
+        if isinstance(stage, dict):
+            payload[key] = {
+                name: value
+                for name, value in stage.items()
+                if name not in {"request", "raw_response"}
+            }
+    return payload
+
+
+def _structural_code_evidence(context: ReflectionContext) -> dict[str, Any]:
+    diagnostics = context.code_diagnostics.to_dict()
+    return {
+        key: diagnostics.get(key)
+        for key in (
+            "generation_failure",
+            "validation_failure",
+            "compile_success",
+            "compile_errors",
+            "compile_warnings",
+            "missing_functions",
+            "invalid_functions",
+        )
+        if diagnostics.get(key) not in (None, (), [], {}, "")
+    }
+
+
+def _rewrite_artifact_dir(root: Path | None, rewrite_type: str) -> Path:
+    assert root is not None
+    mutation_type = "code" if rewrite_type == "generation_prompt_rewrite" else "strategy"
+    return root / "mutation" / f"{mutation_type}_reflection"
 
 
 def _write_text(path: Path, value: str) -> None:

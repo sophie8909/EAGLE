@@ -1,7 +1,7 @@
 Generate the complete Java source file for CandidateAgent.
 
-Overall strategy:
-$strategy_prompt
+Game-playing policy to implement faithfully:
+$policy_prompt
 
 The editable strategy implementation is the single region between the
 EAGLE_AGENT_STRATEGY_START and EAGLE_AGENT_STRATEGY_END comments.
@@ -11,13 +11,13 @@ EAGLE_ACTION_HELPERS_END to operate the Agent.
 
 $action_api_guide
 
-Generation requirements:
-$generation_prompt
+Reusable policy-to-Java translation instructions:
+$code_generation_prompt
 
-Start from this complete known-good source. Return the complete revised Java file, including every unchanged section:
+Start from this canonical checked-in scaffold. Return the complete revised Java file, including every unchanged section:
 
 ```java
-$current_source
+$java_scaffold
 ```
 FINAL OUTPUT CONTRACT (highest priority):
 Your response must contain one complete CandidateAgent.java file and nothing else.

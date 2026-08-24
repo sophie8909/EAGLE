@@ -87,3 +87,28 @@ class CanonicalRunCliTests(unittest.TestCase):
             "run", "--no-capture-output", "-n", "eagle", "python", "-m", "eagle",
             "experiment", "--config-dir", "folder", "--mock", "--skip-final-test",
         ])
+
+    def test_experiment_shell_passes_folder_resume_to_python(self):
+        repository = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            conda = fake_bin / "conda"
+            conda.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
+            conda.chmod(0o755)
+            environment = dict(os.environ)
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            completed = subprocess.run(
+                [str(repository / "experiment.sh"), "--resume", "folder", "--skip-final-test"],
+                cwd=repository,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout.splitlines(), [
+            "run", "--no-capture-output", "-n", "eagle", "python", "-m", "eagle",
+            "experiment", "--resume", "folder", "--skip-final-test",
+        ])

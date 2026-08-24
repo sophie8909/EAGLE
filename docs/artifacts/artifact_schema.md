@@ -1,7 +1,7 @@
 # Artifact schema
 
 This document owns the current `eagle-run-v2`, `eagle-generation-v3`, and
-`eagle-candidate-v3` layout. Timing and lineage fields are defined by
+`eagle-candidate-v4` layout. Timing and lineage fields are defined by
 `timing_schema.md` and `lineage_schema.md`.
 
 ## Run root
@@ -26,7 +26,7 @@ runs/<run_id>/
 
 `config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings, reflection mode/probabilities, and evaluation matrix. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
 
-`manifest.json` stays small: schema/run identity, timestamps, status, experiment/model/reflection identity, and `latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`; interrupted/failed records include resumability and their interruption/failure metadata without replacing the last atomic generation. It never embeds the config. `summary.json` stores completion/reporting fields, final population IDs, and a reference to the best candidate; it does not copy candidate snapshots.
+`manifest.json` stays small: schema/run identity, timestamps, status, experiment/model/reflection identity, and `latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`; interrupted/failed records include resumability and their interruption/failure metadata without replacing the last atomic generation. It never embeds the config. `summary.json` stores completion/reporting fields, final population IDs, and a reference to the best runnable candidate in the final population; the reference is `null` when every final candidate failed. It does not copy candidate snapshots.
 
 `timing.jsonl` is the canonical append-only run timing stream. Archive data lives only below `archives/`.
 
@@ -40,6 +40,16 @@ runs/<run_id>/
 - aggregate objective, opponent, diversity, and timing-derived metrics;
 - one canonical reflection-operator/AOS generation record.
 
+Each generation also has a lightweight flat sidecar at
+`generations/generation_<nnnn>_policies.jsonl`. It contains one
+`eagle-generation-policy-v2` record, in population order, for every population
+candidate with a non-empty `strategy_prompt`. Records contain the generation,
+candidate ID, strategy-parent ID, operator, mutation type, and a run-relative
+reference to the candidate's canonical `genotype/policy_prompt.txt`. When
+known, they also reference the parent strategy prompt and the candidate's
+Strategy Reflection metadata. Full strategy text is not duplicated in this
+index.
+
 The AOS record contains `mode`, probabilities before/after, nullable Strategy/Code rewards, `reward_source`, operator state, and transitions. Static mode records `reward_source: static`, null rewards, and unchanged probabilities. Resume restores adaptive state from the latest generation file. There is no `generation_metrics.jsonl` or `final_population.json` in new runs.
 
 ## Candidate snapshot and evidence
@@ -50,13 +60,15 @@ candidates/<candidate_id>/
 ├── lineage.json
 ├── timing.json
 ├── genotype/
-│   ├── strategy_prompt.txt
+│   ├── policy_prompt.txt
 │   ├── strategy_signature.json
-│   ├── previous_code.java
-│   └── generation_prompt.txt
+│   └── code_generation_prompt.txt
+├── phenotype/
+│   └── CandidateAgent.java
 ├── crossover/provenance.json
 ├── mutation/
-├── reflection/
+│   ├── strategy_reflection/
+│   └── code_reflection/
 ├── aos/
 ├── generation/
 │   ├── request.txt
@@ -79,9 +91,19 @@ candidates/<candidate_id>/
 
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, fitness vector, aggregate Game Performance, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
 
-Resume rebuilds a `Candidate` from `candidate.json` plus referenced genotype, normalized Java, evaluation, code-quality, and timing files. `individual.json`, `candidate_result.json`, `evaluation/summary.json`, and `evaluation/matches.json` are not written.
+Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
+phenotype, evaluation, code-quality, and timing files. The loader has isolated
+fallback reads for old prompt/phenotype paths, but ignores legacy
+`previous_code` and phenotype-parent provenance. New writers never emit them.
+`individual.json`, `candidate_result.json`, `evaluation/summary.json`, and
+`evaluation/matches.json` are not written.
 
 Raw LLM output is persisted before parsing. Mutation retains reflection/rewrite request, raw response, attempts, status, and failure evidence even when later generation fails. Adaptively credited offspring retain `aos/reward.json`; head-to-head match evidence remains below `aos/head_to_head/`.
+
+Code Reflection metadata records `reviewed_phenotype_artifact` as a run-relative
+reference to the evaluated source candidate's canonical Java phenotype. The
+source is reviewer evidence only; it is never duplicated as `previous_code` in
+the child genotype or forwarded to the child Generator request.
 
 ## Match ownership
 
@@ -128,3 +150,10 @@ absolute run folders. The file is updated atomically when each run directory is
 created and is not a run-root artifact or an experiment config. Config discovery
 excludes this generated index. For compatibility, a pre-existing
 `experiment-v2` config named `experiment.yaml` is never overwritten.
+
+Folder-level resume reads this mapping without reinitializing it. An indexed
+entry is lifecycle-complete when its run manifest is `complete` and, for a
+non-mock invocation that does not use `--skip-final-test`, a canonical
+`final_test/final_test_summary.json` exists. Incomplete indexed entries are
+resumed before unindexed configs; completed entries are skipped. Index paths
+written by new batches and accepted by folder resume are absolute.

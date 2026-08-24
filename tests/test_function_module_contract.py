@@ -91,8 +91,9 @@ class CompleteJavaGenerationTests(unittest.TestCase):
         template = load_java_template(JavaTemplatePaths())
         source_a = template.replace("private void decide", "private void decideA", 1)
         source_b = template.replace("private void decide", "private void decideB", 1)
-        child = crossover(Candidate(id="a", previous_code="old-a", generated_java=source_a), Candidate(id="b", previous_code="old-b", generated_java=source_b), CrossoverContext(1, 0, random.Random(2)))
-        self.assertIn(child.previous_code, (source_a, source_b))
+        child = crossover(Candidate(id="a", strategy_prompt="a", generated_java=source_a), Candidate(id="b", strategy_prompt="b", generated_java=source_b), CrossoverContext(1, 0, random.Random(2)))
+        self.assertEqual(child.generated_java, "")
+        self.assertFalse(hasattr(child, "previous_code"))
 
     @unittest.skipUnless(shutil.which("javac"), "javac is required for the real template compile test")
     def test_complete_marked_template_compiles(self):

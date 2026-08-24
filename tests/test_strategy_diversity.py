@@ -136,7 +136,7 @@ class StrategyDiversityTests(unittest.TestCase):
             self.assertEqual(result.candidate.mutation_intent, "STRUCTURAL")
             self.assertEqual(result.candidate.strategy_niche, "mid-mixed-pressure")
             self.assertIn("Mutation Intent: STRUCTURAL", next(item for item in backend.prompts if "ROLE: coach" in item))
-            payload = json.loads((root / "child" / "reflection" / "mutation_intent.json").read_text())
+            payload = json.loads((root / "child" / "mutation" / "strategy_reflection" / "mutation_intent.json").read_text())
             self.assertEqual(payload["mutation_intent"], "STRUCTURAL")
             self.assertTrue(result.candidate.niche_changed)
 

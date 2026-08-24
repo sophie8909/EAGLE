@@ -18,6 +18,7 @@ from .config import ExperimentConfig
 RUN_SCHEMA_VERSION = "eagle-run-v2"
 GENERATION_SCHEMA_VERSION = "eagle-generation-v3"
 ERROR_MEMORY_SCHEMA_VERSION = "eagle-error-memory-v1"
+GENERATION_POLICY_SCHEMA_VERSION = "eagle-generation-policy-v2"
 
 
 def utc_now() -> str:
@@ -188,6 +189,11 @@ def record_generation(
     }
     generations_dir = run_dir / "generations"
     generations_dir.mkdir(parents=True, exist_ok=True)
+    policy_index_path = generations_dir / f"generation_{generation:04d}_policies.jsonl"
+    atomic_jsonl(
+        policy_index_path,
+        generation_policy_records(run_dir, generation, population),
+    )
     snapshot_path = generations_dir / f"generation_{generation:04d}.json"
     atomic_json(snapshot_path, snapshot)
     manifest = load_manifest(run_dir)
@@ -197,6 +203,44 @@ def record_generation(
         updated_at=utc_now(),
     )
     atomic_json(run_dir / "manifest.json", manifest)
+
+
+def generation_policy_records(
+    run_dir: Path,
+    generation: int,
+    population: list[Candidate],
+) -> list[dict[str, Any]]:
+    """Build stable references to every current population strategy prompt."""
+
+    records: list[dict[str, Any]] = []
+    for candidate in population:
+        if not candidate.strategy_prompt.strip():
+            continue
+        record: dict[str, Any] = {
+            "schema_version": GENERATION_POLICY_SCHEMA_VERSION,
+            "generation": generation,
+            "candidate_id": candidate.id,
+            "strategy_parent_id": candidate.strategy_parent_id,
+            "operator": candidate.operator,
+            "mutation_type": candidate.mutation_type,
+            "policy_prompt_artifact": (
+                f"candidates/{candidate.id}/genotype/policy_prompt.txt"
+            ),
+        }
+        if candidate.strategy_parent_id is not None:
+            record["parent_policy_prompt_artifact"] = (
+                "candidates/"
+                f"{candidate.strategy_parent_id}/genotype/policy_prompt.txt"
+            )
+        reflection_metadata = (
+            run_dir / "candidates" / candidate.id / "mutation" / "strategy_reflection" / "metadata.json"
+        )
+        if reflection_metadata.is_file():
+            record["strategy_reflection_artifact"] = (
+                f"candidates/{candidate.id}/mutation/strategy_reflection/metadata.json"
+            )
+        records.append(record)
+    return records
 
 
 def finalize_run(run_dir: Path, population: list[Candidate], *, stop_reason: str | None) -> None:
@@ -433,15 +477,26 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
         id=candidate_id,
         generation=int(payload.get("generation") or 0),
         parent_ids=tuple(payload.get("parent_ids") or ()),
-        strategy_prompt=text("genotype/strategy_prompt.txt"),
-        previous_code=text("genotype/previous_code.java"),
-        generation_prompt=text("genotype/generation_prompt.txt"),
-        generated_java=text("generation/normalized_candidate.java"),
-        generated_java_path=str(candidate_dir / "generation" / "normalized_candidate.java"),
+        strategy_prompt=(
+            text("genotype/policy_prompt.txt")
+            or text("genotype/strategy_prompt.txt")
+        ),
+        generation_prompt=(
+            text("genotype/code_generation_prompt.txt")
+            or text("genotype/generation_prompt.txt")
+        ),
+        generated_java=(
+            text("phenotype/CandidateAgent.java")
+            or text("generation/normalized_candidate.java")
+        ),
+        generated_java_path=str(
+            candidate_dir / "phenotype" / "CandidateAgent.java"
+            if (candidate_dir / "phenotype" / "CandidateAgent.java").is_file()
+            else candidate_dir / "generation" / "normalized_candidate.java"
+        ),
         operator=str(payload.get("operator") or "seed"),
         mutation_type=payload.get("mutation_type"),
         strategy_parent_id=payload.get("strategy_parent_id"),
-        previous_code_parent_id=payload.get("previous_code_parent_id"),
         generation_prompt_parent_id=payload.get("generation_prompt_parent_id"),
         source_candidate_ids=tuple(payload.get("source_candidate_ids") or ()),
         compile_status=str(payload.get("compile_status") or "pending"),

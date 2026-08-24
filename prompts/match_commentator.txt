@@ -13,5 +13,11 @@ candidate_basic_strategy: $candidate_basic_strategy
 opponent_basic_strategy: $opponent_basic_strategy
 complete_match_record: $complete_match_record
 Return a concise evidence-based tactical diagnosis for this match.
-Return the compact match_analysis JSON schema.
 raw_game_log: $raw_game_log
+
+Return exactly one valid JSON object without Markdown fences, wrapper objects, or prose:
+{"match_id":"","candidate_strategy":{"summary":""},"opponent_strategy":{"summary":""},"turning_points":[{"tick":0,"event":"","impact":""}],"candidate_strengths":[],"candidate_weaknesses":[],"win_loss_analysis":{"result":"win|draw|loss","decisive_causes":[]},"strategy_observations":[]}
+
+Include at least one turning point. Every turning point tick must be a non-negative integer
+copied from the supplied raw game log. Keep strategy sections as objects and all list items
+concise. Do not return recommendations, prompt rewrites, Java, compiler analysis, or fitness.

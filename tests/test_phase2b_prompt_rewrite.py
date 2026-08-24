@@ -33,7 +33,6 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.candidate = Candidate(
             id="rewrite-child",
             strategy_prompt="old strategy",
-            previous_code="parent Java",
             generation_prompt="old generation prompt",
             operator="crossover",
         )
@@ -58,7 +57,6 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertIn("Strategy Reflection stage", backend.calls[0])
         self.assertIn("Strategy Prompt Rewrite stage", backend.calls[1])
         self.assertEqual(child.strategy_prompt, "new strategy prompt")
-        self.assertEqual(child.previous_code, self.candidate.previous_code)
         self.assertEqual(child.generation_prompt, self.candidate.generation_prompt)
         self.assertEqual(child.operator, "crossover+mutation")
         self.assertTrue(child.metadata["mutation"]["applied"])
@@ -74,7 +72,6 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         )
         child = mutation.mutate(self.candidate, self.context)
         self.assertEqual(child.strategy_prompt, self.candidate.strategy_prompt)
-        self.assertEqual(child.previous_code, self.candidate.previous_code)
         self.assertEqual(child.generation_prompt, "new generation prompt")
         self.assertEqual(child.mutation_type, "code")
     def test_rewrite_prompt_builders_include_reflection_and_original_component(self):
@@ -85,11 +82,19 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
             request=build_strategy_reflection_prompt(self.candidate, self.context),
         )
         strategy_prompt = build_strategy_rewrite_prompt(self.candidate, reflection, self.context)
-        code_prompt = build_code_rewrite_prompt(self.candidate, reflection, self.context)
+        code_reflection = ReflectionStage(
+            ScriptedRewriteBackend((self._code_reflection(),)), max_attempts=1
+        ).run(
+            reflection_type="code",
+            candidate=self.candidate,
+            request="review",
+        )
+        code_prompt = build_code_rewrite_prompt(self.candidate, code_reflection, self.context)
         self.assertIn("old strategy", strategy_prompt)
         self.assertIn("reflection", strategy_prompt)
         self.assertIn("old generation prompt", code_prompt)
-        self.assertIn("reflection", code_prompt)
+        self.assertIn("Policy-Code Alignment Review", code_prompt)
+        self.assertNotIn("old strategy", code_prompt)
 
     def test_rewrite_output_rejects_java_and_retries(self):
         backend = ScriptedRewriteBackend(("package ai.generated; class CandidateAgent {}", "usable revised prompt"))
@@ -112,14 +117,14 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
                 rewrite_backend=backend,
             )
             child = mutation.mutate(self.candidate, self.context, artifact_dir=Path(temp))
-            mutation_dir = Path(temp) / "mutation"
+            mutation_dir = Path(temp) / "mutation" / "strategy_reflection"
             self.assertFalse(child.metadata["mutation"]["applied"])
             self.assertEqual(child.strategy_prompt, self.candidate.strategy_prompt)
             self.assertTrue((mutation_dir / "reflector_request.txt").exists())
             self.assertTrue((mutation_dir / "reflector_response_raw.txt").exists())
             self.assertTrue((mutation_dir / "rewriter_request.txt").exists())
             self.assertTrue((mutation_dir / "rewriter_response_raw.txt").exists())
-            self.assertTrue((mutation_dir / "original_strategy_prompt.txt").exists())
+            self.assertTrue((mutation_dir / "original_policy_prompt.txt").exists())
             self.assertTrue((Path(temp) / "timing.json").exists())
 
     @staticmethod
@@ -132,8 +137,9 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
     @staticmethod
     def _code_reflection():
         return json.dumps({
-            "analysis": {"implementation_failures": ["none"], "constraint_failures": [], "priority_changes": ["preserve complete file"]},
-            "revised_code_generation_prompt": "Preserve a complete compilable file.",
+            "assessment": "java_faithfully_implements_policy",
+            "alignment_review": [],
+            "required_generation_behaviors": [],
         })
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 import tempfile
 import unittest
 from pathlib import Path
@@ -66,6 +67,140 @@ class CanonicalRunArtifactTests(unittest.TestCase):
             generation, population = load_resume_population(run)
             self.assertEqual(generation, 0)
             self.assertEqual([item.id for item in population], ["valid-0", "failed-0"])
+
+    def test_generation_policy_index_references_every_available_population_strategy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "run"
+            run.mkdir()
+            self.initialize(run)
+            population = [
+                Candidate(
+                    id="seed-policy",
+                    generation=0,
+                    strategy_prompt="seed strategy",
+                    operator="seed",
+                ),
+                Candidate(
+                    id="copy-policy",
+                    generation=1,
+                    parent_ids=("seed-policy",),
+                    strategy_prompt="seed strategy",
+                    strategy_parent_id="seed-policy",
+                    operator="copy",
+                ),
+                Candidate(
+                    id="code-policy",
+                    generation=1,
+                    parent_ids=("seed-policy",),
+                    strategy_prompt="seed strategy",
+                    strategy_parent_id="seed-policy",
+                    operator="mutation",
+                    mutation_type="code",
+                ),
+                Candidate(
+                    id="strategy-policy",
+                    generation=1,
+                    parent_ids=("seed-policy",),
+                    strategy_prompt="revised strategy",
+                    strategy_parent_id="seed-policy",
+                    operator="mutation",
+                    mutation_type="strategy",
+                ),
+                Candidate(
+                    id="missing-policy",
+                    generation=1,
+                    strategy_prompt="",
+                    operator="copy",
+                ),
+            ]
+            self.checkpoint(run, population)
+            reflection_dir = run / "candidates" / "strategy-policy" / "mutation" / "strategy_reflection"
+            reflection_dir.mkdir(parents=True)
+            (reflection_dir / "metadata.json").write_text("{}", encoding="utf-8")
+
+            record_generation(run, 1, population)
+            path = run / "generations" / "generation_0001_policies.jsonl"
+            first_contents = path.read_text(encoding="utf-8")
+            record_generation(run, 1, population)
+
+            self.assertEqual(path.read_text(encoding="utf-8"), first_contents)
+            records = [json.loads(line) for line in first_contents.splitlines()]
+            self.assertEqual(
+                [record["candidate_id"] for record in records],
+                ["seed-policy", "copy-policy", "code-policy", "strategy-policy"],
+            )
+            self.assertTrue(all("strategy_prompt" not in record for record in records))
+            self.assertEqual(
+                records[0]["policy_prompt_artifact"],
+                "candidates/seed-policy/genotype/policy_prompt.txt",
+            )
+            self.assertNotIn("parent_policy_prompt_artifact", records[0])
+            self.assertEqual(
+                records[2]["parent_policy_prompt_artifact"],
+                "candidates/seed-policy/genotype/policy_prompt.txt",
+            )
+            self.assertEqual(records[2]["mutation_type"], "code")
+            self.assertNotIn("strategy_reflection_artifact", records[2])
+            self.assertEqual(records[3]["mutation_type"], "strategy")
+            self.assertEqual(
+                records[3]["strategy_reflection_artifact"],
+                "candidates/strategy-policy/mutation/strategy_reflection/metadata.json",
+            )
+
+    def test_reflection_generator_strategy_input_is_written_at_generation_boundary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            candidates_dir = Path(directory) / "candidates"
+            candidate = Candidate(
+                id="reflected-child",
+                generation=1,
+                strategy_prompt="\n  exact downstream strategy  \n",
+                mutation_type="strategy",
+            )
+            reflection_dir = candidates_dir / candidate.id / "mutation" / "strategy_reflection"
+            reflection_dir.mkdir(parents=True)
+            (reflection_dir / "metadata.json").write_text("{}", encoding="utf-8")
+
+            write_candidate_inputs(candidates_dir, candidate)
+            write_candidate_snapshot(candidates_dir, candidate)
+
+            self.assertEqual(
+                (reflection_dir / "generator_strategy_input.txt").read_text(encoding="utf-8"),
+                "exact downstream strategy",
+            )
+            snapshot = json.loads(
+                (candidates_dir / candidate.id / "candidate.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                snapshot["artifacts"]["generator_strategy_input"],
+                "mutation/strategy_reflection/generator_strategy_input.txt",
+            )
+
+    def test_observation_writes_preserve_ea_rng_and_evaluated_candidate_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "run"
+            run.mkdir()
+            self.initialize(run)
+            candidate = Candidate(
+                id="evaluated-policy",
+                generation=2,
+                strategy_prompt="persist without changing behavior",
+                status="evaluated",
+                fitness_objectives={case: 7.5 for case in LEXICASE_CASES},
+                game_eval_result={"game_performance": 7.5, "completed_match_count": 126},
+                mutation_type="strategy",
+            )
+            rng = random.Random(37)
+            rng_state = rng.getstate()
+            candidate_state = candidate.to_json_dict()
+
+            write_candidate_inputs(run / "candidates", candidate)
+            write_candidate_snapshot(run / "candidates", candidate)
+            record_generation(run, 2, [candidate])
+
+            self.assertEqual(rng.getstate(), rng_state)
+            self.assertEqual(candidate.to_json_dict(), candidate_state)
+            self.assertEqual(candidate.fitness_objectives["lightrush"], 7.5)
+            self.assertEqual(candidate.game_eval_result["completed_match_count"], 126)
 
     def test_final_population_and_manifest(self):
         with tempfile.TemporaryDirectory() as directory:

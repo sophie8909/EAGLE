@@ -1,6 +1,6 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-08-19 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-08-20 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
@@ -12,15 +12,18 @@ runtime LLM policy。
 
 ## Candidate 與演化流程
 
-Genotype 固定包含三個部分：
+Genotype 固定包含兩個可演化 prompt：
 
-1. `strategy_prompt`
-2. `previous_code`
-3. `generation_prompt`
+1. `strategy_prompt`：遊戲 policy gene
+2. `generation_prompt`：policy-to-Java translation gene
 
-子代的 `previous_code` 來自被選 parent 最近一次完成評估的 Java phenotype。
-Uniform Crossover 會獨立選擇三個 genotype component，並保存各 component 的
-來源 candidate ID。
+Java `CandidateAgent.java` 是 phenotype／evidence，不是 genotype，也不會傳給
+子代。Uniform Crossover 只對兩個完整 prompt component 獨立選 parent，並只保存
+這兩個 component 的來源 candidate ID。
+
+新建立的 candidate ID 使用 `gen_<四位 generation>_<12 位十六進位>`，例如
+`gen_0007_3a81c65d20bf`，讓 candidate artifact folder 可直接按 generation
+辨識與排序。從既有 artifact 或 resume 載入的明確 ID 不會被重新命名。
 
 每一代依序執行 seeded lexicase parent selection、crossover、可選的 Strategy
 或 Code mutation、完整 Java generation、validation、compilation、integration、
@@ -40,6 +43,33 @@ Reflection operator mode 只有三種：
 
 Strategy Mutation 只修改 `strategy_prompt`；Code Mutation 只修改
 `generation_prompt`。兩者完成後都必須重新產生完整 Java。
+
+Strategy Reflection 只使用 policy 與 match evidence。Match Commentator 不會收到
+Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Code
+Reflection 則比較 policy 與當前 Java phenotype，可選用 static/compiler evidence，
+但不使用 raw game logs；Code Prompt Rewriter 只收到原 generation prompt 與
+alignment review。Generator 使用兩個 gene 加上固定 checked-in Java scaffold，
+不使用 parent Java。
+
+結構化輸出會保留原始 response，並只在 parser 邊界正規化已知的模型格式差異：
+賽評的 `match_analysis/key_observations.time` 與 Reviewer 將文字修正拆成陣列的
+情形。缺少數字 tick、必要欄位、alignment classification 或跨越 role 責任邊界
+仍會判定失敗。
+
+Strategy Reflection 的 candidate artifact 會在 `mutation/strategy_reflection/`
+保存：parent
+`strategy_prompt`、按 Commentator 呼叫順序排列的 match、各次 Commentator
+解析結果、Coach 的結構化與最終 render input、Coach raw／parsed output、正規化後的
+child `strategy_prompt`，以及實際交給 Generator 的 strategy 值。系統沒有另設
+`policy` 欄位；可重用策略就是 genotype 的 `strategy_prompt`。每代另有只保存
+artifact reference 的 policy JSONL sidecar，其他 mutation operator 的 candidate
+也不會被排除。這些新增內容只供觀測，不改變 prompt、LLM 呼叫、sampling、
+selection、fitness 或 evaluation。
+
+新 candidate artifact 將兩個 gene 放在 `genotype/policy_prompt.txt` 與
+`genotype/code_generation_prompt.txt`，Java phenotype 放在
+`phenotype/CandidateAgent.java`；Code Reflection evidence 放在
+`mutation/code_reflection/`。舊路徑只能由 loader 隔離讀取，不會恢復舊的第三 gene。
 
 所有 executable prompt body 都放在 `prompts/`，一個 prompt 一個 UTF-8
 `.txt` 檔。`prompts/manifest.toml` 只保存 metadata 與 placeholder contract。
@@ -82,7 +112,7 @@ root `errors.jsonl` 與 run-v1 reader 已移除。
 
 ```bash
 ./experiment.sh CONFIG_FOLDER_OR_YAML [--mock] [--skip-final-test]
-./experiment.sh --resume RUN_DIR [--mock] [--skip-final-test]
+./experiment.sh --resume RUN_DIR_OR_CONFIG_FOLDER [--mock] [--skip-final-test]
 ./analyze.sh RUN_DIR
 ```
 
@@ -94,6 +124,11 @@ cleanup。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
 以資料夾啟動批次時，該設定資料夾會建立 `experiment.yaml` 索引，逐筆記錄
 「config 檔名 → 絕對 run folder」。索引在 run folder 建立後立即原子更新，
 不會在下次執行時被當成 config；既有的 `experiment-v2` 同名設定檔不會被覆寫。
+
+`--resume` 指向設定資料夾時會讀取既有索引，不會清空它。系統先續跑已索引但
+search 或必要 final test 尚未完成的 run，跳過完整完成者，再依檔名字典序執行
+其餘尚未建立 run 的 config；新 run 仍會原子寫回同一索引。若 search 已完成、
+只缺 final test，則不會為該步驟啟動 llama.cpp。
 
 ## 驗證
 

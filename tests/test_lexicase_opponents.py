@@ -10,7 +10,7 @@ from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig, FIXED_OPPONENT_WEIGHT_SUM
 from eagle.opponent_archive import ensure_opponent_archive, update_opponent_archive
 from eagle.opponent_cases import LEXICASE_CASES
-from eagle.selection import lexicase_select, select_next_generation
+from eagle.selection import best_candidate, lexicase_select, select_next_generation
 
 
 def candidate(candidate_id: str, scores: dict[str, float], *, generation: int = 0) -> Candidate:
@@ -66,6 +66,18 @@ class LexicaseOpponentTests(unittest.TestCase):
             [capability_winner], [aggregate_challenger], population_size=1, rng=random.Random(1)
         )
         self.assertEqual(lost[0].id, "aggregate-challenger-wins")
+
+    def test_best_candidate_excludes_failed_candidates(self) -> None:
+        failed = Candidate(
+            id="failed-high-score",
+            status="failed",
+            fitness_objectives={case: 100.0 for case in LEXICASE_CASES},
+            game_eval_result={"game_performance": 100.0},
+        )
+        runnable = candidate("runnable", {case: 1.0 for case in LEXICASE_CASES})
+
+        self.assertIs(best_candidate([failed]), None)
+        self.assertEqual(best_candidate([failed, runnable]).id, "runnable")
 
     def test_per_opponent_archive_keeps_best_score_without_code_quality_tie_break(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

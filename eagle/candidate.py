@@ -13,26 +13,27 @@ from .prompts import load_prompt
 ACTION_API_GUIDE = load_prompt("action_api_guide")
 DEFAULT_GENERATION_PROMPT = load_prompt("initial_generation")
 
-LINEAGE_SCHEMA_VERSION = "1.0"
-CANDIDATE_SNAPSHOT_SCHEMA_VERSION = "eagle-candidate-v2"
+LINEAGE_SCHEMA_VERSION = "2.0"
+CANDIDATE_SNAPSHOT_SCHEMA_VERSION = "eagle-candidate-v4"
 
 
 @dataclass(frozen=True)
 class Candidate:
     """One evolutionary individual that generates one complete Java agent."""
 
-    id: str = field(default_factory=lambda: uuid4().hex[:12])
+    id: str = ""
     generation: int = 0
     parent_ids: tuple[str, ...] = ()
+    # The canonical genotype has exactly two genes.  ``strategy_prompt`` is
+    # the policy gene; ``generation_prompt`` is the policy-to-Java translation
+    # gene.  Java source belongs only to the phenotype fields below.
     strategy_prompt: str = ""
-    previous_code: str = ""
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
     generated_java: str = ""
     generated_java_path: str | None = None
     operator: str = "seed"
     mutation_type: str | None = None
     strategy_parent_id: str | None = None
-    previous_code_parent_id: str | None = None
     generation_prompt_parent_id: str | None = None
     source_candidate_ids: tuple[str, ...] = ()
     compile_status: str = "pending"
@@ -51,6 +52,16 @@ class Candidate:
     timing: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        """Give new candidates a sortable generation-qualified identity."""
+
+        if not self.id:
+            object.__setattr__(
+                self,
+                "id",
+                f"gen_{self.generation:04d}_{uuid4().hex[:12]}",
+            )
+
     def objective_vector(self) -> tuple[float, ...]:
         """Return the fixed opponent cases used by lexicase selection."""
 
@@ -58,31 +69,20 @@ class Candidate:
 
     def generation_input(self, *, class_name: str = "", module_name: str = "controller") -> str:
         """Build one request for a complete single-file Java agent."""
-        from generation.agent_template import (
-            JavaTemplatePaths,
-            STRATEGY_END_MARKER,
-            STRATEGY_START_MARKER,
-            load_java_template,
-        )
+        from generation.agent_template import JavaTemplatePaths, load_java_template
 
-        previous_source = self.previous_code.strip()
-        if (
-            previous_source.startswith("package ai.generated;")
-            and STRATEGY_START_MARKER in previous_source
-            and STRATEGY_END_MARKER in previous_source
-        ):
-            current_source = previous_source
-        else:
-            current_source = load_java_template(JavaTemplatePaths())
+        # Generation always starts from the checked-in scaffold.  A parent's
+        # phenotype must never become decoder context for its child.
+        current_source = load_java_template(JavaTemplatePaths())
         from .prompts import render_prompt
 
         return render_prompt(
             "java_generation",
             {
-                "strategy_prompt": self.strategy_prompt.strip(),
+                "policy_prompt": self.strategy_prompt.strip(),
                 "action_api_guide": ACTION_API_GUIDE,
-                "generation_prompt": self.generation_prompt.strip(),
-                "current_source": current_source,
+                "code_generation_prompt": self.generation_prompt.strip(),
+                "java_scaffold": current_source,
             },
         )
 
@@ -102,14 +102,12 @@ class Candidate:
             "generation": self.generation,
             "parent_ids": list(self.parent_ids),
             "strategy_prompt": self.strategy_prompt,
-            "previous_code": self.previous_code,
             "generation_prompt": self.generation_prompt,
             "generated_java": self.generated_java,
             "generated_java_path": self.generated_java_path,
             "operator": self.operator,
             "mutation_type": self.mutation_type,
             "strategy_parent_id": self.strategy_parent_id,
-            "previous_code_parent_id": self.previous_code_parent_id,
             "generation_prompt_parent_id": self.generation_prompt_parent_id,
             "source_candidate_ids": list(self.resolved_source_candidate_ids()),
             "compile_status": self.compile_status,
@@ -167,7 +165,6 @@ class Candidate:
         ordered = (
             *self.source_candidate_ids,
             self.strategy_parent_id,
-            self.previous_code_parent_id,
             self.generation_prompt_parent_id,
         )
         unique: list[str] = []
@@ -187,7 +184,6 @@ class Candidate:
             "operator": self.operator,
             "mutation_type": self.mutation_type,
             "strategy_parent_id": self.strategy_parent_id,
-            "previous_code_parent_id": self.previous_code_parent_id,
             "generation_prompt_parent_id": self.generation_prompt_parent_id,
             "source_candidate_ids": list(self.resolved_source_candidate_ids()),
         }

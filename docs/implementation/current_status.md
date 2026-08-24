@@ -1,9 +1,14 @@
 # Current implementation status
 
-Snapshot: 2026-08-18. This file describes executable repository behavior.
+Snapshot: 2026-08-22. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
+- The genotype has exactly two evolvable prompt components: `strategy_prompt`
+  (policy gene) and `generation_prompt` (code-generation gene). Generated Java
+  is phenotype/evidence and is never inherited as `previous_code`.
+- Automatically created candidate IDs use `gen_<zero-padded-generation>_<12-hex>`;
+  explicitly loaded IDs remain unchanged for artifact and resume compatibility.
 - The search roster is exactly seven fixed opponents: `lightrush`, `heavyrush`,
   `workerrush`, `allinbot`, `mayari`, `coac`, and `tma`. `PassiveAI`, `RandomAI`,
   and `RandomBiasedAI` remain available as definitions but are excluded from EA.
@@ -85,6 +90,13 @@ run folder at run-creation time; the generated index is excluded from later
 config discovery. A legacy `experiment-v2` config with that filename is
 preserved rather than replaced.
 
+`./experiment.sh --resume CONFIG_FOLDER` reads that index as a batch checkpoint.
+Indexed entries with incomplete search or missing required final-test output are
+prioritized and resumed, fully completed entries are skipped, and remaining
+unindexed configs run fresh in filename order. Direct `--resume RUN_DIR` remains
+the single-run interface. Search-complete/final-test-only recovery does not start
+llama.cpp unless a later config still needs LLM work.
+
 New `eagle-run-v2` runs persist one fully resolved `config.yaml`. The root has
 only manifest/config/summary/timing plus canonical directories. Candidate,
 generation, match, archive, and config compatibility duplicates have been
@@ -105,16 +117,34 @@ transport, and validate these resources.
 
 ## Reflection boundary
 
-Reflection receives the structured candidate context from
-`eagle/reflection_context.py`. Gameplay evidence includes the aggregate
-reporting metric and opponent-specific summaries; code evidence remains in
-the separate diagnostics structure. Strategy Reflection and Code Reflection
-share transport/parsing support but use separate prompt builders and role
-pipelines. Strategy Reflection samples up to 10 matches with opponent/map-aware
+Reflection context construction remains shared, but each operator projects a
+strictly scoped evidence view. Strategy Reflection consumes policy plus game
+evidence and changes only policy. Code Reflection consumes policy plus Java and
+optional structural/compiler diagnostics, then rewrites only the code-generation
+prompt; it receives no raw game logs. Strategy Reflection samples up to 10 matches with opponent/map-aware
 coverage, calls one Commentator per selected log, and gives the Coach a
 deterministic all-match global summary. Coverage and fully-beaten diagnostics are
-stored under candidate reflection artifacts; this does not add a fitness objective
-or change AOS.
+stored under `mutation/strategy_reflection/`; this does not add a fitness objective
+or change AOS. Each Strategy Reflection candidate also retains the exact parent
+strategy prompt, selected matches in Commentator call order, individual parsed
+Commentator results, structured and rendered Coach input, raw and parsed Coach
+output, normalized child strategy prompt, and the strategy value passed to the
+Generator. Per-generation policy sidecars reference every population member's
+canonical `genotype/policy_prompt.txt`, including candidates produced by other
+operators; no policy text is duplicated in the sidecar.
+
+Code Reviewer/Rewriter evidence is stored under `mutation/code_reflection/`.
+The canonical Java phenotype is `phenotype/CandidateAgent.java`; Generator uses
+the checked-in scaffold and never a parent phenotype. Code Reflection metadata
+records which evaluated source phenotype the Reviewer consumed through the
+run-relative `reviewed_phenotype_artifact` reference; this evidence reference
+does not restore the removed `previous_code` genotype gene.
+
+Structured-output parsing keeps raw responses losslessly while normalizing only
+known local-model shape variants into canonical artifacts: Commentator
+`match_analysis/key_observations.time` and Reviewer textual correction arrays.
+Semantic requirements, numeric tick evidence, classification, role boundaries,
+and required fields remain hard failures.
 
 ## Verification
 

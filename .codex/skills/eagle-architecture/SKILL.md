@@ -18,7 +18,8 @@ Do not read `docs/architeture_specification_zh.md` as an implementation source.
 
 ## Preserve
 
-- Keep exactly three genotype components: `strategy_prompt`, latest evaluated `previous_code`, and `generation_prompt`.
+- Keep exactly two genotype components: policy gene `strategy_prompt` and code-generation gene `generation_prompt`.
+- Keep all Java source as phenotype/evidence; never inherit parent Java into a child genotype or Generator request.
 - Keep generated full-file Java as phenotype, separate from the pre-generation genotype.
 - Make every offspring pass through final Java generation after crossover and optional mutation.
 - Keep exactly two maximized objectives: `game_performance` and `code_quality`.
@@ -45,4 +46,3 @@ Do not read `docs/architeture_specification_zh.md` as an implementation source.
 ## Documentation policy
 
 Update `docs/architeture_specification_zh.md` for architecture, objective, Candidate transition, mutation/evaluation protocol, artifact schema, or docs-structure changes. Pure behavior-preserving fixes do not require it. Any active documentation add/remove/rename must update its documentation map.
-

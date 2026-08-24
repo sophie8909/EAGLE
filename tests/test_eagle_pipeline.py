@@ -188,12 +188,13 @@ class EaglePipelineTests(unittest.TestCase):
     def test_crossover_uniform_selects_complete_java_source(self) -> None:
         source_a = load_java_template(JavaTemplatePaths()).replace("private void decide", "private void decideA", 1)
         source_b = load_java_template(JavaTemplatePaths()).replace("private void decide", "private void decideB", 1)
-        parent_a = Candidate(id="a", previous_code="old-a", generated_java=source_a)
-        parent_b = Candidate(id="b", previous_code="old-b", generated_java=source_b)
+        parent_a = Candidate(id="a", strategy_prompt="policy-a", generation_prompt="code-a", generated_java=source_a)
+        parent_b = Candidate(id="b", strategy_prompt="policy-b", generation_prompt="code-b", generated_java=source_b)
         child = crossover(parent_a, parent_b, CrossoverContext(generation=2, index=0, rng=random.Random(1)))
         self.assertEqual(child.parent_ids, ("a", "b"))
         self.assertEqual(child.operator, "crossover")
-        self.assertIn(child.previous_code, (source_a, source_b))
+        self.assertEqual(child.generated_java, "")
+        self.assertFalse(hasattr(child, "previous_code"))
 
     def test_selection_binary_tournament_returns_candidates(self) -> None:
         population = [
@@ -315,7 +316,7 @@ class EaglePipelineTests(unittest.TestCase):
             self.assertFalse((result.run_dir / "final_population.json").exists())
             candidate_dir = next((result.run_dir / "candidates").iterdir())
             self.assertTrue((candidate_dir / "lineage.json").exists())
-            self.assertTrue((candidate_dir / "genotype" / "strategy_prompt.txt").exists())
+            self.assertTrue((candidate_dir / "genotype" / "policy_prompt.txt").exists())
             self.assertTrue(
                 (candidate_dir / "generation" / "normalized_candidate.java").exists()
             )

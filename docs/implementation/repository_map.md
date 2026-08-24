@@ -19,7 +19,7 @@ kept as documentation entries.
 | `eagle/__main__.py` | Dispatches only `experiment` and `analyze` |
 | `eagle/cli/experiment.py` | Experiment arguments and exit codes |
 | `eagle/cli/analyze.py` | Run selection and report dispatch |
-| `eagle/experiment.py` | Config discovery, batch run index, owned runtime, search/resume, final test, cleanup |
+| `eagle/experiment.py` | Config discovery, fresh/resumable folder-batch index, owned runtime, search/resume, final test, cleanup |
 | `eagle/runtime/config.py` | Adapts the experiment model section to runtime settings |
 | `eagle/runtime/processes.py` | Owned process start/reuse/switch/health/stop safety |
 | `eagle/config.py` | File-only prompts, one execution mode, EA/model/evaluation validation |
@@ -34,7 +34,7 @@ kept as documentation entries.
 | Path | Responsibility |
 | --- | --- |
 | `eagle/candidate.py` | Candidate genotype, phenotype, lineage, failure, fitness, references |
-| `eagle/crossover.py` | Three-component uniform crossover and provenance |
+| `eagle/crossover.py` | Two-component uniform crossover and provenance |
 | `eagle/mutation.py` | Reflection context and transport contracts |
 | `eagle/rewrite.py` | Prompt-only mutation rewrite |
 | `eagle/strategy_reflection.py` | Match sampling, Commentator, Coach, trace lifecycle |

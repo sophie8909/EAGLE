@@ -33,11 +33,25 @@ Generation 0 is initialization. `generations: 20` therefore records generation 0
 
 ## Resume
 
-Resume uses the immutable run-local configuration, not the original folder:
+Resume can target one run and uses its immutable run-local configuration:
 
 ```bash
 ./experiment.sh --resume runs/20260811_120000_000000
 ```
+
+It can also continue a whole config-folder batch:
+
+```bash
+./experiment.sh --resume configs/experiments/static_0820/
+```
+
+Folder resume reads that directory's generated `experiment.yaml` index. It
+first resumes indexed runs whose search or required final test is incomplete,
+skips fully completed entries, and then starts the remaining unindexed configs
+in filename order. It preserves and extends the existing index rather than
+starting a fresh batch index. If the interrupted run has no atomically recorded
+generation yet, the config restarts in a replacement run and the index is
+updated to that new run directory.
 
 If a config folder is also supplied, it is compatibility-checked against the run. Model identity/path/endpoint, EA parameters, evaluation matrix, and reflection mode/probabilities cannot silently change. Missing persisted model assets fail clearly. Only the latest atomically recorded generation is resumed; incomplete candidate work is recomputed.
 

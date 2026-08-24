@@ -6,7 +6,7 @@ NSGA-II and `eagle-run-v1` rows were removed on 2026-08-19.
 
 | ID | Contract | Canonical owner | Implementation | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| CAND-01 | Three-part genotype and complete Java phenotype remain distinct | candidate model | `eagle/candidate.py`, `eagle/evaluation.py` | candidate/state-transition tests | Implemented |
+| CAND-01 | Two-prompt genotype and complete Java phenotype remain distinct | candidate model | `eagle/candidate.py`, `eagle/evaluation.py` | candidate/state-transition tests | Implemented |
 | CAND-02 | First-class lineage and component provenance | lineage schema | `eagle/crossover.py`, `eagle/artifacts.py` | lineage/crossover tests | Implemented |
 | EVO-01 | Seeded seven-case lexicase parent/survivor selection | evolutionary flow | `eagle/selection.py`, `eagle/search.py` | lexicase tests | Implemented |
 | EVO-02 | Static/opponent/head-to-head reflection operator modes | mutation | `eagle/aos.py`, `evaluation/parent_offspring.py` | AOS tests | Implemented |
@@ -20,7 +20,7 @@ NSGA-II and `eagle-run-v1` rows were removed on 2026-08-19.
 | SCORE-01 | Seven opponent fitness cases; aggregate and quality are diagnostics | objectives | `evaluation/objectives.py`, `evaluation/code_quality.py` | objective/quality tests | Implemented |
 | ART-01 | Only `eagle-run-v2` compact referenced artifacts are supported | artifact schema | `eagle/run_artifacts.py`, `eagle/analysis/loader.py` | artifact/analysis tests | Implemented |
 | CFG-01 | File-only prompts and one execution mode | config schema | `eagle/config.py`, `configs/experiments/` | config/prompt tests | Implemented |
-| OPS-01 | Unified experiment lifecycle, batch run index, and static analysis entrypoint | operations | `eagle/experiment.py`, `experiment.sh`, `analyze.sh` | launcher/runtime tests | Implemented |
+| OPS-01 | Unified experiment lifecycle, resumable folder-batch run index, and static analysis entrypoint | operations | `eagle/experiment.py`, `experiment.sh`, `analyze.sh` | launcher/runtime tests | Implemented |
 | TIME-01 | Candidate/stage/attempt/match timing | timing schema | `eagle/timing.py`, evaluation/mutation modules | timing tests | Partial: selection/crossover event detail remains optional hardening |
 
 ## Update rule

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -43,6 +44,40 @@ class ExperimentLauncherTests(unittest.TestCase):
             "reflection_operator_mode": reflection_mode,
         }), encoding="utf-8")
         return path
+
+    def indexed_run(
+        self,
+        run_dir: Path,
+        source_config: Path,
+        *,
+        status: str,
+        mock: bool,
+        final_test_complete: bool = False,
+        latest_generation: int | None = 3,
+    ) -> Path:
+        run_dir.mkdir(parents=True)
+        config = ExperimentConfig.from_file(source_config)
+        (run_dir / "config.yaml").write_text(
+            yaml.safe_dump(config.to_mapping(mock=mock), sort_keys=False),
+            encoding="utf-8",
+        )
+        (run_dir / "manifest.json").write_text(
+            json.dumps({
+                "schema_version": "eagle-run-v2",
+                "run_id": run_dir.name,
+                "status": status,
+                "latest_generation": latest_generation,
+            }),
+            encoding="utf-8",
+        )
+        if final_test_complete:
+            final_dir = run_dir / "final_test"
+            final_dir.mkdir()
+            (final_dir / "final_test_summary.json").write_text(
+                json.dumps({"schema_version": "eagle-final-test-v1"}),
+                encoding="utf-8",
+            )
+        return run_dir
 
     def orchestrator(
         self,
@@ -378,6 +413,141 @@ class ExperimentLauncherTests(unittest.TestCase):
                 resume_runner=resume,
             ).run(config_path=None, resume_dir=run_dir, skip_final_test=True)
             self.assertEqual(observed, ["model.gguf", "resumed", "stopped"])
+
+    def test_folder_resume_prioritizes_interrupted_run_then_remaining_configs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            configs = {
+                name: self.config(root, f"{name}.yaml", model_name=name, model_path=model)
+                for name in ("a", "b", "c")
+            }
+            completed = self.indexed_run(
+                root / "runs" / "a",
+                configs["a"],
+                status="complete",
+                mock=True,
+            )
+            interrupted = self.indexed_run(
+                root / "runs" / "b",
+                configs["b"],
+                status="interrupted",
+                mock=True,
+            )
+            (root / "experiment.yaml").write_text(
+                yaml.safe_dump({
+                    "a.yaml": str(completed.resolve()),
+                    "b.yaml": str(interrupted.resolve()),
+                }),
+                encoding="utf-8",
+            )
+            events: list[str] = []
+
+            def resume(config, *, run_dir, **_kwargs):
+                self.assertIsNone(config)
+                events.append(f"resume:{run_dir.name}")
+                return SearchResult(run_dir, [], None, completed_generation=3)
+
+            def search(config, **_kwargs):
+                events.append(f"search:{config.model.name}")
+                return SearchResult(root / "runs" / config.model.name, [], None)
+
+            result = ExperimentOrchestrator(
+                runtime_factory=lambda: (_ for _ in ()).throw(
+                    AssertionError("mock folder resume constructed a runtime")
+                ),
+                search_runner=search,
+                resume_runner=resume,
+            ).run(
+                config_path=None,
+                resume_dir=root,
+                mock=True,
+                skip_final_test=True,
+            )
+
+            self.assertEqual(events, ["resume:b", "search:c"])
+            self.assertEqual(result.run_dir, root / "runs" / "c")
+            index = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8"))
+            self.assertEqual(index, {
+                "a.yaml": str(completed.resolve()),
+                "b.yaml": str(interrupted.resolve()),
+                "c.yaml": str((root / "runs" / "c").resolve()),
+            })
+
+    def test_folder_resume_retries_missing_final_test_without_starting_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            config_path = self.config(root, "a.yaml", model_name="a", model_path=model)
+            run_dir = self.indexed_run(
+                root / "runs" / "a",
+                config_path,
+                status="complete",
+                mock=False,
+            )
+            (root / "experiment.yaml").write_text(
+                yaml.safe_dump({"a.yaml": str(run_dir.resolve())}),
+                encoding="utf-8",
+            )
+            events: list[str] = []
+
+            def resume(_config, **_kwargs):
+                events.append("resume")
+                return SearchResult(run_dir, [], None, completed_generation=3)
+
+            def final(argv):
+                events.append(f"final:{Path(argv[-1]).name}")
+                return 0
+
+            ExperimentOrchestrator(
+                runtime_factory=lambda: (_ for _ in ()).throw(
+                    AssertionError("final-test-only resume started the LLM runtime")
+                ),
+                resume_runner=resume,
+                final_test_runner=final,
+            ).run(config_path=None, resume_dir=root)
+
+            self.assertEqual(events, ["resume", "final:a"])
+
+    def test_folder_resume_restarts_indexed_run_without_generation_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "model.gguf"
+            model.write_bytes(b"model")
+            config_path = self.config(root, "a.yaml", model_name="a", model_path=model)
+            abandoned = self.indexed_run(
+                root / "runs" / "abandoned",
+                config_path,
+                status="interrupted",
+                mock=True,
+                latest_generation=None,
+            )
+            replacement = root / "runs" / "replacement"
+            (root / "experiment.yaml").write_text(
+                yaml.safe_dump({"a.yaml": str(abandoned.resolve())}),
+                encoding="utf-8",
+            )
+
+            def search(_config, **_kwargs):
+                return SearchResult(replacement, [], None)
+
+            result = ExperimentOrchestrator(
+                search_runner=search,
+                resume_runner=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("run without generation checkpoint was resumed")
+                ),
+            ).run(
+                config_path=None,
+                resume_dir=root,
+                mock=True,
+                skip_final_test=True,
+            )
+
+            self.assertEqual(result.run_dir, replacement)
+            index = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8"))
+            self.assertEqual(index, {"a.yaml": str(replacement.resolve())})
 
 
 if __name__ == "__main__":

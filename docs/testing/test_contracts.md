@@ -18,12 +18,12 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 
 | Area | Required proof |
 | --- | --- |
-| Candidate | all required logical fields; pre/post Java separation; terminal failure retains state |
+| Candidate | exactly two prompt genes; generation-qualified automatic IDs and explicit-ID preservation; Java phenotype separation; terminal failure retains state |
 | Lineage | seed/copy/crossover/mutation schemas; IDs resolve; graph acyclic |
-| Crossover | independent component selection; latest evaluated Java; exact provenance; equal-text case |
-| Strategy Mutation | Reflection ??Strategy Rewrite ??final Java generation; only strategy changes; full game evidence |
-| Code Mutation | Reflection ??Generation Prompt Rewrite ??final Java generation; only generation prompt changes; full failure/code evidence |
-| Generation | complete-file only; raw response durability; no direct patches/body maps |
+| Crossover | two independent whole-component choices; exact provenance; equal-text case; no Java inheritance |
+| Strategy Mutation | Commentator per selected match → Coach → final Java generation; only policy changes; no Java/code-prompt evidence |
+| Code Mutation | Policy-Code Reviewer → Code Prompt Rewriter → final Java generation; only code-generation prompt changes; no raw game logs |
+| Generation | two genes + fixed scaffold/API constraints; complete-file only; raw response durability; no parent Java or game logs |
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, and no fixed internal layout |
 | Compilation | isolated output; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; `passed`/`failed`/`blocked`; no match execution |
@@ -34,7 +34,7 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Timing | UTC fields, monotonic durations, attempts, optional null stages, 126 match durations |
 | Opponent-wise lexicase | exactly seven maximized opponent cases; seeded case-order filtering; offspring-first fixed-size lexicase survivor behavior |
 | Reflection operator selection | Exactly `static`, `aos_opponent`, and `aos_head2head`; config validation and resume identity; fixed static probabilities with no credit matches; historical execution-first seven-case rank reward without direct matches; configured head-to-head matrix with `[0,1]` W/D/L reward; shared EMA/floor; common artifacts and mode-labelled analysis |
-| Operations | shell positional mapping; sorted non-recursive directory batch; single YAML; mock port isolation; start/reuse/switch/owned-stop ordering; failure/interrupt cleanup; foreign-process safety; stale-state reconciliation; experiment-state isolation; skip-final-test |
+| Operations | shell positional mapping; sorted non-recursive directory batch; single YAML; folder resume prioritizes incomplete indexed runs, skips complete entries, and continues unindexed configs; final-test-only recovery avoids LLM startup; mock port isolation; start/reuse/switch/owned-stop ordering; failure/interrupt cleanup; foreign-process safety; stale-state reconciliation; experiment-state isolation; skip-final-test |
 | Offline analysis | explicit/latest run resolution is deterministic; only direct canonical children are eligible; partial runs produce derived outputs; unsupported or historical schemas fail explicitly; `results.jsonl` is never read |
 | LLM server lifecycle | missing executable/model; bounded readiness; occupied port; configured endpoint identity; durable logs; and stopping only the process created by the experiment orchestrator |
 
@@ -59,6 +59,13 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
 - Do not make fixed helper names, strategy markers, code length, or function count a contract unless the normative spec is changed.
 - Mock LLM calls must record stage/order/attempts and return realistic raw payloads.
 - Test no-regeneration by counting backend calls and comparing source hashes across matches.
+- Use sentinel-based structural tests to prove Commentator/Coach exclude Java,
+  Code Reviewer excludes raw game logs, and both mutation operators preserve the
+  gene they do not own.
+- Keep regression fixtures for observed structured-output variants: wrapped
+  Commentator analyses with tick ranges and Reviewer generation corrections
+  split into arrays. Assert their canonical parsed form as well as rejection of
+  missing evidence and responsibility-boundary violations.
 - Test formulas only in their canonical test module; other tests assert references/results, not copied arithmetic.
 - Unsupported run schemas must fail explicitly; no legacy reader may silently activate.
 - Compact v3 analysis fixtures must prove candidate references recover

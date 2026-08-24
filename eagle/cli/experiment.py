@@ -15,7 +15,11 @@ def main(argv: list[str] | None = None) -> int:
         "--config-dir",
         help="Directory of top-level YAML configs, or one direct YAML path.",
     )
-    parser.add_argument("--resume", type=Path, help="Resume a run using its own config.yaml.")
+    parser.add_argument(
+        "--resume",
+        type=Path,
+        help="Resume one run, or a config-folder batch using its experiment.yaml index.",
+    )
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--skip-final-test", action="store_true")
     args = parser.parse_args(argv)

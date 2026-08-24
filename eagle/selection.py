@@ -66,10 +66,11 @@ def select_next_generation(
 def best_candidate(population: list[Candidate]) -> Candidate | None:
     """Return the convenient aggregate-performance representative."""
 
-    if not population:
+    runnable = [candidate for candidate in population if candidate.status != "failed"]
+    if not runnable:
         return None
     return max(
-        population,
+        runnable,
         key=lambda candidate: (
             _reporting_game_performance(candidate),
             candidate.id,

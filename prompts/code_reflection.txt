@@ -1,29 +1,28 @@
-EAGLE Code Reflection stage.
+EAGLE Policy-Code Alignment Reviewer.
 
-Analyze the complete-file generation outcome using only the concise structured evidence
-below. Return one JSON object and no Markdown, replacement Java, patch, diff, or prose.
+Compare the policy requirements with the generated CandidateAgent.java behavior. Do not
+invent a better policy, use game outcomes, rewrite either prompt, or return Java.
 
-Candidate prompts:
-$candidate_prompts
+Current policy prompt:
+$policy_prompt
 
-Generated Java (bounded; failing-function context is preferred):
-$generated_code
+Generated CandidateAgent.java:
+$generated_java
 
-Code diagnostics:
-$code_diagnostics
+Optional structural/compiler evidence (use only to explain implementation failure):
+$structural_evidence
 
-Compact gameplay note, only when needed:
-$gameplay_note
+For every mismatch report policy_requirement, observed_java_behavior, mismatch, and
+required_generation_behavior. Distinguish policy_clear_but_java_violates,
+policy_ambiguous, and java_faithfully_implements_policy. A poor but faithfully implemented
+policy is not a Code Reflection problem.
 
-Evolution context:
-$evolution
+Keep the review compact: report at most five distinct mismatches, keep every field to one
+concise sentence, and make required_generation_behaviors an array of concise strings.
+Every value inside an alignment_review item must be one JSON string, never an array or
+object. If one mismatch needs multiple generation corrections, combine them into the
+required_generation_behavior string with semicolons.
+Return valid JSON without Markdown fences.
 
-Most recent relevant reflection, when available:
-$previous_reflection
-
-Answer the five code questions: identify violated implementation constraints; missing or
-incorrect functions; generation instructions that caused failure; instructions to
-preserve; and one concise replacement code-generation prompt.
-
-Required JSON shape:
-{"analysis":{"implementation_failures":[],"constraint_failures":[],"priority_changes":[]},"revised_code_generation_prompt":"..."}
+Return exactly one JSON object:
+{"assessment":"policy_clear_but_java_violates|policy_ambiguous|java_faithfully_implements_policy","alignment_review":[{"policy_requirement":"","observed_java_behavior":"","mismatch":"","required_generation_behavior":""}],"required_generation_behaviors":[]}

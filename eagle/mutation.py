@@ -8,6 +8,7 @@ handling, timing, and durable Reflection results for both mutation types.
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -41,7 +42,7 @@ from .reflection_prompts import (
 # Reflection and Strategy Reflection. The concrete strategy role sequence is
 # intentionally kept in eagle.strategy_reflection.
 REFLECTION_SCHEMA_VERSION = "reflection-v2"
-DEFAULT_STRUCTURED_OUTPUT_TOKENS = 2048
+DEFAULT_STRUCTURED_OUTPUT_TOKENS = 4096
 
 
 def utc_now() -> str:
@@ -112,15 +113,62 @@ class ReflectionResult:
         }
 
 
+def parse_json_object_response(response: str) -> dict[str, object]:
+    """Parse one JSON object while tolerating common local-model formatting.
+
+    Raw responses remain unchanged in artifacts.  This compatibility boundary
+    accepts only an optional full Markdown JSON fence and repairs otherwise
+    invalid literal control characters inside JSON strings; it does not extract
+    arbitrary prose or complete truncated objects.
+    """
+
+    source = str(response).lstrip("\ufeff").strip()
+    fence = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", source, re.DOTALL | re.IGNORECASE)
+    if fence:
+        source = fence.group(1).strip()
+    try:
+        payload = json.loads(source)
+    except json.JSONDecodeError:
+        repaired = _escape_json_string_control_characters(source)
+        if repaired == source:
+            raise
+        payload = json.loads(repaired)
+    if not isinstance(payload, dict):
+        raise ValueError("Role response must be one JSON object.")
+    return payload
+
+
+def _escape_json_string_control_characters(source: str) -> str:
+    output: list[str] = []
+    in_string = False
+    escaped = False
+    for character in source:
+        if escaped:
+            output.append(character)
+            escaped = False
+            continue
+        if in_string and character == "\\":
+            output.append(character)
+            escaped = True
+            continue
+        if character == '"':
+            output.append(character)
+            in_string = not in_string
+            continue
+        if in_string and character in {"\n", "\r", "\t"}:
+            output.append({"\n": "\\n", "\r": "\\r", "\t": "\\t"}[character])
+            continue
+        output.append(character)
+    return "".join(output)
+
+
 def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict[str, object], str, str]:
     """Parse the single JSON contract shared by Strategy and Code Reflection."""
     lowered = str(response).lower()
     if "```java" in lowered or "package ai.generated" in lowered or "public class candidateagent" in lowered:
         raise ValueError("Reflection response must not contain generated Java.")
     reflection_type = reflection_type.removesuffix("_reflection")
-    payload = json.loads(response)
-    if not isinstance(payload, dict):
-        raise ValueError("Reflection response must be one JSON object.")
+    payload = parse_json_object_response(response)
     if reflection_type == "strategy":
         diagnosis = payload.get("diagnosis")
         if isinstance(diagnosis, dict) and isinstance(payload.get("mutation_plan"), dict):
@@ -135,11 +183,47 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
         if not isinstance(analysis, dict):
             raise ValueError("Reflection response must contain an analysis object.")
     elif reflection_type == "code":
-        analysis = payload.get("analysis")
-        if not isinstance(analysis, dict):
-            raise ValueError("Reflection response must contain an analysis object.")
-        required = ("implementation_failures", "constraint_failures", "priority_changes")
-        revised_key = "revised_code_generation_prompt"
+        assessment = payload.get("assessment")
+        if assessment not in {
+            "policy_clear_but_java_violates",
+            "policy_ambiguous",
+            "java_faithfully_implements_policy",
+        }:
+            raise ValueError("Code Reviewer response must classify policy-code alignment.")
+        review = payload.get("alignment_review")
+        if not isinstance(review, list):
+            raise ValueError("Code Reviewer response must contain alignment_review array.")
+        normalized_review: list[dict[str, object]] = []
+        for item in review:
+            if not isinstance(item, dict):
+                raise ValueError("Each alignment_review item must contain the four alignment fields.")
+            normalized_item = dict(item)
+            try:
+                for key in (
+                    "policy_requirement",
+                    "observed_java_behavior",
+                    "mismatch",
+                    "required_generation_behavior",
+                ):
+                    if key not in item:
+                        raise ValueError(key)
+                    normalized_item[key] = _alignment_review_text(item[key], field=key)
+            except ValueError as exc:
+                raise ValueError("Each alignment_review item must contain the four alignment fields.") from exc
+            normalized_review.append(normalized_item)
+        corrections = payload.get("required_generation_behaviors")
+        if not isinstance(corrections, list):
+            raise ValueError("Code Reviewer response must contain required_generation_behaviors array.")
+        normalized_payload = dict(payload)
+        normalized_payload["alignment_review"] = normalized_review
+        try:
+            normalized_payload["required_generation_behaviors"] = [
+                _alignment_review_text(item, field="required_generation_behaviors")
+                for item in corrections
+            ]
+        except ValueError as exc:
+            raise ValueError("Code Reviewer required_generation_behaviors items must be text corrections.") from exc
+        return normalized_payload, json.dumps(normalized_payload, ensure_ascii=False, sort_keys=True), ""
     else:
         raise ValueError(f"Unknown reflection type: {reflection_type}")
     for key in required:
@@ -150,6 +234,42 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
         raise ValueError(f"Reflection response must contain non-empty {revised_key}.")
     summary = json.dumps({"analysis": analysis}, ensure_ascii=False, sort_keys=True)
     return payload, summary, revised.strip()
+
+
+def _alignment_review_text(value: object, *, field: str) -> str:
+    """Collapse bounded text/list/object variants into the canonical string field."""
+
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        return "; ".join(
+            text
+            for item in value
+            if (text := _alignment_review_text(item, field=field))
+        )
+    if isinstance(value, dict):
+        detail = next(
+            (
+                value.get(key)
+                for key in (
+                    "required_generation_behavior",
+                    "requirement",
+                    "behavior",
+                    "correction",
+                    "detail",
+                    "summary",
+                    "text",
+                )
+                if isinstance(value.get(key), str) and str(value.get(key)).strip()
+            ),
+            None,
+        )
+        if detail is None:
+            raise ValueError(f"{field} object does not contain a supported text field")
+        area = value.get("area")
+        prefix = f"{str(area).strip()}: " if isinstance(area, str) and area.strip() else ""
+        return prefix + str(detail).strip()
+    raise ValueError(f"{field} must be a string, string array, or supported text object")
 
 
 class ReflectionBackend(Protocol):
@@ -179,8 +299,15 @@ class MockReflectionBackend:
             })
         if "Code Reflection stage" in prompt:
             return json.dumps({
-                "analysis": {"implementation_failures": [], "constraint_failures": [], "priority_changes": ["preserve compilable complete-file output"]},
-                "revised_code_generation_prompt": "Return a complete compilable CandidateAgent.java file and preserve the required API constraints.",
+                "assessment": "java_faithfully_implements_policy",
+                "alignment_review": [],
+                "required_generation_behaviors": [],
+            })
+        if "Policy-Code Alignment Reviewer" in prompt:
+            return json.dumps({
+                "assessment": "java_faithfully_implements_policy",
+                "alignment_review": [],
+                "required_generation_behaviors": [],
             })
         if "MATCH_COMMENTATOR_OUTPUT=chunk" in prompt:
             source = prompt.split("MATCH_COMMENTATOR_OUTPUT=chunk", 1)[1]
@@ -321,10 +448,12 @@ class ReflectionStage:
         prompt_metadata: dict[str, object] | None = None,
     ) -> ReflectionResult:
         stage = "reflector"
+        stage_dir = None if artifact_dir is None else _reflection_artifact_dir(artifact_dir, reflection_type)
         if artifact_dir is not None:
-            _write_text(artifact_dir / "mutation" / f"{stage}_request.txt", request)
+            assert stage_dir is not None
+            _write_text(stage_dir / f"{stage}_request.txt", request)
             if prompt_metadata is not None:
-                _write_json(artifact_dir / "mutation" / f"{stage}_prompt_metadata.json", prompt_metadata)
+                _write_json(stage_dir / f"{stage}_prompt_metadata.json", prompt_metadata)
 
         attempts: list[ReflectionAttempt] = []
         last_response = ""
@@ -358,12 +487,13 @@ class ReflectionStage:
                 )
             )
             if artifact_dir is not None:
+                assert stage_dir is not None
                 _write_text(
-                    artifact_dir / "mutation" / f"{stage}_attempt_{attempt_number:03d}_response_raw.txt",
+                    stage_dir / f"{stage}_attempt_{attempt_number:03d}_response_raw.txt",
                     response,
                 )
                 if response:
-                    _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", response)
+                    _write_text(stage_dir / f"{stage}_response_raw.txt", response)
             if self.logger is not None:
                 self.logger.write(
                     stage=stage,
@@ -407,7 +537,8 @@ class ReflectionStage:
             time.sleep(0)
 
         if artifact_dir is not None:
-            _write_text(artifact_dir / "mutation" / f"{stage}_response_raw.txt", last_response)
+            assert stage_dir is not None
+            _write_text(stage_dir / f"{stage}_response_raw.txt", last_response)
         return ReflectionResult(
             stage=stage,
             reflection_type=reflection_type,
@@ -435,6 +566,12 @@ def _timing_payload(attempts: tuple[ReflectionAttempt, ...]) -> dict[str, object
         "duration_seconds": sum(attempt.duration_seconds for attempt in attempts),
         "attempts": [attempt.to_dict() for attempt in attempts],
     }
+
+
+def _reflection_artifact_dir(root: Path | None, reflection_type: str) -> Path:
+    assert root is not None
+    mutation_type = reflection_type.removesuffix("_reflection")
+    return root / "mutation" / f"{mutation_type}_reflection"
 
 
 def _write_text(path: Path, value: str) -> None:

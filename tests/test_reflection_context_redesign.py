@@ -26,8 +26,9 @@ def strategy_response() -> str:
 
 def code_response() -> str:
     return json.dumps({
-        "analysis": {"implementation_failures": ["missing helper"], "constraint_failures": [], "priority_changes": ["preserve the required API"]},
-        "revised_code_generation_prompt": "Preserve every required helper and return one complete compilable Java file.",
+        "assessment": "policy_clear_but_java_violates",
+        "alignment_review": [{"policy_requirement": "defend", "observed_java_behavior": "expands", "mismatch": "missing defense", "required_generation_behavior": "encode defense first"}],
+        "required_generation_behaviors": ["encode defense first"],
     })
 
 
@@ -141,19 +142,20 @@ class ReflectionContextRedesignTests(unittest.TestCase):
         self.assertNotIn("CandidateAgent {}", prompt.text)
         self.assertNotIn("complexity_penalty", prompt.text)
 
-    def test_code_formatter_receives_scalar_and_complexity_diagnostics(self):
+    def test_code_formatter_receives_only_structural_compiler_diagnostics(self):
         context = build_reflection_context(self.candidate(), generation=5, index=2, reflection_type="code")
         prompt = build_code_reflection_prompt_bundle(self.candidate(), context)
-        self.assertIn('"code_quality":65.18', prompt.text)
-        self.assertIn('"complexity_penalty":34.82', prompt.text)
-        self.assertIn('"longest_function_loc":48', prompt.text)
+        self.assertIn("unchecked conversion", prompt.text)
+        self.assertNotIn("code_quality", prompt.text)
+        self.assertNotIn("complexity_penalty", prompt.text)
+        self.assertNotIn("strategy_alignment", prompt.text)
 
     def test_code_formatter_excludes_match_table_and_bounds_code(self):
         candidate = self.candidate()
         candidate = Candidate(**{**candidate.__dict__, "generated_java": "\n".join(f"line {index}" for index in range(5000))})
         context = build_reflection_context(candidate, generation=5, index=2, reflection_type="code")
         prompt = build_code_reflection_prompt_bundle(candidate, context)
-        self.assertIn("Code diagnostics", prompt.text)
+        self.assertIn("Optional structural/compiler evidence", prompt.text)
         self.assertNotIn('"map_1"', prompt.text)
         self.assertIn("generated_code", prompt.metadata["truncated_sections"])
         self.assertTrue(prompt.metadata["estimated_prompt_size"] < 30_000)

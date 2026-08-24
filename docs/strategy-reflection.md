@@ -8,7 +8,7 @@ role-local enablement, temperature, and the configurable sample budget
 ```text
 all configured evaluation matches -> deterministic Global Evaluation Summary
 canonical match traces -> coverage-aware sample up to 10 -> match_selection.json
-each selected log -> one independent Match Commentator -> match_analysis.json
+each selected log -> one independent Match Commentator -> commentator_NN.json
 parent strategy + global summary + selected analyses -> Coach -> new_strategy_prompt
 new strategy + existing code-generation prompt -> Generator -> Java candidate
 ```
@@ -28,9 +28,9 @@ one explicit fallback record. After all matches finish, a deterministic greedy
 sampler selects up to 10 completed matches without replacement. It first covers
 opponents with losses (or draws when no loss exists), then unseen maps, then fills
 diverse opponent/map/player-side combinations using LOSS > DRAW > WIN. Seeded
-randomness only breaks equivalent choices. `reflection/match_selection.json`
+randomness only breaks equivalent choices. `mutation/strategy_reflection/match_selection.json`
 records the counts, eligible IDs, selected IDs, coverage metadata, rule, and RNG
-provenance. `reflection/global_evaluation_summary.json` records deterministic
+provenance. `mutation/strategy_reflection/global_evaluation_summary.json` records deterministic
 breadth across all evaluated matches, including fully-beaten opponents.
 
 Unselected traces are deleted before any commentary call. Selected traces are
@@ -41,21 +41,51 @@ Each selected raw log is sent to exactly one independent Commentator call. The
 Coach receives only the resulting diagnoses and the deterministic global summary;
 raw game logs are never concatenated into the Coach request.
 
+The canonical response has top-level strategy objects and integer-backed
+`turning_points`. At the parser boundary EAGLE also normalizes the bounded local-
+model variant observed in real runs: one `match_analysis` wrapper, string strategy
+summaries, and `key_observations[].time` ranges whose first integer is the source
+tick. This normalization never forwards `recommendations`; missing numeric tick
+evidence remains a terminal Commentator attempt failure.
+
 ## Artifacts and traceability
 
 Per-match artifacts live under `commentary/<match_id>/`. Candidate-level role
-artifacts live under `reflection/`:
+artifacts live under `mutation/strategy_reflection/`:
 
 ```text
-reflection/
+mutation/strategy_reflection/
+  metadata.json
+  parent_strategy_prompt.txt
+  selected_matches.json
+  commentator_01.json
+  ...
+  coach_input.json
+  coach_prompt.txt
   coach_request.json
   coach_response.json
+  coach_raw.txt
+  coach_output.json
   coach_result.json
+  child_strategy_prompt.txt
+  generator_strategy_input.txt
 ```
 
 Every role envelope records `role`, `candidate_id`, `generation_index`,
 `request_id`, model-configuration identity, prompt version, and schema version.
-Coach results retain both the parent and replacement strategy prompts.
+The numbered Commentator files contain the exact parsed responses in call order.
+`coach_input.json` contains the semantic render inputs and selected Coach prompt
+name, while `coach_prompt.txt` is the exact bounded prompt sent.
+`coach_output.json` is the parsed response before validation or normalization;
+`coach_result.json` is the validated runtime result. The post-normalization
+`child_strategy_prompt.txt` is the value stored in the child genotype, and
+`generator_strategy_input.txt` is written at the pre-Generator boundary from
+the exact strategy placeholder value.
+
+The implementation has no separate field named `policy`. The reusable strategy
+policy is the genotype field `Candidate.strategy_prompt`; Coach directly returns
+it as `new_strategy_prompt`, after which deterministic prompt normalization is
+the only transformation before Generator use.
 
 ## Failure and budgeting rules
 

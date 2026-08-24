@@ -1,59 +1,20 @@
-# Uniform Crossover
+# Uniform crossover
 
-## Normative source
-
-See specification section 6 and section 28.4. Lineage fields are serialized according to [`../artifacts/lineage_schema.md`](../artifacts/lineage_schema.md).
-
-## Input
-
-For each evaluated parent, expose:
-
-- `strategy_prompt`;
-- the latest generated and evaluated Java source (`parent.generated_java`);
-- `generation_prompt`;
-- `candidate_id`.
-
-Do not read a stale pre-generation `parent.previous_code` unless it has been explicitly synchronized to the latest evaluated Java.
-
-## Operator
-
-Choose each genotype component independently and uniformly from Parent A or Parent B:
+Uniform crossover operates on exactly two whole prompt components:
 
 ```text
-child.strategy_prompt  <- choice(A.strategy_prompt, B.strategy_prompt)
-child.previous_code    <- choice(A.generated_java, B.generated_java)
+child.strategy_prompt   <- choice(A.strategy_prompt, B.strategy_prompt)
 child.generation_prompt <- choice(A.generation_prompt, B.generation_prompt)
 ```
 
-The three choices are independent. The operator may therefore combine components from both parents.
+The choices are independent. No text is spliced within either component and no
+Java phenotype participates in crossover.
 
-## Output
+Persist `strategy_parent_id`, `generation_prompt_parent_id`, both direct
+`parent_ids`, the operator, and any later mutation type. Provenance is recorded
+even when parent prompt strings are equal. There is no
+`previous_code_parent_id` in new-run lineage or crossover provenance.
 
-Crossover returns a genotype only. It does not return a Java phenotype. The crossed `A + B + C` must proceed through optional mutation and then the final Java Generation LLM.
-
-## Required provenance
-
-Persist the parent ID selected for each component:
-
-- `strategy_parent_id`;
-- `previous_code_parent_id`;
-- `generation_prompt_parent_id`.
-
-Also persist both `parent_ids`, `operator`, and any later `mutation_type`. Provenance must drive mutation feedback selection and must support lineage reconstruction without comparing component text.
-
-## Tests
-
-- Force all eight three-bit parent-choice combinations with a deterministic RNG.
-- Prove the `previous_code` source is the selected parent's latest evaluated Java.
-- Prove each provenance field matches its selected value.
-- Prove crossover output still invokes final Java generation.
-- Prove equal component strings do not corrupt provenance or feedback-parent selection.
-
-## Prohibited behavior
-
-- text splicing within a genotype component;
-- direct Java mutation;
-- using `parent.previous_code` when it is older than `parent.generated_java`;
-- recording only one generic behavior parent;
-- treating the selected previous code as the final child phenotype.
-
+Tests force all four two-bit parent-choice combinations, verify exact
+component provenance, verify the child phenotype starts empty, and verify final
+Java generation still occurs from the two-gene child plus fixed scaffold.
