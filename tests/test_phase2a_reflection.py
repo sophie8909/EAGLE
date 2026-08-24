@@ -120,6 +120,34 @@ class Phase2AReflectionTests(unittest.TestCase):
         parsed, _summary, _revised = parse_reflection_response(response, "code")
         self.assertEqual(parsed["assessment"], "java_faithfully_implements_policy")
 
+    def test_blank_policy_rejects_invented_code_requirements_and_retries(self):
+        invented = json.dumps({
+            "assessment": "policy_clear_but_java_violates",
+            "alignment_review": [{
+                "policy_requirement": "Attack early.",
+                "observed_java_behavior": "No early attack.",
+                "mismatch": "Invented requirement.",
+                "required_generation_behavior": "Add an early attack.",
+            }],
+            "required_generation_behaviors": ["Add an early attack."],
+        })
+        ambiguous = json.dumps({
+            "assessment": "policy_ambiguous",
+            "alignment_review": [],
+            "required_generation_behaviors": [],
+        })
+        backend = ScriptedBackend((invented, ambiguous))
+
+        result = ReflectionStage(backend, max_attempts=2).run(
+            reflection_type="code_reflection",
+            candidate=Candidate(strategy_prompt=""),
+            request="review",
+        )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
+        self.assertEqual(result.parsed_response["assessment"], "policy_ambiguous")
+
     def test_code_reflection_normalizes_0823_array_corrections(self):
         response = json.dumps({
             "assessment": "policy_clear_but_java_violates",

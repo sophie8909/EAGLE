@@ -123,6 +123,8 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertIn("reflection", strategy_prompt)
         self.assertIn("old generation prompt", code_prompt)
         self.assertIn("Policy-Code Alignment Review", code_prompt)
+        self.assertIn("Immutable MicroRTS API contract", code_prompt)
+        self.assertIn("commandMove", code_prompt)
         self.assertNotIn("old strategy", code_prompt)
 
     def test_rewrite_output_rejects_java_and_retries(self):

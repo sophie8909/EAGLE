@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -72,7 +73,12 @@ class PromptResourceTests(unittest.TestCase):
             self.assertEqual(config.generation_prompt, load_prompt("initial_generation"), path)
             self.assertEqual(
                 config.initial_java_seed_path,
-                Path("eagle/java_templates/CandidateAgent.java").resolve(),
+                Path("eagle/java_seeds/CandidateAgent.java").resolve(),
+                path,
+            )
+            self.assertEqual(
+                hashlib.sha256(config.initial_java_seed_path.read_bytes()).hexdigest(),
+                "0750786cb4c14d2cabb74357d8b4ef6fc7d78848f6ffe11007ba855f0f3da230",
                 path,
             )
 

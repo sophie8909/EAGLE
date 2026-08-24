@@ -10,6 +10,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_AGENT_TEMPLATE_PATH = (
     REPOSITORY_ROOT / "eagle" / "java_templates" / "CandidateAgent.java"
 )
+DEFAULT_INITIAL_JAVA_SEED_PATH = (
+    REPOSITORY_ROOT / "eagle" / "java_seeds" / "CandidateAgent.java"
+)
 STRATEGY_START_MARKER = "// EAGLE_AGENT_STRATEGY_START"
 STRATEGY_END_MARKER = "// EAGLE_AGENT_STRATEGY_END"
 ACTION_HELPERS_START_MARKER = "// EAGLE_ACTION_HELPERS_START"
@@ -21,6 +24,14 @@ ACTION_HELPER_METHODS: tuple[str, ...] = (
     "commandBuild",
     "commandAttack",
     "commandIdle",
+)
+
+_JAVA_TOKEN_PATTERN = re.compile(
+    r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|//[^\n]*|/\*.*?\*/|'''
+    r'''[A-Za-z_$][A-Za-z0-9_$]*|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?[fFdDlL]?|'''
+    r'''>=|<=|==|!=|&&|\|\||\+\+|--|<<|>>>|>>|->|::|\+=|-=|\*=|/=|%=|&=|\|=|\^=|'''
+    r'''[^\s]''',
+    re.DOTALL,
 )
 
 
@@ -95,6 +106,29 @@ def extract_strategy_region(source: str) -> str:
     if not region:
         raise ValueError("Agent strategy region must not be empty.")
     return region
+
+
+def fixed_scaffold_equivalent(source: str, scaffold: str) -> bool:
+    """Compare every Java token outside the single editable strategy region."""
+
+    return _fixed_source_tokens(source) == _fixed_source_tokens(scaffold)
+
+
+def _fixed_source_tokens(source: str) -> tuple[str, ...]:
+    _validate_marker_pair(
+        source,
+        STRATEGY_START_MARKER,
+        STRATEGY_END_MARKER,
+        "Agent strategy",
+    )
+    start = source.index(STRATEGY_START_MARKER) + len(STRATEGY_START_MARKER)
+    end = source.index(STRATEGY_END_MARKER)
+    fixed_source = source[:start] + source[end:]
+    return tuple(
+        token
+        for token in _JAVA_TOKEN_PATTERN.findall(fixed_source)
+        if not token.startswith("//") and not token.startswith("/*")
+    )
 
 
 def microrts_blank_strategy_prompt() -> str:

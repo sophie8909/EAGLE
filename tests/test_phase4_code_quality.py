@@ -198,6 +198,11 @@ class Phase4CodeQualityTests(unittest.TestCase):
         self.assertEqual(len(result.attempts), 1)
         self.assertIn("Build workers before attacking.", backend.requests[0])
 
+    def test_strategy_alignment_accepts_full_json_fence_and_literal_newline(self):
+        payload = '```json\n{"score": 7.5, "reason": "First line\nSecond line"}\n```'
+        parsed = parse_strategy_alignment_response(payload)
+        self.assertEqual(parsed, {"score": 7.5, "reason": "First line\nSecond line"})
+
     def test_strategy_alignment_rejects_invalid_results(self):
         with self.assertRaises(ValueError):
             parse_strategy_alignment_response('{"score": 11, "reason": "too high"}')

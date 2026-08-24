@@ -11,11 +11,10 @@ import hashlib
 import json
 import random
 import re
-import shutil
 import time
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 from uuid import uuid4
 
 from evaluation.match_trace import iter_match_trace
@@ -207,12 +206,6 @@ class StrategyReflectionPipeline:
         _write_json(artifact_dir, "reflection/match_selection.json", selection)
         global_summary = build_global_evaluation_summary(context.game_evidence or {}, context.per_match_results)
         _write_json(artifact_dir, "reflection/global_evaluation_summary.json", global_summary)
-        selected_ids = set(selection["selected_match_ids"])
-        for item in context.per_match_results:
-            match_id = _match_id(item)
-            if match_id not in selected_ids:
-                _delete_raw_match_artifacts(item)
-
         by_id = {_match_id(item): item for item in context.per_match_results}
         selected_items = [by_id[match_id] for match_id in selection["selected_match_ids"] if match_id in by_id]
         _write_json(
@@ -232,7 +225,6 @@ class StrategyReflectionPipeline:
             if log_path is None or not log_path.exists():
                 failures.append(f"{match_id}: commentary unavailable")
                 _write_status(artifact_dir, match_id, "unavailable", failures[-1])
-                _delete_raw_match_artifacts(item)
                 continue
             try:
                 commentator_call_count += 1
@@ -248,10 +240,8 @@ class StrategyReflectionPipeline:
             except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
                 failures.append(f"{match_id}: {exc}")
                 _write_status(artifact_dir, match_id, "failed", str(exc))
-                _delete_raw_match_artifacts(item)
                 continue
             analyses.append(analysis)
-            _delete_raw_match_artifacts(item)
 
         _write_json(
             artifact_dir,
@@ -262,6 +252,13 @@ class StrategyReflectionPipeline:
                 "successful_commentator_count": len(analyses),
             },
         )
+        if not analyses:
+            return _failed_result(
+                candidate,
+                artifact_dir,
+                "match_commentator: no valid match analyses",
+                analyses,
+            )
         try:
             coach_payload = _coach_payload(candidate, context, analyses, selection, failures, global_summary)
             coach_request = _coach_prompt(candidate.strategy_prompt, coach_payload, intent)
@@ -285,17 +282,20 @@ class StrategyReflectionPipeline:
             coach_extra = {}
             if strategy_source_parent_id is not None:
                 coach_extra["parent_candidate_id"] = strategy_source_parent_id
-            coach_raw = self._call_role(
+            coach_raw, validated_coach = self._call_role(
                 "coach",
                 bounded_coach_request,
                 candidate,
                 artifact_dir,
                 extra=coach_extra,
+                validator=lambda raw: _validate_coach_response(
+                    raw,
+                    parent_strategy_prompt=candidate.strategy_prompt,
+                ),
             )
             _write_text(artifact_dir, "reflection/coach_raw.txt", coach_raw)
-            coach_output = parse_json_object_response(coach_raw)
+            coach_output, coach = validated_coach
             _write_json(artifact_dir, "reflection/coach_output.json", coach_output)
-            coach = _parse_coach(coach_raw, parent_strategy_prompt=candidate.strategy_prompt)
             child_signature = normalize_strategy_signature(coach.strategy_signature)
             child_niche = build_strategy_niche(child_signature)
             niche_changed = parent_niche != "unknown" and child_niche != parent_niche
@@ -358,21 +358,36 @@ class StrategyReflectionPipeline:
         if not raw_log:
             raise ValueError("match log contains no ticks")
         request = _commentator_prompt(candidate, context, item, match_id, raw_log)
-        raw = self._call_role("match_commentator", request, candidate, artifact_dir, match_id=match_id)
-        parsed_output = parse_json_object_response(raw)
+        raw, validated_commentary = self._call_role(
+            "match_commentator",
+            request,
+            candidate,
+            artifact_dir,
+            match_id=match_id,
+            validator=lambda response: _validate_commentary_response(response, match_id),
+        )
+        parsed_output, analysis = validated_commentary
         _write_json(
             artifact_dir,
             f"reflection/commentator_{artifact_index:02d}.json",
             parsed_output,
         )
-        if not isinstance(parsed_output, dict):
-            raise ValueError("role response must be a JSON object")
-        analysis = _parse_commentary(parsed_output, match_id)
         _write_json(artifact_dir, f"commentary/{match_id}/match_analysis.json", analysis.to_dict())
         _write_status(artifact_dir, match_id, "succeeded", None)
         return analysis
 
-    def _call_role(self, role: str, prompt: str, candidate: Candidate, artifact_dir: Path | None, *, match_id: str | None = None, suffix: str = "", extra: dict[str, Any] | None = None) -> str:
+    def _call_role(
+        self,
+        role: str,
+        prompt: str,
+        candidate: Candidate,
+        artifact_dir: Path | None,
+        *,
+        validator: Callable[[str], Any],
+        match_id: str | None = None,
+        suffix: str = "",
+        extra: dict[str, Any] | None = None,
+    ) -> tuple[str, Any]:
         request_id = uuid4().hex
         trace = {"role": role, "candidate_id": candidate.id, "generation_index": candidate.generation, "request_id": request_id, "model_configuration_identity": self.model_identity, "prompt_version": PROMPT_VERSION, "schema_version": ROLE_SCHEMA_VERSION, **(extra or {})}
         if match_id is not None:
@@ -383,22 +398,24 @@ class StrategyReflectionPipeline:
         last_error = ""
         for attempt in range(1, self.max_attempts + 1):
             started = time.monotonic()
+            raw = ""
             try:
                 raw = self.backend.generate(bounded)
+                validated = validator(raw)
                 envelope = {**trace, "attempt": attempt, "status": "success", "duration_seconds": max(0.0, time.monotonic() - started), "response": raw}
                 response_name = "response.json" if not suffix else f"response_{suffix}.json"
                 _write_json(artifact_dir, f"commentary/{match_id}/{response_name}" if match_id else f"reflection/{role}_{response_name}", envelope)
                 attempt_name = f"response_attempt_{attempt:03d}.json"
                 _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
-                return raw
-            except (OSError, RuntimeError, ValueError) as exc:
+                return raw, validated
+            except (OSError, RuntimeError, TypeError, ValueError) as exc:
                 last_error = str(exc) or type(exc).__name__
                 envelope = {
                     **trace,
                     "attempt": attempt,
                     "status": "error",
                     "duration_seconds": max(0.0, time.monotonic() - started),
-                    "response": "",
+                    "response": raw,
                     "error": last_error,
                 }
                 attempt_name = f"response_attempt_{attempt:03d}.json"
@@ -709,23 +726,27 @@ def _match_outcome(item: dict[str, Any]) -> str | None:
     return None
 
 
-def _delete_raw_match_artifacts(item: dict[str, Any]) -> None:
-    """Delete temporary commentator logs while preserving compact score artifacts."""
+def cleanup_retired_match_traces(
+    candidates_dir: Path,
+    candidates: list[Candidate] | tuple[Candidate, ...],
+    *,
+    surviving_candidate_ids: set[str],
+) -> None:
+    """Remove traces only after an atomic survivor boundary retires a candidate.
 
-    paths = [item.get("match_trace_path")]
-    match_dir: Path | None = None
-    for value in paths:
-        if value:
-            path = Path(str(value))
-            match_dir = path.parent
-            path.unlink(missing_ok=True)
-    replay = item.get("replay_path")
-    if replay:
-        Path(str(replay)).unlink(missing_ok=True)
-    if match_dir is not None:
-        round_states = match_dir / "round_states"
-        if round_states.exists():
-            shutil.rmtree(round_states)
+    Parent selection is with replacement, so multiple siblings can need the
+    same parent's traces while a generation is being constructed.  The caller
+    must invoke this only after the next surviving population has been recorded.
+    """
+
+    retired_ids = {
+        candidate.id
+        for candidate in candidates
+        if candidate.id not in surviving_candidate_ids
+    }
+    for candidate_id in sorted(retired_ids):
+        for trace_path in sorted((candidates_dir / candidate_id / "matches").glob("*/match_trace.jsonl.gz")):
+            trace_path.unlink(missing_ok=True)
 
 
 # Role prompt construction and response parsing -----------------------------
@@ -853,6 +874,20 @@ def _parse_coach(payload: str, *, parent_strategy_prompt: str) -> CoachResult:
         parent_strategy_prompt=str(data.get("parent_strategy_prompt") or parent_strategy_prompt),
         new_strategy_prompt=prompt,
     )
+
+
+def _validate_commentary_response(raw: str, match_id: str) -> tuple[dict[str, object], MatchAnalysis]:
+    payload = parse_json_object_response(raw)
+    return payload, _parse_commentary(payload, match_id)
+
+
+def _validate_coach_response(
+    raw: str,
+    *,
+    parent_strategy_prompt: str,
+) -> tuple[dict[str, object], CoachResult]:
+    payload = parse_json_object_response(raw)
+    return payload, _parse_coach(raw, parent_strategy_prompt=parent_strategy_prompt)
 
 
 def _parse_json(raw: str) -> dict[str, Any]:

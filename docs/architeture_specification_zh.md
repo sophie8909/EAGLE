@@ -52,10 +52,12 @@ alignment review。Generator 使用兩個 gene 加上固定 checked-in Java scaf
 不使用 parent Java。
 
 Code Prompt Rewriter 固定回傳且只回傳
-`{"rewritten_prompt":"..."}`。Generation 0 是唯一 decoder 例外：所有 seed
-candidate 使用空白 `strategy_prompt`，直接載入 `initial_java_seed_path` 的舊版
+`{"rewritten_prompt":"..."}`。Generation 0 是唯一 decoder 例外：每個 seed
+檔建立一個 candidate（不複製到 `population_size`），使用空白
+`strategy_prompt` 並直接載入 `initial_java_seed_path` 的舊版
 初始 Java，不呼叫 LLM；之後仍經相同 validation、compilation、integration 與
-evaluation。這份 Java 只是 gen0 phenotype，不是第三個 gene，也不會遺傳。
+evaluation。歷史 seed 與後續加固的 Generator scaffold 是兩個檔案；這份 Java
+只是 gen0 phenotype，不是第三個 gene，也不會遺傳。
 
 結構化輸出會保留原始 response，並只在 parser 邊界正規化已知的模型格式差異：
 賽評的 `match_analysis/key_observations.time` 與 Reviewer 將文字修正拆成陣列的
@@ -101,7 +103,8 @@ Code Quality 也是 diagnostic，不是 lexicase objective。成功分數為：
 
 其中 C、N、L、F 分別是 normalized cyclomatic complexity、nesting、logical
 LOC 與 longest-function LOC。失敗分數為 `-1000.0`。Compiler、Function
-Capability、Strategy Alignment 只保存為診斷資料。
+Capability、Strategy Alignment 只保存為診斷資料；空白 policy 的 Strategy
+Alignment 記為不適用且不呼叫 LLM。
 
 ## Match 與 Artifact owner
 
@@ -109,7 +112,8 @@ Capability、Strategy Alignment 只保存為診斷資料。
 `evaluation/runtime_evaluation.py` 是唯一 match runner。
 
 每場比賽只保存一份 canonical 壓縮 tick stream：`match_trace.jsonl.gz`。
-Strategy Reflection 直接讀取同一份 trace；`match_log.jsonl.gz` 已移除。
+Strategy Reflection 直接讀取同一份 trace；同代 sibling 建立完成前保留 parent
+trace，generation 原子落盤後才清理非 survivor 的 trace。`match_log.jsonl.gz` 已移除。
 
 支援的 run schema 只有 `eagle-run-v2`。每個 run 只有一份完整解析後的
 `config.yaml`，generation 使用 compact candidate reference，candidate state

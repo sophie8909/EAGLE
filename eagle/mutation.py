@@ -475,6 +475,11 @@ class ReflectionStage:
                 response = self.backend.generate(request)
                 last_response = response
                 parsed, analysis_summary, revised_prompt = parse_reflection_response(response, reflection_type)
+                _validate_reflection_candidate_preconditions(
+                    candidate,
+                    reflection_type,
+                    parsed,
+                )
             except LLMServerError:
                 raise
             except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
@@ -559,6 +564,28 @@ class ReflectionStage:
             backend=self.backend_name,
             operation=self.operation,
             prompt_metadata=prompt_metadata,
+        )
+
+
+def _validate_reflection_candidate_preconditions(
+    candidate: Candidate,
+    reflection_type: str,
+    parsed: dict[str, object],
+) -> None:
+    """Reject role output that invents requirements for an absent policy gene."""
+
+    if reflection_type.removesuffix("_reflection") != "code":
+        return
+    if candidate.strategy_prompt.strip():
+        return
+    if (
+        parsed.get("assessment") != "policy_ambiguous"
+        or parsed.get("alignment_review")
+        or parsed.get("required_generation_behaviors")
+    ):
+        raise ValueError(
+            "Code Reflection requires a non-blank policy before it can propose "
+            "generation-prompt corrections."
         )
 
 

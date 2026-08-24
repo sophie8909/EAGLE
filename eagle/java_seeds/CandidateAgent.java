@@ -23,7 +23,6 @@ public final class CandidateAgent extends AbstractionLayerAI {
     private UnitType rangedType;
     private UnitType baseType;
     private UnitType barracksType;
-    private int activePlayer = -1;
 
     public CandidateAgent(UnitTypeTable utt) {
         this(utt, new AStarPathFinding());
@@ -60,7 +59,6 @@ public final class CandidateAgent extends AbstractionLayerAI {
 
     @Override
     public PlayerAction getAction(int player, GameState gs) throws Exception {
-        activePlayer = player;
         if (gs.gameover()) {
             return translateActions(player, gs);
         }
@@ -150,8 +148,7 @@ public final class CandidateAgent extends AbstractionLayerAI {
     // EAGLE_ACTION_HELPERS_START
     // Stable Agent operation API: strategy code should issue actions through these helpers.
     private boolean commandMove(Unit unit, int x, int y) {
-        if (unit == null || unit.getPlayer() != activePlayer
-                || unit.getType() == baseType || unit.getType() == barracksType) {
+        if (unit == null || unit.getType() == baseType || unit.getType() == barracksType) {
             return false;
         }
         move(unit, x, y);
@@ -162,9 +159,7 @@ public final class CandidateAgent extends AbstractionLayerAI {
         if (worker == null || resource == null || base == null) {
             return false;
         }
-        if (worker.getPlayer() != activePlayer || base.getPlayer() != activePlayer
-                || resource.getPlayer() >= 0 || worker.getType() != workerType
-                || resource.getType() != resourceType || base.getType() != baseType) {
+        if (worker.getType() != workerType || resource.getType() != resourceType || base.getType() != baseType) {
             return false;
         }
         harvest(worker, resource, base);
@@ -172,13 +167,10 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
     private boolean commandTrain(Unit producer, UnitType unitType) {
-        if (producer == null || producer.getPlayer() != activePlayer || unitType == null) {
+        if (producer == null || unitType == null) {
             return false;
         }
-        boolean validBaseProduction = producer.getType() == baseType && unitType == workerType;
-        boolean validBarracksProduction = producer.getType() == barracksType
-                && (unitType == lightType || unitType == heavyType || unitType == rangedType);
-        if (!validBaseProduction && !validBarracksProduction) {
+        if (producer.getType() != baseType && producer.getType() != barracksType) {
             return false;
         }
         train(producer, unitType);
@@ -186,9 +178,7 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
     private boolean commandBuild(Unit worker, UnitType buildingType, int x, int y) {
-        if (worker == null || worker.getPlayer() != activePlayer || buildingType == null
-                || worker.getType() != workerType
-                || (buildingType != baseType && buildingType != barracksType)) {
+        if (worker == null || buildingType == null || worker.getType() != workerType) {
             return false;
         }
         build(worker, buildingType, x, y);
@@ -196,11 +186,10 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
     private boolean commandAttack(Unit attacker, Unit target) {
-        if (attacker == null || target == null || attacker.getPlayer() != activePlayer
-                || target.getPlayer() < 0 || !attacker.getType().canAttack) {
+        if (attacker == null || target == null || !attacker.getType().canAttack) {
             return false;
         }
-        if (target.getPlayer() == activePlayer) {
+        if (target.getPlayer() == attacker.getPlayer()) {
             return false;
         }
         attack(attacker, target);
@@ -208,7 +197,7 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
     private boolean commandIdle(Unit unit) {
-        if (unit == null || unit.getPlayer() != activePlayer) {
+        if (unit == null) {
             return false;
         }
         idle(unit);

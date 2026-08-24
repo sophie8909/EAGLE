@@ -22,13 +22,13 @@ required_variables = ["strategy_prompt", "reflection", "game_summary"]
 file = "code_rewrite.txt"
 role = "rewriter"
 stages = ["generation_prompt_rewrite"]
-required_variables = ["code_generation_prompt", "alignment_review"]
+required_variables = ["code_generation_prompt", "alignment_review", "action_api_guide"]
 
 [prompts.java_generation]
 file = "java_generation.txt"
 role = "generator"
 stages = ["seed_generation", "mutation_generation", "crossover_generation"]
-required_variables = ["policy_prompt", "action_api_guide", "code_generation_prompt", "java_scaffold"]
+required_variables = ["policy_prompt", "code_generation_prompt", "action_api_guide", "java_scaffold"]
 
 [prompts.strategy_alignment]
 file = "strategy_alignment.txt"

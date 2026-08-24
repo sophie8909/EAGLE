@@ -14,4 +14,8 @@ $code_generation_prompt
 Policy-Code Alignment Review:
 $alignment_review
 
+Immutable MicroRTS API contract (the replacement prompt must defer to it and
+must not claim that any unlisted helper or member is provided):
+$action_api_guide
+
 Output only the JSON object.

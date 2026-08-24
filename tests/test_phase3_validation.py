@@ -11,53 +11,57 @@ from generation.java_agent_generator import (
     validate_assembled_java,
     validate_generated_java_source,
 )
+from generation.agent_template import (
+    JavaTemplatePaths,
+    STRATEGY_END_MARKER,
+    STRATEGY_START_MARKER,
+    fixed_scaffold_equivalent,
+    load_java_template,
+)
 
 
-VALID_SOURCE = """\
-package ai.generated;
-import ai.abstraction.AbstractionLayerAI;
-import ai.abstraction.pathfinding.AStarPathFinding;
-import ai.core.AI;
-import ai.core.ParameterSpecification;
-import java.util.Collections;
-import java.util.List;
-import rts.GameState;
-import rts.PlayerAction;
-import rts.units.UnitTypeTable;
+VALID_SOURCE = load_java_template(JavaTemplatePaths())
 
-public final class CandidateAgent extends AbstractionLayerAI {
-    public CandidateAgent(UnitTypeTable utt) {
-        this(utt, new AStarPathFinding());
-    }
-    public CandidateAgent(UnitTypeTable utt, AStarPathFinding pathFinding) {
-        super(pathFinding);
-    }
-    @Override public void reset() {
-        super.reset();
-    }
-    @Override public AI clone() {
-        return new CandidateAgent(new UnitTypeTable());
-    }
-    @Override public PlayerAction getAction(int player, GameState gs) {
-        return new PlayerAction();
-    }
-    @Override public List<ParameterSpecification> getParameters() {
-        return Collections.emptyList();
-    }
-    private void differentlyNamedInternalMethod() {}
-}
-"""
+
+def with_strategy(source: str, body: str) -> str:
+    start = source.index(STRATEGY_START_MARKER) + len(STRATEGY_START_MARKER)
+    end = source.index(STRATEGY_END_MARKER)
+    return source[:start] + f"\n{body}\n    " + source[end:]
 
 
 class Phase3ValidationTests(unittest.TestCase):
     def test_valid_source_accepts_arbitrary_internal_structure(self):
-        result = validate_generated_java_source(VALID_SOURCE, "CandidateAgent")
+        source = with_strategy(
+            VALID_SOURCE,
+            "    private void differentlyNamedInternalMethod() {}",
+        )
+        result = validate_generated_java_source(source, "CandidateAgent")
         self.assertTrue(result.ok)
         self.assertIn("runtime_contract", result.passed_checks)
+        self.assertIn("fixed_scaffold", result.passed_checks)
         self.assertEqual(result.failed_checks, ())
         self.assertEqual(result.blocked_checks, ())
-        wildcard = validate_generated_java_source(VALID_SOURCE.replace("import java.util.Collections;", "import java.util.*;"), "CandidateAgent")
-        self.assertTrue(wildcard.ok)
+
+    def test_fixed_scaffold_allows_only_whitespace_comments_and_strategy_changes(self):
+        strategy_change = with_strategy(VALID_SOURCE, "    private void changedStrategy() {}")
+        comment_change = VALID_SOURCE.replace(
+            "// Stable Agent operation API: strategy code should issue actions through these helpers.",
+            "// The same fixed helpers, with different prose.",
+        )
+        self.assertTrue(fixed_scaffold_equivalent(strategy_change, VALID_SOURCE))
+        self.assertTrue(fixed_scaffold_equivalent(comment_change, VALID_SOURCE))
+        self.assertFalse(
+            fixed_scaffold_equivalent(
+                VALID_SOURCE.replace("return true;", "return false;", 1),
+                VALID_SOURCE,
+            )
+        )
+
+    def test_modified_fixed_helper_is_a_structured_validation_failure(self):
+        source = VALID_SOURCE.replace("move(unit, x, y);", "idle(unit);")
+        result = validate_generated_java_source(source, "CandidateAgent")
+        self.assertFalse(result.ok)
+        self.assertIn("fixed_scaffold", {item["check"] for item in result.failed_checks})
 
     def test_invalid_package_is_a_structured_validation_failure(self):
         result = validate_assembled_java(VALID_SOURCE.replace("ai.generated", "ai.invalid", 1), "CandidateAgent")
@@ -86,24 +90,29 @@ class Phase3ValidationTests(unittest.TestCase):
         self.assertIn("superclass", {item["check"] for item in result.failed_checks})
 
     def test_missing_get_action_is_a_structured_validation_failure(self):
-        source = VALID_SOURCE.replace(
-            "    @Override public PlayerAction getAction(int player, GameState gs) {\n        return new PlayerAction();\n    }\n",
-            "",
-        )
+        start = VALID_SOURCE.index("    @Override\n    public PlayerAction getAction")
+        end = VALID_SOURCE.index("\n    // EAGLE_AGENT_STRATEGY_START", start)
+        source = VALID_SOURCE[:start] + VALID_SOURCE[end:]
         result = validate_assembled_java(source, "CandidateAgent")
         self.assertFalse(result.ok)
         self.assertIn("callable_methods", {item["check"] for item in result.failed_checks})
 
     def test_forbidden_process_behavior_is_rejected(self):
-        result = validate_assembled_java(VALID_SOURCE.replace(
-            "private void differentlyNamedInternalMethod() {}",
-            "private void differentlyNamedInternalMethod() { new ProcessBuilder(); }",
-        ), "CandidateAgent")
+        result = validate_assembled_java(
+            with_strategy(
+                VALID_SOURCE,
+                "    private void differentlyNamedInternalMethod() { new ProcessBuilder(); }",
+            ),
+            "CandidateAgent",
+        )
         self.assertFalse(result.ok)
         self.assertIn("forbidden_behaviors", {item["check"] for item in result.failed_checks})
 
     def test_unavailable_dependency_is_rejected(self):
-        source = VALID_SOURCE.replace("import java.util.Collections;", "import com.example.missing.Dependency;")
+        source = VALID_SOURCE.replace(
+            "import java.util.ArrayList;",
+            "import com.example.missing.Dependency;",
+        )
         result = validate_assembled_java(source, "CandidateAgent")
         self.assertFalse(result.ok)
         self.assertIn("unavailable_dependencies", result.failed_checks[0]["reason"])
@@ -111,14 +120,17 @@ class Phase3ValidationTests(unittest.TestCase):
     def test_forbidden_file_network_and_reflection_behaviors_are_rejected(self):
         for snippet in ('new File("x");', 'new URL("http://x");', 'setAccessible(true);'):
             with self.subTest(snippet=snippet):
-                source = VALID_SOURCE.replace("private void differentlyNamedInternalMethod() {}", f"private void differentlyNamedInternalMethod() {{ {snippet} }}")
+                source = with_strategy(
+                    VALID_SOURCE,
+                    f"    private void differentlyNamedInternalMethod() {{ {snippet} }}",
+                )
                 result = validate_assembled_java(source, "CandidateAgent")
                 self.assertFalse(result.ok)
                 self.assertIn("forbidden_behaviors", {item["check"] for item in result.failed_checks})
     def test_generation_failure_blocks_validation_checks(self):
         result = validate_assembled_java("", "CandidateAgent")
         self.assertFalse(result.ok)
-        self.assertEqual(len(result.blocked_checks), 7)
+        self.assertEqual(len(result.blocked_checks), 8)
         self.assertEqual(result.failed_checks, ())
 
     def test_validation_artifact_is_persisted_on_failure(self):

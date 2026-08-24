@@ -6,6 +6,10 @@ invent a better policy, use game outcomes, rewrite either prompt, or return Java
 Current policy prompt:
 $policy_prompt
 
+If the policy prompt is empty or whitespace, there is no policy requirement to
+review. Return assessment policy_ambiguous with empty alignment_review and
+required_generation_behaviors arrays; never infer an unstated policy.
+
 Generated CandidateAgent.java:
 $generated_java
 

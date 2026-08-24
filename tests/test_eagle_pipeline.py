@@ -221,7 +221,7 @@ class EaglePipelineTests(unittest.TestCase):
             self.assertEqual(agent.source_paths, (agent.source_path,))
             self.assertTrue(agent.strategy_region)
 
-    def test_missing_java_strategy_marker_is_not_a_runtime_contract_requirement(self) -> None:
+    def test_missing_java_strategy_marker_fails_fixed_scaffold_validation(self) -> None:
         class StaticGenerationBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 source = load_java_template(JavaTemplatePaths())
@@ -240,13 +240,14 @@ class EaglePipelineTests(unittest.TestCase):
                 mock=True,
                 ordinal=0,
             )
-        self.assertIsNotNone(evaluation.agent)
-        self.assertTrue(evaluation.compile_result and evaluation.compile_result.ok)
-        self.assertTrue(evaluation.integration_result and evaluation.integration_result.ok)
-        self.assertEqual(len(evaluation.match_results), config.expected_match_count)
-        self.assertEqual(evaluation.candidate.status, "evaluated")
-        self.assertIsNone(evaluation.result.failure_category)
-        self.assertTrue(evaluation.code_quality_breakdown.compile_success)
+        self.assertIsNone(evaluation.agent)
+        self.assertIsNone(evaluation.compile_result)
+        self.assertIsNone(evaluation.integration_result)
+        self.assertEqual(evaluation.match_results, [])
+        self.assertEqual(evaluation.candidate.status, "failed")
+        self.assertEqual(evaluation.candidate.failure_stage, "validation")
+        self.assertEqual(evaluation.result.failure_category, "Java validation failure")
+        self.assertFalse(evaluation.code_quality_breakdown.compile_success)
         self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
 
     def test_empty_java_response_fails_before_compile_or_matches(self) -> None:

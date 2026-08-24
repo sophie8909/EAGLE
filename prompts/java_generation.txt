@@ -6,13 +6,11 @@ $policy_prompt
 The editable strategy implementation is the single region between the
 EAGLE_AGENT_STRATEGY_START and EAGLE_AGENT_STRATEGY_END comments.
 You may freely add, remove, or reorganize strategy helper methods inside that region.
-Use the fixed action helpers marked by EAGLE_ACTION_HELPERS_START and
-EAGLE_ACTION_HELPERS_END to operate the Agent.
-
-$action_api_guide
-
 Reusable policy-to-Java translation instructions:
 $code_generation_prompt
+
+IMMUTABLE SOURCE/API CONTRACT (higher priority than the reusable instructions):
+$action_api_guide
 
 Start from this canonical checked-in scaffold. Return the complete revised Java file, including every unchanged section:
 

@@ -38,9 +38,11 @@ while loading or resuming a run.
 
 ## 3. Evolution lifecycle
 
-Generation zero loads initial strategy and generation prompts from files,
-generates Java, and passes every candidate through the canonical evaluation
-boundary. Each later generation performs:
+Generation zero creates one candidate per configured seed policy file, pairs
+each blank policy with the checked-in Java seed without calling the Generator,
+and passes each seed through the canonical downstream evaluation boundary. It
+does not replicate a seed merely to fill `population_size`. Each later
+generation produces a fixed-size offspring population and performs:
 
 1. seeded lexicase parent selection;
 2. optional uniform two-component crossover;
@@ -100,7 +102,11 @@ Generation 0 is the one explicit decoder exception: every seed candidate has a
 blank `strategy_prompt` and uses `initial_java_seed_path` as its fixed phenotype,
 without an LLM call. The checked-in seed is validated, compiled, integrated, and
 evaluated through the same downstream boundary as every generated phenotype. It
-is generation-zero evidence only and is never inherited as a third gene.
+is generation-zero evidence only and is never inherited as a third gene. Seed
+loading records checked-in source provenance but no generation request, raw LLM
+response, or LLM attempt.
+The seed file is distinct from the checked-in offspring scaffold, so decoder
+safety hardening cannot silently change the historical seed source or hash.
 
 Final generation consumes the two prompt genes plus the fixed checked-in Java
 scaffold/API constraints and returns exactly one complete Java source file. It
@@ -160,6 +166,8 @@ objective. Successful Code Quality is:
 where the terms are normalized cyclomatic complexity, nesting, logical LOC, and
 longest-function LOC. Failure Code Quality is `-1000.0`. Compiler diagnostics,
 Function Capability, and Strategy Alignment are persisted diagnostics only.
+Strategy Alignment is not applicable to an empty policy prompt and is persisted
+as skipped with a null score and no LLM attempt.
 
 ## 10. Match evidence
 

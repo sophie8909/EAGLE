@@ -41,6 +41,17 @@ class CompleteJavaGenerationTests(unittest.TestCase):
             self.assertEqual(template.count(f"boolean {helper}("), 1)
         self.assertIn("return translateActions(player, gs);", template)
 
+    def test_template_action_helpers_enforce_active_player_and_legal_types(self):
+        template = load_java_template(JavaTemplatePaths())
+        self.assertIn("private int activePlayer = -1;", template)
+        self.assertIn("activePlayer = player;", template)
+        self.assertGreaterEqual(template.count("getPlayer() != activePlayer"), 6)
+        self.assertIn("resource.getPlayer() >= 0", template)
+        self.assertIn("unitType == workerType", template)
+        self.assertIn("unitType == lightType || unitType == heavyType || unitType == rangedType", template)
+        self.assertIn("buildingType != baseType && buildingType != barracksType", template)
+        self.assertIn("target.getPlayer() < 0", template)
+
     def test_extracts_one_strategy_region_without_fixed_method_contract(self):
         template = load_java_template(JavaTemplatePaths())
         region = extract_strategy_region(template)
@@ -68,12 +79,20 @@ class CompleteJavaGenerationTests(unittest.TestCase):
                 validate_java_template(JavaTemplatePaths(agent_path))
 
     def test_generation_prompt_requires_complete_java_only(self):
-        prompt = Candidate(strategy_prompt="balanced").generation_input(class_name="CandidateAgent")
+        evolved_prompt = "EVOLVABLE_TRANSLATION_SENTINEL"
+        prompt = Candidate(
+            strategy_prompt="balanced",
+            generation_prompt=evolved_prompt,
+        ).generation_input(class_name="CandidateAgent")
         self.assertIn("Generate the complete Java source file", prompt)
         self.assertIn("EAGLE_AGENT_STRATEGY_START", prompt)
         self.assertIn("private boolean commandMove", prompt)
         self.assertIn("FINAL OUTPUT CONTRACT", prompt)
         self.assertIn("Never return JSON", prompt)
+        self.assertIn("context.gs.getTime(), never getTick() or getTickCount()", prompt)
+        self.assertIn("unit.getID(), never getId()", prompt)
+        self.assertLess(prompt.index(evolved_prompt), prompt.index("IMMUTABLE MICRORTS ACTION AND JAVA API CONTRACT"))
+        self.assertIn("This contract overrides every conflicting reusable", prompt)
         self.assertNotIn("All six strategy methods must be present", prompt)
         self.assertTrue(prompt.rstrip().endswith("Markdown fences."))
 

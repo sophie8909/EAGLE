@@ -33,13 +33,18 @@ records the counts, eligible IDs, selected IDs, coverage metadata, rule, and RNG
 provenance. `mutation/strategy_reflection/global_evaluation_summary.json` records deterministic
 breadth across all evaluated matches, including fully-beaten opponents.
 
-Unselected traces are deleted before any commentary call. Selected traces are
-deleted after successful commentary or bounded terminal failure. Compact result,
-performance, opponent, map, side, round, and winner artifacts remain permanent.
+All traces belonging to the current parent population remain available while
+the generation's siblings are constructed because seeded parent selection is
+with replacement. After survivor selection is atomically recorded, traces for
+retired parents and discarded offspring may be deleted. Traces belonging to
+survivors remain available for the next generation. Compact result, performance,
+opponent, map, side, round, and winner artifacts remain permanent.
 
-Each selected raw log is sent to exactly one independent Commentator call. The
-Coach receives only the resulting diagnoses and the deterministic global summary;
-raw game logs are never concatenated into the Coach request.
+Each selected raw log owns one independent Commentator role invocation. A role
+invocation may make bounded retry attempts, all under the same request identity,
+when transport, parsing, or semantic validation fails. The Coach receives only
+the resulting diagnoses and the deterministic global summary; raw game logs are
+never concatenated into the Coach request.
 
 The canonical response has top-level strategy objects and integer-backed
 `turning_points`. At the parser boundary EAGLE also normalizes the bounded local-
@@ -89,12 +94,18 @@ the only transformation before Generator use.
 
 ## Failure and budgeting rules
 
-Commentator failure does not change fitness; Coach receives an unavailable
-entry for that selected match. Coach receives the full aggregate win/draw/loss
-distribution and selection metadata, so selected commentary is never mistaken
-for the complete evaluation distribution. Coach failure leaves the parent strategy
-unchanged and records a role-attributed failure. Generator failures follow the
-existing Java-generation failure contract.
+Commentator failure does not change fitness. Transport, JSON parsing, and
+role-semantic validation share the configured bounded retry budget, and every
+attempt retains its raw response and validation status. Coach receives an
+unavailable entry for an individual selected match only when at least one other
+selected match produced a valid diagnosis. With zero valid diagnoses, Strategy
+Mutation fails without calling Coach and preserves the parent strategy. Coach
+receives the full aggregate win/draw/loss distribution and selection metadata,
+so selected commentary is never mistaken for the complete evaluation
+distribution. Coach parsing and semantic validation use the same bounded retry
+contract. Terminal Coach failure leaves the parent strategy unchanged and
+records a role-attributed failure. Generator failures follow the existing
+Java-generation failure contract.
 
 Commentator budgeting prioritizes metadata, the selected raw log, and schema;
 Coach receives compact analyses, the all-match global summary, parent strategy,

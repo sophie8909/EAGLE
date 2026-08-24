@@ -13,6 +13,7 @@ from eagle.strategy_reflection import (
     StrategyReflectionMutation,
     _parse_commentary,
     build_global_evaluation_summary,
+    cleanup_retired_match_traces,
     select_reflection_matches,
 )
 from evaluation.match_trace import iter_match_trace, write_match_trace
@@ -154,7 +155,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertEqual(len(commentator_prompts), 5)
             self.assertEqual(len(selection["selected_match_ids"]), 5)
             self.assertEqual(len({item for item in selection["selected_match_ids"]}), 5)
-            self.assertTrue(all(not Path(row["match_trace_path"]).exists() for row in rows))
+            self.assertTrue(all(Path(row["match_trace_path"]).exists() for row in rows))
             coach_prompt = next(prompt for prompt in backend.prompts if "ROLE: coach" in prompt)
             self.assertIn('"global_evaluation_summary"', coach_prompt)
             self.assertIn('"total_matches": 5', coach_prompt)
@@ -376,7 +377,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
         self.assertFalse(by_id["heavyrush"]["fully_beaten_opponent"])
         self.assertEqual(summary["fully_beaten_opponents_count"], 1)
 
-    def test_commentator_direct_coach_delete_trace_and_preserve_artifacts(self) -> None:
+    def test_commentator_direct_coach_preserves_trace_and_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             states = root / "states"
@@ -422,7 +423,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
 
             self.assertEqual(result.status, "success")
             self.assertIsNotNone(result.coach)
-            self.assertFalse(log_path.exists())
+            self.assertTrue(log_path.exists())
             self.assertTrue((root / "child" / "mutation" / "strategy_reflection" / "commentary" / "match-1" / "match_analysis.json").exists())
             self.assertTrue((root / "child" / "mutation" / "strategy_reflection" / "commentary" / "match-1" / "commentary_status.json").exists())
             self.assertTrue((root / "child" / "mutation" / "strategy_reflection" / "coach_result.json").exists())
@@ -432,9 +433,136 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertNotIn("ROLE: manager", "\n".join(mutation.backend.prompts))
             self.assertIn("If the first combat group is ready", result.candidate.strategy_prompt)
 
-    def test_commentary_failure_deletes_trace_without_changing_candidate(self) -> None:
-        class BadBackend:
+    def test_repeated_siblings_can_reuse_the_same_parent_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            states = root / "states"
+            write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
+            log_path = root / "match_trace.jsonl.gz"
+            _write_trace(log_path, metadata={"match_id": "match-3"}, round_state_dir=states, raw_result={}, tick_limit=0)
+            context = ReflectionContext(
+                generation=1,
+                index=0,
+                candidate_id="parent",
+                per_match_results=({"match_id": "match-3", "match_trace_path": str(log_path)},),
+            )
+
+            first = StrategyReflectionMutation(MockRoleBackend(), max_attempts=1).run(
+                Candidate(id="sibling-1", strategy_prompt="Defend, then attack."),
+                context,
+                artifact_dir=root / "sibling-1",
+            )
+            second = StrategyReflectionMutation(MockRoleBackend(), max_attempts=1).run(
+                Candidate(id="sibling-2", strategy_prompt="Defend, then attack."),
+                context,
+                artifact_dir=root / "sibling-2",
+            )
+
+            self.assertEqual(first.status, "success")
+            self.assertEqual(second.status, "success")
+            self.assertTrue(log_path.exists())
+
+    def test_malformed_commentary_is_retried_with_raw_attempt_evidence(self) -> None:
+        class RetryBackend:
+            def __init__(self) -> None:
+                self.mock = MockRoleBackend()
+                self.commentator_attempts = 0
+
             def generate(self, prompt: str) -> str:
+                if "ROLE: match_commentator" in prompt:
+                    self.commentator_attempts += 1
+                    if self.commentator_attempts == 1:
+                        return '{"match_id":"match-4" "turning_points":[]}'
+                    if self.commentator_attempts == 2:
+                        return json.dumps({
+                            "match_id": "match-4",
+                            "candidate_strategy": {"summary": "passive"},
+                            "opponent_strategy": {"summary": "pressure"},
+                            "turning_points": [],
+                            "candidate_strengths": [],
+                            "candidate_weaknesses": [],
+                            "win_loss_analysis": {"result": "loss"},
+                            "strategy_observations": [],
+                        })
+                return self.mock.generate(prompt)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            states = root / "states"
+            write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
+            log_path = root / "match_trace.jsonl.gz"
+            _write_trace(log_path, metadata={"match_id": "match-4"}, round_state_dir=states, raw_result={}, tick_limit=0)
+            backend = RetryBackend()
+            result = StrategyReflectionMutation(backend, max_attempts=3).run(
+                Candidate(id="retry-commentary", strategy_prompt="Defend, then attack."),
+                ReflectionContext(
+                    generation=1,
+                    index=0,
+                    candidate_id="parent",
+                    per_match_results=({"match_id": "match-4", "match_trace_path": str(log_path)},),
+                ),
+                artifact_dir=root / "child",
+            )
+
+            self.assertEqual(result.status, "success")
+            self.assertEqual(backend.commentator_attempts, 3)
+            attempt_dir = root / "child" / "mutation" / "strategy_reflection" / "commentary" / "match-4"
+            first_attempt = json.loads((attempt_dir / "response_attempt_001.json").read_text(encoding="utf-8"))
+            second_attempt = json.loads((attempt_dir / "response_attempt_002.json").read_text(encoding="utf-8"))
+            third_attempt = json.loads((attempt_dir / "response_attempt_003.json").read_text(encoding="utf-8"))
+            self.assertEqual(first_attempt["status"], "error")
+            self.assertIn('"match_id":"match-4"', first_attempt["response"])
+            self.assertEqual(second_attempt["status"], "error")
+            self.assertIn('"turning_points": []', second_attempt["response"])
+            self.assertEqual(third_attempt["status"], "success")
+
+    def test_semantically_invalid_coach_is_retried(self) -> None:
+        class RetryCoachBackend:
+            def __init__(self) -> None:
+                self.mock = MockRoleBackend()
+                self.coach_attempts = 0
+
+            def generate(self, prompt: str) -> str:
+                if "ROLE: coach" in prompt:
+                    self.coach_attempts += 1
+                    if self.coach_attempts == 1:
+                        return json.dumps({"new_strategy_prompt": "public void invalidJava() {}"})
+                return self.mock.generate(prompt)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            states = root / "states"
+            write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
+            log_path = root / "match_trace.jsonl.gz"
+            _write_trace(log_path, metadata={"match_id": "match-5"}, round_state_dir=states, raw_result={}, tick_limit=0)
+            backend = RetryCoachBackend()
+            result = StrategyReflectionMutation(backend, max_attempts=2).run(
+                Candidate(id="retry-coach", strategy_prompt="Defend, then attack."),
+                ReflectionContext(
+                    generation=1,
+                    index=0,
+                    candidate_id="parent",
+                    per_match_results=({"match_id": "match-5", "match_trace_path": str(log_path)},),
+                ),
+                artifact_dir=root / "child",
+            )
+
+            self.assertEqual(result.status, "success")
+            self.assertEqual(backend.coach_attempts, 2)
+            reflection_dir = root / "child" / "mutation" / "strategy_reflection"
+            first_attempt = json.loads((reflection_dir / "coach_response_attempt_001.json").read_text(encoding="utf-8"))
+            second_attempt = json.loads((reflection_dir / "coach_response_attempt_002.json").read_text(encoding="utf-8"))
+            self.assertEqual(first_attempt["status"], "error")
+            self.assertIn("public void", first_attempt["response"])
+            self.assertEqual(second_attempt["status"], "success")
+
+    def test_commentary_failure_preserves_trace_without_changing_candidate(self) -> None:
+        class BadBackend:
+            def __init__(self) -> None:
+                self.prompts: list[str] = []
+
+            def generate(self, prompt: str) -> str:
+                self.prompts.append(prompt)
                 return "not json"
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -445,12 +573,35 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             _write_trace(log_path, metadata={"match_id": "match-2"}, round_state_dir=states, raw_result={}, tick_limit=0)
             candidate = Candidate(id="candidate-2", strategy_prompt="Keep the base safe.")
             context = ReflectionContext(generation=1, index=0, candidate_id=candidate.id, per_match_results=({"match_id": "match-2", "match_trace_path": str(log_path)},))
-            result = StrategyReflectionMutation(BadBackend(), max_attempts=1).run(candidate, context, artifact_dir=root / "child")
+            backend = BadBackend()
+            result = StrategyReflectionMutation(backend, max_attempts=1).run(candidate, context, artifact_dir=root / "child")
 
             self.assertEqual(result.status, "failed")
             self.assertEqual(result.candidate.strategy_prompt, candidate.strategy_prompt)
-            self.assertFalse(log_path.exists())
+            self.assertTrue(log_path.exists())
+            self.assertFalse(any("ROLE: coach" in prompt for prompt in backend.prompts))
             self.assertTrue((root / "child" / "mutation" / "strategy_reflection" / "commentary_failure.json").exists())
+
+    def test_generation_boundary_cleanup_removes_only_retired_candidate_traces(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            candidates_dir = Path(temp_dir) / "candidates"
+            survivor = Candidate(id="survivor")
+            retired = Candidate(id="retired")
+            survivor_trace = candidates_dir / survivor.id / "matches" / "match_00" / "match_trace.jsonl.gz"
+            retired_trace = candidates_dir / retired.id / "matches" / "match_00" / "match_trace.jsonl.gz"
+            survivor_trace.parent.mkdir(parents=True)
+            retired_trace.parent.mkdir(parents=True)
+            survivor_trace.write_bytes(b"survivor")
+            retired_trace.write_bytes(b"retired")
+
+            cleanup_retired_match_traces(
+                candidates_dir,
+                [survivor, retired],
+                surviving_candidate_ids={survivor.id},
+            )
+
+            self.assertTrue(survivor_trace.exists())
+            self.assertFalse(retired_trace.exists())
 
     def test_commentary_normalizes_0823_match_analysis_shape(self) -> None:
         analysis = _parse_commentary({

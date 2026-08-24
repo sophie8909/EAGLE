@@ -109,6 +109,26 @@ class ReflectionOperatorModeTests(unittest.TestCase):
                 "strategy_reward", "code_reward",
             }.issubset(record))
 
+    def test_operator_preconditions_condition_selection_and_usage_on_eligible_set(self):
+        controller = build_reflection_operator_controller(config_for("static"))
+        rng = random.Random(19)
+
+        choices = [
+            controller.select_operator(rng, eligible=(STRATEGY_REFLECTION,))
+            for _ in range(20)
+        ]
+
+        self.assertEqual(choices, [STRATEGY_REFLECTION] * 20)
+        record = controller.update_generation([])
+        self.assertEqual(
+            record["operators"][STRATEGY_REFLECTION]["usage_count"],
+            20,
+        )
+        self.assertEqual(
+            record["operators"][GENERATE_CODE_REFLECTION]["usage_count"],
+            0,
+        )
+
     def test_static_collects_no_reward_and_launches_no_head_to_head(self):
         config = config_for("static")
         controller = build_reflection_operator_controller(config)

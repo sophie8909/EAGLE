@@ -1,6 +1,6 @@
 ---
 name: eagle-architecture
-description: Route and implement EAGLE Candidate model, genotype/phenotype, state-transition, overall pipeline, parent selection, or NSGA-II architecture changes. Use for edits to candidate records, search orchestration, selection, Java inheritance, or cross-cutting architecture contracts.
+description: Route and implement EAGLE Candidate model, genotype/phenotype, state-transition, overall pipeline, parent selection, or opponent-wise lexicase architecture changes. Use for edits to candidate records, search orchestration, selection, Java inheritance, or cross-cutting architecture contracts.
 ---
 
 # EAGLE architecture workflow
@@ -22,9 +22,9 @@ Do not read `docs/architeture_specification_zh.md` as an implementation source.
 - Keep all Java source as phenotype/evidence; never inherit parent Java into a child genotype or Generator request.
 - Keep generated full-file Java as phenotype, separate from the pre-generation genotype.
 - Make every offspring pass through final Java generation after crossover and optional mutation.
-- Keep exactly two maximized objectives: `game_performance` and `code_quality`.
-- Keep failed candidates in NSGA-II with failure-stage fitness.
-- Treat DEC-01 and DEC-02 as resolved: use the selected `+500` successful-code-quality base and the exact CandidateAgent/integration contract from the canonical owners.
+- Keep exactly seven maximized opponent fitness cases and seeded lexicase parent/survivor selection; weighted `game_performance` and `code_quality` are diagnostics only.
+- Keep failed candidates in lexicase with the canonical per-case failure sentinel and failure-stage diagnostics.
+- Preserve the exact CandidateAgent/integration contract from the canonical owners.
 - Persist component provenance, lineage, artifacts, and timing.
 - Do not introduce GEPA, ACE, MIPRO, CAPO, surrogate search, or runtime LLM-controlled agents.
 

@@ -29,6 +29,31 @@ OPERATOR_TO_MUTATION = {
     GENERATE_CODE_REFLECTION: "code",
 }
 
+
+def _select_eligible_operator(
+    rng: Any,
+    probabilities: dict[str, float],
+    eligible: tuple[str, ...],
+) -> str:
+    """Draw from configured probabilities after applying operator preconditions."""
+
+    if not eligible or any(operator not in OPERATORS for operator in eligible):
+        raise ValueError(f"eligible operators must be a non-empty subset of {OPERATORS!r}.")
+    draw_unit = rng.random()
+    if len(eligible) == 1:
+        return eligible[0]
+    weights = {operator: float(probabilities[operator]) for operator in eligible}
+    total = sum(weights.values())
+    if total <= 0.0:
+        raise ValueError("eligible operator probabilities must have positive total weight.")
+    draw = draw_unit * total
+    cumulative = 0.0
+    for operator in eligible:
+        cumulative += weights[operator]
+        if draw < cumulative:
+            return operator
+    return eligible[-1]
+
 # These are historical algorithm constants, not experiment configuration.
 AOS_CREDIT_ALPHA = 0.20
 OPPONENT_REPAIRED_EXECUTION_REWARD = 1.0
@@ -163,9 +188,8 @@ class AdaptiveOperatorSelection:
         if state:
             self._restore(state)
 
-    def select_operator(self, rng) -> str:
-        draw = rng.random()
-        operator = OPERATORS[0] if draw < self.probabilities[OPERATORS[0]] else OPERATORS[1]
+    def select_operator(self, rng, *, eligible: tuple[str, ...] = OPERATORS) -> str:
+        operator = _select_eligible_operator(rng, self.probabilities, eligible)
         self._generation_usage[operator] += 1
         self.total_usage[operator] += 1
         return operator
@@ -399,7 +423,7 @@ class ReflectionOperatorController:
     def mode(self) -> ReflectionOperatorMode:
         return self.settings.mode
 
-    def select_operator(self, rng) -> str:
+    def select_operator(self, rng, *, eligible: tuple[str, ...] = OPERATORS) -> str:
         raise NotImplementedError
 
     def probability(self, operator: str) -> float:
@@ -459,8 +483,8 @@ class StaticOperatorSelector(ReflectionOperatorController):
             for operator in OPERATORS:
                 self.total_usage[operator] = int((state.get("total_usage") or {}).get(operator, 0))
 
-    def select_operator(self, rng) -> str:
-        operator = OPERATORS[0] if rng.random() < self.probabilities[OPERATORS[0]] else OPERATORS[1]
+    def select_operator(self, rng, *, eligible: tuple[str, ...] = OPERATORS) -> str:
+        operator = _select_eligible_operator(rng, self.probabilities, eligible)
         self._generation_usage[operator] += 1
         self.total_usage[operator] += 1
         return operator
@@ -529,8 +553,8 @@ class AdaptiveOperatorSelector(ReflectionOperatorController):
         self.provider = provider
         self.updater = AdaptiveOperatorSelection(settings, state=state)
 
-    def select_operator(self, rng) -> str:
-        return self.updater.select_operator(rng)
+    def select_operator(self, rng, *, eligible: tuple[str, ...] = OPERATORS) -> str:
+        return self.updater.select_operator(rng, eligible=eligible)
 
     def probability(self, operator: str) -> float:
         return self.updater.probability(operator)

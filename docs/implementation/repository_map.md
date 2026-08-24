@@ -50,6 +50,8 @@ kept as documentation entries.
 | `generation/backend.py` | Mock/OpenAI-compatible complete-source generation |
 | `generation/java_agent_generator.py` | Extraction, normalization, validation, source persistence |
 | `generation/agent_template.py` | Java template contract |
+| `eagle/java_templates/CandidateAgent.java` | Hardened fixed scaffold for offspring decoding |
+| `eagle/java_seeds/CandidateAgent.java` | Immutable historical generation-zero phenotype |
 | `eagle/evaluation.py` | Canonical child evaluation orchestration |
 | `evaluation/compiler.py` | Isolated javac and diagnostics |
 | `evaluation/microrts_runner.py` | Standalone seven-check integration probe only |

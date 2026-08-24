@@ -20,6 +20,7 @@ from .run_artifacts import (
     record_generation,
 )
 from .search import SearchResult, create_offspring
+from .strategy_reflection import cleanup_retired_match_traces
 from .strategy_diversity import (
     archive_niches,
     diversity_console_summary,
@@ -140,6 +141,7 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path | None, r
                 span=span.finish(),
             ),
         )
+        selection_candidates = [*population, *evaluated]
         population = select_next_generation(
             population, evaluated, population_size=config.population_size, rng=rng,
         )
@@ -153,6 +155,11 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path | None, r
             population,
             diversity=generation_diversity,
             aos=aos_record,
+        )
+        cleanup_retired_match_traces(
+            candidates_dir,
+            selection_candidates,
+            surviving_candidate_ids={candidate.id for candidate in population},
         )
         print(diversity_console_summary(generation, generation_diversity), flush=True)
         completed_generation = generation

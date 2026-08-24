@@ -436,11 +436,12 @@ def build_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionRe
 
 
 def build_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult, context: ReflectionContext) -> str:
-    from .prompts import render_prompt
+    from .prompts import load_prompt, render_prompt
 
     return render_prompt("code_rewrite", {
         "code_generation_prompt": candidate.generation_prompt,
         "alignment_review": json.dumps(reflection.parsed_response or {}, ensure_ascii=False),
+        "action_api_guide": load_prompt("action_api_guide"),
     })
 
 

@@ -116,6 +116,10 @@ New experiment configs reference the intentionally empty
 `seeds/blank_policy.txt`, and generation zero loads the validated checked-in
 `initial_java_seed_path` without an LLM call. Python modules only load, render,
 bound, transport, and validate executable prompt resources.
+One configured seed file creates one generation-zero candidate; the historical
+seed source is separate from the hardened offspring scaffold. Empty-policy
+candidates cannot enter Code Reflection, and Strategy Alignment is not
+applicable to them.
 
 ## Reflection boundary
 
@@ -134,6 +138,10 @@ output, normalized child strategy prompt, and the strategy value passed to the
 Generator. Per-generation policy sidecars reference every population member's
 canonical `genotype/policy_prompt.txt`, including candidates produced by other
 operators; no policy text is duplicated in the sidecar.
+Parent match traces remain available while all same-generation siblings are
+created, then retired/discarded traces are removed only after atomic survivor
+persistence. Commentator and Coach semantic failures participate in bounded
+attempt retries; zero valid Commentator analyses preserves the parent policy.
 
 Code Reviewer/Rewriter evidence is stored under `mutation/code_reflection/`.
 The Rewriter uses the exact JSON object contract with the sole field
@@ -143,6 +151,9 @@ the checked-in scaffold and never a parent phenotype. Code Reflection metadata
 records which evaluated source phenotype the Reviewer consumed through the
 run-relative `reviewed_phenotype_artifact` reference; this evidence reference
 does not restore the removed `previous_code` genotype gene.
+The immutable API guide is rendered after the evolvable decoder gene, and
+validation requires token-equivalent fixed scaffold source outside the strategy
+markers. Fixed action helpers reject wrong-owner and invalid-type commands.
 
 The `workerrush` case compiles the vendored upstream
 `third_party/microrts/src/ai/abstraction/WorkerRush.java`; it is a distinct

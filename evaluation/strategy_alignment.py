@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from eagle.llm import LLMServerError, llm_request_progress, read_chat_completion_content, truncate_prompt
+from eagle.mutation import parse_json_object_response
 
 
 @dataclass(frozen=True)
@@ -190,11 +191,9 @@ def build_alignment_request(
 
 def parse_strategy_alignment_response(raw_response: str) -> dict[str, Any]:
     try:
-        payload = json.loads(raw_response)
-    except json.JSONDecodeError as exc:
+        payload = parse_json_object_response(raw_response)
+    except (json.JSONDecodeError, ValueError) as exc:
         raise ValueError(f"Strategy Alignment response is not valid JSON: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError("Strategy Alignment response must be a JSON object.")
     if set(payload) != {"score", "reason"}:
         raise ValueError("Strategy Alignment response must contain exactly score and reason.")
     score = payload["score"]

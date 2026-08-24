@@ -143,14 +143,19 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     if alignment is None:
         request = ""
         raw_response = ""
+        blank_policy = not evaluation.candidate.strategy_prompt.strip()
         alignment_payload = {
-            "status": "blocked",
+            "status": "not_applicable" if blank_policy else "blocked",
             "request": request,
             "raw_response": raw_response,
             "parsed_response": None,
-            "score": 0.0,
-            "reason": "Strategy Alignment runs only after the complete evaluation matrix.",
-            "error": evaluation.result.failure_reason,
+            "score": None if blank_policy else 0.0,
+            "reason": (
+                "Strategy Alignment is not applicable to an empty policy prompt."
+                if blank_policy
+                else "Strategy Alignment runs only after the complete evaluation matrix."
+            ),
+            "error": None if blank_policy else evaluation.result.failure_reason,
             "attempts": [],
         }
     else:
@@ -270,10 +275,19 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
 
     generation_dir = candidate_dir / "generation"
     generation_dir.mkdir(parents=True, exist_ok=True)
-    request = evaluation.candidate.generation_input(class_name="CandidateAgent")
     result = evaluation.result
+    generation_timing = evaluation.generation_timing or {}
+    initial_seed_source = generation_timing.get("operation") == "initial_java_seed"
+    request = (
+        ""
+        if initial_seed_source
+        else evaluation.candidate.generation_input(class_name="CandidateAgent")
+    )
     (generation_dir / "request.txt").write_text(request, encoding="utf-8")
-    (generation_dir / "response_raw.txt").write_text(result.raw_llm_output or "", encoding="utf-8")
+    (generation_dir / "response_raw.txt").write_text(
+        "" if initial_seed_source else result.raw_llm_output or "",
+        encoding="utf-8",
+    )
     (generation_dir / "extracted_candidate.java").write_text(result.extracted_code or "", encoding="utf-8")
     (generation_dir / "normalized_candidate.java").write_text(
         result.assembled_java or evaluation.candidate.generated_java or "",
@@ -291,9 +305,10 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         "failure_reason": result.failure_reason,
         "validation_result": validation_to_dict(result.validation_result),
         "stage": "generation",
-        "operation": (evaluation.generation_timing or {}).get("operation"),
-        "model": (evaluation.generation_timing or {}).get("model"),
-        "attempts": (evaluation.generation_timing or {}).get("attempts", []),
+        "operation": generation_timing.get("operation"),
+        "model": generation_timing.get("model"),
+        "attempts": generation_timing.get("attempts", []),
+        "source": generation_timing.get("source"),
     })
 
 

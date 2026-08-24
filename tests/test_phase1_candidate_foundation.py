@@ -1,3 +1,4 @@
+import hashlib
 import json
 import random
 import tempfile
@@ -180,7 +181,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
 
     def test_every_generation_zero_candidate_has_seed_lineage(self) -> None:
         population = initialize_population(ExperimentConfig.from_mapping({"population_size": 4}))
-        self.assertEqual(len(population), 4)
+        self.assertEqual(len(population), 1)
         self.assertTrue(all(candidate.lineage_to_json_dict()["source_candidate_ids"] == [] for candidate in population))
         self.assertTrue(all(candidate.strategy_prompt == "" for candidate in population))
 
@@ -192,6 +193,74 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "generation-zero only"):
             backend.generate(Candidate(generation=1), "CandidateAgent")
 
+    def test_blank_policy_bootstrap_forces_strategy_reflection_before_code(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExperimentConfig.from_mapping({
+                "runs_dir": temp_dir,
+                "generations": 1,
+                "population_size": 3,
+                "mutation_rate": 1.0,
+                "crossover_rate": 0.0,
+                "reflection_operator_mode": "static",
+                "strategy_reflection_probability": 0.0,
+                "code_reflection_probability": 1.0,
+            })
+
+            result = run_search(config, mock=True, run_id="blank-policy-bootstrap")
+
+        self.assertEqual(len(result.final_population), 3)
+        self.assertTrue(all(item.mutation_type == "strategy" for item in result.final_population))
+        self.assertTrue(all(item.strategy_prompt.strip() for item in result.final_population))
+        self.assertTrue(all(
+            item.metadata["aos"]["eligible_operator_ids"] == ["strategy_reflection"]
+            for item in result.final_population
+        ))
+
+    def test_initial_java_seed_artifacts_record_no_llm_call_and_source_provenance(self) -> None:
+        config = ExperimentConfig.from_mapping({})
+        candidate = initialize_population(config)[0]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_dir = root / "candidates"
+            evaluation = evaluate_candidate(
+                candidate,
+                config=config,
+                backend=InitialJavaSeedBackend(config.initial_java_seed_path),
+                generated_agents_dir=root / "generated",
+                classes_dir=root / "classes",
+                match_artifacts_dir=candidates_dir / candidate.id / "matches",
+                mock=True,
+                ordinal=0,
+            )
+            write_candidate_artifacts(candidates_dir, evaluation)
+            candidate_dir = candidates_dir / candidate.id
+            generation = json.loads(
+                (candidate_dir / "generation" / "result.json").read_text(encoding="utf-8")
+            )
+            timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
+            alignment = json.loads(
+                (candidate_dir / "strategy_alignment" / "result.json").read_text(encoding="utf-8")
+            )
+            phenotype = (candidate_dir / "phenotype" / "CandidateAgent.java").read_bytes()
+            generation_request = (candidate_dir / "generation" / "request.txt").read_text()
+            generation_response = (candidate_dir / "generation" / "response_raw.txt").read_text()
+
+        self.assertEqual(generation["operation"], "initial_java_seed")
+        self.assertIsNone(generation["model"])
+        self.assertEqual(generation["attempts"], [])
+        self.assertEqual(generation["source"]["kind"], "checked_in_java_seed")
+        self.assertEqual(generation["source"]["path"], str(config.initial_java_seed_path.resolve()))
+        self.assertEqual(generation["source"]["sha256"], hashlib.sha256(phenotype).hexdigest())
+        self.assertEqual(generation_request, "")
+        self.assertEqual(generation_response, "")
+        self.assertIsNone(timing["generation_llm"]["started_at"])
+        self.assertIsNone(timing["generation_llm"]["duration_seconds"])
+        self.assertEqual(timing["generation_llm"]["attempts"], [])
+        self.assertEqual(alignment["status"], "not_applicable")
+        self.assertIsNone(alignment["score"])
+        self.assertEqual(alignment["attempts"], [])
+        self.assertIsNone(timing["strategy_alignment_llm"]["duration_seconds"])
+
     def test_run_lineage_ids_resolve_to_earlier_acyclic_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -199,6 +268,15 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             config_path.write_text("\n".join(("generations: 2", "population_size: 2", "crossover_rate: 1.0", "mutation_rate: 0.0", f'runs_dir: "{(root / "runs").as_posix()}"')), encoding="utf-8")
             result = run_search(ExperimentConfig.from_file(config_path), config_path=config_path, mock=True, run_id="lineage_run")
             records = [json.loads(path.read_text()) for path in (result.run_dir / "candidates").glob("*/lineage.json")]
+            generation_zero = json.loads(
+                (result.run_dir / "generations" / "generation_0000.json").read_text()
+            )
+            generation_one = json.loads(
+                (result.run_dir / "generations" / "generation_0001.json").read_text()
+            )
+        self.assertEqual(len(generation_zero["population"]), 1)
+        self.assertEqual(generation_zero["metrics"]["expected_match_count"], 126)
+        self.assertEqual(len(generation_one["population"]), 2)
         by_id = {record["candidate_id"]: record for record in records}
         for record in records:
             for parent_id in record["parent_ids"]:

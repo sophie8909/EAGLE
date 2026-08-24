@@ -51,7 +51,14 @@ This is the canonical owner of candidate and LLM-attempt timing fields. Normativ
 }
 ```
 
-For a successful evaluation, `match_durations_seconds` has exactly 10 entries. For partial failure it has one entry per attempted/completed match and is interpreted with match statuses.
+For a successful evaluation, `match_durations_seconds` has exactly 126 entries.
+For partial failure it has one entry per attempted match and is interpreted with
+match statuses.
+
+Generation-zero seed loading is not an LLM request. Its `generation_llm`
+record has null start/finish/duration fields and an empty attempt list. Strategy
+Alignment likewise has null timing and no attempts when an empty policy makes
+the diagnostic not applicable.
 
 ## LLM attempt record
 

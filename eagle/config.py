@@ -9,7 +9,10 @@ from typing import Any
 
 import yaml
 
-from generation.agent_template import DEFAULT_AGENT_TEMPLATE_PATH
+from generation.agent_template import (
+    DEFAULT_AGENT_TEMPLATE_PATH,
+    DEFAULT_INITIAL_JAVA_SEED_PATH,
+)
 
 from .candidate import DEFAULT_GENERATION_PROMPT
 from .aos import ReflectionOperatorMode, ReflectionOperatorSettings
@@ -104,7 +107,7 @@ class ExperimentConfig:
     microrts_dir: Path = Path("third_party/microrts")
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
-    initial_java_seed_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
+    initial_java_seed_path: Path = DEFAULT_INITIAL_JAVA_SEED_PATH
     tick_limit: int = 100
     match_timeout_seconds: float = 120.0
     match_artifact_mode: str = "compact"
@@ -260,7 +263,7 @@ class ExperimentConfig:
             agent_template_path=_repository_path(payload.get("agent_template_path"), DEFAULT_AGENT_TEMPLATE_PATH),
             initial_java_seed_path=_repository_path(
                 payload.get("initial_java_seed_path"),
-                DEFAULT_AGENT_TEMPLATE_PATH,
+                DEFAULT_INITIAL_JAVA_SEED_PATH,
             ),
             tick_limit=int(payload.get("tick_limit", 100)),
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),

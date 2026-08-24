@@ -19,6 +19,7 @@ from generation.backend import InitialJavaSeedBackend
 from .aos import (
     OPERATOR_TO_MUTATION,
     ReflectionOperatorController,
+    STRATEGY_REFLECTION,
 )
 from .artifacts import (
     write_run_config,
@@ -41,7 +42,7 @@ from .reflection_context import build_reflection_context
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
 from .prompts import normalize_prompt
 from .rewrite import PromptRewriteMutation
-from .strategy_reflection import select_strategy_mutation_intent
+from .strategy_reflection import cleanup_retired_match_traces, select_strategy_mutation_intent
 from .search_runtime import build_search_runtime
 from .strategy_diversity import (
     archive_niches,
@@ -242,6 +243,7 @@ def _run_search_impl(
         ))
         # Survival selection is the only population update boundary and consumes
         # the objectives already persisted by evaluate_population.
+        selection_candidates = [*evaluated_population, *evaluated_offspring]
         evaluated_population = select_next_generation(
             evaluated_population,
             evaluated_offspring,
@@ -261,6 +263,11 @@ def _run_search_impl(
             evaluated_population,
             diversity=generation_diversity,
             aos=aos_record,
+        )
+        cleanup_retired_match_traces(
+            candidates_dir,
+            selection_candidates,
+            surviving_candidate_ids={candidate.id for candidate in evaluated_population},
         )
         print(diversity_console_summary(generation, generation_diversity), flush=True)
         completed_generation = generation
@@ -292,10 +299,19 @@ def _run_search_impl(
 
 
 def initialize_population(config: ExperimentConfig) -> list[Candidate]:
-    population = [Candidate(generation=0, strategy_prompt=prompt, generation_prompt=config.generation_prompt, operator="seed", metadata={"seed_index": index}) for index, prompt in enumerate(config.seed_prompts)]
-    while len(population) < config.population_size:
-        seed_index = len(population)
-        population.append(Candidate(generation=0, strategy_prompt=config.seed_prompts[seed_index % len(config.seed_prompts)], generation_prompt=config.generation_prompt, operator="seed", metadata={"seed_index": seed_index}))
+    # A seed file represents one generation-zero candidate.  Replicating one
+    # seed to ``population_size`` gives identical genotypes/phenotypes distinct
+    # identities and lets match noise masquerade as evolutionary diversity.
+    population = [
+        Candidate(
+            generation=0,
+            strategy_prompt=prompt,
+            generation_prompt=config.generation_prompt,
+            operator="seed",
+            metadata={"seed_index": index},
+        )
+        for index, prompt in enumerate(config.seed_prompts)
+    ]
     return population[: config.population_size]
 
 
@@ -349,7 +365,19 @@ def create_offspring(
                 source_candidate_ids=(parent_a.id,),
             )
         if rng.random() < config.mutation_rate:
-            operator_used = operator_controller.select_operator(rng)
+            code_feedback_parent = parent_for_component(
+                child.generation_prompt_parent_id,
+                (parent_a, parent_b),
+            )
+            eligible_operators = (
+                (STRATEGY_REFLECTION,)
+                if not code_feedback_parent.strategy_prompt.strip()
+                else tuple(OPERATOR_TO_MUTATION)
+            )
+            operator_used = operator_controller.select_operator(
+                rng,
+                eligible=eligible_operators,
+            )
             mutation_name = OPERATOR_TO_MUTATION[operator_used]
             mutation = mutations[mutation_name]
             evidence_parent_id = (
@@ -427,6 +455,7 @@ def create_offspring(
                     "operator_id": operator_used,
                     "mode": operator_controller.mode.value,
                     "probability_before": operator_controller.probability(operator_used),
+                    "eligible_operator_ids": list(eligible_operators),
                 },
             })
         offspring.append(child)

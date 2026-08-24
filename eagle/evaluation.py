@@ -180,28 +180,45 @@ def evaluate_candidate(
     # preserve its raw response and validation evidence.
     generation_started_at = _utc_now()
     generation_monotonic_started = time.monotonic()
+    initial_seed_source = getattr(backend, "operation", None) == "initial_java_seed"
     generation = generate_java_agent_result(
         candidate,
         backend,
         generated_agents_dir,
-        template_paths=JavaTemplatePaths(config.agent_template_path),
+        template_paths=JavaTemplatePaths(
+            config.initial_java_seed_path if initial_seed_source else config.agent_template_path
+        ),
     )
     generation_finished_at = _utc_now()
+    generation_duration = max(0.0, time.monotonic() - generation_monotonic_started)
+    source_provenance = None
+    if initial_seed_source:
+        source_path = getattr(backend, "source_path", None)
+        source_provenance = {
+            "kind": "checked_in_java_seed",
+            "path": None if source_path is None else str(Path(source_path).resolve()),
+            "sha256": (
+                hashlib.sha256(generation.assembled_java.encode("utf-8")).hexdigest()
+                if generation.assembled_java
+                else None
+            ),
+        }
     generation_timing = {
         "stage": "generation",
         "operation": getattr(backend, "operation", None),
         "model": getattr(backend, "model", None),
-        "started_at": generation_started_at,
-        "finished_at": generation_finished_at,
-        "duration_seconds": max(0.0, time.monotonic() - generation_monotonic_started),
-        "attempts": [{
+        "started_at": None if initial_seed_source else generation_started_at,
+        "finished_at": None if initial_seed_source else generation_finished_at,
+        "duration_seconds": None if initial_seed_source else generation_duration,
+        "attempts": [] if initial_seed_source else [{
             "attempt": 1,
             "started_at": generation_started_at,
             "finished_at": generation_finished_at,
-            "duration_seconds": max(0.0, time.monotonic() - generation_monotonic_started),
+            "duration_seconds": generation_duration,
             "status": "success" if generation.raw_llm_output else "error",
             "error": generation.failure_reason,
         }],
+        "source": source_provenance,
     }
 
     agent = generation.agent
@@ -320,22 +337,23 @@ def evaluate_candidate(
     alignment_result: StrategyAlignmentResult | None = None
     if failure_stage is None:
         capability_result = evaluate_function_capability(generation.assembled_java, matches)
-        alignment_backend = build_strategy_alignment_backend(
-            "mock" if mock else config.execution_mode,
-            base_url=getattr(llm_client, "base_url", config.llm_base_url),
-            model=getattr(llm_client, "model", config.llm_model),
-            timeout_seconds=getattr(llm_client, "timeout_seconds", 120.0),
-            temperature=getattr(llm_client, "temperature", 0.0),
-            max_output_tokens=getattr(llm_client, "max_output_tokens", None),
-        )
-        alignment_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent / "strategy_alignment"
-        alignment_result = evaluate_strategy_alignment(
-            strategy_prompt=candidate.strategy_prompt,
-            generated_java=generation.assembled_java,
-            behavior_summary=game_metrics.behavior_summary,
-            backend=alignment_backend,
-            artifact_dir=alignment_dir,
-        )
+        if candidate.strategy_prompt.strip():
+            alignment_backend = build_strategy_alignment_backend(
+                "mock" if mock else config.execution_mode,
+                base_url=getattr(llm_client, "base_url", config.llm_base_url),
+                model=getattr(llm_client, "model", config.llm_model),
+                timeout_seconds=getattr(llm_client, "timeout_seconds", 120.0),
+                temperature=getattr(llm_client, "temperature", 0.0),
+                max_output_tokens=getattr(llm_client, "max_output_tokens", None),
+            )
+            alignment_dir = None if match_artifacts_dir is None else match_artifacts_dir.parent / "strategy_alignment"
+            alignment_result = evaluate_strategy_alignment(
+                strategy_prompt=candidate.strategy_prompt,
+                generated_java=generation.assembled_java,
+                behavior_summary=game_metrics.behavior_summary,
+                backend=alignment_backend,
+                artifact_dir=alignment_dir,
+            )
         quality = build_successful_code_quality(
             compiler,
             capability_result,

@@ -5,8 +5,9 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 
 ## Population lifecycle
 
-1. Create seed candidates with a blank policy gene and the configured initial
-   Java seed as their generation-zero phenotype.
+1. Create one candidate per configured seed policy file, with a blank policy
+   gene and the configured initial Java seed as its generation-zero phenotype.
+   Do not replicate one seed to fill `population_size`.
 2. Validate, compile, integrate, and evaluate every seed candidate without an
    LLM call. Later offspring use the normal two-gene Generator boundary.
 3. Store one score for each fixed opponent case:
@@ -20,7 +21,7 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    no credit update; `aos_opponent` reuses the seven normal opponent summaries;
    `aos_head2head` runs the configured direct parent-A matrix. Both adaptive
    modes feed one shared generation-level EMA updater.
-7. Fill the fixed population from offspring with seeded lexicase selection,
+7. From generation 1 onward, fill the fixed population from offspring with seeded lexicase selection,
    using parent fallback only when offspring are insufficient.
 8. Persist the surviving population and generation metrics.
 

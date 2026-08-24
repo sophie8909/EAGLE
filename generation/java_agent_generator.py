@@ -11,7 +11,12 @@ from pathlib import Path
 from eagle.candidate import Candidate
 from eagle.llm import LLMServerError
 from evaluation.code_quality import StrategyRegionScoreResult, evaluate_agent_strategy_region
-from .agent_template import JavaTemplatePaths, extract_strategy_region
+from .agent_template import (
+    JavaTemplatePaths,
+    extract_strategy_region,
+    fixed_scaffold_equivalent,
+    load_java_template,
+)
 from .backend import GenerationBackend
 
 
@@ -85,7 +90,16 @@ class JavaAgentGenerationResult:
     validation_timing: dict[str, object] = field(default_factory=dict)
 
 
-VALIDATION_CHECK_NAMES = ("package", "public_class", "superclass", "constructors", "callable_methods", "forbidden_behaviors", "runtime_contract")
+VALIDATION_CHECK_NAMES = (
+    "package",
+    "public_class",
+    "superclass",
+    "constructors",
+    "callable_methods",
+    "forbidden_behaviors",
+    "fixed_scaffold",
+    "runtime_contract",
+)
 
 FORBIDDEN_BEHAVIOR_PATTERNS = (
     ("network_import", r"\bimport\s+java\.(?:net|nio\.channels)\b"),
@@ -128,7 +142,11 @@ def generate_java_agent_result(candidate: Candidate, backend: GenerationBackend,
 
     started_at = _utc_now()
     started = time.monotonic()
-    validation = validate_generated_java_source(source, "CandidateAgent")
+    validation = validate_generated_java_source(
+        source,
+        "CandidateAgent",
+        template_paths=template_paths,
+    )
     finished_at = _utc_now()
     validation_record = validation_timing("success" if validation.ok else "failed", validation.failure_reason or validation.error, started_at=started_at, finished_at=finished_at, duration_seconds=max(0.0, time.monotonic() - started))
     try:
@@ -169,7 +187,12 @@ def normalize_java_agent_source(source: str) -> str:
     return source.lstrip("\ufeff").strip()
 
 
-def validate_generated_java_source(source: str, class_name: str) -> ValidationResult:
+def validate_generated_java_source(
+    source: str,
+    class_name: str,
+    *,
+    template_paths: JavaTemplatePaths | None = None,
+) -> ValidationResult:
     if not source.strip():
         return blocked_validation_result("Generated Java source is empty.")
     passed: list[str] = []
@@ -197,6 +220,16 @@ def validate_generated_java_source(source: str, class_name: str) -> ValidationRe
     if unavailable_imports:
         forbidden.append(f"unavailable_dependencies:{','.join(unavailable_imports)}")
     check("forbidden_behaviors", not forbidden, f"forbidden runtime behavior: {', '.join(forbidden)}")
+    try:
+        scaffold = load_java_template(template_paths or JavaTemplatePaths())
+        fixed_scaffold_ok = fixed_scaffold_equivalent(source, scaffold)
+    except ValueError:
+        fixed_scaffold_ok = False
+    check(
+        "fixed_scaffold",
+        fixed_scaffold_ok,
+        "source outside the EAGLE strategy region must preserve the checked-in scaffold",
+    )
     runtime_contract_ok = bool(package_match and public_class and superclass and constructor_one and constructor_two and methods_ok)
     check("runtime_contract", runtime_contract_ok, "the complete external MicroRTS runtime contract is not satisfied")
     failure_reason = failed[0]["reason"] if failed else None

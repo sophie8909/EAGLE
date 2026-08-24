@@ -96,9 +96,16 @@ candidates/<candidate_id>/
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, fitness vector, aggregate Game Performance, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
 
 For generation-zero candidates, `genotype/policy_prompt.txt` is empty and
-`generation/result.json` records operation `initial_java_seed`; the generation
-response/source artifacts contain the checked-in seed phenotype rather than an
-LLM response.
+`generation/result.json` records operation `initial_java_seed`, no attempts,
+and checked-in source kind, resolved path, and normalized-source SHA-256.
+`generation/request.txt` and `generation/response_raw.txt` are empty because no
+request was sent. The extracted, normalized, and canonical phenotype files
+retain the checked-in seed Java as source evidence.
+
+When the policy prompt is empty, `strategy_alignment/result.json` records
+`status: not_applicable`, a null score, and no attempts; its request/raw files
+are empty. This is distinct from an Alignment blocked by an earlier evaluation
+failure.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 phenotype, evaluation, code-quality, and timing files. The loader has isolated
