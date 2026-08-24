@@ -14,6 +14,11 @@ The Generator receives no parent Java and no game logs. It must not independentl
 improve the policy. Output is one complete `ai.generated.CandidateAgent` Java
 source file; patches, methods, JSON, prose, and partial source are rejected.
 
+Generation zero does not call the Generator LLM. It loads the complete source
+from `initial_java_seed_path`, paired with a blank policy gene, and enters the
+same validation/compilation/integration/evaluation stages. Offspring generation
+continues to use the normal two-gene decoder described above.
+
 The raw response is persisted before extraction. Extracted/normalized generation
 evidence remains under `generation/`; the canonical phenotype is
 `phenotype/CandidateAgent.java`.

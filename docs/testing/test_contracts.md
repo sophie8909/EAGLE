@@ -22,12 +22,12 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Lineage | seed/copy/crossover/mutation schemas; IDs resolve; graph acyclic |
 | Crossover | two independent whole-component choices; exact provenance; equal-text case; no Java inheritance |
 | Strategy Mutation | Commentator per selected match → Coach → final Java generation; only policy changes; no Java/code-prompt evidence |
-| Code Mutation | Policy-Code Reviewer → Code Prompt Rewriter → final Java generation; only code-generation prompt changes; no raw game logs |
-| Generation | two genes + fixed scaffold/API constraints; complete-file only; raw response durability; no parent Java or game logs |
+| Code Mutation | Policy-Code Reviewer → exact `rewritten_prompt` JSON object → final Java generation; only code-generation prompt changes; no raw game logs |
+| Generation | blank-policy checked-in Java seed at generation zero; later two genes + fixed scaffold/API constraints; complete-file only; raw response durability; no parent Java or game logs |
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, and no fixed internal layout |
 | Compilation | isolated output; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; `passed`/`failed`/`blocked`; no match execution |
-| Matches | compile once; same source/class hash; complete configured matrix; distinct directories and round indices; both sides; no fake match-seed property; no regeneration |
+| Matches | compile once; same source/class hash; complete configured matrix with a real distinct WorkerRush; population-summed generation counts; distinct directories and round indices; both sides; no fake match-seed property; no regeneration |
 | Game Performance | exact canonical component math, clamps, bands, aggregation, partial-batch failure |
 | Code Quality | `[0,100]` simplicity score from four weighted complexity penalties, persisted details, diagnostic separation, and `-1000` failure sentinel for both objectives |
 | Artifacts | v2 root allowlist; one resolved `config.yaml`; referenced generation/candidate reconstruction; interruption safety; absence of obsolete config, population, candidate-summary, and match-result duplicates |

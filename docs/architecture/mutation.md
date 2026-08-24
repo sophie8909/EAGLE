@@ -67,8 +67,9 @@ single string; it does not accept missing alignment fields, prose outside the
 JSON object, Java output, or an unknown alignment classification.
 
 The Code Prompt Rewriter receives only the current code-generation prompt and
-Reviewer output. It returns one replacement code-generation prompt and cannot
-modify policy.
+Reviewer output. It returns exactly one JSON object containing only the
+non-empty string field `rewritten_prompt`; the parsed value replaces the
+code-generation prompt and cannot modify policy.
 
 Canonical state transition:
 

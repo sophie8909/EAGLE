@@ -5,8 +5,10 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 
 ## Population lifecycle
 
-1. Create seed candidates.
-2. Generate, validate, compile, integrate, and evaluate every candidate.
+1. Create seed candidates with a blank policy gene and the configured initial
+   Java seed as their generation-zero phenotype.
+2. Validate, compile, integrate, and evaluate every seed candidate without an
+   LLM call. Later offspring use the normal two-gene Generator boundary.
 3. Store one score for each fixed opponent case:
    `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`, `coac`, and `tma`.
 4. Select parents with seeded lexicase selection. A random case order is drawn
@@ -44,6 +46,10 @@ the convenient final representative only; it does not replace the seven cases.
 Each candidate runs all seven opponents over three maps, three rounds, and both
 player positions: `7 × 3 × 3 × 2 = 126` matches. There is no previous-generation
 EAGLE opponent or dynamic opponent weight.
+
+The generation-level `expected_match_count` and `completed_match_count` are sums
+over every candidate in that generation, including zero completed matches for a
+candidate blocked before runtime.
 
 Only `aos_head2head` runs the separate `3 × 3 × 2 = 18` parent-vs-offspring
 matrix for each runnable mutated child. It reuses the configured maps, round

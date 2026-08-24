@@ -51,6 +51,12 @@ Reflection 則比較 policy 與當前 Java phenotype，可選用 static/compiler
 alignment review。Generator 使用兩個 gene 加上固定 checked-in Java scaffold，
 不使用 parent Java。
 
+Code Prompt Rewriter 固定回傳且只回傳
+`{"rewritten_prompt":"..."}`。Generation 0 是唯一 decoder 例外：所有 seed
+candidate 使用空白 `strategy_prompt`，直接載入 `initial_java_seed_path` 的舊版
+初始 Java，不呼叫 LLM；之後仍經相同 validation、compilation、integration 與
+evaluation。這份 Java 只是 gen0 phenotype，不是第三個 gene，也不會遺傳。
+
 結構化輸出會保留原始 response，並只在 parser 邊界正規化已知的模型格式差異：
 賽評的 `match_analysis/key_observations.time` 與 Reviewer 將文字修正拆成陣列的
 情形。缺少數字 tick、必要欄位、alignment classification 或跨越 role 責任邊界
@@ -85,6 +91,9 @@ class directory，進行：
 
 Fitness 是七個 maximized opponent case。失敗或 incomplete candidate 的每個
 case 都是 `-1000.0`。加權 aggregate Game Performance 只用於報表。
+WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的重複行為
+充當 identity adapter。每代的 expected/completed match count 是所有 candidate
+的加總，而不是第一個 candidate 的值。
 
 Code Quality 也是 diagnostic，不是 lexicase objective。成功分數為：
 

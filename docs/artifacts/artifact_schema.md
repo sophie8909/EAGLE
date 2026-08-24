@@ -40,6 +40,10 @@ runs/<run_id>/
 - aggregate objective, opponent, diversity, and timing-derived metrics;
 - one canonical reflection-operator/AOS generation record.
 
+Generation metric match counts are population totals: `expected_match_count`
+and `completed_match_count` sum the corresponding values from every candidate,
+including candidates blocked before matches.
+
 Each generation also has a lightweight flat sidecar at
 `generations/generation_<nnnn>_policies.jsonl`. It contains one
 `eagle-generation-policy-v2` record, in population order, for every population
@@ -90,6 +94,11 @@ candidates/<candidate_id>/
 ```
 
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, fitness vector, aggregate Game Performance, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
+
+For generation-zero candidates, `genotype/policy_prompt.txt` is empty and
+`generation/result.json` records operation `initial_java_seed`; the generation
+response/source artifacts contain the checked-in seed phenotype rather than an
+LLM response.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 phenotype, evaluation, code-quality, and timing files. The loader has isolated

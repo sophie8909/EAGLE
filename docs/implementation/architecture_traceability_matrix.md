@@ -12,9 +12,9 @@ NSGA-II and `eagle-run-v1` rows were removed on 2026-08-19.
 | EVO-02 | Static/opponent/head-to-head reflection operator modes | mutation | `eagle/aos.py`, `evaluation/parent_offspring.py` | AOS tests | Implemented |
 | MUT-01 | Strategy and Code Reflection/Rewrite boundaries | mutation | `eagle/mutation.py`, `eagle/rewrite.py`, `eagle/strategy_reflection.py` | mutation/reflection tests | Implemented |
 | PROMPT-01 | One executable prompt per file under `prompts/` | prompt manifest | `eagle/prompts.py`, `prompts/manifest.toml` | prompt-resource tests | Implemented |
-| GEN-01 | Complete-file generation with raw/extracted/normalized evidence | Java generation | `generation/backend.py`, `generation/java_agent_generator.py` | generation tests | Implemented |
+| GEN-01 | Checked-in generation-zero seed plus complete-file offspring generation with raw/extracted/normalized evidence | Java generation | `generation/backend.py`, `generation/java_agent_generator.py` | generation tests | Implemented |
 | VAL-01 | External Java/security contract without fixed internals | Java generation | `generation/java_agent_generator.py` | validation tests | Implemented |
-| EVAL-01 | Compile once and run seven × three × three × two matches | evaluation | `eagle/evaluation.py`, `evaluation/match_matrix.py` | evaluation matrix tests | Implemented |
+| EVAL-01 | Compile once and run seven distinct opponents × three maps × three rounds × two sides | evaluation | `eagle/evaluation.py`, `evaluation/match_matrix.py`, `third_party/microrts/src/ai/abstraction/WorkerRush.java` | evaluation matrix/opponent compile tests | Implemented |
 | EVAL-02 | Integration probe and match execution have separate single owners | evaluation | `evaluation/microrts_runner.py`, `evaluation/runtime_evaluation.py` | integration/runtime tests | Implemented |
 | EVAL-03 | One canonical match trace consumed by reflection | match evidence | `evaluation/match_trace.py`, `eagle/strategy_reflection.py` | trace/reflection tests | Implemented |
 | SCORE-01 | Seven opponent fitness cases; aggregate and quality are diagnostics | objectives | `evaluation/objectives.py`, `evaluation/code_quality.py` | objective/quality tests | Implemented |

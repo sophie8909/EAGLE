@@ -107,13 +107,15 @@ experiment definition.
 
 All executable prompt bodies live under `prompts/`, with exactly one UTF-8
 `.txt` file per prompt. `prompts/manifest.toml` stores only prompt metadata and
-placeholder contracts. This includes the initial EA individual's strategy and
-generation prompts, Code Reflection, the library Strategy Reflection/Rewrite
+placeholder contracts. This includes the reusable generation prompt, Code
+Reflection, the library Strategy Reflection/Rewrite
 path, Match Commentator, all four Coach intents, generation, Strategy Alignment,
 the action-API guide, and endpoint preflight. Experiment YAML files reference
-`prompts/initial_strategy.txt` and `prompts/initial_generation.txt`; inline
-prompt/template fields are rejected. Python modules only load, render, bound,
-transport, and validate these resources.
+`prompts/initial_generation.txt`; inline prompt/template fields are rejected.
+New experiment configs reference the intentionally empty
+`seeds/blank_policy.txt`, and generation zero loads the validated checked-in
+`initial_java_seed_path` without an LLM call. Python modules only load, render,
+bound, transport, and validate executable prompt resources.
 
 ## Reflection boundary
 
@@ -134,11 +136,17 @@ canonical `genotype/policy_prompt.txt`, including candidates produced by other
 operators; no policy text is duplicated in the sidecar.
 
 Code Reviewer/Rewriter evidence is stored under `mutation/code_reflection/`.
+The Rewriter uses the exact JSON object contract with the sole field
+`rewritten_prompt`.
 The canonical Java phenotype is `phenotype/CandidateAgent.java`; Generator uses
 the checked-in scaffold and never a parent phenotype. Code Reflection metadata
 records which evaluated source phenotype the Reviewer consumed through the
 run-relative `reviewed_phenotype_artifact` reference; this evidence reference
 does not restore the removed `previous_code` genotype gene.
+
+The `workerrush` case compiles the vendored upstream
+`third_party/microrts/src/ai/abstraction/WorkerRush.java`; it is a distinct
+worker-rush implementation, not a LightRush subclass identity adapter.
 
 Structured-output parsing keeps raw responses losslessly while normalizing only
 known local-model shape variants into canonical artifacts: Commentator

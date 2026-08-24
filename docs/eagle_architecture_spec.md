@@ -86,13 +86,21 @@ Strategy Prompt rewrite before final Java generation. It changes only
 
 Code mutation compares the current policy with the current Java phenotype, then
 performs Code Generation Prompt Rewrite before final Java generation. It changes
-only `generation_prompt`; game logs are not Code Reflection evidence.
+only `generation_prompt`; game logs are not Code Reflection evidence. The Code
+Prompt Rewriter returns exactly `{"rewritten_prompt":"..."}` so the transport's
+JSON-object mode and the parser enforce the same contract.
 
 All executable prompt bodies live as individual UTF-8 text files under
 `prompts/`. Python and YAML may reference, render, bound, transport, and validate
 prompt resources but may not contain alternate executable prompt bodies.
 
 ## 7. Java generation and validation
+
+Generation 0 is the one explicit decoder exception: every seed candidate has a
+blank `strategy_prompt` and uses `initial_java_seed_path` as its fixed phenotype,
+without an LLM call. The checked-in seed is validated, compiled, integrated, and
+evaluated through the same downstream boundary as every generated phenotype. It
+is generation-zero evidence only and is never inherited as a third gene.
 
 Final generation consumes the two prompt genes plus the fixed checked-in Java
 scaffold/API constraints and returns exactly one complete Java source file. It
