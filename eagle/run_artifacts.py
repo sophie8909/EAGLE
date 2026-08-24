@@ -353,6 +353,14 @@ def generation_metrics(
         (candidate.game_eval_result or {} for candidate in population if candidate.game_eval_result),
         {},
     )
+    expected_match_count = sum(
+        int((candidate.game_eval_result or {}).get("expected_match_count") or 0)
+        for candidate in population
+    )
+    completed_match_count = sum(
+        int((candidate.game_eval_result or {}).get("completed_match_count") or 0)
+        for candidate in population
+    )
     aggregate_values = [
         float((candidate.game_eval_result or {}).get("game_performance"))
         for candidate in population
@@ -386,8 +394,8 @@ def generation_metrics(
         "fixed_weight_sum": first_game.get("fixed_weight_sum"),
         "total_weight": first_game.get("total_weight"),
         "weighted_numerator": first_game.get("weighted_numerator"),
-        "expected_match_count": first_game.get("expected_match_count"),
-        "completed_match_count": first_game.get("completed_match_count"),
+        "expected_match_count": expected_match_count,
+        "completed_match_count": completed_match_count,
         "evaluation_maps": first_game.get("evaluation_maps"),
         "rounds_per_map": first_game.get("rounds_per_map"),
         "swap_player_sides": first_game.get("swap_player_sides"),

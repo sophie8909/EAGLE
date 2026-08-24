@@ -278,6 +278,41 @@ class CanonicalRunArtifactTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["light_rush_win_rate"], 1 / 3)
         self.assertAlmostEqual(metrics["heavy_rush_win_rate"], 1 / 3)
 
+    def test_generation_match_counts_sum_every_candidate(self):
+        candidates = [
+            Candidate(
+                id="failed-before-matches",
+                status="failed",
+                failure_reason="compilation",
+                game_eval_result={
+                    "expected_match_count": 126,
+                    "completed_match_count": 0,
+                },
+            ),
+            Candidate(
+                id="complete",
+                status="evaluated",
+                game_eval_result={
+                    "expected_match_count": 126,
+                    "completed_match_count": 126,
+                },
+            ),
+            Candidate(
+                id="partial",
+                status="failed",
+                failure_reason="runtime",
+                game_eval_result={
+                    "expected_match_count": 126,
+                    "completed_match_count": 63,
+                },
+            ),
+        ]
+
+        metrics = generation_metrics(4, candidates)
+
+        self.assertEqual(metrics["expected_match_count"], 378)
+        self.assertEqual(metrics["completed_match_count"], 189)
+
     def test_population_snapshot_is_compact_but_keeps_fitness_and_timing(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory) / "run"
