@@ -99,6 +99,25 @@ class Phase3ValidationTests(unittest.TestCase):
         self.assertIn("does not declare AgentContext context", reason)
         self.assertIn("getUnitAt is not an available", reason)
 
+    def test_strategy_contract_rejects_direct_unbounded_map_reads(self):
+        source = with_strategy(
+            VALID_SOURCE,
+            """    private void decide(AgentContext context) {
+        if (context.gs.free(-1, 0)) { commandIdle(null); }
+        PhysicalGameState physical = context.gs.getPhysicalGameState();
+        if (physical.getTerrain(99, 99) == PhysicalGameState.TERRAIN_NONE) { commandIdle(null); }
+    }""",
+        )
+        result = validate_generated_java_source(source, "CandidateAgent")
+        self.assertFalse(result.ok)
+        reason = next(
+            item["reason"] for item in result.failed_checks
+            if item["check"] == "strategy_contract"
+        )
+        self.assertIn("isFreeCell(context, x, y)", reason)
+        self.assertIn("GameState.free directly", reason)
+        self.assertIn("PhysicalGameState.getTerrain directly", reason)
+
     def test_strategy_contract_rejects_nested_pairs_declared_as_one_dimensional(self):
         source = with_strategy(
             VALID_SOURCE,
@@ -126,7 +145,7 @@ class Phase3ValidationTests(unittest.TestCase):
     private void manageWorkers(AgentContext context, int gameTime) {
         int[][] directions = new int[][]{{-1, 0}, {1, 0}};
         for (int[] direction : directions) {
-            if (gameTime >= 250 && context.gs.free(direction[0], direction[1])) {
+            if (gameTime >= 250 && isFreeCell(context, direction[0], direction[1])) {
                 return;
             }
         }

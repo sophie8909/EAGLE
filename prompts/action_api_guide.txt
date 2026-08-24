@@ -17,14 +17,14 @@ Use these fixed lookup helpers instead of inventing engine queries:
 - nearestEnemy(Unit source, AgentContext context)
 - nearestResource(Unit source, AgentContext context)
 - ownBase(AgentContext context)
+- isFreeCell(AgentContext context, int x, int y)
 
 AgentContext exposes only context.player, context.gs, and context.units. The
 following MicroRTS reads are allowlisted; do not call any unlisted method or
 field on GameState, PhysicalGameState, Player, Unit, UnitType, or PathFinding:
-- GameState: getTime(), getPlayer(int), getUnits(), getUnitAction(Unit),
-  getPhysicalGameState(), and free(int, int).
-- PhysicalGameState: getWidth(), getHeight(), getTerrain(int, int), and
-  getUnit(long).
+- GameState: getTime(), getPlayer(int), getUnits(), getUnitAction(Unit), and
+  getPhysicalGameState().
+- PhysicalGameState: getWidth(), getHeight(), and getUnit(long).
 - Player: getResources().
 - Unit: getPlayer(), getType(), getX(), getY(), getID(), getResources(),
   getHitPoints(), and getMaxHitPoints().
@@ -41,7 +41,11 @@ Exact corrections for common invalid APIs:
 - Use context.gs.getPhysicalGameState().getWidth()/getHeight(), never map,
   map-width, map-height, spawn-location, tile, or base methods on GameState or Player.
 - Use context.gs.getUnitAction(unit), never unit.getAction() or unit.getTask().
-- Use context.gs.free(x, y) to test occupancy, never getUnitAt(...).
+- Use isFreeCell(context, x, y) to test a strategy candidate coordinate. It
+  returns false before accessing a coordinate outside the active map.
+- Never call GameState.free(...) or PhysicalGameState.getTerrain(...) in the
+  strategy region, and never use getUnitAt(...). These direct map reads are
+  rejected by deterministic validation.
 - context.units is a List<Unit>, never a map; count/filter it with loops.
 - Every added helper that reads player, state, or units must accept AgentContext;
   never reference a context variable that is not a parameter or local variable.

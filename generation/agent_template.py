@@ -137,7 +137,15 @@ def strategy_contract_errors(source: str) -> tuple[str, ...]:
     ):
         errors.append("nested coordinate pairs must be declared as int[][], not int[]")
     if re.search(r"\.getUnitAt\s*\(", code):
-        errors.append("getUnitAt is not an available MicroRTS API; use GameState.free(x, y)")
+        errors.append("getUnitAt is not an available MicroRTS API; use isFreeCell(context, x, y)")
+    if re.search(r"\.free\s*\(", code):
+        errors.append(
+            "strategy code must not call GameState.free directly; use isFreeCell(context, x, y)"
+        )
+    if re.search(r"\.getTerrain\s*\(", code):
+        errors.append(
+            "strategy code must not call PhysicalGameState.getTerrain directly; use isFreeCell(context, x, y)"
+        )
 
     for match in _PRIVATE_METHOD_PATTERN.finditer(code):
         method_name = match.group("name")

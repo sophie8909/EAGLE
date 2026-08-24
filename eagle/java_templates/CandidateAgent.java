@@ -24,6 +24,7 @@ public final class CandidateAgent extends AbstractionLayerAI {
     private UnitType baseType;
     private UnitType barracksType;
     private int activePlayer = -1;
+    private GameState activeGameState;
 
     public CandidateAgent(UnitTypeTable utt) {
         this(utt, new AStarPathFinding());
@@ -36,6 +37,8 @@ public final class CandidateAgent extends AbstractionLayerAI {
 
     public void reset(UnitTypeTable utt) {
         this.utt = utt;
+        activePlayer = -1;
+        activeGameState = null;
         resourceType = utt.getUnitType("Resource");
         workerType = utt.getUnitType("Worker");
         lightType = utt.getUnitType("Light");
@@ -61,13 +64,19 @@ public final class CandidateAgent extends AbstractionLayerAI {
     @Override
     public PlayerAction getAction(int player, GameState gs) throws Exception {
         activePlayer = player;
-        if (gs.gameover()) {
+        activeGameState = gs;
+        try {
+            if (gs.gameover()) {
+                return translateActions(player, gs);
+            }
+            AgentContext context = new AgentContext(player, gs, new ArrayList<>(gs.getUnits()));
+            decide(context);
+            applyAutoDefense(player, gs);
             return translateActions(player, gs);
+        } finally {
+            activePlayer = -1;
+            activeGameState = null;
         }
-        AgentContext context = new AgentContext(player, gs, new ArrayList<>(gs.getUnits()));
-        decide(context);
-        applyAutoDefense(player, gs);
-        return translateActions(player, gs);
     }
 
     // EAGLE_AGENT_STRATEGY_START
@@ -151,7 +160,8 @@ public final class CandidateAgent extends AbstractionLayerAI {
     // Stable Agent operation API: strategy code should issue actions through these helpers.
     private boolean commandMove(Unit unit, int x, int y) {
         if (unit == null || unit.getPlayer() != activePlayer
-                || unit.getType() == baseType || unit.getType() == barracksType) {
+                || unit.getType() == baseType || unit.getType() == barracksType
+                || !isInsideActiveMap(x, y)) {
             return false;
         }
         move(unit, x, y);
@@ -188,7 +198,8 @@ public final class CandidateAgent extends AbstractionLayerAI {
     private boolean commandBuild(Unit worker, UnitType buildingType, int x, int y) {
         if (worker == null || worker.getPlayer() != activePlayer || buildingType == null
                 || worker.getType() != workerType
-                || (buildingType != baseType && buildingType != barracksType)) {
+                || (buildingType != baseType && buildingType != barracksType)
+                || !isInsideActiveMap(x, y)) {
             return false;
         }
         build(worker, buildingType, x, y);
@@ -213,6 +224,14 @@ public final class CandidateAgent extends AbstractionLayerAI {
         }
         idle(unit);
         return true;
+    }
+
+    private boolean isInsideActiveMap(int x, int y) {
+        if (activeGameState == null) {
+            return false;
+        }
+        PhysicalGameState physical = activeGameState.getPhysicalGameState();
+        return x >= 0 && y >= 0 && x < physical.getWidth() && y < physical.getHeight();
     }
 
     // EAGLE_ACTION_HELPERS_END
@@ -270,6 +289,15 @@ public final class CandidateAgent extends AbstractionLayerAI {
             }
         }
         return null;
+    }
+
+    private boolean isFreeCell(AgentContext context, int x, int y) {
+        if (context == null || context.gs == null) {
+            return false;
+        }
+        PhysicalGameState physical = context.gs.getPhysicalGameState();
+        return x >= 0 && y >= 0 && x < physical.getWidth() && y < physical.getHeight()
+                && context.gs.free(x, y);
     }
 
     private void applyAutoDefense(int player, GameState gs) {

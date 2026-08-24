@@ -44,13 +44,19 @@ class CompleteJavaGenerationTests(unittest.TestCase):
     def test_template_action_helpers_enforce_active_player_and_legal_types(self):
         template = load_java_template(JavaTemplatePaths())
         self.assertIn("private int activePlayer = -1;", template)
+        self.assertIn("private GameState activeGameState;", template)
         self.assertIn("activePlayer = player;", template)
+        self.assertIn("activeGameState = gs;", template)
+        self.assertIn("activeGameState = null;", template)
         self.assertGreaterEqual(template.count("getPlayer() != activePlayer"), 6)
         self.assertIn("resource.getPlayer() >= 0", template)
         self.assertIn("unitType == workerType", template)
         self.assertIn("unitType == lightType || unitType == heavyType || unitType == rangedType", template)
         self.assertIn("buildingType != baseType && buildingType != barracksType", template)
         self.assertIn("target.getPlayer() < 0", template)
+        self.assertGreaterEqual(template.count("!isInsideActiveMap(x, y)"), 2)
+        self.assertIn("private boolean isFreeCell(AgentContext context, int x, int y)", template)
+        self.assertIn("&& context.gs.free(x, y);", template)
 
     def test_extracts_one_strategy_region_without_fixed_method_contract(self):
         template = load_java_template(JavaTemplatePaths())

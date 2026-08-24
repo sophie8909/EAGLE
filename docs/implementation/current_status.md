@@ -248,3 +248,26 @@ received the prior `PhysicalGameState.free` diagnostics. The bounded chain
 stopped at each first success, retained per-attempt evidence, and the owned
 model server stopped cleanly after the smoke. This clears the documented 3/4
 gate for restarting the production batch.
+
+Cycle 4 addresses the first restarted-batch runtime fault: candidate
+`gen_0001_95374445025a` compiled after decoder repair but its strategy called
+`GameState.free` with coordinates outside the real 8×8 map, producing
+`ArrayIndexOutOfBoundsException` from `PhysicalGameState.getTerrain`. The fixed
+offspring scaffold now exposes bounds-safe `isFreeCell(context, x, y)` and
+guards `commandMove`/`commandBuild` against coordinates outside the active
+`GameState`; reset and clone leave no active-state reference. The action guide
+and deterministic strategy validator prohibit direct strategy-region
+`GameState.free`/`PhysicalGameState.getTerrain` calls so their structured
+validation failure can guide the existing decoder repair loop. Integration now
+uses two populated 8×8 bases/workers maps plus independent one-argument agent
+instances/states for both sides, action integrity, safe issuance, and one cycle.
+It remains a terminal Integration boundary rather than a decoder retry path.
+
+The cycle 4 real smoke at
+`/tmp/eagle-static0824-runtime-smoke-round4-_3aftcth` replayed the production
+runtime-failing policy plus the four earlier decoder policies. All 5/5 reached
+validation+javac and the populated 8×8 two-instance/two-side Integration probe;
+their selected attempts were 2, 2, 2, 3, and 4. The production-failing policy
+was rejected at validation for unsafe direct map access, repaired on attempt 2,
+and passed Integration. The owned model server and ownership record were
+cleaned after the smoke, clearing the runtime restart gate.

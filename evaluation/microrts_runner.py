@@ -29,7 +29,6 @@ import ai.abstraction.pathfinding.AStarPathFinding;
 import ai.core.AI;
 import rts.GameState;
 import rts.PhysicalGameState;
-import rts.Player;
 import rts.PlayerAction;
 import rts.units.UnitTypeTable;
 import java.lang.reflect.Constructor;
@@ -88,12 +87,15 @@ public final class EAGLEIntegrationProbe {
         }
         check("ai_inheritance", "passed", "");
 
-        AI candidate;
+        AI candidatePlayerZero;
+        AI candidatePlayerOne;
+        UnitTypeTable utt;
         try {
             Constructor<?> one = candidateClass.getConstructor(UnitTypeTable.class);
             Constructor<?> two = candidateClass.getConstructor(UnitTypeTable.class, AStarPathFinding.class);
-            UnitTypeTable utt = new UnitTypeTable();
-            candidate = (AI) one.newInstance(utt);
+            utt = new UnitTypeTable();
+            candidatePlayerZero = (AI) one.newInstance(utt);
+            candidatePlayerOne = (AI) one.newInstance(utt);
             two.newInstance(utt, new AStarPathFinding());
             check("constructors", "passed", "");
         } catch (Throwable error) {
@@ -103,7 +105,8 @@ public final class EAGLEIntegrationProbe {
         }
 
         try {
-            candidate.reset();
+            candidatePlayerZero.reset();
+            candidatePlayerOne.reset();
             check("reset", "passed", "");
         } catch (Throwable error) {
             check("reset", "failed", describe(error));
@@ -112,7 +115,7 @@ public final class EAGLEIntegrationProbe {
         }
 
         try {
-            AI cloned = candidate.clone();
+            AI cloned = candidatePlayerZero.clone();
             if (cloned == null) {
                 check("clone", "failed", "clone returned null");
                 blockAfter("clone", "clone failed");
@@ -125,13 +128,23 @@ public final class EAGLEIntegrationProbe {
             return;
         }
 
-        PlayerAction action;
+        GameState playerZeroState;
+        GameState playerOneState;
+        PlayerAction playerZeroAction;
+        PlayerAction playerOneAction;
         try {
-            PhysicalGameState physical = new PhysicalGameState(8, 8);
-            physical.addPlayer(new Player(0, 10));
-            physical.addPlayer(new Player(1, 10));
-            GameState state = new GameState(physical, new UnitTypeTable());
-            action = candidate.getAction(0, state);
+            PhysicalGameState playerZeroMap = PhysicalGameState.load("maps/8x8/basesWorkers8x8.xml", utt);
+            PhysicalGameState playerOneMap = PhysicalGameState.load("maps/8x8/basesWorkers8x8.xml", utt);
+            if (playerZeroMap.getWidth() != 8 || playerZeroMap.getHeight() != 8
+                    || playerZeroMap.getUnits().isEmpty()
+                    || playerOneMap.getWidth() != 8 || playerOneMap.getHeight() != 8
+                    || playerOneMap.getUnits().isEmpty()) {
+                throw new IllegalStateException("expected populated 8x8 basesWorkers map");
+            }
+            playerZeroState = new GameState(playerZeroMap, utt);
+            playerOneState = new GameState(playerOneMap, utt);
+            playerZeroAction = candidatePlayerZero.getAction(0, playerZeroState);
+            playerOneAction = candidatePlayerOne.getAction(1, playerOneState);
             check("get_action", "passed", "");
         } catch (Throwable error) {
             check("get_action", "failed", describe(error));
@@ -139,8 +152,21 @@ public final class EAGLEIntegrationProbe {
             return;
         }
 
-        if (action == null || action.getResourceUsage() == null) {
-            check("player_action", "failed", "getAction returned an invalid PlayerAction");
+        if (playerZeroAction == null || playerOneAction == null
+                || playerZeroAction.getResourceUsage() == null
+                || playerOneAction.getResourceUsage() == null
+                || !playerZeroAction.integrityCheck()
+                || !playerOneAction.integrityCheck()) {
+            check("player_action", "failed", "getAction returned an invalid PlayerAction for an active side");
+            return;
+        }
+        try {
+            playerZeroState.issueSafe(playerZeroAction);
+            playerOneState.issueSafe(playerOneAction);
+            playerZeroState.cycle();
+            playerOneState.cycle();
+        } catch (Throwable error) {
+            check("player_action", "failed", describe(error));
             return;
         }
         check("player_action", "passed", "");

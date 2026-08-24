@@ -38,7 +38,9 @@ REPAIR RULES:
 - Do not rewrite either prompt gene. They are immutable inputs, not output.
 - Do not invent unavailable MicroRTS APIs or helpers. Every called strategy
   helper must be declared with a compatible signature and return type.
-- GameState.free(int, int) is valid; PhysicalGameState.free(int, int) is not.
+- Use isFreeCell(context, x, y) for strategy occupancy checks. Direct
+  GameState.free(...) and PhysicalGameState.getTerrain(...) calls in the
+  strategy region are rejected, even when they would compile.
 - Preserve the fixed scaffold exactly outside the editable strategy markers.
 - Use the previous source only as repair evidence; the canonical scaffold owns
   all fixed source.

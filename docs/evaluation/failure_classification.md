@@ -27,6 +27,12 @@ validation, or compilation failure. Earlier failures remain diagnostic and do
 not create extra fitness cases, and an exhausted source is not a canonical
 phenotype.
 
+The Integration boundary is not a decoder-repair input. It runs a real
+populated 8×8 two-side probe with independent agent instances/states and checks
+`PlayerAction` integrity, safe issuance, and one cycle; an exception or invalid
+action there is an Integration failure with retained probe evidence, not a
+validation/compilation retry.
+
 Valid losses and draws are not failures when the complete expected match batch
 is present. A partial, missing, invalid, unparseable, timed-out, or runtime-
 failed batch is incomplete and receives both sentinels.

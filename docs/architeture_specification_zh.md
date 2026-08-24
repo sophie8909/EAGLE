@@ -81,6 +81,13 @@ evaluation 只對選中的 attempt 執行一次，且 integration/runtime failur
 重新生成。舊設定預設仍為一次，`static_0824` 四個 production config 才明列上限
 五次。
 
+策略區的座標／佔用查詢只能呼叫固定的
+`isFreeCell(context, x, y)`；它會先檢查 active map bounds，再查詢佔用。
+直接呼叫 `GameState.free(...)`、`PhysicalGameState.getTerrain(...)` 或
+`getUnitAt(...)` 都會在 deterministic validation 被拒絕並成為 decoder repair
+evidence。固定的 `commandMove`、`commandBuild` 也會以目前 `GameState` 的
+bounds 擋下非法座標，避免抽象 action 帶著地圖外座標進入 MicroRTS。
+
 結構化輸出會保留原始 response，並只在 parser 邊界正規化已知的模型格式差異：
 賽評的 `match_analysis/key_observations.time` 與 Reviewer 將文字修正拆成陣列的
 情形。缺少數字 tick、必要欄位、alignment classification 或跨越 role 責任邊界
@@ -136,6 +143,13 @@ Alignment 記為不適用且不呼叫 LLM。
 
 `evaluation/microrts_runner.py` 只負責七項 integration probe；
 `evaluation/runtime_evaluation.py` 是唯一 match runner。
+
+Integration 不使用空白 state：probe 會載入真實、含雙方 base/worker 的
+`basesWorkers8x8.xml` 兩次，分別以獨立的 one-argument candidate instance 與
+獨立 GameState 呼叫 player 0／player 1，確認 `PlayerAction` 非空、integrity
+合法、可 `issueSafe` 並各 cycle 一次。這能在 126 場前攔截座標越界與跨 side
+state 殘留等 runtime 問題；integration failure 只記錄 evidence，不會回到 decoder
+retry。
 
 每場比賽只保存一份 canonical 壓縮 tick stream：`match_trace.jsonl.gz`。
 Strategy Reflection 直接讀取同一份 trace；同代 sibling 建立完成前保留 parent

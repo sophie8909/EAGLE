@@ -58,8 +58,11 @@ Generation zero always loads once and records no LLM attempts.
    project the final source only under `generation/` as failure evidence; do not
    create a canonical phenotype.
 6. Run Integration once for the canonical success, then reuse the identical
-   source/classes for every evaluation match. Integration/runtime failures do
-   not trigger decoder attempts.
+   source/classes for every evaluation match. Its bounded probe loads the real
+   populated `basesWorkers8x8.xml` map twice, exercises both player sides with
+   independent one-argument agent instances and independent states, then checks
+   `PlayerAction` integrity before `GameState.issueSafe` and one cycle.
+   Integration/runtime failures do not trigger decoder attempts.
 
 Validation enforces package `ai.generated`, public class `CandidateAgent`,
 `AbstractionLayerAI`, required constructors/lifecycle methods, available APIs,
@@ -69,8 +72,13 @@ editable region, deterministic strategy-contract checks reject Java shapes that
 the immutable prompt explicitly forbids: a helper using `context` without an
 `AgentContext context` parameter, a helper reading an undeclared `gameTime`,
 one-dimensional arrays initialized with nested coordinate pairs, and unavailable
-`getUnitAt` lookups. These checks classify invalid generation before `javac`
-and provide structured evidence to the next bounded decoder repair attempt.
+`getUnitAt` lookups. Strategy code must use the fixed bounds-safe
+`isFreeCell(context, x, y)` helper for occupancy checks; direct
+`GameState.free(...)` or `PhysicalGameState.getTerrain(...)` reads are rejected.
+The fixed `commandMove` and `commandBuild` helpers also reject coordinates
+outside the active `GameState` before issuing an abstraction action. These
+checks classify invalid generation before `javac` and provide structured
+evidence to the next bounded decoder repair attempt.
 
 Compile repair is not Code Reflection: it cannot rewrite a gene or improve the
 policy. A deterministic delta guard requires fixed-scaffold-only repairs to keep

@@ -27,6 +27,14 @@ Only the first compilation success is promoted. Exhaustion classifies the final
 attempt's generation, validation, or compilation failure; an Integration failure
 never re-enters the decoder.
 
+The seven-check Integration probe is deliberately smaller than a match but is
+not an empty-state smoke: it loads separate populated 8×8 bases/workers maps,
+invokes independent one-argument agent instances for the two player sides, and
+rejects null or integrity-invalid `PlayerAction` values before safe issuance and
+one cycle per state. This exposes map-coordinate and cross-side state faults
+before the 126-match matrix without treating an Integration failure as a decoder
+retry signal.
+
 ## Match protocol
 
 The fixed roster is defined by `eagle/opponent_cases.py` and resolved by

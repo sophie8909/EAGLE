@@ -144,7 +144,9 @@ Validation requires:
 - strategy-helper scope and array-shape constraints, including an explicit
   `AgentContext context` parameter for every helper that reads `context`, local
   or parameter ownership for `gameTime`, and `int[][]` for nested coordinate
-  pairs;
+  pairs; direct strategy-region `GameState.free(...)` and
+  `PhysicalGameState.getTerrain(...)` reads are rejected in favor of the fixed
+  bounds-safe `isFreeCell(context, x, y)` helper;
 - no network, process execution, unauthorized file I/O, runtime modification,
   or unavailable dependencies.
 
@@ -162,7 +164,11 @@ new decoder attempt.
 
 Before matches, the standalone integration probe performs seven ordered checks:
 class loading, AI inheritance, constructors, reset, clone, getAction, and valid
-PlayerAction. A failed prerequisite blocks later checks and prevents matches.
+PlayerAction. The `getAction`/`PlayerAction` checks load the populated real
+8×8 bases/workers map into independent states, exercise both candidate sides
+with independent one-argument instances, and verify action integrity, safe
+issuance, and one cycle. A failed prerequisite blocks later checks and prevents
+matches. Integration failure does not re-enter the decoder.
 
 `evaluation/microrts_runner.py` owns only this integration probe.
 `evaluation/runtime_evaluation.py` is the sole match-execution owner.
