@@ -62,6 +62,25 @@ Gen0 的 generation request／raw response 為空，LLM attempts 與 timing 也�
 artifact 另保存 normalized seed 的來源路徑與 SHA-256。空白 policy 的 Strategy
 Alignment 記為 `not_applicable`、`score: null`，且不建立 LLM attempt。
 
+非 seed candidate 可用 `generation_max_attempts` 做有界 compile-guided decoder。
+Attempt 1 使用權威的兩份 gene 生成請求；若 extraction 沒有得到完整 source，下一
+次仍重送 base request。若完整 source 在 validation 或 javac 失敗，下一次改用獨立
+的 `java_compile_repair` prompt，內容必須包含未改動的兩份權威 genes、immutable
+action API guide、canonical scaffold、標示為 untrusted 的前一次完整 source，以及
+只屬於前一次 attempt 的結構化診斷。每次實際 request、source、hash、repair chain
+和 evidence 都獨立保存。
+
+Compile-guided decoder 只修正 phenotype 的可驗證編譯問題，不是 Code Reflection，
+也不得修改 gene、策略意圖、lineage、AOS 狀態或 selection case。固定 scaffold-only
+問題要求 strategy region token 完全不變；其他修正另以 deterministic similarity
+guard 阻擋沒有診斷依據的大幅重寫，但此 guard 不能證明語意等價。每個通過
+validation 的完整 source 最多編譯一次，第一個編譯成功的 attempt 直接成為唯一
+canonical phenotype/classes；全部失敗時由最後一次 attempt 決定 failure stage，
+其 source 只算 generation evidence，不會偽裝成 phenotype。Integration 與 126 場
+evaluation 只對選中的 attempt 執行一次，且 integration/runtime failure 不會觸發
+重新生成。舊設定預設仍為一次，`static_0824` 四個 production config 才明列上限
+五次。
+
 結構化輸出會保留原始 response，並只在 parser 邊界正規化已知的模型格式差異：
 賽評的 `match_analysis/key_observations.time` 與 Reviewer 將文字修正拆成陣列的
 情形。缺少數字 tick、必要欄位、alignment classification 或跨越 role 責任邊界

@@ -63,8 +63,13 @@ explicitly and must be inspected with the repository revision that created them.
    run together with population, generation, crossover, and mutation settings.
 2. Inspect the compact generation record and referenced candidate entries.
 3. Follow the candidate's lineage and stage artifact references.
-4. Compare generation request, raw response, extracted source, and normalized source.
-5. Read validation and compiler diagnostics before integration or match failures.
+4. Read `generation/result.json` for `selected_attempt` or
+   `representative_failure_attempt`, then compare the persisted request and every
+   `generation/attempts/attempt_<nnn>/` raw, source, validation, compilation,
+   and timing envelope. Each request hash must match its own `request.txt`.
+5. Confirm the flat phenotype/validation/compilation projection references the
+   selected attempt (or final representative failure) before interpreting
+   Integration or match failures.
 6. Verify all integration checks before interpreting runtime evidence.
 7. Count match results and verify that source and class hashes remain stable.
 8. Recompute objective components from persisted inputs using the recorded formula version.
@@ -82,8 +87,8 @@ activate a historical artifact layout.
 | `javac` returns nonzero | compiler diagnostics | integration |
 | class, constructor, or method cannot load | integration checks | compilation or runtime match |
 | process starts but result is missing or partial | match output, result, and timing | valid loss or draw |
-| fewer than 10 valid matches | completed match evidence | successful aggregate |
-| objective looks inconsistent | formula/schema versions and ten-case component payload | lexicase selection before recomputation |
+| fewer than 126 valid matches in the canonical configuration | completed match evidence | successful aggregate |
+| objective looks inconsistent | formula/schema versions and seven-case opponent payload | lexicase selection before recomputation |
 
 ## Artifact boundary
 

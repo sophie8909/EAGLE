@@ -110,7 +110,8 @@ All executable prompt bodies live under `prompts/`, with exactly one UTF-8
 placeholder contracts. This includes the reusable generation prompt, Code
 Reflection, the library Strategy Reflection/Rewrite
 path, Match Commentator, all four Coach intents, generation, Strategy Alignment,
-the action-API guide, and endpoint preflight. Experiment YAML files reference
+the compile-guided Java repair decoder, the action-API guide, and endpoint
+preflight. Experiment YAML files reference
 `prompts/initial_generation.txt`; inline prompt/template fields are rejected.
 New experiment configs reference the intentionally empty
 `seeds/blank_policy.txt`, and generation zero loads the validated checked-in
@@ -214,3 +215,36 @@ record, null `opponent_id` in canonical per-match results, missing UTC/run-level
 mutation-role timing, and untrusted Coach parent-policy echoes. These items are
 the scope of cycle 2; the Strategy Reflection state transition itself passed its
 real-run checks.
+
+Cycle 2 preflight first replayed the same four representative policies through
+the real Ministral decoder after the scope/type prompt hardening. Only one of
+four compiled; the new failures were an undefined helper and general Java type
+inconsistencies, while another source was rejected by deterministic API
+validation. This ruled out continued special-case validation as a sufficient
+solution. Cycle 2 therefore added bounded decoder sampling with
+attempt-isolated source/classes and durable evidence. The global and legacy
+default remains one; only the four tracked `static_0824` configs opt into five
+attempts.
+
+The cycle 2 bounded production smoke at
+`/tmp/eagle-static0824-bounded-smoke-juhoh9` then exhausted all five samples for
+each of the first two policies and was stopped during policy 3.
+Repeated failures included undefined helpers, incompatible Java return/value
+types, incorrect `pgs.free` calls, and fixed-scaffold violations. Cycle 3 keeps
+attempt 1 as the authoritative two-gene decode and uses a separate
+compile-guided decoder request after a complete source fails validation or
+javac. That request contains the unchanged authoritative genes, immutable API
+guide and scaffold, the immediately previous source marked untrusted, and only
+its structured diagnostics. Extraction failures still resample the base
+request. Each actual request has its own hash and evidence. This does not add a
+third gene, mutate lineage/AOS state, alter selection, or retry Integration or
+matches; it is also distinct from Code Reflection.
+
+The cycle 3 real Ministral smoke at
+`/tmp/eagle-static0824-guided-smoke-round3-hyr0_m36` replayed the same four
+policies and passed 4/4 validation+javac. Policies 1 and 3 compiled on the
+initial decode; policies 2 and 4 compiled on attempt 2 after the repair request
+received the prior `PhysicalGameState.free` diagnostics. The bounded chain
+stopped at each first success, retained per-attempt evidence, and the owned
+model server stopped cleanly after the smoke. This clears the documented 3/4
+gate for restarting the production batch.

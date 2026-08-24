@@ -55,6 +55,16 @@ updated to that new run directory.
 
 If a config folder is also supplied, it is compatibility-checked against the run. Model identity/path/endpoint, EA parameters, evaluation matrix, and reflection mode/probabilities cannot silently change. Missing persisted model assets fail clearly. Only the latest atomically recorded generation is resumed; incomplete candidate work is recomputed.
 
+`generation_max_attempts` controls bounded compile-guided Java decoding. Its
+repository and legacy-config default is `1`; production configs that opt in
+must persist the value explicitly. `static_0824` uses `5`. Attempt 1 uses the
+authoritative two-gene request. Extraction failures repeat that base request;
+validation or javac failures produce a new repair request from the immediately
+previous complete source and its structured diagnostics. Changing this field
+changes resolved run identity and is not allowed during resume. Partial
+candidate attempt artifacts are retained for audit but are never resumed or
+overwritten; work restarts from the last atomically recorded generation.
+
 ## Mock and final test
 
 ```bash

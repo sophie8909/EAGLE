@@ -67,7 +67,7 @@ candidates/<candidate_id>/
 │   ├── policy_prompt.txt
 │   ├── strategy_signature.json
 │   └── code_generation_prompt.txt
-├── phenotype/
+├── phenotype/                         # compilation success only
 │   └── CandidateAgent.java
 ├── crossover/provenance.json
 ├── mutation/
@@ -79,6 +79,18 @@ candidates/<candidate_id>/
 │   ├── response_raw.txt
 │   ├── extracted_candidate.java
 │   ├── normalized_candidate.java
+│   ├── repair_ledger.json
+│   ├── attempts/
+│   │   └── attempt_<nnn>/
+│   │       ├── request.txt
+│   │       ├── response_raw.txt
+│   │       ├── extracted_candidate.java
+│   │       ├── normalized_candidate.java
+│   │       ├── repair_input.json       # compile_repair attempts only
+│   │       ├── validation/
+│   │       ├── compilation/
+│   │       ├── timing.json
+│   │       └── result.json
 │   └── result.json
 ├── validation/validation_result.json
 ├── compilation/
@@ -94,6 +106,28 @@ candidates/<candidate_id>/
 ```
 
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, fitness vector, aggregate Game Performance, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
+
+For a non-seed bounded decode, every attempt owns its actual post-truncation
+request and hash, raw response, extracted/normalized source, validation,
+compilation, and timing. `request_kind` distinguishes `initial_decode`,
+`initial_decode_retry`, and `compile_repair`. Repair records also identify
+`repair_of_attempt`, the previous source SHA-256, and a `repair_input.json`
+containing only that previous attempt's structured diagnostics. The compact
+`repair_ledger.json` links the chain without duplicating source or diagnostics.
+Attempt directories are append-distinct and failed evidence is never replaced
+by a later attempt. The flat `generation/`, `validation/`, and `compilation/`
+files project the selected success or final representative failure. A
+`phenotype/CandidateAgent.java` exists only after compilation success; an
+exhausted final source remains `generation/normalized_candidate.java` and is
+indexed as `failed_generation_source`. `generation/result.json` records
+`max_attempts`, nullable `selected_attempt`, `final_attempt`, canonical attempt
+reference (null on exhaustion), representative selected/final-failure attempt
+reference, and the projected request SHA-256. Attempt class workspaces are transient and
+candidate-isolated; only promoted canonical classes remain for Integration and
+matches. A partial persisted attempt is audit-only and a rerun refuses to
+overwrite it; resume starts from the last atomic generation boundary rather than
+continuing a half-decoded candidate. Generation-zero has no
+`generation/attempts/` LLM evidence.
 
 For generation-zero candidates, `genotype/policy_prompt.txt` is empty and
 `generation/result.json` records operation `initial_java_seed`, no attempts,

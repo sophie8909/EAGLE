@@ -15,6 +15,18 @@ matrix, diagnostics, objective construction, and candidate artifact writing.
 | Match execution | 126 matches across seven opponents | retained match results and runtime failure |
 | Objective construction | seven opponent scores | seven `-1000.0` case scores on failure |
 
+`decode_validate_compile_candidate` is the single production boundary for the
+first three rows and can be called by a decoder smoke without launching
+Integration or the 126-match matrix. `evaluate_candidate` consumes that helper;
+it does not maintain a second retry implementation. Attempt 1 uses the base
+two-gene request; extraction failures may repeat that request, while a complete
+source's validation/javac failure produces the next compile-repair request from
+that source and only its structured diagnostics. Every attempt has an isolated
+source/classes workspace and compiles each validated source no more than once.
+Only the first compilation success is promoted. Exhaustion classifies the final
+attempt's generation, validation, or compilation failure; an Integration failure
+never re-enters the decoder.
+
 ## Match protocol
 
 The fixed roster is defined by `eagle/opponent_cases.py` and resolved by

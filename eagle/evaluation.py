@@ -9,9 +9,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-import json
+from difflib import SequenceMatcher
 import hashlib
+import json
 import os
+import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -43,16 +46,27 @@ from evaluation.strategy_alignment import (
     build_strategy_alignment_backend,
     evaluate_strategy_alignment,
 )
-from generation.agent_template import JavaTemplatePaths
+from generation.agent_template import (
+    JavaTemplatePaths,
+    extract_strategy_region,
+    load_java_template,
+)
 from generation.backend import GenerationBackend
 from generation.java_agent_generator import (
     GeneratedJavaAgent,
+    JavaAgentGenerationResult,
     ValidationResult,
     generate_java_agent_result,
 )
-from .artifacts import write_candidate_artifacts, write_candidate_inputs
+from .artifacts import (
+    write_candidate_artifacts,
+    write_candidate_inputs,
+    write_generation_attempt_artifacts,
+    write_generation_repair_ledger,
+)
 from .candidate import Candidate, compact_candidate_metadata
 from .config import ExperimentConfig
+from .prompts import load_prompt, render_prompt
 from .opponents import EVALUATION_ROSTER, OpponentSetupError, OpponentSpec, SEARCH_OPPONENT_REGISTRY, rooted_jar_path
 from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
 
@@ -80,6 +94,55 @@ class CandidateEvaluation:
     function_capability_result: FunctionCapabilityResult | None = None
     strategy_alignment_result: StrategyAlignmentResult | None = None
     generation_timing: dict[str, object] | None = None
+    generation_attempts: tuple["GenerationAttemptResult", ...] = ()
+
+
+@dataclass(frozen=True)
+class GenerationAttemptResult:
+    """One decoder-chain step with validation and at-most-once javac."""
+
+    attempt: int
+    request: str
+    generation: JavaAgentGenerationResult
+    compile_result: CompileResult | None
+    compile_error: str | None
+    generation_timing: dict[str, object]
+    compilation_timing: dict[str, object]
+    request_kind: str = "initial_decode"
+    repair_parent_attempt: int | None = None
+    repair_evidence: dict[str, object] | None = None
+    selected: bool = False
+    final: bool = False
+
+
+@dataclass(frozen=True)
+class BoundedGenerationResult:
+    """Production result shared by smoke checks and full evaluation."""
+
+    attempts: tuple[GenerationAttemptResult, ...]
+    selected_attempt: int | None
+    final_attempt: int
+    max_attempts: int
+    initial_seed_source: bool
+
+    @property
+    def representative_attempt(self) -> GenerationAttemptResult:
+        """Return the selected success or, on exhaustion, the final failure."""
+
+        number = self.selected_attempt or self.final_attempt
+        return next(item for item in self.attempts if item.attempt == number)
+
+    @property
+    def generation(self) -> JavaAgentGenerationResult:
+        return self.representative_attempt.generation
+
+    @property
+    def compile_result(self) -> CompileResult | None:
+        return self.representative_attempt.compile_result
+
+    @property
+    def compile_error(self) -> str | None:
+        return self.representative_attempt.compile_error
 
 
 @dataclass(frozen=True)
@@ -153,6 +216,400 @@ def evaluate_population(
     return evaluated
 
 
+def decode_validate_compile_candidate(
+    candidate: Candidate,
+    *,
+    config: ExperimentConfig,
+    backend: GenerationBackend,
+    generated_agents_dir: Path,
+    classes_dir: Path,
+    mock: bool,
+    candidate_artifact_dir: Path | None = None,
+) -> BoundedGenerationResult:
+    """Run bounded compile-guided decoding and compile valid sources once.
+
+    Attempt one uses the authoritative two-gene generation request. After a
+    complete source fails validation or javac, later attempts receive a
+    separate compile-repair request containing that phenotype and structured
+    failure evidence. Extraction failures have no repairable complete source
+    and therefore resample the base request. The first validation+javac success
+    is promoted to the sole canonical class directory. This helper deliberately
+    stops before Integration and matches so production smoke uses this path.
+    """
+
+    _validate_candidate_path_component(candidate.id)
+    initial_seed_source = getattr(backend, "operation", None) == "initial_java_seed"
+    max_attempts = 1 if initial_seed_source else config.generation_max_attempts
+    if max_attempts < 1:
+        raise ValueError("generation_max_attempts must be at least 1.")
+    base_request = "" if initial_seed_source else (
+        backend.authoritative_request(candidate, "CandidateAgent")
+        if hasattr(backend, "authoritative_request")
+        else candidate.generation_input(class_name="CandidateAgent")
+    )
+    candidate_source_root = generated_agents_dir / candidate.id / "attempts"
+    scratch_root = classes_dir / ".generation_attempts" / candidate.id
+    canonical_classes = classes_dir / candidate.id
+    if candidate_artifact_dir is not None:
+        persisted_attempts = candidate_artifact_dir / "generation" / "attempts"
+        if persisted_attempts.is_dir() and any(persisted_attempts.iterdir()):
+            raise RuntimeError(
+                "Refusing to overwrite persisted decoder attempts; "
+                f"partial candidate evidence is audit-only: {persisted_attempts}"
+            )
+    _safe_remove_candidate_tree(
+        candidate_source_root,
+        generated_agents_dir / candidate.id,
+    )
+    _safe_remove_candidate_tree(canonical_classes, classes_dir)
+    _safe_remove_candidate_tree(scratch_root, classes_dir / ".generation_attempts")
+    attempts: list[GenerationAttemptResult] = []
+    selected_attempt: int | None = None
+    repair_parent: GenerationAttemptResult | None = None
+
+    try:
+        for attempt_number in range(1, max_attempts + 1):
+            attempt_name = f"attempt_{attempt_number:03d}"
+            request_kind = (
+                "compile_repair"
+                if not initial_seed_source and repair_parent is not None
+                else "initial_decode_retry"
+                if not initial_seed_source and attempt_number > 1
+                else "initial_decode"
+            )
+            repair_evidence = (
+                _compile_repair_evidence(repair_parent)
+                if repair_parent is not None
+                else None
+            )
+            request = (
+                _compile_repair_request(
+                    candidate,
+                    config=config,
+                    backend=backend,
+                    previous_source=repair_parent.generation.assembled_java,
+                    evidence=repair_evidence or {},
+                )
+                if request_kind == "compile_repair" and repair_parent is not None
+                else base_request
+            )
+            request_sha256 = hashlib.sha256(request.encode("utf-8")).hexdigest()
+            attempt_artifact_dir = (
+                None
+                if candidate_artifact_dir is None
+                else candidate_artifact_dir / "generation" / "attempts" / attempt_name
+            )
+            if attempt_artifact_dir is not None and not initial_seed_source:
+                attempt_artifact_dir.mkdir(parents=True, exist_ok=True)
+                (attempt_artifact_dir / "request.txt").write_text(request, encoding="utf-8")
+                for filename in (
+                    "response_raw.txt",
+                    "extracted_candidate.java",
+                    "normalized_candidate.java",
+                ):
+                    (attempt_artifact_dir / filename).write_text("", encoding="utf-8")
+            if hasattr(backend, "set_generation_attempt_context"):
+                backend.set_generation_attempt_context(
+                    attempt_number,
+                    f"{candidate.id}:generation:{attempt_number:03d}",
+                )
+            if hasattr(backend, "set_generation_request_kind"):
+                backend.set_generation_request_kind(request_kind)
+            generation_started_at = _utc_now()
+            generation_started = time.monotonic()
+            generation = generate_java_agent_result(
+                candidate,
+                backend,
+                generated_agents_dir,
+                template_paths=JavaTemplatePaths(
+                    config.initial_java_seed_path if initial_seed_source else config.agent_template_path
+                ),
+                authoritative_request=request,
+                output_dir=candidate_source_root / attempt_name,
+                attempt_artifact_dir=None if initial_seed_source else attempt_artifact_dir,
+            )
+            if request_kind == "compile_repair" and repair_parent is not None:
+                generation = _enforce_compile_repair_delta(
+                    generation,
+                    previous_source=repair_parent.generation.assembled_java,
+                    parent_validation=repair_parent.generation.validation_result,
+                )
+            generation_finished_at = _utc_now()
+            generation_duration = max(0.0, time.monotonic() - generation_started)
+            generation_timing = {
+                "attempt": attempt_number,
+                "generation_attempt_id": f"{candidate.id}:generation:{attempt_number:03d}",
+                "request_sha256": request_sha256,
+                "request_kind": request_kind,
+                "repair_parent_attempt": (
+                    None if repair_parent is None else repair_parent.attempt
+                ),
+                "repair_of_attempt": (
+                    None if repair_parent is None else repair_parent.attempt
+                ),
+                "previous_source_sha256": (
+                    None
+                    if repair_parent is None
+                    else hashlib.sha256(
+                        repair_parent.generation.assembled_java.encode("utf-8")
+                    ).hexdigest()
+                ),
+                "started_at": None if initial_seed_source else generation_started_at,
+                "finished_at": None if initial_seed_source else generation_finished_at,
+                "duration_seconds": None if initial_seed_source else generation_duration,
+                "status": (
+                    "source_validated"
+                    if generation.agent is not None
+                    else "failed"
+                ),
+                "error": generation.failure_reason,
+            }
+
+            compile_result: CompileResult | None = None
+            compile_error: str | None = None
+            compilation_started_at: str | None = None
+            compilation_finished_at: str | None = None
+            compilation_duration: float | None = None
+            if generation.agent is not None:
+                attempt_classes = scratch_root / attempt_name
+                compilation_started_at = _utc_now()
+                compilation_started = time.monotonic()
+                try:
+                    compile_result = compile_agent_source(
+                        generation.agent,
+                        config=config,
+                        classes_dir=scratch_root,
+                        candidate_id=attempt_name,
+                        mock=mock,
+                    )
+                except (RuntimeError, OSError, ValueError) as exc:
+                    compile_error = str(exc)
+                compilation_finished_at = _utc_now()
+                compilation_duration = max(0.0, time.monotonic() - compilation_started)
+                if compile_result is not None and compile_result.ok:
+                    attempt_classes.mkdir(parents=True, exist_ok=True)
+                    canonical_classes.parent.mkdir(parents=True, exist_ok=True)
+                    attempt_classes.replace(canonical_classes)
+                    selected_attempt = attempt_number
+
+            compilation_timing = {
+                "started_at": compilation_started_at,
+                "finished_at": compilation_finished_at,
+                "duration_seconds": compilation_duration,
+                "status": (
+                    "success"
+                    if compile_result is not None and compile_result.ok
+                    else "failed"
+                    if generation.agent is not None
+                    else "blocked"
+                ),
+                "error": compile_error or (
+                    compile_error_message(compile_result)
+                    if compile_result is not None and not compile_result.ok
+                    else generation.failure_reason if generation.agent is None else None
+                ),
+            }
+            attempt = GenerationAttemptResult(
+                attempt=attempt_number,
+                request=request,
+                generation=generation,
+                compile_result=compile_result,
+                compile_error=compile_error,
+                generation_timing=generation_timing,
+                compilation_timing=compilation_timing,
+                request_kind=request_kind,
+                repair_parent_attempt=(
+                    None if repair_parent is None else repair_parent.attempt
+                ),
+                repair_evidence=repair_evidence,
+                selected=selected_attempt == attempt_number,
+            )
+            attempts.append(attempt)
+            if candidate_artifact_dir is not None:
+                write_generation_attempt_artifacts(
+                    candidate_artifact_dir,
+                    attempt,
+                    initial_seed_source=initial_seed_source,
+                )
+                write_generation_repair_ledger(
+                    candidate_artifact_dir,
+                    attempts,
+                    initial_seed_source=initial_seed_source,
+                )
+            if selected_attempt is not None:
+                break
+            repair_parent = (
+                attempt
+                if generation.assembled_java
+                and (
+                    not generation.validation_result.ok
+                    or compile_result is not None and not compile_result.ok
+                    or compile_error is not None
+                )
+                else None
+            )
+    finally:
+        _safe_remove_candidate_tree(scratch_root, classes_dir / ".generation_attempts")
+
+    final_attempt = attempts[-1].attempt
+    attempts[-1] = replace(attempts[-1], final=True)
+    if candidate_artifact_dir is not None:
+        write_generation_attempt_artifacts(
+            candidate_artifact_dir,
+            attempts[-1],
+            initial_seed_source=initial_seed_source,
+        )
+        write_generation_repair_ledger(
+            candidate_artifact_dir,
+            attempts,
+            initial_seed_source=initial_seed_source,
+        )
+    return BoundedGenerationResult(
+        attempts=tuple(attempts),
+        selected_attempt=selected_attempt,
+        final_attempt=final_attempt,
+        max_attempts=max_attempts,
+        initial_seed_source=initial_seed_source,
+    )
+
+
+def _compile_repair_request(
+    candidate: Candidate,
+    *,
+    config: ExperimentConfig,
+    backend: GenerationBackend,
+    previous_source: str,
+    evidence: dict[str, object],
+) -> str:
+    rendered = render_prompt(
+        "java_compile_repair",
+        {
+            "policy_prompt": candidate.strategy_prompt.strip(),
+            "code_generation_prompt": candidate.generation_prompt.strip(),
+            "action_api_guide": load_prompt("action_api_guide"),
+            "java_scaffold": load_java_template(JavaTemplatePaths(config.agent_template_path)),
+            "previous_complete_source": previous_source,
+            "compile_evidence": json.dumps(evidence, ensure_ascii=False, indent=2),
+        },
+    )
+    return (
+        backend.prepare_request(rendered)
+        if hasattr(backend, "prepare_request")
+        else rendered
+    )
+
+
+def _compile_repair_evidence(
+    attempt: GenerationAttemptResult,
+) -> dict[str, object]:
+    compilation = attempt.compile_result
+    return {
+        "schema_version": "eagle-java-compile-repair-v1",
+        "source_attempt": attempt.attempt,
+        "failure_stage": (
+            "compilation"
+            if attempt.generation.agent is not None
+            else attempt.generation.failure_stage
+        ),
+        "validation": attempt.generation.validation_result.to_json_dict(),
+        "compilation": (
+            {
+                "status": "blocked",
+                "error": attempt.compile_error or attempt.generation.failure_reason,
+            }
+            if compilation is None
+            else {
+                "status": compilation.status,
+                "returncode": compilation.returncode,
+                "diagnostics": [item.to_json_dict() for item in compilation.diagnostics],
+                "stderr": compilation.stderr,
+            }
+        ),
+    }
+
+
+def _enforce_compile_repair_delta(
+    generation: JavaAgentGenerationResult,
+    *,
+    previous_source: str,
+    parent_validation: ValidationResult,
+) -> JavaAgentGenerationResult:
+    """Reject repair responses that broadly replace unreported strategy code."""
+
+    if not generation.assembled_java:
+        return generation
+    try:
+        previous_region = extract_strategy_region(previous_source)
+        repaired_region = extract_strategy_region(generation.assembled_java)
+    except ValueError:
+        return generation
+    previous_tokens = re.findall(r"[A-Za-z_$][A-Za-z0-9_$]*|\d+|\S", previous_region)
+    repaired_tokens = re.findall(r"[A-Za-z_$][A-Za-z0-9_$]*|\d+|\S", repaired_region)
+    failed_check_names = {
+        str(item.get("check") or "") for item in parent_validation.failed_checks
+    }
+    delta_error: str | None = None
+    if failed_check_names == {"fixed_scaffold"} and previous_tokens != repaired_tokens:
+        delta_error = (
+            "compile repair for a fixed_scaffold-only failure must preserve "
+            "the strategy region token-for-token"
+        )
+    elif previous_tokens and repaired_tokens:
+        similarity = SequenceMatcher(None, previous_tokens, repaired_tokens).ratio()
+        if similarity < 0.45:
+            delta_error = (
+                "compile repair changed the strategy region too broadly for "
+                f"diagnostic-only repair (token similarity {similarity:.3f} < 0.450)"
+            )
+    if delta_error is None:
+        return generation
+    validation = generation.validation_result
+    failed_checks = (*validation.failed_checks, {
+        "check": "compile_repair_delta",
+        "reason": delta_error,
+    })
+    guarded_validation = ValidationResult(
+        ok=False,
+        error=delta_error,
+        passed_checks=tuple(
+            name for name in validation.passed_checks if name != "compile_repair_delta"
+        ),
+        failed_checks=failed_checks,
+        blocked_checks=validation.blocked_checks,
+        failure_reason=delta_error,
+    )
+    guarded_timing = {
+        **generation.validation_timing,
+        "status": "failed",
+        "error": delta_error,
+    }
+    return replace(
+        generation,
+        validation_result=guarded_validation,
+        agent=None,
+        failure_category="Java validation failure",
+        failure_reason=delta_error,
+        failure_stage="validation",
+        validation_timing=guarded_timing,
+    )
+
+
+def _validate_candidate_path_component(candidate_id: str) -> None:
+    if not candidate_id or candidate_id in {".", ".."} or Path(candidate_id).name != candidate_id:
+        raise ValueError(f"Unsafe candidate id for owned artifact paths: {candidate_id!r}")
+
+
+def _safe_remove_candidate_tree(path: Path, owner: Path) -> None:
+    """Remove one exact candidate-owned directory without broad/glob deletion."""
+
+    resolved_path = path.resolve()
+    resolved_owner = owner.resolve()
+    if resolved_path.parent != resolved_owner:
+        raise ValueError(f"Refusing to clean non-candidate directory: {resolved_path}")
+    if resolved_path.exists():
+        shutil.rmtree(resolved_path)
+
+
 def evaluate_candidate(
     candidate: Candidate,
     *,
@@ -176,21 +633,31 @@ def evaluate_candidate(
 
     genotype_before = (candidate.strategy_prompt, candidate.generation_prompt)
 
-    # Stage 1: ask the generation backend for a complete Java phenotype and
-    # preserve its raw response and validation evidence.
-    generation_started_at = _utc_now()
-    generation_monotonic_started = time.monotonic()
-    initial_seed_source = getattr(backend, "operation", None) == "initial_java_seed"
-    generation = generate_java_agent_result(
+    # Stages 1-2 use the same bounded decoder helper as production smoke
+    # checks. Only its selected (or, when exhausted, final) attempt becomes
+    # the canonical phenotype and compilation evidence below.
+    bounded_generation = decode_validate_compile_candidate(
         candidate,
-        backend,
-        generated_agents_dir,
-        template_paths=JavaTemplatePaths(
-            config.initial_java_seed_path if initial_seed_source else config.agent_template_path
-        ),
+        config=config,
+        backend=backend,
+        generated_agents_dir=generated_agents_dir,
+        classes_dir=classes_dir,
+        mock=mock,
+        candidate_artifact_dir=None if match_artifacts_dir is None else match_artifacts_dir.parent,
     )
-    generation_finished_at = _utc_now()
-    generation_duration = max(0.0, time.monotonic() - generation_monotonic_started)
+    generation = bounded_generation.generation
+    initial_seed_source = bounded_generation.initial_seed_source
+    generation_attempts = bounded_generation.attempts
+    representative_attempt = bounded_generation.representative_attempt
+    compile_result = bounded_generation.compile_result
+    compile_error = bounded_generation.compile_error
+    compilation_started_at = representative_attempt.compilation_timing.get("started_at")
+    compilation_finished_at = representative_attempt.compilation_timing.get("finished_at")
+    representative_compilation_duration = representative_attempt.compilation_timing.get("duration_seconds")
+    compilation_duration = sum(
+        float(item.compilation_timing.get("duration_seconds") or 0.0)
+        for item in generation_attempts
+    )
     source_provenance = None
     if initial_seed_source:
         source_path = getattr(backend, "source_path", None)
@@ -207,17 +674,26 @@ def evaluate_candidate(
         "stage": "generation",
         "operation": getattr(backend, "operation", None),
         "model": getattr(backend, "model", None),
-        "started_at": None if initial_seed_source else generation_started_at,
-        "finished_at": None if initial_seed_source else generation_finished_at,
-        "duration_seconds": None if initial_seed_source else generation_duration,
-        "attempts": [] if initial_seed_source else [{
-            "attempt": 1,
-            "started_at": generation_started_at,
-            "finished_at": generation_finished_at,
-            "duration_seconds": generation_duration,
-            "status": "success" if generation.raw_llm_output else "error",
-            "error": generation.failure_reason,
-        }],
+        "started_at": None if initial_seed_source else generation_attempts[0].generation_timing.get("started_at"),
+        "finished_at": None if initial_seed_source else generation_attempts[-1].generation_timing.get("finished_at"),
+        "duration_seconds": None if initial_seed_source else sum(
+            float(item.generation_timing.get("duration_seconds") or 0.0)
+            for item in generation_attempts
+        ),
+        "attempts": [] if initial_seed_source else [
+            {
+                **item.generation_timing,
+                "status": "success" if item.generation.raw_llm_output else "error",
+                "validation_status": item.generation.validation_result.status,
+                "compilation_status": item.compilation_timing.get("status"),
+                "selected": item.selected,
+                "final": item.final,
+            }
+            for item in generation_attempts
+        ],
+        "max_attempts": bounded_generation.max_attempts,
+        "selected_attempt": None if initial_seed_source else bounded_generation.selected_attempt,
+        "final_attempt": None if initial_seed_source else bounded_generation.final_attempt,
         "source": source_provenance,
     }
 
@@ -229,29 +705,6 @@ def evaluate_candidate(
             "",
             error=generation.failure_reason or "Complete Java validation did not run.",
         )
-
-    # Stage 2: compile the validated phenotype once. No match can run unless
-    # compilation succeeds.
-    compile_result: CompileResult | None = None
-    compile_error: str | None = None
-    compilation_started_at: str | None = None
-    compilation_finished_at: str | None = None
-    compilation_duration: float | None = None
-    if agent is not None:
-        compilation_started_at = _utc_now()
-        compilation_started = time.monotonic()
-        try:
-            compile_result = compile_agent_source(
-                agent,
-                config=config,
-                classes_dir=classes_dir,
-                candidate_id=candidate.id,
-                mock=mock,
-            )
-        except (RuntimeError, OSError, ValueError) as exc:
-            compile_error = str(exc)
-        compilation_finished_at = _utc_now()
-        compilation_duration = max(0.0, time.monotonic() - compilation_started)
 
     compiler = analyze_compilation(compile_result)
     integration_result: IntegrationResult | None = None
@@ -429,7 +882,12 @@ def evaluate_candidate(
         "failure_category": failure_category,
         "failure_reason": failure_reason,
         "generation": {
-            "phenotype_artifact": "phenotype/CandidateAgent.java",
+            "phenotype_artifact": (
+                "phenotype/CandidateAgent.java" if compiler.compile_success else None
+            ),
+            "failure_source_artifact": (
+                None if compiler.compile_success else "generation/normalized_candidate.java"
+            ),
             "validation": generation.validation_result.to_json_dict(),
             "strategy_region_validation": {
                 key: value.to_json_dict()
@@ -442,7 +900,10 @@ def evaluate_candidate(
     timing = {
         **candidate.timing,
         "generation_llm": generation_timing,
-        "validation_duration_seconds": generation.validation_timing.get("duration_seconds") or 0.0,
+        "validation_duration_seconds": sum(
+            float(item.generation.validation_timing.get("duration_seconds") or 0.0)
+            for item in generation_attempts
+        ),
         "compilation_duration_seconds": compilation_duration or 0.0,
         "integration_duration_seconds": 0.0 if integration_result is None else integration_result.duration_seconds,
         "evaluation_duration_seconds": evaluation_duration,
@@ -450,11 +911,20 @@ def evaluate_candidate(
         "match_durations_seconds": match_durations,
         "strategy_alignment_llm": alignment_timing,
         "objective_calculation_duration_seconds": objective_duration,
-        "validation": generation.validation_timing,
+        "validation": {
+            **generation.validation_timing,
+            "attempts": [
+                {
+                    "attempt": item.attempt,
+                    **item.generation.validation_timing,
+                }
+                for item in generation_attempts
+            ],
+        },
         "compilation": {
             "started_at": compilation_started_at,
             "finished_at": compilation_finished_at,
-            "duration_seconds": compilation_duration,
+            "duration_seconds": representative_compilation_duration,
             "status": "success" if compile_result is not None and compile_result.ok else ("failed" if compile_result is not None else "blocked"),
             "error": compile_error or (failure_reason if compile_result is None else None),
         },
@@ -490,8 +960,9 @@ def evaluate_candidate(
     }
     mutation_generation = timing.get("mutation", {}).get("generation_only_duration_seconds", 0.0)
     crossover_generation = timing.get("crossover", {}).get("generation_only_duration_seconds", 0.0)
-    validation_duration = timing["validation"].get("duration_seconds") or 0.0
-    compilation_duration_value = timing["compilation"].get("duration_seconds") or 0.0
+    generation_llm_duration = timing["generation_llm"].get("duration_seconds") or 0.0
+    validation_duration = timing["validation_duration_seconds"]
+    compilation_duration_value = timing["compilation_duration_seconds"]
     evaluation_duration_value = timing["evaluation"].get("duration_seconds") or 0.0
     operation_generation = float(mutation_generation or 0.0) + float(crossover_generation or 0.0)
     timing["mutation_generation"] = timing.get("mutation") if timing.get("mutation") else None
@@ -503,8 +974,8 @@ def evaluate_candidate(
         "duration_seconds": operation_generation,
     }
     timing["child_total"] = {
-        "duration_seconds": operation_generation + validation_duration + compilation_duration_value + float(timing["integration"].get("duration_seconds") or 0.0) + evaluation_duration_value,
-        "includes": ["mutation_generation", "crossover_generation", "validation", "compilation", "integration", "evaluation"],
+        "duration_seconds": operation_generation + float(generation_llm_duration) + validation_duration + compilation_duration_value + float(timing["integration"].get("duration_seconds") or 0.0) + evaluation_duration_value,
+        "includes": ["mutation_generation", "crossover_generation", "generation_llm", "validation", "compilation", "integration", "evaluation"],
         "status": "failed" if failure_stage else "success",
         "failure_stage": failure_stage,
     }
@@ -516,8 +987,10 @@ def evaluate_candidate(
         parent_ids=candidate.parent_ids,
         strategy_prompt=candidate.strategy_prompt,
         generation_prompt=candidate.generation_prompt,
-        generated_java=generation.assembled_java,
-        generated_java_path=str(agent.source_path) if agent else None,
+        generated_java=generation.assembled_java if compiler.compile_success else "",
+        generated_java_path=(
+            str(agent.source_path) if agent is not None and compiler.compile_success else None
+        ),
         operator=candidate.operator,
         mutation_type=candidate.mutation_type,
         strategy_parent_id=candidate.strategy_parent_id,
@@ -584,6 +1057,7 @@ def evaluate_candidate(
         strategy_alignment_result=alignment_result,
         error=failure_reason,
         generation_timing=generation_timing,
+        generation_attempts=generation_attempts,
     )
 
 

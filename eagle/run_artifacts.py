@@ -481,6 +481,11 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
         value = json.loads(target.read_text(encoding="utf-8"))
         return value if isinstance(value, dict) else {}
 
+    artifact_refs = payload.get("artifacts") or {}
+    failed_source_is_evidence_only = "failed_generation_source" in artifact_refs
+    phenotype_path = candidate_dir / "phenotype" / "CandidateAgent.java"
+    legacy_generation_path = candidate_dir / "generation" / "normalized_candidate.java"
+
     return Candidate(
         id=candidate_id,
         generation=int(payload.get("generation") or 0),
@@ -495,12 +500,18 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
         ),
         generated_java=(
             text("phenotype/CandidateAgent.java")
-            or text("generation/normalized_candidate.java")
+            or (
+                ""
+                if failed_source_is_evidence_only
+                else text("generation/normalized_candidate.java")
+            )
         ),
-        generated_java_path=str(
-            candidate_dir / "phenotype" / "CandidateAgent.java"
-            if (candidate_dir / "phenotype" / "CandidateAgent.java").is_file()
-            else candidate_dir / "generation" / "normalized_candidate.java"
+        generated_java_path=(
+            str(phenotype_path)
+            if phenotype_path.is_file()
+            else None
+            if failed_source_is_evidence_only
+            else str(legacy_generation_path)
         ),
         operator=str(payload.get("operator") or "seed"),
         mutation_type=payload.get("mutation_type"),

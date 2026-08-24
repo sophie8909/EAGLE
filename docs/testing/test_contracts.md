@@ -23,11 +23,11 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Crossover | two independent whole-component choices; exact provenance; equal-text case; no Java inheritance |
 | Strategy Mutation | Commentator per selected match → Coach → final Java generation; only policy changes; no Java/code-prompt evidence |
 | Code Mutation | Policy-Code Reviewer → exact `rewritten_prompt` JSON object → final Java generation; only code-generation prompt changes; no raw game logs |
-| Generation | blank-policy checked-in Java seed at generation zero; later two genes + fixed scaffold/API constraints; complete-file only; raw response durability; no parent Java or game logs |
+| Generation | blank-policy checked-in Java seed at generation zero; later two genes + fixed scaffold/API constraints; base retry only after extraction failure; compile-guided retry from the immediately previous complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic fixed-scaffold/non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, and no fixed internal layout |
-| Compilation | isolated output; warning flags; diagnostic parsing/deduplication |
+| Compilation | attempt-isolated output; each validated source compiled at most once; first success promoted without recompilation; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; `passed`/`failed`/`blocked`; no match execution |
-| Matches | compile once; same source/class hash; complete configured matrix with a real distinct WorkerRush; population-summed generation counts; distinct directories and round indices; both sides; no fake match-seed property; no regeneration |
+| Matches | one promoted source/class tree; complete configured matrix with a real distinct WorkerRush; population-summed generation counts; distinct directories and round indices; both sides; no fake match-seed property; no regeneration after Integration starts |
 | Game Performance | exact canonical component math, clamps, bands, aggregation, partial-batch failure |
 | Code Quality | `[0,100]` simplicity score from four weighted complexity penalties, persisted details, diagnostic separation, and `-1000` failure sentinel for both objectives |
 | Artifacts | v2 root allowlist; one resolved `config.yaml`; referenced generation/candidate reconstruction; interruption safety; absence of obsolete config, population, candidate-summary, and match-result duplicates |
@@ -59,6 +59,11 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
 - Do not make fixed helper names, strategy markers, code length, or function count a contract unless the normative spec is changed.
 - Mock LLM calls must record stage/order/attempts and return realistic raw payloads.
 - Test no-regeneration by counting backend calls and comparing source hashes across matches.
+- Test compile-guided decoding as a chain: extraction-only retries preserve the
+  base request, while validation/javac failures produce distinct requests that
+  contain both authoritative genes, immutable API/scaffold, only the immediately
+  previous source and diagnostics, and matching request/source hashes. Exhaustion
+  must leave `selected_attempt: null` and no phenotype.
 - Use sentinel-based structural tests to prove Commentator/Coach exclude Java,
   Code Reviewer excludes raw game logs, and both mutation operators preserve the
   gene they do not own.

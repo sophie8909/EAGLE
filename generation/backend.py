@@ -26,6 +26,37 @@ class GenerationBackend(ABC):
     def generate(self, candidate: Candidate, class_name: str) -> str:
         """Return Java source code for a candidate prompt."""
 
+    def authoritative_request(self, candidate: Candidate, class_name: str) -> str:
+        """Render the exact immutable request used by bounded decoder attempts."""
+
+        return self.prepare_request(candidate.generation_input(class_name=class_name))
+
+    def prepare_request(self, request_text: str) -> str:
+        """Apply backend request bounds before an attempt persists its prompt."""
+
+        return request_text
+
+    def generate_from_request(
+        self,
+        candidate: Candidate,
+        class_name: str,
+        request_text: str,
+    ) -> str:
+        """Generate from a pre-rendered request.
+
+        Custom/test backends that do not consume prompts retain the legacy
+        ``generate`` contract. Production prompt backends override this method
+        so each attempt consumes the exact request persisted for that attempt.
+        """
+
+        return self.generate(candidate, class_name)
+
+    def set_generation_attempt_context(self, attempt: int, attempt_id: str) -> None:
+        """Attach outer decoder-attempt identity to transport logging."""
+
+    def set_generation_request_kind(self, request_kind: str) -> None:
+        """Identify base generation versus compile-guided decoder repair."""
+
 class MockGenerationBackend(GenerationBackend):
     """Deterministic backend for tests and local pipeline smoke runs."""
 
@@ -67,6 +98,18 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         self.max_output_tokens = max_output_tokens
         self._active_request_started_at: str | None = None
         self._active_request_started_monotonic: float | None = None
+        self._generation_attempt = 1
+        self._generation_attempt_id: str | None = None
+        self._generation_request_kind = "initial_decode"
+
+    def set_generation_attempt_context(self, attempt: int, attempt_id: str) -> None:
+        self._generation_attempt = attempt
+        self._generation_attempt_id = attempt_id
+
+    def set_generation_request_kind(self, request_kind: str) -> None:
+        if request_kind not in {"initial_decode", "initial_decode_retry", "compile_repair"}:
+            raise ValueError(f"Unsupported generation request kind: {request_kind}")
+        self._generation_request_kind = request_kind
 
     @property
     def chat_completions_url(self) -> str:
@@ -75,10 +118,32 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         return f"{self.base_url}/v1/chat/completions"
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
+        return self.generate_from_request(
+            candidate,
+            class_name,
+            self.authoritative_request(candidate, class_name),
+        )
+
+    def authoritative_request(self, candidate: Candidate, class_name: str) -> str:
+        return self.prepare_request(candidate.generation_input(class_name=class_name))
+
+    def prepare_request(self, request_text: str) -> str:
+        return truncate_prompt(request_text)
+
+    def generate_from_request(
+        self,
+        candidate: Candidate,
+        class_name: str,
+        request_text: str,
+    ) -> str:
         genotype_before = (candidate.strategy_prompt, candidate.generation_prompt)
-        prompt = truncate_prompt(candidate.generation_input(class_name=class_name))
+        prompt = request_text
         assert (candidate.strategy_prompt, candidate.generation_prompt) == genotype_before
-        module_name = "complete_java_agent"
+        module_name = (
+            "java_compile_repair"
+            if self._generation_request_kind == "compile_repair"
+            else "complete_java_agent"
+        )
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -183,7 +248,7 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             candidate_id=candidate.id,
             generation=candidate.generation,
             module_name=module_name,
-            attempt=attempt,
+            attempt=self._generation_attempt,
             error=error,
             metadata={
                 "class_name": generated_class_name(candidate.id),
@@ -191,6 +256,10 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                 "endpoint": self.base_url,
                 "operation": self.operation,
                 "operation_type": "mutation" if candidate.operator in {"mutation", "crossover+mutation"} else "crossover" if candidate.operator == "crossover" else None,
+                "generation_attempt": self._generation_attempt,
+                "generation_attempt_id": self._generation_attempt_id,
+                "transport_attempt": attempt,
+                "generation_request_kind": self._generation_request_kind,
             },
             started_at=self._active_request_started_at,
             finished_at=utc_now(),

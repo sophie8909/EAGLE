@@ -30,6 +30,12 @@ role = "generator"
 stages = ["seed_generation", "mutation_generation", "crossover_generation"]
 required_variables = ["policy_prompt", "code_generation_prompt", "action_api_guide", "java_scaffold"]
 
+[prompts.java_compile_repair]
+file = "java_compile_repair.txt"
+role = "generator"
+stages = ["java_compile_repair"]
+required_variables = ["policy_prompt", "code_generation_prompt", "action_api_guide", "java_scaffold", "previous_complete_source", "compile_evidence"]
+
 [prompts.strategy_alignment]
 file = "strategy_alignment.txt"
 role = "reflector"

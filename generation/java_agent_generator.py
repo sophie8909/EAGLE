@@ -126,21 +126,51 @@ def generate_java_agent(candidate: Candidate, backend: GenerationBackend, worksp
     return result.agent
 
 
-def generate_java_agent_result(candidate: Candidate, backend: GenerationBackend, workspace_dir: Path, *, template_paths: JavaTemplatePaths | None = None) -> JavaAgentGenerationResult:
+def generate_java_agent_result(
+    candidate: Candidate,
+    backend: GenerationBackend,
+    workspace_dir: Path,
+    *,
+    template_paths: JavaTemplatePaths | None = None,
+    authoritative_request: str | None = None,
+    output_dir: Path | None = None,
+    attempt_artifact_dir: Path | None = None,
+) -> JavaAgentGenerationResult:
+    request_text = (
+        (
+            backend.authoritative_request(candidate, "CandidateAgent")
+            if hasattr(backend, "authoritative_request")
+            else candidate.generation_input(class_name="CandidateAgent")
+        )
+        if authoritative_request is None
+        else authoritative_request
+    )
     try:
-        raw = backend.generate(candidate, "CandidateAgent")
+        raw = (
+            backend.generate_from_request(candidate, "CandidateAgent", request_text)
+            if hasattr(backend, "generate_from_request")
+            else backend.generate(candidate, "CandidateAgent")
+        )
     except LLMServerError:
         raise
     except (RuntimeError, OSError, ValueError) as exc:
         reason = str(exc)
         blocked = blocked_validation_result("Source validation was blocked because Java generation failed.")
         return JavaAgentGenerationResult(validation_result=blocked, strategy_region_score_result=evaluate_agent_strategy_region("", error=reason), failure_category=classify_generation_error(reason), failure_reason=reason, failure_stage="generation", validation_timing=validation_timing("blocked", blocked.error))
+    if attempt_artifact_dir is not None:
+        attempt_artifact_dir.mkdir(parents=True, exist_ok=True)
+        (attempt_artifact_dir / "request.txt").write_text(request_text, encoding="utf-8")
+        (attempt_artifact_dir / "response_raw.txt").write_text(raw, encoding="utf-8")
     try:
         source = normalize_java_agent_source(extract_code_from_output(raw))
     except (ValueError, OSError) as exc:
         reason = str(exc)
         blocked = blocked_validation_result("Source validation was blocked because no complete Java source was generated.")
         return JavaAgentGenerationResult(raw_llm_output=raw, validation_result=blocked, strategy_region_score_result=evaluate_agent_strategy_region("", error=reason), failure_category=classify_generation_error(reason), failure_reason=reason, failure_stage="generation", validation_timing=validation_timing("blocked", blocked.error))
+
+    if attempt_artifact_dir is not None:
+        (attempt_artifact_dir / "extracted_candidate.java").write_text(source, encoding="utf-8")
+        (attempt_artifact_dir / "normalized_candidate.java").write_text(source, encoding="utf-8")
 
     started_at = _utc_now()
     started = time.monotonic()
@@ -160,7 +190,7 @@ def generate_java_agent_result(candidate: Candidate, backend: GenerationBackend,
         reason = validation.failure_reason or validation.error
         return JavaAgentGenerationResult(raw_llm_output=raw, extracted_code=source, strategy_region=strategy_region, assembled_java=source, validation_result=validation, strategy_region_score_result=region_score, failure_category="Java validation failure", failure_reason=reason, failure_stage="validation", validation_timing=validation_record)
 
-    package_dir = workspace_dir / candidate.id
+    package_dir = output_dir if output_dir is not None else workspace_dir / candidate.id
     package_dir.mkdir(parents=True, exist_ok=True)
     source_path = package_dir / "CandidateAgent.java"
     source_path.write_text(source, encoding="utf-8")

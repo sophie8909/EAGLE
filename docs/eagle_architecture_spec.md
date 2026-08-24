@@ -118,6 +118,20 @@ scaffold/API constraints and returns exactly one complete Java source file. It
 does not receive parent Java or game logs. Raw response, extracted source, normalized source,
 attempts, model identity, errors, and timing are persisted.
 
+Offspring decoding may use up to `generation_max_attempts`. Attempt 1 consumes
+the authoritative two-gene generation request. An extraction failure may repeat
+that base request. After a complete source fails validation or compilation, the
+next attempt consumes the separate compile-repair prompt containing the unchanged
+authoritative genes, immutable scaffold/API guide, the immediately previous
+complete source as untrusted phenotype evidence, and only that attempt's
+structured validation/compiler diagnostics. Compile repair changes no gene,
+lineage, AOS state, selection case, or strategy intent and is distinct from Code
+Reflection. Each actual request and source owns its hash and evidence. The first
+validation+compilation success is the sole canonical phenotype. If all attempts
+fail, the final attempt owns the candidate failure classification and remains
+generation evidence rather than a canonical phenotype. Generation zero loads
+once regardless of this setting.
+
 Validation requires:
 
 - package `ai.generated`;
@@ -139,9 +153,12 @@ remain flexible within those deterministic Java/API constraints.
 
 ## 8. Compilation and integration
 
-Validated Java is compiled exactly once into an isolated candidate class
-directory with the MicroRTS classpath and `-Xlint:all`. Structured, deduplicated
-errors and warnings are persisted.
+Each decoder-attempt Java source that passes validation is compiled at
+most once in an attempt-isolated class directory with the MicroRTS classpath and
+`-Xlint:all`. Structured, deduplicated errors and warnings are persisted. The
+first successful class tree is promoted without recompilation and is the only
+tree visible to Integration. Integration or runtime failure does not trigger a
+new decoder attempt.
 
 Before matches, the standalone integration probe performs seven ordered checks:
 class loading, AI inheritance, constructors, reset, clone, getAction, and valid

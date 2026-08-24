@@ -60,6 +60,15 @@ record has null start/finish/duration fields and an empty attempt list. Strategy
 Alignment likewise has null timing and no attempts when an empty policy makes
 the diagnostic not applicable.
 
+For bounded Java decoding, `generation_llm.attempts` is the ordered outer
+`generation_attempt` list and includes `generation_attempt_id`, request hash,
+`request_kind`, optional `repair_of_attempt`/previous-source hash,
+validation/compilation status, and selected/final flags. Candidate-level
+validation and compilation totals include all attempted work, while the flat
+stage artifacts project the selected attempt or final failure. `child_total`
+includes `generation_llm` as well as mutation/crossover generation, validation,
+compilation, integration, and evaluation.
+
 ## LLM attempt record
 
 ```json
@@ -74,6 +83,18 @@ the diagnostic not applicable.
 ```
 
 Attempt order is stable and one-based. The owning stage artifact provides model/backend/request/response paths; timing may reference those paths in a versioned extension but must not duplicate their content.
+
+Java generation has two distinct axes. `generation_attempt` (and stable
+`generation_attempt_id`) identifies the outer decoder step;
+`transport_attempt` identifies an HTTP transport try inside that sample. The
+backend logger remains the sole writer of each real `llm_request` event. Both
+axes and the shared request correlation ID appear in the durable LLM log and
+run timing event; the outer decoder does not emit a duplicate request event.
+The current generation transport remains fail-fast on HTTP/connection errors,
+so `transport_attempt` is normally `1`; decoder steps are not a substitute for
+an infrastructure retry. `initial_decode_retry` repeats the base request only
+after extraction yielded no complete source. `compile_repair` consumes the
+immediately previous complete source's structured validation/javac feedback.
 
 ## Match timing
 
@@ -108,7 +129,7 @@ Candidate timing now includes post-Integration evaluation start/finish/duration,
 
 ## Canonical runtime timing additions
 
-Run-level timing.jsonl contains event=generation and event=llm_request records. Generation records include generation boundaries, mutation/crossover counts and aggregates, aggregate request/validation/compilation/evaluation durations, and the generation duration. Request records include run_id, generation, candidate_id, operation_type, operation_stage, server_or_endpoint, model_id, request_started_at, request_finished_at, duration_seconds, status, failure_category, token counts when supplied, and request_correlation_id.
+Run-level timing.jsonl contains event=generation and event=llm_request records. Generation records include generation boundaries, mutation/crossover counts and aggregates, aggregate request/validation/compilation/evaluation durations, and the generation duration. Request records include run_id, generation, candidate_id, operation_type, operation_stage, server_or_endpoint, model_id, request_started_at, request_finished_at, duration_seconds, status, failure_category, token counts when supplied, request_correlation_id, generation_attempt, generation_attempt_id, transport_attempt, and generation_request_kind.
 
 Candidate timing.json contains operation-specific mutation and crossover generation-only spans, the shared child_generation span, separate validation/compilation/integration/evaluation spans, and child_total. Durations use a monotonic clock; UTC fields are display timestamps.
 

@@ -17,8 +17,12 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    best score for each case until one remains.
 5. Apply crossover/copy and let the configured reflection-operator controller
    choose Strategy Reflection or Generate-Code Reflection.
-6. Evaluate every child through the same complete pipeline. `static` performs
-   no credit update; `aos_opponent` reuses the seven normal opponent summaries;
+6. Decode each child with its configured compile-guided attempt bound, using
+   structured validation/javac evidence only after a complete source fails;
+   promote the first validation+compilation success, then evaluate that single
+   promoted phenotype through the complete pipeline. Integration/runtime
+   failure never re-enters the decoder. `static` performs no credit update;
+   `aos_opponent` reuses the seven normal opponent summaries;
    `aos_head2head` runs the configured direct parent-A matrix. Both adaptive
    modes feed one shared generation-level EMA updater.
 7. From generation 1 onward, fill the fixed population from offspring with seeded lexicase selection,

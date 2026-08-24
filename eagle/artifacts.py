@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -19,7 +20,7 @@ from .candidate import Candidate, compact_candidate_metadata
 from .config import ExperimentConfig
 
 if TYPE_CHECKING:
-    from .evaluation import CandidateEvaluation
+    from .evaluation import CandidateEvaluation, GenerationAttemptResult
 
 
 # Writers are grouped by lifecycle boundary: genotype inputs first,
@@ -89,11 +90,32 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     candidate_dir = candidates_dir / evaluation.candidate.id
     candidate_dir.mkdir(parents=True, exist_ok=True)
     write_candidate_inputs(candidates_dir, evaluation.candidate)
+    initial_seed_source = (evaluation.generation_timing or {}).get("operation") == "initial_java_seed"
+    if not initial_seed_source:
+        for attempt in evaluation.generation_attempts:
+            write_generation_attempt_artifacts(
+                candidate_dir,
+                attempt,
+                initial_seed_source=False,
+            )
+        write_generation_repair_ledger(
+            candidate_dir,
+            evaluation.generation_attempts,
+            initial_seed_source=False,
+        )
     _write_generation_artifacts(candidate_dir, evaluation)
     validation_payload = validation_to_dict(evaluation.result.validation_result)
     if validation_payload is None:
         validation_payload = {"status": "blocked", "failure_stage": evaluation.result.failure_stage, "failure_reason": evaluation.result.failure_reason}
     validation_payload["timing"] = evaluation.candidate.timing.get("validation")
+    generation_timing = evaluation.generation_timing or {}
+    representative_attempt_number = generation_timing.get("selected_attempt") or generation_timing.get("final_attempt")
+    representative_attempt_ref = (
+        None
+        if initial_seed_source or representative_attempt_number is None
+        else f"generation/attempts/attempt_{int(representative_attempt_number):03d}"
+    )
+    validation_payload["attempt_ref"] = representative_attempt_ref
     write_json(candidate_dir / "validation" / "validation_result.json", validation_payload)
     compilation_dir = candidate_dir / "compilation"
     compilation_dir.mkdir(parents=True, exist_ok=True)
@@ -105,6 +127,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
             evaluation.result.failure_reason or "Compilation was not run because an earlier stage failed.",
         )
     compilation_payload["timing"] = evaluation.candidate.timing.get("compilation")
+    compilation_payload["attempt_ref"] = representative_attempt_ref
     write_json(compilation_dir / "compilation_result.json", compilation_payload)
     (compilation_dir / "command.txt").write_text("" if compilation is None else " ".join(compilation.command), encoding="utf-8")
     (compilation_dir / "stdout.txt").write_text("" if compilation is None else compilation.stdout, encoding="utf-8")
@@ -270,6 +293,182 @@ def _mutation_metadata_record(record: dict) -> dict:
             }
     return payload
 
+
+def write_generation_attempt_artifacts(
+    candidate_dir: Path,
+    attempt: "GenerationAttemptResult",
+    *,
+    initial_seed_source: bool,
+) -> None:
+    """Persist one decoder attempt without overwriting sibling evidence."""
+
+    attempt_dir = (
+        candidate_dir
+        / "generation"
+        / "attempts"
+        / f"attempt_{attempt.attempt:03d}"
+    )
+    attempt_dir.mkdir(parents=True, exist_ok=True)
+    generation = attempt.generation
+    (attempt_dir / "request.txt").write_text(
+        "" if initial_seed_source else attempt.request,
+        encoding="utf-8",
+    )
+    (attempt_dir / "response_raw.txt").write_text(
+        "" if initial_seed_source else generation.raw_llm_output,
+        encoding="utf-8",
+    )
+    (attempt_dir / "extracted_candidate.java").write_text(
+        generation.extracted_code,
+        encoding="utf-8",
+    )
+    (attempt_dir / "normalized_candidate.java").write_text(
+        generation.assembled_java,
+        encoding="utf-8",
+    )
+    validation_dir = attempt_dir / "validation"
+    validation_payload = validation_to_dict(generation.validation_result) or {
+        "status": "blocked",
+        "failure_reason": generation.failure_reason,
+    }
+    validation_payload["timing"] = generation.validation_timing
+    write_json(validation_dir / "validation_result.json", validation_payload)
+    compilation_dir = attempt_dir / "compilation"
+    compilation = attempt.compile_result
+    compilation_payload = compile_to_dict(compilation)
+    if compilation_payload is None:
+        compilation_payload = blocked_compilation_payload(
+            generation.failure_stage,
+            attempt.compile_error
+            or generation.failure_reason
+            or "Compilation was not run because source validation failed.",
+        )
+    compilation_payload["timing"] = attempt.compilation_timing
+    write_json(compilation_dir / "compilation_result.json", compilation_payload)
+    (compilation_dir / "command.txt").write_text(
+        "" if compilation is None else " ".join(compilation.command),
+        encoding="utf-8",
+    )
+    (compilation_dir / "stdout.txt").write_text(
+        "" if compilation is None else compilation.stdout,
+        encoding="utf-8",
+    )
+    (compilation_dir / "stderr.txt").write_text(
+        "" if compilation is None else compilation.stderr,
+        encoding="utf-8",
+    )
+    write_json(
+        attempt_dir / "timing.json",
+        {
+            "generation": attempt.generation_timing,
+            "validation": generation.validation_timing,
+            "compilation": attempt.compilation_timing,
+        },
+    )
+    write_json(
+        attempt_dir / "result.json",
+        {
+            "attempt": attempt.attempt,
+            "generation_attempt_id": attempt.generation_timing.get("generation_attempt_id"),
+            "request_sha256": attempt.generation_timing.get("request_sha256"),
+            "request_kind": attempt.request_kind,
+            "repair_parent_attempt": attempt.repair_parent_attempt,
+            "repair_of_attempt": attempt.repair_parent_attempt,
+            "previous_source_sha256": attempt.generation_timing.get("previous_source_sha256"),
+            "status": (
+                "success"
+                if attempt.compile_result is not None and attempt.compile_result.ok
+                else "failed"
+            ),
+            "failure_stage": (
+                None
+                if attempt.compile_result is not None and attempt.compile_result.ok
+                else "compilation"
+                if generation.agent is not None
+                else generation.failure_stage
+            ),
+            "failure_category": (
+                None
+                if attempt.compile_result is not None and attempt.compile_result.ok
+                else "Java compile failure"
+                if generation.agent is not None
+                else generation.failure_category
+            ),
+            "failure_reason": (
+                None
+                if attempt.compile_result is not None and attempt.compile_result.ok
+                else attempt.compile_error
+                or (compilation.stderr if compilation is not None else None)
+                or generation.failure_reason
+            ),
+            "selected": attempt.selected,
+            "final": attempt.final,
+        },
+    )
+    if attempt.repair_evidence is not None:
+        write_json(attempt_dir / "repair_input.json", attempt.repair_evidence)
+
+
+def write_generation_repair_ledger(
+    candidate_dir: Path,
+    attempts: list["GenerationAttemptResult"] | tuple["GenerationAttemptResult", ...],
+    *,
+    initial_seed_source: bool,
+) -> None:
+    """Project the bounded decoder chain without duplicating large evidence."""
+
+    if initial_seed_source:
+        return
+    write_json(
+        candidate_dir / "generation" / "repair_ledger.json",
+        {
+            "schema_version": "eagle-java-compile-repair-ledger-v1",
+            "selected_attempt": next(
+                (item.attempt for item in attempts if item.selected),
+                None,
+            ),
+            "final_attempt": next(
+                (item.attempt for item in reversed(attempts) if item.final),
+                attempts[-1].attempt if attempts else None,
+            ),
+            "attempts": [
+                {
+                    "attempt": item.attempt,
+                    "request_kind": item.request_kind,
+                    "request_sha256": item.generation_timing.get("request_sha256"),
+                    "repair_parent_attempt": item.repair_parent_attempt,
+                    "repair_of_attempt": item.repair_parent_attempt,
+                    "previous_source_sha256": item.generation_timing.get("previous_source_sha256"),
+                    "request_artifact": (
+                        f"generation/attempts/attempt_{item.attempt:03d}/request.txt"
+                    ),
+                    "source_artifact": (
+                        f"generation/attempts/attempt_{item.attempt:03d}/normalized_candidate.java"
+                    ),
+                    "repair_evidence_artifact": (
+                        None
+                        if item.repair_evidence is None
+                        else f"generation/attempts/attempt_{item.attempt:03d}/repair_input.json"
+                    ),
+                    "validation_artifact": (
+                        f"generation/attempts/attempt_{item.attempt:03d}/validation/validation_result.json"
+                    ),
+                    "compilation_artifact": (
+                        f"generation/attempts/attempt_{item.attempt:03d}/compilation/compilation_result.json"
+                    ),
+                    "status": (
+                        "success"
+                        if item.compile_result is not None and item.compile_result.ok
+                        else "failed"
+                    ),
+                    "selected": item.selected,
+                    "final": item.final,
+                }
+                for item in attempts
+            ],
+        },
+    )
+
 def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvaluation) -> None:
     """Persist the complete final Java-generation request and response envelope."""
 
@@ -278,9 +477,18 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     result = evaluation.result
     generation_timing = evaluation.generation_timing or {}
     initial_seed_source = generation_timing.get("operation") == "initial_java_seed"
-    request = (
-        ""
-        if initial_seed_source
+    representative_attempt = next(
+        (
+            item
+            for item in evaluation.generation_attempts
+            if item.attempt
+            == (generation_timing.get("selected_attempt") or generation_timing.get("final_attempt"))
+        ),
+        None,
+    )
+    request = "" if initial_seed_source else (
+        representative_attempt.request
+        if representative_attempt is not None
         else evaluation.candidate.generation_input(class_name="CandidateAgent")
     )
     (generation_dir / "request.txt").write_text(request, encoding="utf-8")
@@ -293,14 +501,19 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         result.assembled_java or evaluation.candidate.generated_java or "",
         encoding="utf-8",
     )
-    phenotype_dir = candidate_dir / "phenotype"
-    phenotype_dir.mkdir(parents=True, exist_ok=True)
-    (phenotype_dir / "CandidateAgent.java").write_text(
-        result.assembled_java or evaluation.candidate.generated_java or "",
-        encoding="utf-8",
-    )
+    if evaluation.compile_result is not None and evaluation.compile_result.ok:
+        phenotype_dir = candidate_dir / "phenotype"
+        phenotype_dir.mkdir(parents=True, exist_ok=True)
+        (phenotype_dir / "CandidateAgent.java").write_text(
+            result.assembled_java or evaluation.candidate.generated_java or "",
+            encoding="utf-8",
+        )
     write_json(generation_dir / "result.json", {
-        "status": "success" if evaluation.agent is not None else "failed",
+        "status": (
+            "success"
+            if evaluation.compile_result is not None and evaluation.compile_result.ok
+            else "failed"
+        ),
         "failure_category": result.failure_category,
         "failure_reason": result.failure_reason,
         "validation_result": validation_to_dict(result.validation_result),
@@ -308,6 +521,31 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         "operation": generation_timing.get("operation"),
         "model": generation_timing.get("model"),
         "attempts": generation_timing.get("attempts", []),
+        "max_attempts": generation_timing.get("max_attempts", 1),
+        "selected_attempt": generation_timing.get("selected_attempt"),
+        "final_attempt": generation_timing.get("final_attempt", 1),
+        "representative_failure_attempt": (
+            generation_timing.get("final_attempt")
+            if generation_timing.get("selected_attempt") is None and not initial_seed_source
+            else None
+        ),
+        "canonical_attempt_artifact": (
+            None
+            if initial_seed_source or generation_timing.get("selected_attempt") is None
+            else "generation/attempts/"
+            f"attempt_{int(generation_timing['selected_attempt']):03d}"
+        ),
+        "representative_attempt_artifact": (
+            None
+            if initial_seed_source
+            else "generation/attempts/"
+            f"attempt_{int(generation_timing.get('selected_attempt') or generation_timing.get('final_attempt') or 1):03d}"
+        ),
+        "request_sha256": (
+            None
+            if initial_seed_source
+            else hashlib.sha256(request.encode("utf-8")).hexdigest()
+        ),
         "source": generation_timing.get("source"),
     })
 
@@ -365,7 +603,6 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "lineage": "lineage.json",
         "policy_prompt": "genotype/policy_prompt.txt",
         "code_generation_prompt": "genotype/code_generation_prompt.txt",
-        "generated_java": "phenotype/CandidateAgent.java",
         "generation": "generation/result.json",
         "validation": "validation/validation_result.json",
         "compilation": "compilation/compilation_result.json",
@@ -379,6 +616,10 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "timing": "timing.json",
     }
     candidate_dir = candidates_dir / candidate.id
+    if (candidate_dir / "phenotype" / "CandidateAgent.java").is_file():
+        artifact_references["generated_java"] = "phenotype/CandidateAgent.java"
+    else:
+        artifact_references["failed_generation_source"] = "generation/normalized_candidate.java"
     if (candidate_dir / "mutation" / "strategy_reflection" / "metadata.json").is_file():
         artifact_references.update({
             "strategy_reflection": "mutation/strategy_reflection/metadata.json",

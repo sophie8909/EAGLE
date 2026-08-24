@@ -20,6 +20,7 @@ generations: 20
 population_size: 10
 execution_mode: openai
 mutation_max_attempts: 3
+generation_max_attempts: 5
 crossover_rate: 0.75
 mutation_rate: 0.85
 random_seed: 7

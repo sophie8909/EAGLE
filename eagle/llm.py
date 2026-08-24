@@ -215,7 +215,14 @@ class LLMCallLogger:
         self.timing_path = timing_path
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self._lock = Lock()
-        self._sequence = 0
+        self._sequence = max(
+            (
+                int(path.name.split("_", 1)[0])
+                for path in self.log_dir.glob("[0-9][0-9][0-9][0-9][0-9][0-9]_*.json")
+                if path.name.split("_", 1)[0].isdigit()
+            ),
+            default=0,
+        )
 
     def write(
         self,
@@ -247,6 +254,7 @@ class LLMCallLogger:
         if module_name:
             parts.append(safe_name(module_name))
         path = self.log_dir / ("_".join(parts) + ".json")
+        details = metadata or {}
         payload = {
             "call_id": sequence,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -259,10 +267,14 @@ class LLMCallLogger:
             "generation": generation,
             "module_name": module_name,
             "attempt": attempt,
+            "generation_attempt": details.get("generation_attempt"),
+            "generation_attempt_id": details.get("generation_attempt_id"),
+            "transport_attempt": details.get("transport_attempt"),
+            "generation_request_kind": details.get("generation_request_kind"),
             "input": input_text,
             "response": response_text,
             "error": error,
-            "metadata": metadata or {},
+            "metadata": details,
             "run_id": self.run_id,
             "request_started_at": started_at,
             "request_finished_at": finished_at,
@@ -324,6 +336,10 @@ class LLMCallLogger:
             "status": status,
             "failure_category": details.get("failure_category") if status != "success" else None,
             "token_counts": details.get("token_counts"),
+            "generation_attempt": details.get("generation_attempt"),
+            "generation_attempt_id": details.get("generation_attempt_id"),
+            "transport_attempt": details.get("transport_attempt"),
+            "generation_request_kind": details.get("generation_request_kind"),
         }
         self.timing_path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:

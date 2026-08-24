@@ -95,6 +95,7 @@ class ExperimentConfig:
     generations: int = 1
     population_size: int = 4
     mutation_max_attempts: int = 3
+    generation_max_attempts: int = 1
     crossover_rate: float = 0.75
     mutation_rate: float = 0.85
     random_seed: int = 7
@@ -249,6 +250,7 @@ class ExperimentConfig:
             generations=int(payload.get("generations", 1)),
             population_size=int(payload.get("population_size", max(1, len(seed_prompts)))),
             mutation_max_attempts=int(payload.get("mutation_max_attempts", cls.mutation_max_attempts)),
+            generation_max_attempts=int(payload.get("generation_max_attempts", cls.generation_max_attempts)),
             crossover_rate=float(payload.get("crossover_rate", 0.75)),
             mutation_rate=float(payload.get("mutation_rate", 0.85)),
             random_seed=int(payload.get("random_seed", 7)),
@@ -305,6 +307,8 @@ class ExperimentConfig:
             raise ValueError("mutation_rate must be in [0, 1].")
         if self.mutation_max_attempts < 1:
             raise ValueError("mutation_max_attempts must be at least 1.")
+        if self.generation_max_attempts < 1:
+            raise ValueError("generation_max_attempts must be at least 1.")
         if self.stagnation_generations < 0:
             raise ValueError("stagnation_generations must be at least 0.")
         self.reflection_operator_settings.validate()
@@ -382,6 +386,7 @@ class ExperimentConfig:
             "generations": self.generations,
             "population_size": self.population_size,
             "mutation_max_attempts": self.mutation_max_attempts,
+            "generation_max_attempts": self.generation_max_attempts,
             "crossover_rate": self.crossover_rate,
             "mutation_rate": self.mutation_rate,
             "random_seed": self.random_seed,
