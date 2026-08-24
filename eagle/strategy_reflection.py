@@ -20,7 +20,7 @@ from uuid import uuid4
 from evaluation.match_trace import iter_match_trace
 
 from .candidate import Candidate
-from .llm import truncate_prompt
+from .llm import LLMCallLogger, truncate_prompt
 from .mutation import ReflectionContext, parse_json_object_response, utc_now
 from .opponent_cases import LEXICASE_CASES
 from .prompts import normalize_prompt, render_prompt
@@ -141,7 +141,18 @@ class MockRoleBackend:
 class StrategyReflectionPipeline:
     """Run Commentator -> Coach using shared backend plumbing."""
 
-    def __init__(self, backend: RoleBackend, *, max_attempts: int = 3, max_prompt_chars: int = 60_000, model_identity: str | None = None, enabled_roles: set[str] | None = None, selection_seed: int = 0, sample_budget: int = 10) -> None:
+    def __init__(
+        self,
+        backend: RoleBackend,
+        *,
+        max_attempts: int = 3,
+        max_prompt_chars: int = 60_000,
+        model_identity: str | None = None,
+        enabled_roles: set[str] | None = None,
+        selection_seed: int = 0,
+        sample_budget: int = 10,
+        timing_logger: LLMCallLogger | None = None,
+    ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
         if sample_budget < 1:
@@ -153,6 +164,7 @@ class StrategyReflectionPipeline:
         self.enabled_roles = frozenset(("match_commentator", "coach") if enabled_roles is None else enabled_roles)
         self.selection_seed = int(selection_seed)
         self.sample_budget = int(sample_budget)
+        self.timing_logger = timing_logger
 
     def mutate(self, candidate: Candidate, context: ReflectionContext, *, artifact_dir: Path | None = None, mutation_intent: str | None = None) -> Candidate:
         result = self.run(candidate, context, artifact_dir=artifact_dir, mutation_intent=mutation_intent)
@@ -397,30 +409,103 @@ class StrategyReflectionPipeline:
         _write_json(artifact_dir, f"commentary/{match_id}/{name}" if match_id else f"reflection/{role}_{name}", {**trace, "prompt": bounded})
         last_error = ""
         for attempt in range(1, self.max_attempts + 1):
+            started_at = utc_now()
             started = time.monotonic()
             raw = ""
             try:
                 raw = self.backend.generate(bounded)
                 validated = validator(raw)
-                envelope = {**trace, "attempt": attempt, "status": "success", "duration_seconds": max(0.0, time.monotonic() - started), "response": raw}
-                response_name = "response.json" if not suffix else f"response_{suffix}.json"
-                _write_json(artifact_dir, f"commentary/{match_id}/{response_name}" if match_id else f"reflection/{role}_{response_name}", envelope)
-                attempt_name = f"response_attempt_{attempt:03d}.json"
-                _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
-                return raw, validated
             except (OSError, RuntimeError, TypeError, ValueError) as exc:
                 last_error = str(exc) or type(exc).__name__
+                finished_at = utc_now()
+                duration_seconds = max(0.0, time.monotonic() - started)
                 envelope = {
                     **trace,
                     "attempt": attempt,
                     "status": "error",
-                    "duration_seconds": max(0.0, time.monotonic() - started),
+                    "started_at": started_at,
+                    "finished_at": finished_at,
+                    "duration_seconds": duration_seconds,
                     "response": raw,
                     "error": last_error,
                 }
                 attempt_name = f"response_attempt_{attempt:03d}.json"
                 _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
+                self._write_role_timing(
+                    trace,
+                    role=role,
+                    attempt=attempt,
+                    status="error",
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_seconds=duration_seconds,
+                    failure_category=type(exc).__name__,
+                )
+                continue
+
+            finished_at = utc_now()
+            duration_seconds = max(0.0, time.monotonic() - started)
+            envelope = {
+                **trace,
+                "attempt": attempt,
+                "status": "success",
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "duration_seconds": duration_seconds,
+                "response": raw,
+            }
+            response_name = "response.json" if not suffix else f"response_{suffix}.json"
+            _write_json(artifact_dir, f"commentary/{match_id}/{response_name}" if match_id else f"reflection/{role}_{response_name}", envelope)
+            attempt_name = f"response_attempt_{attempt:03d}.json"
+            _write_json(artifact_dir, f"commentary/{match_id}/{attempt_name}" if match_id else f"reflection/{role}_{attempt_name}", envelope)
+            self._write_role_timing(
+                trace,
+                role=role,
+                attempt=attempt,
+                status="success",
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_seconds=duration_seconds,
+                failure_category=None,
+            )
+            return raw, validated
         raise RuntimeError(last_error or f"{role} failed after {self.max_attempts} attempts")
+
+    def _write_role_timing(
+        self,
+        trace: dict[str, Any],
+        *,
+        role: str,
+        attempt: int,
+        status: str,
+        started_at: str,
+        finished_at: str,
+        duration_seconds: float,
+        failure_category: str | None,
+    ) -> None:
+        if self.timing_logger is None:
+            return
+        endpoint = getattr(self.backend, "chat_completions_url", None)
+        if not isinstance(endpoint, str):
+            endpoint = getattr(self.backend, "base_url", None)
+        request_id = str(trace["request_id"])
+        run_id = self.timing_logger.run_id or "run"
+        self.timing_logger.write_timing_event(
+            request_correlation_id=f"{run_id}:{request_id}:{attempt}",
+            stage=role,
+            status=status,
+            model=self.model_identity,
+            candidate_id=str(trace["candidate_id"]),
+            generation=int(trace["generation_index"]),
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_seconds=duration_seconds,
+            metadata={
+                "operation_type": "mutation",
+                "endpoint": endpoint,
+                "failure_category": failure_category,
+            },
+        )
 
 
 class StrategyReflectionMutation(StrategyReflectionPipeline):
@@ -871,7 +956,9 @@ def _parse_coach(payload: str, *, parent_strategy_prompt: str) -> CoachResult:
     return CoachResult(
         strategy_changes={key: _strings(changes.get(key)) for key in ("preserved", "removed_or_reduced", "added_or_strengthened")},
         strategy_signature=normalize_strategy_signature(data.get("strategy_signature")),
-        parent_strategy_prompt=str(data.get("parent_strategy_prompt") or parent_strategy_prompt),
+        # The model echo remains losslessly available in coach_output.json, but
+        # validated state must use the authoritative input gene.
+        parent_strategy_prompt=parent_strategy_prompt,
         new_strategy_prompt=prompt,
     )
 

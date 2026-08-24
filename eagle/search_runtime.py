@@ -76,6 +76,7 @@ def build_search_runtime(
             enabled_roles=enabled_roles,
             selection_seed=config.random_seed,
             sample_budget=config.match_commentator_sample_count,
+            timing_logger=logger,
         ),
         "code": PromptRewriteMutation(
             config,

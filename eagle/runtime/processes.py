@@ -183,7 +183,17 @@ class RuntimeManager:
             self._remove_ownership_state(only_if_owned=True)
             self._owned_identity = None
             return
-        terminate_pid(identity.pid, 5.0)
+        try:
+            terminate_pid(identity.pid, 5.0)
+        except KeyboardInterrupt:
+            # Ctrl+C can reach the launcher while the owned process is already
+            # handling the same terminal signal. Remove only this manager's
+            # token after the full recorded identity is confirmed dead; retain
+            # live state so later reconciliation can safely finish cleanup.
+            if not identity_matches_process(identity):
+                self._remove_ownership_state(only_if_owned=True)
+                self._owned_identity = None
+            raise
         self._remove_ownership_state(only_if_owned=True)
         self._owned_identity = None
 

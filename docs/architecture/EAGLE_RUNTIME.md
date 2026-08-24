@@ -10,6 +10,11 @@ Ownership is stored per endpoint below `runtime/ownership/`. The record contains
 
 An occupied endpoint without verified ownership is foreign even if its executable happens to be named `llama-server`. EAGLE never kills or attaches to it and reports host, port, PID, executable, and command. Batch cleanup calls `stop_owned()` from one `finally` after success, search/artifact/final-test failure, Ctrl+C, or CLI-translated SIGTERM. The experiment orchestrator is the sole lifecycle owner.
 
+If Ctrl+C interrupts termination after the owned process has already exited,
+the original manager removes its matching ownership-token record before
+re-raising the interrupt. It retains the record when that exact process is
+still alive, and never removes a record owned by another manager token.
+
 `--mock` bypasses runtime adaptation entirely: no model-file validation, port inspection, health check, or server ownership state is touched.
 
 The optional `watchdog.sh` only monitors the local network interface. It never owns a model process or endpoint.

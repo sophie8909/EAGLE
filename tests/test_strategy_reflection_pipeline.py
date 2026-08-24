@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from eagle.candidate import Candidate
+from eagle.llm import LLMCallLogger
 from eagle.mutation import ReflectionContext
 from eagle.reflection_context import CandidateReflectionSummary, EvolutionContext
 from eagle.strategy_reflection import (
@@ -202,7 +203,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                         "defense": "reactive",
                         "target_priority": "workers",
                     },
-                    "parent_strategy_prompt": parent_strategy,
+                    "parent_strategy_prompt": "hallucinated parent echo",
                     "new_strategy_prompt": raw_child_strategy,
                     "unconsumed_exact_field": "coach-raw-value",
                 })
@@ -312,6 +313,10 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             coach_output = json.loads((reflection_dir / "coach_output.json").read_text(encoding="utf-8"))
             self.assertEqual(coach_output, json.loads(coach_raw))
             self.assertEqual(coach_output["unconsumed_exact_field"], "coach-raw-value")
+            self.assertEqual(coach_output["parent_strategy_prompt"], "hallucinated parent echo")
+            coach_result = json.loads((reflection_dir / "coach_result.json").read_text(encoding="utf-8"))
+            self.assertEqual(coach_result["parent_strategy_prompt"], parent_strategy)
+            self.assertEqual(result.coach.parent_strategy_prompt, parent_strategy)
             self.assertEqual(result.candidate.strategy_prompt, "Revised policy.\n\nAttack conditionally.")
             self.assertEqual(
                 (reflection_dir / "child_strategy_prompt.txt").read_text(encoding="utf-8"),
@@ -493,7 +498,14 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             log_path = root / "match_trace.jsonl.gz"
             _write_trace(log_path, metadata={"match_id": "match-4"}, round_state_dir=states, raw_result={}, tick_limit=0)
             backend = RetryBackend()
-            result = StrategyReflectionMutation(backend, max_attempts=3).run(
+            timing_path = root / "timing.jsonl"
+            logger = LLMCallLogger(root / "llm_logs", run_id="test-run", timing_path=timing_path)
+            result = StrategyReflectionMutation(
+                backend,
+                max_attempts=3,
+                model_identity="test-model",
+                timing_logger=logger,
+            ).run(
                 Candidate(id="retry-commentary", strategy_prompt="Defend, then attack."),
                 ReflectionContext(
                     generation=1,
@@ -515,6 +527,26 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertEqual(second_attempt["status"], "error")
             self.assertIn('"turning_points": []', second_attempt["response"])
             self.assertEqual(third_attempt["status"], "success")
+            for attempt in (first_attempt, second_attempt, third_attempt):
+                self.assertTrue(attempt["started_at"].endswith("+00:00"))
+                self.assertTrue(attempt["finished_at"].endswith("+00:00"))
+                self.assertGreaterEqual(attempt["duration_seconds"], 0)
+
+            timing_events = [json.loads(line) for line in timing_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(len(timing_events), 4)
+            self.assertEqual(
+                [event["operation_stage"] for event in timing_events],
+                ["match_commentator", "match_commentator", "match_commentator", "coach"],
+            )
+            self.assertTrue(all(event["operation_type"] == "mutation" for event in timing_events))
+            self.assertEqual(
+                [event["status"] for event in timing_events],
+                ["error", "error", "success", "success"],
+            )
+            self.assertEqual(len({event["request_correlation_id"] for event in timing_events}), 4)
+            self.assertTrue(all(event["request_started_at"].endswith("+00:00") for event in timing_events))
+            self.assertTrue(all(event["request_finished_at"].endswith("+00:00") for event in timing_events))
+            self.assertEqual(list((root / "llm_logs").glob("*.json")), [])
 
     def test_semantically_invalid_coach_is_retried(self) -> None:
         class RetryCoachBackend:

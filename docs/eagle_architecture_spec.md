@@ -85,6 +85,11 @@ seven-case lexicase fitness.
 Strategy mutation performs Match Commentator sampling, Coach reflection, and a
 Strategy Prompt rewrite before final Java generation. It changes only
 `strategy_prompt`.
+Commentator and Coach transport, parsing, and semantic validation use one
+bounded attempt budget. Each attempt retains UTC boundaries and one run timing
+event without duplicating candidate-owned prompt/response evidence. A validated
+Coach result takes its parent policy from the authoritative input; any model
+echo remains raw/parsed evidence only.
 
 Code mutation compares the current policy with the current Java phenotype, then
 performs Code Generation Prompt Rewrite before final Java generation. It changes
@@ -120,10 +125,17 @@ Validation requires:
 - superclass `AbstractionLayerAI`;
 - required one- and two-argument constructors;
 - `getAction`, `reset`, and `clone` contracts;
+- token-equivalent checked-in source outside the single editable strategy
+  region;
+- strategy-helper scope and array-shape constraints, including an explicit
+  `AgentContext context` parameter for every helper that reads `context`, local
+  or parameter ownership for `gameTime`, and `int[][]` for nested coordinate
+  pairs;
 - no network, process execution, unauthorized file I/O, runtime modification,
   or unavailable dependencies.
 
-Internal helper names and source layout are not part of the candidate contract.
+Internal helper names and implementation inside the editable strategy region
+remain flexible within those deterministic Java/API constraints.
 
 ## 8. Compilation and integration
 
@@ -178,8 +190,10 @@ an integrity report. Strategy Reflection consumes this same trace. A second
 `match_log.jsonl.gz` format is prohibited.
 
 Compact mode may remove replay and raw round-state files after canonical
-telemetry and trace persistence. Reflection sampling may delete consumed trace
-files after commentary artifacts have been written.
+telemetry and trace persistence. Parent traces remain available until every
+same-generation sibling has been constructed. Only after atomic survivor
+persistence may traces for retired parents and discarded offspring be removed;
+survivor traces remain available to the next generation.
 
 ## 11. Run schema
 

@@ -78,11 +78,18 @@ mutation/strategy_reflection/
 
 Every role envelope records `role`, `candidate_id`, `generation_index`,
 `request_id`, model-configuration identity, prompt version, and schema version.
+Every attempt additionally records UTC start/finish timestamps, monotonic
+duration, status, and error. The same attempt has one compact `llm_request`
+event in run `timing.jsonl`; the exact prompt/response remains only in the
+candidate-owned role artifacts and is not duplicated under `llm_logs/`.
 The numbered Commentator files contain the exact parsed responses in call order.
 `coach_input.json` contains the semantic render inputs and selected Coach prompt
 name, while `coach_prompt.txt` is the exact bounded prompt sent.
 `coach_output.json` is the parsed response before validation or normalization;
-`coach_result.json` is the validated runtime result. The post-normalization
+it therefore preserves any model-provided parent-policy echo losslessly.
+`coach_result.json` is the validated runtime result and always takes
+`parent_strategy_prompt` from the authoritative Coach input rather than trusting
+that echo. The post-normalization
 `child_strategy_prompt.txt` is the value stored in the child genotype, and
 `generator_strategy_input.txt` is written at the pre-Generator boundary from
 the exact strategy placeholder value.

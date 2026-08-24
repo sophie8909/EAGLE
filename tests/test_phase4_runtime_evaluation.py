@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import gzip
 import json
 import subprocess
@@ -80,6 +81,45 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertEqual(len({item["source_hash"] for item in observed}), 1)
         self.assertEqual(len({item["class_hash"] for item in observed}), 1)
         self.assertEqual(len({str(item["classes_dir"]) for item in observed}), 1)
+
+    def test_canonical_match_artifacts_persist_all_seven_case_ids(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "CandidateAgent.java"
+            source.write_text("source", encoding="utf-8")
+            classes = root / "classes" / "candidate"
+            classes.mkdir(parents=True)
+            (classes / "CandidateAgent.class").write_bytes(b"compiled")
+            agent = GeneratedJavaAgent("CandidateAgent", "ai.generated", "source", source)
+            config = ExperimentConfig.from_mapping({})
+            results, error = evaluate_matches(
+                candidate=Candidate(id="candidate"),
+                agent=agent,
+                config=config,
+                classes_dir=root / "classes",
+                match_artifacts_dir=root / "matches",
+                mock=True,
+                ordinal=0,
+            )
+            persisted = [
+                json.loads(
+                    (root / "matches" / f"match_{index:02d}" / "result.json").read_text()
+                )
+                for index in range(config.expected_match_count)
+            ]
+            metadata = [
+                json.loads(
+                    (root / "matches" / f"match_{index:02d}" / "match_metadata.json").read_text()
+                )
+                for index in range(config.expected_match_count)
+            ]
+
+        self.assertIsNone(error)
+        self.assertEqual(len(results), 126)
+        expected = {item.opponent_id: 18 for item in EVALUATION_ROSTER}
+        self.assertEqual(Counter(item["opponent_id"] for item in persisted), expected)
+        self.assertEqual(Counter(item["opponent_id"] for item in metadata), expected)
+        self.assertTrue(all(item["opponent_id"] for item in persisted))
 
     def test_real_mode_preflight_reports_missing_search_opponent(self):
         with tempfile.TemporaryDirectory() as temp_dir:

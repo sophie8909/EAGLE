@@ -63,6 +63,78 @@ class Phase3ValidationTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("fixed_scaffold", {item["check"] for item in result.failed_checks})
 
+    def test_strategy_contract_rejects_cross_method_game_time_reference(self):
+        source = with_strategy(
+            VALID_SOURCE,
+            """    private void decide(AgentContext context) {
+        int gameTime = context.gs.getTime();
+        manageWorkers(context);
+    }
+    private void manageWorkers(AgentContext context) {
+        if (gameTime >= 250) { commandIdle(null); }
+    }""",
+        )
+        result = validate_generated_java_source(source, "CandidateAgent")
+        self.assertFalse(result.ok)
+        reason = next(
+            item["reason"] for item in result.failed_checks
+            if item["check"] == "strategy_contract"
+        )
+        self.assertIn("manageWorkers uses gameTime", reason)
+
+    def test_strategy_contract_rejects_context_without_parameter_and_unavailable_lookup(self):
+        source = with_strategy(
+            VALID_SOURCE,
+            """    private int[] findBuildLocation(Unit base) {
+        PhysicalGameState pgs = context.gs.getPhysicalGameState();
+        return pgs.getUnitAt(base.getX(), base.getY()) == null ? new int[]{0, 0} : null;
+    }""",
+        )
+        result = validate_generated_java_source(source, "CandidateAgent")
+        self.assertFalse(result.ok)
+        reason = next(
+            item["reason"] for item in result.failed_checks
+            if item["check"] == "strategy_contract"
+        )
+        self.assertIn("does not declare AgentContext context", reason)
+        self.assertIn("getUnitAt is not an available", reason)
+
+    def test_strategy_contract_rejects_nested_pairs_declared_as_one_dimensional(self):
+        source = with_strategy(
+            VALID_SOURCE,
+            """    private int[] direction() {
+        int[] directions = {{-1, 0}, {1, 0}};
+        for (int[] direction : directions) { return direction; }
+        return null;
+    }""",
+        )
+        result = validate_generated_java_source(source, "CandidateAgent")
+        self.assertFalse(result.ok)
+        reason = next(
+            item["reason"] for item in result.failed_checks
+            if item["check"] == "strategy_contract"
+        )
+        self.assertIn("int[][]", reason)
+
+    def test_strategy_contract_accepts_explicit_scope_and_two_dimensional_pairs(self):
+        source = with_strategy(
+            VALID_SOURCE,
+            """    private void decide(AgentContext context) {
+        int gameTime = context.gs.getTime();
+        manageWorkers(context, gameTime);
+    }
+    private void manageWorkers(AgentContext context, int gameTime) {
+        int[][] directions = new int[][]{{-1, 0}, {1, 0}};
+        for (int[] direction : directions) {
+            if (gameTime >= 250 && context.gs.free(direction[0], direction[1])) {
+                return;
+            }
+        }
+    }""",
+        )
+        result = validate_generated_java_source(source, "CandidateAgent")
+        self.assertTrue(result.ok, result.failed_checks)
+
     def test_invalid_package_is_a_structured_validation_failure(self):
         result = validate_assembled_java(VALID_SOURCE.replace("ai.generated", "ai.invalid", 1), "CandidateAgent")
         self.assertFalse(result.ok)
@@ -130,7 +202,7 @@ class Phase3ValidationTests(unittest.TestCase):
     def test_generation_failure_blocks_validation_checks(self):
         result = validate_assembled_java("", "CandidateAgent")
         self.assertFalse(result.ok)
-        self.assertEqual(len(result.blocked_checks), 8)
+        self.assertEqual(len(result.blocked_checks), 9)
         self.assertEqual(result.failed_checks, ())
 
     def test_validation_artifact_is_persisted_on_failure(self):

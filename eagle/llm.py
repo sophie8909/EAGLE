@@ -270,28 +270,66 @@ class LLMCallLogger:
             "request_correlation_id": correlation_id,
         }
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        if self.timing_path is not None:
-            event = {
-                "event": "llm_request",
-                "run_id": self.run_id,
-                "request_correlation_id": correlation_id,
-                "generation": generation,
-                "candidate_id": candidate_id,
-                "operation_type": (metadata or {}).get("operation_type"),
-                "operation_stage": stage,
-                "server_or_endpoint": (metadata or {}).get("endpoint"),
-                "model_id": model,
-                "request_started_at": started_at,
-                "request_finished_at": finished_at,
-                "duration_seconds": duration_seconds,
-                "status": status,
-                "failure_category": (metadata or {}).get("failure_category") if status != "success" else None,
-                "token_counts": (metadata or {}).get("token_counts"),
-            }
+        self.write_timing_event(
+            request_correlation_id=correlation_id,
+            stage=stage,
+            status=status,
+            model=model,
+            candidate_id=candidate_id,
+            generation=generation,
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_seconds=duration_seconds,
+            metadata=metadata,
+        )
+        return path
+
+    def write_timing_event(
+        self,
+        *,
+        request_correlation_id: str,
+        stage: str,
+        status: str,
+        model: str | None,
+        candidate_id: str | None,
+        generation: int | None,
+        started_at: str | None,
+        finished_at: str | None,
+        duration_seconds: float | None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Append timing for a request whose full evidence has another owner.
+
+        Strategy Reflection already persists exact request/response artifacts
+        below the candidate.  This method adds only the canonical run timing
+        event so ``llm_logs`` does not duplicate those large payloads.
+        """
+
+        if self.timing_path is None:
+            return
+        details = metadata or {}
+        event = {
+            "event": "llm_request",
+            "run_id": self.run_id,
+            "request_correlation_id": request_correlation_id,
+            "generation": generation,
+            "candidate_id": candidate_id,
+            "operation_type": details.get("operation_type"),
+            "operation_stage": stage,
+            "server_or_endpoint": details.get("endpoint"),
+            "model_id": model,
+            "request_started_at": started_at,
+            "request_finished_at": finished_at,
+            "duration_seconds": duration_seconds,
+            "status": status,
+            "failure_category": details.get("failure_category") if status != "success" else None,
+            "token_counts": details.get("token_counts"),
+        }
+        self.timing_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock:
             with self.timing_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(event, ensure_ascii=False))
                 handle.write("\n")
-        return path
 
 
 def safe_name(value: str) -> str:

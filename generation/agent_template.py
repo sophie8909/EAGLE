@@ -33,6 +33,16 @@ _JAVA_TOKEN_PATTERN = re.compile(
     r'''[^\s]''',
     re.DOTALL,
 )
+_JAVA_NON_CODE_PATTERN = re.compile(
+    r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|//[^\n]*|/\*.*?\*/''',
+    re.DOTALL,
+)
+_PRIVATE_METHOD_PATTERN = re.compile(
+    r"\bprivate\s+(?:static\s+)?(?:final\s+)?"
+    r"[A-Za-z_$][A-Za-z0-9_$<>,.?\[\]\s]*\s+"
+    r"(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)\s*"
+    r"\((?P<parameters>[^()]*)\)\s*(?:throws\s+[^\{]+)?\{",
+)
 
 
 @dataclass(frozen=True)
@@ -112,6 +122,58 @@ def fixed_scaffold_equivalent(source: str, scaffold: str) -> bool:
     """Compare every Java token outside the single editable strategy region."""
 
     return _fixed_source_tokens(source) == _fixed_source_tokens(scaffold)
+
+
+def strategy_contract_errors(source: str) -> tuple[str, ...]:
+    """Return deterministic Java-shape violations inside the editable region."""
+
+    strategy = extract_strategy_region(source)
+    code = _JAVA_NON_CODE_PATTERN.sub(" ", strategy)
+    errors: list[str] = []
+    if re.search(
+        r"\bint\s*\[\s*\]\s+[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*"
+        r"(?:new\s+int\s*\[\s*\]\s*)?\{\s*\{",
+        code,
+    ):
+        errors.append("nested coordinate pairs must be declared as int[][], not int[]")
+    if re.search(r"\.getUnitAt\s*\(", code):
+        errors.append("getUnitAt is not an available MicroRTS API; use GameState.free(x, y)")
+
+    for match in _PRIVATE_METHOD_PATTERN.finditer(code):
+        method_name = match.group("name")
+        parameters = match.group("parameters")
+        method_end = _matching_brace_end(code, match.end() - 1)
+        if method_end is None:
+            errors.append(f"method {method_name} has unbalanced braces")
+            continue
+        method = code[match.start():method_end]
+        if re.search(r"\bcontext\s*\.", method) and not re.search(
+            r"\bAgentContext\s+context\b",
+            parameters,
+        ):
+            errors.append(
+                f"method {method_name} uses context but does not declare AgentContext context"
+            )
+        if re.search(r"\bgameTime\b", method) and not re.search(
+            r"\b(?:byte|short|int|long)\s+gameTime\b",
+            method,
+        ):
+            errors.append(
+                f"method {method_name} uses gameTime without an integer parameter or local declaration"
+            )
+    return tuple(dict.fromkeys(errors))
+
+
+def _matching_brace_end(source: str, opening_index: int) -> int | None:
+    depth = 0
+    for index in range(opening_index, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    return None
 
 
 def _fixed_source_tokens(source: str) -> tuple[str, ...]:

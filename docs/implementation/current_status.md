@@ -142,6 +142,10 @@ Parent match traces remain available while all same-generation siblings are
 created, then retired/discarded traces are removed only after atomic survivor
 persistence. Commentator and Coach semantic failures participate in bounded
 attempt retries; zero valid Commentator analyses preserves the parent policy.
+Every role attempt has UTC boundaries in its candidate artifact and one compact
+run timing event, without duplicating prompts/responses under `llm_logs/`.
+Validated Coach results use the authoritative input parent policy; the model's
+echo is retained only in raw/parsed evidence.
 
 Code Reviewer/Rewriter evidence is stored under `mutation/code_reflection/`.
 The Rewriter uses the exact JSON object contract with the sole field
@@ -177,3 +181,36 @@ git diff --check
 
 The test suite uses mocked generation/matches and does not constitute a full
 MicroRTS evolutionary experiment.
+
+## static_0824 repair ledger
+
+This ledger records production stop/fix/restart cycles. A cycle is counted only
+after an implementation change is followed by a fresh production restart. One
+failed evolutionary candidate is normal; the run is stopped for a repeated
+shared root cause, a broken pipeline/artifact contract, or no viable path to an
+evaluated generation. The early Java-decoder health window is the first four
+offspring, with at most one validation/compilation failure allowed.
+
+If ten repair cycles complete without a healthy restart, cycle 11 must not be
+started. The handoff must instead list each remaining root-cause hypothesis,
+supporting and refuting evidence, solution options, architectural impact, cost,
+and the smallest discriminating experiment.
+
+The pre-cycle baseline, `runs/20260824_170942_291008`, was interrupted after
+generation 15. It exposed duplicated generation-zero seeds, fabricated seed LLM
+evidence, unnecessary blank-policy Alignment calls, sibling trace consumption,
+zero-analysis Coach calls, and a 94/150 offspring compilation-failure rate. The
+bootstrap and evidence fixes are recorded in commit `e187732b2c7`.
+
+Cycle 1 used `runs/20260824_204255_208585`. Generation 0 correctly evaluated
+one seed over 126 matches with no generation LLM attempt, and all ten
+generation-1 Strategy Reflection children completed 10 Commentator analyses and
+one Coach call with non-empty policies. The run was stopped during offspring 5
+because three of the first four generated sources failed javac: an out-of-scope
+`gameTime`, two helpers using undeclared `context`, and an `int[]` initialized
+with nested coordinate pairs. The manifest is `interrupted`, and the server
+process stopped. Follow-up inspection also found a stale dead-process ownership
+record, null `opponent_id` in canonical per-match results, missing UTC/run-level
+mutation-role timing, and untrusted Coach parent-policy echoes. These items are
+the scope of cycle 2; the Strategy Reflection state transition itself passed its
+real-run checks.

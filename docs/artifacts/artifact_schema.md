@@ -114,7 +114,14 @@ fallback reads for old prompt/phenotype paths, but ignores legacy
 `individual.json`, `candidate_result.json`, `evaluation/summary.json`, and
 `evaluation/matches.json` are not written.
 
-Raw LLM output is persisted before parsing. Mutation retains reflection/rewrite request, raw response, attempts, status, and failure evidence even when later generation fails. Adaptively credited offspring retain `aos/reward.json`; head-to-head match evidence remains below `aos/head_to_head/`.
+Raw LLM output is persisted before parsing. Mutation retains reflection/rewrite
+request, raw response, UTC-bounded attempts, status, and failure evidence even
+when later generation fails. Strategy Coach parsed output preserves the model's
+parent-policy echo, while validated `coach_result.json` takes the parent policy
+from the authoritative input artifact. Mutation-role run timing references the
+candidate-owned evidence without duplicating its prompt/response under
+`llm_logs/`. Adaptively credited offspring retain `aos/reward.json`;
+head-to-head match evidence remains below `aos/head_to_head/`.
 
 Code Reflection metadata records `reviewed_phenotype_artifact` as a run-relative
 reference to the evaluated source candidate's canonical Java phenotype. The
@@ -138,6 +145,11 @@ matches/<match_id>/
 ├── stderr.txt
 └── timing.json
 ```
+
+Every normal-evaluation `result.json` and `match_metadata.json` records a
+non-null canonical `opponent_id`. The 126 match directories must reconstruct
+exactly the seven configured case IDs with 18 matches per opponent, without
+mapping Java class names back to fitness cases.
 
 Compact mode removes transient raw replay/round-state inputs after durable telemetry/trace creation. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
 

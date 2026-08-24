@@ -707,6 +707,8 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                 result = run_microrts_match(
                     microrts_dir=config.microrts_dir, classes_dir=candidate_classes_dir,
                     agent_class=agent.qualified_class_name, opponent=opponent.class_name,
+                    opponent_id=opponent.opponent_id,
+                    opponent_name=_opponent_display_name(opponent.opponent_id),
                     tick_limit=config.tick_limit, match_index=specification.match_index,
                     match_artifacts_dir=match_artifacts_dir,
                     scoring_config=scoring_config_from_experiment(config), mock=mock,

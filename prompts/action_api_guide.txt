@@ -41,9 +41,26 @@ Exact corrections for common invalid APIs:
 - Use context.gs.getPhysicalGameState().getWidth()/getHeight(), never map,
   map-width, map-height, spawn-location, tile, or base methods on GameState or Player.
 - Use context.gs.getUnitAction(unit), never unit.getAction() or unit.getTask().
+- Use context.gs.free(x, y) to test occupancy, never getUnitAt(...).
 - context.units is a List<Unit>, never a map; count/filter it with loops.
 - Every added helper that reads player, state, or units must accept AgentContext;
   never reference a context variable that is not a parameter or local variable.
-- Represent coordinate pairs as int[][], not an int[] containing nested pairs.
+- Java locals never flow into another method. If decide computes
+  `int gameTime = context.gs.getTime()`, every helper that reads it must declare
+  an `int gameTime` parameter and every call must pass that value. Apply this
+  rule to every other computed local value as well.
+- A helper that reads game state must use a signature such as
+  `findBuildLocation(AgentContext context, Unit base)`; a method whose parameters
+  omit AgentContext must never contain `context.gs` or `context.units`.
+- A scalar coordinate is `int x`. One coordinate pair is `int[] point = new
+  int[]{x, y}`. Multiple coordinate pairs must use the exact two-dimensional
+  form `int[][] directions = new int[][]{{-1, 0}, {1, 0}, {0, -1}, {0, 1}};`
+  and iterate with `for (int[] direction : directions)`. Never initialize an
+  `int[]` with nested `{...}` pairs.
 - Never construct synthetic Unit, GameState, AgentContext, PathFinding, or
   PathChoice objects to query engine state.
+
+Before returning the file, check every private strategy helper independently:
+all referenced locals are declared in that method or its parameter list, every
+`context.` use has an `AgentContext context` parameter, and every array's declared
+dimension matches its initializer and enhanced-for element type.

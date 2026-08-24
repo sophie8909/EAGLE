@@ -32,6 +32,11 @@ The Coach receives the current policy, selected MatchAnalysis summaries, and
 the existing global evaluation/selection metadata. It receives no Java or
 code-generation diagnostics. Its replacement policy describes economy,
 production, attack timing, defense, expansion, and targeting—not Java.
+Commentator and Coach transport, parsing, and semantic validation share the
+configured bounded attempt budget. Each attempt has candidate-owned raw
+evidence plus one run timing event. The validated Coach result always uses the
+authoritative input policy as its parent-policy field; a model echo remains only
+in raw/parsed evidence and cannot rewrite provenance.
 
 Canonical state transition:
 

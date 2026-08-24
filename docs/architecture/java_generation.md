@@ -43,7 +43,13 @@ evidence remains under `generation/`; the canonical phenotype is
 Validation enforces package `ai.generated`, public class `CandidateAgent`,
 `AbstractionLayerAI`, required constructors/lifecycle methods, available APIs,
 the token-equivalent fixed scaffold outside the editable strategy markers, and
-prohibited network/process/file/runtime-modification capabilities.
+prohibited network/process/file/runtime-modification capabilities. Inside the
+editable region, deterministic strategy-contract checks reject Java shapes that
+the immutable prompt explicitly forbids: a helper using `context` without an
+`AgentContext context` parameter, a helper reading an undeclared `gameTime`,
+one-dimensional arrays initialized with nested coordinate pairs, and unavailable
+`getUnitAt` lookups. These checks classify invalid generation before `javac`;
+they do not repair source or add another LLM stage.
 
 Hard tests prove the request uses the checked-in scaffold rather than
 `parent.generated_java`, and prove Generator/Evaluation preserve both prompt

@@ -16,6 +16,7 @@ from .agent_template import (
     extract_strategy_region,
     fixed_scaffold_equivalent,
     load_java_template,
+    strategy_contract_errors,
 )
 from .backend import GenerationBackend
 
@@ -97,6 +98,7 @@ VALIDATION_CHECK_NAMES = (
     "constructors",
     "callable_methods",
     "forbidden_behaviors",
+    "strategy_contract",
     "fixed_scaffold",
     "runtime_contract",
 )
@@ -220,6 +222,15 @@ def validate_generated_java_source(
     if unavailable_imports:
         forbidden.append(f"unavailable_dependencies:{','.join(unavailable_imports)}")
     check("forbidden_behaviors", not forbidden, f"forbidden runtime behavior: {', '.join(forbidden)}")
+    try:
+        strategy_errors = strategy_contract_errors(source)
+    except ValueError as exc:
+        strategy_errors = (str(exc),)
+    check(
+        "strategy_contract",
+        not strategy_errors,
+        "; ".join(strategy_errors),
+    )
     try:
         scaffold = load_java_template(template_paths or JavaTemplatePaths())
         fixed_scaffold_ok = fixed_scaffold_equivalent(source, scaffold)

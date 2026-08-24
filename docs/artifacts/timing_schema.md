@@ -125,4 +125,7 @@ timing records needed by resume and analysis.
 Strategy Reflection attempt records use the canonical role names
 `match_commentator`, `coach`, and `generator`. The Generator timing
 is the existing Java-generation timing; Commentator and Coach timing
-is stored in their role request/response envelopes.
+is stored in their role request/response envelopes with UTC start/finish fields
+and monotonic duration. Each Commentator/Coach attempt also writes exactly one
+run-level `llm_request` event with the same role and timing. Exact role prompts
+and responses remain candidate-owned and are not duplicated in `llm_logs/`.

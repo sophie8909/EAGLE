@@ -58,11 +58,16 @@ Code Prompt Rewriter 固定回傳且只回傳
 初始 Java，不呼叫 LLM；之後仍經相同 validation、compilation、integration 與
 evaluation。歷史 seed 與後續加固的 Generator scaffold 是兩個檔案；這份 Java
 只是 gen0 phenotype，不是第三個 gene，也不會遺傳。
+Gen0 的 generation request／raw response 為空，LLM attempts 與 timing 也為空；
+artifact 另保存 normalized seed 的來源路徑與 SHA-256。空白 policy 的 Strategy
+Alignment 記為 `not_applicable`、`score: null`，且不建立 LLM attempt。
 
 結構化輸出會保留原始 response，並只在 parser 邊界正規化已知的模型格式差異：
 賽評的 `match_analysis/key_observations.time` 與 Reviewer 將文字修正拆成陣列的
 情形。缺少數字 tick、必要欄位、alignment classification 或跨越 role 責任邊界
-仍會判定失敗。
+仍會判定失敗。Commentator 與 Coach 的 transport、parse、semantic validation
+共用有界重試；每次 attempt 保存 UTC 起訖時間，並在 run `timing.jsonl` 寫一筆
+不重複 prompt／response 的 timing event。
 
 Strategy Reflection 的 candidate artifact 會在 `mutation/strategy_reflection/`
 保存：parent
@@ -71,8 +76,10 @@ Strategy Reflection 的 candidate artifact 會在 `mutation/strategy_reflection/
 child `strategy_prompt`，以及實際交給 Generator 的 strategy 值。系統沒有另設
 `policy` 欄位；可重用策略就是 genotype 的 `strategy_prompt`。每代另有只保存
 artifact reference 的 policy JSONL sidecar，其他 mutation operator 的 candidate
-也不會被排除。這些新增內容只供觀測，不改變 prompt、LLM 呼叫、sampling、
-selection、fitness 或 evaluation。
+也不會被排除。Coach parsed output 會原樣保留模型回顯，但 validated
+`coach_result.parent_strategy_prompt` 一律取自權威的 input gene，不信任模型回顯。
+這些新增內容只供觀測，不改變 prompt、sampling、selection、fitness 或
+evaluation。
 
 新 candidate artifact 將兩個 gene 放在 `genotype/policy_prompt.txt` 與
 `genotype/code_generation_prompt.txt`，Java phenotype 放在

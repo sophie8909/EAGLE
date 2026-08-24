@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import tempfile
 import unittest
 from dataclasses import replace
@@ -294,6 +296,7 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "Refusing to stop"):
                     other.stop_owned()
             terminate.assert_not_called()
+            self.assertTrue(runtime.ownership_path.exists())
 
     def test_dead_owned_process_removes_state_without_signalling_reused_pid(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -307,6 +310,45 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 manager.stop_owned()
             terminate.assert_not_called()
             self.assertFalse(runtime.ownership_path.exists())
+
+    def test_keyboard_interrupt_removes_state_when_controlled_owned_process_is_dead(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = self.make_runtime(Path(directory))
+            manager = RuntimeManager(runtime)
+            process = subprocess.Popen(
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+                start_new_session=True,
+            )
+            try:
+                from eagle.runtime.processes import process_identity
+
+                identity = None
+                for _ in range(100):
+                    identity = process_identity(process.pid)
+                    if identity is not None:
+                        break
+                self.assertIsNotNone(identity)
+                assert identity is not None
+                self.write_state(manager, identity)
+
+                def terminate_then_interrupt(pid: int, timeout: float) -> None:
+                    self.assertEqual((pid, timeout), (identity.pid, 5.0))
+                    process.terminate()
+                    process.wait(timeout=5)
+                    raise KeyboardInterrupt
+
+                with patch(
+                    "eagle.runtime.processes.terminate_pid",
+                    side_effect=terminate_then_interrupt,
+                ):
+                    with self.assertRaises(KeyboardInterrupt):
+                        manager.stop_owned()
+                self.assertFalse(runtime.ownership_path.exists())
+                self.assertIsNone(manager._owned_identity)
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait(timeout=5)
 
     def test_ownership_write_failure_terminates_new_child(self):
         with tempfile.TemporaryDirectory() as directory:
