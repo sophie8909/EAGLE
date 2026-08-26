@@ -52,7 +52,13 @@ def build_search_runtime(
         run_id=run_dir.name,
         timing_path=run_dir / "timing.jsonl",
     )
-    generation_backend = MockGenerationBackend() if mock else client.generation_backend(logger=logger)
+    generation_backend = (
+        MockGenerationBackend(config.agent_template_path)
+        if mock else client.generation_backend(logger=logger)
+    )
+    # The mock and production generator must render the same configured
+    # immutable scaffold, including inherited-Java requests.
+    generation_backend.agent_template_path = config.agent_template_path
     if mock:
         reflection_backend = build_reflection_backend("mock")
         rewrite_backend = reflection_backend

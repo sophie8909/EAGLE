@@ -155,7 +155,11 @@ def _run_search_impl(
         population,
         generation=0,
         config=config,
-        backend=InitialJavaSeedBackend(config.initial_java_seed_path),
+        backend=(
+            generation_backend
+            if config.candidate_java_mode == "inherited_genotype"
+            else InitialJavaSeedBackend(config.initial_java_seed_path)
+        ),
         generated_agents_dir=generated_agents_dir,
         classes_dir=classes_dir,
         candidates_dir=candidates_dir,
@@ -299,18 +303,34 @@ def _run_search_impl(
 
 
 def initialize_population(config: ExperimentConfig) -> list[Candidate]:
-    # A seed file represents one generation-zero candidate.  Replicating one
-    # seed to ``population_size`` gives identical genotypes/phenotypes distinct
-    # identities and lets match noise masquerade as evolutionary diversity.
+    # The inherited mode deliberately replicates one policy/Java genotype so
+    # generation zero makes one independent decoder call per population slot.
+    # The default mode preserves the one-seed-file/one-candidate contract.
+    seed_prompts = config.seed_prompts
+    if config.candidate_java_mode == "inherited_genotype" and len(seed_prompts) == 1:
+        seed_prompts = tuple(seed_prompts[0] for _ in range(config.population_size))
+    inherited_java = (
+        config.initial_java_seed_path.read_text(encoding="utf-8")
+        if config.candidate_java_mode == "inherited_genotype"
+        else ""
+    )
     population = [
         Candidate(
             generation=0,
             strategy_prompt=prompt,
             generation_prompt=config.generation_prompt,
+            inherited_java=inherited_java,
             operator="seed",
-            metadata={"seed_index": index},
+            metadata={
+                "seed_index": 0 if config.candidate_java_mode == "inherited_genotype" else index,
+                **(
+                    {"replicate_index": index}
+                    if config.candidate_java_mode == "inherited_genotype"
+                    else {}
+                ),
+            },
         )
-        for index, prompt in enumerate(config.seed_prompts)
+        for index, prompt in enumerate(seed_prompts)
     ]
     return population[: config.population_size]
 
@@ -323,9 +343,9 @@ def create_offspring(
 ) -> list[Candidate]:
     """Create the next generation's genotypes without evaluating them.
 
-    Parent selection, optional two-component crossover, and optional
-    prompt-only mutation happen here. Java generation, compilation, matches,
-    and objective calculation remain in :func:`evaluate_population`.
+    Parent selection, optional component-wise crossover, and optional prompt
+    mutation happen here. Java generation, compilation, matches, and objective
+    calculation remain in :func:`evaluate_population`.
     """
     offspring: list[Candidate] = []
     while len(offspring) < config.population_size:
@@ -337,7 +357,12 @@ def create_offspring(
         if len(population) > 1 and rng.random() < config.crossover_rate:
             crossover_started_at = utc_now()
             crossover_started = time.monotonic()
-            child = crossover(parent_a, parent_b, CrossoverContext(generation=generation, index=context_index, rng=rng))
+            child = crossover(parent_a, parent_b, CrossoverContext(
+                generation=generation,
+                index=context_index,
+                rng=rng,
+                inherit_java=config.candidate_java_mode == "inherited_genotype",
+            ))
             crossover_duration = max(0.0, time.monotonic() - crossover_started)
             child = replace(child, timing={
                 **child.timing,
@@ -362,16 +387,33 @@ def create_offspring(
                 operator="copy",
                 strategy_parent_id=parent_a.id,
                 generation_prompt_parent_id=parent_a.id,
+                inherited_java=(
+                    parent_a.generated_java or parent_a.inherited_java
+                    if config.candidate_java_mode == "inherited_genotype" else ""
+                ),
+                java_parent_id=(
+                    parent_a.id
+                    if config.candidate_java_mode == "inherited_genotype" else None
+                ),
                 source_candidate_ids=(parent_a.id,),
             )
         if rng.random() < config.mutation_rate:
+            code_feedback_parent_id = (
+                child.java_parent_id
+                if config.candidate_java_mode == "inherited_genotype"
+                else child.generation_prompt_parent_id
+            )
             code_feedback_parent = parent_for_component(
-                child.generation_prompt_parent_id,
+                code_feedback_parent_id,
                 (parent_a, parent_b),
             )
             eligible_operators = (
                 (STRATEGY_REFLECTION,)
-                if not code_feedback_parent.strategy_prompt.strip()
+                if not (
+                    child.strategy_prompt.strip()
+                    if config.candidate_java_mode == "inherited_genotype"
+                    else code_feedback_parent.strategy_prompt.strip()
+                )
                 else tuple(OPERATOR_TO_MUTATION)
             )
             operator_used = operator_controller.select_operator(
@@ -383,7 +425,7 @@ def create_offspring(
             evidence_parent_id = (
                 child.strategy_parent_id
                 if mutation_name == "strategy"
-                else child.generation_prompt_parent_id
+                else code_feedback_parent_id
             )
             # Reflection evidence must describe the evaluated source of the
             # gene being mutated.  This avoids reviewing one parent's Java as

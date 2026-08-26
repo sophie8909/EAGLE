@@ -29,6 +29,7 @@ DEFAULT_SEED_POLICY_PATH = Path(__file__).resolve().parents[1] / "seeds" / "blan
 DEFAULT_SEARCH_OPPONENTS = tuple((case, OPPONENT_WEIGHTS[case]) for case in LEXICASE_CASES)
 FIXED_OPPONENT_WEIGHT_SUM = OPPONENT_WEIGHT_SUM
 MU_PLUS_LAMBDA_SELECTION = "mu_plus_lambda"
+CANDIDATE_JAVA_MODES = ("generated_phenotype", "inherited_genotype")
 
 DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Resource", 0.0),
@@ -111,6 +112,7 @@ class ExperimentConfig:
     runs_dir: Path = Path("runs")
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
     initial_java_seed_path: Path = DEFAULT_INITIAL_JAVA_SEED_PATH
+    candidate_java_mode: str = "generated_phenotype"
     tick_limit: int = 100
     match_timeout_seconds: float = 120.0
     match_artifact_mode: str = "compact"
@@ -277,6 +279,7 @@ class ExperimentConfig:
                 payload.get("initial_java_seed_path"),
                 DEFAULT_INITIAL_JAVA_SEED_PATH,
             ),
+            candidate_java_mode=str(payload.get("candidate_java_mode", "generated_phenotype")),
             tick_limit=int(payload.get("tick_limit", 100)),
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
             match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
@@ -330,6 +333,14 @@ class ExperimentConfig:
             raise ValueError("tick_limit must be at least 1.")
         if self.execution_mode not in {"mock", "openai"}:
             raise ValueError("execution_mode must be mock or openai.")
+        if self.candidate_java_mode not in CANDIDATE_JAVA_MODES:
+            raise ValueError(
+                "candidate_java_mode must be generated_phenotype or inherited_genotype."
+            )
+        if self.candidate_java_mode == "inherited_genotype" and len(self.seed_prompts) != 1:
+            raise ValueError(
+                "candidate_java_mode=inherited_genotype requires exactly one seed_prompt_files entry."
+            )
         if len(self.evaluation_maps) != 3:
             raise ValueError("evaluation.maps must contain exactly three maps.")
         if self.rounds_per_map != 3:
@@ -423,6 +434,7 @@ class ExperimentConfig:
             "runs_dir": str(self.runs_dir.resolve()),
             "agent_template_path": str(self.agent_template_path.resolve()),
             "initial_java_seed_path": str(self.initial_java_seed_path.resolve()),
+            "candidate_java_mode": self.candidate_java_mode,
             "tick_limit": self.tick_limit,
             "match_timeout_seconds": self.match_timeout_seconds,
             "match_artifact_mode": self.match_artifact_mode,

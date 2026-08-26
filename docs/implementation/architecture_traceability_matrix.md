@@ -6,13 +6,13 @@ NSGA-II and `eagle-run-v1` rows were removed on 2026-08-19.
 
 | ID | Contract | Canonical owner | Implementation | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| CAND-01 | Two-prompt genotype and complete Java phenotype remain distinct | candidate model | `eagle/candidate.py`, `eagle/evaluation.py` | candidate/state-transition tests | Implemented |
-| CAND-02 | First-class lineage and component provenance | lineage schema | `eagle/crossover.py`, `eagle/artifacts.py` | lineage/crossover tests | Implemented |
+| CAND-01 | Default two-prompt genotype and opt-in prompt/prompt/Java genotype remain distinct from the generated Java phenotype | candidate model | `eagle/candidate.py`, `eagle/evaluation.py` | candidate/state-transition tests | Implemented |
+| CAND-02 | First-class lineage and independent policy, generation-prompt, and optional Java provenance | lineage schema | `eagle/crossover.py`, `eagle/artifacts.py` | lineage/crossover tests | Implemented |
 | EVO-01 | Seeded seven-case lexicase parent selection and joint parent-plus-offspring survivor selection | evolutionary flow | `eagle/selection.py`, `eagle/search.py`, `eagle/resume.py` | lexicase tests | Implemented |
 | EVO-02 | Static/opponent/head-to-head reflection operator modes | mutation | `eagle/aos.py`, `evaluation/parent_offspring.py` | AOS tests | Implemented |
 | MUT-01 | Strategy/Code boundaries, bounded structured retries, and authoritative mutation inputs | mutation | `eagle/mutation.py`, `eagle/rewrite.py`, `eagle/strategy_reflection.py` | mutation/reflection tests | Implemented |
 | PROMPT-01 | One executable prompt per file under `prompts/` | prompt manifest | `eagle/prompts.py`, `prompts/manifest.toml` | prompt-resource tests | Implemented |
-| GEN-01 | Shared callable no-op generation-zero Java seed for configured policy genes plus bounded compile-guided full-file decoding with immutable genes and per-attempt request/source/diagnostic evidence | Java generation | `generation/backend.py`, `generation/java_agent_generator.py`, `eagle/evaluation.py` | generation-attempt/prompt-resource tests | Implemented |
+| GEN-01 | Default shared seed phenotype plus inherited-mode population replication and independent generation-zero decoding; bounded compile-guided full-file decoding with immutable active genes and per-attempt request/source/diagnostic evidence | Java generation | `generation/backend.py`, `generation/java_agent_generator.py`, `eagle/evaluation.py` | inherited-genotype/generation-attempt/prompt-resource tests | Implemented |
 | VAL-01 | External Java/security contract, immutable scaffold, and deterministic strategy scope/array/API checks | Java generation | `generation/java_agent_generator.py` | validation tests | Implemented |
 | EVAL-01 | Compile each validated decoder sample at most once, promote the first success, and run seven distinct opponents × three maps × three rounds × two sides once | evaluation | `eagle/evaluation.py`, `evaluation/match_matrix.py`, `third_party/microrts/src/ai/abstraction/WorkerRush.java` | generation-attempt/evaluation matrix/opponent compile tests | Implemented |
 | EVAL-02 | Integration probe and match execution have separate single owners | evaluation | `evaluation/microrts_runner.py`, `evaluation/runtime_evaluation.py` | integration/runtime tests | Implemented |

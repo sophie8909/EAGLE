@@ -55,10 +55,11 @@ For a successful evaluation, `match_durations_seconds` has exactly 126 entries.
 For partial failure it has one entry per attempted match and is interpreted with
 match statuses.
 
-Generation-zero seed loading is not an LLM request. Its `generation_llm`
-record has null start/finish/duration fields and an empty attempt list. Strategy
-Alignment likewise has null timing and no attempts when an empty policy makes
-the diagnostic not applicable.
+Default-mode generation-zero seed loading is not an LLM request and has null
+generation timing with an empty attempt list. Inherited-mode generation zero
+uses the normal bounded `generation_llm` attempt records independently for all
+`population_size` candidates. Strategy Alignment has null timing and no
+attempts when an empty policy makes the diagnostic not applicable.
 
 For bounded Java decoding, `generation_llm.attempts` is the ordered outer
 `generation_attempt` list and includes `generation_attempt_id`, request hash,
@@ -135,7 +136,7 @@ Candidate timing.json contains operation-specific mutation and crossover generat
 
 ## Compact snapshot retention (2026-08-04)
 
-Candidate `timing` is retained unchanged in `eagle-candidate-v2` generation and
+Candidate `timing` is retained unchanged in `eagle-candidate-v5` generation and
 final-population snapshots. Match stdout/stderr, commands, raw result payloads,
 and telemetry are excluded from those snapshots and remain in their owning
 match directories. Artifact compaction must never remove fitness objectives or

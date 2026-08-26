@@ -18,14 +18,21 @@ matrix, diagnostics, objective construction, and candidate artifact writing.
 `decode_validate_compile_candidate` is the single production boundary for the
 first three rows and can be called by a decoder smoke without launching
 Integration or the 126-match matrix. `evaluate_candidate` consumes that helper;
-it does not maintain a second retry implementation. Attempt 1 uses the base
-two-gene request; extraction failures may repeat that request, while a complete
+it does not maintain a second retry implementation. Attempt 1 uses the active
+genotype request (two prompts, plus inherited Java when configured); extraction
+failures may repeat that request, while a complete
 source's validation/javac failure produces the next compile-repair request from
 that source and only its structured diagnostics. Every attempt has an isolated
 source/classes workspace and compiles each validated source no more than once.
 Only the first compilation success is promoted. Exhaustion classifies the final
 attempt's generation, validation, or compilation failure; an Integration failure
 never re-enters the decoder.
+
+In `inherited_genotype` mode generation zero uses this same bounded decoder for
+every replicated population slot, so a population of ten records ten separate
+requests/responses and can produce ten different Java phenotypes. Later
+generations pass the independently selected Java component into the base and
+compile-repair requests without mutating that stored input during evaluation.
 
 The seven-check Integration probe is deliberately smaller than a match but is
 not an empty-state smoke: it loads separate populated 8×8 bases/workers maps,

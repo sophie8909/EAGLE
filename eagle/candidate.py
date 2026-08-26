@@ -13,8 +13,8 @@ from .prompts import load_prompt
 ACTION_API_GUIDE = load_prompt("action_api_guide")
 DEFAULT_GENERATION_PROMPT = load_prompt("initial_generation")
 
-LINEAGE_SCHEMA_VERSION = "2.0"
-CANDIDATE_SNAPSHOT_SCHEMA_VERSION = "eagle-candidate-v4"
+LINEAGE_SCHEMA_VERSION = "3.0"
+CANDIDATE_SNAPSHOT_SCHEMA_VERSION = "eagle-candidate-v5"
 
 
 @dataclass(frozen=True)
@@ -24,11 +24,14 @@ class Candidate:
     id: str = ""
     generation: int = 0
     parent_ids: tuple[str, ...] = ()
-    # The canonical genotype has exactly two genes.  ``strategy_prompt`` is
-    # the policy gene; ``generation_prompt`` is the policy-to-Java translation
-    # gene.  Java source belongs only to the phenotype fields below.
+    # The default ``generated_phenotype`` mode has the original two prompt
+    # genes.  ``inherited_genotype`` additionally carries the complete Java
+    # input chosen before generation; it is deliberately separate from the
+    # generated phenotype below so failures do not erase inherited state.
     strategy_prompt: str = ""
     generation_prompt: str = DEFAULT_GENERATION_PROMPT
+    inherited_java: str = ""
+    java_parent_id: str | None = None
     generated_java: str = ""
     generated_java_path: str | None = None
     operator: str = "seed"
@@ -67,24 +70,38 @@ class Candidate:
 
         return tuple(float(self.fitness_objectives.get(case, FAILED_OPPONENT_SCORE)) for case in LEXICASE_CASES)
 
-    def generation_input(self, *, class_name: str = "", module_name: str = "controller") -> str:
+    def generation_input(
+        self,
+        *,
+        class_name: str = "",
+        module_name: str = "controller",
+        agent_template_path: object | None = None,
+    ) -> str:
         """Build one request for a complete single-file Java agent."""
         from generation.agent_template import JavaTemplatePaths, load_java_template
 
-        # Generation always starts from the checked-in scaffold.  A parent's
-        # phenotype must never become decoder context for its child.
-        current_source = load_java_template(JavaTemplatePaths())
+        # The default mode starts from the checked-in scaffold without parent
+        # Java.  A candidate with inherited Java uses the explicitly separate
+        # third-component generator resource.
+        current_source = load_java_template(
+            JavaTemplatePaths()
+            if agent_template_path is None
+            else JavaTemplatePaths(agent_template_path)
+        )
         from .prompts import render_prompt
 
-        return render_prompt(
-            "java_generation",
-            {
-                "policy_prompt": self.strategy_prompt.strip(),
-                "action_api_guide": ACTION_API_GUIDE,
-                "code_generation_prompt": self.generation_prompt.strip(),
-                "java_scaffold": current_source,
-            },
-        )
+        values = {
+            "policy_prompt": self.strategy_prompt.strip(),
+            "action_api_guide": ACTION_API_GUIDE,
+            "code_generation_prompt": self.generation_prompt.strip(),
+            "java_scaffold": current_source,
+        }
+        if self.inherited_java:
+            return render_prompt(
+                "java_generation_inherited",
+                {**values, "inherited_java": self.inherited_java},
+            )
+        return render_prompt("java_generation", values)
 
     def to_json_dict(self) -> dict[str, Any]:
         """Return the compact, resumable candidate snapshot.
@@ -95,7 +112,7 @@ class Candidate:
         artifact and recursively deep-copied by ``dataclasses.asdict``.
         """
 
-        return {
+        payload = {
             "candidate_schema_version": CANDIDATE_SNAPSHOT_SCHEMA_VERSION,
             "id": self.id,
             "candidate_id": self.id,
@@ -126,6 +143,11 @@ class Candidate:
             "timing": dict(self.timing),
             "metadata": compact_candidate_metadata(self.metadata),
         }
+        if self.inherited_java or self.java_parent_id is not None:
+            # The complete component is stored only at the genotype artifact
+            # path. Snapshots retain provenance, not duplicate source bodies.
+            payload["java_parent_id"] = self.java_parent_id
+        return payload
 
     def to_individual_dict(self) -> dict[str, Any]:
         """Return the small candidate index used by offline inspection."""
@@ -166,6 +188,7 @@ class Candidate:
             *self.source_candidate_ids,
             self.strategy_parent_id,
             self.generation_prompt_parent_id,
+            self.java_parent_id,
         )
         unique: list[str] = []
         for candidate_id in ordered:
@@ -176,7 +199,7 @@ class Candidate:
     def lineage_to_json_dict(self) -> dict[str, Any]:
         """Serialize canonical first-class lineage independent of generic metadata."""
 
-        return {
+        payload = {
             "lineage_schema_version": LINEAGE_SCHEMA_VERSION,
             "candidate_id": self.id,
             "generation": self.generation,
@@ -187,6 +210,9 @@ class Candidate:
             "generation_prompt_parent_id": self.generation_prompt_parent_id,
             "source_candidate_ids": list(self.resolved_source_candidate_ids()),
         }
+        if self.inherited_java or self.java_parent_id is not None:
+            payload["java_parent_id"] = self.java_parent_id
+        return payload
 
 
 def compact_mutation_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -230,7 +256,7 @@ def compact_candidate_metadata(
     """Return only metadata required by selection, mutation, and resume."""
 
     compact: dict[str, Any] = {}
-    for key in ("seed_index", "failure_category", "failure_reason"):
+    for key in ("seed_index", "replicate_index", "failure_category", "failure_reason"):
         if key in metadata:
             compact[key] = metadata[key]
     aos = metadata.get("aos")

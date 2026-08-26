@@ -1,14 +1,16 @@
 # Architecture overview
 
-EAGLE evolves a two-component prompt genotype that generates one complete
-Java MicroRTS agent. The active evolutionary contract is documented in
+EAGLE evolves one complete Java MicroRTS agent under one of two explicit
+candidate modes. The default genotype contains two prompt components; the
+opt-in inherited mode adds complete Java as a third component. The active evolutionary contract is documented in
 [`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md).
 
 ## System boundary
 
 In scope:
 
-- a game-playing policy prompt and a policy-to-Java code-generation prompt;
+- a game-playing policy prompt, a policy-to-Java code-generation prompt, and
+  optionally inherited Java;
 - crossover, Strategy Reflection, Code Reflection, and final Java generation;
 - validation, compilation, integration, and the fixed seven-opponent evaluation;
 - opponent-wise fitness, seeded lexicase selection, artifacts, and analysis.
@@ -51,6 +53,11 @@ flowchart TD
 ## Invariants
 
 - One generated source and one compiled class directory serve all 126 matches.
+- `inherited_genotype` generation zero replicates one seed policy to the fixed
+  population and performs one independent Generator call per individual.
+- In inherited mode crossover selects policy, generation prompt, and Java
+  parents independently; generated child Java becomes the inheritable Java
+  component available to the next generation.
 - Fitness is the seven-case mapping in `Candidate.fitness_objectives`.
 - The reporting aggregate uses the fixed `1/2` weights and denominator `11.0`,
   but does not participate in lexicase case filtering.

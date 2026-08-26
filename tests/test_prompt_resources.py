@@ -85,7 +85,7 @@ class PromptResourceTests(unittest.TestCase):
             )
             self.assertEqual(
                 hashlib.sha256(config.initial_java_seed_path.read_bytes()).hexdigest(),
-                "1d2361e34329ee7c6b21be5da431b61585d965ffebfc7572fb65cabe292ecf8b",
+                "22ab7b94adbcee2cce69afec781cd5c183c066c85a95a151daac10c0e5ab820b",
                 path,
             )
 
@@ -110,7 +110,7 @@ class PromptResourceTests(unittest.TestCase):
         self.assertIn("continuous Worker-rush", config.seed_prompts[1])
         self.assertIn("deterministic pseudo-random policy", config.seed_prompts[2])
 
-    def test_static_0826_seed_variants_are_three_distinct_one_plus_one_experiments(self) -> None:
+    def test_static_0826_seed_variants_generate_ten_individuals_from_one_policy(self) -> None:
         config_dir = Path("configs/experiments/static_0826_seed_variants")
         config_paths = sorted(config_dir.glob("ministral3_8b_static_0.5_0.5_*.yaml"))
         configs = tuple(ExperimentConfig.from_file(path) for path in config_paths)
@@ -126,13 +126,18 @@ class PromptResourceTests(unittest.TestCase):
             },
         )
         self.assertEqual(len({config.seed_prompts for config in configs}), 3)
-        self.assertTrue(all(config.population_size == 1 for config in configs))
+        self.assertTrue(all(config.population_size == 10 for config in configs))
         self.assertTrue(all(config.survivor_selection == "mu_plus_lambda" for config in configs))
+        self.assertTrue(all(config.candidate_java_mode == "inherited_genotype" for config in configs))
         self.assertTrue(all(config.strategy_reflection_probability == 0.5 for config in configs))
         self.assertTrue(all(config.code_reflection_probability == 0.5 for config in configs))
 
         java_paths = {config.initial_java_seed_path for config in configs}
         self.assertEqual(java_paths, {Path("eagle/java_seeds/CandidateAgent.java").resolve()})
+        self.assertEqual(
+            {config.agent_template_path for config in configs},
+            {Path("eagle/java_seeds/CandidateAgent.java").resolve()},
+        )
         source = java_paths.pop().read_text(encoding="utf-8")
         decide = source.split("private void decide(AgentContext context) {", 1)[1].split("\n    }", 1)[0]
         get_action = source.split("public PlayerAction getAction", 1)[1].split(

@@ -1,9 +1,11 @@
 # Mutation responsibility boundaries
 
-EAGLE has two mutation operators because it searches two different spaces.
+EAGLE has two mutation operators because it searches two prompt spaces.
 Strategy Reflection searches policy space; Code Reflection searches reusable
 policy-to-code translation instructions. Both stop at a prompt gene. The
-Generator remains a separate genotype-to-phenotype stage.
+Generator remains a separate complete-Java revision stage. In
+`inherited_genotype` mode the selected Java component is preserved through
+mutation and supplied to that stage; neither mutation edits Java directly.
 
 ## Strategy Reflection
 
@@ -41,7 +43,7 @@ in raw/parsed evidence and cannot rewrite provenance.
 Canonical state transition:
 
 ```text
-(policy A1, code prompt B1) -> (policy A2, code prompt B1) -> Java phenotype P2
+(policy A1, code prompt B1, Java C1) -> (policy A2, code prompt B1, Java C1) -> Java C2
 ```
 
 ## Code Reflection
@@ -79,7 +81,7 @@ code-generation prompt and cannot modify policy.
 Canonical state transition:
 
 ```text
-(policy A1, code prompt B1) -> (policy A1, code prompt B2) -> Java phenotype P2
+(policy A1, code prompt B1, Java C1) -> (policy A1, code prompt B2, Java C1) -> Java C2
 ```
 
 ## Selection and persistence
@@ -100,10 +102,12 @@ attempts, errors, and timing. Full Java is canonical only at
 `phenotype/CandidateAgent.java`; reflection metadata uses a path reference when
 the request artifact already contains the needed Java evidence.
 
-For Code Reflection, that reference identifies the evaluated source
-candidate's phenotype (`reviewed_phenotype_artifact`). This is the previous
-program in the reviewer workflow, but it remains evidence: it is not copied
-into the child genotype and is not supplied to the Generator.
+For Code Reflection, default-mode evidence identifies the evaluated source
+candidate's phenotype (`reviewed_phenotype_artifact`). In inherited mode the
+Reviewer instead evaluates the child's current policy against its independently
+selected inherited Java component; artifacts retain both its Java-parent
+provenance and the exact inherited source. The Rewriter still changes only the
+selected code-generation prompt.
 
 After crossover, Strategy Reflection evidence comes from the recorded policy
 parent. Code Reflection evidence comes from the recorded code-generation-prompt
@@ -115,7 +119,8 @@ choose evidence.
 
 - Strategy mutation preserves `generation_prompt` exactly.
 - Code mutation preserves `strategy_prompt` exactly.
-- Neither mutation directly edits Java.
-- Generator and Evaluation preserve both prompt genes exactly.
+- Both mutations preserve inherited Java input exactly and never edit it directly.
+- Generator and Evaluation preserve both prompt genes and the recorded
+  pre-generation Java input exactly.
 - Evidence routing tests use sentinels to prove Match Commentator/Coach exclude
   Java and code prompt, and Code Reviewer excludes raw game logs.

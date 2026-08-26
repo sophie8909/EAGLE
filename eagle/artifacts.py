@@ -47,6 +47,8 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
         },
     )
     (genotype_dir / "code_generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
+    if candidate.inherited_java or candidate.java_parent_id is not None:
+        (genotype_dir / "inherited_java.java").write_text(candidate.inherited_java, encoding="utf-8")
     reflection_dir = candidate_dir / "mutation" / "strategy_reflection"
     if (reflection_dir / "metadata.json").is_file():
         # ``Candidate.generation_input`` supplies the strategy placeholder with
@@ -61,15 +63,15 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
     if candidate.operator in {"crossover", "crossover+mutation"}:
         crossover_dir = candidate_dir / "crossover"
         crossover_dir.mkdir(exist_ok=True)
-        write_json(
-            crossover_dir / "provenance.json",
-            {
+        provenance = {
                 "lineage_schema_version": candidate.lineage_to_json_dict()["lineage_schema_version"],
                 "candidate_id": candidate.id,
                 "strategy_parent_id": candidate.strategy_parent_id,
                 "generation_prompt_parent_id": candidate.generation_prompt_parent_id,
-            },
-        )
+        }
+        if candidate.inherited_java or candidate.java_parent_id is not None:
+            provenance["java_parent_id"] = candidate.java_parent_id
+        write_json(crossover_dir / "provenance.json", provenance)
 
 
 def write_aos_reward_artifact(candidates_dir: Path, reward: dict) -> None:
@@ -615,6 +617,8 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "objectives": "evaluation/objectives.json",
         "timing": "timing.json",
     }
+    if candidate.inherited_java or candidate.java_parent_id is not None:
+        artifact_references["inherited_java"] = "genotype/inherited_java.java"
     candidate_dir = candidates_dir / candidate.id
     if (candidate_dir / "phenotype" / "CandidateAgent.java").is_file():
         artifact_references["generated_java"] = "phenotype/CandidateAgent.java"
@@ -626,7 +630,7 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
             "generator_strategy_input": "mutation/strategy_reflection/generator_strategy_input.txt",
         })
     payload = {
-        "candidate_schema_version": "eagle-candidate-v4",
+        "candidate_schema_version": "eagle-candidate-v5",
         "candidate_id": candidate.id,
         "generation": candidate.generation,
         "parent_ids": list(candidate.parent_ids),
@@ -651,6 +655,8 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "timing_summary": dict(candidate.timing),
         "artifacts": artifact_references,
     }
+    if candidate.inherited_java or candidate.java_parent_id is not None:
+        payload["java_parent_id"] = candidate.java_parent_id
     write_json(candidates_dir / candidate.id / "candidate.json", payload)
 
 

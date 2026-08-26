@@ -18,12 +18,12 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 
 | Area | Required proof |
 | --- | --- |
-| Candidate | exactly two prompt genes; generation-qualified automatic IDs and explicit-ID preservation; Java phenotype separation; terminal failure retains state |
-| Lineage | seed/copy/crossover/mutation schemas; IDs resolve; graph acyclic |
-| Crossover | two independent whole-component choices; exact provenance; equal-text case; no Java inheritance |
+| Candidate | default two-prompt mode and opt-in prompt/prompt/Java mode; generation-qualified automatic IDs and explicit-ID preservation; inherited Java versus generated phenotype separation; terminal failure retains state |
+| Lineage | seed/copy/crossover/mutation schemas; prompt and optional Java parent IDs resolve; graph acyclic |
+| Crossover | independent whole-component choices for both prompts and, when enabled, Java; exact provenance; equal-text case; default mode has no Java inheritance |
 | Strategy Mutation | Commentator per selected match → Coach → final Java generation; only policy changes; no Java/code-prompt evidence |
 | Code Mutation | Policy-Code Reviewer → exact `rewritten_prompt` JSON object → final Java generation; only code-generation prompt changes; no raw game logs |
-| Generation | configured empty/non-empty policy genes sharing one callable no-op checked-in Java seed at generation zero; later two genes + fixed scaffold/API constraints; base retry only after extraction failure; compile-guided retry from the immediately previous complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic fixed-scaffold/non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
+| Generation | default seed-phenotype initialization plus inherited-mode single-policy replication and one independent decoder call per population slot; active genes + fixed scaffold/API constraints; base retry only after extraction failure; compile-guided retry from the immediately previous complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic fixed-scaffold/non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, direct strategy-map reads rejected in favor of bounds-safe `isFreeCell`, and no fixed internal layout |
 | Compilation | attempt-isolated output; each validated source compiled at most once; first success promoted without recompilation; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; two populated real 8×8 maps, independent one-argument instances/states for both sides, action integrity plus safe issuance/cycle; `passed`/`failed`/`blocked`; no match execution or decoder retry |

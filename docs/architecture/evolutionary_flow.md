@@ -5,19 +5,23 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 
 ## Population lifecycle
 
-1. Create one candidate per configured seed policy file, retaining that file's
-   policy gene and pairing every candidate with the same callable no-op initial
-   Java seed as its generation-zero phenotype. Do not replicate a seed to fill
-   `population_size`.
-2. Validate, compile, integrate, and evaluate every seed candidate without an
-   LLM call. Later offspring use the normal two-gene Generator boundary.
+1. In default `generated_phenotype` mode, create one candidate per configured
+   seed policy and load the callable no-op Java phenotype without an LLM call.
+   In `inherited_genotype` mode, require one seed policy, copy it to
+   `population_size`, and give every copy the same no-op inherited Java input.
+2. In inherited mode, call the Generator independently for every generation-zero
+   candidate before validation, compilation, integration, and evaluation. Later
+   children independently inherit policy, generation prompt, and Java parent
+   provenance before the same final Generator boundary.
 3. Store one score for each fixed opponent case:
    `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`, `coac`, and `tma`.
 4. Select parents with seeded lexicase selection. A random case order is drawn
    from the EA `random.Random` instance, and candidates are filtered to the
    best score for each case until one remains.
-5. Apply crossover/copy and let the configured reflection-operator controller
-   choose Strategy Reflection or Generate-Code Reflection.
+5. Apply crossover/copy to every active genotype component and let the
+   configured reflection-operator controller choose Strategy Reflection or
+   Generate-Code Reflection. Mutation changes only its owned prompt; it does
+   not directly edit inherited Java.
 6. Decode each child with its configured compile-guided attempt bound, using
    structured validation/javac evidence only after a complete source fails;
    promote the first validation+compilation success, then evaluate that single

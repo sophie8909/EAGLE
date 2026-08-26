@@ -489,8 +489,13 @@ def _compile_repair_request(
     previous_source: str,
     evidence: dict[str, object],
 ) -> str:
+    prompt_id = (
+        "java_compile_repair_inherited"
+        if candidate.inherited_java
+        else "java_compile_repair"
+    )
     rendered = render_prompt(
-        "java_compile_repair",
+        prompt_id,
         {
             "policy_prompt": candidate.strategy_prompt.strip(),
             "code_generation_prompt": candidate.generation_prompt.strip(),
@@ -498,6 +503,7 @@ def _compile_repair_request(
             "java_scaffold": load_java_template(JavaTemplatePaths(config.agent_template_path)),
             "previous_complete_source": previous_source,
             "compile_evidence": json.dumps(evidence, ensure_ascii=False, indent=2),
+            "inherited_java": candidate.inherited_java,
         },
     )
     return (
@@ -639,7 +645,11 @@ def evaluate_candidate(
     receives explicit failure scores and remains available to lexicase.
     """
 
-    genotype_before = (candidate.strategy_prompt, candidate.generation_prompt)
+    genotype_before = (
+        candidate.strategy_prompt,
+        candidate.generation_prompt,
+        candidate.inherited_java,
+    )
 
     # Stages 1-2 use the same bounded decoder helper as production smoke
     # checks. Only its selected (or, when exhausted, final) attempt becomes
@@ -995,6 +1005,8 @@ def evaluate_candidate(
         parent_ids=candidate.parent_ids,
         strategy_prompt=candidate.strategy_prompt,
         generation_prompt=candidate.generation_prompt,
+        inherited_java=candidate.inherited_java,
+        java_parent_id=candidate.java_parent_id,
         generated_java=generation.assembled_java if compiler.compile_success else "",
         generated_java_path=(
             str(agent.source_path) if agent is not None and compiler.compile_success else None
@@ -1028,7 +1040,11 @@ def evaluate_candidate(
             preserve_unpersisted_mutation=True,
         ),
     )
-    assert (evaluated_candidate.strategy_prompt, evaluated_candidate.generation_prompt) == genotype_before
+    assert (
+        evaluated_candidate.strategy_prompt,
+        evaluated_candidate.generation_prompt,
+        evaluated_candidate.inherited_java,
+    ) == genotype_before
     result = CandidateResult(
         candidate_id=candidate.id,
         parent_ids=candidate.parent_ids,

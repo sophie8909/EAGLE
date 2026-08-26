@@ -1,6 +1,6 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-08-20 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-08-26 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
@@ -12,14 +12,17 @@ runtime LLM policy。
 
 ## Candidate 與演化流程
 
-Genotype 固定包含兩個可演化 prompt：
+Candidate 有兩種明確模式。預設 `generated_phenotype` 的 genotype 包含兩個
+可演化 prompt：
 
 1. `strategy_prompt`：遊戲 policy gene
 2. `generation_prompt`：policy-to-Java translation gene
 
-Java `CandidateAgent.java` 是 phenotype／evidence，不是 genotype，也不會傳給
-子代。Uniform Crossover 只對兩個完整 prompt component 獨立選 parent，並只保存
-這兩個 component 的來源 candidate ID。
+在預設模式，Java `CandidateAgent.java` 只屬於 phenotype／evidence，不會傳給
+子代。`inherited_genotype` 則加入第三個完整 Java component。Uniform Crossover
+對 policy、generation prompt 與 Java 各自獨立選 parent，保存三者來源 ID；
+Generator 成功產生的 child Java 會成為下一代可選取的 Java component。這是
+明確設定且有版本的 genotype，不是舊版隱含的 `previous_code` 欄位。
 
 新建立的 candidate ID 使用 `gen_<四位 generation>_<12 位十六進位>`，例如
 `gen_0007_3a81c65d20bf`，讓 candidate artifact folder 可直接按 generation
@@ -49,27 +52,31 @@ Strategy Mutation 只修改 `strategy_prompt`；Code Mutation 只修改
 
 Strategy Reflection 只使用 policy 與 match evidence。Match Commentator 不會收到
 Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Code
-Reflection 則比較 policy 與當前 Java phenotype，可選用 static/compiler evidence，
-但不使用 raw game logs；Code Prompt Rewriter 只收到原 generation prompt 與
-alignment review。Generator 使用兩個 gene 加上固定 checked-in Java scaffold，
-不使用 parent Java。
+Reflection 在預設模式比較 policy 與當前 Java phenotype；在 inherited 模式則
+比較 child 當前 policy 與 independently selected Java component。兩者皆可選用
+static/compiler evidence，但不使用 raw game logs；Code Prompt Rewriter 只收到
+原 generation prompt 與 alignment review。Generator 永遠使用兩個 prompt gene
+與固定 checked-in Java scaffold，且在 inherited 模式額外收到完整 inherited Java。
 
 Code Prompt Rewriter 固定回傳且只回傳
-`{"rewritten_prompt":"..."}`。Generation 0 是唯一 decoder 例外：每個 seed
-檔建立一個 candidate（不複製到 `population_size`），保留該檔的空白或非空白
-`strategy_prompt`，並共同載入 `initial_java_seed_path` 的 callable no-op
-初始 Java，不呼叫 Generator；之後仍經相同 validation、compilation、integration
-與 evaluation。Seed 與後續加固的 Generator scaffold 是兩個檔案；這份 Java
-保留完整 action helper API，但 strategy 不發出 action。它只是 gen0 phenotype，
-不是第三個 gene，也不會遺傳。
-Gen0 的 generation request／raw response 為空，LLM attempts 與 timing 也為空；
-artifact 另保存 normalized seed 的來源路徑與 SHA-256。空白 policy 的 Strategy
-Alignment 記為 `not_applicable`、`score: null`，且不建立 LLM attempt。
+`{"rewritten_prompt":"..."}`。Generation 0 依 candidate mode 分流：預設模式仍是
+每個 seed 檔建立一個 candidate，直接載入 `initial_java_seed_path`，不呼叫
+Generator；inherited 模式必須只有一個 seed policy，將同一份 policy 與 callable
+no-op Java 複製到 `population_size` 個 genotype，並對每個 candidate 各呼叫一次
+Generator。因此 population 10 會有 10 份 request／response，也可能得到 10 份
+不同 Java。三份 `static_0826_seed_variants` config 都使用此模式，後續每代以
+`10 + 10` joint pool 做 lexicase survivor selection。
 
-非 seed candidate 可用 `generation_max_attempts` 做有界 compile-guided decoder。
-Attempt 1 使用權威的兩份 gene 生成請求；若 extraction 沒有得到完整 source，下一
+Callable no-op Java 保留完整 action helper API，但 `decide` 不發出 action；同一
+檔案同時是這三份設定的初始 Java component 與 immutable scaffold。空白 policy
+的 Strategy Alignment 仍記為 `not_applicable`、`score: null`，且不建立 alignment
+LLM attempt。
+
+所有走 Generator 的 candidate 可用 `generation_max_attempts` 做有界
+compile-guided decoder。Attempt 1 使用權威的 active genotype 生成請求；若
+extraction 沒有得到完整 source，下一
 次仍重送 base request。若完整 source 在 validation 或 javac 失敗，下一次改用獨立
-的 `java_compile_repair` prompt，內容必須包含未改動的兩份權威 genes、immutable
+的 Java repair prompt，內容必須包含未改動的權威 genes（inherited 模式也含 Java component）、immutable
 action API guide、canonical scaffold、標示為 untrusted 的前一次完整 source，以及
 只屬於前一次 attempt 的結構化診斷。每次實際 request、source、hash、repair chain
 和 evidence 都獨立保存。
@@ -111,10 +118,12 @@ artifact reference 的 policy JSONL sidecar，其他 mutation operator 的 candi
 這些新增內容只供觀測，不改變 prompt、sampling、selection、fitness 或
 evaluation。
 
-新 candidate artifact 將兩個 gene 放在 `genotype/policy_prompt.txt` 與
-`genotype/code_generation_prompt.txt`，Java phenotype 放在
+新 candidate artifact 將兩個 prompt gene 放在 `genotype/policy_prompt.txt` 與
+`genotype/code_generation_prompt.txt`；inherited 模式另保存
+`genotype/inherited_java.java` 與 `java_parent_id`。Generator 輸出放在
 `phenotype/CandidateAgent.java`；Code Reflection evidence 放在
-`mutation/code_reflection/`。舊路徑只能由 loader 隔離讀取，不會恢復舊的第三 gene。
+`mutation/code_reflection/`。Snapshot JSON 不重複內嵌完整 inherited Java，resume
+由 canonical genotype 檔重建。
 
 所有 executable prompt body 都放在 `prompts/`，一個 prompt 一個 UTF-8
 `.txt` 檔。`prompts/manifest.toml` 只保存 metadata 與 placeholder contract。

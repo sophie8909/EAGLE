@@ -125,9 +125,24 @@ def build_code_reflection_prompt_bundle(candidate: Candidate, context: Reflectio
         )
         if all_diagnostics.get(key) not in (None, (), [], {}, "")
     }
-    policy_prompt = context.candidate.strategy_prompt
+    if (
+        candidate.inherited_java
+        and context.candidate.generated_code != candidate.inherited_java
+    ):
+        # A failed Java parent passes through its earlier inherited component;
+        # diagnostics from the failed attempted phenotype do not describe that
+        # fallback source and must not be presented as if they did.
+        diagnostics = {}
+    # In inherited-genotype mode the child may have independently selected
+    # policy, generation prompt, and Java. Review the exact child inputs;
+    # diagnostics come from the selected Java parent context.
+    policy_prompt = (
+        candidate.strategy_prompt
+        if candidate.inherited_java
+        else context.candidate.strategy_prompt
+    )
     generated_code = _bounded_code(
-        context.candidate.generated_code,
+        candidate.inherited_java or context.candidate.generated_code,
         CODE_BUDGETS["generated_java"],
         diagnostics,
         truncated,

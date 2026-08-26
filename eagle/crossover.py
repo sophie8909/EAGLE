@@ -13,6 +13,7 @@ class CrossoverContext:
     generation: int
     index: int
     rng: random.Random
+    inherit_java: bool = False
 
 
 def crossover(parent_a: Candidate, parent_b: Candidate, context: CrossoverContext) -> Candidate:
@@ -20,9 +21,11 @@ def crossover(parent_a: Candidate, parent_b: Candidate, context: CrossoverContex
 
     strategy_parent = context.rng.choice((parent_a, parent_b))
     generation_prompt_parent = context.rng.choice((parent_a, parent_b))
+    java_parent = context.rng.choice((parent_a, parent_b)) if context.inherit_java else None
     component_parent_ids = (
         strategy_parent.id,
         generation_prompt_parent.id,
+        *(() if java_parent is None else (java_parent.id,)),
     )
     return Candidate(
         generation=context.generation,
@@ -34,5 +37,10 @@ def crossover(parent_a: Candidate, parent_b: Candidate, context: CrossoverContex
         operator="crossover",
         strategy_parent_id=strategy_parent.id,
         generation_prompt_parent_id=generation_prompt_parent.id,
+        inherited_java=(
+            "" if java_parent is None
+            else java_parent.generated_java or java_parent.inherited_java
+        ),
+        java_parent_id=None if java_parent is None else java_parent.id,
         source_candidate_ids=tuple(dict.fromkeys(component_parent_ids)),
     )

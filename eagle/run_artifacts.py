@@ -498,6 +498,8 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
             text("genotype/code_generation_prompt.txt")
             or text("genotype/generation_prompt.txt")
         ),
+        inherited_java=text("genotype/inherited_java.java"),
+        java_parent_id=payload.get("java_parent_id"),
         generated_java=(
             text("phenotype/CandidateAgent.java")
             or (

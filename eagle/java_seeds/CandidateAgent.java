@@ -23,6 +23,8 @@ public final class CandidateAgent extends AbstractionLayerAI {
     private UnitType rangedType;
     private UnitType baseType;
     private UnitType barracksType;
+    private int activePlayer = -1;
+    private GameState activeGameState;
 
     public CandidateAgent(UnitTypeTable utt) {
         this(utt, new AStarPathFinding());
@@ -35,6 +37,8 @@ public final class CandidateAgent extends AbstractionLayerAI {
 
     public void reset(UnitTypeTable utt) {
         this.utt = utt;
+        activePlayer = -1;
+        activeGameState = null;
         resourceType = utt.getUnitType("Resource");
         workerType = utt.getUnitType("Worker");
         lightType = utt.getUnitType("Light");
@@ -59,19 +63,27 @@ public final class CandidateAgent extends AbstractionLayerAI {
 
     @Override
     public PlayerAction getAction(int player, GameState gs) throws Exception {
-        if (gs.gameover()) {
+        activePlayer = player;
+        activeGameState = gs;
+        try {
+            if (gs.gameover()) {
+                return translateActions(player, gs);
+            }
+            AgentContext context = new AgentContext(player, gs, new ArrayList<>(gs.getUnits()));
+            decide(context);
             return translateActions(player, gs);
+        } finally {
+            activePlayer = -1;
+            activeGameState = null;
         }
-        AgentContext context = new AgentContext(player, gs, new ArrayList<>(gs.getUnits()));
-        decide(context);
-        return translateActions(player, gs);
     }
 
     // EAGLE_AGENT_STRATEGY_START
     // Edit this region to implement the complete strategy. Use the action helpers below to control units.
     private void decide(AgentContext context) {
-        // Generation zero intentionally issues no actions. The policy gene is
-        // evaluated against this same neutral seed phenotype for every seed.
+        // This shared seed/scaffold intentionally issues no actions. In
+        // inherited-genotype experiments the Generator revises a private copy
+        // for every generation-zero individual before evaluation.
     }
 
     private void economy(AgentContext context) {
@@ -146,7 +158,9 @@ public final class CandidateAgent extends AbstractionLayerAI {
     // EAGLE_ACTION_HELPERS_START
     // Stable Agent operation API: strategy code should issue actions through these helpers.
     private boolean commandMove(Unit unit, int x, int y) {
-        if (unit == null || unit.getType() == baseType || unit.getType() == barracksType) {
+        if (unit == null || unit.getPlayer() != activePlayer
+                || unit.getType() == baseType || unit.getType() == barracksType
+                || !isInsideActiveMap(x, y)) {
             return false;
         }
         move(unit, x, y);
@@ -157,7 +171,9 @@ public final class CandidateAgent extends AbstractionLayerAI {
         if (worker == null || resource == null || base == null) {
             return false;
         }
-        if (worker.getType() != workerType || resource.getType() != resourceType || base.getType() != baseType) {
+        if (worker.getPlayer() != activePlayer || base.getPlayer() != activePlayer
+                || resource.getPlayer() >= 0 || worker.getType() != workerType
+                || resource.getType() != resourceType || base.getType() != baseType) {
             return false;
         }
         harvest(worker, resource, base);
@@ -165,10 +181,13 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
     private boolean commandTrain(Unit producer, UnitType unitType) {
-        if (producer == null || unitType == null) {
+        if (producer == null || producer.getPlayer() != activePlayer || unitType == null) {
             return false;
         }
-        if (producer.getType() != baseType && producer.getType() != barracksType) {
+        boolean validBaseProduction = producer.getType() == baseType && unitType == workerType;
+        boolean validBarracksProduction = producer.getType() == barracksType
+                && (unitType == lightType || unitType == heavyType || unitType == rangedType);
+        if (!validBaseProduction && !validBarracksProduction) {
             return false;
         }
         train(producer, unitType);
@@ -176,7 +195,10 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
     private boolean commandBuild(Unit worker, UnitType buildingType, int x, int y) {
-        if (worker == null || buildingType == null || worker.getType() != workerType) {
+        if (worker == null || worker.getPlayer() != activePlayer || buildingType == null
+                || worker.getType() != workerType
+                || (buildingType != baseType && buildingType != barracksType)
+                || !isInsideActiveMap(x, y)) {
             return false;
         }
         build(worker, buildingType, x, y);
@@ -184,10 +206,11 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
     private boolean commandAttack(Unit attacker, Unit target) {
-        if (attacker == null || target == null || !attacker.getType().canAttack) {
+        if (attacker == null || target == null || attacker.getPlayer() != activePlayer
+                || target.getPlayer() < 0 || !attacker.getType().canAttack) {
             return false;
         }
-        if (target.getPlayer() == attacker.getPlayer()) {
+        if (target.getPlayer() == activePlayer) {
             return false;
         }
         attack(attacker, target);
@@ -195,11 +218,19 @@ public final class CandidateAgent extends AbstractionLayerAI {
     }
 
     private boolean commandIdle(Unit unit) {
-        if (unit == null) {
+        if (unit == null || unit.getPlayer() != activePlayer) {
             return false;
         }
         idle(unit);
         return true;
+    }
+
+    private boolean isInsideActiveMap(int x, int y) {
+        if (activeGameState == null) {
+            return false;
+        }
+        PhysicalGameState physical = activeGameState.getPhysicalGameState();
+        return x >= 0 && y >= 0 && x < physical.getWidth() && y < physical.getHeight();
     }
 
     // EAGLE_ACTION_HELPERS_END
@@ -248,6 +279,15 @@ public final class CandidateAgent extends AbstractionLayerAI {
 
     private Unit nearestResource(Unit source, AgentContext context) {
         return nearestUnit(source, context.units, -1, resourceType);
+    }
+
+    private boolean isFreeCell(AgentContext context, int x, int y) {
+        if (context == null || context.gs == null) {
+            return false;
+        }
+        PhysicalGameState physical = context.gs.getPhysicalGameState();
+        return x >= 0 && y >= 0 && x < physical.getWidth() && y < physical.getHeight()
+                && context.gs.free(x, y);
     }
 
     private Unit ownBase(AgentContext context) {

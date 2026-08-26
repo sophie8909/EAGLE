@@ -34,7 +34,7 @@ kept as documentation entries.
 | Path | Responsibility |
 | --- | --- |
 | `eagle/candidate.py` | Candidate genotype, phenotype, lineage, failure, fitness, references |
-| `eagle/crossover.py` | Two-component uniform crossover and provenance |
+| `eagle/crossover.py` | Independent prompt and optional inherited-Java crossover with provenance |
 | `eagle/mutation.py` | Reflection context and transport contracts |
 | `eagle/rewrite.py` | Prompt-only mutation rewrite |
 | `eagle/strategy_reflection.py` | Match sampling, Commentator, Coach, trace lifecycle |
@@ -51,7 +51,7 @@ kept as documentation entries.
 | `generation/java_agent_generator.py` | Extraction, normalization, validation, source persistence |
 | `generation/agent_template.py` | Java template contract |
 | `eagle/java_templates/CandidateAgent.java` | Hardened fixed scaffold for offspring decoding |
-| `eagle/java_seeds/CandidateAgent.java` | Shared callable no-op generation-zero phenotype |
+| `eagle/java_seeds/CandidateAgent.java` | Shared callable no-op seed and configured inherited-mode scaffold |
 | `eagle/evaluation.py` | Canonical child evaluation orchestration |
 | `evaluation/compiler.py` | Isolated javac and diagnostics |
 | `evaluation/microrts_runner.py` | Standalone seven-check integration probe only |

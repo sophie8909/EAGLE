@@ -29,7 +29,10 @@ class GenerationBackend(ABC):
     def authoritative_request(self, candidate: Candidate, class_name: str) -> str:
         """Render the exact immutable request used by bounded decoder attempts."""
 
-        return self.prepare_request(candidate.generation_input(class_name=class_name))
+        return self.prepare_request(candidate.generation_input(
+            class_name=class_name,
+            agent_template_path=getattr(self, "agent_template_path", None),
+        ))
 
     def prepare_request(self, request_text: str) -> str:
         """Apply backend request bounds before an attempt persists its prompt."""
@@ -60,12 +63,19 @@ class GenerationBackend(ABC):
 class MockGenerationBackend(GenerationBackend):
     """Deterministic backend for tests and local pipeline smoke runs."""
 
+    def __init__(self, agent_template_path: Path | None = None) -> None:
+        self.agent_template_path = agent_template_path
+
     def generate(self, candidate: Candidate, class_name: str) -> str:
         from .agent_template import JavaTemplatePaths, load_java_template
 
         if class_name != "CandidateAgent":
             raise ValueError("Repository template declares only CandidateAgent.")
-        return load_java_template(JavaTemplatePaths())
+        return load_java_template(
+            JavaTemplatePaths()
+            if self.agent_template_path is None
+            else JavaTemplatePaths(self.agent_template_path)
+        )
 
 
 class InitialJavaSeedBackend(GenerationBackend):
@@ -125,7 +135,10 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         )
 
     def authoritative_request(self, candidate: Candidate, class_name: str) -> str:
-        return self.prepare_request(candidate.generation_input(class_name=class_name))
+        return self.prepare_request(candidate.generation_input(
+            class_name=class_name,
+            agent_template_path=getattr(self, "agent_template_path", None),
+        ))
 
     def prepare_request(self, request_text: str) -> str:
         return truncate_prompt(request_text)
@@ -136,9 +149,17 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         class_name: str,
         request_text: str,
     ) -> str:
-        genotype_before = (candidate.strategy_prompt, candidate.generation_prompt)
+        genotype_before = (
+            candidate.strategy_prompt,
+            candidate.generation_prompt,
+            candidate.inherited_java,
+        )
         prompt = request_text
-        assert (candidate.strategy_prompt, candidate.generation_prompt) == genotype_before
+        assert (
+            candidate.strategy_prompt,
+            candidate.generation_prompt,
+            candidate.inherited_java,
+        ) == genotype_before
         module_name = (
             "java_compile_repair"
             if self._generation_request_kind == "compile_repair"

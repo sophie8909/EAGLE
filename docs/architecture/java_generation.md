@@ -4,50 +4,55 @@ The Generator is a genotype-to-phenotype decoder.
 
 ## Exact input and output
 
-Input:
+Input in every mode:
 
 - `strategy_prompt` as the game-playing policy;
 - `generation_prompt` as reusable policy-to-Java translation instructions;
 - the fixed checked-in Java scaffold, action API guide, and structural/security constraints.
 
-The Generator receives no parent Java and no game logs. It must not independently
+Additional input in `inherited_genotype` mode:
+
+- the complete Java component selected from the Java parent, or the configured
+  no-op Java seed at generation zero.
+
+Default mode receives no parent Java. Inherited mode receives the selected Java
+component as revision context. Neither mode receives game logs or may independently
 improve the policy. Output is one complete `ai.generated.CandidateAgent` Java
 source file; patches, methods, JSON, prose, and partial source are rejected.
 
-Generation zero does not call the Generator LLM. It loads the complete callable
-no-op source from `initial_java_seed_path`, paired with the policy gene from each
-configured seed file, and enters the same validation/compilation/integration/
-evaluation stages. Offspring generation
-continues to use the normal two-gene decoder described above.
-The seed and decoder scaffold are separate checked-in files: hardening fixed
-offspring helpers must not silently alter the generation-zero source or hash.
+Default-mode generation zero does not call the Generator LLM. In inherited mode,
+one configured policy is copied to `population_size`; every copy receives the
+complete callable no-op source from `initial_java_seed_path` and makes its own
+bounded Generator call. The seed-variant configs use that same file as their
+fixed scaffold so callable helper and safety contracts match the inherited input.
 
-Each configured seed policy file creates one generation-zero candidate; a seed
-is not duplicated to fill the later-generation `population_size`. Seed
-generation evidence records the resolved checked-in source path and normalized
-source SHA-256. Its generation request and raw-response files are empty, and its
-`generation_llm` timing has null boundaries/duration and no attempts.
+Default mode creates one generation-zero candidate per seed file and records
+checked-in-source evidence with no request. In inherited mode, the pre-generation
+Java input is persisted for every replicated candidate and every candidate owns
+normal request/raw-response/attempt/timing evidence.
 
 The raw response is persisted before extraction. Extracted/normalized generation
 evidence remains under `generation/`; only a compilation success creates the
 canonical `phenotype/CandidateAgent.java`.
 
-For non-seed candidates, `generation_max_attempts` bounds compile-guided decoder
+For every LLM-generated candidate, including inherited-mode generation zero,
+`generation_max_attempts` bounds compile-guided decoder
 attempts. The repository default is one so old configs and resumes retain their
 original semantics; the tracked `static_0824` production configs explicitly use
-five. Attempt 1 uses the authoritative two-gene generation request. If extraction
+five. Attempt 1 uses the authoritative active-genotype generation request. If extraction
 does not yield a complete source, the next attempt resamples that base request and
 is marked `initial_decode_retry`. Once a complete source fails validation or
 `javac`, the next attempt uses the separate `java_compile_repair` prompt with the
 same authoritative genes, immutable scaffold/API guide, the immediately previous
 complete source marked untrusted, and only that attempt's structured validation
 and compiler evidence. Every actual post-truncation request is separately hashed.
-Generation zero always loads once and records no LLM attempts.
+Only default-mode generation zero loads once and records no LLM attempts.
 
 ## Processing sequence
 
-1. Persist the unchanged two-gene genotype and lineage.
-2. Render the two genes with the canonical scaffold/API constraints for the
+1. Persist the unchanged active genotype and lineage, including inherited Java
+   input and Java-parent provenance when enabled.
+2. Render the active genotype with canonical scaffold/API constraints for the
    initial decode.
 3. Before each request, persist its candidate-owned attempt envelope, then
    persist the raw response before extraction.
@@ -88,6 +93,6 @@ strategy-token similarity. This bounds broad drift but does not prove semantic
 equivalence; the immutable prompt and subsequent evaluation remain responsible
 for intent fidelity.
 
-Hard tests prove the request uses the checked-in scaffold rather than
-`parent.generated_java`, and prove Generator/Evaluation preserve both prompt
-genes exactly.
+Hard tests prove the default request uses the checked-in scaffold rather than
+`parent.generated_java`, the inherited request includes its explicit Java
+component, and Generator/Evaluation preserve every active genotype input.

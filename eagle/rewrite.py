@@ -347,14 +347,27 @@ class PromptRewriteMutation:
             "objectives": context.objectives.to_dict(),
             "evaluation_status": context.candidate.status,
             "evidence": (
-                {
-                    "candidate_id": feedback_candidate_id,
-                    "policy_prompt": context.candidate.strategy_prompt,
-                    "reviewed_phenotype_artifact": (
-                        f"candidates/{feedback_candidate_id}/phenotype/CandidateAgent.java"
-                    ),
-                    "structural_evidence": _structural_code_evidence(context),
-                }
+                (
+                    {
+                        "candidate_id": candidate.id,
+                        "policy_prompt": candidate.strategy_prompt,
+                        "java_parent_id": candidate.java_parent_id,
+                        "reviewed_java_input": "inherited_java",
+                        "reviewed_inherited_java_artifact": (
+                            f"candidates/{candidate.id}/genotype/inherited_java.java"
+                        ),
+                        "structural_evidence": _structural_code_evidence(context),
+                    }
+                    if candidate.inherited_java
+                    else {
+                        "candidate_id": feedback_candidate_id,
+                        "policy_prompt": context.candidate.strategy_prompt,
+                        "reviewed_phenotype_artifact": (
+                            f"candidates/{feedback_candidate_id}/phenotype/CandidateAgent.java"
+                        ),
+                        "structural_evidence": _structural_code_evidence(context),
+                    }
+                )
                 if self.mutation_type == "code"
                 else {
                     "candidate_id": feedback_candidate_id,

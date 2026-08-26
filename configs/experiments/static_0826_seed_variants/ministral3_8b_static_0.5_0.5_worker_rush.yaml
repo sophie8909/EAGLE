@@ -2,6 +2,7 @@ schema_version: experiment-v2
 experiment_name: ministral3_8b_static_0.5_0.5_worker_rush
 algorithm: lexicase
 survivor_selection: mu_plus_lambda
+candidate_java_mode: inherited_genotype
 application: microrts
 objectives: {opponent_cases: maximize}
 model:
@@ -18,8 +19,9 @@ model:
 seed_prompt_files: [seeds/worker_rush_policy.txt]
 generation_prompt_file: prompts/initial_generation.txt
 initial_java_seed_path: eagle/java_seeds/CandidateAgent.java
+agent_template_path: eagle/java_seeds/CandidateAgent.java
 generations: 20
-population_size: 1
+population_size: 10
 execution_mode: openai
 mutation_max_attempts: 3
 generation_max_attempts: 5

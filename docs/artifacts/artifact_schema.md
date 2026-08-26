@@ -1,7 +1,7 @@
 # Artifact schema
 
 This document owns the current `eagle-run-v2`, `eagle-generation-v3`, and
-`eagle-candidate-v4` layout. Timing and lineage fields are defined by
+`eagle-candidate-v5` layout. Timing and lineage fields are defined by
 `timing_schema.md` and `lineage_schema.md`.
 
 ## Run root
@@ -24,7 +24,7 @@ runs/<run_id>/
 └── final_test/
 ```
 
-`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda`, reflection mode/probabilities, and evaluation matrix. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
+`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda` and `candidate_java_mode`, reflection mode/probabilities, and evaluation matrix. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
 
 `manifest.json` stays small: schema/run identity, timestamps, status, experiment/model/reflection identity, and `latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`; interrupted/failed records include resumability and their interruption/failure metadata without replacing the last atomic generation. It never embeds the config. `summary.json` stores completion/reporting fields, final population IDs, and a reference to the best runnable candidate in the final population; the reference is `null` when every final candidate failed. It does not copy candidate snapshots.
 
@@ -66,7 +66,8 @@ candidates/<candidate_id>/
 ├── genotype/
 │   ├── policy_prompt.txt
 │   ├── strategy_signature.json
-│   └── code_generation_prompt.txt
+│   ├── code_generation_prompt.txt
+│   └── inherited_java.java             # inherited_genotype mode only
 ├── phenotype/                         # compilation success only
 │   └── CandidateAgent.java
 ├── crossover/provenance.json
@@ -107,7 +108,8 @@ candidates/<candidate_id>/
 
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, fitness vector, aggregate Game Performance, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
 
-For a non-seed bounded decode, every attempt owns its actual post-truncation
+For every bounded LLM decode, including inherited-mode generation zero, every
+attempt owns its actual post-truncation
 request and hash, raw response, extracted/normalized source, validation,
 compilation, and timing. `request_kind` distinguishes `initial_decode`,
 `initial_decode_retry`, and `compile_repair`. Repair records also identify
@@ -126,17 +128,19 @@ reference, and the projected request SHA-256. Attempt class workspaces are trans
 candidate-isolated; only promoted canonical classes remain for Integration and
 matches. A partial persisted attempt is audit-only and a rerun refuses to
 overwrite it; resume starts from the last atomic generation boundary rather than
-continuing a half-decoded candidate. Generation-zero has no
+continuing a half-decoded candidate. Default fixed-seed generation zero has no
 `generation/attempts/` LLM evidence.
 
-For generation-zero candidates, `genotype/policy_prompt.txt` retains the exact
-configured seed policy (which may be empty), while every seed candidate uses the
-same checked-in callable no-op Java source. `generation/result.json` records
-operation `initial_java_seed`, no attempts,
-and checked-in source kind, resolved path, and normalized-source SHA-256.
-`generation/request.txt` and `generation/response_raw.txt` are empty because no
-request was sent. The extracted, normalized, and canonical phenotype files
-retain the checked-in seed Java as source evidence.
+For default-mode generation-zero candidates, `genotype/policy_prompt.txt`
+retains the configured seed policy and `generation/result.json` records
+operation `initial_java_seed`, no attempts, and checked-in source provenance.
+Request/raw-response files are empty. In `inherited_genotype` mode,
+`genotype/inherited_java.java` retains the exact pre-generation no-op Java input
+for each replicated seed candidate; each candidate then owns ordinary bounded
+generation attempts and a separately generated phenotype. Later children use
+the same file for the selected parent Java component, with `java_parent_id` in
+candidate/lineage/crossover provenance. Full inherited Java is never embedded
+in candidate or generation JSON.
 
 When the policy prompt is empty, `strategy_alignment/result.json` records
 `status: not_applicable`, a null score, and no attempts; its request/raw files
@@ -144,7 +148,7 @@ are empty. This is distinct from an Alignment blocked by an earlier evaluation
 failure.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
-phenotype, evaluation, code-quality, and timing files. The loader has isolated
+optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated
 fallback reads for old prompt/phenotype paths, but ignores legacy
 `previous_code` and phenotype-parent provenance. New writers never emit them.
 `individual.json`, `candidate_result.json`, `evaluation/summary.json`, and
@@ -159,10 +163,12 @@ candidate-owned evidence without duplicating its prompt/response under
 `llm_logs/`. Adaptively credited offspring retain `aos/reward.json`;
 head-to-head match evidence remains below `aos/head_to_head/`.
 
-Code Reflection metadata records `reviewed_phenotype_artifact` as a run-relative
-reference to the evaluated source candidate's canonical Java phenotype. The
-source is reviewer evidence only; it is never duplicated as `previous_code` in
-the child genotype or forwarded to the child Generator request.
+In default mode Code Reflection metadata records `reviewed_phenotype_artifact`
+as a run-relative reference to the evaluated source candidate's canonical Java
+phenotype. In inherited mode it instead records `java_parent_id`,
+`reviewed_java_input: inherited_java`, and the child's canonical
+`reviewed_inherited_java_artifact`; that source is also the explicit Java input
+to the Generator. Neither path restores an implicit `previous_code` field.
 
 ## Match ownership
 

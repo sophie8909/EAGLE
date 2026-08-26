@@ -1,0 +1,28 @@
+Generate the complete Java source file for CandidateAgent.
+
+Game-playing policy to implement faithfully:
+$policy_prompt
+
+Reusable policy-to-Java translation instructions:
+$code_generation_prompt
+
+INHERITED JAVA COMPONENT (an evolvable input, not the immutable scaffold):
+$inherited_java
+
+Use the inherited Java as implementation evidence while producing a complete
+CandidateAgent that follows the policy and translation instructions. Do not
+return a patch: return the complete file.
+
+IMMUTABLE SOURCE/API CONTRACT (higher priority than the reusable instructions):
+$action_api_guide
+
+Start from this canonical checked-in scaffold. Return the complete revised Java file, including every unchanged section:
+
+```java
+$java_scaffold
+```
+
+FINAL OUTPUT CONTRACT (highest priority):
+Your response must contain one complete CandidateAgent.java file and nothing else.
+The first non-whitespace text must be package ai.generated; and the final non-whitespace character must be the class closing brace.
+Never return JSON, a functions object, individual method bodies, a patch, an explanation, or Markdown fences.

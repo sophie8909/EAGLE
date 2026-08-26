@@ -4,9 +4,13 @@ Snapshot: 2026-08-26. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
-- The genotype has exactly two evolvable prompt components: `strategy_prompt`
-  (policy gene) and `generation_prompt` (code-generation gene). Generated Java
-  is phenotype/evidence and is never inherited as `previous_code`.
+- `candidate_java_mode: generated_phenotype` preserves the two evolvable prompt
+  components: `strategy_prompt` and `generation_prompt`; generated Java remains
+  phenotype/evidence only. Opt-in `inherited_genotype` adds a complete Java
+  component selected independently at crossover. The Generator revises that
+  component, and a successful child phenotype becomes Java input for the next
+  generation; this is explicit versioned state, not the removed legacy
+  `previous_code` field.
 - Automatically created candidate IDs use `gen_<zero-padded-generation>_<12-hex>`;
   explicitly loaded IDs remain unchanged for artifact and resume compatibility.
 - The search roster is exactly seven fixed opponents: `lightrush`, `heavyrush`,
@@ -117,12 +121,15 @@ preflight. Experiment YAML files reference
 The `static_0826` experiment references blank, Worker-rush, and deterministic
 random seed policies in one three-candidate run. The
 `static_0826_seed_variants` batch stores the same three initial-policy choices
-as separate one-seed configs for independent `1 + 1` experiments. Generation
-zero retains each policy gene while every variant loads the same validated
-callable no-op `initial_java_seed_path` without a Generator call. Python modules
+as separate one-seed configs for independent `10 + 10` experiments. Each config
+uses `inherited_genotype`, replicates its single policy and callable no-op Java
+to ten generation-zero individuals, and performs ten independent Generator
+calls. Python modules
 only load, render, bound, transport, and validate executable prompt resources.
-One configured seed file creates one generation-zero candidate; the no-op seed
-source is separate from the hardened offspring scaffold. Empty-policy
+In the default mode one configured seed file creates one generation-zero
+candidate. In inherited mode exactly one seed is required and replicated to the
+configured population; the no-op source may also be selected as the immutable
+Generator scaffold. Empty-policy
 candidates cannot enter Code Reflection, and Strategy Alignment is not
 applicable to them.
 
@@ -155,11 +162,12 @@ echo is retained only in raw/parsed evidence.
 Code Reviewer/Rewriter evidence is stored under `mutation/code_reflection/`.
 The Rewriter uses the exact JSON object contract with the sole field
 `rewritten_prompt`.
-The canonical Java phenotype is `phenotype/CandidateAgent.java`; Generator uses
-the checked-in scaffold and never a parent phenotype. Code Reflection metadata
-records which evaluated source phenotype the Reviewer consumed through the
-run-relative `reviewed_phenotype_artifact` reference; this evidence reference
-does not restore the removed `previous_code` genotype gene.
+The canonical generated Java phenotype is `phenotype/CandidateAgent.java`.
+Default mode uses only the checked-in scaffold. In inherited mode the Generator
+also receives `genotype/inherited_java.java`; Code Reflection reviews the
+child's current policy against that exact Java component and records its Java
+parent/artifact provenance. This explicit mode does not restore the removed
+unversioned `previous_code` field.
 The immutable API guide is rendered after the evolvable decoder gene, and
 validation requires token-equivalent fixed scaffold source outside the strategy
 markers. Fixed action helpers reject wrong-owner and invalid-type commands.

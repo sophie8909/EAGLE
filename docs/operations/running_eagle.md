@@ -38,8 +38,10 @@ with three seed policies and `population_size: 3` therefore performs exact
 
 `configs/experiments/static_0826_seed_variants/` is a three-config batch: blank,
 Worker Rush, and deterministic pseudo-random. Each config has one seed policy
-and `population_size: 1`, so each independent run performs exact `1 + 1`
-environmental selection while sharing the same no-op generation-zero Java.
+and `population_size: 10`. In `candidate_java_mode: inherited_genotype`, the
+policy and callable no-op Java are copied into ten generation-zero genotypes,
+then ten independent Generator calls may produce ten different Java agents.
+Every later generation performs exact `10 + 10` environmental selection.
 
 ## Resume
 
@@ -68,7 +70,7 @@ If a config folder is also supplied, it is compatibility-checked against the run
 `generation_max_attempts` controls bounded compile-guided Java decoding. Its
 repository and legacy-config default is `1`; production configs that opt in
 must persist the value explicitly. `static_0824` uses `5`. Attempt 1 uses the
-authoritative two-gene request. Extraction failures repeat that base request;
+authoritative active-genotype request. Extraction failures repeat that base request;
 validation or javac failures produce a new repair request from the immediately
 previous complete source and its structured diagnostics. Changing this field
 changes resolved run identity and is not allowed during resume. Partial

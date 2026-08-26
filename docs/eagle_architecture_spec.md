@@ -1,6 +1,6 @@
 # EAGLE architecture specification
 
-Status: authoritative current contract, 2026-08-19.
+Status: authoritative current contract, 2026-08-26.
 
 This document describes executable EAGLE behavior. Historical NSGA-II,
 two-objective, ten-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
@@ -17,14 +17,18 @@ surrogate fitness models, or previous-generation self-play opponents.
 
 ## 2. Candidate model
 
-The genotype has exactly two evolving prompt values:
+Every candidate has two evolving prompt values:
 
 1. `strategy_prompt` — the game-playing policy gene (`policy_prompt` conceptually)
 2. `generation_prompt` — the reusable policy-to-Java translation gene (`code_generation_prompt` conceptually)
 
-The phenotype is the latest complete generated Java source. Java source is
-evidence, never an inherited genotype component. Child construction inherits
-only the two prompt genes; evaluation does not overwrite either gene.
+`candidate_java_mode` selects the Java state boundary. The default
+`generated_phenotype` mode keeps Java as non-inherited phenotype/evidence.
+The explicit `inherited_genotype` mode adds a third component: the complete
+Java source selected from a parent or the configured generation-zero Java
+seed. The Generator consumes that inherited source and produces the candidate's
+new Java component and phenotype. Evaluation does not overwrite either prompt
+gene or the persisted pre-generation Java input.
 
 First-class candidate state includes identity, generation, direct parents,
 operator, mutation type, component-source IDs, generated Java, validation and
@@ -38,15 +42,17 @@ while loading or resuming a run.
 
 ## 3. Evolution lifecycle
 
-Generation zero creates one candidate per configured seed policy file, pairs
-each policy (including an intentionally blank policy) with the same checked-in
-callable no-op Java seed without calling the Generator, and passes each seed
-through the canonical downstream evaluation boundary. It does not replicate a
-seed merely to fill `population_size`. Each later
+In the default `generated_phenotype` mode, generation zero creates one candidate
+per configured seed policy file, pairs each policy with the checked-in callable
+no-op Java seed without calling the Generator, and does not replicate a seed to
+fill `population_size`. In `inherited_genotype` mode, exactly one configured
+seed policy is copied to `population_size`; every copy receives the same no-op
+Java component and independently calls the Generator before evaluation. Each later
 generation produces a fixed-size offspring population and performs:
 
 1. seeded lexicase parent selection;
-2. optional uniform two-component crossover;
+2. optional uniform component crossover (two prompt components, plus an
+   independent Java-component choice in `inherited_genotype` mode);
 3. optional Strategy or Code mutation;
 4. final complete-file Java generation;
 5. validation, compilation, integration, and evaluation;
@@ -69,9 +75,10 @@ reproducibility and does not pass a match-seed JVM property.
 ## 5. Crossover and lineage
 
 Uniform crossover independently selects `strategy_prompt` and
-`generation_prompt` from the two parents. Lineage persists the direct parent IDs
-and the source candidate ID for both prompt components, even when selected text
-values are equal. It records no phenotype-parent component.
+`generation_prompt` from the two parents. In `inherited_genotype` mode it also
+independently selects the complete Java component. Lineage persists the direct
+parent IDs and the source candidate ID for every active component, even when
+component values are equal. Default-mode lineage has no Java parent.
 
 ## 6. Mutation
 
@@ -94,9 +101,12 @@ event without duplicating candidate-owned prompt/response evidence. A validated
 Coach result takes its parent policy from the authoritative input; any model
 echo remains raw/parsed evidence only.
 
-Code mutation compares the current policy with the current Java phenotype, then
-performs Code Generation Prompt Rewrite before final Java generation. It changes
-only `generation_prompt`; game logs are not Code Reflection evidence. The Code
+Code mutation in default mode compares the source parent's policy with its Java
+phenotype. In inherited mode it compares the child's independently selected
+policy with its inherited Java component and uses diagnostics from that Java
+parent only when they describe the selected source. It then performs Code
+Generation Prompt Rewrite before final Java generation and changes only
+`generation_prompt`; game logs are not Code Reflection evidence. The Code
 Prompt Rewriter returns exactly `{"rewritten_prompt":"..."}` so the transport's
 JSON-object mode and the parser enforce the same contract.
 
@@ -104,27 +114,30 @@ All executable prompt bodies live as individual UTF-8 text files under
 `prompts/`. Python and YAML may reference, render, bound, transport, and validate
 prompt resources but may not contain alternate executable prompt bodies.
 
+Neither mutation operator directly edits the inherited Java component. In
+`inherited_genotype` mode crossover/copy chooses that component first, mutation
+changes only its owned prompt, and the final Generator consumes all three
+pre-generation components to produce the child's new Java.
+
 ## 7. Java generation and validation
 
-Generation 0 is the one explicit decoder exception: every seed candidate keeps
-the policy loaded from its configured seed file and uses the same
-`initial_java_seed_path` as its fixed phenotype, without a Generator call. The
-checked-in seed exposes the complete callable CandidateAgent scaffold and
-helpers but its strategy issues no actions. It is validated, compiled,
-integrated, and evaluated through the same downstream boundary as every
-generated phenotype. It is generation-zero evidence only and is never inherited
-as a third gene. Seed loading records checked-in source provenance but no
-generation request, raw Generator response, or Generator attempt.
-The seed file is distinct from the checked-in offspring scaffold, so decoder
-safety hardening cannot silently change the generation-zero seed source or hash.
+In `generated_phenotype` mode, generation 0 remains the decoder exception: the
+configured policy uses `initial_java_seed_path` as a fixed phenotype without a
+Generator call. In `inherited_genotype` mode, `initial_java_seed_path` is instead
+the third pre-generation component for every replicated seed candidate; each
+candidate makes an independent bounded Generator call and persists normal
+request, raw response, attempt, validation, and compilation evidence. The
+checked-in seed exposes callable helpers while its strategy issues no actions.
 
-Final generation consumes the two prompt genes plus the fixed checked-in Java
-scaffold/API constraints and returns exactly one complete Java source file. It
-does not receive parent Java or game logs. Raw response, extracted source, normalized source,
+Final generation always consumes the two prompt genes plus the fixed checked-in
+Java scaffold/API constraints and returns exactly one complete Java source file.
+In `inherited_genotype` mode it additionally receives the selected inherited
+Java component as revision context; default mode receives no parent Java. It
+never receives game logs. Raw response, extracted source, normalized source,
 attempts, model identity, errors, and timing are persisted.
 
 Offspring decoding may use up to `generation_max_attempts`. Attempt 1 consumes
-the authoritative two-gene generation request. An extraction failure may repeat
+the authoritative active-genotype generation request. An extraction failure may repeat
 that base request. After a complete source fails validation or compilation, the
 next attempt consumes the separate compile-repair prompt containing the unchanged
 authoritative genes, immutable scaffold/API guide, the immediately previous
@@ -134,8 +147,9 @@ lineage, AOS state, selection case, or strategy intent and is distinct from Code
 Reflection. Each actual request and source owns its hash and evidence. The first
 validation+compilation success is the sole canonical phenotype. If all attempts
 fail, the final attempt owns the candidate failure classification and remains
-generation evidence rather than a canonical phenotype. Generation zero loads
-once regardless of this setting.
+generation evidence rather than a canonical phenotype. Fixed-seed generation
+zero loads once; inherited-genotype generation zero uses the configured bounded
+attempt budget independently for every replicated candidate.
 
 Validation requires:
 
@@ -252,7 +266,8 @@ timing references. Each generation also has a policy JSONL sidecar containing
 artifact references for every population member with a non-empty
 `strategy_prompt`; it does not duplicate strategy text. Candidate state lives once under
 `candidates/<id>/candidate.json`, with `genotype/policy_prompt.txt`,
-`genotype/code_generation_prompt.txt`, `phenotype/CandidateAgent.java`, and
+`genotype/code_generation_prompt.txt`, optional
+`genotype/inherited_java.java`, `phenotype/CandidateAgent.java`, and
 specialized generation, validation, compilation, integration, evaluation,
 mutation, lineage, and timing artifacts beside it.
 

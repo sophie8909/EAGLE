@@ -21,6 +21,10 @@
 - resumable config-folder batches driven by the atomic `experiment.yaml` index.
 - joint parent-plus-offspring `(mu + lambda)` lexicase survivor selection;
 - heterogeneous generation-zero policy genes sharing one callable no-op Java seed.
+- explicit `candidate_java_mode` with backward-compatible two-prompt default and
+  opt-in inherited Java third component;
+- inherited-mode single-policy generation-zero replication, independent Java
+  generation, three-component crossover provenance, and resumable Java genotype artifacts.
 
 ## Remaining optional hardening
 
