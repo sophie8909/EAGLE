@@ -115,10 +115,12 @@ the compile-guided Java repair decoder, the action-API guide, and endpoint
 preflight. Experiment YAML files reference
 `prompts/initial_generation.txt`; inline prompt/template fields are rejected.
 The `static_0826` experiment references blank, Worker-rush, and deterministic
-random seed policies. Generation zero retains each policy gene while all three
-candidates load the same validated callable no-op `initial_java_seed_path`
-without a Generator call. Python modules only load, render,
-bound, transport, and validate executable prompt resources.
+random seed policies in one three-candidate run. The
+`static_0826_seed_variants` batch stores the same three initial-policy choices
+as separate one-seed configs for independent `1 + 1` experiments. Generation
+zero retains each policy gene while every variant loads the same validated
+callable no-op `initial_java_seed_path` without a Generator call. Python modules
+only load, render, bound, transport, and validate executable prompt resources.
 One configured seed file creates one generation-zero candidate; the no-op seed
 source is separate from the hardened offspring scaffold. Empty-policy
 candidates cannot enter Code Reflection, and Strategy Alignment is not

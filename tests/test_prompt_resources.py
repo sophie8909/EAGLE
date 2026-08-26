@@ -110,6 +110,37 @@ class PromptResourceTests(unittest.TestCase):
         self.assertIn("continuous Worker-rush", config.seed_prompts[1])
         self.assertIn("deterministic pseudo-random policy", config.seed_prompts[2])
 
+    def test_static_0826_seed_variants_are_three_distinct_one_plus_one_experiments(self) -> None:
+        config_dir = Path("configs/experiments/static_0826_seed_variants")
+        config_paths = sorted(config_dir.glob("ministral3_8b_static_0.5_0.5_*.yaml"))
+        configs = tuple(ExperimentConfig.from_file(path) for path in config_paths)
+
+        self.assertEqual(len(configs), 3)
+        self.assertEqual(len({config.experiment_name for config in configs}), 3)
+        self.assertEqual(
+            {config.seed_prompt_files for config in configs},
+            {
+                (DEFAULT_SEED_POLICY_PATH,),
+                (Path("seeds/worker_rush_policy.txt").resolve(),),
+                (Path("seeds/random_policy.txt").resolve(),),
+            },
+        )
+        self.assertEqual(len({config.seed_prompts for config in configs}), 3)
+        self.assertTrue(all(config.population_size == 1 for config in configs))
+        self.assertTrue(all(config.survivor_selection == "mu_plus_lambda" for config in configs))
+        self.assertTrue(all(config.strategy_reflection_probability == 0.5 for config in configs))
+        self.assertTrue(all(config.code_reflection_probability == 0.5 for config in configs))
+
+        java_paths = {config.initial_java_seed_path for config in configs}
+        self.assertEqual(java_paths, {Path("eagle/java_seeds/CandidateAgent.java").resolve()})
+        source = java_paths.pop().read_text(encoding="utf-8")
+        decide = source.split("private void decide(AgentContext context) {", 1)[1].split("\n    }", 1)[0]
+        get_action = source.split("public PlayerAction getAction", 1)[1].split(
+            "// EAGLE_AGENT_STRATEGY_START", 1
+        )[0]
+        self.assertNotIn("command", decide)
+        self.assertNotIn("applyAutoDefense", get_action)
+
     def test_survivor_selection_defaults_and_rejects_noncanonical_modes(self) -> None:
         config = ExperimentConfig.from_mapping({})
         self.assertEqual(config.survivor_selection, "mu_plus_lambda")

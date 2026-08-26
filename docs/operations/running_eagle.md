@@ -36,6 +36,11 @@ offspring candidates jointly enter seeded lexicase survivor selection. A config
 with three seed policies and `population_size: 3` therefore performs exact
 `3 + 3` environmental selection in every evolutionary generation.
 
+`configs/experiments/static_0826_seed_variants/` is a three-config batch: blank,
+Worker Rush, and deterministic pseudo-random. Each config has one seed policy
+and `population_size: 1`, so each independent run performs exact `1 + 1`
+environmental selection while sharing the same no-op generation-zero Java.
+
 ## Resume
 
 Resume can target one run and uses its immutable run-local configuration:
