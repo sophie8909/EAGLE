@@ -24,7 +24,7 @@ runs/<run_id>/
 └── final_test/
 ```
 
-`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings, reflection mode/probabilities, and evaluation matrix. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
+`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda`, reflection mode/probabilities, and evaluation matrix. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
 
 `manifest.json` stays small: schema/run identity, timestamps, status, experiment/model/reflection identity, and `latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`; interrupted/failed records include resumability and their interruption/failure metadata without replacing the last atomic generation. It never embeds the config. `summary.json` stores completion/reporting fields, final population IDs, and a reference to the best runnable candidate in the final population; the reference is `null` when every final candidate failed. It does not copy candidate snapshots.
 
@@ -129,8 +129,10 @@ overwrite it; resume starts from the last atomic generation boundary rather than
 continuing a half-decoded candidate. Generation-zero has no
 `generation/attempts/` LLM evidence.
 
-For generation-zero candidates, `genotype/policy_prompt.txt` is empty and
-`generation/result.json` records operation `initial_java_seed`, no attempts,
+For generation-zero candidates, `genotype/policy_prompt.txt` retains the exact
+configured seed policy (which may be empty), while every seed candidate uses the
+same checked-in callable no-op Java source. `generation/result.json` records
+operation `initial_java_seed`, no attempts,
 and checked-in source kind, resolved path, and normalized-source SHA-256.
 `generation/request.txt` and `generation/response_raw.txt` are empty because no
 request was sent. The extracted, normalized, and canonical phenotype files

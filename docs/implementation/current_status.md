@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-08-22. This file describes executable repository behavior.
+Snapshot: 2026-08-26. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -20,9 +20,10 @@ Snapshot: 2026-08-22. This file describes executable repository behavior.
   reproducibility.
 - Candidate fitness is a seven-field opponent score mapping. Failed or
   incomplete candidates receive `-1000.0` for every case.
-- Parent selection is seeded lexicase. Survivor selection fills the fixed-size
-  population with seeded lexicase-selected offspring, using parent fallback only
-  when offspring are insufficient; aggregate Game Performance is reporting-only.
+- Parent selection is seeded lexicase. Survivor selection repeatedly applies
+  seeded lexicase without replacement to the joint parent-plus-offspring
+  (`mu_plus_lambda`) pool until the fixed population is full; aggregate Game
+  Performance and generation age are reporting-only.
 - The reflection-operator controller supports exactly `static`, `aos_opponent`,
   and `aos_head2head`. Strategy/Code probabilities mean fixed probabilities in
   static mode and initial probabilities in AOS modes. Static performs no reward
@@ -113,12 +114,13 @@ path, Match Commentator, all four Coach intents, generation, Strategy Alignment,
 the compile-guided Java repair decoder, the action-API guide, and endpoint
 preflight. Experiment YAML files reference
 `prompts/initial_generation.txt`; inline prompt/template fields are rejected.
-New experiment configs reference the intentionally empty
-`seeds/blank_policy.txt`, and generation zero loads the validated checked-in
-`initial_java_seed_path` without an LLM call. Python modules only load, render,
+The `static_0826` experiment references blank, Worker-rush, and deterministic
+random seed policies. Generation zero retains each policy gene while all three
+candidates load the same validated callable no-op `initial_java_seed_path`
+without a Generator call. Python modules only load, render,
 bound, transport, and validate executable prompt resources.
-One configured seed file creates one generation-zero candidate; the historical
-seed source is separate from the hardened offspring scaffold. Empty-policy
+One configured seed file creates one generation-zero candidate; the no-op seed
+source is separate from the hardened offspring scaffold. Empty-policy
 candidates cannot enter Code Reflection, and Strategy Alignment is not
 applicable to them.
 

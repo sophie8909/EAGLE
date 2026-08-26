@@ -42,7 +42,7 @@ flowchart TD
     R -->|aos_head2head| H["Configured parent-vs-offspring matches"]
     Q --> A["Shared EMA operator update"]
     H --> A
-    F --> N["Lexicase survivor selection"]
+    F --> N["Parent + offspring lexicase survivor selection"]
     A --> N --> P
     N --> FT["Final test"]
     FT --> CL["Stop owned runtime"]
@@ -55,6 +55,8 @@ flowchart TD
 - The reporting aggregate uses the fixed `1/2` weights and denominator `11.0`,
   but does not participate in lexicase case filtering.
 - Failed candidates remain available to selection with `-1000.0` case scores.
+- Survivor selection is seeded lexicase without replacement over the joint
+  parent-plus-offspring (`mu_plus_lambda`) pool.
 - `static` uses fixed probabilities; `aos_opponent` reuses seven-opponent rank
   changes; `aos_head2head` uses a separate direct matrix. Neither reward path
   creates another objective or changes normal selection.

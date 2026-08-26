@@ -26,7 +26,7 @@ kept as documentation entries.
 | `eagle/search_runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
 | `eagle/search.py` | Initialization and evolutionary generation loop |
 | `eagle/resume.py` | v2 snapshot resume |
-| `eagle/selection.py` | Seeded seven-case lexicase selection |
+| `eagle/selection.py` | Seeded seven-case lexicase parent selection and joint parent-plus-offspring survivor selection |
 | `eagle/aos.py` | Static and adaptive reflection-operator selection |
 
 ## Candidate and mutation
@@ -51,7 +51,7 @@ kept as documentation entries.
 | `generation/java_agent_generator.py` | Extraction, normalization, validation, source persistence |
 | `generation/agent_template.py` | Java template contract |
 | `eagle/java_templates/CandidateAgent.java` | Hardened fixed scaffold for offspring decoding |
-| `eagle/java_seeds/CandidateAgent.java` | Immutable historical generation-zero phenotype |
+| `eagle/java_seeds/CandidateAgent.java` | Shared callable no-op generation-zero phenotype |
 | `eagle/evaluation.py` | Canonical child evaluation orchestration |
 | `evaluation/compiler.py` | Isolated javac and diagnostics |
 | `evaluation/microrts_runner.py` | Standalone seven-check integration probe only |

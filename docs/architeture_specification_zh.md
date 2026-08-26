@@ -27,7 +27,10 @@ Java `CandidateAgent.java` 是 phenotype／evidence，不是 genotype，也不�
 
 每一代依序執行 seeded lexicase parent selection、crossover、可選的 Strategy
 或 Code mutation、完整 Java generation、validation、compilation、integration、
-126 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。
+126 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。Survivor
+selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
+選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
+`(n + n)`。
 
 `random_seed` 影響 EA 隨機、lexicase case 順序、operator、crossover、mutation
 intent 與 reflection sampling。MicroRTS match 不宣稱 seeded reproducibility；
@@ -53,11 +56,12 @@ alignment review。Generator 使用兩個 gene 加上固定 checked-in Java scaf
 
 Code Prompt Rewriter 固定回傳且只回傳
 `{"rewritten_prompt":"..."}`。Generation 0 是唯一 decoder 例外：每個 seed
-檔建立一個 candidate（不複製到 `population_size`），使用空白
-`strategy_prompt` 並直接載入 `initial_java_seed_path` 的舊版
-初始 Java，不呼叫 LLM；之後仍經相同 validation、compilation、integration 與
-evaluation。歷史 seed 與後續加固的 Generator scaffold 是兩個檔案；這份 Java
-只是 gen0 phenotype，不是第三個 gene，也不會遺傳。
+檔建立一個 candidate（不複製到 `population_size`），保留該檔的空白或非空白
+`strategy_prompt`，並共同載入 `initial_java_seed_path` 的 callable no-op
+初始 Java，不呼叫 Generator；之後仍經相同 validation、compilation、integration
+與 evaluation。Seed 與後續加固的 Generator scaffold 是兩個檔案；這份 Java
+保留完整 action helper API，但 strategy 不發出 action。它只是 gen0 phenotype，
+不是第三個 gene，也不會遺傳。
 Gen0 的 generation request／raw response 為空，LLM attempts 與 timing 也為空；
 artifact 另保存 normalized seed 的來源路徑與 SHA-256。空白 policy 的 Strategy
 Alignment 記為 `not_applicable`、`score: null`，且不建立 LLM attempt。

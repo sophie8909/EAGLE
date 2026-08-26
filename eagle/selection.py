@@ -1,4 +1,4 @@
-"""Seeded lexicase parent selection and lightweight generational replacement."""
+"""Seeded lexicase parent selection and ``(mu + lambda)`` replacement."""
 from __future__ import annotations
 
 import random
@@ -39,28 +39,34 @@ def select_next_generation(
     population_size: int,
     rng: random.Random,
 ) -> list[Candidate]:
-    """Select a fixed-size generation using opponent-wise lexicase only.
+    """Select a fixed-size generation from parents and offspring jointly.
 
-    Offspring are preferred, with the previous population used only when the
-    offspring list is too small. Aggregate Game Performance is reporting-only;
-    code quality is never consulted.
+    Seeded opponent-wise lexicase is applied without replacement to the unique
+    ``(mu + lambda)`` candidate pool. Aggregate Game Performance is
+    reporting-only; code quality is never consulted.
     """
 
-    if not offspring:
-        return list(population[:population_size])
+    if population_size < 0:
+        raise ValueError("population_size must be non-negative.")
+
+    available: list[Candidate] = []
+    available_ids: set[str] = set()
+    for candidate in [*population, *offspring]:
+        if candidate.id not in available_ids:
+            available.append(candidate)
+            available_ids.add(candidate.id)
+    if len(available) < population_size:
+        raise ValueError(
+            "Cannot select a fixed-size generation without replacement: "
+            f"requested {population_size}, found {len(available)} unique candidates."
+        )
+
     selected: list[Candidate] = []
-    available = list(offspring)
-    while len(selected) < population_size and available:
+    while len(selected) < population_size:
         chosen = lexicase_select(available, rng)
         selected.append(chosen)
         available = [candidate for candidate in available if candidate.id != chosen.id]
-    if len(selected) < population_size:
-        remaining = [candidate for candidate in population if candidate.id not in {item.id for item in selected}]
-        while len(selected) < population_size and remaining:
-            chosen = lexicase_select(remaining, rng)
-            selected.append(chosen)
-            remaining = [candidate for candidate in remaining if candidate.id != chosen.id]
-    return selected[:population_size]
+    return selected
 
 
 def best_candidate(population: list[Candidate]) -> Candidate | None:

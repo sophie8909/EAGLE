@@ -185,6 +185,38 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         self.assertTrue(all(candidate.lineage_to_json_dict()["source_candidate_ids"] == [] for candidate in population))
         self.assertTrue(all(candidate.strategy_prompt == "" for candidate in population))
 
+    def test_three_distinct_seed_policies_share_the_no_llm_generation_zero_java(self) -> None:
+        config = ExperimentConfig.from_file(
+            "configs/experiments/static_0826/ministral3_8b_static_0.5_0.5.yaml"
+        )
+        population = initialize_population(config)
+        backend = InitialJavaSeedBackend(config.initial_java_seed_path)
+
+        self.assertEqual(len(population), 3)
+        self.assertEqual(
+            tuple(candidate.strategy_prompt for candidate in population),
+            config.seed_prompts,
+        )
+        self.assertEqual(population[0].strategy_prompt, "")
+        self.assertTrue(all(candidate.strategy_prompt for candidate in population[1:]))
+        self.assertEqual(backend.operation, "initial_java_seed")
+        self.assertIsNone(backend.model)
+        self.assertEqual(
+            {backend.generate(candidate, "CandidateAgent") for candidate in population},
+            {config.initial_java_seed_path.read_text(encoding="utf-8")},
+        )
+
+    def test_generation_zero_java_decide_entrypoint_is_actionless(self) -> None:
+        source = ExperimentConfig.from_mapping({}).initial_java_seed_path.read_text(encoding="utf-8")
+        decide = source.split("private void decide(AgentContext context) {", 1)[1].split("\n    }", 1)[0]
+        get_action = source.split("public PlayerAction getAction", 1)[1].split(
+            "// EAGLE_AGENT_STRATEGY_START", 1
+        )[0]
+
+        self.assertNotIn("command", decide)
+        self.assertNotIn("applyAutoDefense", get_action)
+        self.assertIn("return translateActions(player, gs);", get_action)
+
     def test_initial_java_seed_backend_is_generation_zero_only(self) -> None:
         config = ExperimentConfig.from_mapping({})
         backend = InitialJavaSeedBackend(config.initial_java_seed_path)

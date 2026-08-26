@@ -28,6 +28,7 @@ DEFAULT_EVALUATION_MAPS = (
 DEFAULT_SEED_POLICY_PATH = Path(__file__).resolve().parents[1] / "seeds" / "blank_policy.txt"
 DEFAULT_SEARCH_OPPONENTS = tuple((case, OPPONENT_WEIGHTS[case]) for case in LEXICASE_CASES)
 FIXED_OPPONENT_WEIGHT_SUM = OPPONENT_WEIGHT_SUM
+MU_PLUS_LAMBDA_SELECTION = "mu_plus_lambda"
 
 DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Resource", 0.0),
@@ -99,6 +100,7 @@ class ExperimentConfig:
     crossover_rate: float = 0.75
     mutation_rate: float = 0.85
     random_seed: int = 7
+    survivor_selection: str = MU_PLUS_LAMBDA_SELECTION
     execution_mode: str = "openai"
     llm_temperature: float = 0.2
     llm_max_tokens: int | None = None
@@ -155,6 +157,13 @@ class ExperimentConfig:
             raise ValueError(f"Unsupported experiment schema version: {schema_version!r}")
         if payload.get("algorithm", "lexicase") != "lexicase":
             raise ValueError("The canonical EAGLE parent-selection algorithm is lexicase.")
+        survivor_selection = str(
+            payload.get("survivor_selection", MU_PLUS_LAMBDA_SELECTION)
+        )
+        if survivor_selection != MU_PLUS_LAMBDA_SELECTION:
+            raise ValueError(
+                "The canonical EAGLE survivor selection is mu_plus_lambda lexicase."
+            )
         if payload.get("application", "microrts") != "microrts":
             raise ValueError("The configured application is not supported.")
         if payload.get("objectives", {"opponent_cases": "maximize"}) != {"opponent_cases": "maximize"}:
@@ -254,6 +263,7 @@ class ExperimentConfig:
             crossover_rate=float(payload.get("crossover_rate", 0.75)),
             mutation_rate=float(payload.get("mutation_rate", 0.85)),
             random_seed=int(payload.get("random_seed", 7)),
+            survivor_selection=survivor_selection,
             execution_mode=str(payload.get("execution_mode", "openai")),
             llm_temperature=float(llm_settings.get("temperature", 0.2)),
             llm_max_tokens=None if max_tokens is None else int(max_tokens),
@@ -301,6 +311,10 @@ class ExperimentConfig:
             raise ValueError("generations must be at least 1.")
         if self.population_size < 1:
             raise ValueError("population_size must be at least 1.")
+        if self.survivor_selection != MU_PLUS_LAMBDA_SELECTION:
+            raise ValueError(
+                "survivor_selection must be the canonical mu_plus_lambda mode."
+            )
         if not 0.0 <= self.crossover_rate <= 1.0:
             raise ValueError("crossover_rate must be in [0, 1].")
         if not 0.0 <= self.mutation_rate <= 1.0:
@@ -366,6 +380,7 @@ class ExperimentConfig:
             "schema_version": "experiment-v2",
             "experiment_name": self.experiment_name,
             "algorithm": "lexicase",
+            "survivor_selection": self.survivor_selection,
             "application": "microrts",
             "objectives": {"opponent_cases": "maximize"},
             "model": {

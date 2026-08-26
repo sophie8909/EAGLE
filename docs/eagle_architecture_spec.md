@@ -39,9 +39,10 @@ while loading or resuming a run.
 ## 3. Evolution lifecycle
 
 Generation zero creates one candidate per configured seed policy file, pairs
-each blank policy with the checked-in Java seed without calling the Generator,
-and passes each seed through the canonical downstream evaluation boundary. It
-does not replicate a seed merely to fill `population_size`. Each later
+each policy (including an intentionally blank policy) with the same checked-in
+callable no-op Java seed without calling the Generator, and passes each seed
+through the canonical downstream evaluation boundary. It does not replicate a
+seed merely to fill `population_size`. Each later
 generation produces a fixed-size offspring population and performs:
 
 1. seeded lexicase parent selection;
@@ -50,11 +51,13 @@ generation produces a fixed-size offspring population and performs:
 4. final complete-file Java generation;
 5. validation, compilation, integration, and evaluation;
 6. optional AOS reward collection;
-7. seeded lexicase survivor selection;
+7. seeded lexicase survivor selection without replacement from the joint
+   parent-plus-offspring (`mu_plus_lambda`) pool;
 8. atomic generation persistence.
 
-The fixed-size survivor population is selected from evaluated offspring, with
-parent fallback only when the offspring set is insufficient.
+The fixed-size survivor population is selected from the joint evaluated parent
+and offspring pool. Parent and offspring candidates compete under the same
+seven cases; aggregate Game Performance and generation age do not break ties.
 
 ## 4. Reproducibility
 
@@ -103,15 +106,17 @@ prompt resources but may not contain alternate executable prompt bodies.
 
 ## 7. Java generation and validation
 
-Generation 0 is the one explicit decoder exception: every seed candidate has a
-blank `strategy_prompt` and uses `initial_java_seed_path` as its fixed phenotype,
-without an LLM call. The checked-in seed is validated, compiled, integrated, and
-evaluated through the same downstream boundary as every generated phenotype. It
-is generation-zero evidence only and is never inherited as a third gene. Seed
-loading records checked-in source provenance but no generation request, raw LLM
-response, or LLM attempt.
+Generation 0 is the one explicit decoder exception: every seed candidate keeps
+the policy loaded from its configured seed file and uses the same
+`initial_java_seed_path` as its fixed phenotype, without a Generator call. The
+checked-in seed exposes the complete callable CandidateAgent scaffold and
+helpers but its strategy issues no actions. It is validated, compiled,
+integrated, and evaluated through the same downstream boundary as every
+generated phenotype. It is generation-zero evidence only and is never inherited
+as a third gene. Seed loading records checked-in source provenance but no
+generation request, raw Generator response, or Generator attempt.
 The seed file is distinct from the checked-in offspring scaffold, so decoder
-safety hardening cannot silently change the historical seed source or hash.
+safety hardening cannot silently change the generation-zero seed source or hash.
 
 Final generation consumes the two prompt genes plus the fixed checked-in Java
 scaffold/API constraints and returns exactly one complete Java source file. It

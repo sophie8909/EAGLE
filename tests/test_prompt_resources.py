@@ -62,14 +62,21 @@ class PromptResourceTests(unittest.TestCase):
             save_prompt_template("example", "after $value", path=root)
             self.assertEqual(render_prompt("example", {"value": "ok"}, path=root), "after ok")
 
-    def test_production_configs_use_blank_policy_and_checked_in_java_seed(self) -> None:
+    def test_production_configs_use_file_backed_policies_and_checked_in_java_seed(self) -> None:
         config_paths = sorted(Path("configs/experiments").glob("**/*.yaml"))
         self.assertTrue(config_paths)
         for path in config_paths:
             config = ExperimentConfig.from_file(path)
-            self.assertEqual(config.seed_prompt_files, (DEFAULT_SEED_POLICY_PATH,), path)
+            self.assertTrue(config.seed_prompt_files, path)
+            self.assertEqual(
+                config.seed_prompts,
+                tuple(
+                    seed_path.read_text(encoding="utf-8").strip()
+                    for seed_path in config.seed_prompt_files
+                ),
+                path,
+            )
             self.assertEqual(config.generation_prompt_file, DEFAULT_PROMPT_DIR / "initial_generation.txt", path)
-            self.assertEqual(config.seed_prompts, ("",), path)
             self.assertEqual(config.generation_prompt, load_prompt("initial_generation"), path)
             self.assertEqual(
                 config.initial_java_seed_path,
@@ -78,9 +85,37 @@ class PromptResourceTests(unittest.TestCase):
             )
             self.assertEqual(
                 hashlib.sha256(config.initial_java_seed_path.read_bytes()).hexdigest(),
-                "0750786cb4c14d2cabb74357d8b4ef6fc7d78848f6ffe11007ba855f0f3da230",
+                "1d2361e34329ee7c6b21be5da431b61585d965ffebfc7572fb65cabe292ecf8b",
                 path,
             )
+
+    def test_static_0826_uses_three_distinct_seed_policies_and_equal_operator_weights(self) -> None:
+        config = ExperimentConfig.from_file(
+            "configs/experiments/static_0826/ministral3_8b_static_0.5_0.5.yaml"
+        )
+        self.assertEqual(
+            config.seed_prompt_files,
+            (
+                DEFAULT_SEED_POLICY_PATH,
+                Path("seeds/worker_rush_policy.txt").resolve(),
+                Path("seeds/random_policy.txt").resolve(),
+            ),
+        )
+        self.assertEqual(config.population_size, 3)
+        self.assertEqual(config.survivor_selection, "mu_plus_lambda")
+        self.assertEqual(config.strategy_reflection_probability, 0.5)
+        self.assertEqual(config.code_reflection_probability, 0.5)
+        self.assertEqual(config.initial_java_seed_path, Path("eagle/java_seeds/CandidateAgent.java").resolve())
+        self.assertEqual(config.seed_prompts[0], "")
+        self.assertIn("continuous Worker-rush", config.seed_prompts[1])
+        self.assertIn("deterministic pseudo-random policy", config.seed_prompts[2])
+
+    def test_survivor_selection_defaults_and_rejects_noncanonical_modes(self) -> None:
+        config = ExperimentConfig.from_mapping({})
+        self.assertEqual(config.survivor_selection, "mu_plus_lambda")
+        self.assertEqual(config.to_mapping()["survivor_selection"], "mu_plus_lambda")
+        with self.assertRaisesRegex(ValueError, "mu_plus_lambda"):
+            ExperimentConfig.from_mapping({"survivor_selection": "offspring_first"})
 
     def test_inline_prompt_and_template_fields_are_rejected(self) -> None:
         for field, value in (

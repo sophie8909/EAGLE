@@ -12,8 +12,10 @@ The canonical genotype has exactly two evolvable prompt components:
 The phenotype is the generated complete `ai.generated.CandidateAgent` Java
 source. Java source is evaluation and Code Reflection evidence; it is never a
 genotype component and is never inherited into a child Generator request.
-Generation-zero seeds use a checked-in Java phenotype paired with an empty
-policy gene; this initialization exception does not add an evolvable field.
+Generation-zero seeds use one shared checked-in callable no-op Java phenotype
+paired with the policy from each configured seed file. A seed policy may be
+empty or non-empty; this initialization exception does not add an evolvable
+field.
 
 ## Required logical fields
 

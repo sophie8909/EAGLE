@@ -1,0 +1,3 @@
+Use a continuous Worker-rush policy.
+
+Every Base continuously produces Workers whenever resources allow. Keep one Worker harvesting the nearest reachable resource and returning it to the nearest friendly Base so production continues. Every additional Worker advances toward the enemy Base and attacks it. If the enemy Base is not visible, advance toward enemy territory and attack the nearest enemy unit or structure encountered. Nearby Workers may eliminate an immediate threat to a friendly Base before resuming the rush. Do not build Barracks or produce non-Worker combat units.

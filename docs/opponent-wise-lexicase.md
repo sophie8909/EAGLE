@@ -39,9 +39,11 @@ the best score for each case, and stops when one candidate remains. There is
 no Pareto rank, crowding distance, dominance comparator, or code-quality
 tie-break in the active selection path.
 
-`select_next_generation` fills the fixed population with lexicase-selected
-offspring, then uses lexicase-selected parents only if offspring are insufficient.
-Aggregate Game Performance remains reporting-only and does not select survivors.
+`select_next_generation` combines parents and offspring, then fills the fixed
+population by repeated lexicase selection without replacement from that joint
+`mu_plus_lambda` pool. Parents receive no age bonus and offspring receive no
+preference. Aggregate Game Performance remains reporting-only and does not
+select survivors.
 
 Reflection operator selection is a separate credit path. `static` has no
 reward; `aos_opponent` compares the existing seven case W/D/L ranks with parent

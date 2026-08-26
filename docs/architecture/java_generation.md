@@ -14,12 +14,13 @@ The Generator receives no parent Java and no game logs. It must not independentl
 improve the policy. Output is one complete `ai.generated.CandidateAgent` Java
 source file; patches, methods, JSON, prose, and partial source are rejected.
 
-Generation zero does not call the Generator LLM. It loads the complete source
-from `initial_java_seed_path`, paired with a blank policy gene, and enters the
-same validation/compilation/integration/evaluation stages. Offspring generation
+Generation zero does not call the Generator LLM. It loads the complete callable
+no-op source from `initial_java_seed_path`, paired with the policy gene from each
+configured seed file, and enters the same validation/compilation/integration/
+evaluation stages. Offspring generation
 continues to use the normal two-gene decoder described above.
 The seed and decoder scaffold are separate checked-in files: hardening fixed
-offspring helpers must not alter the historical generation-zero source or hash.
+offspring helpers must not silently alter the generation-zero source or hash.
 
 Each configured seed policy file creates one generation-zero candidate; a seed
 is not duplicated to fill the later-generation `population_size`. Seed

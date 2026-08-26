@@ -168,6 +168,7 @@ def _print_non_batch_output(
     print(f"Experiment: {config.experiment_name}")
     print(f"Model: {config.model.name}")
     print(f"Endpoint: {config.model.base_url}")
+    print(f"Survivor selection: {config.survivor_selection} lexicase")
     kind = "initial" if config.reflection_operator_mode.adaptive else "fixed"
     print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
     print(f"Strategy {kind} probability: {config.strategy_reflection_probability:.2f}")
@@ -267,6 +268,7 @@ class ExperimentOrchestrator:
                 print(f"\n[{index}/{len(config_paths)}] {resolved_path.name}")
                 config = ExperimentConfig.from_file(resolved_path)
                 print(f"Model: {config.model.name}")
+                print(f"Survivor selection: {config.survivor_selection} lexicase")
                 print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
                 config.validate()
                 record_run = (

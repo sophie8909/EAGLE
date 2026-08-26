@@ -44,28 +44,53 @@ class LexicaseOpponentTests(unittest.TestCase):
         second = lexicase_select([left, right], random.Random(17)).id
         self.assertEqual(first, second)
 
-    def test_survivor_selection_keeps_elite_and_fixed_population_size(self) -> None:
-        parents = [candidate("parent", {case: 1.0 for case in LEXICASE_CASES})]
-        offspring = [
-            candidate("child-a", {case: 2.0 for case in LEXICASE_CASES}, generation=1),
-            candidate("child-b", {case: 3.0 for case in LEXICASE_CASES}, generation=1),
+    def test_survivor_selection_competes_parents_and_offspring_jointly(self) -> None:
+        parents = [
+            candidate(
+                "parent-light-specialist",
+                {case: 10.0 if case == "lightrush" else 0.0 for case in LEXICASE_CASES},
+            )
         ]
-        selected = select_next_generation(parents, offspring, population_size=2, rng=random.Random(3))
-        self.assertEqual(len(selected), 2)
-        self.assertEqual(selected[0].id, "child-b")
+        offspring = [
+            candidate(
+                "child-worker-specialist",
+                {case: 10.0 if case == "workerrush" else 0.0 for case in LEXICASE_CASES},
+                generation=1,
+            )
+        ]
+        selected = select_next_generation(parents, offspring, population_size=1, rng=random.Random(14))
+        self.assertEqual([item.id for item in selected], ["parent-light-specialist"])
 
-    def test_opponent_capability_can_be_retained_or_lost_by_lexicase_replacement(self) -> None:
-        capability_winner = candidate("light-capability", {case: 20.0 for case in LEXICASE_CASES})
-        retained = select_next_generation(
-            [capability_winner], [], population_size=1, rng=random.Random(1)
-        )
-        self.assertEqual(retained[0].id, "light-capability")
+    def test_survivor_selection_is_unique_and_fixed_size(self) -> None:
+        parents = [
+            candidate("parent-a", {case: 1.0 for case in LEXICASE_CASES}),
+            candidate("parent-b", {case: 2.0 for case in LEXICASE_CASES}),
+        ]
+        offspring = [
+            candidate("child-a", {case: 3.0 for case in LEXICASE_CASES}, generation=1),
+            candidate("child-b", {case: 4.0 for case in LEXICASE_CASES}, generation=1),
+        ]
 
-        aggregate_challenger = candidate("aggregate-challenger-wins", {case: 2.0 for case in LEXICASE_CASES})
-        lost = select_next_generation(
-            [capability_winner], [aggregate_challenger], population_size=1, rng=random.Random(1)
+        selected = select_next_generation(
+            parents, offspring, population_size=3, rng=random.Random(3)
         )
-        self.assertEqual(lost[0].id, "aggregate-challenger-wins")
+
+        self.assertEqual(len(selected), 3)
+        self.assertEqual(len({item.id for item in selected}), 3)
+        self.assertTrue({item.id for item in selected} <= {"parent-a", "parent-b", "child-a", "child-b"})
+
+    def test_empty_offspring_selects_from_parents_with_lexicase(self) -> None:
+        parents = [
+            candidate("weak", {case: 0.0 for case in LEXICASE_CASES}),
+            candidate("middle", {case: 1.0 for case in LEXICASE_CASES}),
+            candidate("elite", {case: 2.0 for case in LEXICASE_CASES}),
+        ]
+
+        selected = select_next_generation(
+            parents, [], population_size=2, rng=random.Random(1)
+        )
+
+        self.assertEqual({item.id for item in selected}, {"middle", "elite"})
 
     def test_best_candidate_excludes_failed_candidates(self) -> None:
         failed = Candidate(

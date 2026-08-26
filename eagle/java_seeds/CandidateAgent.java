@@ -64,16 +64,14 @@ public final class CandidateAgent extends AbstractionLayerAI {
         }
         AgentContext context = new AgentContext(player, gs, new ArrayList<>(gs.getUnits()));
         decide(context);
-        applyAutoDefense(player, gs);
         return translateActions(player, gs);
     }
 
     // EAGLE_AGENT_STRATEGY_START
     // Edit this region to implement the complete strategy. Use the action helpers below to control units.
     private void decide(AgentContext context) {
-        economy(context);
-        expansion(context);
-        combat(context);
+        // Generation zero intentionally issues no actions. The policy gene is
+        // evaluated against this same neutral seed phenotype for every seed.
     }
 
     private void economy(AgentContext context) {

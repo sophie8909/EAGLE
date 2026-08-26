@@ -31,6 +31,11 @@ owned runtime before starting the next one.
 
 Generation 0 is initialization. `generations: 20` therefore records generation 0 and performs evolutionary generations 1 through 20.
 
+The resolved config records `survivor_selection: mu_plus_lambda`. Parent and
+offspring candidates jointly enter seeded lexicase survivor selection. A config
+with three seed policies and `population_size: 3` therefore performs exact
+`3 + 3` environmental selection in every evolutionary generation.
+
 ## Resume
 
 Resume can target one run and uses its immutable run-local configuration:
