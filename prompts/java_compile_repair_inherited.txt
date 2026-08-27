@@ -25,4 +25,4 @@ $previous_complete_source
 STRUCTURED VALIDATION/COMPILATION DIAGNOSTICS:
 $compile_evidence
 
-Return one complete CandidateAgent.java file and nothing else. Preserve the policy and the immutable scaffold; do not return a patch, Markdown, JSON, or explanation.
+Return one complete CandidateAgent.java file and nothing else. Copy every token outside EAGLE_AGENT_STRATEGY_START/END from the canonical scaffold; only the strategy region may differ. Preserve every fixed method even when it appears unused. Preserve the policy; do not return a patch, Markdown, JSON, or explanation.

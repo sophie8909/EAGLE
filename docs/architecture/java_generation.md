@@ -31,7 +31,12 @@ checked-in-source evidence with no request. In inherited mode, the pre-generatio
 Java input is persisted for every replicated candidate and every candidate owns
 normal request/raw-response/attempt/timing evidence.
 
-The raw response is persisted before extraction. Extracted/normalized generation
+The raw response is persisted before extraction. The extracted response must
+still be a structurally complete Java file. After its external envelope and
+security checks pass, normalization deterministically combines the configured
+canonical scaffold with only the extracted strategy region. Thus harmless model
+rewrites or deletion of fixed code are retained as extracted evidence but never
+enter validation, compilation, or the phenotype. Extracted/normalized generation
 evidence remains under `generation/`; only a compilation success creates the
 canonical `phenotype/CandidateAgent.java`.
 
@@ -56,9 +61,12 @@ Only default-mode generation zero loads once and records no LLM attempts.
    initial decode.
 3. Before each request, persist its candidate-owned attempt envelope, then
    persist the raw response before extraction.
-4. Extract and validate each complete source; after failure render the bounded
-   compile-repair request without changing either gene, lineage, AOS state, or
-   strategy intent. Invoke `javac` at most once for a source that passes validation.
+4. Extract each complete source, reject an invalid external/security envelope,
+   then rebuild the normalized complete source from the configured scaffold and
+   extracted strategy region. Validate that normalized source; after failure
+   render the bounded compile-repair request without changing either gene,
+   lineage, AOS state, or strategy intent. Invoke `javac` at most once for a
+   normalized source that passes validation.
 5. Stop at the first validation+compilation success and promote its isolated
    classes and source as the only canonical phenotype. If all attempts fail,
    project the final source only under `generation/` as failure evidence; do not

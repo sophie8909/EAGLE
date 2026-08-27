@@ -70,14 +70,6 @@ def invalid_source() -> str:
     )
 
 
-def scaffold_only_invalid_source() -> str:
-    return load_java_template(JavaTemplatePaths()).replace(
-        "    // EAGLE_AGENT_STRATEGY_START",
-        "    private int untrustedExtraField;\n\n    // EAGLE_AGENT_STRATEGY_START",
-        1,
-    )
-
-
 def replace_strategy(source: str, strategy: str) -> str:
     start_marker = "// EAGLE_AGENT_STRATEGY_START"
     end_marker = "// EAGLE_AGENT_STRATEGY_END"
@@ -452,32 +444,61 @@ class GenerationAttemptTests(unittest.TestCase):
                 )
             self.assertEqual((partial / "request.txt").read_text(), "durable request")
 
-    def test_fixed_scaffold_only_repair_cannot_rewrite_strategy(self) -> None:
-        valid = load_java_template(JavaTemplatePaths())
-        changed = valid.replace("economy(context);", "commandIdle(context.units.get(0));", 1)
-        backend = ScriptedBackend([scaffold_only_invalid_source(), changed])
-        with tempfile.TemporaryDirectory() as temp:
+    def test_fixed_scaffold_drift_is_normalized_before_compilation(self) -> None:
+        seed_path = Path("eagle/java_seeds/CandidateAgent.java").resolve()
+        generated = load_java_template(JavaTemplatePaths(seed_path)).replace(
+            "    private void applyAutoDefense(int player, GameState gs) {",
+            "    private void modelDeletedFixedMethod(int player, GameState gs) {",
+            1,
+        ).replace(
+            "private void decide(AgentContext context) {",
+            "private void decide(AgentContext context) {\n        commandIdle(null);",
+            1,
+        )
+        backend = ScriptedBackend([generated])
+        with tempfile.TemporaryDirectory() as temp, patch(
+            "eagle.evaluation.compile_agent_source",
+            return_value=CompileResult(True, ["javac"]),
+        ) as compile_source:
             root = Path(temp)
             outcome = decode_validate_compile_candidate(
                 Candidate(id="scaffold-delta", generation=1),
-                config=ExperimentConfig.from_mapping({"generation_max_attempts": 2}),
+                config=ExperimentConfig.from_mapping({
+                    "generation_max_attempts": 2,
+                    "agent_template_path": str(seed_path),
+                }),
                 backend=backend,
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",
+                candidate_artifact_dir=root / "candidate",
                 mock=True,
             )
-        self.assertIsNone(outcome.selected_attempt)
-        self.assertEqual(outcome.final_attempt, 2)
+            attempt_dir = root / "candidate" / "generation" / "attempts" / "attempt_001"
+            extracted_artifact = (
+                attempt_dir / "extracted_candidate.java"
+            ).read_text(encoding="utf-8")
+            normalized_artifact = (
+                attempt_dir / "normalized_candidate.java"
+            ).read_text(encoding="utf-8")
+        self.assertEqual(outcome.selected_attempt, 1)
+        self.assertEqual(outcome.final_attempt, 1)
+        self.assertEqual(len(outcome.attempts), 1)
+        compile_source.assert_called_once()
         self.assertIn(
-            "fixed_scaffold-only failure must preserve",
-            outcome.generation.failure_reason or "",
+            "private void modelDeletedFixedMethod",
+            outcome.generation.extracted_code,
         )
-        self.assertTrue(
-            any(
-                item["check"] == "compile_repair_delta"
-                for item in outcome.generation.validation_result.failed_checks
-            )
+        self.assertNotIn(
+            "private void modelDeletedFixedMethod",
+            outcome.generation.assembled_java,
         )
+        self.assertIn("private void applyAutoDefense", outcome.generation.assembled_java)
+        self.assertIn(
+            "commandIdle(null);",
+            outcome.generation.assembled_java,
+        )
+        self.assertEqual(extracted_artifact, generated.strip())
+        self.assertEqual(normalized_artifact, outcome.generation.assembled_java)
 
     def test_compile_repair_rejects_broad_nondiagnostic_strategy_drift(self) -> None:
         valid = load_java_template(JavaTemplatePaths())

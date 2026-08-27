@@ -136,6 +136,16 @@ Java component as revision context; default mode receives no parent Java. It
 never receives game logs. Raw response, extracted source, normalized source,
 attempts, model identity, errors, and timing are persisted.
 
+The extracted response must itself satisfy the complete-file external envelope:
+package/class/superclass, constructors, lifecycle methods, security restrictions,
+and exactly one ordered strategy-marker pair. After that check, the decoder
+deterministically constructs `normalized_candidate.java` from the configured
+canonical scaffold plus only the extracted strategy region. Model edits outside
+the strategy region therefore remain visible in `response_raw.txt` and
+`extracted_candidate.java` but cannot enter validation, compilation, or the
+canonical phenotype. A partial, structurally invalid, or prohibited response is
+not made valid by scaffold normalization.
+
 Offspring decoding may use up to `generation_max_attempts`. Attempt 1 consumes
 the authoritative active-genotype generation request. An extraction failure may repeat
 that base request. After a complete source fails validation or compilation, the
@@ -168,6 +178,11 @@ Validation requires:
   bounds-safe `isFreeCell(context, x, y)` helper;
 - no network, process execution, unauthorized file I/O, runtime modification,
   or unavailable dependencies.
+
+The token-equivalent scaffold check applies to the normalized complete source.
+Strategy validation and javac also consume that same source, so every successful
+phenotype contains the configured scaffold around the generated strategy rather
+than a model reconstruction of fixed code.
 
 Internal helper names and implementation inside the editable strategy region
 remain flexible within those deterministic Java/API constraints.

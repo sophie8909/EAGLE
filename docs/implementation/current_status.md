@@ -171,6 +171,12 @@ unversioned `previous_code` field.
 The immutable API guide is rendered after the evolvable decoder gene, and
 validation requires token-equivalent fixed scaffold source outside the strategy
 markers. Fixed action helpers reject wrong-owner and invalid-type commands.
+The production decoder now checks that each extracted response is a complete,
+safe CandidateAgent envelope and then deterministically builds the normalized
+source from the configured scaffold plus only the extracted strategy region.
+Raw/extracted evidence still exposes model drift, while deletion of unused fixed
+methods such as `applyAutoDefense` no longer consumes all compile-repair attempts
+or produces a scaffold-only `-1000` failure.
 
 The `workerrush` case compiles the vendored upstream
 `third_party/microrts/src/ai/abstraction/WorkerRush.java`; it is a distinct

@@ -118,6 +118,36 @@ def extract_strategy_region(source: str) -> str:
     return region
 
 
+def assemble_canonical_java_source(source: str, scaffold: str) -> str:
+    """Rebuild a complete source from the scaffold and generated strategy region.
+
+    The Generator still has to return a structurally complete CandidateAgent.
+    Callers must validate that envelope before using this function.  This helper
+    owns only the deterministic normalization step that prevents harmless model
+    edits outside the strategy markers from becoming part of the phenotype.
+    """
+
+    strategy_region = extract_strategy_region(source)
+    _validate_marker_pair(
+        scaffold,
+        STRATEGY_START_MARKER,
+        STRATEGY_END_MARKER,
+        "Agent strategy",
+    )
+    strategy_start = scaffold.index(STRATEGY_START_MARKER) + len(
+        STRATEGY_START_MARKER
+    )
+    end_marker = scaffold.index(STRATEGY_END_MARKER)
+    end_line_start = scaffold.rfind("\n", 0, end_marker) + 1
+    return (
+        scaffold[:strategy_start]
+        + "\n"
+        + strategy_region
+        + "\n\n"
+        + scaffold[end_line_start:]
+    )
+
+
 def fixed_scaffold_equivalent(source: str, scaffold: str) -> bool:
     """Compare every Java token outside the single editable strategy region."""
 

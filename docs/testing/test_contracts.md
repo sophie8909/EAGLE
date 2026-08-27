@@ -23,7 +23,7 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Crossover | independent whole-component choices for both prompts and, when enabled, Java; exact provenance; equal-text case; default mode has no Java inheritance |
 | Strategy Mutation | Commentator per selected match → Coach → final Java generation; only policy changes; no Java/code-prompt evidence |
 | Code Mutation | Policy-Code Reviewer → exact `rewritten_prompt` JSON object → final Java generation; only code-generation prompt changes; no raw game logs |
-| Generation | default seed-phenotype initialization plus inherited-mode single-policy replication and one independent decoder call per population slot; active genes + fixed scaffold/API constraints; base retry only after extraction failure; compile-guided retry from the immediately previous complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic fixed-scaffold/non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
+| Generation | default seed-phenotype initialization plus inherited-mode single-policy replication and one independent decoder call per population slot; active genes + fixed scaffold/API constraints; complete extracted envelope/security checks followed by deterministic canonical-scaffold-plus-strategy normalization; distinct extracted/normalized evidence; base retry only after extraction failure; compile-guided retry from the immediately previous normalized complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, direct strategy-map reads rejected in favor of bounds-safe `isFreeCell`, and no fixed internal layout |
 | Compilation | attempt-isolated output; each validated source compiled at most once; first success promoted without recompilation; warning flags; diagnostic parsing/deduplication |
 | Integration | all seven ordered load/type/two-constructor/reset/clone/getAction/PlayerAction checks; two populated real 8×8 maps, independent one-argument instances/states for both sides, action integrity plus safe issuance/cycle; `passed`/`failed`/`blocked`; no match execution or decoder retry |
@@ -65,6 +65,10 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
   contain both authoritative genes, immutable API/scaffold, only the immediately
   previous source and diagnostics, and matching request/source hashes. Exhaustion
   must leave `selected_attempt: null` and no phenotype.
+- Test canonical scaffold normalization with a realistic model deletion or
+  rewrite of fixed source: the extracted artifact retains the drift, the
+  normalized source restores the configured scaffold, the strategy region is
+  unchanged, and compilation occurs without a scaffold-only repair attempt.
 - Use sentinel-based structural tests to prove Commentator/Coach exclude Java,
   Code Reviewer excludes raw game logs, and both mutation operators preserve the
   gene they do not own.

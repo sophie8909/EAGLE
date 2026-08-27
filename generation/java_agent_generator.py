@@ -13,6 +13,7 @@ from eagle.llm import LLMServerError
 from evaluation.code_quality import StrategyRegionScoreResult, evaluate_agent_strategy_region
 from .agent_template import (
     JavaTemplatePaths,
+    assemble_canonical_java_source,
     extract_strategy_region,
     fixed_scaffold_equivalent,
     load_java_template,
@@ -103,6 +104,10 @@ VALIDATION_CHECK_NAMES = (
     "runtime_contract",
 )
 
+_NORMALIZABLE_VALIDATION_FAILURES = frozenset(
+    {"strategy_contract", "fixed_scaffold"}
+)
+
 FORBIDDEN_BEHAVIOR_PATTERNS = (
     ("network_import", r"\bimport\s+java\.(?:net|nio\.channels)\b"),
     ("file_io_import", r"\bimport\s+java\.(?:io|nio\.file)\b"),
@@ -167,18 +172,46 @@ def generate_java_agent_result(
         reason = str(exc)
         blocked = blocked_validation_result("Source validation was blocked because no complete Java source was generated.")
         return JavaAgentGenerationResult(raw_llm_output=raw, validation_result=blocked, strategy_region_score_result=evaluate_agent_strategy_region("", error=reason), failure_category=classify_generation_error(reason), failure_reason=reason, failure_stage="generation", validation_timing=validation_timing("blocked", blocked.error))
+    extracted_source = source
 
     if attempt_artifact_dir is not None:
-        (attempt_artifact_dir / "extracted_candidate.java").write_text(source, encoding="utf-8")
-        (attempt_artifact_dir / "normalized_candidate.java").write_text(source, encoding="utf-8")
+        (attempt_artifact_dir / "extracted_candidate.java").write_text(
+            extracted_source,
+            encoding="utf-8",
+        )
 
     started_at = _utc_now()
     started = time.monotonic()
+    extracted_validation = validate_generated_java_source(
+        source,
+        "CandidateAgent",
+        template_paths=template_paths,
+    )
+    failed_checks = {
+        str(item.get("check") or "")
+        for item in extracted_validation.failed_checks
+    }
+    if (
+        "fixed_scaffold" in failed_checks
+        and failed_checks <= _NORMALIZABLE_VALIDATION_FAILURES
+    ):
+        try:
+            scaffold = load_java_template(template_paths or JavaTemplatePaths())
+            source = assemble_canonical_java_source(source, scaffold)
+        except ValueError:
+            # Keep the extracted source and its structured marker diagnostics.
+            # A malformed or incomplete full-file response is not normalizable.
+            pass
     validation = validate_generated_java_source(
         source,
         "CandidateAgent",
         template_paths=template_paths,
     )
+    if attempt_artifact_dir is not None:
+        (attempt_artifact_dir / "normalized_candidate.java").write_text(
+            source,
+            encoding="utf-8",
+        )
     finished_at = _utc_now()
     validation_record = validation_timing("success" if validation.ok else "failed", validation.failure_reason or validation.error, started_at=started_at, finished_at=finished_at, duration_seconds=max(0.0, time.monotonic() - started))
     try:
@@ -188,14 +221,14 @@ def generate_java_agent_result(
     region_score = evaluate_agent_strategy_region(strategy_region, error=validation.failure_reason if not validation.ok else None)
     if not validation.ok:
         reason = validation.failure_reason or validation.error
-        return JavaAgentGenerationResult(raw_llm_output=raw, extracted_code=source, strategy_region=strategy_region, assembled_java=source, validation_result=validation, strategy_region_score_result=region_score, failure_category="Java validation failure", failure_reason=reason, failure_stage="validation", validation_timing=validation_record)
+        return JavaAgentGenerationResult(raw_llm_output=raw, extracted_code=extracted_source, strategy_region=strategy_region, assembled_java=source, validation_result=validation, strategy_region_score_result=region_score, failure_category="Java validation failure", failure_reason=reason, failure_stage="validation", validation_timing=validation_record)
 
     package_dir = output_dir if output_dir is not None else workspace_dir / candidate.id
     package_dir.mkdir(parents=True, exist_ok=True)
     source_path = package_dir / "CandidateAgent.java"
     source_path.write_text(source, encoding="utf-8")
-    agent = GeneratedJavaAgent("CandidateAgent", "ai.generated", source, source_path, raw, source, strategy_region, validation)
-    return JavaAgentGenerationResult(raw_llm_output=raw, extracted_code=source, strategy_region=strategy_region, assembled_java=source, validation_result=validation, strategy_region_score_result=region_score, agent=agent, validation_timing=validation_record)
+    agent = GeneratedJavaAgent("CandidateAgent", "ai.generated", source, source_path, raw, extracted_source, strategy_region, validation)
+    return JavaAgentGenerationResult(raw_llm_output=raw, extracted_code=extracted_source, strategy_region=strategy_region, assembled_java=source, validation_result=validation, strategy_region_score_result=region_score, agent=agent, validation_timing=validation_record)
 
 
 def extract_code_from_output(raw_output: str) -> str:

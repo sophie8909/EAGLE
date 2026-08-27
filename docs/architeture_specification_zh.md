@@ -92,6 +92,14 @@ evaluation 只對選中的 attempt 執行一次，且 integration/runtime failur
 重新生成。舊設定預設仍為一次，`static_0824` 四個 production config 才明列上限
 五次。
 
+模型回覆仍必須是一份具有正確 package、class、constructor、lifecycle method、
+security contract 與唯一 strategy marker pair 的完整 Java。通過此前置 envelope
+檢查後，系統會用「設定中的 canonical scaffold＋模型回覆的 strategy region」
+確定性建立 `normalized_candidate.java`。因此模型刪除未使用的固定 method、改寫
+固定註解或重新排版固定區時，差異仍保留在 raw／extracted evidence，但不會進入
+validation、javac 或 phenotype；partial、結構錯誤或含禁止行為的回覆不會因這個
+正規化步驟被放行。
+
 策略區的座標／佔用查詢只能呼叫固定的
 `isFreeCell(context, x, y)`；它會先檢查 active map bounds，再查詢佔用。
 直接呼叫 `GameState.free(...)`、`PhysicalGameState.getTerrain(...)` 或

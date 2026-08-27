@@ -131,6 +131,15 @@ overwrite it; resume starts from the last atomic generation boundary rather than
 continuing a half-decoded candidate. Default fixed-seed generation zero has no
 `generation/attempts/` LLM evidence.
 
+`extracted_candidate.java` is the normalized text extracted from the model's
+complete-file response and therefore preserves model-authored fixed-region
+drift for audit. `normalized_candidate.java` is the configured canonical
+scaffold with only that extracted file's strategy region inserted. Structural
+envelope and security checks run before this assembly, so normalization does not
+turn a partial or prohibited response into a valid source. Validation, javac,
+the promoted phenotype, source hashes used by matches, and compile-repair parent
+source references all use `normalized_candidate.java`.
+
 For default-mode generation-zero candidates, `genotype/policy_prompt.txt`
 retains the configured seed policy and `generation/result.json` records
 operation `initial_java_seed`, no attempts, and checked-in source provenance.

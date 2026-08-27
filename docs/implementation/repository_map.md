@@ -48,8 +48,8 @@ kept as documentation entries.
 | Path | Responsibility |
 | --- | --- |
 | `generation/backend.py` | Mock/OpenAI-compatible complete-source generation |
-| `generation/java_agent_generator.py` | Extraction, normalization, validation, source persistence |
-| `generation/agent_template.py` | Java template contract |
+| `generation/java_agent_generator.py` | Complete-source extraction, envelope checks, canonical assembly, validation, source persistence |
+| `generation/agent_template.py` | Java template and canonical scaffold assembly contract |
 | `eagle/java_templates/CandidateAgent.java` | Hardened fixed scaffold for offspring decoding |
 | `eagle/java_seeds/CandidateAgent.java` | Shared callable no-op seed and configured inherited-mode scaffold |
 | `eagle/evaluation.py` | Canonical child evaluation orchestration |

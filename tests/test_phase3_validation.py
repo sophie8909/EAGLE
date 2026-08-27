@@ -15,6 +15,8 @@ from generation.agent_template import (
     JavaTemplatePaths,
     STRATEGY_END_MARKER,
     STRATEGY_START_MARKER,
+    assemble_canonical_java_source,
+    extract_strategy_region,
     fixed_scaffold_equivalent,
     load_java_template,
 )
@@ -56,6 +58,21 @@ class Phase3ValidationTests(unittest.TestCase):
                 VALID_SOURCE,
             )
         )
+
+    def test_canonical_assembly_restores_fixed_source_and_preserves_strategy(self):
+        strategy = "    private void decide(AgentContext context) { commandIdle(null); }"
+        generated = with_strategy(VALID_SOURCE, strategy).replace(
+            "    private void applyAutoDefense(int player, GameState gs) {",
+            "    private void modelDeletedFixedMethod(int player, GameState gs) {",
+            1,
+        )
+
+        assembled = assemble_canonical_java_source(generated, VALID_SOURCE)
+
+        self.assertTrue(fixed_scaffold_equivalent(assembled, VALID_SOURCE))
+        self.assertEqual(extract_strategy_region(assembled), strategy.strip())
+        self.assertIn("private void applyAutoDefense", assembled)
+        self.assertNotIn("modelDeletedFixedMethod", assembled)
 
     def test_modified_fixed_helper_is_a_structured_validation_failure(self):
         source = VALID_SOURCE.replace("move(unit, x, y);", "idle(unit);")
