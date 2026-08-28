@@ -170,11 +170,17 @@ def llm_request_progress(
     candidate_id: str | None = None,
     heartbeat_seconds: float = 30.0,
 ) -> Iterator[None]:
-    """Report only abnormal requests unless verbose LLM progress is enabled."""
+    """Report blocking-request progress unless explicitly disabled."""
 
     started = time.monotonic()
     stopped = threading.Event()
-    verbose = os.environ.get("EAGLE_LLM_PROGRESS", "").lower() in {"1", "true", "yes", "on"}
+    progress_setting = os.environ.get("EAGLE_LLM_PROGRESS")
+    verbose = progress_setting is None or progress_setting.strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
     candidate_text = f" candidate={candidate_id}" if candidate_id else ""
     prefix = f"[llm {stage}]{candidate_text} endpoint={endpoint} model={model}"
     if verbose:
