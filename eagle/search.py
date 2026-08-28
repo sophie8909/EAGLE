@@ -397,6 +397,10 @@ def create_offspring(
                 ),
                 source_candidate_ids=(parent_a.id,),
             )
+        progress_prefix = (
+            f"[gen {generation} cand {context_index + 1}/{config.population_size}] "
+            f"{child.id}"
+        )
         if rng.random() < config.mutation_rate:
             code_feedback_parent_id = (
                 child.java_parent_id
@@ -422,6 +426,10 @@ def create_offspring(
             )
             mutation_name = OPERATOR_TO_MUTATION[operator_used]
             mutation = mutations[mutation_name]
+            print(
+                f"{progress_prefix} stage=mutation status=started operator={mutation_name}",
+                flush=True,
+            )
             evidence_parent_id = (
                 child.strategy_parent_id
                 if mutation_name == "strategy"
@@ -500,6 +508,23 @@ def create_offspring(
                     "eligible_operator_ids": list(eligible_operators),
                 },
             })
+            mutation_status = "completed" if mutation_applied else "failed"
+            mutation_error_detail = (
+                f" error={str(mutation_error).replace(chr(10), ' ')[:300]}"
+                if mutation_error
+                else ""
+            )
+            print(
+                f"{progress_prefix} stage=mutation status={mutation_status} "
+                f"operator={mutation_name} applied={str(mutation_applied).lower()}"
+                f"{mutation_error_detail}",
+                flush=True,
+            )
+        else:
+            print(
+                f"{progress_prefix} stage=mutation status=skipped operator=none",
+                flush=True,
+            )
         offspring.append(child)
     return offspring
 

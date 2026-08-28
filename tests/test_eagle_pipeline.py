@@ -4,6 +4,7 @@ import random
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import replace
 from io import StringIO
 from types import SimpleNamespace
 from pathlib import Path
@@ -16,7 +17,7 @@ from eagle.crossover import CrossoverContext, crossover
 from eagle.evaluation import evaluate_candidate, print_progress
 from eagle.mutation import MutationContext
 from eagle.prompts import normalize_prompt
-from eagle.search import population_signature, run_search
+from eagle.search import create_offspring, population_signature, run_search
 from eagle.selection import select_parent
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_performance import (
@@ -70,6 +71,71 @@ def quality_fixture() -> CodeQualityBreakdown:
         compile_error_count=0,
     )
 class EaglePipelineTests(unittest.TestCase):
+    def test_offspring_mutation_progress_includes_generation_and_candidate_ordinal(self) -> None:
+        class StrategyOnlyController:
+            mode = SimpleNamespace(value="static")
+
+            @staticmethod
+            def select_operator(rng, *, eligible):
+                return "strategy_reflection"
+
+            @staticmethod
+            def probability(operator):
+                return 1.0
+
+        class SuccessfulMutation:
+            @staticmethod
+            def mutate(candidate, context, *, artifact_dir=None, mutation_intent=None):
+                return replace(
+                    candidate,
+                    mutation_type="strategy",
+                    metadata={
+                        **candidate.metadata,
+                        "mutation": {
+                            "applied": True,
+                            "type": "strategy",
+                            "reflection_error": None,
+                            "rewrite_error": None,
+                        },
+                    },
+                )
+
+        config = ExperimentConfig.from_mapping({
+            "population_size": 1,
+            "crossover_rate": 0.0,
+            "mutation_rate": 1.0,
+        })
+        parent = Candidate(
+            id="parent",
+            strategy_prompt="worker rush",
+            generation_prompt="generate Java",
+            fitness_objectives={case: 0.0 for case in LEXICASE_CASES},
+        )
+        output = StringIO()
+        with redirect_stdout(output):
+            offspring = create_offspring(
+                [parent],
+                config=config,
+                generation=7,
+                rng=random.Random(3),
+                mutations={"strategy": SuccessfulMutation()},
+                operator_controller=StrategyOnlyController(),
+            )
+
+        self.assertEqual(len(offspring), 1)
+        lines = output.getvalue().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertRegex(
+            lines[0],
+            r"^\[gen 7 cand 1/1\] gen_0007_[0-9a-f]{12} "
+            r"stage=mutation status=started operator=strategy$",
+        )
+        self.assertRegex(
+            lines[1],
+            r"^\[gen 7 cand 1/1\] gen_0007_[0-9a-f]{12} "
+            r"stage=mutation status=completed operator=strategy applied=true$",
+        )
+
     def test_progress_prints_matching_code_quality_total_and_components(self) -> None:
         quality = quality_fixture()
         evaluation = SimpleNamespace(
