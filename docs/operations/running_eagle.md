@@ -92,10 +92,15 @@ Mock mode does not adapt or start llama.cpp, inspect the configured port, valida
 reflection_operator_mode: aos_head2head # static | aos_opponent | aos_head2head
 strategy_reflection_probability: 0.20
 code_reflection_probability: 0.80
+balance_reflection_probability: 0.00
 aos_minimum_probability: 0.10
 ```
 
-Strategy/Code probabilities are fixed in `static` and initial in either AOS mode. Every YAML creates fresh population, RNG, operator controller/AOS state, archives, IDs, and run directory; only a compatible LLM process may be reused.
+Strategy/Code/Balance probabilities must sum to 1.0; they are fixed in `static`
+and initial in either AOS mode. Set Balance above zero to enable its aggregate
+opponent/map/side W/D/L reflection. Every YAML creates fresh population, RNG,
+operator controller/AOS state, archives, IDs, and run directory; only a
+compatible LLM process may be reused.
 
 There are no separate `run` or `runtime` compatibility entrypoints. The
 experiment orchestrator is the only model/search lifecycle owner.

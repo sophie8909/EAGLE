@@ -173,6 +173,7 @@ def _print_non_batch_output(
     print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
     print(f"Strategy {kind} probability: {config.strategy_reflection_probability:.2f}")
     print(f"Code {kind} probability: {config.code_reflection_probability:.2f}")
+    print(f"Balance {kind} probability: {config.balance_reflection_probability:.2f}")
     print(f"AOS minimum probability: {config.aos_minimum_probability:.2f}")
     print(f"run_dir={config_path}")
     print(f"completed_generation={completed_generation}")

@@ -22,9 +22,8 @@ from .mutation import (
     ReflectionBackend,
     ReflectionResult,
     ReflectionStage,
-    build_code_reflection_prompt,
     build_code_reflection_prompt_bundle,
-    build_strategy_reflection_prompt,
+    build_balance_reflection_prompt_bundle,
     build_strategy_reflection_prompt_bundle,
     parse_json_object_response,
     _timing_payload,
@@ -108,12 +107,22 @@ class PromptRewriteStage:
         candidate: Candidate,
         request: str,
         artifact_dir: Path | None = None,
+        artifact_mutation_type: str | None = None,
+        artifact_prefix: str = "",
     ) -> RewriteResult:
         stage = "rewriter"
-        stage_dir = None if artifact_dir is None else _rewrite_artifact_dir(artifact_dir, rewrite_type)
+        stage_dir = (
+            None
+            if artifact_dir is None
+            else _rewrite_artifact_dir(
+                artifact_dir,
+                rewrite_type,
+                mutation_type=artifact_mutation_type,
+            )
+        )
         if artifact_dir is not None:
             assert stage_dir is not None
-            _write_text(stage_dir / f"{stage}_request.txt", request)
+            _write_text(stage_dir / f"{artifact_prefix}{stage}_request.txt", request)
         attempts: list[ReflectionAttempt] = []
         last_response = ""
         last_error: str | None = None
@@ -146,9 +155,9 @@ class PromptRewriteStage:
             )
             if artifact_dir is not None:
                 assert stage_dir is not None
-                _write_text(stage_dir / f"{stage}_attempt_{attempt_number:03d}_response_raw.txt", response)
+                _write_text(stage_dir / f"{artifact_prefix}{stage}_attempt_{attempt_number:03d}_response_raw.txt", response)
                 if response:
-                    _write_text(stage_dir / f"{stage}_response_raw.txt", response)
+                    _write_text(stage_dir / f"{artifact_prefix}{stage}_response_raw.txt", response)
             if self.logger is not None:
                 self.logger.write(
                     stage=stage,
@@ -183,7 +192,7 @@ class PromptRewriteStage:
             time.sleep(0)
         if artifact_dir is not None:
             assert stage_dir is not None
-            _write_text(stage_dir / f"{stage}_response_raw.txt", last_response)
+            _write_text(stage_dir / f"{artifact_prefix}{stage}_response_raw.txt", last_response)
         return RewriteResult(
             stage=stage,
             rewrite_type=rewrite_type,
@@ -319,6 +328,208 @@ class PromptRewriteMutation:
         else:
             assert result.strategy_prompt == original_strategy
         return result
+
+    def _result_candidate(self, *args: Any, **kwargs: Any) -> Candidate:
+        """Share the established single-gene mutation artifact writer."""
+
+        return BalanceReflectionMutation._result_candidate(self, *args, **kwargs)
+
+
+class BalanceReflectionMutation:
+    """Use aggregate outcome balance evidence to atomically revise both prompt genes."""
+
+    mutation_type = "balance"
+
+    def __init__(
+        self,
+        config: ExperimentConfig,
+        *,
+        reflection_backend: ReflectionBackend,
+        rewrite_backend: RewriteBackend,
+        artifact_root: Path | None = None,
+        logger: Any | None = None,
+        backend_name: str | None = None,
+    ) -> None:
+        self.config = config
+        self.artifact_root = artifact_root
+        model = None if config.execution_mode == "mock" else config.llm_model
+        name = backend_name or config.execution_mode
+        self.reflection = ReflectionStage(
+            reflection_backend,
+            max_attempts=config.mutation_max_attempts,
+            logger=logger,
+            model=model,
+            backend_name=name,
+        )
+        self.rewrite = PromptRewriteStage(
+            rewrite_backend,
+            max_attempts=config.mutation_max_attempts,
+            logger=logger,
+            model=model,
+            backend_name=name,
+        )
+
+    def mutate(
+        self,
+        candidate: Candidate,
+        context: ReflectionContext,
+        *,
+        artifact_dir: Path | None = None,
+    ) -> Candidate:
+        from .reflection_context import coerce_structured_context
+
+        target_dir = artifact_dir or (self.artifact_root / candidate.id if self.artifact_root else None)
+        context = coerce_structured_context(context, candidate)
+        original_strategy = candidate.strategy_prompt
+        original_generation = candidate.generation_prompt
+        bundle = build_balance_reflection_prompt_bundle(candidate, context)
+        reflection = self.reflection.run(
+            reflection_type="balance",
+            candidate=candidate,
+            request=bundle.text,
+            artifact_dir=target_dir,
+            prompt_metadata=bundle.metadata,
+        )
+        if not reflection.succeeded:
+            return self._result(
+                candidate, context, reflection, None, None,
+                original_strategy, original_generation, applied=False, target_dir=target_dir,
+            )
+
+        strategy_rewrite = self.rewrite.run(
+            rewrite_type="balance_strategy_prompt_rewrite",
+            candidate=candidate,
+            request=build_balance_strategy_rewrite_prompt(candidate, reflection),
+            artifact_dir=target_dir,
+            artifact_mutation_type="balance",
+            artifact_prefix="strategy_",
+        )
+        if not strategy_rewrite.succeeded:
+            return self._result(
+                candidate, context, reflection, strategy_rewrite, None,
+                original_strategy, original_generation, applied=False, target_dir=target_dir,
+            )
+
+        code_rewrite = self.rewrite.run(
+            rewrite_type="balance_generation_prompt_rewrite",
+            candidate=candidate,
+            request=build_balance_code_rewrite_prompt(candidate, reflection),
+            artifact_dir=target_dir,
+            artifact_mutation_type="balance",
+            artifact_prefix="code_",
+        )
+        if not code_rewrite.succeeded:
+            return self._result(
+                candidate, context, reflection, strategy_rewrite, code_rewrite,
+                original_strategy, original_generation, applied=False, target_dir=target_dir,
+            )
+        strategy_prompt = normalize_prompt(
+            strategy_rewrite.rewritten_prompt,
+            max_chars=self.config.max_prompt_chars,
+            max_lines=self.config.max_prompt_lines,
+        )
+        generation_prompt = normalize_prompt(
+            code_rewrite.rewritten_prompt,
+            max_chars=self.config.max_prompt_chars,
+            max_lines=self.config.max_prompt_lines,
+        )
+        return self._result(
+            candidate, context, reflection, strategy_rewrite, code_rewrite,
+            strategy_prompt, generation_prompt, applied=True, target_dir=target_dir,
+            original_strategy=original_strategy, original_generation=original_generation,
+        )
+
+    def _result(
+        self,
+        candidate: Candidate,
+        context: ReflectionContext,
+        reflection: ReflectionResult,
+        strategy_rewrite: RewriteResult | None,
+        code_rewrite: RewriteResult | None,
+        strategy_prompt: str,
+        generation_prompt: str,
+        *,
+        applied: bool,
+        target_dir: Path | None,
+        original_strategy: str | None = None,
+        original_generation: str | None = None,
+    ) -> Candidate:
+        original_strategy = candidate.strategy_prompt if original_strategy is None else original_strategy
+        original_generation = candidate.generation_prompt if original_generation is None else original_generation
+        rewrite_attempts = tuple(
+            attempt
+            for rewrite in (strategy_rewrite, code_rewrite)
+            if rewrite is not None
+            for attempt in rewrite.attempts
+        )
+        rewrite_error = next(
+            (rewrite.error for rewrite in (strategy_rewrite, code_rewrite) if rewrite is not None and rewrite.error),
+            None,
+        )
+        mutation_record = {
+            "schema_version": "balance-reflection-v1",
+            "reflection_schema_version": REFLECTION_SCHEMA_VERSION,
+            "candidate_id": candidate.id,
+            "feedback_candidate_id": context.candidate.candidate_id or candidate.id,
+            "operation": "balance_mutation",
+            "applied": applied,
+            "type": "balance",
+            "objectives": context.objectives.to_dict(),
+            "evaluation_status": context.candidate.status,
+            "evidence": {"outcome_table": _balance_outcome_table(context)},
+            "prompt_metadata": reflection.prompt_metadata,
+            "model": reflection.model,
+            "reflection_operation": reflection.operation,
+            "rewrite_operation": None if strategy_rewrite is None else strategy_rewrite.operation,
+            "reflection_attempts": len(reflection.attempts),
+            "rewrite_attempts": len(rewrite_attempts),
+            "reflection_status": reflection.status,
+            "rewrite_status": None if code_rewrite is None else code_rewrite.status,
+            "reflection_error": reflection.error,
+            "rewrite_error": rewrite_error,
+            "original_strategy_prompt": original_strategy,
+            "original_generation_prompt": original_generation,
+            "reflection": reflection.to_dict(),
+            "strategy_rewrite": None if strategy_rewrite is None else strategy_rewrite.to_dict(),
+            "generation_rewrite": None if code_rewrite is None else code_rewrite.to_dict(),
+        }
+        timing = dict(candidate.timing)
+        timing["reflector_llm"] = _timing_payload(reflection.attempts)
+        timing["rewriter_llm"] = _timing_payload(rewrite_attempts)
+        metadata = dict(candidate.metadata)
+        history = [
+            item for item in list(metadata.get("reflection_history") or ())
+            if isinstance(item, dict) and item.get("reflection_type") == "balance"
+        ][-1:]
+        history.append({
+            "reflection_type": "balance",
+            "parent_candidate_id": mutation_record["feedback_candidate_id"],
+            "analysis_summary": reflection.analysis_summary,
+            "generation_index": candidate.generation,
+        })
+        mutation_record["reflection_history"] = history
+        if target_dir is not None:
+            mutation_dir = target_dir / "mutation" / "balance_reflection"
+            _write_text(mutation_dir / "original_policy_prompt.txt", original_strategy)
+            _write_text(mutation_dir / "original_code_generation_prompt.txt", original_generation)
+            _write_json(mutation_dir / "reflection_context.json", mutation_record["evidence"])
+            _write_json(mutation_dir / "metadata.json", _mutation_metadata_record(mutation_record))
+            _write_json(target_dir / "timing.json", timing)
+        metadata["mutation"] = (
+            compact_mutation_record(mutation_record)
+            if target_dir is not None and self.artifact_root is not None
+            else mutation_record
+        )
+        metadata["reflection_history"] = history
+        return replace(
+            candidate,
+            strategy_prompt=strategy_prompt,
+            generation_prompt=generation_prompt,
+            operator=("crossover+mutation" if candidate.operator == "crossover" else "mutation") if applied else candidate.operator,
+            mutation_type="balance",
+            timing=timing,
+            metadata=metadata,
+        )
 
     def _result_candidate(
         self,
@@ -458,10 +669,29 @@ def build_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult
     })
 
 
+def build_balance_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult) -> str:
+    from .prompts import render_prompt
+
+    return render_prompt("balance_strategy_rewrite", {
+        "strategy_prompt": candidate.strategy_prompt,
+        "balance_analysis": json.dumps(reflection.parsed_response or {}, ensure_ascii=False),
+    })
+
+
+def build_balance_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult) -> str:
+    from .prompts import load_prompt, render_prompt
+
+    return render_prompt("balance_code_rewrite", {
+        "code_generation_prompt": candidate.generation_prompt,
+        "balance_analysis": json.dumps(reflection.parsed_response or {}, ensure_ascii=False),
+        "action_api_guide": load_prompt("action_api_guide"),
+    })
+
+
 def _parse_rewritten_prompt(response: str, rewrite_type: str) -> str:
     if not isinstance(response, str) or not response.strip():
         raise ValueError("Rewrite response must contain a non-empty prompt.")
-    if rewrite_type == "generation_prompt_rewrite":
+    if rewrite_type in {"generation_prompt_rewrite", "balance_generation_prompt_rewrite"}:
         payload = parse_json_object_response(response)
         if set(payload) != {"rewritten_prompt"}:
             raise ValueError(
@@ -487,7 +717,7 @@ def _mutation_metadata_record(record: dict[str, Any]) -> dict[str, Any]:
     """Keep request/response bodies in their text artifacts, not metadata JSON."""
 
     payload = dict(record)
-    for key in ("reflection", "rewrite"):
+    for key in ("reflection", "rewrite", "strategy_rewrite", "generation_rewrite"):
         stage = payload.get(key)
         if isinstance(stage, dict):
             payload[key] = {
@@ -515,10 +745,23 @@ def _structural_code_evidence(context: ReflectionContext) -> dict[str, Any]:
     }
 
 
-def _rewrite_artifact_dir(root: Path | None, rewrite_type: str) -> Path:
+def _rewrite_artifact_dir(root: Path | None, rewrite_type: str, *, mutation_type: str | None = None) -> Path:
     assert root is not None
-    mutation_type = "code" if rewrite_type == "generation_prompt_rewrite" else "strategy"
+    mutation_type = mutation_type or ("code" if rewrite_type == "generation_prompt_rewrite" else "strategy")
     return root / "mutation" / f"{mutation_type}_reflection"
+
+
+def _balance_outcome_table(context: ReflectionContext) -> list[dict[str, object]]:
+    table: list[dict[str, object]] = []
+    for opponent in context.opponents:
+        for map_result in opponent.map_results:
+            table.append({
+                "opponent": opponent.opponent_id,
+                "map": map_result.map_name,
+                "p0": {key: int(map_result.p0_result.get(key) or 0) for key in ("wins", "losses", "draws", "games")},
+                "p1": {key: int(map_result.p1_result.get(key) or 0) for key in ("wins", "losses", "draws", "games")},
+            })
+    return table
 
 
 def _write_text(path: Path, value: str) -> None:

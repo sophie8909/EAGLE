@@ -134,6 +134,11 @@ Run-level timing.jsonl contains event=generation and event=llm_request records. 
 
 Candidate timing.json contains operation-specific mutation and crossover generation-only spans, the shared child_generation span, separate validation/compilation/integration/evaluation spans, and child_total. Durations use a monotonic clock; UTC fields are display timestamps.
 
+Balance Reflection records one `reflector_llm` attempt stream and two ordered
+rewrite attempts in `rewriter_llm` (strategy first, code-generation second).
+Each request emits one run-level `llm_request` event and remains candidate-owned
+under `mutation/balance_reflection/`.
+
 ## Compact snapshot retention (2026-08-04)
 
 Candidate `timing` is retained unchanged in `eagle-candidate-v5` generation and

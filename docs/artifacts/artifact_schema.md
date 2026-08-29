@@ -54,7 +54,11 @@ known, they also reference the parent strategy prompt and the candidate's
 Strategy Reflection metadata. Full strategy text is not duplicated in this
 index.
 
-The AOS record contains `mode`, probabilities before/after, nullable Strategy/Code rewards, `reward_source`, operator state, and transitions. Static mode records `reward_source: static`, null rewards, and unchanged probabilities. Resume restores adaptive state from the latest generation file. There is no `generation_metrics.jsonl` or `final_population.json` in new runs.
+The AOS record contains `mode`, probabilities before/after, nullable
+Strategy/Code/Balance rewards, `reward_source`, operator state, and transitions.
+Static mode records `reward_source: static`, null rewards, and unchanged
+probabilities. Resume restores adaptive state from the latest generation file.
+There is no `generation_metrics.jsonl` or `final_population.json` in new runs.
 
 ## Candidate snapshot and evidence
 
@@ -73,7 +77,8 @@ candidates/<candidate_id>/
 ├── crossover/provenance.json
 ├── mutation/
 │   ├── strategy_reflection/
-│   └── code_reflection/
+│   ├── code_reflection/
+│   └── balance_reflection/
 ├── aos/
 ├── generation/
 │   ├── request.txt
@@ -155,6 +160,14 @@ When the policy prompt is empty, `strategy_alignment/result.json` records
 `status: not_applicable`, a null score, and no attempts; its request/raw files
 are empty. This is distinct from an Alignment blocked by an earlier evaluation
 failure.
+
+Balance Reflection evidence is stored under `mutation/balance_reflection/`.
+Its `reflection_context.json` is only the bounded opponent/map/side W/D/L
+table; the directory retains the reflection request/raw response and separately
+named strategy/code rewrite request/raw-response artifacts. Metadata records
+both rewrite statuses without embedding raw response bodies. A failed reflector
+or either failed rewrite retains completed evidence and leaves both prompt genes
+unchanged.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated

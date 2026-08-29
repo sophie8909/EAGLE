@@ -53,7 +53,7 @@ generation produces a fixed-size offspring population and performs:
 1. seeded lexicase parent selection;
 2. optional uniform component crossover (two prompt components, plus an
    independent Java-component choice in `inherited_genotype` mode);
-3. optional Strategy or Code mutation;
+3. optional Strategy, Code, or Balance mutation;
 4. final complete-file Java generation;
 5. validation, compilation, integration, and evaluation;
 6. optional AOS reward collection;
@@ -84,7 +84,7 @@ component values are equal. Default-mode lineage has no Java parent.
 
 The reflection operator is chosen by exactly one configured mode:
 
-- `static`: fixed Strategy/Code probabilities and no reward work;
+- `static`: fixed Strategy/Code/Balance probabilities and no reward work;
 - `aos_opponent`: execution-first seven-case rank-change reward;
 - `aos_head2head`: configured parent-A versus offspring match matrix reward.
 
@@ -110,11 +110,19 @@ Generation Prompt Rewrite before final Java generation and changes only
 Prompt Rewriter returns exactly `{"rewritten_prompt":"..."}` so the transport's
 JSON-object mode and the parser enforce the same contract.
 
+Balance mutation receives only a bounded aggregate W/D/L table partitioned by
+opponent, map, and candidate side. It receives no prompt text, Java, compiler
+diagnostics, per-match result, or raw trace. Its reflector identifies weak
+opponent/map/side cells, then bounded Strategy and Code Prompt Rewriters
+atomically replace both `strategy_prompt` and `generation_prompt`. If either
+rewrite fails, both parent prompt genes remain unchanged. Balance mutation never
+edits Java directly.
+
 All executable prompt bodies live as individual UTF-8 text files under
 `prompts/`. Python and YAML may reference, render, bound, transport, and validate
 prompt resources but may not contain alternate executable prompt bodies.
 
-Neither mutation operator directly edits the inherited Java component. In
+No mutation operator directly edits the inherited Java component. In
 `inherited_genotype` mode crossover/copy chooses that component first, mutation
 changes only its owned prompt, and the final Generator consumes all three
 pre-generation components to produce the child's new Java.

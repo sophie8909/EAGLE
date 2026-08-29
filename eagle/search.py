@@ -418,7 +418,7 @@ def create_offspring(
                     if config.candidate_java_mode == "inherited_genotype"
                     else code_feedback_parent.strategy_prompt.strip()
                 )
-                else tuple(OPERATOR_TO_MUTATION)
+                else config.reflection_operator_settings.enabled_operators
             )
             operator_used = operator_controller.select_operator(
                 rng,

@@ -29,7 +29,7 @@ Snapshot: 2026-08-26. This file describes executable repository behavior.
   (`mu_plus_lambda`) pool until the fixed population is full; aggregate Game
   Performance and generation age are reporting-only.
 - The reflection-operator controller supports exactly `static`, `aos_opponent`,
-  and `aos_head2head`. Strategy/Code probabilities mean fixed probabilities in
+  and `aos_head2head`. Strategy/Code/Balance probabilities mean fixed probabilities in
   static mode and initial probabilities in AOS modes. Static performs no reward
   work. Opponent AOS restores execution-first seven-case W/D/L-rank change.
   Head-to-head AOS preserves the configured direct parent-A matrix and
@@ -168,6 +168,10 @@ also receives `genotype/inherited_java.java`; Code Reflection reviews the
 child's current policy against that exact Java component and records its Java
 parent/artifact provenance. This explicit mode does not restore the removed
 unversioned `previous_code` field.
+Balance Reflection receives only aggregate opponent/map/side W/D/L evidence;
+it names weak cells and runs ordered Strategy then Code Prompt rewrites. Both
+prompt changes are committed atomically only after both rewrites succeed, with
+evidence under `mutation/balance_reflection/`; it receives no raw trace or Java.
 The immutable API guide is rendered after the evolvable decoder gene, and
 validation requires token-equivalent fixed scaffold source outside the strategy
 markers. Fixed action helpers reject wrong-owner and invalid-type commands.

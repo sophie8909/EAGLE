@@ -44,6 +44,7 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
   in inherited mode, one independent Java choice.
 - Strategy Reflection may change only `strategy_prompt`.
 - Code Reflection may change only `generation_prompt`.
+- Balance Reflection may atomically change both prompts, but never Java.
 - Generator and Evaluation do not modify either prompt gene.
 - Generator uses the canonical checked-in scaffold. Only inherited mode also
   receives the selected parent Java component.

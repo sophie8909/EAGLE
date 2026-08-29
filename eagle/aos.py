@@ -17,7 +17,8 @@ from .opponent_cases import LEXICASE_CASES
 
 STRATEGY_REFLECTION = "strategy_reflection"
 GENERATE_CODE_REFLECTION = "generate_code_reflection"
-OPERATORS = (STRATEGY_REFLECTION, GENERATE_CODE_REFLECTION)
+BALANCE_REFLECTION = "balance_reflection"
+OPERATORS = (STRATEGY_REFLECTION, GENERATE_CODE_REFLECTION, BALANCE_REFLECTION)
 TRANSITIONS = (
     "failed_parent_to_runnable_child",
     "runnable_parent_to_failed_child",
@@ -27,6 +28,7 @@ TRANSITIONS = (
 OPERATOR_TO_MUTATION = {
     STRATEGY_REFLECTION: "strategy",
     GENERATE_CODE_REFLECTION: "code",
+    BALANCE_REFLECTION: "balance",
 }
 
 
@@ -101,6 +103,7 @@ class ReflectionOperatorSettings:
     mode: ReflectionOperatorMode = ReflectionOperatorMode.AOS_HEAD2HEAD
     strategy_probability: float = 0.20
     code_probability: float = 0.80
+    balance_probability: float = 0.0
     minimum_probability: float = 0.10
     credit_alpha: float = AOS_CREDIT_ALPHA
 
@@ -109,26 +112,41 @@ class ReflectionOperatorSettings:
         return {
             STRATEGY_REFLECTION: self.strategy_probability,
             GENERATE_CODE_REFLECTION: self.code_probability,
+            BALANCE_REFLECTION: self.balance_probability,
         }
+
+    @property
+    def enabled_operators(self) -> tuple[str, ...]:
+        return tuple(
+            operator
+            for operator, probability in self.initial_probabilities.items()
+            if probability > 0.0
+        )
 
     def validate(self) -> None:
         values = {
             "strategy_reflection_probability": self.strategy_probability,
             "code_reflection_probability": self.code_probability,
+            "balance_reflection_probability": self.balance_probability,
         }
         for name, value in values.items():
             if not math.isfinite(value) or not 0.0 <= value <= 1.0:
                 raise ValueError(f"{name} must be a finite number in [0, 1]; got {value!r}.")
         if not math.isclose(sum(values.values()), 1.0, rel_tol=0.0, abs_tol=1e-9):
             raise ValueError(
-                "strategy_reflection_probability + code_reflection_probability "
+                "strategy_reflection_probability + code_reflection_probability + "
+                "balance_reflection_probability "
                 f"must equal 1.0; got {sum(values.values()):.12g}."
             )
         if not math.isfinite(self.minimum_probability):
             raise ValueError("aos_minimum_probability must be finite.")
-        if self.mode.adaptive and not 0.0 <= self.minimum_probability <= 0.5:
+        enabled_count = len(self.enabled_operators)
+        if enabled_count == 0:
+            raise ValueError("At least one reflection operator probability must be positive.")
+        if self.mode.adaptive and not 0.0 <= self.minimum_probability <= 1.0 / enabled_count:
             raise ValueError(
-                "aos_minimum_probability must be in [0, 0.5] for two operators "
+                f"aos_minimum_probability must be in [0, {1.0 / enabled_count:.12g}] for "
+                f"{enabled_count} enabled operators "
                 f"in {self.mode.value} mode; got {self.minimum_probability!r}."
             )
         if not 0.0 < self.credit_alpha <= 1.0:
@@ -281,23 +299,29 @@ class AdaptiveOperatorSelection:
             self.total_transition_counts[transition] = int(transition_values.get(transition, 0))
 
     def _normalize_with_floor(self, values: dict[str, float]) -> dict[str, float]:
-        positive = {operator: max(0.0, values[operator]) for operator in OPERATORS}
+        enabled = self.settings.enabled_operators
+        positive = {
+            operator: max(0.0, values[operator]) if operator in enabled else 0.0
+            for operator in OPERATORS
+        }
         total = sum(positive.values())
         if total <= 0:
             positive = dict(self.probabilities)
             total = sum(positive.values())
         normalized = {operator: positive[operator] / total for operator in OPERATORS}
         floor = self.settings.minimum_probability
-        below_floor = [operator for operator in OPERATORS if normalized[operator] < floor]
+        below_floor = [operator for operator in enabled if normalized[operator] < floor]
         if not below_floor:
             return normalized
         fixed_total = floor * len(below_floor)
         remaining = 1.0 - fixed_total
-        above_total = sum(normalized[operator] for operator in OPERATORS if operator not in below_floor)
+        above_total = sum(normalized[operator] for operator in enabled if operator not in below_floor)
         if above_total <= 0:
-            return {operator: 1.0 / len(OPERATORS) for operator in OPERATORS}
+            return {operator: 1.0 / len(enabled) if operator in enabled else 0.0 for operator in OPERATORS}
         return {
-            operator: floor if operator in below_floor else remaining * normalized[operator] / above_total
+            operator: 0.0 if operator not in enabled else (
+                floor if operator in below_floor else remaining * normalized[operator] / above_total
+            )
             for operator in OPERATORS
         }
 
@@ -842,10 +866,13 @@ def _canonical_generation_record(
         "reward_source": settings.mode.reward_source,
         "strategy_probability_before": before[STRATEGY_REFLECTION],
         "code_probability_before": before[GENERATE_CODE_REFLECTION],
+        "balance_probability_before": before[BALANCE_REFLECTION],
         "strategy_probability_after": after[STRATEGY_REFLECTION],
         "code_probability_after": after[GENERATE_CODE_REFLECTION],
+        "balance_probability_after": after[BALANCE_REFLECTION],
         "strategy_reward": operators[STRATEGY_REFLECTION].get("mean_reward"),
         "code_reward": operators[GENERATE_CODE_REFLECTION].get("mean_reward"),
+        "balance_reward": operators[BALANCE_REFLECTION].get("mean_reward"),
         "selection_probabilities": dict(before),
         "post_update_probabilities": dict(after),
         "operators": operators,

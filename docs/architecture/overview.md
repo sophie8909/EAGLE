@@ -32,9 +32,11 @@ flowchart TD
     X --> M{"Mutation?"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
     M -->|Code| CR["Code Reflection + prompt rewrite"]
+    M -->|Balance| BR["Balance Reflection + two prompt rewrites"]
     M -->|No| G["Final Java Generation"]
     SR --> G
     CR --> G
+    BR --> G
     G --> V["Validation"] --> C["Compile"] --> I["Integration"]
     I --> E["126 MicroRTS matches"]
     E --> O["7 opponent scores + reporting aggregate"]

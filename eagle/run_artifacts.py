@@ -239,6 +239,13 @@ def generation_policy_records(
             record["strategy_reflection_artifact"] = (
                 f"candidates/{candidate.id}/mutation/strategy_reflection/metadata.json"
             )
+        balance_metadata = (
+            run_dir / "candidates" / candidate.id / "mutation" / "balance_reflection" / "metadata.json"
+        )
+        if balance_metadata.is_file():
+            record["balance_reflection_artifact"] = (
+                f"candidates/{candidate.id}/mutation/balance_reflection/metadata.json"
+            )
         records.append(record)
     return records
 

@@ -19,9 +19,10 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    from the EA `random.Random` instance, and candidates are filtered to the
    best score for each case until one remains.
 5. Apply crossover/copy to every active genotype component and let the
-   configured reflection-operator controller choose Strategy Reflection or
-   Generate-Code Reflection. Mutation changes only its owned prompt; it does
-   not directly edit inherited Java.
+   configured reflection-operator controller choose Strategy Reflection,
+   Generate-Code Reflection, or Balance Reflection. Strategy and Code mutate
+   one owned prompt; Balance atomically rewrites both from aggregate
+   opponent/map/side W/D/L evidence. None directly edits inherited Java.
 6. Decode each child with its configured compile-guided attempt bound, using
    structured validation/javac evidence only after a complete source fails;
    promote the first validation+compilation success, then evaluate that single

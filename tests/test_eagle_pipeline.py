@@ -410,7 +410,7 @@ class EaglePipelineTests(unittest.TestCase):
             generation_one_aos = next(item["aos"] for item in metrics if item["generation"] == 1)
             self.assertEqual(
                 set(generation_one_aos["operators"]),
-                {"strategy_reflection", "generate_code_reflection"},
+                {"strategy_reflection", "generate_code_reflection", "balance_reflection"},
             )
             self.assertAlmostEqual(
                 sum(generation_one_aos["post_update_probabilities"].values()), 1.0

@@ -1,0 +1,12 @@
+EAGLE Balance Strategy Prompt Rewrite stage.
+
+Rewrite the strategy prompt to address the Balance Reflection's documented
+opponent/map/side weaknesses. Preserve strengths not implicated by the analysis.
+Return only the revised strategy prompt: no analysis, Java, JSON, patches, or
+Markdown fences.
+
+Current strategy_prompt:
+$strategy_prompt
+
+Balance analysis:
+$balance_analysis

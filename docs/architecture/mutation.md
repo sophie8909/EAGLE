@@ -1,6 +1,6 @@
 # Mutation responsibility boundaries
 
-EAGLE has two mutation operators because it searches two prompt spaces.
+EAGLE has three mutation operators over its two prompt spaces.
 Strategy Reflection searches policy space; Code Reflection searches reusable
 policy-to-code translation instructions. Both stop at a prompt gene. The
 Generator remains a separate complete-Java revision stage. In
@@ -84,6 +84,26 @@ Canonical state transition:
 (policy A1, code prompt B1, Java C1) -> (policy A1, code prompt B2, Java C1) -> Java C2
 ```
 
+## Balance Reflection
+
+Balance Reflection diagnoses uneven outcomes without consuming gameplay traces,
+Java, either source prompt, compiler diagnostics, or objective-writing tasks.
+Its sole reflector input is a bounded W/D/L table grouped by opponent, map, and
+candidate side. It must name weak cells as `opponent`, `map`, and `p0`, `p1`, or
+`both`, then provide separate strategy and code-generation focus lists.
+
+The resulting two rewrite calls are one atomic mutation: the Strategy Rewriter
+receives the current strategy prompt plus Balance analysis, and the Code
+Rewriter receives the current generation prompt, Balance analysis, and the
+immutable API guide. Both must succeed before either gene changes.
+
+```text
+(policy A1, code prompt B1, Java C1)
+  -> aggregate opponent × map × side W/D/L Balance Reflection
+  -> strategy rewrite A2 + generation-prompt rewrite B2
+  -> (policy A2, code prompt B2, Java C1) -> Java C2
+```
+
 ## Selection and persistence
 
 The configured static/AOS controller selects exactly one mutation operator.
@@ -95,6 +115,7 @@ New artifacts live under:
 ```text
 mutation/strategy_reflection/
 mutation/code_reflection/
+mutation/balance_reflection/
 ```
 
 Each directory retains requests, raw responses, parsed/scoped evidence,
@@ -119,6 +140,8 @@ choose evidence.
 
 - Strategy mutation preserves `generation_prompt` exactly.
 - Code mutation preserves `strategy_prompt` exactly.
+- Balance mutation changes both prompt genes only after its reflector and both
+  rewrite stages succeed; otherwise it preserves both exactly.
 - Both mutations preserve inherited Java input exactly and never edit it directly.
 - Generator and Evaluation preserve both prompt genes and the recorded
   pre-generation Java input exactly.

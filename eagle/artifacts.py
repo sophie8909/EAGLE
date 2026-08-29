@@ -281,11 +281,19 @@ def _write_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> Non
         (mutation_dir / "rewriter_response_raw.txt").write_text(
             str(rewrite.get("raw_response") or ""), encoding="utf-8"
         )
+    for prefix, rewrite in (("strategy_", mutation_record.get("strategy_rewrite")), ("code_", mutation_record.get("generation_rewrite"))):
+        if isinstance(rewrite, dict):
+            (mutation_dir / f"{prefix}rewriter_request.txt").write_text(
+                str(rewrite.get("request") or ""), encoding="utf-8"
+            )
+            (mutation_dir / f"{prefix}rewriter_response_raw.txt").write_text(
+                str(rewrite.get("raw_response") or ""), encoding="utf-8"
+            )
 
 
 def _mutation_metadata_record(record: dict) -> dict:
     payload = dict(record)
-    for key in ("reflection", "rewrite"):
+    for key in ("reflection", "rewrite", "strategy_rewrite", "generation_rewrite"):
         stage = payload.get(key)
         if isinstance(stage, dict):
             payload[key] = {
@@ -629,6 +637,8 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
             "strategy_reflection": "mutation/strategy_reflection/metadata.json",
             "generator_strategy_input": "mutation/strategy_reflection/generator_strategy_input.txt",
         })
+    if (candidate_dir / "mutation" / "balance_reflection" / "metadata.json").is_file():
+        artifact_references["balance_reflection"] = "mutation/balance_reflection/metadata.json"
     payload = {
         "candidate_schema_version": "eagle-candidate-v5",
         "candidate_id": candidate.id,

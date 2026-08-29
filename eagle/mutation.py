@@ -30,7 +30,10 @@ from .reflection_context import (
     OpponentReflectionSummary,
     ReflectionContext,
 )
+# Compatibility re-exports used by the reflection/rewrite API and tests.
 from .reflection_prompts import (
+    build_balance_reflection_prompt,
+    build_balance_reflection_prompt_bundle,
     build_code_reflection_prompt,
     build_code_reflection_prompt_bundle,
     build_strategy_reflection_prompt,
@@ -224,6 +227,28 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
         except ValueError as exc:
             raise ValueError("Code Reviewer required_generation_behaviors items must be text corrections.") from exc
         return normalized_payload, json.dumps(normalized_payload, ensure_ascii=False, sort_keys=True), ""
+    elif reflection_type == "balance":
+        weaknesses = payload.get("weaknesses")
+        strategy_focus = payload.get("strategy_focus")
+        code_focus = payload.get("code_generation_focus")
+        if not isinstance(weaknesses, list) or not isinstance(strategy_focus, list) or not isinstance(code_focus, list):
+            raise ValueError(
+                "Balance Reflection response must contain weaknesses, strategy_focus, and code_generation_focus arrays."
+            )
+        for item in weaknesses:
+            if not isinstance(item, dict) or not all(
+                isinstance(item.get(key), str) and item[key].strip()
+                for key in ("opponent", "map", "side", "reason")
+            ):
+                raise ValueError(
+                    "Each Balance Reflection weakness must identify opponent, map, side, and reason."
+                )
+            if item["side"] not in {"p0", "p1", "both"}:
+                raise ValueError("Each Balance Reflection weakness side must be p0, p1, or both.")
+        for values, field in ((strategy_focus, "strategy_focus"), (code_focus, "code_generation_focus")):
+            if not all(isinstance(item, str) and item.strip() for item in values):
+                raise ValueError(f"Balance Reflection {field} entries must be non-empty strings.")
+        return payload, json.dumps(payload, ensure_ascii=False, sort_keys=True), ""
     else:
         raise ValueError(f"Unknown reflection type: {reflection_type}")
     for key in required:

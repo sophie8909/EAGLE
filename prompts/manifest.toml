@@ -12,6 +12,12 @@ role = "reflector"
 stages = ["code_reflection"]
 required_variables = ["policy_prompt", "generated_java", "structural_evidence"]
 
+[prompts.balance_reflection]
+file = "balance_reflection.txt"
+role = "reflector"
+stages = ["balance_reflection"]
+required_variables = ["win_loss_table"]
+
 [prompts.strategy_rewrite]
 file = "strategy_rewrite.txt"
 role = "rewriter"
@@ -23,6 +29,18 @@ file = "code_rewrite.txt"
 role = "rewriter"
 stages = ["generation_prompt_rewrite"]
 required_variables = ["code_generation_prompt", "alignment_review", "action_api_guide"]
+
+[prompts.balance_strategy_rewrite]
+file = "balance_strategy_rewrite.txt"
+role = "rewriter"
+stages = ["balance_strategy_prompt_rewrite"]
+required_variables = ["strategy_prompt", "balance_analysis"]
+
+[prompts.balance_code_rewrite]
+file = "balance_code_rewrite.txt"
+role = "rewriter"
+stages = ["balance_generation_prompt_rewrite"]
+required_variables = ["code_generation_prompt", "balance_analysis", "action_api_guide"]
 
 [prompts.java_generation]
 file = "java_generation.txt"

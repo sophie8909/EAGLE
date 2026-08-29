@@ -16,7 +16,7 @@ from .config import ExperimentConfig
 from .llm import LLMCallLogger, LLMClient, LLMServerError
 from .mutation import build_reflection_backend
 from .prompts import load_prompt
-from .rewrite import PromptRewriteMutation
+from .rewrite import BalanceReflectionMutation, PromptRewriteMutation
 from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation
 
 
@@ -87,6 +87,14 @@ def build_search_runtime(
         "code": PromptRewriteMutation(
             config,
             mutation_type="code",
+            reflection_backend=reflection_backend,
+            rewrite_backend=rewrite_backend,
+            artifact_root=candidates_dir,
+            logger=logger,
+            backend_name=backend_name,
+        ),
+        "balance": BalanceReflectionMutation(
+            config,
             reflection_backend=reflection_backend,
             rewrite_backend=rewrite_backend,
             artifact_root=candidates_dir,

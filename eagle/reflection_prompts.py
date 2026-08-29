@@ -26,6 +26,7 @@ CODE_BUDGETS = {
     "generated_java": 24_000,
     "structural_evidence": 9_000,
 }
+BALANCE_BUDGETS = {"win_loss_table": 18_000}
 
 
 @dataclass(frozen=True)
@@ -162,9 +163,52 @@ def build_code_reflection_prompt_bundle(candidate: Candidate, context: Reflectio
     return ReflectionPrompt(text, _metadata(sections, omitted, truncated, text))
 
 
+def build_balance_reflection_prompt_bundle(candidate: Candidate, context: ReflectionContext) -> ReflectionPrompt:
+    """Render balance-only evidence without exposing Java, prompts, or raw traces."""
+
+    context = coerce_structured_context(context, candidate)
+    truncated: list[str] = []
+    table: list[dict[str, object]] = []
+    for opponent in context.opponents:
+        for map_result in opponent.map_results:
+            table.append({
+                "opponent": opponent.opponent_id,
+                "map": map_result.map_name,
+                "p0": _win_loss_draw(map_result.p0_result),
+                "p1": _win_loss_draw(map_result.p1_result),
+                "total": {
+                    "wins": map_result.wins,
+                    "losses": map_result.losses,
+                    "draws": map_result.draws,
+                    "games": map_result.games,
+                },
+            })
+    sections = {
+        "win_loss_table": _bounded_text(
+            _json(table),
+            BALANCE_BUDGETS["win_loss_table"],
+            section="win_loss_table",
+            truncated=truncated,
+        ),
+    }
+    text = render_prompt("balance_reflection", sections)
+    return ReflectionPrompt(text, _metadata(sections, [], truncated, text))
+
+
+def _win_loss_draw(value: dict[str, object]) -> dict[str, int]:
+    return {
+        key: int(value.get(key) or 0)
+        for key in ("wins", "losses", "draws", "games")
+    }
+
+
 def build_strategy_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
     return build_strategy_reflection_prompt_bundle(candidate, context).text
 
 
 def build_code_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
     return build_code_reflection_prompt_bundle(candidate, context).text
+
+
+def build_balance_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
+    return build_balance_reflection_prompt_bundle(candidate, context).text

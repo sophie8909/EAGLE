@@ -10,6 +10,7 @@ from eagle.aos import (
     AdaptiveOperatorSelection,
     AdaptiveOperatorSelector,
     GENERATE_CODE_REFLECTION,
+    BALANCE_REFLECTION,
     STRATEGY_REFLECTION,
     StaticOperatorSelector,
     OperatorReward,
@@ -77,6 +78,7 @@ def config_for(mode: str, **overrides) -> ExperimentConfig:
         "reflection_operator_mode": mode,
         "strategy_reflection_probability": 0.20,
         "code_reflection_probability": 0.80,
+        "balance_reflection_probability": 0.0,
         "aos_minimum_probability": 0.10,
         **overrides,
     }
@@ -273,6 +275,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
             self.assertEqual(controller.updater.probabilities, {
                 STRATEGY_REFLECTION: 0.20,
                 GENERATE_CODE_REFLECTION: 0.80,
+                BALANCE_REFLECTION: 0.0,
             })
             for index in range(12):
                 record = controller.update_generation([

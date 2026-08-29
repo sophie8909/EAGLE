@@ -28,8 +28,8 @@ Generator 成功產生的 child Java 會成為下一代可選取的 Java compone
 `gen_0007_3a81c65d20bf`，讓 candidate artifact folder 可直接按 generation
 辨識與排序。從既有 artifact 或 resume 載入的明確 ID 不會被重新命名。
 
-每一代依序執行 seeded lexicase parent selection、crossover、可選的 Strategy
-或 Code mutation、完整 Java generation、validation、compilation、integration、
+每一代依序執行 seeded lexicase parent selection、crossover、可選的 Strategy、
+Code 或 Balance mutation、完整 Java generation、validation、compilation、integration、
 126 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。Survivor
 selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
 選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
@@ -48,7 +48,9 @@ Reflection operator mode 只有三種：
 - `aos_head2head`
 
 Strategy Mutation 只修改 `strategy_prompt`；Code Mutation 只修改
-`generation_prompt`。兩者完成後都必須重新產生完整 Java。
+`generation_prompt`。Balance Reflection 只接收依 opponent、map 與 candidate
+side 匯總的 W/D/L 表，辨識弱 cell 後依序重寫兩個 prompt；兩次 rewrite 都成功才
+原子地套用，任何一步失敗都保留兩個原 prompt。三者完成後都必須重新產生完整 Java。
 
 Strategy Reflection 只使用 policy 與 match evidence。Match Commentator 不會收到
 Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Code
@@ -130,7 +132,9 @@ evaluation。
 `genotype/code_generation_prompt.txt`；inherited 模式另保存
 `genotype/inherited_java.java` 與 `java_parent_id`。Generator 輸出放在
 `phenotype/CandidateAgent.java`；Code Reflection evidence 放在
-`mutation/code_reflection/`。Snapshot JSON 不重複內嵌完整 inherited Java，resume
+`mutation/code_reflection/`；Balance Reflection evidence 放在
+`mutation/balance_reflection/`，並保存 W/D/L table、reflector 與兩個 rewriter 的
+request/response evidence。Snapshot JSON 不重複內嵌完整 inherited Java，resume
 由 canonical genotype 檔重建。
 
 所有 executable prompt body 都放在 `prompts/`，一個 prompt 一個 UTF-8

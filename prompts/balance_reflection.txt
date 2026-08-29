@@ -1,0 +1,12 @@
+EAGLE Balance Reflection stage.
+
+Analyze only the following aggregate win/loss/draw table. Identify the most
+important weaknesses by opponent, map, and candidate side (p0 or p1). Do not
+infer unobserved gameplay events, discuss Java, reproduce the table, or rewrite
+either prompt.
+
+Aggregate opponent × map × side W/L/D table:
+$win_loss_table
+
+Return only valid JSON in this exact shape:
+{"weaknesses":[{"opponent":"","map":"","side":"p0|p1|both","reason":""}],"strategy_focus":[""],"code_generation_focus":[""]}
