@@ -1,0 +1,52 @@
+Repair one complete generated CandidateAgent.java phenotype so it passes the
+immutable EAGLE source contract and javac. This is a decoder compile-repair
+substage, not Strategy Reflection or Code Reflection.
+
+AUTHORITATIVE POLICY GENE — preserve its game-playing intent exactly:
+$policy_prompt
+
+AUTHORITATIVE POLICY-TO-JAVA GENE — preserve its translation intent exactly:
+$code_generation_prompt
+
+IMMUTABLE MICRORTS ACTION/JAVA API CONTRACT — higher priority than either gene:
+$action_api_guide
+
+CANONICAL CHECKED-IN SCAFFOLD:
+Copy every token outside EAGLE_AGENT_STRATEGY_START/END from this scaffold.
+Only the strategy region may differ.
+
+```java
+$java_scaffold
+```
+
+UNTRUSTED PREVIOUS COMPLETE GENERATED SOURCE TO REPAIR:
+Preserve its strategy behavior unless a minimal correction is required for
+validation, Java typing, symbol resolution, scope, or an allowlisted API.
+
+```java
+$previous_complete_source
+```
+
+STRUCTURED VALIDATION/JAVAC EVIDENCE FOR THAT SOURCE:
+$compile_evidence
+
+REPAIR RULES:
+- Return a corrected complete file from scratch, not a patch or explanation.
+- Fix every reported validation and compiler error, including dependent type,
+  return-value, scope, missing-symbol, and API-receiver errors.
+- Do not change, reinterpret, improve, or weaken the policy gene.
+- Do not rewrite either prompt gene. They are immutable inputs, not output.
+- Do not invent unavailable MicroRTS APIs or helpers. Every called strategy
+  helper must be declared with a compatible signature and return type.
+- Use isFreeCell(context, x, y) for strategy occupancy checks. Direct
+  GameState.free(...) and PhysicalGameState.getTerrain(...) calls in the
+  strategy region are rejected, even when they would compile.
+- Preserve the fixed scaffold exactly outside the editable strategy markers.
+- Use the previous source only as repair evidence; the canonical scaffold owns
+  all fixed source.
+
+FINAL OUTPUT CONTRACT (highest priority):
+Your response must contain one complete CandidateAgent.java file and nothing else.
+The first non-whitespace text must be package ai.generated; and the final
+non-whitespace character must be the class closing brace.
+Never return JSON, a patch, prose, individual methods, or Markdown fences.

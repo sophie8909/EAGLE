@@ -1,0 +1,47 @@
+schema_version: experiment-v2
+experiment_name: ministral3_8b_static_0.5_0.5_blank
+algorithm: lexicase
+survivor_selection: mu_plus_lambda
+candidate_java_mode: inherited_genotype
+application: microrts
+objectives: {opponent_cases: maximize}
+model:
+  name: ministral3_8b
+  path: experiment_env/model/ministral3-8b-instruct-q4-k-m/Ministral-3-8B-Instruct-2512-Q4_K_M.gguf
+  llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
+  host: 127.0.0.1
+  port: 8080
+  context_size: 32768
+  gpu_layers: -1
+  threads: 8
+  batch_size: 512
+  parallel: 1
+seed_prompt_files: [seeds/blank_policy.txt]
+generation_prompt_file: prompts/initial_generation.txt
+initial_java_seed_path: eagle/java_seeds/CandidateAgent.java
+agent_template_path: eagle/java_seeds/CandidateAgent.java
+generations: 20
+population_size: 10
+execution_mode: openai
+mutation_max_attempts: 3
+generation_max_attempts: 5
+crossover_rate: 0.75
+mutation_rate: 0.85
+random_seed: 7
+reflection_operator_mode: static
+strategy_reflection_probability: 0.50
+code_reflection_probability: 0.50
+balance_reflection_probability: 0.00
+aos_minimum_probability: 0.10
+llm:
+  temperature: 0.2
+  match_commentator: {enabled: true, temperature: 0.2, sample_count: 10}
+microrts_dir: third_party/microrts
+tick_limit: 5000
+match_timeout_seconds: 120
+match_artifact_mode: compact
+stagnation_generations: 10
+evaluation:
+  maps: [maps/8x8/basesWorkers8x8.xml, maps/16x16/basesWorkers16x16.xml, maps/24x24/basesWorkers24x24.xml]
+  rounds_per_map: 3
+  swap_player_sides: true

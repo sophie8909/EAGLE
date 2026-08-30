@@ -1,71 +1,78 @@
 # Architecture overview
 
-## Contract source
-
-The normative source is [`../eagle_architecture_spec.md`](../eagle_architecture_spec.md), especially sections 1, 4, 19, and 29. This file routes implementation work; it does not replace the specification.
+EAGLE evolves one complete Java MicroRTS agent under one of two explicit
+candidate modes. The default genotype contains two prompt components; the
+opt-in inherited mode adds complete Java as a third component. The active evolutionary contract is documented in
+[`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md).
 
 ## System boundary
 
-EAGLE evolves a three-component genotype that conditions generation of one complete Java MicroRTS agent. The generated source is an offline phenotype: it is validated, compiled once, and executed without an LLM during matches.
-
 In scope:
 
-- evolutionary prompt search;
-- `Strategy Prompt`, latest evaluated `Previous Code`, and `Code Generation Prompt`;
-- Uniform Crossover, four-role Strategy Mutation, and separate Code Mutation;
-- full-file `CandidateAgent.java` generation;
-- exactly 10 matches against the fixed Evolution Evaluation roster;
-- `game_performance` and `code_quality` as the only NSGA-II objectives;
-- failure-aware fitness, lineage, artifacts, and timing.
+- a game-playing policy prompt, a policy-to-Java code-generation prompt, and
+  optionally inherited Java;
+- crossover, Strategy Reflection, Code Reflection, and final Java generation;
+- validation, compilation, integration, and the fixed seven-opponent evaluation;
+- opponent-wise fitness, seeded lexicase selection, artifacts, and analysis.
+- one resolved experiment config and one owned llama.cpp lifecycle.
 
-Out of scope:
-
-- GEPA, ACE, MIPRO, CAPO, or general context optimization;
-- surrogate-oriented research paths;
-- runtime LLM-controlled agents;
-- patches, diffs, fixed method bodies, or split controller/behavior generation.
+Code quality, compiler output, function coverage, alignment, and match
+telemetry remain diagnostics. They are not additional evolutionary objectives.
 
 ## Pipeline
 
 ```mermaid
 flowchart TD
-    P["Evaluated population"] --> S["Binary tournament by rank and crowding"]
-    S --> X["Uniform Crossover over A, B, C"]
-    X --> M{"Mutation selected?"}
-    M -->|No| G["Final Java Generation LLM"]
-    M -->|Strategy| SR["Strategy Reflection LLM"] --> SW["Strategy Rewrite LLM"] --> G
-    M -->|Code| CR["Code Reflection LLM"] --> CW["Generation Prompt Rewrite LLM"] --> G
-    G --> V["Source validation"] --> C["Compile once"] --> I["MicroRTS integration"]
-    I --> E["10 matches vs fixed roster; no regeneration"]
-    E --> O["game_performance and code_quality"]
-    O --> N["NSGA-II survivor selection"] --> P
+    CFG["Config YAML or directory"] --> L["Experiment orchestrator"]
+    L --> RI["experiment.yaml run index"]
+    L --> RT["Owned llama.cpp runtime"]
+    RT --> P
+    P["Evaluated population"] --> S["Seeded lexicase parent selection"]
+    S --> X["Crossover or copy"]
+    X --> M{"Mutation?"}
+    M -->|Strategy| SR["Strategy Reflection + Coach"]
+    M -->|Code| CR["Code Reflection + prompt rewrite"]
+    M -->|Balance| BR["Balance Reflection + two prompt rewrites"]
+    M -->|No| G["Final Java Generation"]
+    SR --> G
+    CR --> G
+    BR --> G
+    G --> V["Validation"] --> C["Compile"] --> I["Integration"]
+    I --> E["126 MicroRTS matches"]
+    E --> O["7 opponent scores + reporting aggregate"]
+    O --> R{"Reflection operator mode"}
+    R -->|static| F["Fixed probabilities"]
+    R -->|aos_opponent| Q["Seven-opponent rank reward"]
+    R -->|aos_head2head| H["Configured parent-vs-offspring matches"]
+    Q --> A["Shared EMA operator update"]
+    H --> A
+    F --> N["Parent + offspring lexicase survivor selection"]
+    A --> N --> P
+    N --> FT["Final test"]
+    FT --> CL["Stop owned runtime"]
 ```
 
-## Boundary invariants
+## Invariants
 
-- Variation changes genotype components, never Java source directly.
-- Every offspring reaches final Java generation after crossover and optional mutation.
-- `previous_code` inheritance uses the parent Java most recently generated and evaluated.
-- Source validation enforces the external runtime/security contract, not a fixed internal coding style.
-- One accepted Java source and one compiled class set serve all 10 matches.
-- Failed candidates stay in the population with `game_performance = -1000`; `code_quality` records their progress through the pipeline.
-- `strategy_alignment_score` is a component of successful `code_quality`, not a third optimizer objective.
-- Every LLM interaction, retry, stage result, lineage decision, and duration is reconstructable from artifacts.
+- One generated source and one compiled class directory serve all 126 matches.
+- `inherited_genotype` generation zero replicates one seed policy to the fixed
+  population and performs one independent Generator call per individual.
+- In inherited mode crossover selects policy, generation prompt, and Java
+  parents independently; generated child Java becomes the inheritable Java
+  component available to the next generation.
+- Fitness is the seven-case mapping in `Candidate.fitness_objectives`.
+- The reporting aggregate uses the fixed `1/2` weights and denominator `11.0`,
+  but does not participate in lexicase case filtering.
+- Failed candidates remain available to selection with `-1000.0` case scores.
+- Survivor selection is seeded lexicase without replacement over the joint
+  parent-plus-offspring (`mu_plus_lambda`) pool.
+- `static` uses fixed probabilities; `aos_opponent` reuses seven-opponent rank
+  changes; `aos_head2head` uses a separate direct matrix. Neither reward path
+  creates another objective or changes normal selection.
+- No previous-generation EAGLE opponent or dynamic EAGLE weight exists in the
+  active path.
 
-## Responsibility routing
-
-- Candidate state: [`candidate_model.md`](candidate_model.md)
-- Selection and generation lifecycle: [`evolutionary_flow.md`](evolutionary_flow.md)
-- Crossover: [`crossover.md`](crossover.md)
-- Mutation: [`mutation.md`](mutation.md)
-- Java production boundary: [`java_generation.md`](java_generation.md)
-- Evaluation and objectives: [`../evaluation/evaluation_pipeline.md`](../evaluation/evaluation_pipeline.md)
-- Persistence: [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md)
-- Current discrepancies: [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md)
-
-
-## Post-evolution boundary
-
-After a run completes, the optional champion Final Test selects already evaluated canonical Java from evolution artifacts and compares it with pinned TMA, Mayari, and COAC agents. This branch is terminal analysis: it has no path back to fitness, NSGA-II, crossover, mutation, generation, or any LLM.
-
-Evolution Evaluation uses five vendored basic agents and five deterministic vendored pathfinding variants for fitness. Historical-self opponents and incompatible competition jars are excluded from the active roster. Final Test remains a separate post-run protocol; see [`../evaluation/final_test.md`](../evaluation/final_test.md) for selectors, both-side schedule, artifact tree, and reproducibility contract.
+See [`evolutionary_flow.md`](evolutionary_flow.md),
+[`../evaluation/evaluation_pipeline.md`](../evaluation/evaluation_pipeline.md),
+and [`../implementation/current_status.md`](../implementation/current_status.md)
+for ownership and artifact details.

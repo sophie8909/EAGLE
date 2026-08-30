@@ -34,7 +34,7 @@ class CodeQualityTests(unittest.TestCase):
         )
         result = analyze_compilation(CompileResult(True, [], stderr=output))
         self.assertEqual(result.warning_count, 2)
-        self.assertEqual(result.compilation_score, -100)
+        self.assertEqual(result.compilation_score, 0)
         self.assertEqual(result.compile_error_count, 1)
 
     def test_complete_java_strategy_region_scores_100(self):
@@ -141,7 +141,7 @@ class CodeQualityTests(unittest.TestCase):
             unique.maintainability_score,
         )
 
-    def test_total_code_quality_is_component_sum(self):
+    def test_code_quality_is_100_minus_complexity_penalty(self):
         compiler = analyze_compilation(
             CompileResult(True, [], stderr="A.java:1: warning: unchecked")
         )
@@ -154,21 +154,59 @@ class CodeQualityTests(unittest.TestCase):
             structure,
             {"agent_strategy_region": strategy_region},
         )
+        self.assertEqual(quality.code_quality, 100 - quality.complexity_penalty)
+        self.assertIsNotNone(quality.static_metrics)
         self.assertEqual(
-            quality.code_quality,
-            500 + quality.compilation_score,
+            quality.code_quality_details["complexity_penalty"],
+            quality.complexity_penalty,
         )
-        self.assertIsNone(quality.static_metrics)
         self.assertEqual(
             quality.to_json_dict()["code_quality"],
             quality.code_quality,
         )
 
-    def test_optimizer_vector_uses_code_quality(self):
-        candidate = Candidate(
-            fitness_objectives={"game_performance": 4, "code_quality": 108}
+    def test_complexity_dimensions_reduce_valid_simplicity(self):
+        compiler = analyze_compilation(CompileResult(True, []))
+
+        def score(source: str) -> float:
+            return build_code_quality(
+                compiler,
+                evaluate_agent_strategy_region(source),
+                {"candidate_generated_methods": source},
+            ).code_quality
+
+        minimal = "private void decide() { commandIdle(unit); }"
+        branched = "private void decide() { if (a) { commandIdle(unit); } if (b) { commandIdle(unit); } }"
+        nested = "private void decide() { if (a) { if (b) { if (c) { commandIdle(unit); } } } }"
+        long_function = "private void decide() {\n" + "\n".join(
+            f"    int value_{index} = {index};" for index in range(20)
+        ) + "\n    commandIdle(unit);\n}"
+
+        self.assertEqual(score(minimal), 100.0)
+        self.assertLess(score(branched), score(minimal))
+        self.assertLess(score(nested), score(minimal))
+        self.assertLess(score(long_function), score(minimal))
+        self.assertGreaterEqual(score(long_function), 0.0)
+        self.assertLessEqual(score(long_function), 100.0)
+
+    def test_warning_and_alignment_diagnostics_do_not_change_valid_score(self):
+        clean = analyze_compilation(CompileResult(True, []))
+        warning = analyze_compilation(CompileResult(True, [], stderr="A.java:1: warning: unchecked"))
+        source = "private void decide() { commandIdle(unit); }"
+        clean_quality = build_code_quality(
+            clean, evaluate_agent_strategy_region(source), {"candidate_generated_methods": source},
         )
-        self.assertEqual(candidate.objective_vector(), (4.0, 108.0))
+        warning_quality = build_code_quality(
+            warning, evaluate_agent_strategy_region(source), {"candidate_generated_methods": source},
+        )
+        self.assertEqual(clean_quality.code_quality, warning_quality.code_quality)
+
+    def test_optimizer_vector_contains_only_opponent_cases(self):
+        candidate = Candidate(
+            fitness_objectives={"lightrush": 4, "heavyrush": 108}
+        )
+        self.assertEqual(candidate.objective_vector()[:2], (4.0, 108.0))
+        self.assertEqual(len(candidate.objective_vector()), 7)
 
 if __name__ == "__main__":
     unittest.main()

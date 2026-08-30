@@ -9,7 +9,6 @@ from eagle.config import ExperimentConfig
 from eagle.evaluation import evaluate_candidate
 from eagle.mutation import MutationContext
 from eagle.rewrite import PromptRewriteMutation
-from generation.agent_template import JavaTemplatePaths, load_java_template
 from generation.backend import GenerationBackend, MockGenerationBackend
 
 
@@ -35,11 +34,9 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             generation=3,
             parent_ids=("parent-1", "parent-2"),
             strategy_prompt="original strategy prompt",
-            previous_code=load_java_template(JavaTemplatePaths()),
             generation_prompt="original generation prompt",
             operator="crossover",
             strategy_parent_id="parent-1",
-            previous_code_parent_id="parent-2",
             generation_prompt_parent_id="parent-1",
             source_candidate_ids=("parent-1", "parent-2"),
         )
@@ -68,9 +65,12 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
 
 
     def test_mutation_artifacts_survive_final_generation_failure(self):
-        backend = ScriptedMutationBackend(("reflection evidence", "rewritten prompt"))
+        backend = ScriptedMutationBackend((
+            self._code_reflection(),
+            json.dumps({"rewritten_prompt": "rewritten prompt"}),
+        ))
         config = ExperimentConfig.from_mapping(
-            {"seed_prompts": ["seed"], "mutation_max_attempts": 1}
+            {"mutation_max_attempts": 1}
         )
         candidate = self._candidate()
         mutated = PromptRewriteMutation(
@@ -95,16 +95,22 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             write_candidate_artifacts(root / "candidates", evaluation)
             candidate_dir = root / "candidates" / candidate.id
             self.assertEqual(evaluation.candidate.status, "failed")
-            self.assertTrue((candidate_dir / "mutation" / "reflector_response_raw.txt").exists())
-            self.assertTrue((candidate_dir / "mutation" / "rewriter_response_raw.txt").exists())
+            self.assertTrue((candidate_dir / "mutation" / "code_reflection" / "reflector_response_raw.txt").exists())
+            self.assertTrue((candidate_dir / "mutation" / "code_reflection" / "rewriter_response_raw.txt").exists())
             self.assertTrue((candidate_dir / "generation" / "response_raw.txt").exists())
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
             self.assertEqual(timing["generation_llm"]["attempts"][0]["status"], "error")
 
     def _assert_complete_pipeline(self, *, mutation_type, rewritten, untouched):
-        backend = ScriptedMutationBackend(("reflection evidence", rewritten))
+        reflection = self._strategy_reflection() if mutation_type == "strategy" else self._code_reflection()
+        rewrite_response = (
+            json.dumps({"rewritten_prompt": rewritten})
+            if mutation_type == "code"
+            else rewritten
+        )
+        backend = ScriptedMutationBackend((reflection, rewrite_response))
         config = ExperimentConfig.from_mapping(
-            {"seed_prompts": ["seed"], "mutation_max_attempts": 1}
+            {"mutation_max_attempts": 1}
         )
         candidate = self._candidate()
         mutation = PromptRewriteMutation(
@@ -122,7 +128,6 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
                 artifact_dir=root / candidate.id,
             )
             self.assertEqual(len(backend.calls), 2)
-            self.assertEqual(mutated.previous_code, candidate.previous_code)
             if mutation_type == "strategy":
                 self.assertEqual(mutated.strategy_prompt, rewritten)
                 self.assertEqual(mutated.generation_prompt, untouched)
@@ -144,15 +149,13 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             write_candidate_artifacts(root / "candidates", evaluation)
             candidate_dir = root / "candidates" / candidate.id
 
-            self.assertEqual(evaluation.candidate.previous_code, candidate.previous_code)
             self.assertEqual(evaluation.candidate.operator, "crossover+mutation")
             self.assertEqual(evaluation.candidate.mutation_type, mutation_type)
             self.assertEqual(evaluation.candidate.strategy_parent_id, "parent-1")
-            self.assertEqual(evaluation.candidate.previous_code_parent_id, "parent-2")
             self.assertEqual(evaluation.candidate.generation_prompt_parent_id, "parent-1")
             self.assertEqual(evaluation.candidate.status, "evaluated")
 
-            mutation_dir = candidate_dir / "mutation"
+            mutation_dir = candidate_dir / "mutation" / f"{mutation_type}_reflection"
             generation_dir = candidate_dir / "generation"
             for name in (
                 "reflector_request.txt",
@@ -173,7 +176,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
 
             generation_request = (generation_dir / "request.txt").read_text(encoding="utf-8")
             self.assertIn(rewritten, generation_request)
-            self.assertIn(candidate.previous_code, generation_request)
+            self.assertIn("canonical checked-in scaffold", generation_request)
             self.assertIn("package ai.generated;", (generation_dir / "response_raw.txt").read_text(encoding="utf-8"))
             self.assertEqual(
                 (generation_dir / "normalized_candidate.java").read_text(encoding="utf-8"),
@@ -189,6 +192,26 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             lineage = json.loads((candidate_dir / "lineage.json").read_text(encoding="utf-8"))
             self.assertEqual(lineage["source_candidate_ids"], ["parent-1", "parent-2"])
             self.assertEqual(lineage["operator"], "crossover+mutation")
+
+    @staticmethod
+    def _strategy_reflection():
+        return json.dumps({
+            "analysis": {"strengths": [], "weaknesses": ["late attack"], "priority_changes": ["attack earlier"]},
+            "revised_strategy_prompt": "Attack earlier while preserving the tested strategy.",
+        })
+
+    @staticmethod
+    def _code_reflection():
+        return json.dumps({
+            "assessment": "policy_clear_but_java_violates",
+            "alignment_review": [{
+                "policy_requirement": "defend first",
+                "observed_java_behavior": "expands immediately",
+                "mismatch": "defense prerequisite is absent",
+                "required_generation_behavior": "encode the prerequisite explicitly",
+            }],
+            "required_generation_behaviors": ["encode policy preconditions explicitly"],
+        })
 
 
 if __name__ == "__main__":

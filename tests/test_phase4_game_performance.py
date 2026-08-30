@@ -10,7 +10,7 @@ from evaluation.game_performance import (
     compute_performance_breakdown,
     tick_telemetry,
 )
-from evaluation.microrts_runner import MatchResult
+from evaluation.runtime_evaluation import MatchResult
 
 
 class Phase4GamePerformanceTests(unittest.TestCase):
@@ -121,7 +121,6 @@ class Phase4GamePerformanceTests(unittest.TestCase):
             weighted_resource_difference=0.0,
             performance_breakdown=breakdown,
             match_index=index,
-            seed=index,
             raw_result={"result": "p0_win" if winner == 0 else "p1_win" if winner == 1 else "draw"},
         )
 

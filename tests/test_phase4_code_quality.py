@@ -3,7 +3,7 @@ import unittest
 import urllib.error
 from unittest.mock import patch
 
-from eagle.llm_errors import LLMServerError
+from eagle.llm import LLMServerError
 from evaluation.code_quality import (
     analyze_compilation,
     build_failure_code_quality,
@@ -15,7 +15,7 @@ from evaluation.function_capability import (
     FunctionCapabilityResult,
     evaluate_function_capability,
 )
-from evaluation.microrts_runner import MatchResult
+from evaluation.runtime_evaluation import MatchResult
 from evaluation.strategy_alignment import (
     OpenAICompatibleStrategyAlignmentBackend,
     StrategyAlignmentBackend,
@@ -85,23 +85,19 @@ class Phase4CodeQualityTests(unittest.TestCase):
         repeated = "A.java:1: warning: [unchecked] duplicate\n" * 2
         compiler = analyze_compilation(CompileResult(True, [], stderr=repeated))
         self.assertEqual(compiler.warning_count, 1)
-        self.assertEqual(compiler.compilation_score, -50)
+        self.assertEqual(compiler.compilation_score, 0)
 
         warnings = "\n".join(
             f"A.java:{line}: warning: warning {line}" for line in range(1, 12)
         )
         capped = analyze_compilation(CompileResult(True, [], stderr=warnings))
         self.assertEqual(capped.warning_count, 11)
-        self.assertEqual(capped.compilation_score, -500)
+        self.assertEqual(capped.compilation_score, 0)
 
     def test_failure_hierarchy_and_boundaries(self):
         self.assertEqual(failure_code_quality("generation"), -1000)
-        self.assertEqual(failure_code_quality("validation"), -950)
-        self.assertEqual(failure_code_quality("compilation", error_count=20), -900)
-        self.assertEqual(failure_code_quality("integration", integration_pass_ratio=0.5), -550)
-        self.assertEqual(failure_code_quality("runtime", completed_matches=0), -400)
-        self.assertEqual(failure_code_quality("runtime", completed_matches=5), -300)
-        self.assertEqual(failure_code_quality("runtime", completed_matches=9), -221)
+        for stage in ("validation", "compilation", "integration", "runtime", "timeout", "incomplete"):
+            self.assertEqual(failure_code_quality(stage), -1000)
 
     def test_successful_formula_exact_range(self):
         clean = analyze_compilation(CompileResult(True, []))
@@ -110,7 +106,7 @@ class Phase4CodeQualityTests(unittest.TestCase):
             capability_result(20),
             alignment_result(10),
         )
-        self.assertEqual(maximum.code_quality, 610)
+        self.assertEqual(maximum.code_quality, 100)
 
         warnings = "\n".join(
             f"A.java:{line}: warning: warning {line}" for line in range(1, 12)
@@ -121,8 +117,10 @@ class Phase4CodeQualityTests(unittest.TestCase):
             capability_result(0),
             alignment_result(0),
         )
-        self.assertEqual(minimum.code_quality, 0)
-        self.assertEqual(maximum.objective_formula_version, "eagle-objectives-phase4-v1")
+        self.assertEqual(minimum.code_quality, 100)
+        self.assertEqual(maximum.objective_formula_version, "eagle-objectives-simplicity-v1")
+        self.assertEqual(maximum.function_score, 100)
+        self.assertEqual(maximum.strategy_alignment_score, 10)
 
     def test_compilation_failure_uses_structured_error_count(self):
         compiler = analyze_compilation(
@@ -130,7 +128,7 @@ class Phase4CodeQualityTests(unittest.TestCase):
         )
         quality = build_failure_code_quality("compilation", compiler=compiler)
         self.assertEqual(quality.compile_error_count, 1)
-        self.assertEqual(quality.code_quality, -805)
+        self.assertEqual(quality.code_quality, -1000)
 
     def test_function_capability_combines_static_and_runtime_evidence(self):
         source = """
@@ -199,6 +197,11 @@ class Phase4CodeQualityTests(unittest.TestCase):
         self.assertEqual(result.raw_response, backend.response)
         self.assertEqual(len(result.attempts), 1)
         self.assertIn("Build workers before attacking.", backend.requests[0])
+
+    def test_strategy_alignment_accepts_full_json_fence_and_literal_newline(self):
+        payload = '```json\n{"score": 7.5, "reason": "First line\nSecond line"}\n```'
+        parsed = parse_strategy_alignment_response(payload)
+        self.assertEqual(parsed, {"score": 7.5, "reason": "First line\nSecond line"})
 
     def test_strategy_alignment_rejects_invalid_results(self):
         with self.assertRaises(ValueError):

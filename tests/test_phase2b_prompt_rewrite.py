@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from eagle.candidate import Candidate
@@ -28,11 +29,10 @@ class ScriptedRewriteBackend:
 
 class Phase2BPromptRewriteTests(unittest.TestCase):
     def setUp(self):
-        self.config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"], "mutation_max_attempts": 2})
+        self.config = ExperimentConfig.from_mapping({"mutation_max_attempts": 2})
         self.candidate = Candidate(
             id="rewrite-child",
             strategy_prompt="old strategy",
-            previous_code="parent Java",
             generation_prompt="old generation prompt",
             operator="crossover",
         )
@@ -45,7 +45,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         )
 
     def test_strategy_rewrite_call_order_and_component_isolation(self):
-        backend = ScriptedRewriteBackend(("strategy reflection", "new strategy prompt"))
+        backend = ScriptedRewriteBackend((self._strategy_reflection(), "new strategy prompt"))
         mutation = PromptRewriteMutation(
             self.config,
             mutation_type="strategy",
@@ -57,14 +57,16 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertIn("Strategy Reflection stage", backend.calls[0])
         self.assertIn("Strategy Prompt Rewrite stage", backend.calls[1])
         self.assertEqual(child.strategy_prompt, "new strategy prompt")
-        self.assertEqual(child.previous_code, self.candidate.previous_code)
         self.assertEqual(child.generation_prompt, self.candidate.generation_prompt)
         self.assertEqual(child.operator, "crossover+mutation")
         self.assertTrue(child.metadata["mutation"]["applied"])
         self.assertEqual(child.metadata["mutation"]["original_strategy_prompt"], "old strategy")
 
     def test_code_rewrite_changes_only_generation_prompt(self):
-        backend = ScriptedRewriteBackend(("code reflection", "new generation prompt"))
+        backend = ScriptedRewriteBackend((
+            self._code_reflection(),
+            json.dumps({"rewritten_prompt": "new generation prompt"}),
+        ))
         mutation = PromptRewriteMutation(
             self.config,
             mutation_type="code",
@@ -73,22 +75,57 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         )
         child = mutation.mutate(self.candidate, self.context)
         self.assertEqual(child.strategy_prompt, self.candidate.strategy_prompt)
-        self.assertEqual(child.previous_code, self.candidate.previous_code)
         self.assertEqual(child.generation_prompt, "new generation prompt")
         self.assertEqual(child.mutation_type, "code")
+
+    def test_code_rewrite_requires_exact_json_contract_and_retries(self):
+        backend = ScriptedRewriteBackend((
+            json.dumps({"rewritten_prompt": "bad", "analysis": "extra"}),
+            "```json\n{\"rewritten_prompt\":\"usable generation prompt\"}\n```",
+        ))
+        result = PromptRewriteStage(backend, max_attempts=2).run(
+            rewrite_type="generation_prompt_rewrite",
+            candidate=self.candidate,
+            request="rewrite request",
+        )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.rewritten_prompt, "usable generation prompt")
+        self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
+
+    def test_code_rewrite_rejects_java_inside_json(self):
+        backend = ScriptedRewriteBackend((
+            json.dumps({"rewritten_prompt": "package ai.generated; public class CandidateAgent {}"}),
+        ))
+        result = PromptRewriteStage(backend, max_attempts=1).run(
+            rewrite_type="generation_prompt_rewrite",
+            candidate=self.candidate,
+            request="rewrite request",
+        )
+        self.assertFalse(result.succeeded)
+        self.assertIn("only the rewritten prompt", result.error)
     def test_rewrite_prompt_builders_include_reflection_and_original_component(self):
-        backend = ScriptedRewriteBackend(("reflection",))
+        backend = ScriptedRewriteBackend((self._strategy_reflection(),))
         reflection = ReflectionStage(backend, max_attempts=1).run(
             reflection_type="strategy",
             candidate=self.candidate,
             request=build_strategy_reflection_prompt(self.candidate, self.context),
         )
         strategy_prompt = build_strategy_rewrite_prompt(self.candidate, reflection, self.context)
-        code_prompt = build_code_rewrite_prompt(self.candidate, reflection, self.context)
+        code_reflection = ReflectionStage(
+            ScriptedRewriteBackend((self._code_reflection(),)), max_attempts=1
+        ).run(
+            reflection_type="code",
+            candidate=self.candidate,
+            request="review",
+        )
+        code_prompt = build_code_rewrite_prompt(self.candidate, code_reflection, self.context)
         self.assertIn("old strategy", strategy_prompt)
         self.assertIn("reflection", strategy_prompt)
         self.assertIn("old generation prompt", code_prompt)
-        self.assertIn("reflection", code_prompt)
+        self.assertIn("Policy-Code Alignment Review", code_prompt)
+        self.assertIn("Immutable MicroRTS API contract", code_prompt)
+        self.assertIn("commandMove", code_prompt)
+        self.assertNotIn("old strategy", code_prompt)
 
     def test_rewrite_output_rejects_java_and_retries(self):
         backend = ScriptedRewriteBackend(("package ai.generated; class CandidateAgent {}", "usable revised prompt"))
@@ -102,7 +139,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
 
     def test_reflection_and_rewrite_artifacts_survive_rewrite_failure(self):
-        backend = ScriptedRewriteBackend(("reflection", "", ""))
+        backend = ScriptedRewriteBackend((self._strategy_reflection(), "", ""))
         with tempfile.TemporaryDirectory() as temp:
             mutation = PromptRewriteMutation(
                 self.config,
@@ -111,15 +148,30 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
                 rewrite_backend=backend,
             )
             child = mutation.mutate(self.candidate, self.context, artifact_dir=Path(temp))
-            mutation_dir = Path(temp) / "mutation"
+            mutation_dir = Path(temp) / "mutation" / "strategy_reflection"
             self.assertFalse(child.metadata["mutation"]["applied"])
             self.assertEqual(child.strategy_prompt, self.candidate.strategy_prompt)
             self.assertTrue((mutation_dir / "reflector_request.txt").exists())
             self.assertTrue((mutation_dir / "reflector_response_raw.txt").exists())
             self.assertTrue((mutation_dir / "rewriter_request.txt").exists())
             self.assertTrue((mutation_dir / "rewriter_response_raw.txt").exists())
-            self.assertTrue((mutation_dir / "original_strategy_prompt.txt").exists())
+            self.assertTrue((mutation_dir / "original_policy_prompt.txt").exists())
             self.assertTrue((Path(temp) / "timing.json").exists())
+
+    @staticmethod
+    def _strategy_reflection():
+        return json.dumps({
+            "analysis": {"strengths": ["workers"], "weaknesses": ["late attack"], "priority_changes": ["attack earlier"]},
+            "revised_strategy_prompt": "Attack earlier while preserving workers.",
+        })
+
+    @staticmethod
+    def _code_reflection():
+        return json.dumps({
+            "assessment": "java_faithfully_implements_policy",
+            "alignment_review": [],
+            "required_generation_behaviors": [],
+        })
 
 
 if __name__ == "__main__":

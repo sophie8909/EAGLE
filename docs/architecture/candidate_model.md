@@ -1,67 +1,59 @@
 # Candidate model
 
-## Normative source
+## Genotype and phenotype modes
 
-See specification sections 2, 3, 24, 28, and 29. Lineage serialization is owned by [`../artifacts/lineage_schema.md`](../artifacts/lineage_schema.md).
+Every candidate has two evolvable prompt components:
 
-## Genotype and phenotype
-
-| Symbol | Field | Meaning |
+| Concept | Current field | Meaning |
 | --- | --- | --- |
-| `A` | `strategy_prompt` | High-level MicroRTS behavior intent. |
-| `B` | `previous_code` | Complete Java source most recently generated for and evaluated as the source parent. |
-| `C` | `generation_prompt` | Instructions controlling complete-file Java generation. |
+| Policy gene | `strategy_prompt` | Concrete MicroRTS game-playing policy (`policy_prompt` conceptually). |
+| Translation gene | `generation_prompt` | Reusable instructions for faithfully translating policy into Java (`code_generation_prompt` conceptually). |
 
-The genotype is `A + B + C`. The phenotype is the new complete `CandidateAgent.java` produced by the final Java Generation LLM.
+In the default `generated_phenotype` mode, the complete
+`ai.generated.CandidateAgent` Java source remains non-inherited phenotype and
+Code Reflection evidence. In explicit `inherited_genotype` mode, a third
+pre-generation component stores the complete inherited Java source and its
+parent ID. The Generator revises it into the candidate's new Java phenotype;
+that successful phenotype is eligible for independent Java-component
+inheritance by children.
 
-`previous_code` is not a static seed snapshot. If genotype `A1 + B1 + C1` generates and evaluates Java `B2`, the inheritable evaluated state is `A1 + B2 + C1`.
+Default-mode generation-zero seeds use one checked-in callable no-op phenotype.
+Inherited mode requires one seed policy, copies it to `population_size`, gives
+every copy the same no-op Java component, and invokes the Generator separately.
 
 ## Required logical fields
-
-An implementation may use nested records, but it must expose and persist these names or an explicitly versioned lossless mapping:
 
 | Group | Fields |
 | --- | --- |
 | Identity | `candidate_id`, `generation`, `parent_ids` |
-| Genotype | `strategy_prompt`, `previous_code`, `generation_prompt` |
+| Genotype | `strategy_prompt`, `generation_prompt`, and optional inherited Java input |
 | Phenotype | `generated_java`, `generated_java_path` |
 | Variation | `operator`, `mutation_type` |
-| Component provenance | `strategy_parent_id`, `previous_code_parent_id`, `generation_prompt_parent_id` |
+| Component provenance | `strategy_parent_id`, `generation_prompt_parent_id`, optional `java_parent_id` |
 | State/failure | `status`, `failure_stage`, `failure_reason` |
-| Objectives | `game_performance`, `code_quality` |
+| Objectives/evidence | opponent fitness cases, game/code diagnostics |
 | Persistence references | `artifacts`, `timing` |
 
-Recommended internal separation:
-
-- `CandidateGenotype`: the three heritable components;
-- `CandidatePhenotype`: the newly generated complete Java;
-- `CandidateEvaluation`: match evidence, objective values, and failure data.
-
-## Lifecycle
-
-Valid logical states are:
-
-1. `constructed`: genotype and lineage are complete.
-2. `generation_started`: final Java request has been persisted.
-3. `generated`: raw response, extracted source, and normalized source are persisted.
-4. `validated`: source contract passed.
-5. `compiled`: one class set is available.
-6. `integrated`: MicroRTS can load and initialize the class.
-7. `evaluated`: all 10 matches and both objectives completed.
-8. `failed`: a terminal failure records the exact `failure_stage` and retains earlier evidence.
-
-These labels are a documentation model, not newly mandated serialized enum values. Serialized status values must be versioned and map unambiguously to the required pipeline stages.
+New runtime IDs use `gen_<zero-padded-generation>_<12-hex-random-suffix>`.
+Explicit IDs loaded from supported artifacts remain opaque and unchanged.
 
 ## Construction invariants
 
-- A child is not complete until all three genotype components and component-level provenance are known.
-- Crossover reads the evaluated parent phenotype for the `previous_code` component.
-- Mutation changes only the component owned by its mutation type. See [`mutation.md`](mutation.md).
-- The final generation result is stored separately from the pre-generation `previous_code`; artifact writing must not overwrite either value.
-- The next generation inherits the child phenotype as its `previous_code` only after that phenotype has been evaluated.
-- A failure does not erase genotype, partial phenotype, lineage, mutation output, or timing.
+- A child genotype is complete only when every active component and its provenance are known.
+- Whole-component uniform crossover makes two independent prompt choices and,
+  in inherited mode, one independent Java choice.
+- Strategy Reflection may change only `strategy_prompt`.
+- Code Reflection may change only `generation_prompt`.
+- Balance Reflection may atomically change both prompts, but never Java.
+- Generator and Evaluation do not modify either prompt gene.
+- Generator uses the canonical checked-in scaffold. Only inherited mode also
+  receives the selected parent Java component.
+- Failure never erases genotype, partial phenotype, lineage, mutation evidence, or timing.
 
-## Implementation mapping
+## Compatibility
 
-Current code centers the record in `eagle/candidate.py` and reconstructs it in `eagle/evaluation.py`. The active dataclass lacks several first-class contract fields and artifact writing overwrites the pre-generation evidence. Treat [`../implementation/current_status.md`](../implementation/current_status.md) and gap `G-01` in [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md) as migration evidence, not normative behavior.
-
+New candidate artifacts use `genotype/policy_prompt.txt`,
+`genotype/code_generation_prompt.txt`, and `phenotype/CandidateAgent.java`.
+The resume loader may read old prompt/phenotype paths. Missing Java-component
+fields mean default mode; compatibility never silently opts an old run into
+`inherited_genotype`.

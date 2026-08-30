@@ -13,28 +13,34 @@ class CrossoverContext:
     generation: int
     index: int
     rng: random.Random
+    inherit_java: bool = False
 
 
 def crossover(parent_a: Candidate, parent_b: Candidate, context: CrossoverContext) -> Candidate:
     """Select one parent for each inheritable component and create the child genotype."""
 
     strategy_parent = context.rng.choice((parent_a, parent_b))
-    previous_code_parent = context.rng.choice((parent_a, parent_b))
     generation_prompt_parent = context.rng.choice((parent_a, parent_b))
+    java_parent = context.rng.choice((parent_a, parent_b)) if context.inherit_java else None
     component_parent_ids = (
         strategy_parent.id,
-        previous_code_parent.id,
         generation_prompt_parent.id,
+        *(() if java_parent is None else (java_parent.id,)),
     )
     return Candidate(
         generation=context.generation,
         parent_ids=(parent_a.id, parent_b.id),
         strategy_prompt=strategy_parent.strategy_prompt,
-        previous_code=previous_code_parent.generated_java,
+        strategy_signature=dict(strategy_parent.strategy_signature),
+        strategy_niche=strategy_parent.strategy_niche,
         generation_prompt=generation_prompt_parent.generation_prompt,
         operator="crossover",
         strategy_parent_id=strategy_parent.id,
-        previous_code_parent_id=previous_code_parent.id,
         generation_prompt_parent_id=generation_prompt_parent.id,
+        inherited_java=(
+            "" if java_parent is None
+            else java_parent.generated_java or java_parent.inherited_java
+        ),
+        java_parent_id=None if java_parent is None else java_parent.id,
         source_candidate_ids=tuple(dict.fromkeys(component_parent_ids)),
     )

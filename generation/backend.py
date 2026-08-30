@@ -8,18 +8,17 @@ import time
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from eagle.candidate import Candidate
-from eagle.llm_errors import LLMServerError
+from eagle.llm import LLMServerError, llm_request_progress, read_chat_completion_content, truncate_prompt
 from eagle.timing import utc_now
-from eagle.llm_progress import llm_request_progress
-from eagle.llm_transport import read_chat_completion_content, truncate_prompt
 
 
 
 if TYPE_CHECKING:
-    from eagle.llm_logging import LLMCallLogger
+    from eagle.llm import LLMCallLogger
 
 
 class GenerationBackend(ABC):
@@ -27,27 +26,81 @@ class GenerationBackend(ABC):
     def generate(self, candidate: Candidate, class_name: str) -> str:
         """Return Java source code for a candidate prompt."""
 
-class GenerationBackendUnavailable(LLMServerError):
-    """Raised when the configured generation service cannot be reached."""
+    def authoritative_request(self, candidate: Candidate, class_name: str) -> str:
+        """Render the exact immutable request used by bounded decoder attempts."""
 
+        return self.prepare_request(candidate.generation_input(
+            class_name=class_name,
+            agent_template_path=getattr(self, "agent_template_path", None),
+        ))
+
+    def prepare_request(self, request_text: str) -> str:
+        """Apply backend request bounds before an attempt persists its prompt."""
+
+        return request_text
+
+    def generate_from_request(
+        self,
+        candidate: Candidate,
+        class_name: str,
+        request_text: str,
+    ) -> str:
+        """Generate from a pre-rendered request.
+
+        Custom/test backends that do not consume prompts retain the legacy
+        ``generate`` contract. Production prompt backends override this method
+        so each attempt consumes the exact request persisted for that attempt.
+        """
+
+        return self.generate(candidate, class_name)
+
+    def set_generation_attempt_context(self, attempt: int, attempt_id: str) -> None:
+        """Attach outer decoder-attempt identity to transport logging."""
+
+    def set_generation_request_kind(self, request_kind: str) -> None:
+        """Identify base generation versus compile-guided decoder repair."""
 
 class MockGenerationBackend(GenerationBackend):
     """Deterministic backend for tests and local pipeline smoke runs."""
+
+    def __init__(self, agent_template_path: Path | None = None) -> None:
+        self.agent_template_path = agent_template_path
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
         from .agent_template import JavaTemplatePaths, load_java_template
 
         if class_name != "CandidateAgent":
             raise ValueError("Repository template declares only CandidateAgent.")
-        return load_java_template(JavaTemplatePaths())
+        return load_java_template(
+            JavaTemplatePaths()
+            if self.agent_template_path is None
+            else JavaTemplatePaths(self.agent_template_path)
+        )
+
+
+class InitialJavaSeedBackend(GenerationBackend):
+    """Return the checked-in generation-zero phenotype without an LLM call."""
+
+    operation = "initial_java_seed"
+    model = None
+
+    def __init__(self, source_path: Path) -> None:
+        self.source_path = source_path
+
+    def generate(self, candidate: Candidate, class_name: str) -> str:
+        if candidate.generation != 0:
+            raise ValueError("The initial Java seed backend is generation-zero only.")
+        if class_name != "CandidateAgent":
+            raise ValueError("The initial Java seed declares only CandidateAgent.")
+        return self.source_path.read_text(encoding="utf-8")
 
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
 
-    def __init__(self, base_url: str, model: str, timeout_sec: float = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, llm_profile: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None) -> None:
+    def __init__(self, base_url: str, model: str, timeout_sec: float = 120, max_retries: int = 2, logger: LLMCallLogger | None = None, operation: str | None = None, temperature: float = 0.2, max_output_tokens: int | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.llm_profile = llm_profile
+        self.operation = operation
         self.timeout_sec = timeout_sec
         self.max_retries = max_retries
         self.logger = logger
@@ -55,6 +108,18 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         self.max_output_tokens = max_output_tokens
         self._active_request_started_at: str | None = None
         self._active_request_started_monotonic: float | None = None
+        self._generation_attempt = 1
+        self._generation_attempt_id: str | None = None
+        self._generation_request_kind = "initial_decode"
+
+    def set_generation_attempt_context(self, attempt: int, attempt_id: str) -> None:
+        self._generation_attempt = attempt
+        self._generation_attempt_id = attempt_id
+
+    def set_generation_request_kind(self, request_kind: str) -> None:
+        if request_kind not in {"initial_decode", "initial_decode_retry", "compile_repair"}:
+            raise ValueError(f"Unsupported generation request kind: {request_kind}")
+        self._generation_request_kind = request_kind
 
     @property
     def chat_completions_url(self) -> str:
@@ -63,8 +128,43 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         return f"{self.base_url}/v1/chat/completions"
 
     def generate(self, candidate: Candidate, class_name: str) -> str:
-        prompt = truncate_prompt(candidate.generation_input(class_name=class_name))
-        module_name = "complete_java_agent"
+        return self.generate_from_request(
+            candidate,
+            class_name,
+            self.authoritative_request(candidate, class_name),
+        )
+
+    def authoritative_request(self, candidate: Candidate, class_name: str) -> str:
+        return self.prepare_request(candidate.generation_input(
+            class_name=class_name,
+            agent_template_path=getattr(self, "agent_template_path", None),
+        ))
+
+    def prepare_request(self, request_text: str) -> str:
+        return truncate_prompt(request_text)
+
+    def generate_from_request(
+        self,
+        candidate: Candidate,
+        class_name: str,
+        request_text: str,
+    ) -> str:
+        genotype_before = (
+            candidate.strategy_prompt,
+            candidate.generation_prompt,
+            candidate.inherited_java,
+        )
+        prompt = request_text
+        assert (
+            candidate.strategy_prompt,
+            candidate.generation_prompt,
+            candidate.inherited_java,
+        ) == genotype_before
+        module_name = (
+            "java_compile_repair"
+            if self._generation_request_kind == "compile_repair"
+            else "complete_java_agent"
+        )
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -169,14 +269,18 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             candidate_id=candidate.id,
             generation=candidate.generation,
             module_name=module_name,
-            attempt=attempt,
+            attempt=self._generation_attempt,
             error=error,
             metadata={
                 "class_name": generated_class_name(candidate.id),
                 "url": self.chat_completions_url,
                 "endpoint": self.base_url,
-                "llm_profile": self.llm_profile,
+                "operation": self.operation,
                 "operation_type": "mutation" if candidate.operator in {"mutation", "crossover+mutation"} else "crossover" if candidate.operator == "crossover" else None,
+                "generation_attempt": self._generation_attempt,
+                "generation_attempt_id": self._generation_attempt_id,
+                "transport_attempt": attempt,
+                "generation_request_kind": self._generation_request_kind,
             },
             started_at=self._active_request_started_at,
             finished_at=utc_now(),
@@ -211,9 +315,9 @@ def build_generation_backend(
     name: str,
     *,
     base_url: str = "http://localhost:8080",
-    model: str = "local-model",
+    model: str | None = None,
     logger: LLMCallLogger | None = None,
-    llm_profile: str | None = None,
+    operation: str | None = None,
     timeout_sec: float = 120,
     temperature: float = 0.2,
     max_output_tokens: int | None = None,
@@ -221,5 +325,7 @@ def build_generation_backend(
     if name == "mock":
         return MockGenerationBackend()
     if name in {"openai", "openai"}:
-        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, llm_profile=llm_profile, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
+        if not model:
+            raise ValueError("An explicit model path is required for the OpenAI-compatible backend.")
+        return OpenAICompatibleGenerationBackend(base_url=base_url, model=model, logger=logger, operation=operation, timeout_sec=timeout_sec, temperature=temperature, max_output_tokens=max_output_tokens)
     raise ValueError(f"Unknown generation backend: {name}")

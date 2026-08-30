@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import gzip
 import math
 import re
 from dataclasses import asdict, dataclass, field
@@ -150,7 +151,12 @@ def build_match_telemetry(*, raw_result: dict[str, Any], round_state_dir: Path, 
 def read_tick_telemetry(round_state_dir: Path, *, player_index: int, scoring_config: GamePerformanceConfig) -> list[MatchTickTelemetry]:
     ticks: dict[int, MatchTickTelemetry] = {}
     for path in sorted(round_state_dir.glob("round_*.log")):
-        item = parse_round_state(path.read_text(encoding="utf-8"), player_index=player_index, scoring_config=scoring_config)
+        text = path.read_text(encoding="utf-8")
+        # Mock-only trace rows are retained for the commentator but are not
+        # folded into the established scoring telemetry contract.
+        if "TRACE_ONLY: true" in text:
+            continue
+        item = parse_round_state(text, player_index=player_index, scoring_config=scoring_config)
         ticks[item.tick] = item
     return [ticks[key] for key in sorted(ticks)]
 
@@ -264,11 +270,21 @@ def tick_from_result(raw_result: dict[str, Any], *, tick: int, player_index: int
 
 
 def write_telemetry_json(path: Path, telemetry: MatchTelemetry) -> None:
-    path.write_text(json.dumps(telemetry.to_json_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    payload = json.dumps(telemetry.to_json_dict(), ensure_ascii=False, indent=2)
+    if path.suffix == ".gz":
+        with gzip.open(path, "wt", encoding="utf-8") as handle:
+            handle.write(payload)
+        return
+    path.write_text(payload, encoding="utf-8")
 
 
 def write_summary_json(path: Path, summary: dict[str, Any]) -> None:
-    path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    payload = json.dumps(summary, ensure_ascii=False, indent=2)
+    if path.suffix == ".gz":
+        with gzip.open(path, "wt", encoding="utf-8") as handle:
+            handle.write(payload)
+        return
+    path.write_text(payload, encoding="utf-8")
 
 
 def result_from_winner(winner: Any, tick_timeout: Any) -> str:

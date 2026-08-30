@@ -1,56 +1,87 @@
-# Evolutionary flow
+# EAGLE evolutionary flow
 
-## Normative source
-
-See specification sections 4, 5, 19, 20, and 30. Operator-local contracts are in [`crossover.md`](crossover.md) and [`mutation.md`](mutation.md).
+This document describes the active implementation. The seven opponent cases are
+the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 
 ## Population lifecycle
 
-1. Construct seed candidates with complete three-part genotypes.
-2. Generate, validate, compile, integrate, and evaluate every seed candidate.
-3. Assign NSGA-II Pareto rank and crowding distance using exactly two maximized objectives.
-4. Select each parent by binary tournament.
-5. Apply Uniform Crossover at the configured rate, or copy an explicitly recorded parent genotype.
-6. Apply at most one selected mutation type at the configured rate.
-7. Invoke the final Java Generation LLM for every child.
-8. Evaluate each child through the complete pipeline.
-9. Combine parents and offspring, then retain complete Pareto fronts plus the highest-crowding members of a partial front.
-10. Persist the selected population and continue.
+1. In default `generated_phenotype` mode, create one candidate per configured
+   seed policy and load the callable no-op Java phenotype without an LLM call.
+   In `inherited_genotype` mode, require one seed policy, copy it to
+   `population_size`, and give every copy the same no-op inherited Java input.
+2. In inherited mode, call the Generator independently for every generation-zero
+   candidate before validation, compilation, integration, and evaluation. Later
+   children independently inherit policy, generation prompt, and Java parent
+   provenance before the same final Generator boundary.
+3. Store one score for each fixed opponent case:
+   `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`, `coac`, and `tma`.
+4. Select parents with seeded lexicase selection. A random case order is drawn
+   from the EA `random.Random` instance, and candidates are filtered to the
+   best score for each case until one remains.
+5. Apply crossover/copy to every active genotype component and let the
+   configured reflection-operator controller choose Strategy Reflection,
+   Generate-Code Reflection, or Balance Reflection. Strategy and Code mutate
+   one owned prompt; Balance atomically rewrites both from aggregate
+   opponent/map/side W/D/L evidence. None directly edits inherited Java.
+6. Decode each child with its configured compile-guided attempt bound, using
+   structured validation/javac evidence only after a complete source fails;
+   promote the first validation+compilation success, then evaluate that single
+   promoted phenotype through the complete pipeline. Integration/runtime
+   failure never re-enters the decoder. `static` performs no credit update;
+   `aos_opponent` reuses the seven normal opponent summaries;
+   `aos_head2head` runs the configured direct parent-A matrix. Both adaptive
+   modes feed one shared generation-level EMA updater.
+7. From generation 1 onward, combine evaluated parents and offspring and fill
+   the fixed population with seeded lexicase selection without replacement.
+   This is the `(mu + lambda)` environmental-selection model; when both sets
+   have size `n`, it is the requested `(n + n)` form.
+8. Persist the surviving population and generation metrics.
 
-## Parent selection contract
-
-Binary tournament comparison order:
-
-1. lower Pareto rank;
-2. higher crowding distance;
-3. random tie-break.
-
-Selection does not change candidate state. Any fallback comparison beyond that ordering must be justified by the specification or recorded as a gap.
+The implementation is in `eagle/search.py`, `eagle/selection.py`, and
+`eagle/evaluation.py`.
 
 ## Objective contract
 
-- Optimize only `game_performance` and `code_quality`.
-- Maximize both values.
-- Keep failed candidates eligible for ranking with failure values assigned by the evaluation contract.
-- Never expose `strategy_alignment` as a third objective; it is a successful-code-quality component.
+`Candidate.objective_vector()` in `eagle/candidate.py` contains exactly the seven
+opponent cases. All are maximized. Missing or failed cases use `-1000.0` from
+`eagle/opponent_cases.py`.
 
-The formula owners are [`../evaluation/game_performance.md`](../evaluation/game_performance.md), [`../evaluation/code_quality.md`](../evaluation/code_quality.md), and [`../evaluation/failure_classification.md`](../evaluation/failure_classification.md).
+`code_quality` is retained in `Candidate.code_quality_result` as a diagnostic
+and failure/implementation signal. It is not an evolutionary objective and is
+not consulted by lexicase, survivor selection, or the opponent archive.
 
-## LLM call accounting
+The weighted Game Performance aggregate is calculated with the fixed weights
+in `eagle/opponent_cases.py` (weight sum `11.0`). It is used for reporting and
+the convenient final representative only; it does not replace the seven cases.
 
-| Offspring path | Variation calls | Final generation call | Total before retries/evaluation |
-| --- | --- | --- | --- |
-| Crossover/copy only | none | 1 | 1 |
-| Strategy Mutation | Reflection + Strategy Rewrite | 1 | 3 |
-| Code Mutation | Reflection + Generation Prompt Rewrite | 1 | 3 |
+## Evaluation matrix
 
-Strategy Alignment evaluation adds a separate evaluation LLM call only after successful execution. Retry counts and durations belong to the timing schema.
+Each candidate runs all seven opponents over three maps, three rounds, and both
+player positions: `7 × 3 × 3 × 2 = 126` matches. There is no previous-generation
+EAGLE opponent or dynamic opponent weight.
 
-## Operational invariants
+The generation-level `expected_match_count` and `completed_match_count` are sums
+over every candidate in that generation, including zero completed matches for a
+candidate blocked before runtime.
 
-- Do not evaluate an unevaluated initial population with NSGA-II defaults.
-- Do not select mutation feedback by string equality; use recorded component provenance and relevant parent evidence.
-- Do not bypass final Java generation for copied, crossed, or mutated offspring.
-- Do not regenerate Java during the 10-match batch.
-- Persist generation-zero and later population views using the artifact contract.
+Only `aos_head2head` runs the separate `3 × 3 × 2 = 18` parent-vs-offspring
+matrix for each runnable mutated child. It reuses the configured maps, round
+indices, sides, and compiled classes. These matches never enter fitness, the
+opponent archive, lexicase, weighted Game Performance, or final testing.
+`aos_opponent` instead compares the existing seven normal opponent records;
+`static` performs neither form of credit assignment.
 
+## Archive and analysis
+
+`runs/<run>/archives/opponents.json` keeps one best valid representative per
+opponent case. Each generation JSON stores objective statistics for all
+seven cases and `opponent_scores.by_opponent` stores reporting summaries. The
+offline analysis writes `opponent_game_performance.csv` and one
+`game_performance_by_generation_<opponent>.png` per opponent. It also writes
+per-agent, per-opponent win-rate rows/plots and `match_game_performance.csv` for the
+small, semi-transparent single-match violin distributions on aggregate
+Game Performance plots. It also writes `aos_operator_statistics.csv` and an
+AOS probability plot.
+
+See [`../opponent-wise-lexicase.md`](../opponent-wise-lexicase.md) for
+the complete data and artifact contract.

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -10,13 +11,18 @@ from typing import Any
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import PercentFormatter
 
 from .loader import RunData
 
 
 OUTPUT_FILES = (
     "summary.md", "run_summary.json", "generation_metrics.csv",
-    "candidate_summary.csv", "objective_statistics.csv", "operator_statistics.csv",
+    "candidate_summary.csv", "agent_game_performance.csv", "agent_win_rate.csv",
+    "match_game_performance.csv", "opponent_game_performance.csv",
+    "aos_operator_statistics.csv",
+    "strategy_diversity.csv", "strategy_niches.csv",
+    "objective_statistics.csv", "operator_statistics.csv",
     "timing_statistics.csv", "error_statistics.csv",
 )
 
@@ -27,13 +33,27 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
     plots = output / "plots"
     plots.mkdir(exist_ok=True)
     candidates = _candidate_rows(data)
+    agent_game_rows = _agent_game_performance_rows(data)
+    agent_win_rate_rows = _agent_win_rate_rows(data)
+    match_game_rows = _match_game_performance_rows(data)
+    diversity_rows = _strategy_diversity_rows(data)
+    niche_rows = _strategy_niche_rows(data)
     objective_rows = _objective_rows(data)
     generation_rows = _generation_rows(data)
     operator_rows = _operator_rows(candidates)
     timing_rows = _timing_rows(data.timing)
     error_rows = _error_rows(data.errors, candidates)
+    opponent_game_rows = _opponent_game_performance_rows(data)
+    aos_rows = _aos_rows(data)
     _write_csv(output / "generation_metrics.csv", generation_rows)
     _write_csv(output / "candidate_summary.csv", candidates)
+    _write_csv(output / "agent_game_performance.csv", agent_game_rows)
+    _write_csv(output / "agent_win_rate.csv", agent_win_rate_rows)
+    _write_csv(output / "match_game_performance.csv", match_game_rows)
+    _write_csv(output / "opponent_game_performance.csv", opponent_game_rows)
+    _write_csv(output / "aos_operator_statistics.csv", aos_rows)
+    _write_csv(output / "strategy_diversity.csv", diversity_rows)
+    _write_csv(output / "strategy_niches.csv", niche_rows)
     _write_csv(output / "objective_statistics.csv", objective_rows)
     _write_csv(output / "operator_statistics.csv", operator_rows)
     _write_csv(output / "timing_statistics.csv", timing_rows)
@@ -44,6 +64,12 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
         "status": data.manifest.get("status"),
         "completed_generations": data.manifest.get("completed_generations", []),
         "candidate_count": len(candidates),
+        "agent_game_performance_count": len(agent_game_rows),
+        "agent_win_rate_count": len(agent_win_rate_rows),
+        "match_game_performance_count": len(match_game_rows),
+        "opponent_game_performance_count": len(opponent_game_rows),
+        "aos_operator_statistics_count": len(aos_rows),
+        "strategy_diversity_count": len(diversity_rows),
         "failure_count": sum(bool(row["failed"]) for row in candidates),
         "objectives": sorted({row["objective_id"] for row in objective_rows}),
     }
@@ -54,10 +80,15 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
         f"- Status: {summary['status']}\n"
         f"- Completed generations: {len(summary['completed_generations'])}\n"
         f"- Final candidates: {summary['candidate_count']}\n"
+        f"- Individual agent Game Performance rows: {summary['agent_game_performance_count']}\n"
+        f"- Individual agent win-rate rows: {summary['agent_win_rate_count']}\n"
+        f"- Single-match Game Performance rows: {summary['match_game_performance_count']}\n"
+        f"- Per-opponent Game Performance rows: {summary['opponent_game_performance_count']}\n"
+        f"- AOS operator statistics rows: {summary['aos_operator_statistics_count']}\n"
         f"- Failures: {summary['failure_count']}\n",
         encoding="utf-8",
     )
-    _plots(plots, generation_rows, objective_rows, operator_rows, timing_rows, error_rows, candidates)
+    _plots(plots, generation_rows, candidates, agent_game_rows, opponent_game_rows, match_game_rows, agent_win_rate_rows, aos_rows)
     return output
 
 
@@ -67,9 +98,38 @@ def _generation_rows(data: RunData) -> list[dict[str, Any]]:
         base = {
             "generation": item.get("generation"),
             "population_size": item.get("population_size"),
+            "light_rush_win_rate": item.get("light_rush_win_rate"),
+            "heavy_rush_win_rate": item.get("heavy_rush_win_rate"),
             "failure_count": item.get("failure_count"),
-            "pareto_front_size": item.get("pareto_front_size"),
+            "expected_match_count": item.get("expected_match_count"),
+            "completed_match_count": item.get("completed_match_count"),
+            "evaluation_maps": json.dumps(item.get("evaluation_maps") or [], ensure_ascii=False),
+            "rounds_per_map": item.get("rounds_per_map"),
+            "swap_player_sides": item.get("swap_player_sides"),
         }
+        aggregate = item.get("game_performance") or {}
+        quality = item.get("code_quality_diagnostic") or {}
+        base.update({
+            "game_performance_best": aggregate.get("best"),
+            "game_performance_mean": aggregate.get("mean"),
+            "game_performance_median": aggregate.get("median"),
+            "game_performance_worst": aggregate.get("worst"),
+            "code_quality_best": quality.get("best"),
+            "code_quality_mean": quality.get("mean"),
+            "code_quality_median": quality.get("median"),
+            "code_quality_worst": quality.get("worst"),
+        })
+        diversity = item.get("strategy_diversity") or {}
+        if isinstance(diversity, dict):
+            base.update({
+                "unique_niches": diversity.get("unique_niches"),
+                "dominant_niche": diversity.get("dominant_niche", "unknown"),
+                "dominant_niche_ratio": diversity.get("dominant_niche_ratio"),
+                "mean_strategy_distance": diversity.get("mean_strategy_distance"),
+                "new_niches": diversity.get("new_niches"),
+                "revisited_niches": diversity.get("revisited_niches"),
+                "niche_change_rate": diversity.get("niche_change_rate"),
+            })
         for objective_id, values in item.get("objectives", {}).items():
             for metric in ("best", "mean", "median", "worst"):
                 base[f"{objective_id}_{metric}"] = values.get(metric)
@@ -85,12 +145,259 @@ def _candidate_rows(data: RunData) -> list[dict[str, Any]]:
             "generation": item.get("generation"),
             "operator": item.get("operator"),
             "mutation_type": item.get("mutation_type"),
+            "strategy_niche": item.get("strategy_niche", "unknown"),
+            "mutation_intent": item.get("mutation_intent"),
+            "parent_strategy_niche": item.get("parent_strategy_niche"),
+            "niche_changed": item.get("niche_changed"),
             "status": item.get("status"),
             "failed": bool(item.get("failure_reason")) or item.get("status") == "failed",
+            "game_performance": (item.get("game_eval_result") or {}).get("game_performance"),
+            "code_quality": (item.get("code_quality_result") or {}).get("code_quality"),
             **{str(key): value for key, value in item.get("fitness_objectives", {}).items()},
         }
         for item in population if isinstance(item, dict)
     ]
+
+
+def _strategy_diversity_rows(data: RunData) -> list[dict[str, Any]]:
+    """Flatten optional generation diversity metadata for legacy-safe CSV output."""
+
+    rows: list[dict[str, Any]] = []
+    for item in data.generation_metrics:
+        diversity = item.get("strategy_diversity") or {}
+        if not isinstance(diversity, dict):
+            diversity = {}
+        intent_rates = diversity.get("intent_niche_change_rates") or {}
+        if not isinstance(intent_rates, dict):
+            intent_rates = {}
+        rows.append({
+            "generation": item.get("generation"),
+            "unique_niches": diversity.get("unique_niches", 0),
+            "dominant_niche": diversity.get("dominant_niche", "unknown"),
+            "dominant_niche_count": diversity.get("dominant_niche_count", 0),
+            "dominant_niche_ratio": diversity.get("dominant_niche_ratio", 0.0),
+            "mean_strategy_distance": diversity.get("mean_strategy_distance", 0.0),
+            "new_niches": diversity.get("new_niches", 0),
+            "revisited_niches": diversity.get("revisited_niches", 0),
+            "niche_change_rate": diversity.get("niche_change_rate"),
+            "known_signature_count": diversity.get("known_signature_count", 0),
+            "unknown_signature_count": diversity.get("unknown_signature_count", 0),
+            **{f"{intent.lower()}_niche_change_rate": intent_rates.get(intent) for intent in ("REFINE", "COUNTER", "STRUCTURAL", "ALTERNATIVE")},
+        })
+    return rows
+
+
+def _strategy_niche_rows(data: RunData) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in data.generation_metrics:
+        generation = item.get("generation")
+        diversity = item.get("strategy_diversity") or {}
+        distribution = diversity.get("niche_distribution") if isinstance(diversity, dict) else {}
+        if not isinstance(distribution, dict):
+            continue
+        total = sum(int(value) for value in distribution.values() if isinstance(value, (int, float)))
+        for niche, count in sorted(distribution.items()):
+            numeric_count = int(count)
+            rows.append({
+                "generation": generation,
+                "strategy_niche": niche,
+                "candidate_count": numeric_count,
+                "population_ratio": numeric_count / total if total else 0.0,
+            })
+    return rows
+
+
+def _agent_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
+    """Return one Game Performance row for every agent in each population snapshot."""
+
+    snapshots = data.generations
+    if not snapshots and data.final_population:
+        snapshots = [data.final_population]
+    rows: list[dict[str, Any]] = []
+    for snapshot in snapshots:
+        snapshot_generation = snapshot.get("generation")
+        population = snapshot.get("population", [])
+        if not isinstance(population, list):
+            continue
+        for item in population:
+            if not isinstance(item, dict):
+                continue
+            objectives = item.get("fitness_objectives") or item.get("objectives") or {}
+            game = item.get("game_eval_result") or {}
+            diagnostics = item.get("code_quality_result") or {}
+            if not isinstance(objectives, dict):
+                objectives = {}
+            rows.append({
+                "generation": item.get("generation", snapshot_generation),
+                "candidate_id": item.get("candidate_id") or item.get("id"),
+                "status": item.get("status"),
+                "operator": item.get("operator"),
+                "mutation_type": item.get("mutation_type"),
+                "game_performance": game.get("game_performance", objectives.get("game_performance")),
+                "win_rate": game.get("win_rate"),
+                "code_quality": diagnostics.get("code_quality", objectives.get("code_quality")),
+                "failed": bool(item.get("failure_reason")) or item.get("status") == "failed",
+            })
+    return sorted(rows, key=lambda item: (item.get("generation", -1), str(item.get("candidate_id") or "")))
+
+
+def _agent_win_rate_rows(data: RunData) -> list[dict[str, Any]]:
+    """Return one win-rate row per agent, generation, and opponent."""
+
+    snapshots = data.generations
+    if not snapshots and data.final_population:
+        snapshots = [data.final_population]
+    rows: list[dict[str, Any]] = []
+    for snapshot in snapshots:
+        snapshot_generation = snapshot.get("generation")
+        population = snapshot.get("population", [])
+        if not isinstance(population, list):
+            continue
+        for candidate in population:
+            if not isinstance(candidate, dict):
+                continue
+            game = candidate.get("game_eval_result") or {}
+            for opponent in game.get("opponent_results") or []:
+                if not isinstance(opponent, dict):
+                    continue
+                expected = opponent.get("expected_match_count")
+                if expected is None:
+                    expected = opponent.get("match_count")
+                if expected is None:
+                    expected = len(opponent.get("match_scores") or [])
+                completed = opponent.get("completed_match_count")
+                missing = opponent.get("missing_match_count", 0)
+                complete = bool(expected) and (completed is None or completed >= expected) and not missing
+                wins = int(opponent.get("wins") or 0)
+                rows.append({
+                    "generation": candidate.get("generation", snapshot_generation),
+                    "candidate_id": candidate.get("candidate_id") or candidate.get("id"),
+                    "opponent_id": str(opponent.get("opponent_id") or "unknown"),
+                    "status": candidate.get("status"),
+                    "wins": wins,
+                    "draws": int(opponent.get("draws") or 0),
+                    "losses": int(opponent.get("losses") or 0),
+                    "match_count": int(expected or 0),
+                    "win_rate": round(wins / expected, 6) if complete else 0.0,
+                    "failed": bool(candidate.get("failure_reason"))
+                    or candidate.get("status") == "failed"
+                    or opponent.get("status") == "failed"
+                    or bool(opponent.get("failure")),
+                })
+    return sorted(rows, key=lambda item: (
+        item.get("generation", -1), str(item.get("opponent_id") or ""),
+        str(item.get("candidate_id") or ""),
+    ))
+
+
+def _match_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
+    """Flatten canonical per-match scores retained in opponent summaries."""
+
+    rows: list[dict[str, Any]] = []
+    snapshots = data.generations
+    if not snapshots and data.final_population:
+        snapshots = [data.final_population]
+    for snapshot in snapshots:
+        snapshot_generation = snapshot.get("generation")
+        population = snapshot.get("population", [])
+        if not isinstance(population, list):
+            continue
+        for candidate in population:
+            if not isinstance(candidate, dict):
+                continue
+            game = candidate.get("game_eval_result") or {}
+            for opponent in game.get("opponent_results") or []:
+                if not isinstance(opponent, dict):
+                    continue
+                for match_index, score in enumerate(opponent.get("match_scores") or []):
+                    if isinstance(score, (int, float)) and not isinstance(score, bool):
+                        rows.append({
+                            "generation": candidate.get("generation", snapshot_generation),
+                            "candidate_id": candidate.get("candidate_id") or candidate.get("id"),
+                            "opponent_id": opponent.get("opponent_id"),
+                            "match_index": match_index,
+                            "game_performance": float(score),
+                        })
+    return sorted(rows, key=lambda item: (
+        item.get("generation", -1), str(item.get("candidate_id") or ""),
+        str(item.get("opponent_id") or ""), item.get("match_index", -1),
+    ))
+
+
+def _opponent_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
+    """Flatten generation-level mean Game Performance for each opponent."""
+
+    rows: list[dict[str, Any]] = []
+    for item in data.generation_metrics:
+        generation = item.get("generation")
+        opponent_scores = item.get("opponent_scores") or {}
+        by_opponent = opponent_scores.get("by_opponent") if isinstance(opponent_scores, dict) else {}
+        if not isinstance(by_opponent, dict):
+            continue
+        for opponent_id, summary in by_opponent.items():
+            if not isinstance(summary, dict):
+                continue
+            game_performance = summary.get("game_performance", summary.get("mean_score"))
+            if game_performance is None:
+                continue
+            rows.append({
+                "generation": generation,
+                "opponent_id": str(opponent_id),
+                "game_performance": game_performance,
+            })
+    return sorted(rows, key=lambda item: (item.get("generation", -1), item["opponent_id"]))
+
+
+def _aos_rows(data: RunData) -> list[dict[str, Any]]:
+    """Flatten generation-level AOS usage, reward, credit, and probability."""
+
+    rows: list[dict[str, Any]] = []
+    for item in data.generation_metrics:
+        aos = item.get("aos") or {}
+        operators = aos.get("operators") if isinstance(aos, dict) else {}
+        transition_counts = aos.get("transition_counts") if isinstance(aos, dict) else {}
+        if not isinstance(operators, dict):
+            continue
+        if not isinstance(transition_counts, dict):
+            transition_counts = {}
+        for operator, stats in sorted(operators.items()):
+            if not isinstance(stats, dict):
+                continue
+            head_to_head = stats.get("head_to_head") or {}
+            if not isinstance(head_to_head, dict):
+                head_to_head = {}
+            rows.append({
+                "generation": item.get("generation"),
+                "mode": aos.get("mode"),
+                "reward_source": aos.get("reward_source"),
+                "operator": operator,
+                "usage_count": stats.get("usage_count", 0),
+                "reward_count": stats.get("reward_count", 0),
+                "mean_reward": stats.get("mean_reward"),
+                "operator_quality_before": stats.get("operator_quality_before"),
+                "operator_quality_after": stats.get("operator_quality_after", stats.get("recent_credit")),
+                "recent_credit": stats.get("recent_credit"),
+                "selection_probability_before": stats.get("selection_probability_before"),
+                "selection_probability": stats.get("selection_probability"),
+                "cumulative_usage_count": stats.get("cumulative_usage_count", 0),
+                "cumulative_reward_count": stats.get("cumulative_reward_count", 0),
+                "cumulative_mean_reward": stats.get("cumulative_mean_reward"),
+                "parent_vs_offspring_wins": head_to_head.get("wins", 0),
+                "parent_vs_offspring_draws": head_to_head.get("draws", 0),
+                "parent_vs_offspring_losses": head_to_head.get("losses", 0),
+                "parent_vs_offspring_errors": head_to_head.get("errors", 0),
+                "parent_vs_offspring_total_matches": head_to_head.get("total_matches", 0),
+                **{
+                    transition: transition_counts.get(transition, 0)
+                    for transition in (
+                        "failed_parent_to_runnable_child",
+                        "runnable_parent_to_failed_child",
+                        "failed_parent_to_failed_child",
+                        "runnable_parent_to_runnable_child",
+                    )
+                },
+            })
+    return sorted(rows, key=lambda item: (item.get("generation", -1), item["operator"]))
 
 
 def _objective_rows(data: RunData) -> list[dict[str, Any]]:
@@ -147,45 +454,221 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def _plots(path: Path, generation_rows, objective_rows, operator_rows, timing_rows, error_rows, candidates) -> None:
-    for objective in sorted({row.get("objective_id") for row in objective_rows if row.get("objective_id")}):
-        rows = [row for row in objective_rows if row.get("objective_id") == objective]
-        _line_plot(path / f"{objective}_by_generation.png", rows, "generation", ("best", "mean", "median", "worst"), objective)
-    _line_plot(path / "population_failures.png", generation_rows, "generation", ("population_size", "failure_count"), "Population and failures")
-    _line_plot(path / "pareto_front_size.png", generation_rows, "generation", ("pareto_front_size",), "Pareto-front size")
-    _bar_plot(path / "operator_usage.png", operator_rows, "operator", "usage_count", "Operator usage")
-    _bar_plot(path / "operator_success_rate.png", operator_rows, "operator", "success_rate", "Operator success rate")
-    _bar_plot(path / "errors_by_stage.png", error_rows, "stage", "count", "Errors by stage")
-    _line_plot(path / "timing_by_generation.png", timing_rows, "generation", ("total_seconds",), "Timing by generation")
-    _bar_plot(path / "timing_by_operation.png", timing_rows, "operation", "total_seconds", "Timing by operation")
-    _line_plot(path / "errors_by_generation.png", error_rows, "generation", ("count",), "Errors by generation")
+def _plots(path: Path, generation_rows, candidates, agent_game_rows, opponent_game_rows, match_game_rows, agent_win_rate_rows, aos_rows) -> None:
+    """Write only the compact plot set used for current run comparison."""
 
-    if len(candidates) > 1 and {"game_performance", "code_quality"} <= set(candidates[0]):
-        plt.figure()
-        plt.scatter([row.get("game_performance") for row in candidates], [row.get("code_quality") for row in candidates])
-        plt.xlabel("game_performance"); plt.ylabel("code_quality"); plt.tight_layout()
-        plt.savefig(path / "final_pareto_front.png"); plt.close()
-    elif candidates:
-        objective = next((key for key in candidates[0] if key not in {"candidate_id", "generation", "operator", "mutation_type", "status", "failed"}), None)
-        if objective:
-            ranked = sorted(candidates, key=lambda row: row.get(objective, float("-inf")), reverse=True)
-            _bar_plot(path / "final_ranking.png", ranked, "candidate_id", objective, "Final ranking")
+    for old_plot in path.glob("*.png"):
+        old_plot.unlink()
+    _line_plot(path / "code_quality_by_generation.png", generation_rows, "generation", ("code_quality_best", "code_quality_mean", "code_quality_median", "code_quality_worst"), "Code Quality diagnostic by generation")
+    _line_plot(
+        path / "game_performance_by_generation.png", generation_rows, "generation",
+        ("game_performance_best", "game_performance_mean", "game_performance_median", "game_performance_worst"),
+        "Aggregate Game Performance by generation", distribution_rows=match_game_rows,
+        distribution_y="game_performance", neutral_line=True,
+    )
+    _agent_game_performance_plot(path / "agent_game_performance.png", agent_game_rows)
+    _agent_win_rate_plots(path, agent_win_rate_rows)
+    _aos_plot(path / "aos_operator_probabilities.png", aos_rows)
+    for opponent_id in sorted({row["opponent_id"] for row in opponent_game_rows}):
+        rows = [row for row in opponent_game_rows if row["opponent_id"] == opponent_id]
+        match_rows = [row for row in match_game_rows if row.get("opponent_id") == opponent_id]
+        filename_id = re.sub(r"[^A-Za-z0-9_-]+", "_", opponent_id).strip("_") or "unknown"
+        _line_plot(
+            path / f"game_performance_by_generation_{filename_id}.png",
+            rows,
+            "generation",
+            ("game_performance",),
+            f"Game Performance vs {opponent_id}", distribution_rows=match_rows,
+            distribution_y="game_performance", neutral_line=True,
+        )
 
 
-def _line_plot(path: Path, rows, x, ys, title) -> None:
+def _line_plot(
+    path: Path,
+    rows,
+    x,
+    ys,
+    title,
+    *,
+    distribution_rows=None,
+    distribution_y: str | None = None,
+    neutral_line: bool = False,
+) -> None:
     if not rows:
         return
-    plt.figure()
+    plotted = []
     for y in ys:
         points = [(row.get(x), row.get(y)) for row in rows if row.get(x) is not None and row.get(y) is not None]
         if points:
-            plt.plot([item[0] for item in points], [item[1] for item in points], marker="o", label=y)
-    plt.title(title); plt.legend(); plt.tight_layout(); plt.savefig(path); plt.close()
+            plotted.append((y, points))
+    if not plotted:
+        return
+    plt.figure()
+    if distribution_rows and distribution_y:
+        _match_violin_overlay(distribution_rows, x=x, y=distribution_y)
+    for y, points in plotted:
+        plt.plot([item[0] for item in points], [item[1] for item in points], marker="o", label=y)
+    if neutral_line:
+        _add_aggregate_neutral_line()
+    plt.title(title)
+    if plt.gca().get_legend_handles_labels()[0]:
+        plt.legend()
+    plt.tight_layout(); plt.savefig(path); plt.close()
 
 
-def _bar_plot(path: Path, rows, x, y, title) -> None:
-    points = [(str(row.get(x)), row.get(y)) for row in rows if row.get(y) is not None]
+def _match_violin_overlay(rows, *, x: str, y: str) -> None:
+    """Draw narrow per-generation match distributions behind aggregate lines."""
+
+    grouped: dict[Any, list[float]] = defaultdict(list)
+    for row in rows:
+        position = row.get(x)
+        score = row.get(y)
+        if position is None or not isinstance(score, (int, float)):
+            continue
+        grouped[position].append(float(score))
+
+    distributions: list[list[float]] = []
+    positions: list[Any] = []
+    degenerate: list[tuple[Any, float]] = []
+    for position in sorted(grouped):
+        values = grouped[position]
+        if len(values) >= 2 and min(values) != max(values):
+            positions.append(position)
+            distributions.append(values)
+        elif values:
+            degenerate.append((position, values[0]))
+
+    if distributions:
+        violin = plt.violinplot(
+            distributions,
+            positions=positions,
+            widths=0.42,
+            showmeans=False,
+            showmedians=True,
+            showextrema=False,
+        )
+        for index, body in enumerate(violin["bodies"]):
+            body.set_facecolor("#9ecae1")
+            body.set_edgecolor("#4a90b8")
+            body.set_alpha(0.32)
+            body.set_linewidth(0.8)
+            body.set_zorder(1)
+            if index == 0:
+                body.set_label("Single-match distribution")
+        medians = violin.get("cmedians")
+        if medians is not None:
+            medians.set_color("#39789d")
+            medians.set_linewidth(1.0)
+            medians.set_alpha(0.8)
+            medians.set_zorder(2)
+
+    for index, (position, value) in enumerate(degenerate):
+        plt.hlines(
+            value,
+            position - 0.10,
+            position + 0.10,
+            colors="#4a90b8",
+            linewidth=1.4,
+            alpha=0.65,
+            zorder=2,
+            label=(
+                "Degenerate match distribution"
+                if index == 0 and not distributions
+                else None
+            ),
+        )
+
+
+def _add_aggregate_neutral_line() -> None:
+    """Mark zero as the neutral reference for aggregate scores."""
+
+    plt.axhline(0.0, color="#666666", linestyle="--", linewidth=1.0, alpha=0.75, label="Aggregate neutral (0)")
+
+
+def _agent_game_performance_plot(path: Path, rows: list[dict[str, Any]]) -> None:
+    points = [
+        item for item in rows
+        if item.get("generation") is not None
+        and item.get("game_performance") is not None
+        and not item.get("failed")
+    ]
     if not points:
         return
-    plt.figure(); plt.bar([item[0] for item in points], [item[1] for item in points])
-    plt.title(title); plt.xticks(rotation=30, ha="right"); plt.tight_layout(); plt.savefig(path); plt.close()
+    plt.figure(figsize=(10, 5))
+    plt.scatter(
+        [item["generation"] for item in points],
+        [item["game_performance"] for item in points],
+        s=18,
+        alpha=0.65,
+    )
+    plt.xlabel("Generation")
+    plt.ylabel("Game Performance")
+    plt.title("Individual agent Game Performance")
+    _add_aggregate_neutral_line()
+    plt.grid(True, alpha=0.2)
+    plt.tight_layout()
+    plt.savefig(path)
+    plt.close()
+
+
+def _agent_win_rate_plots(path: Path, rows: list[dict[str, Any]]) -> None:
+    for opponent_id in sorted({row["opponent_id"] for row in rows}):
+        opponent_rows = [row for row in rows if row["opponent_id"] == opponent_id]
+        filename_id = re.sub(r"[^A-Za-z0-9_-]+", "_", opponent_id).strip("_") or "unknown"
+        _win_rate_plot(
+            path / f"win_rate_by_generation_{filename_id}.png",
+            opponent_rows,
+            opponent_id,
+        )
+
+
+def _aos_plot(path: Path, rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        return
+    plt.figure(figsize=(10, 5))
+    for operator in sorted({row["operator"] for row in rows}):
+        points = [row for row in rows if row["operator"] == operator and row.get("selection_probability") is not None]
+        if points:
+            plt.plot(
+                [row["generation"] for row in points],
+                [row["selection_probability"] for row in points],
+                marker="o", label=operator,
+            )
+    plt.xlabel("Generation")
+    plt.ylabel("Selection probability")
+    plt.ylim(0.0, 1.0)
+    modes = sorted({str(row.get("mode")) for row in rows if row.get("mode")})
+    mode_label = ", ".join(modes) if modes else "unknown"
+    prefix = "Reflection operator" if modes == ["static"] else "AOS operator"
+    plt.title(f"{prefix} probabilities by generation — {mode_label}")
+    plt.grid(True, alpha=0.2)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(path)
+    plt.close()
+
+
+def _win_rate_plot(path: Path, rows: list[dict[str, Any]], opponent_id: str) -> None:
+    points = [
+        item for item in rows
+        if item.get("generation") is not None
+        and item.get("win_rate") is not None
+        and not item.get("failed")
+    ]
+    if not points:
+        return
+    plt.figure(figsize=(10, 5))
+    plt.scatter(
+        [item["generation"] for item in points],
+        [item["win_rate"] for item in points],
+        s=18, alpha=0.65,
+    )
+    plt.xlabel("Generation")
+    plt.ylabel("Win rate")
+    plt.gca().yaxis.set_major_formatter(PercentFormatter(1.0))
+    plt.ylim(0.0, 1.0)
+    plt.title(f"Individual agent win rate vs {opponent_id}")
+    plt.grid(True, alpha=0.2)
+    plt.tight_layout()
+    plt.savefig(path)
+    plt.close()

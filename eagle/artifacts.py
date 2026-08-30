@@ -1,39 +1,31 @@
-﻿"""Run artifact writers for EAGLE searches."""
+"""Run artifact writers for EAGLE searches."""
 
 from __future__ import annotations
 
-import json
 import hashlib
-import subprocess
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import yaml
+
 from evaluation.compiler import CompileResult
-from evaluation.code_quality import analyze_compilation
-from evaluation.nsga2_objectives import OBJECTIVE_DIRECTIONS
-from evaluation.microrts_runner import DEFAULT_MAP_PATH, INTEGRATION_CHECK_NAMES, IntegrationResult, MatchResult
+from evaluation.code_quality import OBJECTIVE_FORMULA_VERSION, analyze_compilation
+from evaluation.objectives import OBJECTIVE_DIRECTIONS
+from evaluation.microrts_runner import INTEGRATION_CHECK_NAMES, IntegrationResult
+from evaluation.runtime_evaluation import DEFAULT_MAP_PATH, MatchResult
 from generation.java_agent_generator import ValidationResult
 
-from .candidate import Candidate
-from .opponents import EVALUATION_ROSTER
-from .llm_profiles import LLMClient
-from .prompts import DEFAULT_PROMPT_TEMPLATE_PATH, load_prompt_templates
+from .candidate import Candidate, compact_candidate_metadata
 from .config import ExperimentConfig
 
 if TYPE_CHECKING:
-    from .evaluation import CandidateEvaluation
+    from .evaluation import CandidateEvaluation, GenerationAttemptResult
 
 
-ARTIFACT_SCHEMA_VERSION = "phase4-v1"
-OBJECTIVE_FORMULA_VERSION = "eagle-objectives-phase4-v1"
-
-
-def append_result(path: Path, evaluation: CandidateEvaluation) -> None:
-    """Append one evaluated candidate record to results.jsonl."""
-
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(evaluation_to_dict(evaluation), ensure_ascii=False))
-        handle.write("\n")
+# Writers are grouped by lifecycle boundary: genotype inputs first,
+# stage/evaluation evidence next, and run summaries/configuration last.
+ARTIFACT_SCHEMA_VERSION = "phase4-v4"
 
 
 def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
@@ -42,23 +34,56 @@ def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
     candidate_dir = candidates_dir / candidate.id
     genotype_dir = candidate_dir / "genotype"
     genotype_dir.mkdir(parents=True, exist_ok=True)
-    (genotype_dir / "strategy_prompt.txt").write_text(candidate.strategy_prompt, encoding="utf-8")
-    (genotype_dir / "previous_code.java").write_text(candidate.previous_code, encoding="utf-8")
-    (genotype_dir / "generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
+    (genotype_dir / "policy_prompt.txt").write_text(candidate.strategy_prompt, encoding="utf-8")
+    write_json(
+        genotype_dir / "strategy_signature.json",
+        {
+            "schema_version": "eagle-strategy-diversity-v1",
+            "strategy_signature": dict(candidate.strategy_signature),
+            "strategy_niche": candidate.strategy_niche,
+            "mutation_intent": candidate.mutation_intent,
+            "parent_strategy_niche": candidate.parent_strategy_niche,
+            "niche_changed": candidate.niche_changed,
+        },
+    )
+    (genotype_dir / "code_generation_prompt.txt").write_text(candidate.generation_prompt, encoding="utf-8")
+    if candidate.inherited_java or candidate.java_parent_id is not None:
+        (genotype_dir / "inherited_java.java").write_text(candidate.inherited_java, encoding="utf-8")
+    reflection_dir = candidate_dir / "mutation" / "strategy_reflection"
+    if (reflection_dir / "metadata.json").is_file():
+        # ``Candidate.generation_input`` supplies the strategy placeholder with
+        # this stripped value.  Record it at the last persistence boundary
+        # before the Generator call, including when Reflection fell back to the
+        # inherited strategy after a role failure.
+        (reflection_dir / "generator_strategy_input.txt").write_text(
+            candidate.strategy_prompt.strip(),
+            encoding="utf-8",
+        )
     write_json(candidate_dir / "lineage.json", candidate.lineage_to_json_dict())
     if candidate.operator in {"crossover", "crossover+mutation"}:
         crossover_dir = candidate_dir / "crossover"
         crossover_dir.mkdir(exist_ok=True)
-        write_json(
-            crossover_dir / "provenance.json",
-            {
+        provenance = {
                 "lineage_schema_version": candidate.lineage_to_json_dict()["lineage_schema_version"],
                 "candidate_id": candidate.id,
                 "strategy_parent_id": candidate.strategy_parent_id,
-                "previous_code_parent_id": candidate.previous_code_parent_id,
                 "generation_prompt_parent_id": candidate.generation_prompt_parent_id,
-            },
-        )
+        }
+        if candidate.inherited_java or candidate.java_parent_id is not None:
+            provenance["java_parent_id"] = candidate.java_parent_id
+        write_json(crossover_dir / "provenance.json", provenance)
+
+
+def write_aos_reward_artifact(candidates_dir: Path, reward: dict) -> None:
+    """Persist post-evaluation AOS credit beside the mutated candidate."""
+
+    candidate_id = str(reward.get("offspring_id") or "")
+    if not candidate_id:
+        return
+    write_json(candidates_dir / candidate_id / "aos" / "reward.json", {
+        "schema_version": "eagle-aos-reward-v3",
+        **reward,
+    })
 
 
 def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluation) -> None:
@@ -67,11 +92,32 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     candidate_dir = candidates_dir / evaluation.candidate.id
     candidate_dir.mkdir(parents=True, exist_ok=True)
     write_candidate_inputs(candidates_dir, evaluation.candidate)
+    initial_seed_source = (evaluation.generation_timing or {}).get("operation") == "initial_java_seed"
+    if not initial_seed_source:
+        for attempt in evaluation.generation_attempts:
+            write_generation_attempt_artifacts(
+                candidate_dir,
+                attempt,
+                initial_seed_source=False,
+            )
+        write_generation_repair_ledger(
+            candidate_dir,
+            evaluation.generation_attempts,
+            initial_seed_source=False,
+        )
     _write_generation_artifacts(candidate_dir, evaluation)
     validation_payload = validation_to_dict(evaluation.result.validation_result)
     if validation_payload is None:
         validation_payload = {"status": "blocked", "failure_stage": evaluation.result.failure_stage, "failure_reason": evaluation.result.failure_reason}
     validation_payload["timing"] = evaluation.candidate.timing.get("validation")
+    generation_timing = evaluation.generation_timing or {}
+    representative_attempt_number = generation_timing.get("selected_attempt") or generation_timing.get("final_attempt")
+    representative_attempt_ref = (
+        None
+        if initial_seed_source or representative_attempt_number is None
+        else f"generation/attempts/attempt_{int(representative_attempt_number):03d}"
+    )
+    validation_payload["attempt_ref"] = representative_attempt_ref
     write_json(candidate_dir / "validation" / "validation_result.json", validation_payload)
     compilation_dir = candidate_dir / "compilation"
     compilation_dir.mkdir(parents=True, exist_ok=True)
@@ -83,6 +129,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
             evaluation.result.failure_reason or "Compilation was not run because an earlier stage failed.",
         )
     compilation_payload["timing"] = evaluation.candidate.timing.get("compilation")
+    compilation_payload["attempt_ref"] = representative_attempt_ref
     write_json(compilation_dir / "compilation_result.json", compilation_payload)
     (compilation_dir / "command.txt").write_text("" if compilation is None else " ".join(compilation.command), encoding="utf-8")
     (compilation_dir / "stdout.txt").write_text("" if compilation is None else compilation.stdout, encoding="utf-8")
@@ -102,20 +149,14 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     (integration_dir / "stderr.txt").write_text("" if integration is None else integration.stderr, encoding="utf-8")
     mutation_record = evaluation.candidate.metadata.get("mutation")
     if mutation_record is not None:
-        write_json(candidate_dir / "mutation" / "metadata.json", mutation_record)
-        _write_mutation_artifacts(candidate_dir, mutation_record)
+        mutation_type = str(mutation_record.get("type") or evaluation.candidate.mutation_type or "unknown")
+        mutation_path = candidate_dir / "mutation" / f"{mutation_type}_reflection" / "metadata.json"
+        if not mutation_path.exists():
+            _write_mutation_artifacts(candidate_dir, mutation_record)
+            write_json(mutation_path, _mutation_metadata_record(mutation_record))
     write_json(candidate_dir / "timing.json", evaluation.candidate.timing)
     _write_evaluation_artifacts(candidate_dir, evaluation)
-    write_json(candidate_dir / "prompt.json", {
-        "strategy_description": evaluation.candidate.strategy_prompt,
-        "generation_guidance": evaluation.candidate.generation_prompt,
-        "previous_complete_java": evaluation.candidate.previous_code,
-    })
-    compile_log = "" if evaluation.compile_result is None else evaluation.compile_result.stdout + evaluation.compile_result.stderr
-    (candidate_dir / "compile.log").write_text(compile_log, encoding="utf-8")
-
-    write_json(candidate_dir / "individual.json", evaluation.candidate.to_json_dict())
-    write_json(candidate_dir / "candidate_result.json", candidate_result_to_dict(evaluation.result))
+    write_candidate_snapshot(candidates_dir, evaluation.candidate)
 
 
 def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvaluation) -> None:
@@ -127,14 +168,19 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     if alignment is None:
         request = ""
         raw_response = ""
+        blank_policy = not evaluation.candidate.strategy_prompt.strip()
         alignment_payload = {
-            "status": "blocked",
+            "status": "not_applicable" if blank_policy else "blocked",
             "request": request,
             "raw_response": raw_response,
             "parsed_response": None,
-            "score": 0.0,
-            "reason": "Strategy Alignment runs only after ten valid matches.",
-            "error": evaluation.result.failure_reason,
+            "score": None if blank_policy else 0.0,
+            "reason": (
+                "Strategy Alignment is not applicable to an empty policy prompt."
+                if blank_policy
+                else "Strategy Alignment runs only after the complete evaluation matrix."
+            ),
+            "error": None if blank_policy else evaluation.result.failure_reason,
             "attempts": [],
         }
     else:
@@ -152,7 +198,7 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         {
             "status": "blocked",
             "function_score": 0,
-            "reason": "Function Capability runs only after ten valid matches.",
+            "reason": "Function Capability runs only after the complete evaluation matrix.",
             "evidence": {},
         }
         if capability is None
@@ -163,42 +209,35 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
         "objective_formula_version": OBJECTIVE_FORMULA_VERSION,
         "candidate_id": evaluation.candidate.id,
-        "game_performance": evaluation.candidate.fitness_objectives["game_performance"],
-        "code_quality": evaluation.candidate.fitness_objectives["code_quality"],
-        "opponent_scores": list(game_payload.get("opponent_scores") or []),
+        "game_performance": game_payload.get("game_performance"),
+        "opponent_scores": (
+            dict(game_payload.get("opponent_scores"))
+            if isinstance(game_payload.get("opponent_scores"), dict)
+            else {
+                str(item.get("opponent_id") or "unknown"): float(item.get("score") or 0.0)
+                for item in (game_payload.get("opponent_results") or [])
+                if isinstance(item, dict)
+            }
+        ),
         "opponent_results": list(game_payload.get("opponent_results") or []),
-        "objective_names": ["game_performance", "code_quality"],
+        "objective_names": list(evaluation.candidate.fitness_objectives),
     }
     write_json(evaluation_dir / "game_performance.json", game_payload)
-    write_json(evaluation_dir / "matches.json", [match_to_dict(result) for result in evaluation.match_results])
+    write_json(
+        evaluation_dir / "commentary_aggregation.json",
+        game_payload.get("commentary_aggregation") or {
+            "schema_version": "candidate-commentary-aggregation-v1",
+            "candidate_id": evaluation.candidate.id,
+            "match_count": len(evaluation.match_results),
+            "commented_match_count": 0,
+            "failed_commentary_count": 0,
+            "opponent_summaries": [],
+            "unavailable_commentary": [{"reason": "commentary not run"}],
+        },
+    )
     write_json(evaluation_dir / "function_capability.json", capability_payload)
     write_json(evaluation_dir / "code_quality.json", code_quality_payload)
     write_json(evaluation_dir / "objectives.json", objectives_payload)
-    write_json(
-        evaluation_dir / "summary.json",
-        {
-            "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
-            "objective_formula_version": OBJECTIVE_FORMULA_VERSION,
-            "candidate_id": evaluation.candidate.id,
-            "status": evaluation.candidate.status,
-            "failure_stage": evaluation.result.failure_stage,
-            "failure_category": evaluation.result.failure_category,
-            "failure_reason": evaluation.result.failure_reason,
-            "completed_match_count": sum(result.ok for result in evaluation.match_results),
-            "match_count": len(evaluation.match_results),
-            "opponent_scores": list(game_payload.get("opponent_scores") or []),
-            "opponent_results": list(game_payload.get("opponent_results") or []),
-            "objectives": objectives_payload,
-            "artifacts": {
-                "game_performance": "evaluation/game_performance.json",
-                "function_capability": "evaluation/function_capability.json",
-                "strategy_alignment": "strategy_alignment/result.json",
-                "code_quality": "evaluation/code_quality.json",
-                "objectives": "evaluation/objectives.json",
-                "timing": "timing.json",
-            },
-        },
-    )
     if evaluation.result.failure_stage == "runtime":
         write_json(
             evaluation_dir / "runtime_failure.json",
@@ -209,6 +248,11 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
                 "failure_reason": evaluation.result.failure_reason,
                 "completed_match_count": sum(result.ok for result in evaluation.match_results),
                 "attempted_match_count": len(evaluation.match_results),
+                "expected_match_count": evaluation.game_metrics.expected_match_count if evaluation.game_metrics else None,
+                "missing_match_count": (
+                    max(0, evaluation.game_metrics.expected_match_count - sum(result.ok for result in evaluation.match_results))
+                    if evaluation.game_metrics else None
+                ),
                 "retained_matches": [match_to_dict(result) for result in evaluation.match_results],
             },
         )
@@ -217,7 +261,8 @@ def _write_evaluation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
 def _write_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> None:
     """Persist reflector and rewriter evidence from the canonical mutation record."""
 
-    mutation_dir = candidate_dir / "mutation"
+    mutation_type = str(mutation_record.get("type") or "unknown")
+    mutation_dir = candidate_dir / "mutation" / f"{mutation_type}_reflection"
     if "evidence" in mutation_record:
         write_json(mutation_dir / "reflection_context.json", mutation_record["evidence"])
     reflection = mutation_record.get("reflection") or {}
@@ -236,128 +281,297 @@ def _write_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> Non
         (mutation_dir / "rewriter_response_raw.txt").write_text(
             str(rewrite.get("raw_response") or ""), encoding="utf-8"
         )
+    for prefix, rewrite in (("strategy_", mutation_record.get("strategy_rewrite")), ("code_", mutation_record.get("generation_rewrite"))):
+        if isinstance(rewrite, dict):
+            (mutation_dir / f"{prefix}rewriter_request.txt").write_text(
+                str(rewrite.get("request") or ""), encoding="utf-8"
+            )
+            (mutation_dir / f"{prefix}rewriter_response_raw.txt").write_text(
+                str(rewrite.get("raw_response") or ""), encoding="utf-8"
+            )
+
+
+def _mutation_metadata_record(record: dict) -> dict:
+    payload = dict(record)
+    for key in ("reflection", "rewrite", "strategy_rewrite", "generation_rewrite"):
+        stage = payload.get(key)
+        if isinstance(stage, dict):
+            payload[key] = {
+                name: value
+                for name, value in stage.items()
+                if name not in {"request", "raw_response"}
+            }
+    return payload
+
+
+def write_generation_attempt_artifacts(
+    candidate_dir: Path,
+    attempt: "GenerationAttemptResult",
+    *,
+    initial_seed_source: bool,
+) -> None:
+    """Persist one decoder attempt without overwriting sibling evidence."""
+
+    attempt_dir = (
+        candidate_dir
+        / "generation"
+        / "attempts"
+        / f"attempt_{attempt.attempt:03d}"
+    )
+    attempt_dir.mkdir(parents=True, exist_ok=True)
+    generation = attempt.generation
+    (attempt_dir / "request.txt").write_text(
+        "" if initial_seed_source else attempt.request,
+        encoding="utf-8",
+    )
+    (attempt_dir / "response_raw.txt").write_text(
+        "" if initial_seed_source else generation.raw_llm_output,
+        encoding="utf-8",
+    )
+    (attempt_dir / "extracted_candidate.java").write_text(
+        generation.extracted_code,
+        encoding="utf-8",
+    )
+    (attempt_dir / "normalized_candidate.java").write_text(
+        generation.assembled_java,
+        encoding="utf-8",
+    )
+    validation_dir = attempt_dir / "validation"
+    validation_payload = validation_to_dict(generation.validation_result) or {
+        "status": "blocked",
+        "failure_reason": generation.failure_reason,
+    }
+    validation_payload["timing"] = generation.validation_timing
+    write_json(validation_dir / "validation_result.json", validation_payload)
+    compilation_dir = attempt_dir / "compilation"
+    compilation = attempt.compile_result
+    compilation_payload = compile_to_dict(compilation)
+    if compilation_payload is None:
+        compilation_payload = blocked_compilation_payload(
+            generation.failure_stage,
+            attempt.compile_error
+            or generation.failure_reason
+            or "Compilation was not run because source validation failed.",
+        )
+    compilation_payload["timing"] = attempt.compilation_timing
+    write_json(compilation_dir / "compilation_result.json", compilation_payload)
+    (compilation_dir / "command.txt").write_text(
+        "" if compilation is None else " ".join(compilation.command),
+        encoding="utf-8",
+    )
+    (compilation_dir / "stdout.txt").write_text(
+        "" if compilation is None else compilation.stdout,
+        encoding="utf-8",
+    )
+    (compilation_dir / "stderr.txt").write_text(
+        "" if compilation is None else compilation.stderr,
+        encoding="utf-8",
+    )
+    write_json(
+        attempt_dir / "timing.json",
+        {
+            "generation": attempt.generation_timing,
+            "validation": generation.validation_timing,
+            "compilation": attempt.compilation_timing,
+        },
+    )
+    write_json(
+        attempt_dir / "result.json",
+        {
+            "attempt": attempt.attempt,
+            "generation_attempt_id": attempt.generation_timing.get("generation_attempt_id"),
+            "request_sha256": attempt.generation_timing.get("request_sha256"),
+            "request_kind": attempt.request_kind,
+            "repair_parent_attempt": attempt.repair_parent_attempt,
+            "repair_of_attempt": attempt.repair_parent_attempt,
+            "previous_source_sha256": attempt.generation_timing.get("previous_source_sha256"),
+            "status": (
+                "success"
+                if attempt.compile_result is not None and attempt.compile_result.ok
+                else "failed"
+            ),
+            "failure_stage": (
+                None
+                if attempt.compile_result is not None and attempt.compile_result.ok
+                else "compilation"
+                if generation.agent is not None
+                else generation.failure_stage
+            ),
+            "failure_category": (
+                None
+                if attempt.compile_result is not None and attempt.compile_result.ok
+                else "Java compile failure"
+                if generation.agent is not None
+                else generation.failure_category
+            ),
+            "failure_reason": (
+                None
+                if attempt.compile_result is not None and attempt.compile_result.ok
+                else attempt.compile_error
+                or (compilation.stderr if compilation is not None else None)
+                or generation.failure_reason
+            ),
+            "selected": attempt.selected,
+            "final": attempt.final,
+        },
+    )
+    if attempt.repair_evidence is not None:
+        write_json(attempt_dir / "repair_input.json", attempt.repair_evidence)
+
+
+def write_generation_repair_ledger(
+    candidate_dir: Path,
+    attempts: list["GenerationAttemptResult"] | tuple["GenerationAttemptResult", ...],
+    *,
+    initial_seed_source: bool,
+) -> None:
+    """Project the bounded decoder chain without duplicating large evidence."""
+
+    if initial_seed_source:
+        return
+    write_json(
+        candidate_dir / "generation" / "repair_ledger.json",
+        {
+            "schema_version": "eagle-java-compile-repair-ledger-v1",
+            "selected_attempt": next(
+                (item.attempt for item in attempts if item.selected),
+                None,
+            ),
+            "final_attempt": next(
+                (item.attempt for item in reversed(attempts) if item.final),
+                attempts[-1].attempt if attempts else None,
+            ),
+            "attempts": [
+                {
+                    "attempt": item.attempt,
+                    "request_kind": item.request_kind,
+                    "request_sha256": item.generation_timing.get("request_sha256"),
+                    "repair_parent_attempt": item.repair_parent_attempt,
+                    "repair_of_attempt": item.repair_parent_attempt,
+                    "previous_source_sha256": item.generation_timing.get("previous_source_sha256"),
+                    "request_artifact": (
+                        f"generation/attempts/attempt_{item.attempt:03d}/request.txt"
+                    ),
+                    "source_artifact": (
+                        f"generation/attempts/attempt_{item.attempt:03d}/normalized_candidate.java"
+                    ),
+                    "repair_evidence_artifact": (
+                        None
+                        if item.repair_evidence is None
+                        else f"generation/attempts/attempt_{item.attempt:03d}/repair_input.json"
+                    ),
+                    "validation_artifact": (
+                        f"generation/attempts/attempt_{item.attempt:03d}/validation/validation_result.json"
+                    ),
+                    "compilation_artifact": (
+                        f"generation/attempts/attempt_{item.attempt:03d}/compilation/compilation_result.json"
+                    ),
+                    "status": (
+                        "success"
+                        if item.compile_result is not None and item.compile_result.ok
+                        else "failed"
+                    ),
+                    "selected": item.selected,
+                    "final": item.final,
+                }
+                for item in attempts
+            ],
+        },
+    )
 
 def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvaluation) -> None:
     """Persist the complete final Java-generation request and response envelope."""
 
     generation_dir = candidate_dir / "generation"
     generation_dir.mkdir(parents=True, exist_ok=True)
-    request = evaluation.candidate.generation_input(class_name="CandidateAgent")
     result = evaluation.result
+    generation_timing = evaluation.generation_timing or {}
+    initial_seed_source = generation_timing.get("operation") == "initial_java_seed"
+    representative_attempt = next(
+        (
+            item
+            for item in evaluation.generation_attempts
+            if item.attempt
+            == (generation_timing.get("selected_attempt") or generation_timing.get("final_attempt"))
+        ),
+        None,
+    )
+    request = "" if initial_seed_source else (
+        representative_attempt.request
+        if representative_attempt is not None
+        else evaluation.candidate.generation_input(class_name="CandidateAgent")
+    )
     (generation_dir / "request.txt").write_text(request, encoding="utf-8")
-    (generation_dir / "response_raw.txt").write_text(result.raw_llm_output or "", encoding="utf-8")
+    (generation_dir / "response_raw.txt").write_text(
+        "" if initial_seed_source else result.raw_llm_output or "",
+        encoding="utf-8",
+    )
     (generation_dir / "extracted_candidate.java").write_text(result.extracted_code or "", encoding="utf-8")
     (generation_dir / "normalized_candidate.java").write_text(
         result.assembled_java or evaluation.candidate.generated_java or "",
         encoding="utf-8",
     )
+    if evaluation.compile_result is not None and evaluation.compile_result.ok:
+        phenotype_dir = candidate_dir / "phenotype"
+        phenotype_dir.mkdir(parents=True, exist_ok=True)
+        (phenotype_dir / "CandidateAgent.java").write_text(
+            result.assembled_java or evaluation.candidate.generated_java or "",
+            encoding="utf-8",
+        )
     write_json(generation_dir / "result.json", {
-        "status": "success" if evaluation.agent is not None else "failed",
+        "status": (
+            "success"
+            if evaluation.compile_result is not None and evaluation.compile_result.ok
+            else "failed"
+        ),
         "failure_category": result.failure_category,
         "failure_reason": result.failure_reason,
         "validation_result": validation_to_dict(result.validation_result),
         "stage": "generation",
-        "llm_profile": (evaluation.generation_timing or {}).get("llm_profile"),
-        "model": (evaluation.generation_timing or {}).get("model"),
-        "attempts": (evaluation.generation_timing or {}).get("attempts", []),
+        "operation": generation_timing.get("operation"),
+        "model": generation_timing.get("model"),
+        "attempts": generation_timing.get("attempts", []),
+        "max_attempts": generation_timing.get("max_attempts", 1),
+        "selected_attempt": generation_timing.get("selected_attempt"),
+        "final_attempt": generation_timing.get("final_attempt", 1),
+        "representative_failure_attempt": (
+            generation_timing.get("final_attempt")
+            if generation_timing.get("selected_attempt") is None and not initial_seed_source
+            else None
+        ),
+        "canonical_attempt_artifact": (
+            None
+            if initial_seed_source or generation_timing.get("selected_attempt") is None
+            else "generation/attempts/"
+            f"attempt_{int(generation_timing['selected_attempt']):03d}"
+        ),
+        "representative_attempt_artifact": (
+            None
+            if initial_seed_source
+            else "generation/attempts/"
+            f"attempt_{int(generation_timing.get('selected_attempt') or generation_timing.get('final_attempt') or 1):03d}"
+        ),
+        "request_sha256": (
+            None
+            if initial_seed_source
+            else hashlib.sha256(request.encode("utf-8")).hexdigest()
+        ),
+        "source": generation_timing.get("source"),
     })
 
 
-def write_resolved_config(run_dir: Path, config: ExperimentConfig, *, mock: bool, client: LLMClient | None = None) -> None:
-    """Write actual post-default and post-override runtime values."""
+def write_run_config(run_dir: Path, config: ExperimentConfig, *, mock: bool) -> None:
+    """Write the one immutable, fully resolved experiment configuration."""
 
-    llm_backend = "mock" if mock else config.generation_backend
-    is_mock_backend = llm_backend == "mock"
-    payload = {
-        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
-        "objective_formula_version": OBJECTIVE_FORMULA_VERSION,
-        "population_size": config.population_size,
-        "generation_count": config.generations,
-        "crossover_rate": config.crossover_rate,
-        "mutation_rate": config.mutation_rate,
-        "mutation_selection_policy": "failed_game_to_code_otherwise_seeded_random",
-        "front0_stagnation_generations": config.front0_stagnation_generations,
-        "matches_per_candidate": config.matches_per_candidate,
-        "opponent": config.opponent,
-        "evaluation_opponents": [
-            {"order": order, **item.__dict__}
-            for order, item in enumerate(EVALUATION_ROSTER, start=1)
-        ],
-        "objective_directions": OBJECTIVE_DIRECTIONS,
-        "map": config.map_path,
-        "max_cycles": config.tick_limit,
-        "ea_random_seed": config.random_seed,
-        "microrts_match_seeds": list(config.resolved_match_seeds),
-        "match_timeout_seconds": config.match_timeout_seconds,
-        "unit_material_values": dict(config.unit_material_values),
-        "material_scale": config.material_scale,
-        "resource_scale": config.resource_scale,
-        "llm_backend": llm_backend,
-        "llm_model": None if is_mock_backend else config.llm_model,
-        "llm_temperature": None if is_mock_backend else 0.2,
-        "llm_roles": {role: {"enabled": enabled, "temperature": temperature} for role, enabled, temperature in config.llm_roles},
-        "retry_policy": {
-            "max_attempts": 1 if is_mock_backend else 3,
-            "mutation_max_attempts": config.mutation_max_attempts,
-            "timeout_seconds": None if is_mock_backend else 120,
-            "backoff": "none" if is_mock_backend else "exponential_seconds",
-        },
-        "strategy_alignment_backend": "mock" if mock else config.alignment_backend,
-        "strategy_alignment_model": None if mock else config.llm_model,
-        "llm": None if client is None else {
-            "model": client.model,
-            "base_url": client.base_url,
-            "timeout_seconds": client.timeout_seconds,
-        },
-        "prompt_version": None,
-        "prompt_template_sha256": prompt_template_digest(),
-        "git_commit_hash": git_commit_hash(),
-        "unsupported": {
-            "prompt_version": "Prompt content is snapshotted and hashed but has no semantic version label.",
-        },
-    }
-    write_json(run_dir / "resolved_config.json", payload)
-
-
-def write_prompt_snapshot(run_dir: Path, config: ExperimentConfig) -> None:
-    """Persist the exact initial and meta-prompt inputs used by a run."""
-    templates = load_prompt_templates(DEFAULT_PROMPT_TEMPLATE_PATH)
-    write_json(run_dir / "prompt_snapshot.json", {
-        "seed_prompts": list(config.seed_prompts),
-        "generation_prompt": config.generation_prompt,
-        "agent_template_path": str(config.agent_template_path),
-        "agent_template_sha256": hashlib.sha256(config.agent_template_path.read_bytes()).hexdigest(),
-        "meta_prompt_source": str(DEFAULT_PROMPT_TEMPLATE_PATH),
-        "meta_prompt_sha256": prompt_template_digest(),
-        "meta_prompts": {
-            prompt_id: {
-                "role": item.role,
-                "stages": list(item.stages),
-                "required_variables": list(item.required_variables),
-                "template": item.template,
-            }
-            for prompt_id, item in templates.items()
-        },
-    })
-
-
-def prompt_template_digest() -> str:
-    return hashlib.sha256(DEFAULT_PROMPT_TEMPLATE_PATH.read_bytes()).hexdigest()
-
-
-def git_commit_hash() -> str | None:
-    """Return the checked-out commit or null when Git identity is unavailable."""
-
-    try:
-        result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], check=True, capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    value = result.stdout.strip()
-    return value or None
-
-
-def write_generation_manifest(run_dir: Path, generation: int, population: list[Candidate]) -> None:
-    write_json(run_dir / f"generation_{generation:03d}_population.json", [candidate.to_json_dict() for candidate in population])
+    path = run_dir / "config.yaml"
+    if path.exists():
+        raise ValueError(f"Run config is immutable and already exists: {path}")
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        yaml.safe_dump(config.to_mapping(mock=mock), sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    temporary.replace(path)
 
 
 def write_summary(
@@ -366,7 +580,6 @@ def write_summary(
     config: ExperimentConfig,
     final_population: list[Candidate],
     best_candidate: Candidate | None,
-    pareto_fronts: list[list[Candidate]],
     mock: bool,
     completed_generation: int | None = None,
     stop_reason: str | None = None,
@@ -377,61 +590,84 @@ def write_summary(
         "completed_generation": completed_generation,
         "stop_reason": stop_reason,
         "population_size": config.population_size,
-        "objectives": ["game_performance", "code_quality"],
-        "best_candidate": None if best_candidate is None else best_candidate.to_json_dict(),
-        "pareto_fronts": [[candidate.id for candidate in front] for front in pareto_fronts],
-        "final_population": [candidate.to_json_dict() for candidate in final_population],
+        "objectives": list(OBJECTIVE_DIRECTIONS),
+        "reporting_metrics": ["game_performance"],
+        "best_candidate": None if best_candidate is None else {
+            "candidate_id": best_candidate.id,
+            "candidate": f"candidates/{best_candidate.id}/candidate.json",
+            "fitness_objectives": dict(best_candidate.fitness_objectives),
+        },
+        "final_population_ids": [candidate.id for candidate in final_population],
+        "final_generation": (
+            None if completed_generation is None
+            else f"generations/generation_{completed_generation:04d}.json"
+        ),
     })
 
 
-def evaluation_to_dict(evaluation: CandidateEvaluation) -> dict:
-    return {
-        "candidate": evaluation.candidate.to_json_dict(),
-        "candidate_result": candidate_result_to_dict(evaluation.result),
-        "agent": None if evaluation.agent is None else {"class_name": evaluation.agent.class_name, "qualified_class_name": evaluation.agent.qualified_class_name, "source_path": str(evaluation.agent.source_path)},
-        "compile": compile_to_dict(evaluation.compile_result),
-        "integration": integration_to_dict(evaluation.integration_result),
-        "matches": [match_to_dict(result) for result in evaluation.match_results],
-        "game_metrics": evaluation.game_metrics.to_json_dict() if evaluation.game_metrics else None,
-        "opponent_scores": [] if evaluation.game_metrics is None else list(evaluation.game_metrics.opponent_scores),
-        "opponent_results": [] if evaluation.game_metrics is None else [
-            item.to_json_dict() for item in evaluation.game_metrics.opponent_results
-        ],
-        "code_quality": {"code_quality": evaluation.code_quality_breakdown.code_quality, "code_quality_breakdown": evaluation.code_quality_breakdown.to_json_dict()},
-        "strategy_consistency": evaluation.strategy_consistency_result.to_json_dict() if evaluation.strategy_consistency_result else None,
-        "function_capability": None if evaluation.function_capability_result is None else evaluation.function_capability_result.to_json_dict(),
-        "strategy_alignment": None if evaluation.strategy_alignment_result is None else evaluation.strategy_alignment_result.to_json_dict(),
-        "objectives": evaluation.candidate.fitness_objectives,
-        "error": evaluation.error,
-        "generation_timing": evaluation.generation_timing,
-    }
+def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None:
+    """Write the lightweight canonical candidate index and resumable references."""
 
-
-def candidate_result_to_dict(result) -> dict:
-    return {
-        "candidate_id": result.candidate_id,
-        "parent_ids": list(result.parent_ids),
-        "raw_llm_output": result.raw_llm_output,
-        "extracted_code": result.extracted_code,
-        "assembled_java": result.assembled_java,
-        "strategy_region": result.strategy_region,
-        "validation_result": validation_to_dict(result.validation_result),
-        "compile_result": compile_to_dict(result.compile_result),
-        "strategy_region_validation": result.strategy_region_validation or {},
-        "strategy_consistency": result.strategy_consistency,
-        "code_quality": (result.final_score or {}).get("code_quality"),
-        "function_capability": result.function_capability,
-        "strategy_alignment": result.strategy_alignment,
-        "code_quality_breakdown": result.code_quality_breakdown,
-        "match_result": [match_to_dict(item) for item in result.match_result or []],
-        "game_metrics": result.game_metrics,
-        "opponent_scores": [] if result.game_metrics is None else list(result.game_metrics.get("opponent_scores") or []),
-        "final_score": result.final_score,
-        "failure_category": result.failure_category,
-        "failure_reason": result.failure_reason,
-        "failure_stage": result.failure_stage,
-        "integration_result": integration_to_dict(result.integration_result),
+    game = candidate.game_eval_result or {}
+    artifact_references = {
+        "lineage": "lineage.json",
+        "policy_prompt": "genotype/policy_prompt.txt",
+        "code_generation_prompt": "genotype/code_generation_prompt.txt",
+        "generation": "generation/result.json",
+        "validation": "validation/validation_result.json",
+        "compilation": "compilation/compilation_result.json",
+        "integration": "integration/integration_result.json",
+        "matches": "matches/",
+        "game_performance": "evaluation/game_performance.json",
+        "function_capability": "evaluation/function_capability.json",
+        "strategy_alignment": "strategy_alignment/result.json",
+        "code_quality": "evaluation/code_quality.json",
+        "objectives": "evaluation/objectives.json",
+        "timing": "timing.json",
     }
+    if candidate.inherited_java or candidate.java_parent_id is not None:
+        artifact_references["inherited_java"] = "genotype/inherited_java.java"
+    candidate_dir = candidates_dir / candidate.id
+    if (candidate_dir / "phenotype" / "CandidateAgent.java").is_file():
+        artifact_references["generated_java"] = "phenotype/CandidateAgent.java"
+    else:
+        artifact_references["failed_generation_source"] = "generation/normalized_candidate.java"
+    if (candidate_dir / "mutation" / "strategy_reflection" / "metadata.json").is_file():
+        artifact_references.update({
+            "strategy_reflection": "mutation/strategy_reflection/metadata.json",
+            "generator_strategy_input": "mutation/strategy_reflection/generator_strategy_input.txt",
+        })
+    if (candidate_dir / "mutation" / "balance_reflection" / "metadata.json").is_file():
+        artifact_references["balance_reflection"] = "mutation/balance_reflection/metadata.json"
+    payload = {
+        "candidate_schema_version": "eagle-candidate-v5",
+        "candidate_id": candidate.id,
+        "generation": candidate.generation,
+        "parent_ids": list(candidate.parent_ids),
+        "operator": candidate.operator,
+        "mutation_type": candidate.mutation_type,
+        "strategy_parent_id": candidate.strategy_parent_id,
+        "generation_prompt_parent_id": candidate.generation_prompt_parent_id,
+        "source_candidate_ids": list(candidate.resolved_source_candidate_ids()),
+        "compile_status": candidate.compile_status,
+        "status": candidate.status,
+        "failure_stage": candidate.failure_stage,
+        "failure_reason": candidate.failure_reason,
+        "fitness_objectives": dict(candidate.fitness_objectives),
+        "aggregate_game_performance": game.get("game_performance"),
+        "opponent_scores": dict(game.get("opponent_scores") or {}),
+        "strategy_signature": dict(candidate.strategy_signature),
+        "strategy_niche": candidate.strategy_niche,
+        "mutation_intent": candidate.mutation_intent,
+        "parent_strategy_niche": candidate.parent_strategy_niche,
+        "niche_changed": candidate.niche_changed,
+        "metadata": compact_candidate_metadata(candidate.metadata),
+        "timing_summary": dict(candidate.timing),
+        "artifacts": artifact_references,
+    }
+    if candidate.inherited_java or candidate.java_parent_id is not None:
+        payload["java_parent_id"] = candidate.java_parent_id
+    write_json(candidates_dir / candidate.id / "candidate.json", payload)
 
 
 def validation_to_dict(result: ValidationResult | None) -> dict | None:

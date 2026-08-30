@@ -20,7 +20,8 @@ description: Implement or review EAGLE Strategy Reflection, Strategy Prompt Rewr
 - Code Mutation: Reflection LLM, Generation Prompt Rewrite LLM, final Java Generation LLM.
 - Strategy Mutation changes only `strategy_prompt`; Code Mutation changes only `generation_prompt`.
 - Mutation never directly edits Java.
-- `previous_code` remains the selected parent's latest evaluated Java until final child generation produces the next phenotype.
+- Java remains phenotype/evidence and is never an inherited mutation input gene.
+- Strategy evidence is policy plus matches only; Code evidence is policy plus Java and optional structural/compiler diagnostics, never raw game logs.
 - Select evidence through recorded provenance; do not compare prompt strings.
 
 ## Implement
@@ -43,4 +44,3 @@ Test ordered call counts, component isolation, both state transitions, evidence 
 ## Prohibited legacy behavior
 
 No no-op rule backend presented as mutation, one-call mutation, direct Java/method-body mutation, missing Reflection/Rewrite, unbounded error-history prompts, discarded raw output, or surrogate/runtime-LLM flow.
-

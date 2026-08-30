@@ -1,0 +1,28 @@
+Repair the following complete CandidateAgent.java response using only the reported diagnostics.
+
+Game-playing policy (unchanged):
+$policy_prompt
+
+Reusable policy-to-Java translation instructions (unchanged):
+$code_generation_prompt
+
+INHERITED JAVA COMPONENT (unchanged input evidence):
+$inherited_java
+
+IMMUTABLE MICRORTS ACTION/JAVA API CONTRACT:
+$action_api_guide
+
+CANONICAL IMMUTABLE SCAFFOLD:
+```java
+$java_scaffold
+```
+
+UNTRUSTED PREVIOUS COMPLETE SOURCE (the immediately preceding failed output only):
+```java
+$previous_complete_source
+```
+
+STRUCTURED VALIDATION/COMPILATION DIAGNOSTICS:
+$compile_evidence
+
+Return one complete CandidateAgent.java file and nothing else. Copy every token outside EAGLE_AGENT_STRATEGY_START/END from the canonical scaffold; only the strategy region may differ. Preserve every fixed method even when it appears unused. Preserve the policy; do not return a patch, Markdown, JSON, or explanation.

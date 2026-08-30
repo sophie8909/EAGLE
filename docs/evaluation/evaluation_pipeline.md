@@ -1,81 +1,126 @@
 # Evaluation pipeline
 
-## Normative source
+`eagle/evaluation.py` owns the candidate evaluation boundary. It performs Java
+generation, validation, compilation, integration, the complete MicroRTS
+matrix, diagnostics, objective construction, and candidate artifact writing.
 
-See specification sections 13, 19, and 26. Objective formulas are owned by [`game_performance.md`](game_performance.md), [`code_quality.md`](code_quality.md), and [`failure_classification.md`](failure_classification.md).
+## Active stages
 
-## Stage contract
+| Stage | Success output | Failure evidence |
+| --- | --- | --- |
+| Java generation | complete `CandidateAgent.java` | generation response and validation failure |
+| Source validation | validated source | validation diagnostics |
+| Compilation | isolated class directory | compiler stdout/stderr and structured errors |
+| Integration | loadable MicroRTS agent | seven integration checks |
+| Match execution | 126 matches across seven opponents | retained match results and runtime failure |
+| Objective construction | seven opponent scores | seven `-1000.0` case scores on failure |
 
-| Stage | Input | Success output | Terminal evidence on failure |
-| --- | --- | --- | --- |
-| Java generation | complete child genotype | raw, extracted, and normalized full Java | backend/extraction failure |
-| Source validation | normalized source | validated runtime contract | validation result and reason |
-| Compilation | validated source | one isolated class set | command and diagnostics |
-| Integration | compiled classes | loadable/constructible/callable MicroRTS AI | failed checks and ratio |
-| Match execution | integrated class set | 10 valid match results | completed evidence and runtime failure |
-| Objective aggregation | all required evidence | `game_performance`, `code_quality` | failure values for the terminal stage |
+`decode_validate_compile_candidate` is the single production boundary for the
+first three rows and can be called by a decoder smoke without launching
+Integration or the 126-match matrix. `evaluate_candidate` consumes that helper;
+it does not maintain a second retry implementation. Attempt 1 uses the active
+genotype request (two prompts, plus inherited Java when configured); extraction
+failures may repeat that request, while a complete
+source's validation/javac failure produces the next compile-repair request from
+that source and only its structured diagnostics. Every attempt has an isolated
+source/classes workspace and compiles each validated source no more than once.
+Only the first compilation success is promoted. Exhaustion classifies the final
+attempt's generation, validation, or compilation failure; an Integration failure
+never re-enters the decoder.
 
-No stage may erase artifacts from an earlier stage.
+In `inherited_genotype` mode generation zero uses this same bounded decoder for
+every replicated population slot, so a population of ten records ten separate
+requests/responses and can produce ten different Java phenotypes. Later
+generations pass the independently selected Java component into the base and
+compile-repair requests without mutating that stored input during evaluation.
 
-## Integration contract
+The seven-check Integration probe is deliberately smaller than a match but is
+not an empty-state smoke: it loads separate populated 8×8 bases/workers maps,
+invokes independent one-argument agent instances for the two player sides, and
+rejects null or integrity-invalid `PlayerAction` values before safe issuance and
+one cycle per state. This exposes map-coordinate and cross-side state faults
+before the 126-match matrix without treating an Integration failure as a decoder
+retry signal.
 
-Integration is a distinct pre-match stage. It loads `ai.generated.CandidateAgent`, verifies the MicroRTS `AI`/`AbstractionLayerAI` type contract, invokes both required constructors, calls `reset()`, validates the non-null `AI` returned by `clone()`, calls `getAction()` with a minimal valid `GameState`, and validates the non-null `PlayerAction` result.
+## Match protocol
 
-Persist all seven ordered check results. A failed prerequisite marks downstream checks `blocked`; `integration_pass_ratio` is `passed_check_count / 7`. Integration starts no evaluation match. Only a candidate passing all seven checks proceeds to the 10-match batch.
+The fixed roster is defined by `eagle/opponent_cases.py` and resolved by
+`eagle/opponents.py`. Each opponent receives three configured maps, three
+rounds, and both candidate player positions. The matrix is owned by
+`evaluation/match_matrix.py`; execution is owned by
+`evaluation/microrts_runner.py`.
 
-## MicroRTS protocol
+The evaluator groups match results by opponent in
+`evaluation/game_metrics.py`. It retains per-opponent, per-map, per-side, and
+per-match summaries, then computes the weighted aggregate only for reporting.
+The aggregate denominator is the fixed weight sum `11.0`.
 
-- Candidate: generated Java, always evaluated as the configured candidate player.
-- Opponents: one match each against 5 vendored basic agents and 5 deterministic
-  pathfinding variants built from the same vendored MicroRTS implementations (10 total).
-  Final-test competition agents and their manifest are not on this classpath.
-- Match count: exactly 10.
-- Compilation count: once per generated source.
-- Java generation count during evaluation: zero.
-- Source/class set: identical across all 10 matches.
-- Seeds: distinct where MicroRTS supports them and persisted in resolved configuration and match metadata.
-- Each match has a separate artifact directory.
+AllInBot remains the pinned upstream implementation: preflight verifies its
+original class and JAR hash.  Real search and final-test matches instantiate a
+separately compiled reflection-only `ai.eagle.SafeAllInBot` adapter, which does
+not enter candidate source/class hashing or strategy complexity.  If the
+upstream delegate throws an `Exception`, returns null, or returns an invalid
+action, it emits one `EAGLE_SAFE_ALLINBOT_FALLBACK` stderr marker and permanently
+issues legal passive actions.  A recovered marker leaves the match `ok=true`
+but is recorded as `fault_scope="opponent"`, `opponent_fault_contained=true`,
+`opponent_fault_recovered=true`, and `scoring_neutralized=true`; the candidate
+contribution is a zero-score draw. Raw result and telemetry evidence are kept,
+so an upstream defect can neither crash the JVM nor become a candidate win.
 
-Any candidate with fewer than 10 valid completed matches has failed evaluation. Preserve completed match evidence and assign failure objectives through the canonical failure contract.
+## Objective and diagnostics
 
-## Match result requirements
+`evaluation/objectives.py` returns exactly one evolutionary score for each of
+the seven cases. `code_quality`, compiler diagnostics, function coverage,
+strategy alignment, and runtime failure details remain in their diagnostic
+artifacts and reflection context; none is inserted into the evolutionary
+objective vector.
 
-Each match must make the following available for aggregation and mutation feedback:
+## Artifacts
 
-- result and winner;
-- candidate/opponent identity and player side;
-- map, seed, `max_cycles`, and final tick;
-- final player/enemy resources;
-- per-tick material traces and configured unit values;
-- survival evidence;
-- replay, round state, stdout, stderr, return code, duration, status, and failure reason.
+Per-candidate evaluation artifacts include:
 
-## Aggregation invariants
+- `evaluation/game_performance.json`: aggregate Game Performance, opponent
+  score mapping, opponent summaries, map/side summaries, and match summaries;
+- `evaluation/objectives.json`: seven-case objective mapping;
+- `evaluation/code_quality.json`: code-quality diagnostics;
+- `evaluation/matches.json`: compact individual match records.
 
-- Aggregate only after all 10 matches are valid.
-- A draw, loss, or tick-limit result that satisfies the match result contract is not automatically a runtime failure.
-- Invalid/missing/unparseable results, process failures, exceptions, deadlocks, or partial batches are runtime failures.
-- Run successful `code_quality` evaluation only after complete 10-match execution because strategy alignment may consume behavior evidence.
-- Keep `strategy_alignment_score` inside `code_quality`; NSGA-II receives two values only.
+Each run-level generation JSON stores objective statistics for every
+opponent case and the per-opponent reporting summaries used by analysis.
+Final-test JSON/CSV/Markdown also count contained upstream-opponent faults
+separately (`OF` in the Markdown table); they are not candidate runtime
+failures.
 
-## Module responsibility target
+## `aos_head2head`-only parent-vs-offspring evaluation
 
-- `eagle/evaluation.py`: stage orchestration and terminal routing only.
-- `generation/`: generation and source validation.
-- `evaluation/compiler.py`: compilation and diagnostic capture.
-- `evaluation/microrts_runner.py`: integration and per-match process execution.
-- `evaluation/game_performance.py`: canonical gameplay formula.
-- `evaluation/code_quality.py`: successful code-quality components.
-- `evaluation/nsga2_objectives.py`: two-objective assembly and failure constants.
-- `eagle/artifacts.py`: serialization only.
+After normal evaluation succeeds for a mutated offspring,
+`evaluation/parent_offspring.py` reuses the offspring and comparison parent's
+compiled class directories. It uses `evaluation/match_matrix.py` with the same
+three configured maps, three round indices, and both player positions, producing
+18 direct matches. `ComparisonParentAgent` isolates the parent's already
+compiled same-named `ai.generated.CandidateAgent`; it does not regenerate or
+recompile either generated source.
 
-Current code does not yet respect these boundaries fully. See gaps `G-05` through `G-11` in [`../implementation/architecture_gaps.md`](../implementation/architecture_gaps.md).
+MicroRTS match seeds are not part of the active contract. The old
+`match_seeds` values were only written to an unread JVM system property, so
+they never controlled MicroRTS randomness. Repeated games are identified by
+`round_index`; match artifacts do not claim seeded reproducibility.
 
-## Tests
+The direct W/D/L summary is consumed only by AOS. It is not added to the seven
+opponent objectives, Game Performance, lexicase, or the opponent archive. An
+offspring that fails generation, validation, compilation, integration, or its
+normal runtime matrix does not launch this evaluator.
 
-- Verify the stage order and that downstream stages do not run after terminal failure.
-- Verify exactly one compile and 10 match calls per successful candidate.
-- Verify the same source hash and class directory are used for all matches.
-- Verify the ten-opponent roster and distinct match directories/seeds.
-- Verify a nine-match partial batch fails while retaining all nine results.
-- Verify each pipeline stage maps to the correct failure classification.
+`aos_opponent` launches no direct matches: its credit provider reuses the seven
+completed opponent summaries from normal evaluation. `static` calculates no
+reward at all. Both adaptive providers feed the updater in `eagle/aos.py` and
+do not alter the normal evaluation vector.
+
+## Final-test candidate recovery
+
+The production final test accepts only candidates whose status is not failed
+and whose canonical Java phenotype and compiled `CandidateAgent.class` are both
+present. If the terminal generation has no runnable candidate, it searches
+completed generations newest-first and tests the newest available runnable
+representative. An explicitly requested candidate ID never falls back to a
+different candidate.

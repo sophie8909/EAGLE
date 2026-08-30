@@ -1,0 +1,70 @@
+IMMUTABLE MICRORTS ACTION AND JAVA API CONTRACT.
+This contract overrides every conflicting reusable policy-to-Java instruction.
+Do not edit any source outside EAGLE_AGENT_STRATEGY_START/END. Do not redefine,
+remove, rename, or bypass the fixed helpers. Strategy code may add private helper
+methods only inside the strategy region.
+
+Issue actions only through these fixed helpers:
+- commandMove(Unit unit, int x, int y)
+- commandHarvest(Unit worker, Unit resource, Unit base)
+- commandTrain(Unit producer, UnitType unitType)
+- commandBuild(Unit worker, UnitType buildingType, int x, int y)
+- commandAttack(Unit attacker, Unit target)
+- commandIdle(Unit unit)
+
+Use these fixed lookup helpers instead of inventing engine queries:
+- isIdleAlly(Unit unit, AgentContext context)
+- nearestEnemy(Unit source, AgentContext context)
+- nearestResource(Unit source, AgentContext context)
+- ownBase(AgentContext context)
+- isFreeCell(AgentContext context, int x, int y)
+
+AgentContext exposes only context.player, context.gs, and context.units. The
+following MicroRTS reads are allowlisted; do not call any unlisted method or
+field on GameState, PhysicalGameState, Player, Unit, UnitType, or PathFinding:
+- GameState: getTime(), getPlayer(int), getUnits(), getUnitAction(Unit), and
+  getPhysicalGameState().
+- PhysicalGameState: getWidth(), getHeight(), and getUnit(long).
+- Player: getResources().
+- Unit: getPlayer(), getType(), getX(), getY(), getID(), getResources(),
+  getHitPoints(), and getMaxHitPoints().
+- UnitType public fields: cost, hp, canAttack, canHarvest, isResource,
+  isStockpile, and attackRange.
+- Known UnitType variables: resourceType, workerType, lightType, heavyType,
+  rangedType, baseType, and barracksType.
+
+Exact corrections for common invalid APIs:
+- Use context.gs.getTime(), never getTick() or getTickCount().
+- Use unit.getID(), never getId().
+- Use getHitPoints()/getMaxHitPoints(), never getHealth()/getMaxHealth().
+- Use unit.getResources(), never resource-carrier or carrying helper methods.
+- Use context.gs.getPhysicalGameState().getWidth()/getHeight(), never map,
+  map-width, map-height, spawn-location, tile, or base methods on GameState or Player.
+- Use context.gs.getUnitAction(unit), never unit.getAction() or unit.getTask().
+- Use isFreeCell(context, x, y) to test a strategy candidate coordinate. It
+  returns false before accessing a coordinate outside the active map.
+- Never call GameState.free(...) or PhysicalGameState.getTerrain(...) in the
+  strategy region, and never use getUnitAt(...). These direct map reads are
+  rejected by deterministic validation.
+- context.units is a List<Unit>, never a map; count/filter it with loops.
+- Every added helper that reads player, state, or units must accept AgentContext;
+  never reference a context variable that is not a parameter or local variable.
+- Java locals never flow into another method. If decide computes
+  `int gameTime = context.gs.getTime()`, every helper that reads it must declare
+  an `int gameTime` parameter and every call must pass that value. Apply this
+  rule to every other computed local value as well.
+- A helper that reads game state must use a signature such as
+  `findBuildLocation(AgentContext context, Unit base)`; a method whose parameters
+  omit AgentContext must never contain `context.gs` or `context.units`.
+- A scalar coordinate is `int x`. One coordinate pair is `int[] point = new
+  int[]{x, y}`. Multiple coordinate pairs must use the exact two-dimensional
+  form `int[][] directions = new int[][]{{-1, 0}, {1, 0}, {0, -1}, {0, 1}};`
+  and iterate with `for (int[] direction : directions)`. Never initialize an
+  `int[]` with nested `{...}` pairs.
+- Never construct synthetic Unit, GameState, AgentContext, PathFinding, or
+  PathChoice objects to query engine state.
+
+Before returning the file, check every private strategy helper independently:
+all referenced locals are declared in that method or its parameter list, every
+`context.` use has an `AgentContext context` parameter, and every array's declared
+dimension matches its initializer and enhanced-for element type.

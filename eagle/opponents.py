@@ -1,9 +1,17 @@
-"""Canonical opponent identities for evolution evaluation and final tests."""
+"""Canonical opponent identities and setup failures for evolution evaluation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+
+
+ALLINBOT_UPSTREAM_CLASS_NAME = "ai.abstraction.submissions.allibot.alli"
+SAFE_ALLINBOT_CLASS_NAME = "ai.eagle.SafeAllInBot"
+
+
+class OpponentSetupError(RuntimeError):
+    """A configured evaluation opponent cannot be prepared or loaded."""
 
 
 @dataclass(frozen=True)
@@ -22,12 +30,37 @@ EXTERNAL_OPPONENTS = (
     OpponentSpec("coac", "COAC", "ai.coac.CoacAI", "external", "third_party/final_test_opponents/jars/coac.jar"),
 )
 
+# AlliBot ships against a newer, LLM-enabled MicroRTS fork. Its local setup owns
+# a self-contained upstream runtime JAR; the evolutionary case is named
+# ``allinbot`` while the GUI inspection utility keeps its historical ``allibot``
+# identifier.
+ALLIBOT_OPPONENTS = (
+    OpponentSpec(
+        "allibot",
+        "AlliBot (upstream runtime)",
+        "ai.abstraction.submissions.allibot.alli",
+        "gui_only_external",
+        "third_party/gui_opponents/jars/allibot.jar",
+    ),
+)
+
+ALLINBOT_SEARCH_OPPONENT = OpponentSpec(
+    "allinbot",
+    "AllInBot (upstream runtime, fault-contained)",
+    SAFE_ALLINBOT_CLASS_NAME,
+    "external",
+    "third_party/gui_opponents/jars/allibot.jar",
+)
+
 BASIC_OPPONENTS = (
-    OpponentSpec("random", "RandomAI", "ai.RandomAI", "basic"),
-    OpponentSpec("random_biased", "RandomBiasedAI", "ai.RandomBiasedAI", "basic"),
     OpponentSpec("passive", "PassiveAI", "ai.PassiveAI", "basic"),
-    OpponentSpec("light_rush", "LightRush", "ai.abstraction.LightRush", "basic"),
-    OpponentSpec("heavy_rush", "HeavyRush", "ai.abstraction.HeavyRush", "basic"),
+    OpponentSpec("random", "RandomAI", "ai.RandomAI", "basic"),
+    OpponentSpec("randombias", "RandomBiasedAI", "ai.RandomBiasedAI", "basic"),
+    OpponentSpec("lightrush", "LightRush", "ai.abstraction.LightRush", "basic"),
+    OpponentSpec("heavyrush", "HeavyRush", "ai.abstraction.HeavyRush", "basic"),
+    # The vendored runtime has no WorkerRush class; evaluation compiles a
+    # run-local compatibility adapter with this canonical identity.
+    OpponentSpec("workerrush", "WorkerRush", "ai.abstraction.WorkerRush", "basic"),
 )
 
 MICRORTS_VARIANT_OPPONENTS = (
@@ -38,17 +71,31 @@ MICRORTS_VARIANT_OPPONENTS = (
     OpponentSpec("bfs_heavy_rush", "BFS HeavyRush", "ai.abstraction.BFSHeavyRush", "builtin_variant"),
 )
 
-# This is the only roster used by EA evaluation and Strategy Reflection.  The
-# external competition agents below remain exclusively in FINAL_TEST_ROSTER.
-# The variants reuse only implementations and pathfinders shipped by the
-# vendored MicroRTS runtime.  They avoid incompatible external bot jars and
-# keep final-test competition agents outside EA evaluation.
-EVALUATION_ROSTER = BASIC_OPPONENTS + MICRORTS_VARIANT_OPPONENTS
-FINAL_TEST_ROSTER = EXTERNAL_OPPONENTS + BASIC_OPPONENTS
+# The search-time roster is resolved from this registry in the canonical order
+# supplied by the experiment configuration. PassiveAI, RandomAI, and
+# RandomBiasedAI remain available as basic definitions for compatibility and
+# visual inspection, but are intentionally excluded from EA evolution.
+SEARCH_OPPONENT_REGISTRY = (
+    BASIC_OPPONENTS[3],
+    BASIC_OPPONENTS[4],
+    BASIC_OPPONENTS[5],
+    ALLINBOT_SEARCH_OPPONENT,
+    EXTERNAL_OPPONENTS[1],
+    EXTERNAL_OPPONENTS[2],
+    EXTERNAL_OPPONENTS[0],
+)
+EVALUATION_ROSTER = SEARCH_OPPONENT_REGISTRY
+
+# Compatibility names for the retained visual inspection utility. AlliBot is
+# also present in the normal search roster; this alias describes its GUI asset
+# layout, not a separate evaluation roster.
+GUI_ONLY_OPPONENTS = ALLIBOT_OPPONENTS
 
 
-def opponent_by_id(opponent_id: str) -> OpponentSpec:
-    for item in EVALUATION_ROSTER + FINAL_TEST_ROSTER:
+def gui_opponent_by_id(opponent_id: str) -> OpponentSpec:
+    """Resolve an opponent supported by the optional visual inspection utility."""
+
+    for item in BASIC_OPPONENTS + EVALUATION_ROSTER + EXTERNAL_OPPONENTS + ALLIBOT_OPPONENTS:
         if item.opponent_id == opponent_id:
             return item
     raise KeyError(opponent_id)

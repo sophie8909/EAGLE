@@ -58,7 +58,7 @@ CandidateAgent.java:15:3: error: cannot find symbol
     def test_compilation_artifacts_include_stdout_stderr_and_result(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+            config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
                 Candidate(id="compile-artifacts"),
                 config=config,
@@ -99,7 +99,7 @@ CandidateAgent.java:15:3: error: cannot find symbol
             root = Path(temp_dir)
             evaluation = evaluate_candidate(
                 Candidate(id="compile-failure"),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
+                config=ExperimentConfig.from_mapping({}),
                 backend=MockGenerationBackend(),
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",
@@ -135,7 +135,7 @@ CandidateAgent.java:15:3: error: cannot find symbol
             root = Path(temp_dir)
             evaluation = evaluate_candidate(
                 Candidate(id="compile-warning"),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
+                config=ExperimentConfig.from_mapping({}),
                 backend=MockGenerationBackend(),
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",

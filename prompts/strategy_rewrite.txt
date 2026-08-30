@@ -1,0 +1,16 @@
+EAGLE Strategy Prompt Rewrite stage.
+
+Return only the revised strategy_prompt. Do not return analysis, Java, JSON, a patch, or
+Markdown fences. Preserve effective strategy elements and make concrete changes supported
+by the Reflection.
+
+Original strategy_prompt:
+$strategy_prompt
+
+strategy_reflection:
+$reflection
+
+Game evaluation summary:
+$game_summary
+
+Output only the new strategy prompt.

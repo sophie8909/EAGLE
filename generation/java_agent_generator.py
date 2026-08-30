@@ -9,9 +9,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from eagle.candidate import Candidate
-from eagle.llm_errors import LLMServerError
+from eagle.llm import LLMServerError
 from evaluation.code_quality import StrategyRegionScoreResult, evaluate_agent_strategy_region
-from .agent_template import JavaTemplatePaths, extract_strategy_region
+from .agent_template import (
+    JavaTemplatePaths,
+    assemble_canonical_java_source,
+    extract_strategy_region,
+    fixed_scaffold_equivalent,
+    load_java_template,
+    strategy_contract_errors,
+)
 from .backend import GenerationBackend
 
 
@@ -85,7 +92,21 @@ class JavaAgentGenerationResult:
     validation_timing: dict[str, object] = field(default_factory=dict)
 
 
-VALIDATION_CHECK_NAMES = ("package", "public_class", "superclass", "constructors", "callable_methods", "forbidden_behaviors", "runtime_contract")
+VALIDATION_CHECK_NAMES = (
+    "package",
+    "public_class",
+    "superclass",
+    "constructors",
+    "callable_methods",
+    "forbidden_behaviors",
+    "strategy_contract",
+    "fixed_scaffold",
+    "runtime_contract",
+)
+
+_NORMALIZABLE_VALIDATION_FAILURES = frozenset(
+    {"strategy_contract", "fixed_scaffold"}
+)
 
 FORBIDDEN_BEHAVIOR_PATTERNS = (
     ("network_import", r"\bimport\s+java\.(?:net|nio\.channels)\b"),
@@ -110,25 +131,87 @@ def generate_java_agent(candidate: Candidate, backend: GenerationBackend, worksp
     return result.agent
 
 
-def generate_java_agent_result(candidate: Candidate, backend: GenerationBackend, workspace_dir: Path, *, template_paths: JavaTemplatePaths | None = None) -> JavaAgentGenerationResult:
+def generate_java_agent_result(
+    candidate: Candidate,
+    backend: GenerationBackend,
+    workspace_dir: Path,
+    *,
+    template_paths: JavaTemplatePaths | None = None,
+    authoritative_request: str | None = None,
+    output_dir: Path | None = None,
+    attempt_artifact_dir: Path | None = None,
+) -> JavaAgentGenerationResult:
+    request_text = (
+        (
+            backend.authoritative_request(candidate, "CandidateAgent")
+            if hasattr(backend, "authoritative_request")
+            else candidate.generation_input(class_name="CandidateAgent")
+        )
+        if authoritative_request is None
+        else authoritative_request
+    )
     try:
-        raw = backend.generate(candidate, "CandidateAgent")
+        raw = (
+            backend.generate_from_request(candidate, "CandidateAgent", request_text)
+            if hasattr(backend, "generate_from_request")
+            else backend.generate(candidate, "CandidateAgent")
+        )
     except LLMServerError:
         raise
     except (RuntimeError, OSError, ValueError) as exc:
         reason = str(exc)
         blocked = blocked_validation_result("Source validation was blocked because Java generation failed.")
         return JavaAgentGenerationResult(validation_result=blocked, strategy_region_score_result=evaluate_agent_strategy_region("", error=reason), failure_category=classify_generation_error(reason), failure_reason=reason, failure_stage="generation", validation_timing=validation_timing("blocked", blocked.error))
+    if attempt_artifact_dir is not None:
+        attempt_artifact_dir.mkdir(parents=True, exist_ok=True)
+        (attempt_artifact_dir / "request.txt").write_text(request_text, encoding="utf-8")
+        (attempt_artifact_dir / "response_raw.txt").write_text(raw, encoding="utf-8")
     try:
         source = normalize_java_agent_source(extract_code_from_output(raw))
     except (ValueError, OSError) as exc:
         reason = str(exc)
         blocked = blocked_validation_result("Source validation was blocked because no complete Java source was generated.")
         return JavaAgentGenerationResult(raw_llm_output=raw, validation_result=blocked, strategy_region_score_result=evaluate_agent_strategy_region("", error=reason), failure_category=classify_generation_error(reason), failure_reason=reason, failure_stage="generation", validation_timing=validation_timing("blocked", blocked.error))
+    extracted_source = source
+
+    if attempt_artifact_dir is not None:
+        (attempt_artifact_dir / "extracted_candidate.java").write_text(
+            extracted_source,
+            encoding="utf-8",
+        )
 
     started_at = _utc_now()
     started = time.monotonic()
-    validation = validate_generated_java_source(source, "CandidateAgent")
+    extracted_validation = validate_generated_java_source(
+        source,
+        "CandidateAgent",
+        template_paths=template_paths,
+    )
+    failed_checks = {
+        str(item.get("check") or "")
+        for item in extracted_validation.failed_checks
+    }
+    if (
+        "fixed_scaffold" in failed_checks
+        and failed_checks <= _NORMALIZABLE_VALIDATION_FAILURES
+    ):
+        try:
+            scaffold = load_java_template(template_paths or JavaTemplatePaths())
+            source = assemble_canonical_java_source(source, scaffold)
+        except ValueError:
+            # Keep the extracted source and its structured marker diagnostics.
+            # A malformed or incomplete full-file response is not normalizable.
+            pass
+    validation = validate_generated_java_source(
+        source,
+        "CandidateAgent",
+        template_paths=template_paths,
+    )
+    if attempt_artifact_dir is not None:
+        (attempt_artifact_dir / "normalized_candidate.java").write_text(
+            source,
+            encoding="utf-8",
+        )
     finished_at = _utc_now()
     validation_record = validation_timing("success" if validation.ok else "failed", validation.failure_reason or validation.error, started_at=started_at, finished_at=finished_at, duration_seconds=max(0.0, time.monotonic() - started))
     try:
@@ -138,14 +221,14 @@ def generate_java_agent_result(candidate: Candidate, backend: GenerationBackend,
     region_score = evaluate_agent_strategy_region(strategy_region, error=validation.failure_reason if not validation.ok else None)
     if not validation.ok:
         reason = validation.failure_reason or validation.error
-        return JavaAgentGenerationResult(raw_llm_output=raw, extracted_code=source, strategy_region=strategy_region, assembled_java=source, validation_result=validation, strategy_region_score_result=region_score, failure_category="Java validation failure", failure_reason=reason, failure_stage="validation", validation_timing=validation_record)
+        return JavaAgentGenerationResult(raw_llm_output=raw, extracted_code=extracted_source, strategy_region=strategy_region, assembled_java=source, validation_result=validation, strategy_region_score_result=region_score, failure_category="Java validation failure", failure_reason=reason, failure_stage="validation", validation_timing=validation_record)
 
-    package_dir = workspace_dir / candidate.id
+    package_dir = output_dir if output_dir is not None else workspace_dir / candidate.id
     package_dir.mkdir(parents=True, exist_ok=True)
     source_path = package_dir / "CandidateAgent.java"
     source_path.write_text(source, encoding="utf-8")
-    agent = GeneratedJavaAgent("CandidateAgent", "ai.generated", source, source_path, raw, source, strategy_region, validation)
-    return JavaAgentGenerationResult(raw_llm_output=raw, extracted_code=source, strategy_region=strategy_region, assembled_java=source, validation_result=validation, strategy_region_score_result=region_score, agent=agent, validation_timing=validation_record)
+    agent = GeneratedJavaAgent("CandidateAgent", "ai.generated", source, source_path, raw, extracted_source, strategy_region, validation)
+    return JavaAgentGenerationResult(raw_llm_output=raw, extracted_code=extracted_source, strategy_region=strategy_region, assembled_java=source, validation_result=validation, strategy_region_score_result=region_score, agent=agent, validation_timing=validation_record)
 
 
 def extract_code_from_output(raw_output: str) -> str:
@@ -169,7 +252,12 @@ def normalize_java_agent_source(source: str) -> str:
     return source.lstrip("\ufeff").strip()
 
 
-def validate_generated_java_source(source: str, class_name: str) -> ValidationResult:
+def validate_generated_java_source(
+    source: str,
+    class_name: str,
+    *,
+    template_paths: JavaTemplatePaths | None = None,
+) -> ValidationResult:
     if not source.strip():
         return blocked_validation_result("Generated Java source is empty.")
     passed: list[str] = []
@@ -197,6 +285,25 @@ def validate_generated_java_source(source: str, class_name: str) -> ValidationRe
     if unavailable_imports:
         forbidden.append(f"unavailable_dependencies:{','.join(unavailable_imports)}")
     check("forbidden_behaviors", not forbidden, f"forbidden runtime behavior: {', '.join(forbidden)}")
+    try:
+        strategy_errors = strategy_contract_errors(source)
+    except ValueError as exc:
+        strategy_errors = (str(exc),)
+    check(
+        "strategy_contract",
+        not strategy_errors,
+        "; ".join(strategy_errors),
+    )
+    try:
+        scaffold = load_java_template(template_paths or JavaTemplatePaths())
+        fixed_scaffold_ok = fixed_scaffold_equivalent(source, scaffold)
+    except ValueError:
+        fixed_scaffold_ok = False
+    check(
+        "fixed_scaffold",
+        fixed_scaffold_ok,
+        "source outside the EAGLE strategy region must preserve the checked-in scaffold",
+    )
     runtime_contract_ok = bool(package_match and public_class and superclass and constructor_one and constructor_two and methods_ok)
     check("runtime_contract", runtime_contract_ok, "the complete external MicroRTS runtime contract is not satisfied")
     failure_reason = failed[0]["reason"] if failed else None

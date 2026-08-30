@@ -4,6 +4,7 @@ import random
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import replace
 from io import StringIO
 from types import SimpleNamespace
 from pathlib import Path
@@ -11,13 +12,13 @@ from unittest.mock import patch
 
 from eagle.artifacts import write_candidate_artifacts
 from eagle.candidate import Candidate
-from eagle.config import ExperimentConfig, parse_minimal_yaml
+from eagle.config import ExperimentConfig
 from eagle.crossover import CrossoverContext, crossover
 from eagle.evaluation import evaluate_candidate, print_progress
 from eagle.mutation import MutationContext
-from eagle.offspring import normalize_prompt
-from eagle.search import choose_mutation, front_zero_signature, run_search
-from eagle.selection import select_parent, dominates
+from eagle.prompts import normalize_prompt
+from eagle.search import create_offspring, population_signature, run_search
+from eagle.selection import select_parent
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_performance import (
     GamePerformanceConfig,
@@ -28,14 +29,14 @@ from evaluation.game_performance import (
     tick_telemetry,
 )
 from evaluation.game_metrics import GameMetrics, compute_game_metrics
-from evaluation.microrts_runner import MatchResult, persist_match_artifacts, run_microrts_match
-from evaluation.nsga2_objectives import FAILED_GAME_PERFORMANCE, build_objectives
+from evaluation.runtime_evaluation import MatchResult, run_microrts_match
+from evaluation.objectives import build_objectives
+from eagle.opponent_cases import FAILED_OPPONENT_SCORE as FAILED_GAME_PERFORMANCE, LEXICASE_CASES
 from evaluation.code_quality import CodeQualityBreakdown
 from generation.agent_template import (
     STRATEGY_START_MARKER,
     JavaTemplatePaths,
     load_java_template,
-    microrts_blank_strategy_prompt,
     render_blank_strategy_agent,
 )
 from generation.backend import GenerationBackend, MockGenerationBackend, generated_class_name
@@ -61,15 +62,80 @@ class RecordingMutationBackend:
 def quality_fixture() -> CodeQualityBreakdown:
     return CodeQualityBreakdown(
         compilation_score=0.0,
-        function_score=100.0,
-        strategy_alignment_score=5.0,
-        successful_base=500.0,
-        score=605.0,
+        function_score=0.0,
+        strategy_alignment_score=0.0,
+        successful_base=0.0,
+        score=60.0,
         warning_count=0,
         compile_success=True,
         compile_error_count=0,
     )
 class EaglePipelineTests(unittest.TestCase):
+    def test_offspring_mutation_progress_includes_generation_and_candidate_ordinal(self) -> None:
+        class StrategyOnlyController:
+            mode = SimpleNamespace(value="static")
+
+            @staticmethod
+            def select_operator(rng, *, eligible):
+                return "strategy_reflection"
+
+            @staticmethod
+            def probability(operator):
+                return 1.0
+
+        class SuccessfulMutation:
+            @staticmethod
+            def mutate(candidate, context, *, artifact_dir=None, mutation_intent=None):
+                return replace(
+                    candidate,
+                    mutation_type="strategy",
+                    metadata={
+                        **candidate.metadata,
+                        "mutation": {
+                            "applied": True,
+                            "type": "strategy",
+                            "reflection_error": None,
+                            "rewrite_error": None,
+                        },
+                    },
+                )
+
+        config = ExperimentConfig.from_mapping({
+            "population_size": 1,
+            "crossover_rate": 0.0,
+            "mutation_rate": 1.0,
+        })
+        parent = Candidate(
+            id="parent",
+            strategy_prompt="worker rush",
+            generation_prompt="generate Java",
+            fitness_objectives={case: 0.0 for case in LEXICASE_CASES},
+        )
+        output = StringIO()
+        with redirect_stdout(output):
+            offspring = create_offspring(
+                [parent],
+                config=config,
+                generation=7,
+                rng=random.Random(3),
+                mutations={"strategy": SuccessfulMutation()},
+                operator_controller=StrategyOnlyController(),
+            )
+
+        self.assertEqual(len(offspring), 1)
+        lines = output.getvalue().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertRegex(
+            lines[0],
+            r"^\[gen 7 cand 1/1\] gen_0007_[0-9a-f]{12} "
+            r"stage=mutation status=started operator=strategy$",
+        )
+        self.assertRegex(
+            lines[1],
+            r"^\[gen 7 cand 1/1\] gen_0007_[0-9a-f]{12} "
+            r"stage=mutation status=completed operator=strategy applied=true$",
+        )
+
     def test_progress_prints_matching_code_quality_total_and_components(self) -> None:
         quality = quality_fixture()
         evaluation = SimpleNamespace(
@@ -77,8 +143,7 @@ class EaglePipelineTests(unittest.TestCase):
                 id="score-test",
                 status="evaluated",
                 fitness_objectives={
-                    "game_performance": 1.0,
-                    "code_quality": quality.code_quality,
+                    "passive": 1.0,
                 },
             ),
             error=None,
@@ -100,43 +165,24 @@ class EaglePipelineTests(unittest.TestCase):
                 evaluation=evaluation,
             )
         text = output.getvalue()
-        self.assertIn("code_quality_total=605.0", text)
-        self.assertIn("successful_base=500.0 + compilation=0.0 + function=100.0 + strategy_alignment=5.0 = 605.0", text)
+        self.assertIn("code_quality_simplicity=60.0", text)
+        self.assertIn("complexity_penalty=0.0", text)
         self.assertIn("game_performance_matches=[100.0, -90.0]", text)
-        self.assertIn("game_performance_fitness=1.0", text)
-    def test_parse_minimal_yaml(self) -> None:
-        payload = parse_minimal_yaml(
-            """
-seed_prompts:
-  - "Generate an agent."
-generations: 2
-population_size: 3
-"""
-        )
-        self.assertEqual(payload["seed_prompts"], ["Generate an agent."])
-        self.assertEqual(payload["generations"], 2)
-        self.assertEqual(payload["population_size"], 3)
-
+        self.assertIn("aggregate_game_performance=None", text)
     def test_config_defaults_limit_evolved_prompt_length(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
+        config = ExperimentConfig.from_mapping({})
         self.assertEqual(config.max_prompt_chars, 4000)
         self.assertEqual(config.max_prompt_lines, 80)
+        self.assertEqual(config.match_commentator_sample_count, 10)
         self.assertEqual(config.result_win_score, 100.0)
         self.assertEqual(config.result_draw_score, 0.0)
         self.assertEqual(config.result_loss_score, -100.0)
 
-    def test_training_opponent_defaults_to_lightrush_player1(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
-        self.assertEqual(config.opponent, "ai.abstraction.LightRush")
-
-    def test_training_config_ignores_non_lightrush_opponent(self) -> None:
-        config = ExperimentConfig.from_mapping(
-            {
-                "seed_prompts": ["Generate an agent."],
-                "opponent": "ai.PassiveAI",
-            }
-        )
-        self.assertEqual(config.opponent, "ai.abstraction.LightRush")
+    def test_strategy_reflection_sample_budget_is_configurable(self) -> None:
+        config = ExperimentConfig.from_mapping({
+            "llm": {"match_commentator": {"sample_count": 6}},
+        })
+        self.assertEqual(config.match_commentator_sample_count, 6)
 
     def test_training_match_command_uses_candidate_player0_and_lightrush_player1(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -191,7 +237,7 @@ population_size: 3
         self.assertTrue(result.ok)
         self.assertEqual(result.winner, 1)
         self.assertEqual(result.performance_breakdown.result_score, -100)
-        self.assertEqual(objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in objectives.values()))
         self.assertEqual(metrics.completed_match_count, 1)
 
     def test_normalize_prompt_truncates_long_prompt(self) -> None:
@@ -205,47 +251,22 @@ population_size: 3
         prompt = "  first\n\n\n\nsecond\n\n\nthird  "
         normalized = normalize_prompt(prompt, max_chars=100, max_lines=10)
         self.assertEqual(normalized, "first\n\nsecond\n\nthird")
-    def test_failed_game_performance_selects_code_mutation(self) -> None:
-        failed_parent = Candidate(fitness_objectives={"game_performance": FAILED_GAME_PERFORMANCE})
-        self.assertEqual(choose_mutation(failed_parent, random.Random(1)), "code")
-
-    def test_high_code_quality_favors_strategy_mutation(self) -> None:
-        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 501.0})
-        self.assertEqual(choose_mutation(parent, random.Random(1)), "strategy")
-
-    def test_high_code_quality_uses_code_mutation_for_tail(self) -> None:
-        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 501.0})
-
-        class TailRandom:
-            def random(self) -> float:
-                return 0.95
-
-        self.assertEqual(choose_mutation(parent, TailRandom()), "code")
-
-    def test_code_quality_threshold_is_strictly_greater_than_500(self) -> None:
-        parent = Candidate(fitness_objectives={"game_performance": 1.0, "code_quality": 500.0})
-
-        class TailRandom:
-            def random(self) -> float:
-                return 0.95
-
-        self.assertEqual(choose_mutation(parent, TailRandom()), "code")
-
     def test_crossover_uniform_selects_complete_java_source(self) -> None:
         source_a = load_java_template(JavaTemplatePaths()).replace("private void decide", "private void decideA", 1)
         source_b = load_java_template(JavaTemplatePaths()).replace("private void decide", "private void decideB", 1)
-        parent_a = Candidate(id="a", previous_code="old-a", generated_java=source_a)
-        parent_b = Candidate(id="b", previous_code="old-b", generated_java=source_b)
+        parent_a = Candidate(id="a", strategy_prompt="policy-a", generation_prompt="code-a", generated_java=source_a)
+        parent_b = Candidate(id="b", strategy_prompt="policy-b", generation_prompt="code-b", generated_java=source_b)
         child = crossover(parent_a, parent_b, CrossoverContext(generation=2, index=0, rng=random.Random(1)))
         self.assertEqual(child.parent_ids, ("a", "b"))
         self.assertEqual(child.operator, "crossover")
-        self.assertIn(child.previous_code, (source_a, source_b))
+        self.assertEqual(child.generated_java, "")
+        self.assertFalse(hasattr(child, "previous_code"))
 
     def test_selection_binary_tournament_returns_candidates(self) -> None:
         population = [
-            Candidate(id="a", fitness_objectives={"game_performance": 1.0, "code_quality": 0.1}),
-            Candidate(id="b", fitness_objectives={"game_performance": 2.0, "code_quality": 0.2}),
-            Candidate(id="c", fitness_objectives={"game_performance": 3.0, "code_quality": 0.3}),
+            Candidate(id="a", fitness_objectives={case: 1.0 for case in LEXICASE_CASES}),
+            Candidate(id="b", fitness_objectives={case: 2.0 for case in LEXICASE_CASES}),
+            Candidate(id="c", fitness_objectives={case: 3.0 for case in LEXICASE_CASES}),
         ]
         selected = [select_parent(population, random.Random(index)) for index in range(5)]
         self.assertEqual(len(selected), 5)
@@ -266,7 +287,7 @@ population_size: 3
             self.assertEqual(agent.source_paths, (agent.source_path,))
             self.assertTrue(agent.strategy_region)
 
-    def test_missing_java_strategy_marker_is_not_a_runtime_contract_requirement(self) -> None:
+    def test_missing_java_strategy_marker_fails_fixed_scaffold_validation(self) -> None:
         class StaticGenerationBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 source = load_java_template(JavaTemplatePaths())
@@ -274,7 +295,7 @@ population_size: 3
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
+            config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
                 Candidate(strategy_prompt="Generate an agent."),
                 config=config,
@@ -285,14 +306,15 @@ population_size: 3
                 mock=True,
                 ordinal=0,
             )
-        self.assertIsNotNone(evaluation.agent)
-        self.assertTrue(evaluation.compile_result and evaluation.compile_result.ok)
-        self.assertTrue(evaluation.integration_result and evaluation.integration_result.ok)
-        self.assertEqual(len(evaluation.match_results), 10)
-        self.assertEqual(evaluation.candidate.status, "evaluated")
-        self.assertIsNone(evaluation.result.failure_category)
-        self.assertTrue(evaluation.code_quality_breakdown.compile_success)
-        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, 0)
+        self.assertIsNone(evaluation.agent)
+        self.assertIsNone(evaluation.compile_result)
+        self.assertIsNone(evaluation.integration_result)
+        self.assertEqual(evaluation.match_results, [])
+        self.assertEqual(evaluation.candidate.status, "failed")
+        self.assertEqual(evaluation.candidate.failure_stage, "validation")
+        self.assertEqual(evaluation.result.failure_category, "Java validation failure")
+        self.assertFalse(evaluation.code_quality_breakdown.compile_success)
+        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
 
     def test_empty_java_response_fails_before_compile_or_matches(self) -> None:
         class NonJavaBackend(GenerationBackend):
@@ -301,7 +323,7 @@ population_size: 3
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]})
+            config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
                 Candidate(strategy_prompt="Generate an agent."),
                 config=config,
@@ -318,107 +340,118 @@ population_size: 3
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
         self.assertFalse(evaluation.code_quality_breakdown.compile_success)
-        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, 0)
+        self.assertEqual(evaluation.code_quality_breakdown.strategy_region_score, -100)
         self.assertIn("strategy region", " ".join(evaluation.strategy_region_score_result.strategy_region_validation["agent_strategy_region"].errors).lower())
 
-    def test_seed_prompt_template_expands_to_blank_strategy_prompt(self) -> None:
-        config = ExperimentConfig.from_mapping({"seed_prompt_template": "microrts_blank_strategy_agent"})
-        self.assertEqual(len(config.seed_prompts), 1)
-        self.assertEqual(config.seed_prompts[0], microrts_blank_strategy_prompt())
-        self.assertIn("one CandidateAgent.java file", config.seed_prompts[0])
-        self.assertIn("six fixed action helpers", config.seed_prompts[0])
-
-    def test_mock_search_writes_nsga2_artifacts(self) -> None:
+    def test_mock_search_writes_lexicase_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             config_path = root / "config.yaml"
             config_path.write_text(
                 "\n".join(
                     [
-                        "seed_prompts:",
-                        '  - "Generate a Java MicroRTS economy agent."',
-                        '  - "Generate a Java MicroRTS defensive agent."',
                         "generations: 2",
                         "population_size: 3",
                         "crossover_rate: 1.0",
                         "mutation_rate: 1.0",
-                        'generation_backend: "mock"',
-                        'alignment_backend: "mock"',
                         f'runs_dir: "{(root / "runs").as_posix()}"',
-                        "matches_per_candidate: 1",
                     ]
                 ),
                 encoding="utf-8",
             )
             config = ExperimentConfig.from_file(config_path)
             result = run_search(config, config_path=config_path, mock=True, run_id="test_run")
+            self.assertEqual(
+                {path.name for path in result.run_dir.iterdir()},
+                {
+                    "manifest.json", "config.yaml", "summary.json", "timing.jsonl",
+                    "generations", "candidates", "generated_agents", "classes",
+                    "archives", "llm_logs", "final_test",
+                },
+            )
             self.assertTrue((result.run_dir / "config.yaml").exists())
             self.assertTrue((result.run_dir / "candidates").is_dir())
             self.assertTrue((result.run_dir / "generated_agents").is_dir())
-            self.assertTrue((result.run_dir / "results.jsonl").exists())
+            self.assertFalse((result.run_dir / "results.jsonl").exists())
+            self.assertFalse((result.run_dir / "source_config").exists())
+            self.assertFalse((result.run_dir / "source_config.json").exists())
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
-            self.assertEqual(summary["objectives"], ["game_performance", "code_quality"])
-            self.assertEqual(len(summary["final_population"]), 3)
-            self.assertTrue((result.run_dir / "resolved_config.json").exists())
+            self.assertEqual(summary["objectives"], list(LEXICASE_CASES))
+            self.assertEqual(len(summary["final_population_ids"]), 3)
+            self.assertFalse((result.run_dir / "resolved_config.json").exists())
+            self.assertFalse((result.run_dir / "prompt_snapshot.json").exists())
+            self.assertFalse((result.run_dir / "final_population.json").exists())
             candidate_dir = next((result.run_dir / "candidates").iterdir())
             self.assertTrue((candidate_dir / "lineage.json").exists())
-            self.assertTrue((candidate_dir / "genotype" / "strategy_prompt.txt").exists())
+            self.assertTrue((candidate_dir / "genotype" / "policy_prompt.txt").exists())
             self.assertTrue(
                 (candidate_dir / "generation" / "normalized_candidate.java").exists()
             )
             self.assertFalse((candidate_dir / "CandidateBehaviors.java").exists())
             self.assertTrue((candidate_dir / "compilation" / "compilation_result.json").exists())
-            self.assertTrue((candidate_dir / "evaluation" / "matches.json").exists())
+            self.assertFalse((candidate_dir / "evaluation" / "matches.json").exists())
             self.assertTrue((candidate_dir / "evaluation" / "game_performance.json").exists())
             self.assertTrue((candidate_dir / "evaluation" / "code_quality.json").exists())
             quality = json.loads((candidate_dir / "evaluation" / "code_quality.json").read_text(encoding="utf-8"))
             self.assertIn("score", quality)
+            self.assertEqual(quality["score"], quality["code_quality"])
             self.assertEqual(
-                quality["score"],
-                round(
-                    sum(
-                        quality[name]
-                        for name in (
-                            "successful_base",
-                            "compilation_score",
-                            "function_score",
-                            "strategy_alignment_score",
-                        )
-                    ),
-                    6,
-                ),
+                quality["code_quality"],
+                round(100 - quality["code_quality_details"]["complexity_penalty"], 6),
             )
             self.assertTrue((candidate_dir / "evaluation" / "objectives.json").exists())
-            self.assertTrue((candidate_dir / "candidate_result.json").exists())
-            individual = json.loads((candidate_dir / "individual.json").read_text(encoding="utf-8"))
+            self.assertTrue((candidate_dir / "candidate.json").exists())
+            individual = json.loads((candidate_dir / "candidate.json").read_text(encoding="utf-8"))
             self.assertNotIn("prompt_length", individual["fitness_objectives"])
+            metrics = [
+                json.loads(path.read_text(encoding="utf-8"))
+                for path in sorted((result.run_dir / "generations").glob("generation_*.json"))
+            ]
+            generation_one_aos = next(item["aos"] for item in metrics if item["generation"] == 1)
+            self.assertEqual(
+                set(generation_one_aos["operators"]),
+                {"strategy_reflection", "generate_code_reflection", "balance_reflection"},
+            )
+            self.assertAlmostEqual(
+                sum(generation_one_aos["post_update_probabilities"].values()), 1.0
+            )
+            self.assertTrue(list((result.run_dir / "candidates").glob("*/aos/reward.json")))
+            aos_reward_path = next((result.run_dir / "candidates").glob("*/aos/reward.json"))
+            aos_reward = json.loads(aos_reward_path.read_text(encoding="utf-8"))
+            self.assertEqual(aos_reward["schema_version"], "eagle-aos-reward-v3")
+            self.assertEqual(aos_reward["offspring_id"], aos_reward_path.parents[1].name)
+            self.assertIn(aos_reward["operator"], {"strategy", "code"})
+            self.assertIn(aos_reward["operator_id"], generation_one_aos["operators"])
+            self.assertTrue(
+                aos_reward_path.parents[2].joinpath(aos_reward["comparison_parent_id"]).is_dir()
+            )
+            self.assertEqual(aos_reward["head_to_head"]["total_matches"], 18)
+            self.assertEqual(aos_reward["reward_source"], "head2head")
+            self.assertIn("operator_quality_before", aos_reward)
+            self.assertIn("operator_quality_after", aos_reward)
 
-    def test_front_zero_signature_tracks_objectives_not_candidate_ids(self) -> None:
+    def test_population_signature_tracks_opponent_cases_not_candidate_ids(self) -> None:
         first = [
-            Candidate(id="front-a", fitness_objectives={"game_performance": 10.0, "code_quality": 20.0}),
-            Candidate(id="dominated-a", fitness_objectives={"game_performance": 1.0, "code_quality": 2.0}),
+            Candidate(id="front-a", fitness_objectives={case: 10.0 for case in LEXICASE_CASES}),
+            Candidate(id="dominated-a", fitness_objectives={case: 1.0 for case in LEXICASE_CASES}),
         ]
         second = [
-            Candidate(id="front-b", fitness_objectives={"game_performance": 10.0, "code_quality": 20.0}),
-            Candidate(id="dominated-b", fitness_objectives={"game_performance": 1.0, "code_quality": 2.0}),
+            Candidate(id="front-b", fitness_objectives={case: 10.0 for case in LEXICASE_CASES}),
+            Candidate(id="dominated-b", fitness_objectives={case: 1.0 for case in LEXICASE_CASES}),
         ]
 
-        self.assertEqual(front_zero_signature(first), front_zero_signature(second))
+        self.assertEqual(population_signature(first), population_signature(second))
 
-    def test_search_stops_when_front_zero_stagnates(self) -> None:
+    def test_search_stops_when_population_stagnates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             config_path = root / "config.yaml"
             config_path.write_text(
                 "\n".join(
                     [
-                        "seed_prompts:",
-                        '  - "seed"',
                         "generations: 10",
                         "population_size: 1",
-                        'generation_backend: "mock"',
-                        'alignment_backend: "mock"',
-                        "front0_stagnation_generations: 2",
+                        "stagnation_generations: 2",
                         f'runs_dir: "{(root / "runs").as_posix()}"',
                     ]
                 ),
@@ -431,7 +464,7 @@ population_size: 3
                     Candidate(
                         id=f"evaluated-{generation}",
                         generation=generation,
-                        fitness_objectives={"game_performance": 10.0, "code_quality": 20.0},
+                        fitness_objectives={case: 10.0 for case in LEXICASE_CASES},
                     )
                 ]
 
@@ -443,12 +476,13 @@ population_size: 3
 
             self.assertEqual(evaluate.call_count, 3)
             self.assertEqual(result.completed_generation, 2)
-            self.assertEqual(result.stop_reason, "front0_stagnation_2_generations")
+            self.assertEqual(result.stop_reason, "stagnation_2_generations")
             summary = json.loads((result.run_dir / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["completed_generation"], 2)
-            self.assertEqual(summary["stop_reason"], "front0_stagnation_2_generations")
-            self.assertTrue((result.run_dir / "generation_002_population.json").exists())
-            self.assertFalse((result.run_dir / "generation_003_population.json").exists())
+            self.assertEqual(summary["stop_reason"], "stagnation_2_generations")
+            self.assertTrue((result.run_dir / "generations" / "generation_0002.json").exists())
+            self.assertFalse((result.run_dir / "generations" / "generation_0003.json").exists())
+            self.assertFalse((result.run_dir / "generation_002_population.json").exists())
 
     def test_generate_java_agent_uses_stable_template_class_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -709,6 +743,7 @@ population_size: 3
                 match_index=0,
                 match_artifacts_dir=root / "matches",
                 mock=True,
+                artifact_mode="full",
             )
             second = run_microrts_match(
                 microrts_dir=Path("third_party/microrts"),
@@ -719,6 +754,7 @@ population_size: 3
                 match_index=1,
                 match_artifacts_dir=root / "matches",
                 mock=True,
+                artifact_mode="full",
             )
             self.assertNotEqual(first.replay_path, second.replay_path)
             self.assertNotEqual(first.telemetry_path, second.telemetry_path)
@@ -745,42 +781,16 @@ population_size: 3
             + breakdown.final_resource_diff,
         )
 
-    def test_persistence_failure_reports_error_without_false_loss(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            round_state_dir = root / "round_states"
-            round_state_dir.mkdir()
-            (round_state_dir / "round_000000.log").write_text(
-                "current time 0 p0 player 0(5) p1 player 1(5)\n",
-                encoding="utf-8",
-            )
-            telemetry_path = root / "telemetry.json"
-            telemetry_path.mkdir()
-            telemetry, summary, error = persist_match_artifacts(
-                raw_result={"winner": 0, "final_tick": 0, "result": "p0_win"},
-                round_state_dir=round_state_dir,
-                replay_path=root / "replay.xml",
-                telemetry_path=telemetry_path,
-                summary_path=root / "summary.json",
-                match_dir=root,
-                tick_limit=10,
-                scoring_config=GamePerformanceConfig(),
-            )
-        self.assertIsNotNone(error)
-        self.assertEqual(summary["result"], "p0_win")
-        self.assertEqual(telemetry.performance.result_score, 100)
-
     def test_backend_failure_gets_failed_game_performance(self) -> None:
         class FailingBackend(GenerationBackend):
             def generate(self, candidate: Candidate, class_name: str) -> str:
                 raise RuntimeError("backend down")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            evaluation = evaluate_candidate(Candidate(strategy_prompt="Generate an agent."), config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}), backend=FailingBackend(), generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
+            evaluation = evaluate_candidate(Candidate(strategy_prompt="Generate an agent."), config=ExperimentConfig.from_mapping({}), backend=FailingBackend(), generated_agents_dir=root / "generated_agents", classes_dir=root / "classes", mock=True, ordinal=0)
         self.assertEqual(evaluation.candidate.status, "failed")
         self.assertEqual(evaluation.result.failure_category, "Backend request failure")
-        self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
-        self.assertIn("code_quality", evaluation.candidate.fitness_objectives)
+        self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in evaluation.candidate.fitness_objectives.values()))
 
     def test_non_java_response_fails_before_compile_or_matches(self) -> None:
         class NonJavaBackend(GenerationBackend):
@@ -792,7 +802,7 @@ population_size: 3
             candidate = Candidate(id="badjson", strategy_prompt="Generate an agent.")
             evaluation = evaluate_candidate(
                 candidate,
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["Generate an agent."]}),
+                config=ExperimentConfig.from_mapping({}),
                 backend=NonJavaBackend(),
                 generated_agents_dir=root / "generated_agents",
                 classes_dir=root / "classes",
@@ -807,16 +817,15 @@ population_size: 3
         self.assertEqual(evaluation.result.failure_category, "Java validation failure")
         self.assertIn("package must be ai.generated", evaluation.result.failure_reason or "")
         self.assertEqual(evaluation.candidate.compile_status, "not_run")
-        self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], FAILED_GAME_PERFORMANCE)
+        self.assertTrue(all(value == FAILED_GAME_PERFORMANCE for value in evaluation.candidate.fitness_objectives.values()))
         self.assertEqual(evaluation.candidate.failure_stage, "validation")
         self.assertTrue(evaluation.result.validation_result.error)
 
-    def test_dominates_uses_objective_vector(self) -> None:
-        strong = Candidate(fitness_objectives={"game_performance": 2, "code_quality": 0.8})
-        weak = Candidate(fitness_objectives={"game_performance": 1, "code_quality": 0.8})
-        tradeoff = Candidate(fitness_objectives={"game_performance": 3, "code_quality": 0.2})
-        self.assertTrue(dominates(strong, weak))
-        self.assertFalse(dominates(strong, tradeoff))
+    def test_lexicase_cases_are_the_only_selection_dimensions(self) -> None:
+        strong_passive = Candidate(id="passive", fitness_objectives={"passive": 10.0, "random": 0.0})
+        strong_random = Candidate(id="random", fitness_objectives={"passive": 0.0, "random": 10.0})
+        selected = select_parent([strong_passive, strong_random], random.Random(4))
+        self.assertIn(selected, (strong_passive, strong_random))
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,7 +10,8 @@ from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation import evaluate_candidate
-from evaluation.microrts_runner import MatchResult
+from eagle.opponent_cases import LEXICASE_CASES
+from evaluation.runtime_evaluation import MatchResult
 from generation.backend import MockGenerationBackend
 
 
@@ -19,7 +20,7 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             candidate = Candidate(id="phase4-success", strategy_prompt="Build an economy, produce units, and attack intelligently.")
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+            config = ExperimentConfig.from_mapping({})
             candidates_dir = root / "candidates"
             write_candidate_inputs(candidates_dir, candidate)
             evaluation = evaluate_candidate(
@@ -35,38 +36,31 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             write_candidate_artifacts(candidates_dir, evaluation)
             candidate_dir = candidates_dir / candidate.id
 
-            self.assertEqual(len(evaluation.match_results), 10)
+            self.assertEqual(len(evaluation.match_results), config.expected_match_count)
             self.assertTrue(all(result.ok for result in evaluation.match_results))
             self.assertIsNone(evaluation.result.failure_stage)
-            self.assertNotEqual(evaluation.candidate.fitness_objectives["game_performance"], -1000)
+            self.assertEqual(set(evaluation.candidate.fitness_objectives), set(LEXICASE_CASES))
+            self.assertTrue(all(value != -1000 for value in evaluation.candidate.fitness_objectives.values()))
             self.assertIsNotNone(evaluation.function_capability_result)
             self.assertIsNotNone(evaluation.strategy_alignment_result)
             self.assertEqual(evaluation.strategy_alignment_result.score, 10)
-            self.assertEqual(
-                evaluation.candidate.fitness_objectives["code_quality"],
-                500
-                + evaluation.code_quality_breakdown.compilation_score
-                + evaluation.code_quality_breakdown.function_score
-                + evaluation.code_quality_breakdown.strategy_alignment_score,
-            )
+            self.assertEqual(evaluation.candidate.game_eval_result["game_performance"], evaluation.game_metrics.objective)
 
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
-            self.assertEqual(len(timing["match_durations_seconds"]), 10)
+            self.assertEqual(len(timing["match_durations_seconds"]), config.expected_match_count)
             self.assertEqual(timing["evaluation"]["status"], "success")
             self.assertEqual(timing["strategy_alignment_llm"]["attempts"][0]["attempt"], 1)
             self.assertGreaterEqual(timing["objective_calculation_duration_seconds"], 0)
             self.assertGreaterEqual(timing["matches_total_duration_seconds"], 0)
 
-            seeds = set()
-            for index in range(10):
+            for index in range(config.expected_match_count):
                 match_dir = candidate_dir / "matches" / f"match_{index:02d}"
                 result = json.loads((match_dir / "result.json").read_text(encoding="utf-8"))
                 match_timing = json.loads((match_dir / "timing.json").read_text(encoding="utf-8"))
-                seeds.add(result["seed"])
+                self.assertNotIn("seed", result)
                 self.assertEqual(result["source_hash"], evaluation.match_results[0].source_hash)
                 self.assertEqual(result["class_hash"], evaluation.match_results[0].class_hash)
                 self.assertEqual(match_timing["status"], "success")
-            self.assertEqual(len(seeds), 10)
 
             alignment = json.loads((candidate_dir / "strategy_alignment" / "result.json").read_text(encoding="utf-8"))
             self.assertEqual(alignment["parsed_response"]["score"], 10.0)
@@ -74,16 +68,17 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             self.assertTrue((candidate_dir / "strategy_alignment" / "response_raw.txt").read_text(encoding="utf-8"))
             capability = json.loads((candidate_dir / "evaluation" / "function_capability.json").read_text(encoding="utf-8"))
             objectives = json.loads((candidate_dir / "evaluation" / "objectives.json").read_text(encoding="utf-8"))
-            summary = json.loads((candidate_dir / "evaluation" / "summary.json").read_text(encoding="utf-8"))
+            summary = json.loads((candidate_dir / "candidate.json").read_text(encoding="utf-8"))
             self.assertEqual(capability["function_score"], evaluation.code_quality_breakdown.function_score)
-            self.assertEqual(objectives["objective_names"], ["game_performance", "code_quality"])
-            self.assertEqual(summary["completed_match_count"], 10)
+            self.assertEqual(objectives["objective_names"], list(LEXICASE_CASES))
+            self.assertEqual(set(objectives["opponent_scores"]), set(LEXICASE_CASES))
+            self.assertEqual(summary["status"], "evaluated")
 
     def test_partial_runtime_failure_uses_progress_score_and_retains_evidence(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             candidate = Candidate(id="phase4-partial", strategy_prompt="strategy")
-            config = ExperimentConfig.from_mapping({"seed_prompts": ["seed"]})
+            config = ExperimentConfig.from_mapping({})
             candidates_dir = root / "candidates"
             write_candidate_inputs(candidates_dir, candidate)
             calls = []
@@ -98,7 +93,6 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
                         command=["java"],
                         returncode=1,
                         match_index=index,
-                        seed=kwargs["seed"],
                         status="failed",
                         failure_category="runtime_exception",
                         failure_reason="boom",
@@ -109,7 +103,6 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
                     score=100.0,
                     command=["java"],
                     match_index=index,
-                    seed=kwargs["seed"],
                     status="success",
                     duration_seconds=0.01,
                     raw_result={"winner": 0, "result": "p0_win"},
@@ -129,21 +122,21 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
             write_candidate_artifacts(candidates_dir, evaluation)
             candidate_dir = candidates_dir / candidate.id
 
-            self.assertEqual(calls, list(range(10)))
+            self.assertEqual(calls, list(range(config.expected_match_count)))
             self.assertEqual(evaluation.result.failure_stage, "runtime")
             self.assertEqual(evaluation.result.failure_category, "runtime_exception")
-            self.assertEqual(evaluation.candidate.fitness_objectives["game_performance"], -1000)
-            self.assertEqual(evaluation.candidate.fitness_objectives["code_quality"], -221)
+            self.assertEqual(set(evaluation.candidate.fitness_objectives), set(LEXICASE_CASES))
+            self.assertTrue(all(value == -1000 for value in evaluation.candidate.fitness_objectives.values()))
             self.assertIsNone(evaluation.function_capability_result)
             self.assertIsNone(evaluation.strategy_alignment_result)
             runtime_failure = json.loads((candidate_dir / "evaluation" / "runtime_failure.json").read_text(encoding="utf-8"))
             game_performance = json.loads((candidate_dir / "evaluation" / "game_performance.json").read_text(encoding="utf-8"))
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
-            self.assertEqual(runtime_failure["completed_match_count"], 9)
-            self.assertEqual(len(runtime_failure["retained_matches"]), 10)
-            self.assertEqual(game_performance["completed_match_count"], 9)
-            self.assertEqual(len(game_performance["opponent_results"]), 10)
-            self.assertEqual(len(timing["match_durations_seconds"]), 10)
+            self.assertEqual(runtime_failure["completed_match_count"], config.expected_match_count - 1)
+            self.assertEqual(len(runtime_failure["retained_matches"]), config.expected_match_count)
+            self.assertEqual(game_performance["completed_match_count"], config.expected_match_count - 1)
+            self.assertEqual(len(game_performance["opponent_results"]), len(LEXICASE_CASES))
+            self.assertEqual(len(timing["match_durations_seconds"]), config.expected_match_count)
             self.assertEqual(timing["evaluation"]["status"], "failed")
             self.assertEqual(timing["strategy_alignment_llm"]["attempts"], [])
 

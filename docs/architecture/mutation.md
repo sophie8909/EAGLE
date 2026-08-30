@@ -1,118 +1,149 @@
-# Mutation
+# Mutation responsibility boundaries
 
-Reflection and Rewrite requests are hard-limited before transport. The shared LLM
-transport keeps the beginning (instructions) and end (latest evidence) of an oversized
-request, inserts an explicit truncation marker, and sends at most 60,000 characters.
-Full telemetry and raw evidence remain in candidate artifacts; they are not silently
-discarded from persistence or allowed to overflow the llama.cpp context.
+EAGLE has three mutation operators over its two prompt spaces.
+Strategy Reflection searches policy space; Code Reflection searches reusable
+policy-to-code translation instructions. Both stop at a prompt gene. The
+Generator remains a separate complete-Java revision stage. In
+`inherited_genotype` mode the selected Java component is preserved through
+mutation and supplied to that stage; neither mutation edits Java directly.
 
-The evaluation-to-mutation hand-off is the typed `ReflectionContext` in
-`eagle/mutation.py`. Its authoritative objectives, evaluation status, failure fields,
-and generation/compilation/integration/game/Code Quality evidence are copied from the
-evaluated Candidate snapshot. Reflection does not recompute fitness or infer missing
-stage results from legacy scalar fields.
+## Strategy Reflection
 
-## Normative source
+Strategy Reflection changes only `strategy_prompt` (the policy gene):
 
-See specification sections 7 through 10 and state-transition examples 28.2 and 28.3. Mutation persistence is owned by [`../artifacts/artifact_schema.md`](../artifacts/artifact_schema.md); LLM timing is owned by [`../artifacts/timing_schema.md`](../artifacts/timing_schema.md).
+```text
+selected match traces
+  -> one Match Commentator call per selected match
+  -> MatchAnalysis summaries
+  -> Coach
+  -> replacement strategy_prompt
+```
 
-## Shared contract
+The Match Commentator receives the current policy, opponent identity, map,
+player side, result, an allowlisted compact match record, and the canonical
+raw/compact trace. It receives no Java, code-generation prompt, compiler
+diagnostics, or fitness-writing task. It analyzes one game and reports observed
+strategies, turning points, strengths, weaknesses, and decisive causes.
+The response boundary validates the canonical MatchAnalysis schema and performs
+only bounded structural normalization: a full `match_analysis` wrapper may be
+unwrapped, strategy summaries may be strings, and `key_observations.time` ranges
+may supply the first tick. A response still fails when it has no numeric
+tick-backed turning point or crosses the role boundary.
 
-Strategy Mutation and Code Mutation are separate. Strategy Mutation changes only
-`strategy_prompt`; Code Mutation changes only `generation_prompt`. The final Java
-Generator remains a separate stage after either mutation.
-
-## Strategy Mutation
-
-Strategy Reflection is a sports-team workflow:
-
-1. Save and stream complete per-match logs.
-2. Match Commentator analyzes one match at a time.
-3. Delete each temporary raw log after terminal Commentator handling.
-4. Manager aggregates all compact match analyses and performance results.
-5. Coach replaces the parent `strategy_prompt` using the Manager plan.
-6. Generator receives the new strategy and the existing code-generation prompt.
-
-The Match Commentator never rewrites strategy or Java. The Manager never writes
-the final prompt or Java. The Coach never writes Java. Raw ticks are never sent
-to Manager or Coach. See [`../strategy-reflection.md`](../strategy-reflection.md)
-for schemas, artifact ownership, failure semantics, and budgeting.
+The Coach receives the current policy, selected MatchAnalysis summaries, and
+the existing global evaluation/selection metadata. It receives no Java or
+code-generation diagnostics. Its replacement policy describes economy,
+production, attack timing, defense, expansion, and targeting—not Java.
+Commentator and Coach transport, parsing, and semantic validation share the
+configured bounded attempt budget. Each attempt has candidate-owned raw
+evidence plus one run timing event. The validated Coach result always uses the
+authoritative input policy as its parent-policy field; a model echo remains only
+in raw/parsed evidence and cannot rewrite provenance.
 
 Canonical state transition:
 
 ```text
-before mutation:       A1 + B2 + C1
-after Coach:            A2 + B2 + C1
-after Java generation:  A2 + B3 + C1
-next inherited state:   A2 + B3 + C1
+(policy A1, code prompt B1, Java C1) -> (policy A2, code prompt B1, Java C1) -> Java C2
 ```
 
-## Code Mutation
-Changes only `generation_prompt`; preserves `strategy_prompt` and `previous_code`.
+## Code Reflection
 
-Reflection inputs must include the strategy, current generation prompt, parent Java, latest child Java if any, raw generation response, validation/compile/integration/runtime results, completed-match count, function and strategy-alignment scores, and failure stage/category/reason. The response is `code_reflection` and must not generate replacement Java.
+Code Reflection changes only `generation_prompt` (the code-generation gene):
 
-Rewrite inputs are the original generation prompt, reflection, strategy, parent Java, and code-quality summary. The response is only `new_generation_prompt` suitable for full-file regeneration.
+```text
+current policy + current Java phenotype
+  -> Policy-Code Alignment Reviewer
+  -> alignment review
+current code-generation prompt + alignment review
+  -> Code Prompt Rewriter
+  -> replacement generation_prompt
+```
+
+The Reviewer receives policy plus Java. Optional static/compiler evidence may
+explain structural failure. It never receives raw game logs as evidence and
+does not propose a better game policy. Each mismatch records the policy
+requirement, observed Java behavior, mismatch, and required generation
+behavior. The Reviewer distinguishes a clear policy violated by Java, an
+ambiguous policy, and faithful implementation. A bad but faithfully implemented
+policy belongs to Strategy Reflection.
+
+Reviewer fields are persisted and forwarded in canonical form. The parser
+accepts a local model splitting one textual generation correction into a JSON
+string array (or a documented text object) and joins it into the required
+single string; it does not accept missing alignment fields, prose outside the
+JSON object, Java output, or an unknown alignment classification.
+
+The Code Prompt Rewriter receives only the current code-generation prompt and
+Reviewer output. It returns exactly one JSON object containing only the
+non-empty string field `rewritten_prompt`; the parsed value replaces the
+code-generation prompt and cannot modify policy.
 
 Canonical state transition:
 
 ```text
-before mutation:      A1 + B2 + C1
-after rewrite:        A1 + B2 + C2
-after Java generation:A1 + B3 + C2
-next inherited state: A1 + B3 + C2
+(policy A1, code prompt B1, Java C1) -> (policy A1, code prompt B2, Java C1) -> Java C2
 ```
 
-## Mutation selection
+## Balance Reflection
 
-- Use Strategy Mutation when reliable completed-game evidence exists.
-- Prefer Code Mutation for generation, validation, compilation, integration, or runtime failures; low capability/alignment; or excessive compiler warnings.
-- A candidate without reliable gameplay results must not use Strategy Mutation as its primary operator.
-- Select feedback evidence by component provenance and mutation responsibility, not by prompt equality.
+Balance Reflection diagnoses uneven outcomes without consuming gameplay traces,
+Java, either source prompt, compiler diagnostics, or objective-writing tasks.
+Its sole reflector input is a bounded W/D/L table grouped by opponent, map, and
+candidate side. It must name weak cells as `opponent`, `map`, and `p0`, `p1`, or
+`both`, then provide separate strategy and code-generation focus lists.
 
-## Persistence checklist
+The resulting two rewrite calls are one atomic mutation: the Strategy Rewriter
+receives the current strategy prompt plus Balance analysis, and the Code
+Rewriter receives the current generation prompt, Balance analysis, and the
+immutable API guide. Both must succeed before either gene changes.
 
-- Save both requests and raw responses even if a later stage fails.
-- Save the versioned `reflection_context.json` evidence snapshot with candidate ID,
-  operation, objectives, evaluation status, failure cause, and stage evidence.
-- Record mutation type, models, attempts, status, and errors.
-- Record that no mutation was applied with explicit `applied: false` metadata.
-- Save the final Java generation request/response separately from mutation calls.
-- Include every attempt in candidate timing.
+```text
+(policy A1, code prompt B1, Java C1)
+  -> aggregate opponent × map × side W/D/L Balance Reflection
+  -> strategy rewrite A2 + generation-prompt rewrite B2
+  -> (policy A2, code prompt B2, Java C1) -> Java C2
+```
 
-## Required tests
+## Selection and persistence
 
-- Three distinct calls occur in order for each mutated offspring.
-- Strategy Mutation changes only `strategy_prompt`; Code Mutation changes only `generation_prompt`.
-- Reflection failure, Rewrite failure, and final generation failure retain all earlier artifacts.
-- Response parsing rejects Java/prose where a rewritten prompt alone is required.
-- Mutation selection follows available evidence and failure stage.
-- The canonical state transitions produce the correct next-generation `previous_code`.
+The configured static/AOS controller selects exactly one mutation operator.
+Reward calculation changes neither responsibility boundary nor the seven-case
+fitness contract.
 
-## Prohibited legacy behavior
+New artifacts live under:
 
-- rule-based no-op mutation presented as an LLM mutation;
-- one-call mutation;
-- mutation without Reflection and Rewrite;
-- direct Java edits, patches, or method-body mutation;
-- unbounded accumulation of old compiler errors in `generation_prompt`;
-- discarded raw responses or unlogged retries.
+```text
+mutation/strategy_reflection/
+mutation/code_reflection/
+mutation/balance_reflection/
+```
 
+Each directory retains requests, raw responses, parsed/scoped evidence,
+attempts, errors, and timing. Full Java is canonical only at
+`phenotype/CandidateAgent.java`; reflection metadata uses a path reference when
+the request artifact already contains the needed Java evidence.
 
-## Implementation milestone
+For Code Reflection, default-mode evidence identifies the evaluated source
+candidate's phenotype (`reviewed_phenotype_artifact`). In inherited mode the
+Reviewer instead evaluates the child's current policy against its independently
+selected inherited Java component; artifacts retain both its Java-parent
+provenance and the exact inherited source. The Rewriter still changes only the
+selected code-generation prompt.
 
-Phase 2A implements the Reflection stage for both mutation types with typed evidence, a backend abstraction, bounded retries, raw request/response artifacts, and UTC attempt timing. It intentionally does not rewrite prompts or generate Java; those stages are delivered in Phase 2B and 2C.
+After crossover, Strategy Reflection evidence comes from the recorded policy
+parent. Code Reflection evidence comes from the recorded code-generation-prompt
+parent, so the reviewed policy/Java pair is the evaluated source that actually
+used the translation gene being mutated. Prompt text equality is never used to
+choose evidence.
 
-## Phase 2B implementation milestone
+## Hard invariants
 
-Phase 2B adds Strategy Prompt Rewrite and Generation Prompt Rewrite after Reflection. Rewritten prompt components are first-class candidate state, original prompt values are retained in mutation artifacts, and Java generation remains deferred to Phase 2C.
-
-
-## Phase 2C implementation milestone
-
-Phase 2C connects both mutation types to the existing final Java Generation boundary.
-The rewritten genotype is passed unchanged into the candidate generation input, which
-contains the rewritten strategy prompt or generation prompt, inherited previous_code,
-and the other prompt component. Evaluation then stores the new generated_java phenotype
-while retaining previous_code. Mutation and generation have independent canonical
-artifacts and timing records, including terminal generation failures.
+- Strategy mutation preserves `generation_prompt` exactly.
+- Code mutation preserves `strategy_prompt` exactly.
+- Balance mutation changes both prompt genes only after its reflector and both
+  rewrite stages succeed; otherwise it preserves both exactly.
+- Both mutations preserve inherited Java input exactly and never edit it directly.
+- Generator and Evaluation preserve both prompt genes and the recorded
+  pre-generation Java input exactly.
+- Evidence routing tests use sentinels to prove Match Commentator/Coach exclude
+  Java and code prompt, and Code Reviewer excludes raw game logs.

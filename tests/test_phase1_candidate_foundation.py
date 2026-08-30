@@ -1,3 +1,4 @@
+import hashlib
 import json
 import random
 import tempfile
@@ -5,42 +6,55 @@ import unittest
 from itertools import product
 from pathlib import Path
 
-from eagle.artifacts import (
-    ARTIFACT_SCHEMA_VERSION,
-    OBJECTIVE_FORMULA_VERSION,
-    write_candidate_artifacts,
-    write_candidate_inputs,
-    write_resolved_config,
-)
+import yaml
+
+from eagle.artifacts import write_candidate_artifacts, write_candidate_inputs, write_run_config
 from eagle.candidate import Candidate, LINEAGE_SCHEMA_VERSION
 from eagle.config import ExperimentConfig
 from eagle.crossover import CrossoverContext, crossover
 from eagle.evaluation import evaluate_candidate
 from eagle.search import initialize_population, run_search
+from eagle.run_artifacts import load_candidate
+from generation.agent_template import JavaTemplatePaths, load_java_template
 from generation.backend import MockGenerationBackend
+from generation.backend import InitialJavaSeedBackend
 
 
 class Phase1CandidateFoundationTests(unittest.TestCase):
-    def test_previous_code_and_generated_java_are_distinct_serialized_state(self) -> None:
+    def test_automatic_candidate_id_includes_zero_padded_generation(self) -> None:
+        first = Candidate(generation=7)
+        second = Candidate(generation=7)
+        self.assertRegex(first.id, r"^gen_0007_[0-9a-f]{12}$")
+        self.assertNotEqual(first.id, second.id)
+
+    def test_explicit_candidate_id_is_preserved_for_resume_and_fixtures(self) -> None:
+        self.assertEqual(Candidate(id="legacy-candidate-id", generation=7).id, "legacy-candidate-id")
+
+    def test_serialized_genotype_has_exactly_two_evolvable_components(self) -> None:
+        payload = Candidate(
+            id="candidate-a",
+            strategy_prompt="policy",
+            generation_prompt="translation",
+            generated_java="class Generated {}",
+        ).to_json_dict()
+        self.assertEqual(payload["strategy_prompt"], "policy")
+        self.assertEqual(payload["generation_prompt"], "translation")
+        self.assertEqual(payload["generated_java"], "class Generated {}")
+        self.assertNotIn("previous_code", payload)
+        self.assertNotIn("previous_code_parent_id", payload)
+
+    def test_evaluation_does_not_mutate_two_gene_genotype(self) -> None:
         candidate = Candidate(
             id="candidate-a",
-            previous_code="class Previous {}",
-            generated_java="class Generated {}",
+            strategy_prompt="defend then expand",
+            generation_prompt="translate every policy condition explicitly",
         )
-
-        payload = candidate.to_json_dict()
-
-        self.assertEqual(payload["previous_code"], "class Previous {}")
-        self.assertEqual(payload["generated_java"], "class Generated {}")
-        self.assertEqual(payload["candidate_id"], "candidate-a")
-
-    def test_evaluation_does_not_overwrite_input_genotype(self) -> None:
-        previous_code = "class PreGenerationInput {}"
+        before = (candidate.strategy_prompt, candidate.generation_prompt)
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             evaluation = evaluate_candidate(
-                Candidate(id="candidate-a", previous_code=previous_code),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
+                candidate,
+                config=ExperimentConfig.from_mapping({}),
                 backend=MockGenerationBackend(),
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",
@@ -48,402 +62,271 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
                 mock=True,
                 ordinal=0,
             )
-
-        self.assertEqual(evaluation.candidate.previous_code, previous_code)
+        self.assertEqual(
+            (evaluation.candidate.strategy_prompt, evaluation.candidate.generation_prompt),
+            before,
+        )
         self.assertIn("package ai.generated;", evaluation.candidate.generated_java)
-        self.assertNotEqual(
-            evaluation.candidate.previous_code,
-            evaluation.candidate.generated_java,
-        )
 
-    def test_child_previous_code_inherits_parent_generated_java(self) -> None:
-        parents = (
-            Candidate(
-                id="a",
-                previous_code="old-a",
-                generated_java="generated-a",
-                strategy_prompt="strategy-a",
-                generation_prompt="prompt-a",
-            ),
-            Candidate(
-                id="b",
-                previous_code="old-b",
-                generated_java="generated-b",
-                strategy_prompt="strategy-b",
-                generation_prompt="prompt-b",
-            ),
+    def test_generator_uses_checked_in_scaffold_not_parent_phenotype(self) -> None:
+        parent_java = "package ai.generated;\n// PARENT_PHENOTYPE_SENTINEL\n"
+        candidate = Candidate(
+            strategy_prompt="policy",
+            generation_prompt="translation",
+            generated_java=parent_java,
         )
+        request = candidate.generation_input(class_name="CandidateAgent")
+        scaffold = load_java_template(JavaTemplatePaths())
+        self.assertIn(scaffold, request)
+        self.assertNotIn("PARENT_PHENOTYPE_SENTINEL", request)
 
-        child = crossover(
-            *parents,
-            CrossoverContext(1, 0, random.Random(3)),
-        )
-
-        source = next(
-            parent for parent in parents if parent.id == child.previous_code_parent_id
-        )
-        self.assertEqual(child.previous_code, source.generated_java)
-        self.assertNotIn(child.previous_code, {"old-a", "old-b"})
-
-    def test_uniform_crossover_records_all_component_parent_ids(self) -> None:
-        parent_a = Candidate(
-            id="a",
-            strategy_prompt="strategy-a",
-            generated_java="generated-a",
-            generation_prompt="prompt-a",
-        )
-        parent_b = Candidate(
-            id="b",
-            strategy_prompt="strategy-b",
-            generated_java="generated-b",
-            generation_prompt="prompt-b",
-        )
-
-        child = crossover(
-            parent_a,
-            parent_b,
-            CrossoverContext(2, 0, random.Random(11)),
-        )
-
+    def test_uniform_crossover_records_only_two_component_parent_ids(self) -> None:
+        parent_a = Candidate(id="a", strategy_prompt="policy-a", generation_prompt="code-a", generated_java="java-a")
+        parent_b = Candidate(id="b", strategy_prompt="policy-b", generation_prompt="code-b", generated_java="java-b")
+        child = crossover(parent_a, parent_b, CrossoverContext(2, 0, random.Random(11)))
         self.assertIn(child.strategy_parent_id, {"a", "b"})
-        self.assertIn(child.previous_code_parent_id, {"a", "b"})
         self.assertIn(child.generation_prompt_parent_id, {"a", "b"})
-        self.assertEqual(child.operator, "crossover")
+        self.assertFalse(hasattr(child, "previous_code_parent_id"))
+        self.assertNotIn(child.generated_java, {"java-a", "java-b"})
         self.assertEqual(child.parent_ids, ("a", "b"))
 
-    def test_crossover_provenance_is_deterministic_for_seeded_rng(self) -> None:
-        parent_a = Candidate(
-            id="a",
-            strategy_prompt="strategy-a",
-            generated_java="generated-a",
-            generation_prompt="prompt-a",
-        )
-        parent_b = Candidate(
-            id="b",
-            strategy_prompt="strategy-b",
-            generated_java="generated-b",
-            generation_prompt="prompt-b",
-        )
-
-        first = crossover(
-            parent_a,
-            parent_b,
-            CrossoverContext(1, 0, random.Random(19)),
-        )
-        second = crossover(
-            parent_a,
-            parent_b,
-            CrossoverContext(1, 0, random.Random(19)),
-        )
-
-        self.assertEqual(
-            (
-                first.strategy_parent_id,
-                first.previous_code_parent_id,
-                first.generation_prompt_parent_id,
-            ),
-            (
-                second.strategy_parent_id,
-                second.previous_code_parent_id,
-                second.generation_prompt_parent_id,
-            ),
-        )
-        self.assertEqual(first.previous_code, second.previous_code)
-
-    def test_all_crossover_source_combinations_remain_exact_with_equal_text(self) -> None:
+    def test_all_four_two_gene_crossover_combinations_preserve_provenance(self) -> None:
         class ChoiceSequence:
-            def __init__(self, choices: tuple[int, int, int]) -> None:
+            def __init__(self, choices: tuple[int, int]) -> None:
                 self.choices = iter(choices)
 
             def choice(self, values):
                 return values[next(self.choices)]
 
-        parent_a = Candidate(
-            id="a",
-            strategy_prompt="equal strategy",
-            previous_code="old-a",
-            generated_java="equal generated java",
-            generation_prompt="equal prompt",
-        )
-        parent_b = Candidate(
-            id="b",
-            strategy_prompt="equal strategy",
-            previous_code="old-b",
-            generated_java="equal generated java",
-            generation_prompt="equal prompt",
-        )
-
+        parent_a = Candidate(id="a", strategy_prompt="same", generation_prompt="same")
+        parent_b = Candidate(id="b", strategy_prompt="same", generation_prompt="same")
         observed = set()
-        for choices in product((0, 1), repeat=3):
-            child = crossover(
-                parent_a,
-                parent_b,
-                CrossoverContext(1, 0, ChoiceSequence(choices)),
-            )
-            provenance = (
-                child.strategy_parent_id,
-                child.previous_code_parent_id,
-                child.generation_prompt_parent_id,
-            )
+        for choices in product((0, 1), repeat=2):
+            child = crossover(parent_a, parent_b, CrossoverContext(1, 0, ChoiceSequence(choices)))
+            provenance = (child.strategy_parent_id, child.generation_prompt_parent_id)
             observed.add(provenance)
-            self.assertEqual(
-                provenance,
-                tuple("a" if choice == 0 else "b" for choice in choices),
-            )
-            self.assertEqual(child.previous_code, "equal generated java")
+            self.assertEqual(provenance, tuple("a" if choice == 0 else "b" for choice in choices))
+        self.assertEqual(len(observed), 4)
 
-        self.assertEqual(len(observed), 8)
-
-    def test_seed_lineage_serializes_canonical_null_provenance(self) -> None:
-        lineage = Candidate(id="seed-a", generation=0).lineage_to_json_dict()
-
-        self.assertEqual(lineage["lineage_schema_version"], LINEAGE_SCHEMA_VERSION)
-        self.assertEqual(lineage["candidate_id"], "seed-a")
-        self.assertEqual(lineage["parent_ids"], [])
-        self.assertEqual(lineage["operator"], "seed")
-        self.assertIsNone(lineage["mutation_type"])
-        self.assertIsNone(lineage["strategy_parent_id"])
-        self.assertIsNone(lineage["previous_code_parent_id"])
-        self.assertIsNone(lineage["generation_prompt_parent_id"])
-        self.assertEqual(lineage["source_candidate_ids"], [])
-
-    def test_every_generation_zero_candidate_has_seed_lineage(self) -> None:
-        population = initialize_population(
-            ExperimentConfig.from_mapping(
-                {"seed_prompts": ["seed"], "population_size": 4}
-            )
-        )
-
-        self.assertEqual(len(population), 4)
-        for candidate in population:
-            lineage = candidate.lineage_to_json_dict()
-            self.assertEqual(lineage["operator"], "seed")
-            self.assertEqual(lineage["parent_ids"], [])
-            self.assertEqual(lineage["source_candidate_ids"], [])
-
-    def test_crossover_lineage_serializes_exact_provenance(self) -> None:
-        candidate = Candidate(
+    def test_lineage_contains_only_two_component_provenance_fields(self) -> None:
+        lineage = Candidate(
             id="child",
             generation=2,
             parent_ids=("a", "b"),
             operator="crossover",
             strategy_parent_id="a",
-            previous_code_parent_id="b",
-            generation_prompt_parent_id="a",
-        )
-
-        lineage = candidate.lineage_to_json_dict()
-
-        self.assertEqual(lineage["parent_ids"], ["a", "b"])
+            generation_prompt_parent_id="b",
+        ).lineage_to_json_dict()
+        self.assertEqual(lineage["lineage_schema_version"], LINEAGE_SCHEMA_VERSION)
         self.assertEqual(lineage["strategy_parent_id"], "a")
-        self.assertEqual(lineage["previous_code_parent_id"], "b")
-        self.assertEqual(lineage["generation_prompt_parent_id"], "a")
+        self.assertEqual(lineage["generation_prompt_parent_id"], "b")
         self.assertEqual(lineage["source_candidate_ids"], ["a", "b"])
+        self.assertNotIn("previous_code_parent_id", lineage)
 
-    def test_lineage_json_is_written_for_every_operator_shape(self) -> None:
+    def test_lineage_json_is_written_for_seed_copy_crossover_and_mutation(self) -> None:
         candidates = (
             Candidate(id="seed", operator="seed"),
-            Candidate(
-                id="copy",
-                parent_ids=("seed",),
-                operator="copy",
-                strategy_parent_id="seed",
-                previous_code_parent_id="seed",
-                generation_prompt_parent_id="seed",
-            ),
-            Candidate(
-                id="cross",
-                parent_ids=("a", "b"),
-                operator="crossover",
-                strategy_parent_id="a",
-                previous_code_parent_id="b",
-                generation_prompt_parent_id="a",
-            ),
-            Candidate(
-                id="cross-mutation",
-                parent_ids=("a", "b"),
-                operator="crossover+mutation",
-                mutation_type="strategy",
-                strategy_parent_id="a",
-                previous_code_parent_id="b",
-                generation_prompt_parent_id="a",
-            ),
+            Candidate(id="copy", parent_ids=("seed",), operator="copy", strategy_parent_id="seed", generation_prompt_parent_id="seed"),
+            Candidate(id="cross", parent_ids=("a", "b"), operator="crossover", strategy_parent_id="a", generation_prompt_parent_id="b"),
+            Candidate(id="mutated", parent_ids=("a", "b"), operator="crossover+mutation", mutation_type="strategy", strategy_parent_id="a", generation_prompt_parent_id="b"),
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             for candidate in candidates:
                 write_candidate_inputs(root, candidate)
-            payloads = {
-                candidate.id: json.loads(
-                    (root / candidate.id / "lineage.json").read_text(encoding="utf-8")
-                )
-                for candidate in candidates
-            }
+            payloads = [json.loads((root / candidate.id / "lineage.json").read_text(encoding="utf-8")) for candidate in candidates]
+        self.assertTrue(all("previous_code_parent_id" not in payload for payload in payloads))
 
-        self.assertEqual(set(payloads), {candidate.id for candidate in candidates})
-        self.assertEqual(payloads["cross-mutation"]["mutation_type"], "strategy")
-
-    def test_run_lineage_ids_resolve_to_earlier_acyclic_candidates(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            config_path = root / "config.yaml"
-            config_path.write_text(
-                "\n".join(
-                    (
-                        "seed_prompts:",
-                        '  - "seed-a"',
-                        '  - "seed-b"',
-                        "generations: 2",
-                        "population_size: 2",
-                        "crossover_rate: 1.0",
-                        "mutation_rate: 0.0",
-                        f'runs_dir: "{(root / "runs").as_posix()}"',
-                    )
-                ),
-                encoding="utf-8",
-            )
-            config = ExperimentConfig.from_file(config_path)
-            result = run_search(
-                config,
-                config_path=config_path,
-                mock=True,
-                run_id="lineage_run",
-            )
-            lineage_records = [
-                json.loads(path.read_text(encoding="utf-8"))
-                for path in (result.run_dir / "candidates").glob("*/lineage.json")
-            ]
-
-        by_id = {record["candidate_id"]: record for record in lineage_records}
-        self.assertEqual(len(by_id), 4)
-        for record in lineage_records:
-            for parent_id in record["parent_ids"]:
-                self.assertIn(parent_id, by_id)
-                self.assertLess(by_id[parent_id]["generation"], record["generation"])
-
-        visiting: set[str] = set()
-        visited: set[str] = set()
-
-        def visit(candidate_id: str) -> None:
-            self.assertNotIn(candidate_id, visiting)
-            if candidate_id in visited:
-                return
-            visiting.add(candidate_id)
-            for parent_id in by_id[candidate_id]["parent_ids"]:
-                visit(parent_id)
-            visiting.remove(candidate_id)
-            visited.add(candidate_id)
-
-        for candidate_id in by_id:
-            visit(candidate_id)
-
-    def test_candidate_artifacts_preserve_genotype_and_phenotype_files(self) -> None:
-        previous_code = "class PreGenerationInput {}"
+    def test_candidate_artifacts_separate_two_gene_genotype_and_java_phenotype(self) -> None:
+        candidate = Candidate(id="candidate-a", strategy_prompt="policy", generation_prompt="translation")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             evaluation = evaluate_candidate(
-                Candidate(id="candidate-a", previous_code=previous_code),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
+                candidate,
+                config=ExperimentConfig.from_mapping({}),
                 backend=MockGenerationBackend(),
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",
                 mock=True,
                 ordinal=0,
             )
-            candidates_dir = root / "candidates"
-            write_candidate_artifacts(candidates_dir, evaluation)
-            candidate_dir = candidates_dir / "candidate-a"
-            genotype = (candidate_dir / "genotype" / "previous_code.java").read_text(
-                encoding="utf-8"
-            )
-            phenotype = (
-                candidate_dir / "generation" / "normalized_candidate.java"
-            ).read_text(encoding="utf-8")
+            write_candidate_artifacts(root / "candidates", evaluation)
+            candidate_dir = root / "candidates" / candidate.id
+            self.assertEqual((candidate_dir / "genotype" / "policy_prompt.txt").read_text(), "policy")
+            self.assertEqual((candidate_dir / "genotype" / "code_generation_prompt.txt").read_text(), "translation")
+            self.assertEqual((candidate_dir / "phenotype" / "CandidateAgent.java").read_text(), evaluation.candidate.generated_java)
+            self.assertFalse((candidate_dir / "genotype" / "previous_code.java").exists())
 
-        self.assertEqual(genotype, previous_code)
-        self.assertEqual(phenotype, evaluation.candidate.generated_java)
-        self.assertNotEqual(genotype, phenotype)
-
-    def test_resolved_config_reflects_parsed_values_and_runtime_overrides(self) -> None:
-        config = ExperimentConfig.from_mapping(
-            {
-                "seed_prompts": ["seed"],
-                "generations": 4,
-                "population_size": 6,
-                "crossover_rate": 0.25,
-                "mutation_rate": 0.5,
-                "random_seed": 41,
-                "generation_backend": "openai",
-                "llm_model": "configured-model",
-                "tick_limit": 345,
-                "opponent": "ai.PassiveAI",
-                "matches_per_candidate": 3,
-            }
-        )
+    def test_legacy_loader_reads_old_paths_but_discards_previous_code_gene(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             run_dir = Path(temp_dir)
-            write_resolved_config(run_dir, config, mock=True)
-            payload = json.loads(
-                (run_dir / "resolved_config.json").read_text(encoding="utf-8")
+            candidate_dir = run_dir / "candidates" / "legacy"
+            (candidate_dir / "genotype").mkdir(parents=True)
+            (candidate_dir / "generation").mkdir()
+            (candidate_dir / "candidate.json").write_text(json.dumps({
+                "candidate_id": "legacy",
+                "generation": 1,
+                "previous_code_parent_id": "old-java-parent",
+            }))
+            (candidate_dir / "genotype" / "strategy_prompt.txt").write_text("legacy policy")
+            (candidate_dir / "genotype" / "generation_prompt.txt").write_text("legacy translation")
+            (candidate_dir / "genotype" / "previous_code.java").write_text("LEGACY_PREVIOUS_CODE")
+            (candidate_dir / "generation" / "normalized_candidate.java").write_text("legacy phenotype")
+            loaded = load_candidate(run_dir, "legacy")
+        self.assertEqual(loaded.strategy_prompt, "legacy policy")
+        self.assertEqual(loaded.generation_prompt, "legacy translation")
+        self.assertEqual(loaded.generated_java, "legacy phenotype")
+        self.assertFalse(hasattr(loaded, "previous_code"))
+        self.assertFalse(hasattr(loaded, "previous_code_parent_id"))
+
+    def test_every_generation_zero_candidate_has_seed_lineage(self) -> None:
+        population = initialize_population(ExperimentConfig.from_mapping({"population_size": 4}))
+        self.assertEqual(len(population), 1)
+        self.assertTrue(all(candidate.lineage_to_json_dict()["source_candidate_ids"] == [] for candidate in population))
+        self.assertTrue(all(candidate.strategy_prompt == "" for candidate in population))
+
+    def test_three_distinct_seed_policies_share_the_no_llm_generation_zero_java(self) -> None:
+        config = ExperimentConfig.from_file(
+            "configs/experiments/static_0826/ministral3_8b_static_0.5_0.5.yaml"
+        )
+        population = initialize_population(config)
+        backend = InitialJavaSeedBackend(config.initial_java_seed_path)
+
+        self.assertEqual(len(population), 3)
+        self.assertEqual(
+            tuple(candidate.strategy_prompt for candidate in population),
+            config.seed_prompts,
+        )
+        self.assertEqual(population[0].strategy_prompt, "")
+        self.assertTrue(all(candidate.strategy_prompt for candidate in population[1:]))
+        self.assertEqual(backend.operation, "initial_java_seed")
+        self.assertIsNone(backend.model)
+        self.assertEqual(
+            {backend.generate(candidate, "CandidateAgent") for candidate in population},
+            {config.initial_java_seed_path.read_text(encoding="utf-8")},
+        )
+
+    def test_generation_zero_java_decide_entrypoint_is_actionless(self) -> None:
+        source = ExperimentConfig.from_mapping({}).initial_java_seed_path.read_text(encoding="utf-8")
+        decide = source.split("private void decide(AgentContext context) {", 1)[1].split("\n    }", 1)[0]
+        get_action = source.split("public PlayerAction getAction", 1)[1].split(
+            "// EAGLE_AGENT_STRATEGY_START", 1
+        )[0]
+
+        self.assertNotIn("command", decide)
+        self.assertNotIn("applyAutoDefense", get_action)
+        self.assertIn("return translateActions(player, gs);", get_action)
+
+    def test_initial_java_seed_backend_is_generation_zero_only(self) -> None:
+        config = ExperimentConfig.from_mapping({})
+        backend = InitialJavaSeedBackend(config.initial_java_seed_path)
+        source = backend.generate(Candidate(generation=0), "CandidateAgent")
+        self.assertEqual(source, config.initial_java_seed_path.read_text(encoding="utf-8"))
+        with self.assertRaisesRegex(ValueError, "generation-zero only"):
+            backend.generate(Candidate(generation=1), "CandidateAgent")
+
+    def test_blank_policy_bootstrap_forces_strategy_reflection_before_code(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExperimentConfig.from_mapping({
+                "runs_dir": temp_dir,
+                "generations": 1,
+                "population_size": 3,
+                "mutation_rate": 1.0,
+                "crossover_rate": 0.0,
+                "reflection_operator_mode": "static",
+                "strategy_reflection_probability": 0.0,
+                "code_reflection_probability": 1.0,
+            })
+
+            result = run_search(config, mock=True, run_id="blank-policy-bootstrap")
+
+        self.assertEqual(len(result.final_population), 3)
+        self.assertTrue(all(item.mutation_type == "strategy" for item in result.final_population))
+        self.assertTrue(all(item.strategy_prompt.strip() for item in result.final_population))
+        self.assertTrue(all(
+            item.metadata["aos"]["eligible_operator_ids"] == ["strategy_reflection"]
+            for item in result.final_population
+        ))
+
+    def test_initial_java_seed_artifacts_record_no_llm_call_and_source_provenance(self) -> None:
+        config = ExperimentConfig.from_mapping({})
+        candidate = initialize_population(config)[0]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            candidates_dir = root / "candidates"
+            evaluation = evaluate_candidate(
+                candidate,
+                config=config,
+                backend=InitialJavaSeedBackend(config.initial_java_seed_path),
+                generated_agents_dir=root / "generated",
+                classes_dir=root / "classes",
+                match_artifacts_dir=candidates_dir / candidate.id / "matches",
+                mock=True,
+                ordinal=0,
             )
+            write_candidate_artifacts(candidates_dir, evaluation)
+            candidate_dir = candidates_dir / candidate.id
+            generation = json.loads(
+                (candidate_dir / "generation" / "result.json").read_text(encoding="utf-8")
+            )
+            timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
+            alignment = json.loads(
+                (candidate_dir / "strategy_alignment" / "result.json").read_text(encoding="utf-8")
+            )
+            phenotype = (candidate_dir / "phenotype" / "CandidateAgent.java").read_bytes()
+            generation_request = (candidate_dir / "generation" / "request.txt").read_text()
+            generation_response = (candidate_dir / "generation" / "response_raw.txt").read_text()
 
+        self.assertEqual(generation["operation"], "initial_java_seed")
+        self.assertIsNone(generation["model"])
+        self.assertEqual(generation["attempts"], [])
+        self.assertEqual(generation["source"]["kind"], "checked_in_java_seed")
+        self.assertEqual(generation["source"]["path"], str(config.initial_java_seed_path.resolve()))
+        self.assertEqual(generation["source"]["sha256"], hashlib.sha256(phenotype).hexdigest())
+        self.assertEqual(generation_request, "")
+        self.assertEqual(generation_response, "")
+        self.assertIsNone(timing["generation_llm"]["started_at"])
+        self.assertIsNone(timing["generation_llm"]["duration_seconds"])
+        self.assertEqual(timing["generation_llm"]["attempts"], [])
+        self.assertEqual(alignment["status"], "not_applicable")
+        self.assertIsNone(alignment["score"])
+        self.assertEqual(alignment["attempts"], [])
+        self.assertIsNone(timing["strategy_alignment_llm"]["duration_seconds"])
+
+    def test_run_lineage_ids_resolve_to_earlier_acyclic_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = root / "config.yaml"
+            config_path.write_text("\n".join(("generations: 2", "population_size: 2", "crossover_rate: 1.0", "mutation_rate: 0.0", f'runs_dir: "{(root / "runs").as_posix()}"')), encoding="utf-8")
+            result = run_search(ExperimentConfig.from_file(config_path), config_path=config_path, mock=True, run_id="lineage_run")
+            records = [json.loads(path.read_text()) for path in (result.run_dir / "candidates").glob("*/lineage.json")]
+            generation_zero = json.loads(
+                (result.run_dir / "generations" / "generation_0000.json").read_text()
+            )
+            generation_one = json.loads(
+                (result.run_dir / "generations" / "generation_0001.json").read_text()
+            )
+        self.assertEqual(len(generation_zero["population"]), 1)
+        self.assertEqual(generation_zero["metrics"]["expected_match_count"], 126)
+        self.assertEqual(len(generation_one["population"]), 2)
+        by_id = {record["candidate_id"]: record for record in records}
+        for record in records:
+            for parent_id in record["parent_ids"]:
+                self.assertLess(by_id[parent_id]["generation"], record["generation"])
+
+    def test_run_config_is_the_resolved_single_source_of_truth(self) -> None:
+        config = ExperimentConfig.from_mapping({"generations": 4, "population_size": 6, "random_seed": 41})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = Path(temp_dir)
+            write_run_config(run_dir, config, mock=True)
+            payload = yaml.safe_load((run_dir / "config.yaml").read_text())
         self.assertEqual(payload["population_size"], 6)
-        self.assertEqual(payload["generation_count"], 4)
-        self.assertEqual(payload["crossover_rate"], 0.25)
-        self.assertEqual(payload["mutation_rate"], 0.5)
-        self.assertEqual(payload["front0_stagnation_generations"], 5)
-        self.assertEqual(payload["matches_per_candidate"], 10)
-        self.assertEqual(payload["opponent"], "ai.abstraction.LightRush")
-        self.assertEqual(
-            [item["class_name"] for item in payload["evaluation_opponents"]],
-            [
-                "ai.RandomAI",
-                "ai.RandomBiasedAI",
-                "ai.PassiveAI",
-                "ai.abstraction.LightRush",
-                "ai.abstraction.HeavyRush",
-                "ai.abstraction.BFSLightRush",
-                "ai.abstraction.GreedyLightRush",
-                "ai.abstraction.FloodFillLightRush",
-                "ai.abstraction.AStarLightRush",
-                "ai.abstraction.BFSHeavyRush",
-            ],
-        )
-        self.assertEqual(payload["max_cycles"], 345)
-        self.assertEqual(payload["ea_random_seed"], 41)
-        self.assertEqual(payload["llm_backend"], "mock")
-        self.assertIsNone(payload["llm_model"])
-        self.assertIsNone(payload["llm_temperature"])
-        self.assertEqual(payload["retry_policy"]["max_attempts"], 1)
-        self.assertEqual(payload["artifact_schema_version"], ARTIFACT_SCHEMA_VERSION)
-        self.assertEqual(
-            payload["objective_formula_version"],
-            OBJECTIVE_FORMULA_VERSION,
-        )
-        self.assertRegex(payload["git_commit_hash"], r"^[0-9a-f]{40}$")
-        self.assertEqual(len(payload["microrts_match_seeds"]), 10)
-        self.assertEqual(len(set(payload["microrts_match_seeds"])), 10)
-        self.assertIsNone(payload["prompt_version"])
-        self.assertNotIn("microrts_match_seeds", payload["unsupported"])
-        self.assertIn("prompt_version", payload["unsupported"])
+        self.assertEqual(payload["execution_mode"], "mock")
+        self.assertNotIn("match_seeds", payload)
 
-    def test_generic_metadata_is_not_needed_to_reconstruct_lineage(self) -> None:
-        candidate = Candidate(
-            id="child",
-            parent_ids=("a", "b"),
-            operator="crossover",
-            strategy_parent_id="b",
-            previous_code_parent_id="a",
-            generation_prompt_parent_id="b",
-            metadata={},
-        )
-
-        lineage = candidate.lineage_to_json_dict()
-
-        self.assertEqual(lineage["strategy_parent_id"], "b")
-        self.assertEqual(lineage["previous_code_parent_id"], "a")
-        self.assertEqual(lineage["generation_prompt_parent_id"], "b")
-        self.assertEqual(lineage["source_candidate_ids"], ["b", "a"])
+    def test_obsolete_match_seeds_are_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "match_seeds is obsolete"):
+            ExperimentConfig.from_mapping({"match_seeds": [0, 1, 2]})
 
 
 if __name__ == "__main__":

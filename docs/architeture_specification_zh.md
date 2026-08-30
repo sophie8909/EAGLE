@@ -1,344 +1,228 @@
-# EAGLE ?嗆?蝮質汗
+# EAGLE 架構說明（中文摘要）
 
-> **EAGLE = Evolutionary Algorithm for Game-playing with LLM-Enabled Agents**
+狀態：2026-08-26 現行 executable contract 的中文摘要。英文權威規格為
+[`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
-?遢?辣?舐策雿輻?霈?蜇閬賬? 
-Codex 撖虫???霈??`docs/README.md` ?????望??銵?隞塚?  
-銝?隞交?辣雿撖虫?閬靘???
-EAGLE ?桀??敹璅??舫? Evolutionary Algorithm 瞍??賢???摰 MicroRTS Java Agent ??Prompt 蝯???銝 GEPA?CE?IPRO?APO????context optimization?urrogate research嚗?銝?典??唳????LLM ??runtime agent??
-## 1. 閬?瘜??辣閫
+## 系統定位
 
-- `docs/eagle_architecture_spec.md` ?臬銝?擃?憡? Architecture Contract??- ?望? `architecture/`?evaluation/`?artifacts/` ?辣???潭??蝬剛風?痊隞駁???雿?敺??寡??潸?蝒?- `implementation/current_status.md` ?芣?餈啁??撘祕??鈭?暻潦?- `implementation/architecture_gaps.md` 閮?閬?瘜?撌桃嚗誑???潔葉撠瘙箏????柴?- `implementation/architecture_gaps.md` ?芸??蝘駁?摨?銝??孵神?格??嗆???- ?祆?隞嗆鈭粹??梯???Traditional Chinese mirror嚗???Codex ?祕雿???
-| docs/linux_wsl2_runtime_audit.md | Native Ubuntu + WSL2 Ubuntu shared Linux runtime support matrix and deployment guidance. | Linux/WSL2 runtime audit and smoke-test contract. |
-?桀?蝔?撌脩??瑕?銝??Candidate????Java file generation???Uniform Crossover???Objective ?迂??NSGA-II ?箇?嚗??迤??挾 Mutation LLM??0-match contract?迤蝣?Objective formulas?ailure-stage fitness????artifact/timing/lineage schema 蝑???蝣?implementation gaps??
-## 2. Candidate嚗??典? Genotype ??Java Phenotype
+EAGLE 使用 LLM 在離線階段產生與改寫 Java MicroRTS agent。實際比賽執行時
+不會呼叫 LLM。每個 phenotype 都是一份完整的
+`ai.generated.CandidateAgent` Java 原始碼，不使用 patch、method-body map 或
+runtime LLM policy。
 
-瘥?Candidate ??Genotype ???典?嚗?
-| 蝚西? | 甈? | ?券?|
-| --- | --- | --- |
-| `A` | Strategy Prompt | ?膩 Agent ??? MicroRTS 蝑??|
-| `B` | Previous Code | Parent ?餈?甈∪祕????瘚?銝行??Evaluation ????Java source??|
-| `C` | Code Generation Prompt | ?內 LLM 憒???摰?蝺刻陌?泵??MicroRTS contract ??Java file??|
+## Candidate 與演化流程
 
-?隞?Candidate ?航”蝷箇嚗?
-```text
-A1 + B1 + C1
+Candidate 有兩種明確模式。預設 `generated_phenotype` 的 genotype 包含兩個
+可演化 prompt：
+
+1. `strategy_prompt`：遊戲 policy gene
+2. `generation_prompt`：policy-to-Java translation gene
+
+在預設模式，Java `CandidateAgent.java` 只屬於 phenotype／evidence，不會傳給
+子代。`inherited_genotype` 則加入第三個完整 Java component。Uniform Crossover
+對 policy、generation prompt 與 Java 各自獨立選 parent，保存三者來源 ID；
+Generator 成功產生的 child Java 會成為下一代可選取的 Java component。這是
+明確設定且有版本的 genotype，不是舊版隱含的 `previous_code` 欄位。
+
+新建立的 candidate ID 使用 `gen_<四位 generation>_<12 位十六進位>`，例如
+`gen_0007_3a81c65d20bf`，讓 candidate artifact folder 可直接按 generation
+辨識與排序。從既有 artifact 或 resume 載入的明確 ID 不會被重新命名。
+
+每一代依序執行 seeded lexicase parent selection、crossover、可選的 Strategy、
+Code 或 Balance mutation、完整 Java generation、validation、compilation、integration、
+126 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。Survivor
+selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
+選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
+`(n + n)`。
+
+`random_seed` 影響 EA 隨機、lexicase case 順序、operator、crossover、mutation
+intent 與 reflection sampling。MicroRTS match 不宣稱 seeded reproducibility；
+重複比賽只用 `round_index` 識別。
+
+## Reflection 與 Prompt
+
+Reflection operator mode 只有三種：
+
+- `static`
+- `aos_opponent`
+- `aos_head2head`
+
+Strategy Mutation 只修改 `strategy_prompt`；Code Mutation 只修改
+`generation_prompt`。Balance Reflection 只接收依 opponent、map 與 candidate
+side 匯總的 W/D/L 表，辨識弱 cell 後依序重寫兩個 prompt；兩次 rewrite 都成功才
+原子地套用，任何一步失敗都保留兩個原 prompt。三者完成後都必須重新產生完整 Java。
+
+Strategy Reflection 只使用 policy 與 match evidence。Match Commentator 不會收到
+Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Code
+Reflection 在預設模式比較 policy 與當前 Java phenotype；在 inherited 模式則
+比較 child 當前 policy 與 independently selected Java component。兩者皆可選用
+static/compiler evidence，但不使用 raw game logs；Code Prompt Rewriter 只收到
+原 generation prompt 與 alignment review。Generator 永遠使用兩個 prompt gene
+與固定 checked-in Java scaffold，且在 inherited 模式額外收到完整 inherited Java。
+
+Code Prompt Rewriter 固定回傳且只回傳
+`{"rewritten_prompt":"..."}`。Generation 0 依 candidate mode 分流：預設模式仍是
+每個 seed 檔建立一個 candidate，直接載入 `initial_java_seed_path`，不呼叫
+Generator；inherited 模式必須只有一個 seed policy，將同一份 policy 與 callable
+no-op Java 複製到 `population_size` 個 genotype，並對每個 candidate 各呼叫一次
+Generator。因此 population 10 會有 10 份 request／response，也可能得到 10 份
+不同 Java。三份 `static_0826_seed_variants` config 都使用此模式，後續每代以
+`10 + 10` joint pool 做 lexicase survivor selection。
+
+Callable no-op Java 保留完整 action helper API，但 `decide` 不發出 action；同一
+檔案同時是這三份設定的初始 Java component 與 immutable scaffold。空白 policy
+的 Strategy Alignment 仍記為 `not_applicable`、`score: null`，且不建立 alignment
+LLM attempt。
+
+所有走 Generator 的 candidate 可用 `generation_max_attempts` 做有界
+compile-guided decoder。Attempt 1 使用權威的 active genotype 生成請求；若
+extraction 沒有得到完整 source，下一
+次仍重送 base request。若完整 source 在 validation 或 javac 失敗，下一次改用獨立
+的 Java repair prompt，內容必須包含未改動的權威 genes（inherited 模式也含 Java component）、immutable
+action API guide、canonical scaffold、標示為 untrusted 的前一次完整 source，以及
+只屬於前一次 attempt 的結構化診斷。每次實際 request、source、hash、repair chain
+和 evidence 都獨立保存。
+
+Compile-guided decoder 只修正 phenotype 的可驗證編譯問題，不是 Code Reflection，
+也不得修改 gene、策略意圖、lineage、AOS 狀態或 selection case。固定 scaffold-only
+問題要求 strategy region token 完全不變；其他修正另以 deterministic similarity
+guard 阻擋沒有診斷依據的大幅重寫，但此 guard 不能證明語意等價。每個通過
+validation 的完整 source 最多編譯一次，第一個編譯成功的 attempt 直接成為唯一
+canonical phenotype/classes；全部失敗時由最後一次 attempt 決定 failure stage，
+其 source 只算 generation evidence，不會偽裝成 phenotype。Integration 與 126 場
+evaluation 只對選中的 attempt 執行一次，且 integration/runtime failure 不會觸發
+重新生成。舊設定預設仍為一次，`static_0824` 四個 production config 才明列上限
+五次。
+
+模型回覆仍必須是一份具有正確 package、class、constructor、lifecycle method、
+security contract 與唯一 strategy marker pair 的完整 Java。通過此前置 envelope
+檢查後，系統會用「設定中的 canonical scaffold＋模型回覆的 strategy region」
+確定性建立 `normalized_candidate.java`。因此模型刪除未使用的固定 method、改寫
+固定註解或重新排版固定區時，差異仍保留在 raw／extracted evidence，但不會進入
+validation、javac 或 phenotype；partial、結構錯誤或含禁止行為的回覆不會因這個
+正規化步驟被放行。
+
+策略區的座標／佔用查詢只能呼叫固定的
+`isFreeCell(context, x, y)`；它會先檢查 active map bounds，再查詢佔用。
+直接呼叫 `GameState.free(...)`、`PhysicalGameState.getTerrain(...)` 或
+`getUnitAt(...)` 都會在 deterministic validation 被拒絕並成為 decoder repair
+evidence。固定的 `commandMove`、`commandBuild` 也會以目前 `GameState` 的
+bounds 擋下非法座標，避免抽象 action 帶著地圖外座標進入 MicroRTS。
+
+結構化輸出會保留原始 response，並只在 parser 邊界正規化已知的模型格式差異：
+賽評的 `match_analysis/key_observations.time` 與 Reviewer 將文字修正拆成陣列的
+情形。缺少數字 tick、必要欄位、alignment classification 或跨越 role 責任邊界
+仍會判定失敗。Commentator 與 Coach 的 transport、parse、semantic validation
+共用有界重試；每次 attempt 保存 UTC 起訖時間，並在 run `timing.jsonl` 寫一筆
+不重複 prompt／response 的 timing event。
+
+Strategy Reflection 的 candidate artifact 會在 `mutation/strategy_reflection/`
+保存：parent
+`strategy_prompt`、按 Commentator 呼叫順序排列的 match、各次 Commentator
+解析結果、Coach 的結構化與最終 render input、Coach raw／parsed output、正規化後的
+child `strategy_prompt`，以及實際交給 Generator 的 strategy 值。系統沒有另設
+`policy` 欄位；可重用策略就是 genotype 的 `strategy_prompt`。每代另有只保存
+artifact reference 的 policy JSONL sidecar，其他 mutation operator 的 candidate
+也不會被排除。Coach parsed output 會原樣保留模型回顯，但 validated
+`coach_result.parent_strategy_prompt` 一律取自權威的 input gene，不信任模型回顯。
+這些新增內容只供觀測，不改變 prompt、sampling、selection、fitness 或
+evaluation。
+
+新 candidate artifact 將兩個 prompt gene 放在 `genotype/policy_prompt.txt` 與
+`genotype/code_generation_prompt.txt`；inherited 模式另保存
+`genotype/inherited_java.java` 與 `java_parent_id`。Generator 輸出放在
+`phenotype/CandidateAgent.java`；Code Reflection evidence 放在
+`mutation/code_reflection/`；Balance Reflection evidence 放在
+`mutation/balance_reflection/`，並保存 W/D/L table、reflector 與兩個 rewriter 的
+request/response evidence。Snapshot JSON 不重複內嵌完整 inherited Java，resume
+由 canonical genotype 檔重建。
+
+所有 executable prompt body 都放在 `prompts/`，一個 prompt 一個 UTF-8
+`.txt` 檔。`prompts/manifest.toml` 只保存 metadata 與 placeholder contract。
+Python 與 YAML 不再接受 inline prompt、seed template 或重複 prompt body。
+
+## Evaluation
+
+Evolution Evaluation 固定使用七個 opponent：LightRush、HeavyRush、WorkerRush、
+AllInBot、Mayari、COAC、TMA。每個可執行 candidate 使用同一份 Java source 與
+class directory，進行：
+
+`7 opponents × 3 maps × 3 rounds × 2 sides = 126 matches`
+
+Fitness 是七個 maximized opponent case。失敗或 incomplete candidate 的每個
+case 都是 `-1000.0`。加權 aggregate Game Performance 只用於報表。
+WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的重複行為
+充當 identity adapter。每代的 expected/completed match count 是所有 candidate
+的加總，而不是第一個 candidate 的值。
+
+AllInBot 的 preflight 仍驗證 pinned upstream 原始 class 與 JAR hash；實際 search
+與 final test 則在 candidate class tree 之外編譯 reflection-only
+`ai.eagle.SafeAllInBot`。adapter 僅在 upstream delegate 拋出 `Exception`、回傳
+null 或無效 action 時，寫出一次 stderr marker 並永久改為合法 passive action；
+不捕捉 `Throwable` 或嚴重 JVM error。若該隔離使對局完成，artifact 明確保存
+`fault_scope=opponent`、contained/recovered、marker/reason 與
+`scoring_neutralized=true`；保留原始 observed result，但 candidate 的計分一律是
+零分 draw。它不會變成 candidate win，也不是 candidate runtime failure。
+
+Code Quality 也是 diagnostic，不是 lexicase objective。成功分數為：
+
+`100 - (40C + 25N + 20L + 15F)`
+
+其中 C、N、L、F 分別是 normalized cyclomatic complexity、nesting、logical
+LOC 與 longest-function LOC。失敗分數為 `-1000.0`。Compiler、Function
+Capability、Strategy Alignment 只保存為診斷資料；空白 policy 的 Strategy
+Alignment 記為不適用且不呼叫 LLM。
+
+## Match 與 Artifact owner
+
+`evaluation/microrts_runner.py` 只負責七項 integration probe；
+`evaluation/runtime_evaluation.py` 是唯一 match runner。
+
+Integration 不使用空白 state：probe 會載入真實、含雙方 base/worker 的
+`basesWorkers8x8.xml` 兩次，分別以獨立的 one-argument candidate instance 與
+獨立 GameState 呼叫 player 0／player 1，確認 `PlayerAction` 非空、integrity
+合法、可 `issueSafe` 並各 cycle 一次。這能在 126 場前攔截座標越界與跨 side
+state 殘留等 runtime 問題；integration failure 只記錄 evidence，不會回到 decoder
+retry。
+
+每場比賽只保存一份 canonical 壓縮 tick stream：`match_trace.jsonl.gz`。
+Strategy Reflection 直接讀取同一份 trace；同代 sibling 建立完成前保留 parent
+trace，generation 原子落盤後才清理非 survivor 的 trace。`match_log.jsonl.gz` 已移除。
+
+支援的 run schema 只有 `eagle-run-v2`。每個 run 只有一份完整解析後的
+`config.yaml`，generation 使用 compact candidate reference，candidate state
+只放在 `candidates/<id>/candidate.json` 與其 stage artifact。舊的
+`resolved_config.json`、`generation_metrics.jsonl`、`final_population.json`、
+root `errors.jsonl` 與 run-v1 reader 已移除。
+
+## 執行入口
+
+```bash
+./experiment.sh CONFIG_FOLDER_OR_YAML [--mock] [--skip-final-test]
+./experiment.sh --resume RUN_DIR_OR_CONFIG_FOLDER [--mock] [--skip-final-test]
+./analyze.sh RUN_DIR
 ```
 
-???典??臬?箏? Crossover???Mutation ?孵神??Genotype? Final Java Generation LLM ?Ｙ?????`CandidateAgent.java` ? Phenotype??
-EAGLE 銝???
+`experiment.sh`／`python -m eagle experiment` 統一管理 config discovery、
+llama.cpp start/reuse/switch、health check、EA、resume、final test 與 owned-process
+cleanup。舊的 `run.sh`、`run_env.sh`、`python -m eagle run`、
+`python -m eagle runtime` 已移除。
 
-- Java patch ??diff嚗?- ?桐? method body嚗?- ?箏??剖?function ??body map嚗?- split controller/behavior file嚗?- runtime LLM call??
-### Previous Code ??啗???
-?身 Parent 頛詨?荔?
+以資料夾啟動批次時，該設定資料夾會建立 `experiment.yaml` 索引，逐筆記錄
+「config 檔名 → 絕對 run folder」。索引在 run folder 建立後立即原子更新，
+不會在下次執行時被當成 config；既有的 `experiment-v2` 同名設定檔不會被覆寫。
 
-```text
-A1 + B1 + C1
+`--resume` 指向設定資料夾時會讀取既有索引，不會清空它。系統先續跑已索引但
+search 或必要 final test 尚未完成的 run，跳過完整完成者，再依檔名字典序執行
+其餘尚未建立 run 的 config；新 run 仍會原子寫回同一索引。若 search 已完成、
+只缺 final test，則不會為該步驟啟動 llama.cpp。
+
+## 驗證
+
+```bash
+python3 -m compileall eagle evaluation generation
+python3 -m unittest discover -s tests
+git diff --check
 ```
 
-Final Java Generation LLM ??銝血???Evaluation ??Java ??`B2`嚗暻澆靘?銝隞?匱?輻? Parent state 敹??荔?
-
-```text
-A1 + B2 + C1
-```
-
-銝?蝙?刻???`B1`?Previous Code` 敹?隞?”?餈祕?◤ validation?ompilation?ntegration?xecution ??evaluation ????Java??
-## 3. End-to-End Pipeline
-
-```mermaid
-flowchart TD
-    P["Evaluated Population"] --> S["Binary Tournament Selection"]
-    S --> X["Uniform Crossover over A, B, C"]
-    X --> M{"Apply Mutation?"}
-    M -->|No| G["Final Java Generation LLM"]
-    M -->|Strategy Mutation| SR["Strategy Reflection LLM"] --> SW["Strategy Prompt Rewrite LLM"] --> G
-    M -->|Code Mutation| CR["Code Reflection LLM"] --> CW["Code Generation Prompt Rewrite LLM"] --> G
-    G --> V["Source Validation"] --> C["Compile once"] --> I["MicroRTS Integration Check"]
-    I --> E["10 matches vs fixed evaluation roster; no regeneration"]
-    E --> O["game_performance + code_quality"]
-    O --> N["NSGA-II Survivor Selection"] --> P
-```
-
-???Offspring嚗?隢??Crossover???copy嚗?????Mutation嚗敹??? Final Java Generation LLM?rossover ??Mutation 靽格? Genotype嚗???亦???靽格?敺? Java source??
-## 4. Parent Selection ??NSGA-II
-
-Parent 雿輻 Binary Tournament Selection??頛?摨嚗?
-1. Pareto rank 頛????
-2. rank ?詨???crowding distance 頛????
-3. 隞???冽?瘙箏???
-NSGA-II ?芣?嗅???憭批???Objective嚗?
-```text
-game_performance
-code_quality
-```
-
-`strategy_alignment_score` ?舀??銵? `code_quality` ?????殷?銝蝚砌???Objective?仃?? Candidate 隞?? evaluated population 銝哨???failure-stage fitness 銵函內摰粥?啣銝??畾萸?
-## 5. Uniform Crossover
-
-Uniform Crossover 撠???Genotype components ??函??賢? Parent嚗?
-```text
-child.strategy_prompt   <- Parent A ??Parent B ??Strategy Prompt
-child.previous_code     <- Parent A ??Parent B ?餈?evaluated ??Generated Java
-child.generation_prompt <- Parent A ??Parent B ??Code Generation Prompt
-```
-
-靘?嚗?
-```text
-Parent A: A1 + B1 + C1
-Parent B: A2 + B2 + C2
-Child:    A1 + B2 + C1
-```
-
-敹?靽? component-level provenance嚗?
-- `strategy_parent_id`嚗?- `previous_code_parent_id`嚗?- `generation_prompt_parent_id`??
-??甈????冽 lineage reconstruction?ebugging ??迤蝣箇? Mutation feedback???賜?rompt ???臬?詨????冽葫靘???
-## 6. ?拍車 Mutation
-
-EAGLE ?蝔?Mutation嚗trategy Mutation ??Code Mutation???Ⅱ?銝?LLM calls嚗?
-```text
-1. Reflection LLM
-2. Prompt Rewrite LLM
-3. final Java Generation LLM
-```
-
-Reflection ?芾?鞎砍???Prompt Rewrite ?芾撓?箄◤?孵神??Prompt嚗?敺? Java Generation ??????`CandidateAgent.java`?utation 蝯?銝?湔??Java??
-### 6.1 Strategy Mutation
-
-Strategy Mutation ?芯耨??`Strategy Prompt`嚗???`Previous Code` ??`Code Generation Prompt`??
-Strategy Reflection LLM 霈???Strategy?arent Generated Java?? fixed evaluation roster ????10-match evidence???渡??in/Draw/Loss?esource/material/survival/round-state ??behavior summary嚗撓??`strategy_reflection`??
-Strategy Prompt Rewrite LLM 霈??憪?Strategy?eflection?arent Java ??Game Evaluation summary嚗頛詨?啁? Strategy Prompt??
-摰 state transition嚗?
-```text
-??頛詨嚗?           A1 + B1 + C1
-Parent ??銝西?隡?B2嚗1 + B2 + C1
-Strategy Reflection嚗?R_strategy
-Strategy Rewrite嚗?   A2 + B2 + C1
-Final Java Generation ?Ｙ? B3
-Child ?蝯???       A2 + B3 + C1
-```
-
-?迨雿輻??瘙? `A1 + B1 + C1` ??`A2 + B2 + C1`嚗???閫??? Parent ???evaluated Java ?湔??`B2`嚗???Strategy Rewrite ??`A1` ?寞? `A2`嚗?敺?閬???Child ? Java `B3`??
-### 6.2 Code Mutation
-
-Code Mutation ?芯耨??`Code Generation Prompt`嚗???`Strategy Prompt` ??`Previous Code`??
-Code Reflection LLM 霈??Strategy???Generation Prompt?arent Java??賜? Child Java?aw generation response?alidation?ompiler diagnostics?ntegration?untime?ompleted match count?unction capability?trategy alignment ??failure stage/reason嚗撓??`code_reflection`??
-Code Generation Prompt Rewrite LLM 霈??憪?Generation Prompt?eflection?trategy?arent Java ??Code Quality summary嚗頛詨?啁? Code Generation Prompt??
-```text
-Parent evaluated state嚗?A1 + B2 + C1
-Code Reflection嚗?       R_code
-Prompt Rewrite嚗?        A1 + B2 + C2
-Final Java Generation嚗? B3
-Child ?蝯???          A1 + B3 + C2
-```
-
-瘝??舫? gameplay evidence ??Candidate嚗??芸?雿輻 Code Mutation嚗??臭誑 Strategy Mutation ?葫?蝑????
-## 7. Final Java Generation ??Runtime Contract
-
-Final Java Generation LLM ?撓?交摰??`A + B + C`嚗撓?箏?賣銝隞賢???`CandidateAgent.java`嚗?
-- 銝頛詨 patch?iff?SON?ethod body?artial function set ?牧??摮?
-- raw response 敹???extraction ??摮?
-- extracted ??normalized Java 敹???靽?嚗?- Java ?? Source Validation 敺???compile嚗?- compile output 敹???Candidate ???ｇ?
-- `javac` 敹????Ⅱ warning diagnostics嚗?憒?`-Xlint`嚗?- compile 摰?敺????函???MicroRTS Integration Check??
-Validation ????Runtime Contract 撌脫迤撘?獢?
-
-```text
-package: ai.generated
-public class: CandidateAgent
-superclass: AbstractionLayerAI
-```
-
-敹????拙?constructor嚗?
-```java
-CandidateAgent(UnitTypeTable utt)
-CandidateAgent(UnitTypeTable utt, AStarPathFinding pathFinding)
-```
-
-敹??臬?恬?
-
-```java
-PlayerAction getAction(int player, GameState gs)
-void reset()
-AI clone()
-```
-
-compile ??敺??函? Integration stage 靘??瑁?銝?瑼Ｘ嚗?
-1. 敺?Candidate classpath 頛 `ai.generated.CandidateAgent`嚗?2. 蝣箄? class ?臬?瘜?MicroRTS `AI`嚗蒂蝜潭 `AbstractionLayerAI`嚗?3. ?拙?required constructors ?質??撱箇? instance嚗?4. `reset()` ?舀???恬?
-5. `clone()` ? non-null??瘜? `AI` instance嚗?6. 雿輻?撠?瘜?`GameState` ?澆 `getAction()`嚗?7. ??潛 non-null??瘜? `PlayerAction`??
-瘥?瑼Ｘ閮? `passed`?failed` ??`blocked` ????`integration_pass_ratio = passed_check_count / 7`??stage 銝??遙雿??湔迤撘?Match嚗???券?敺??脣 10-match batch??
-LLM 銝?閬??摰?helper ?迂?摰?helper ?賊??摰?strategy region?摰?internal class ?摰?code layout???repository ??template/markers ??implementation state嚗??舐璅瑽??折撖急????
-## 8. MicroRTS Evaluation Protocol
-
-瘥????? Java Candidate 敹?嚗?
-1. Source Validation嚗?2. compile 銝甈∴?
-3. MicroRTS Integration Check嚗?4. 雿輻??隞?source ??銝蝯?compiled classes嚗? fixed evaluation roster ?瑁? 10 ??Match??
-Integration Check ?芸銵?餈唬???load/type/constructor/method/result 撽?嚗???摰 Match?????券?嚗??? 10 ??Evaluation??
-10 ?港???
-
-- 銝??澆 Java Generation LLM嚗?- 銝 regenerate Java嚗?- 銝 Mutation Candidate嚗?- 瘥雿輻?函? artifact directory嚗?- MicroRTS ?舀?蝙?其???seed嚗蒂??seed 撖怠 resolved configuration ??match metadata??
-?芾?撠 10 ?湔?????撠曹??舀???Evaluation?歇摰???Match evidence 隞?靽?嚗game_performance` ??`-1000`嚗?`code_quality` 靘?runtime progress ????
-## 9. Objective 1嚗game_performance`
-
-瘥 Result Score嚗?
-```text
-Win  = +100
-Draw =    0
-Loss = -100
-```
-
-Unit Material嚗?
-```text
-material_difference_t = player_material_t - enemy_material_t
-mean_material_difference = mean(material_difference_t)
-unit_material_score = 5 * tanh(mean_material_difference / material_scale)
-```
-
-蝭???`[-5, +5]`??
-Final Resource嚗?
-```text
-final_resource_difference = player_final_resources - enemy_final_resources
-final_resource_score = 3 * tanh(final_resource_difference / resource_scale)
-```
-
-蝭???`[-3, +3]`??
-Survival / finish speed嚗?
-```text
-survival_ratio = final_tick / max_cycles
-
-Loss: survival_score = 2 * survival_ratio
-Win:  survival_score = 2 * (1 - survival_ratio)
-Draw: survival_score = 0
-```
-
-?敺???Result ??shaping contribution clamp ??`[-10, +10]`嚗?
-```text
-shaping_score = clamp(
-    unit_material_score + final_resource_score + survival_score,
-    -10,
-    +10
-)
-
-match_score = result_score + shaping_score
-game_performance = mean(match_score_1 ... match_score_10)
-```
-
-?迨 Win?raw?oss ??score bands ???`[+90,+110]`?[-10,+10]`?[-110,-90]`嚗蒂靽? `Win > Draw > Loss > Failure`?遙銝敹? Match ?⊥???頞?10 ?湔?嚗?
-```text
-game_performance = -1000
-```
-
-## 10. Objective 2嚗code_quality`
-
-`code_quality` ??鞎痊?? Candidate ??鞈芾?憭望??挾????
-### ???瑁???components
-
-```text
-compilation_score = max(-500, -50 * warning_count)
-
-function_score =
-    economy_score
-  + production_score
-  + combat_score
-  + targeting_score
-  + state_aware_decision_score
-```
-
-鈭車 capability ? `0??0`嚗function_score` 蝭???`0??00`??隡啁???reachable gameplay capability嚗??臬摰?function ?迂?? code length??
-?血??梁蝡?Strategy Alignment LLM 霈??Strategy Prompt?enerated Java ???behavior summary嚗??喉?
-
-```json
-{
-  "score": 0,
-  "reason": "..."
-}
-```
-
-`strategy_alignment_score` 蝭???`0??0`嚗雿 `code_quality` component??
-Successful formula 撌脫迤撘?獢?
-
-```text
-code_quality =
-    500
-  + compilation_score
-  + function_score
-  + strategy_alignment_score
-```
-
-Component ?蜇????
-
-```text
-compilation_score:      -500 to 0
-function_score:            0 to 100
-strategy_alignment_score:  0 to 10
-successful code_quality:   0 to 610
-```
-
-?Ⅱ??`+500` base 靽? `Successful Execution > Runtime Failure`嚗??閬?憭?clamp ???offset?祕雿?敹??摰撘神??`objective_formula_version`嚗?敺??唳?冽???base ???寞???
-## 11. Failure-stage `code_quality`
-
-??仃??Candidate ?賭蝙??`game_performance = -1000`嚗蒂靘?甇ａ?畾萇策銝? `code_quality`嚗?
-| Failure Stage | Formula / Score |
-| --- | --- |
-| Generation / backend / empty / extraction failure | `-1000` |
-| Source Validation failure | `-950` |
-| Compilation failure | `-800 - min(error_count * 5, 100)`嚗???`[-900,-800]` |
-| MicroRTS Integration failure | `-600 + round(integration_pass_ratio * 100)`嚗???`[-600,-500]` |
-| Runtime failure | `-400 + round((completed_matches / 10) * 199)`嚗???`[-400,-201]` |
-| 摰? 10 ??| 雿輻???瑁??砍? |
-
-敹?蝬剜?嚗?
-```text
-Generation / Validation
-    < Compilation
-    < Integration
-    < Runtime
-    < Successful Execution
-```
-
-Compile ??敺? class loading?onstructor?uperclass?ethod signature?nitialization ??甈?`getAction` 憭望?撅祆 Integration嚗??毽??Compilation ??Runtime Failure??
-## 12. Artifact?ineage?iming ??Reproducibility
-
-瘥?Run 敹??賡?撱綽?Candidate Genotype?enerated Java?rossover?utation????LLM calls?alidation?ompilation?ntegration??0 Matches?bjectives?ineage ??Timing??
-??閬?嚗?
-- ??parsing ??摮???raw LLM responses嚗?- ??靽? pre-generation `previous_code` ?????Java嚗?- Mutation ??Reflection/Rewrite request?aw response?odel?ttempts ??error ?券靽?嚗?- Final Java Generation 雿輻?函? request/response artifacts嚗?- 瘥?Match ?蝡?`result.json`?replay.xml`?round_states/`?tdout/stderr?elemetry?erformance breakdown ??timing嚗?- `lineage.json` 靽? Parent IDs?perator?utation type ????component source IDs嚗?- `timing.json` 雿輻 UTC timestamp嚗???selection?rossover?eflection LLM?ewrite LLM?eneration LLM?alidation?ompilation?ntegration?trategy Alignment LLM????Match ????retry attempts嚗?- `resolved_config.json` 閮?撖阡? population/generation?perator rates??10-match fixed evaluation roster protocol?ap/cycles/seeds?LM/model/temperature/retry?rompt version?bjective formula version?rtifact schema version ??Git commit嚗?- schema ??formula 敹? versioned嚗??質?頛詨 YAML ?祕??runtime behavior ??銝??氬?
-摰 path tree ??雿?梯??canonical artifact documents ??嚗?辣銝?銴雁霅瑟璉?tree??
-## 13. ?辣蝬剛風閬?
-
-- Codex 銝?砍祕雿極雿??閬???辣??- Architecture?bjective formula?andidate state transition?utation flow?valuation protocol?rtifact schema ??docs structure ???湔?嚗???甇交?唳?辣??- 銝霈?documented behavior ?? implementation fix嚗??閬?撖急 Architecture Overview??- ?啣???斗???賢?隞颱? active documentation file ??敹??湔銝 Documentation Map??- ?望? technical docs ????formula?chema?tate transition ???臭? canonical owner嚗隞?隞嗆????嚗???鋆賬?
-## 14. Documentation Map
-
-| Document | Purpose | When Codex reads it | When it must be updated |
-| --- | --- | --- | --- |
-| `docs/README.md` | Codex ?亙??憡?摨ask routing?wnership ?雁霅瑟蝑?| 瘥?蝪∪ EAGLE implementation/docs task??| ?辣蝯??wnership?outing ?雁霅瑁??霈???|
-| `docs/eagle_architecture_spec.md` | ?擃?憡?Architecture Contract??| ???architecture 霈嚗楊鞎砌遙撌乩????湧霈??| ?芣??Ⅱ architecture decision ??璆??折銝?湔找耨甇??|
-| `docs/architecture/overview.md` | Scope?ipeline?ystem boundaries ???invariants??| Pipeline?cope?ross-cutting architecture 撌乩???| Pipeline?cope ??boundary ?寡???|
-| `docs/architecture/candidate_model.md` | Candidate 銝??Genotype?henotype??雿? inheritance??| Candidate?tate?enotype/phenotype?nheritance 撌乩???| Candidate data/state contract ?寡???|
-| `docs/architecture/evolutionary_flow.md` | Population lifecycle?arent Selection?SGA-II ??LLM call accounting??| Search loop?election?urvivor flow 撌乩???| Evolution order?election ??objective boundary ?寡???|
-| `docs/architecture/crossover.md` | Uniform Crossover input/output?rovenance?ests??| Crossover ??component inheritance 撌乩???| Crossover/provenance contract ?寡???|
-| `docs/architecture/mutation.md` | Strategy/Code Mutation????LLM calls?eedback ??state transitions??| 隞颱? Mutation?rompt?eedback?ogging 撌乩???| Mutation flow?nputs/outputs/state ?寡???|
-| `docs/architecture/java_generation.md` | Full-file generation?alidation?ompilation?untime/security boundary??| Java generation?arser?alidator?ompiler?ntegration 撌乩???| Java output/runtime/compile contract ?寡???|
-| `docs/evaluation/evaluation_pipeline.md` | Evaluation stages ??10-match fixed roster protocol??| Runner?tage orchestration?atch protocol 撌乩???| Evaluation stage/order/protocol ?寡???|
-| `docs/evaluation/game_performance.md` | `game_performance` ?銝 canonical formula??| Gameplay scoring?elemetry?ggregation 撌乩???| 閰?Objective ?撘撓?交???寡???|
-| `docs/evaluation/code_quality.md` | ???瑁??摰? `+500` `code_quality` formula?omponents ??`[0,610]` 蝭???| Code quality?arning?apability?lignment 撌乩???| ???砍??omponents?ange ??formula version ?寡???|
-| `docs/evaluation/failure_classification.md` | Failure stages??憿? failure fitness??| Failure routing?ntegration/runtime?enalty 撌乩???| Failure stage??憿??砍??寡???|
-| `docs/artifacts/artifact_schema.md` | Run/candidate/stage/match path ??payload ownership??| Writer?eader?chema?igration 撌乩???| Artifact path?ayload ??schema version ?寡???|
-| `docs/artifacts/timing_schema.md` | Candidate/stage/LLM attempt/Match timing 甈???| Timing?etry?uration instrumentation 撌乩???| Timing fields ??measurement policy ?寡???|
-| `docs/artifacts/lineage_schema.md` | Parent?perator?utation ??component provenance schema??| Lineage?rossover?nheritance?eedback routing 撌乩???| Lineage/provenance fields ?寡???|
-| `docs/implementation/repository_map.md` | Active modules ??canonical docs ?痊隞餃???| ?曆耨?嫣?蝵格?隤踵 module ownership ??| 瑼??odule responsibility ??dependency boundary ?寡???|
-| `docs/implementation/current_status.md` | Active repository ?暹?嚗? normative??| ???migration?iagnosis?mplementation planning??| Active code/tests/config/artifacts 銵?寡???|
-| `docs/implementation/architecture_gaps.md` | Spec ??current behavior ?榆?啣??芣捱摰???| ?? implementation/migration ??| ?潛?葬撠???gap ?憓?decision ??|
-| `docs/implementation/architecture_traceability_matrix.md` | Architecture contract?mplementation?ests?rtifact?tatus?riority ??migration dependency ?蜓閬蕭頩斤???| ?豢?銝???architecture gap????migration ??霅?contract coverage ??| Contract?mplementation path?est?rtifact?tatus?riority?ependency ??active docs 蝯??寡???|
-| `docs/implementation/architecture_gaps.md` | 靘?dependency ???蝘駁?畾萸?| Legacy cleanup?ap closure?楊璅∠? refactor??| Dependency/order/gap status ?寡???|
-| `docs/operations/running_eagle.md` | WSL-first command?onfig preflight ??run acceptance??| ?瑁? smoke/real mode ? CLI/config ??| Commands?nvironment?onfig/run checks ?寡???|
-| `docs/operations/inspecting_runs.md` | 執行結果與離線分析 | 讀取 canonical compact artifacts | 靜態分析、明確路徑與 legacy migration 規則 |
-| `docs/testing/test_contracts.md` | Contract matrix?ixtures ??WSL validation??| ?啣?/靽格 tests ?遙雿?contract behavior??| Required coverage?ixtures ??validation command ?寡???|
-
-??Documentation Map 敹?????active English documentation files?銵冽??`docs/` 撖阡?蝯?銝??湛???靽格迤銵冽??`docs/README.md`嚗?摰??賊?霈??
-## 初始雙主機 LLM 部署
-
-初始實驗使用兩個邏輯 profile：Machine B 的 general profile（預設 alias qwen3.5-9b、本機 8080）負責 Reflection 與 Rewrite，也執行 EAGLE；Machine A 的 coder profile（預設 alias qwen2.5-coder-7b、預設 8081）只負責完整 Java Generation。Launcher 讀取實際 .gguf 路徑、以明確設定的 alias 作為 artifact model identifier，並只原子更新 endpoint config 的選定 section。Pipeline 不得把這些初始 model 名稱寫死，stage 只依賴 general 與 coder。
-
-## 最終測試邊界
-
-EAGLE 只有兩種評估情境：演化期間固定使用 10-opponent roster 的 Evolution Evaluation（五個 vendored basic agent、五個 deterministic vendored pathfinding variant），以及演化完成後才執行的 Final Test。Evolution Evaluation 不使用 external competition jar，也不使用 historical self opponent。Final Test 只讀取已完成 run 的演化 artifacts，選定既有 Java，對固定版本的 TMA、Mayari、COAC 在多張既有地圖、固定 seeds、雙方 player side 上比賽；結果不得回流 fitness、selection、crossover、mutation、NSGA-II，也不得呼叫 LLM 或重新生成、修復候選者。此架構沒有 validation split 或 validation selection stage。
-
-完整 opponent pins、selector、artifact schema、計分與重現指令由 `docs/evaluation/final_test.md` 管理；該文件已加入 active documentation map。
+完整 evolutionary experiment 不是一般 repository migration 的必要驗證。

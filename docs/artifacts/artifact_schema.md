@@ -1,178 +1,254 @@
 # Artifact schema
 
-This is the canonical owner of run/candidate artifact paths and payload responsibility. Normative source: specification sections 21 through 23, 26, and 27. Timing and lineage field definitions are delegated to [`timing_schema.md`](timing_schema.md) and [`lineage_schema.md`](lineage_schema.md).
+This document owns the current `eagle-run-v2`, `eagle-generation-v3`, and
+`eagle-candidate-v5` layout. Timing and lineage fields are defined by
+`timing_schema.md` and `lineage_schema.md`.
 
-## Schema principles
-
-- Persist enough data to reconstruct genotype, phenotype, lineage, variation, generation, validation, compilation, integration, matches, objectives, and timing.
-- Write raw LLM responses before parsing or downstream work.
-- Keep pre-generation `previous_code` separate from newly generated Java.
-- Keep one directory per candidate and one directory per match.
-- Version artifact and objective schemas in resolved configuration and result payloads.
-- Use UTF-8 text and JSON with explicit field names; do not rely on filenames alone for identity.
-
-## Canonical layout
+## Run root
 
 ```text
 runs/<run_id>/
+├── manifest.json
 ├── config.yaml
-├── resolved_config.json
-├── run_summary.json
-└── generations/
-    └── generation_<n>/
-        ├── population.json
-        └── candidates/
-            └── <candidate_id>/
-                ├── lineage.json
-                ├── genotype/
-                │   ├── strategy_prompt.txt
-                │   ├── previous_code.java
-                │   └── generation_prompt.txt
-                ├── crossover/
-                │   └── provenance.json
-                ├── mutation/
-                │   ├── metadata.json
-                │   ├── reflection_context.json
-                │   ├── reflector_request.txt
-                │   ├── reflector_response_raw.txt
-                │   ├── rewriter_request.txt
-                │   └── rewriter_response_raw.txt
-                ├── generation/
-                │   ├── request.txt
-                │   ├── response_raw.txt
-                │   ├── extracted_candidate.java
-                │   └── normalized_candidate.java
-                ├── validation/result.json
-                ├── compilation/
-                │   ├── command.txt
-                │   ├── stdout.txt
-                │   ├── stderr.txt
-                │   └── result.json
-                ├── integration/result.json
-                ├── strategy_alignment/
-                │   ├── request.txt
-                │   ├── response_raw.txt
-                │   └── result.json
-                ├── matches/
-                │   ├── match_00/
-                │   ├── ...
-                │   └── match_09/
-                ├── evaluation/
-                │   ├── game_performance.json
-                │   ├── matches.json
-                │   ├── code_quality.json
-                │   ├── objectives.json
-                │   └── summary.json
-                ├── timing.json
-                └── candidate_result.json
+├── summary.json
+├── timing.jsonl
+├── generations/
+├── candidates/
+├── generated_agents/
+├── classes/
+├── archives/
+│   ├── strategy.json
+│   ├── opponents.json
+│   └── error_memory.jsonl       # created when failures exist
+├── llm_logs/
+└── final_test/
 ```
 
-The specification calls this layout recommended while making the underlying evidence mandatory. If a different physical layout is retained, it must be versioned, lossless, and documented here before use. Do not maintain duplicate equivalent files without a compatibility reason and removal plan.
+`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda` and `candidate_java_mode`, reflection mode/probabilities, and evaluation matrix. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
 
-## Run-level contracts
+`manifest.json` stays small: schema/run identity, timestamps, status, experiment/model/reflection identity, and `latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`; interrupted/failed records include resumability and their interruption/failure metadata without replacing the last atomic generation. It never embeds the config. `summary.json` stores completion/reporting fields, final population IDs, and a reference to the best runnable candidate in the final population; the reference is `null` when every final candidate failed. It does not copy candidate snapshots.
 
-`config.yaml` preserves the supplied configuration. `resolved_config.json` records actual runtime values, including population/generation sizes, operator rates/policy, 10-opponent evaluation protocol, map/cycles/seeds, LLM/retry/prompt versions, objective/artifact versions, and Git commit. `run_summary.json` records completion state, selected population, Pareto fronts, objective names, and failure counts.
+`timing.jsonl` is the canonical append-only run timing stream. Archive data lives only below `archives/`.
 
-Never silently override an input without writing the resolved value.
+## Generation snapshot
 
-## Variation and generation contracts
+`generations/generation_<nnnn>.json` contains:
 
-For a mutated candidate, retain both mutation interactions even if Rewrite or final generation fails. `metadata.json` records `applied`, mutation `type`, model identifiers, attempt counts, status, and errors. For no mutation, record `applied: false` and `type: null`.
+- generation number;
+- population entries with candidate ID, status, and seven-case fitness vector;
+- best/reporting candidate ID;
+- aggregate objective, opponent, diversity, and timing-derived metrics;
+- one canonical reflection-operator/AOS generation record.
 
-Every offspring persists final generation request, every raw response/retry, extracted source, normalized source, and generation error. Accepted source must be byte-identifiable (for example with SHA-256) across compile and all 10 match records.
+Generation metric match counts are population totals: `expected_match_count`
+and `completed_match_count` sum the corresponding values from every candidate,
+including candidates blocked before matches.
 
-## Stage result payloads
+Each generation also has a lightweight flat sidecar at
+`generations/generation_<nnnn>_policies.jsonl`. It contains one
+`eagle-generation-policy-v2` record, in population order, for every population
+candidate with a non-empty `strategy_prompt`. Records contain the generation,
+candidate ID, strategy-parent ID, operator, mutation type, and a run-relative
+reference to the candidate's canonical `genotype/policy_prompt.txt`. When
+known, they also reference the parent strategy prompt and the candidate's
+Strategy Reflection metadata. Full strategy text is not duplicated in this
+index.
 
-Each stage result JSON records:
+The AOS record contains `mode`, probabilities before/after, nullable
+Strategy/Code/Balance rewards, `reward_source`, operator state, and transitions.
+Static mode records `reward_source: static`, null rewards, and unchanged
+probabilities. Resume restores adaptive state from the latest generation file.
+There is no `generation_metrics.jsonl` or `final_population.json` in new runs.
 
-- schema version, candidate ID, stage, status, start/end references, and error;
-- stage input/output artifact paths;
-- validation checks or compiler/integration diagnostics;
-- source/class hashes where applicable.
-
-`candidate_result.json` is an index/summary, not a replacement for stage evidence. It includes identity, lineage reference, status/failure stage, objective values, completed-match count, and artifact references. `mutation/reflection_context.json` is the immutable evidence snapshot used to build the Reflection request; it retains the canonical two-objective values and normalized stage/failure evidence without recalculating fitness.
-
-`evaluation/game_performance.json` and `evaluation/objectives.json` retain both the
-aggregate `game_performance` and ordered `opponent_scores`. The former also contains
-`opponent_results`, with one resource/unit/W-D-L/status/failure record per opponent.
-Generation metrics retain candidate-level ten-score arrays, per-opponent means and
-failure counts, and each candidate's best/worst matchup. Readers treat missing
-`opponent_scores` as legacy evidence and continue loading the aggregate fields.
-
-## Match directory contract
-
-Each `match_<index>/` contains `result.json`, `replay.xml`, `round_states/`, `stdout.txt`, `stderr.txt`, `telemetry.json`, `performance_breakdown.json`, and `timing.json`.
-
-Required metadata:
-
-- `candidate_id`, `match_index`, `candidate_player`, `opponent`, `opponent_id`;
-- `map`, `seed`, `max_cycles`, `final_tick`, `winner`;
-- player/enemy final resources and `unit_material_trace`;
-- return code, duration, status, and failure reason.
-
-## Atomicity and failure safety
-
-- Create candidate identity/lineage/genotype artifacts before the first LLM call.
-- Write raw responses immediately; never wait for extraction success.
-- Use atomic replacement for JSON summaries where partial writes would make a run unreadable.
-- On interruption, retain a stage status that distinguishes `running`, `failed`, and incomplete persistence.
-- Analysis tools must reject or explicitly migrate unknown schema versions.
-
-## Tests
-
-- Golden tree and JSON-schema checks for seed, crossover-only, both mutation types, and each failure stage.
-- Readback reconstructs the exact pre-generation genotype and generated phenotype.
-- No duplicate canonical source/result files.
-- Every candidate and match references valid files and hashes.
-- Raw responses survive parsing, rewrite, generation, compile, and runtime failures.
-- Resolved configuration matches actual commands and evaluator behavior.
-
-
-
-## Phase 2C implementation note
-
-The active mutation artifact schema version is phase2c-v1. For each mutated candidate,
-mutation/ contains canonical reflector_request.txt, reflector_response_raw.txt,
-rewriter_request.txt, and rewriter_response_raw.txt, plus metadata.json; stage-specific
-attempt files remain available for retry inspection. `reflection_context.json` retains
-the exact canonical evidence envelope used by the reflector. The final
-Java-generation stage owns generation/request.txt, response_raw.txt,
-extracted_candidate.java, normalized_candidate.java, and result.json. Final generation
-failures do not remove the earlier mutation evidence.
-
-## Phase 4 implementation note
-
-Evaluation artifacts use `artifact_schema_version = phase4-v1`. Each candidate writes one directory per match plus canonical `strategy_alignment/` and `evaluation/` payloads for game performance, Function Capability, Code Quality, objective values, evaluation summary, and runtime failure evidence. All active readers consume the versioned canonical candidate tree directly.
-## LLM stage identity
-
-Each Reflection, Rewrite, and Generation stage artifact records stage, the logical llm_profile (reflector, rewriter, or generator), and the configured model alias. The alias is the launcher --alias value, not a filename inferred from .gguf or an arbitrary /v1/models response. The resolved configuration records the centralized routing: Reflector, Rewriter, and Generator use their resolved semantic role profiles.
-
-## Post-evolution Final Test artifacts
-
-Final Test writes only beneath `runs/<run_id>/final_tests/<final_test_id>/` and never overwrites Evolution Evaluation evidence. Schema `eagle-final-test-v1` owns copied/resolved configuration, pre-match selection proof, opponent commits/classes/JAR hashes/adapter hashes, compile-once source/class identity, one evidence directory per scheduled match, JSONL results, failure inventory, aggregation, and timing.
-
-Unknown final-test schemas are rejected by the UI-independent reader. The complete tree and field ownership are defined in [`../evaluation/final_test.md`](../evaluation/final_test.md).
-
-
-## Strategy Reflection artifacts
-
-Temporary per-match traces are `matches/<match_id>/match_log.jsonl.gz`. They are
-streamed one tick per JSONL record and deleted after terminal Match Commentator
-handling. Permanent compact evidence is:
+## Candidate snapshot and evidence
 
 ```text
-matches/<match_id>/match_result.json
-candidates/<candidate_id>/commentary/<match_id>/match_analysis.json
-candidates/<candidate_id>/commentary/<match_id>/commentary_status.json
-candidates/<candidate_id>/reflection/manager_request.json
-candidates/<candidate_id>/reflection/manager_response.json
-candidates/<candidate_id>/reflection/manager_analysis.json
-candidates/<candidate_id>/reflection/coach_request.json
-candidates/<candidate_id>/reflection/coach_response.json
-candidates/<candidate_id>/reflection/coach_result.json
+candidates/<candidate_id>/
+├── candidate.json
+├── lineage.json
+├── timing.json
+├── genotype/
+│   ├── policy_prompt.txt
+│   ├── strategy_signature.json
+│   ├── code_generation_prompt.txt
+│   └── inherited_java.java             # inherited_genotype mode only
+├── phenotype/                         # compilation success only
+│   └── CandidateAgent.java
+├── crossover/provenance.json
+├── mutation/
+│   ├── strategy_reflection/
+│   ├── code_reflection/
+│   └── balance_reflection/
+├── aos/
+├── generation/
+│   ├── request.txt
+│   ├── response_raw.txt
+│   ├── extracted_candidate.java
+│   ├── normalized_candidate.java
+│   ├── repair_ledger.json
+│   ├── attempts/
+│   │   └── attempt_<nnn>/
+│   │       ├── request.txt
+│   │       ├── response_raw.txt
+│   │       ├── extracted_candidate.java
+│   │       ├── normalized_candidate.java
+│   │       ├── repair_input.json       # compile_repair attempts only
+│   │       ├── validation/
+│   │       ├── compilation/
+│   │       ├── timing.json
+│   │       └── result.json
+│   └── result.json
+├── validation/validation_result.json
+├── compilation/
+├── integration/
+├── matches/
+├── strategy_alignment/
+└── evaluation/
+    ├── game_performance.json
+    ├── commentary_aggregation.json
+    ├── function_capability.json
+    ├── code_quality.json
+    └── objectives.json
 ```
 
-Role envelopes contain the role, candidate and generation identity, request ID,
-model-configuration identity, prompt version, and schema version. Manager and
-Coach artifacts never contain raw tick logs. Coach results retain both parent
-and replacement strategy prompts.
+`candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, fitness vector, aggregate Game Performance, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
+
+For every bounded LLM decode, including inherited-mode generation zero, every
+attempt owns its actual post-truncation
+request and hash, raw response, extracted/normalized source, validation,
+compilation, and timing. `request_kind` distinguishes `initial_decode`,
+`initial_decode_retry`, and `compile_repair`. Repair records also identify
+`repair_of_attempt`, the previous source SHA-256, and a `repair_input.json`
+containing only that previous attempt's structured diagnostics. The compact
+`repair_ledger.json` links the chain without duplicating source or diagnostics.
+Attempt directories are append-distinct and failed evidence is never replaced
+by a later attempt. The flat `generation/`, `validation/`, and `compilation/`
+files project the selected success or final representative failure. A
+`phenotype/CandidateAgent.java` exists only after compilation success; an
+exhausted final source remains `generation/normalized_candidate.java` and is
+indexed as `failed_generation_source`. `generation/result.json` records
+`max_attempts`, nullable `selected_attempt`, `final_attempt`, canonical attempt
+reference (null on exhaustion), representative selected/final-failure attempt
+reference, and the projected request SHA-256. Attempt class workspaces are transient and
+candidate-isolated; only promoted canonical classes remain for Integration and
+matches. A partial persisted attempt is audit-only and a rerun refuses to
+overwrite it; resume starts from the last atomic generation boundary rather than
+continuing a half-decoded candidate. Default fixed-seed generation zero has no
+`generation/attempts/` LLM evidence.
+
+`extracted_candidate.java` is the normalized text extracted from the model's
+complete-file response and therefore preserves model-authored fixed-region
+drift for audit. `normalized_candidate.java` is the configured canonical
+scaffold with only that extracted file's strategy region inserted. Structural
+envelope and security checks run before this assembly, so normalization does not
+turn a partial or prohibited response into a valid source. Validation, javac,
+the promoted phenotype, source hashes used by matches, and compile-repair parent
+source references all use `normalized_candidate.java`.
+
+For default-mode generation-zero candidates, `genotype/policy_prompt.txt`
+retains the configured seed policy and `generation/result.json` records
+operation `initial_java_seed`, no attempts, and checked-in source provenance.
+Request/raw-response files are empty. In `inherited_genotype` mode,
+`genotype/inherited_java.java` retains the exact pre-generation no-op Java input
+for each replicated seed candidate; each candidate then owns ordinary bounded
+generation attempts and a separately generated phenotype. Later children use
+the same file for the selected parent Java component, with `java_parent_id` in
+candidate/lineage/crossover provenance. Full inherited Java is never embedded
+in candidate or generation JSON.
+
+When the policy prompt is empty, `strategy_alignment/result.json` records
+`status: not_applicable`, a null score, and no attempts; its request/raw files
+are empty. This is distinct from an Alignment blocked by an earlier evaluation
+failure.
+
+Balance Reflection evidence is stored under `mutation/balance_reflection/`.
+Its `reflection_context.json` is only the bounded opponent/map/side W/D/L
+table; the directory retains the reflection request/raw response and separately
+named strategy/code rewrite request/raw-response artifacts. Metadata records
+both rewrite statuses without embedding raw response bodies. A failed reflector
+or either failed rewrite retains completed evidence and leaves both prompt genes
+unchanged.
+
+Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
+optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated
+fallback reads for old prompt/phenotype paths, but ignores legacy
+`previous_code` and phenotype-parent provenance. New writers never emit them.
+`individual.json`, `candidate_result.json`, `evaluation/summary.json`, and
+`evaluation/matches.json` are not written.
+
+Raw LLM output is persisted before parsing. Mutation retains reflection/rewrite
+request, raw response, UTC-bounded attempts, status, and failure evidence even
+when later generation fails. Strategy Coach parsed output preserves the model's
+parent-policy echo, while validated `coach_result.json` takes the parent policy
+from the authoritative input artifact. Mutation-role run timing references the
+candidate-owned evidence without duplicating its prompt/response under
+`llm_logs/`. Adaptively credited offspring retain `aos/reward.json`;
+head-to-head match evidence remains below `aos/head_to_head/`.
+
+In default mode Code Reflection metadata records `reviewed_phenotype_artifact`
+as a run-relative reference to the evaluated source candidate's canonical Java
+phenotype. In inherited mode it instead records `java_parent_id`,
+`reviewed_java_input: inherited_java`, and the child's canonical
+`reviewed_inherited_java_artifact`; that source is also the explicit Java input
+to the Generator. Neither path restores an implicit `previous_code` field.
+
+## Match ownership
+
+Each normal or head-to-head match has one canonical `result.json`. Distinct specialized evidence remains separate:
+
+```text
+matches/<match_id>/
+├── result.json
+├── raw_result.json
+├── match_metadata.json
+├── match_trace.jsonl.gz
+├── match_trace_integrity.json
+├── telemetry.json.gz
+├── performance_breakdown.json
+├── stdout.txt
+├── stderr.txt
+└── timing.json
+```
+
+Every normal-evaluation `result.json` and `match_metadata.json` records a
+non-null canonical `opponent_id`. The 126 match directories must reconstruct
+exactly the seven configured case IDs with 18 matches per opponent, without
+mapping Java class names back to fitness cases.
+
+Compact mode removes transient raw replay/round-state inputs after durable telemetry/trace creation. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
+
+Mock matches use the same writer and path contract. They synthesize only the initial and final round snapshots before the normal compact/full persistence step; this bounds smoke-test I/O without inventing a second mock artifact schema.
+
+Match records use `round_index` for repeated games and do not contain a
+`seed` field. Resolved run configuration likewise omits `match_seeds`: the
+removed JVM property was never consumed by MicroRTS and therefore could not
+support a reproducibility claim.
+
+## Failure and timing rules
+
+Generation, validation, compilation, integration, runtime evaluation, and LLM-backend failures retain their stage evidence and canonical failure classification. A failed stage blocks downstream work without inventing success records. Runtime partial batches retain completed match evidence. All timings use UTC timestamps and non-negative monotonic durations; retries retain per-attempt records.
+
+## Supported schema
+
+Writers, resume, and `eagle.analysis.loader` support only `eagle-run-v2`.
+Unknown and historical manifests fail explicitly. The run-local `config.yaml`
+is the authoritative model and experiment definition.
+
+## Experiment batch index
+
+When the experiment target is a config directory, the launcher writes
+`<config-directory>/experiment.yaml` as a plain mapping from config filenames to
+absolute run folders. The file is updated atomically when each run directory is
+created and is not a run-root artifact or an experiment config. Config discovery
+excludes this generated index. For compatibility, a pre-existing
+`experiment-v2` config named `experiment.yaml` is never overwritten.
+
+Folder-level resume reads this mapping without reinitializing it. An indexed
+entry is lifecycle-complete when its run manifest is `complete` and, for a
+non-mock invocation that does not use `--skip-final-test`, a canonical
+`final_test/final_test_summary.json` exists and has the current
+`eagle-final-test-v2` schema. The summary records contained upstream-opponent
+faults separately; a recovered containment is an explicit neutral draw rather
+than a candidate win. Incomplete indexed entries are
+resumed before unindexed configs; completed entries are skipped. Index paths
+written by new batches and accepted by folder resume are absolute.

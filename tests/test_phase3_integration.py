@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,13 +10,27 @@ from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation import evaluate_candidate
 from evaluation.microrts_runner import (
+    INTEGRATION_PROBE_SOURCE,
     INTEGRATION_CHECK_NAMES,
     IntegrationCheck,
     IntegrationResult,
     integrate_microrts_agent,
     parse_integration_checks,
 )
+from evaluation.compiler import compile_generated_agent
 from generation.backend import MockGenerationBackend
+from generation.agent_template import (
+    JavaTemplatePaths,
+    STRATEGY_END_MARKER,
+    STRATEGY_START_MARKER,
+    load_java_template,
+)
+
+
+def with_strategy(source: str, body: str) -> str:
+    start = source.index(STRATEGY_START_MARKER) + len(STRATEGY_START_MARKER)
+    end = source.index(STRATEGY_END_MARKER)
+    return source[:start] + f"\n{body}\n    " + source[end:]
 
 
 def failed_integration_result(failed_index: int = 4) -> IntegrationResult:
@@ -88,7 +103,7 @@ class Phase3IntegrationTests(unittest.TestCase):
             candidates_dir = root / "candidates"
             evaluation = evaluate_candidate(
                 Candidate(id="integration-failure"),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
+                config=ExperimentConfig.from_mapping({}),
                 backend=MockGenerationBackend(),
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",
@@ -103,7 +118,7 @@ class Phase3IntegrationTests(unittest.TestCase):
             )
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
             candidate_result = json.loads(
-                (candidate_dir / "candidate_result.json").read_text(encoding="utf-8")
+                (candidate_dir / "candidate.json").read_text(encoding="utf-8")
             )
 
         evaluate_matches.assert_not_called()
@@ -125,9 +140,10 @@ class Phase3IntegrationTests(unittest.TestCase):
     def test_successful_integration_precedes_match_execution(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
+            config = ExperimentConfig.from_mapping({})
             evaluation = evaluate_candidate(
                 Candidate(id="integration-success"),
-                config=ExperimentConfig.from_mapping({"seed_prompts": ["seed"]}),
+                config=config,
                 backend=MockGenerationBackend(),
                 generated_agents_dir=root / "generated",
                 classes_dir=root / "classes",
@@ -141,8 +157,59 @@ class Phase3IntegrationTests(unittest.TestCase):
             tuple(check.name for check in evaluation.integration_result.checks),
             INTEGRATION_CHECK_NAMES,
         )
-        self.assertEqual(len(evaluation.match_results), 10)
+        self.assertEqual(len(evaluation.match_results), config.expected_match_count)
         self.assertIsNone(evaluation.candidate.failure_stage)
+
+    def test_probe_exercises_populated_8x8_map_both_sides_and_action_integrity(self):
+        self.assertGreaterEqual(
+            INTEGRATION_PROBE_SOURCE.count(
+                'PhysicalGameState.load("maps/8x8/basesWorkers8x8.xml", utt)'
+            ),
+            2,
+        )
+        self.assertIn("candidatePlayerZero = (AI) one.newInstance(utt)", INTEGRATION_PROBE_SOURCE)
+        self.assertIn("candidatePlayerOne = (AI) one.newInstance(utt)", INTEGRATION_PROBE_SOURCE)
+        self.assertIn("candidatePlayerZero.getAction(0, playerZeroState)", INTEGRATION_PROBE_SOURCE)
+        self.assertIn("candidatePlayerOne.getAction(1, playerOneState)", INTEGRATION_PROBE_SOURCE)
+        self.assertIn("playerZeroAction.integrityCheck()", INTEGRATION_PROBE_SOURCE)
+        self.assertIn("playerZeroState.issueSafe(playerZeroAction)", INTEGRATION_PROBE_SOURCE)
+        self.assertIn("playerOneState.issueSafe(playerOneAction)", INTEGRATION_PROBE_SOURCE)
+        self.assertIn("playerZeroState.cycle()", INTEGRATION_PROBE_SOURCE)
+        self.assertIn("playerOneState.cycle()", INTEGRATION_PROBE_SOURCE)
+
+    @unittest.skipUnless(shutil.which("javac"), "javac is required for the real integration probe test")
+    def test_real_probe_accepts_scaffold_with_out_of_bounds_strategy_requests(self):
+        source = with_strategy(
+            load_java_template(JavaTemplatePaths()),
+            """    private void decide(AgentContext context) {
+        for (Unit unit : context.units) {
+            if (isIdleAlly(unit, context) && unit.getType() == workerType) {
+                isFreeCell(context, -1, 99);
+                commandMove(unit, -1, 99);
+                commandBuild(unit, barracksType, 99, -1);
+            }
+        }
+    }""",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "CandidateAgent.java"
+            source_path.write_text(source, encoding="utf-8")
+            classes_dir = root / "classes"
+            compiled = compile_generated_agent(
+                source_path,
+                microrts_dir=Path("third_party/microrts"),
+                output_dir=classes_dir,
+            )
+            self.assertTrue(compiled.ok, compiled.stderr)
+            result = integrate_microrts_agent(
+                microrts_dir=Path("third_party/microrts"),
+                classes_dir=classes_dir,
+                agent_class="ai.generated.CandidateAgent",
+                integration_artifacts_dir=root / "integration",
+            )
+
+        self.assertTrue(result.ok, result.stderr or result.stdout)
 
 
 if __name__ == "__main__":

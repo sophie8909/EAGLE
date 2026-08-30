@@ -1,6 +1,6 @@
 ---
 name: eagle-evaluation
-description: Implement or review EAGLE Java validation/compilation/integration, 10-match MicroRTS evaluation against LightRush, game_performance, code_quality, failure-stage fitness, and two-objective NSGA-II assembly. Use for runner, scoring, telemetry, diagnostics, integration, or failure-classification changes.
+description: Implement or review EAGLE Java validation/compilation/integration, the configured 126-match seven-opponent MicroRTS matrix, opponent-wise lexicase fitness, game_performance/code_quality diagnostics, and failure-stage handling. Use for runner, scoring, telemetry, diagnostics, integration, or failure-classification changes.
 ---
 
 # EAGLE evaluation workflow
@@ -17,13 +17,12 @@ description: Implement or review EAGLE Java validation/compilation/integration, 
 
 ## Preserve
 
-- Validate, compile once, integrate, then run exactly 10 matches against `ai.abstraction.LightRush`.
+- Validate, compile once, integrate, then run the configured seven-opponent × map × round × side matrix (126 matches in the canonical production configuration), including a distinct WorkerRush.
 - Reuse identical source/classes; make no generation call between matches.
-- Use only `game_performance` and `code_quality` as optimizer objectives.
-- Assign every failed evaluation `game_performance = -1000` and stage-aware `code_quality`.
-- Keep Strategy Alignment inside successful `code_quality`, never as a third objective.
+- Use the seven opponent scores as the only optimizer fitness cases; `game_performance`, `code_quality`, Function Capability, and Strategy Alignment are diagnostics.
+- Assign every failed evaluation the canonical `-1000` sentinel on all seven opponent cases and retain stage-aware diagnostics.
+- Skip Strategy Alignment for an empty policy; otherwise retain it as a diagnostic, never as an optimizer case.
 - Retain completed match evidence on partial runtime failure.
-- Use the resolved `+500` successful-code-quality base from `docs/evaluation/code_quality.md`; do not reintroduce the no-offset alternative.
 - Enforce the exact `ai.generated.CandidateAgent` identity and seven ordered pre-match integration checks from the Java-generation and evaluation owners.
 
 ## Workflow
@@ -37,7 +36,7 @@ description: Implement or review EAGLE Java validation/compilation/integration, 
 
 ## Common files
 
-`eagle/evaluation.py`, `evaluation/compiler.py`, `evaluation/microrts_runner.py`, `evaluation/game_performance.py`, `evaluation/game_metrics.py`, `evaluation/code_quality.py`, `evaluation/nsga2_objectives.py`, `eagle/config.py`, `eagle/artifacts.py`, `tests/`, and `configs/`.
+`eagle/evaluation.py`, `evaluation/compiler.py`, `evaluation/microrts_runner.py`, `evaluation/game_performance.py`, `evaluation/game_metrics.py`, `evaluation/code_quality.py`, `evaluation/objectives.py`, `eagle/config.py`, `eagle/artifacts.py`, `tests/`, and `configs/`.
 
 ## Required documentation updates
 
@@ -46,4 +45,3 @@ Update the affected evaluation owner, current status/gaps, testing contract, art
 ## Prohibited legacy behavior
 
 No RandomAI active opponent, one-match evaluation, regeneration between matches, unbounded old shaping formula, deterministic marker/text score substituted for the canonical code-quality contract, or active `strategy_alignment` objective.
-

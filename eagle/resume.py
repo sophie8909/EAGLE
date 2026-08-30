@@ -1,85 +1,139 @@
-﻿"""Resume the canonical EA from the latest surviving-population snapshot."""
+"""Resume the canonical EA from the latest surviving-population snapshot."""
 from __future__ import annotations
 
 import random
-import json
+from dataclasses import replace
 from pathlib import Path
 
-from generation.backend import MockGenerationBackend
-
-from .artifacts import write_generation_manifest, write_summary
+from .artifacts import write_summary
 from .config import ExperimentConfig
 from .crossover import CrossoverContext
 from .evaluation import evaluate_population, preflight_evaluation_opponents
-from .llm_logging import LLMCallLogger
-from .llm_profiles import LLMClient
-from .mutation import build_reflection_backend
-from .rewrite import PromptRewriteMutation
-from .run_artifacts import finalize_run, load_resume_population, record_generation
-from .search import SearchResult, create_offspring, front_zero_signature
-from .selection import assign_rank_and_crowding, best_candidate, select_next_generation
+from .run_artifacts import (
+    finalize_run,
+    load_error_memory,
+    load_aos_state,
+    load_resume_population,
+    mark_run_failed,
+    mark_run_interrupted,
+    record_error_memory,
+    record_generation,
+)
+from .search import SearchResult, create_offspring
+from .strategy_reflection import cleanup_retired_match_traces
+from .strategy_diversity import (
+    archive_niches,
+    diversity_console_summary,
+    ensure_strategy_archive,
+    generation_diversity_metrics,
+    update_strategy_archive,
+)
+from .opponent_archive import ensure_opponent_archive, update_opponent_archive
+from .selection import best_candidate, population_signature, select_next_generation
+from .search_runtime import build_search_runtime
 from .timing import Stopwatch, append_event, build_generation_event
 
 
-def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path, mock: bool = False) -> SearchResult:
+def resume_search(
+    config: ExperimentConfig | None = None,
+    *,
+    config_path: Path | None = None,
+    run_dir: Path,
+    mock: bool = False,
+) -> SearchResult:
+    """Continue from the last atomically recorded generation."""
+
+    persisted = load_resume_config(run_dir)
+    if config is not None:
+        validate_resume_config(config, persisted, mock=mock)
+    config = persisted
+    try:
+        return _resume_search_impl(config, config_path=config_path, run_dir=run_dir, mock=mock)
+    except KeyboardInterrupt:
+        mark_run_interrupted(run_dir)
+        raise
+    except Exception as exc:
+        mark_run_failed(run_dir, exc)
+        raise
+
+
+def load_resume_config(run_dir: Path) -> ExperimentConfig:
+    """Load the immutable experiment definition owned by a run."""
+
+    run_config_path = run_dir / "config.yaml"
+    if not run_config_path.is_file():
+        raise ValueError(f"Resume run has no canonical config.yaml: {run_dir}")
+    return ExperimentConfig.from_file(run_config_path)
+
+
+def _resume_search_impl(config: ExperimentConfig, *, config_path: Path | None, run_dir: Path, mock: bool = False) -> SearchResult:
     config.validate()
     preflight_evaluation_opponents(config, mock=mock)
-    _validate_resume_config(config, run_dir)
     completed_generation, population = load_resume_population(run_dir)
-    if completed_generation >= config.generations - 1:
+    ensure_strategy_archive(run_dir)
+    ensure_opponent_archive(run_dir)
+    # Backfill the archive from the surviving snapshot when resuming a run
+    # created before strategy_archive.json existed.  Older candidates retain
+    # the explicit ``unknown`` fallback and are not inferred from prompt text.
+    update_strategy_archive(run_dir, population)
+    update_opponent_archive(run_dir, population)
+    if completed_generation >= config.generations:
         best = best_candidate(population)
         return SearchResult(run_dir, population, best, completed_generation)
 
-    backend_name = "mock" if mock else config.generation_backend
-    client = LLMClient(config.llm_base_url, config.llm_model, temperature=config.llm_temperature, max_output_tokens=config.llm_max_tokens)
-    shared_profile = client.profile
-    if not mock:
-        from .search import _preflight_llm_endpoint
-        _preflight_llm_endpoint(client)
-    logger = LLMCallLogger(run_dir / "llm_logs", run_id=run_dir.name, timing_path=run_dir / "timing.jsonl")
-    generation_backend = MockGenerationBackend() if mock else client.generation_backend(logger=logger)
-    if mock:
-        reflection_backend = build_reflection_backend("mock")
-        rewrite_backend = reflection_backend
-    else:
-        reflection_backend = client.prompt_backend(operation="reflection")
-        rewrite_backend = client.prompt_backend(operation="rewrite")
     candidates_dir = run_dir / "candidates"
     generated_agents_dir = run_dir / "generated_agents"
     classes_dir = run_dir / "classes"
     for directory in (candidates_dir, generated_agents_dir, classes_dir):
         directory.mkdir(parents=True, exist_ok=True)
-    mutations = {
-        "strategy": PromptRewriteMutation(
-            config, mutation_type="strategy", reflection_backend=reflection_backend,
-            rewrite_backend=rewrite_backend, artifact_root=candidates_dir, logger=logger,
-            reflection_model=None if mock else client.model,
-            rewrite_model=None if mock else client.model, backend_name=backend_name,
-        ),
-        "code": PromptRewriteMutation(
-            config, mutation_type="code", reflection_backend=reflection_backend,
-            rewrite_backend=rewrite_backend, artifact_root=candidates_dir, logger=logger,
-            reflection_model=None if mock else client.model,
-            rewrite_model=None if mock else client.model, backend_name=backend_name,
-        ),
-    }
+    runtime = build_search_runtime(
+        config,
+        mock=mock,
+        run_dir=run_dir,
+        candidates_dir=candidates_dir,
+        controller_state=load_aos_state(run_dir),
+    )
+    generation_backend = runtime.generation_backend
+    shared_client = runtime.client
+    mutations = runtime.mutations
     rng = random.Random(f"{config.random_seed}:{completed_generation}")
-    front_signature = front_zero_signature(population)
+    operator_controller = runtime.operator_controller
+    population_state_signature = population_signature(population)
     stagnation = 0
+    error_memory = load_error_memory(run_dir)
     stop_reason = None
-    for generation in range(completed_generation + 1, config.generations):
-        assign_rank_and_crowding(population)
+    for generation in range(completed_generation + 1, config.generations + 1):
         offspring = create_offspring(
             population, config=config, generation=generation, rng=rng,
-            mutations=mutations, artifact_root=candidates_dir,
+            mutations=mutations, operator_controller=operator_controller,
+            artifact_root=candidates_dir, error_memory=error_memory,
         )
         span = Stopwatch.start()
         evaluated = evaluate_population(
             offspring, generation=generation, config=config, backend=generation_backend,
             generated_agents_dir=generated_agents_dir, classes_dir=classes_dir,
-            candidates_dir=candidates_dir, results_path=run_dir / "results.jsonl",
-            mock=mock, alignment_profile=shared_profile,
+            candidates_dir=candidates_dir,
+            mock=mock, llm_client=shared_client,
         )
+        evaluated, rewards = operator_controller.collect_rewards(
+            population,
+            evaluated,
+            config=config,
+            candidates_dir=candidates_dir,
+            classes_dir=classes_dir,
+            mock=mock,
+        )
+        aos_record = operator_controller.update_generation(rewards)
+        evaluated = operator_controller.persist_reward_outcomes(
+            evaluated,
+            rewards,
+            record=aos_record,
+            candidates_dir=candidates_dir,
+        )
+        archive_before = archive_niches(run_dir)
+        update_strategy_archive(run_dir, evaluated)
+        update_opponent_archive(run_dir, evaluated)
+        error_memory = record_error_memory(run_dir, evaluated)
         append_event(
             run_dir / "timing.jsonl",
             build_generation_event(
@@ -87,45 +141,63 @@ def resume_search(config: ExperimentConfig, *, config_path: Path, run_dir: Path,
                 span=span.finish(),
             ),
         )
-        population = select_next_generation(population, evaluated, population_size=config.population_size)
-        signature = front_zero_signature(population)
-        stagnation = stagnation + 1 if signature == front_signature else 0
-        front_signature = signature
-        write_generation_manifest(run_dir, generation, population)
-        record_generation(run_dir, generation, population)
+        selection_candidates = [*population, *evaluated]
+        population = select_next_generation(
+            population, evaluated, population_size=config.population_size, rng=rng,
+        )
+        signature = population_signature(population)
+        stagnation = stagnation + 1 if signature == population_state_signature else 0
+        population_state_signature = signature
+        generation_diversity = generation_diversity_metrics(population, previous_archive_niches=archive_before)
+        record_generation(
+            run_dir,
+            generation,
+            population,
+            diversity=generation_diversity,
+            aos=aos_record,
+        )
+        cleanup_retired_match_traces(
+            candidates_dir,
+            selection_candidates,
+            surviving_candidate_ids={candidate.id for candidate in population},
+        )
+        print(diversity_console_summary(generation, generation_diversity), flush=True)
         completed_generation = generation
-        if config.front0_stagnation_generations > 0 and stagnation >= config.front0_stagnation_generations:
-            stop_reason = f"front0_stagnation_{config.front0_stagnation_generations}_generations"
+        if config.stagnation_generations > 0 and stagnation >= config.stagnation_generations:
+            stop_reason = f"stagnation_{config.stagnation_generations}_generations"
             break
-    fronts = assign_rank_and_crowding(population)
     best = best_candidate(population)
     write_summary(
         run_dir, config=config, final_population=population, best_candidate=best,
-        pareto_fronts=fronts, mock=mock, completed_generation=completed_generation,
+        mock=mock, completed_generation=completed_generation,
         stop_reason=stop_reason,
     )
     finalize_run(run_dir, population, stop_reason=stop_reason)
     return SearchResult(run_dir, population, best, completed_generation, stop_reason)
 
 
-def _validate_resume_config(config: ExperimentConfig, run_dir: Path) -> None:
-    path = run_dir / "resolved_config.json"
-    if not path.is_file():
-        raise ValueError(f"Resume run has no resolved_config.json: {run_dir}")
-    resolved = json.loads(path.read_text(encoding="utf-8"))
-    expected = {
-        "population_size": config.population_size,
-        "crossover_rate": config.crossover_rate,
-        "mutation_rate": config.mutation_rate,
-        "ea_random_seed": config.random_seed,
-        "map": config.map_path,
-        "max_cycles": config.tick_limit,
-        "microrts_match_seeds": list(config.resolved_match_seeds),
-    }
-    mismatches = [
-        f"{key}: run={resolved.get(key)!r}, config={value!r}"
-        for key, value in expected.items()
-        if resolved.get(key) != value
-    ]
+def validate_resume_config(
+    config: ExperimentConfig,
+    persisted: ExperimentConfig,
+    *,
+    mock: bool = False,
+) -> None:
+    run_mapping = persisted.to_mapping(mock=False)
+    requested_mapping = config.to_mapping(mock=mock)
+    mismatches = _mapping_differences(run_mapping, requested_mapping)
     if mismatches:
         raise ValueError("Resume config does not match the run: " + "; ".join(mismatches))
+
+
+def _mapping_differences(run_value, requested_value, prefix: str = "") -> list[str]:
+    if isinstance(run_value, dict) and isinstance(requested_value, dict):
+        differences: list[str] = []
+        for key in sorted(set(run_value) | set(requested_value)):
+            path = f"{prefix}.{key}" if prefix else str(key)
+            differences.extend(
+                _mapping_differences(run_value.get(key), requested_value.get(key), path)
+            )
+        return differences
+    if run_value == requested_value:
+        return []
+    return [f"{prefix}: run={run_value!r}, config={requested_value!r}"]
