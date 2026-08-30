@@ -4,6 +4,10 @@
 
 Run `scripts/codex-budget` before substantial work, after a major milestone in a long-running task, and before starting another expensive phase. Do not poll it after trivial commands.
 
+The weekly hard reserve is dynamic: preserve `12% * days_until_reset` of the weekly allowance, including fractional days. It is not a fixed 12% reserve.
+
+This policy is user-overridable. If the user explicitly says to ignore, bypass, or disable usage or quota controls, stop reading and applying the budget mode for the rest of that task. Resume only when the user explicitly asks to restore the controls.
+
 Use its effective mode to control scope:
 
 - `AGGRESSIVE`: broad repository work, comprehensive validation, and directly related high-value cleanup are allowed.

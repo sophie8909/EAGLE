@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-WEEKLY_RESERVE_PERCENT = 12.0
+WEEKLY_DAILY_RESERVE_PERCENT = 12.0
 # Local JSONL records are normally written after each turn. Older records can
 # no longer safely represent the active account meter, so they do not drive a
 # workload recommendation after this age.
@@ -32,12 +32,12 @@ REVERSE_READ_BLOCK_BYTES = 64 * 1024
 MAX_RECENT_FALLBACK_FILES = 48
 
 # Workload thresholds operate on Codex's percentage rate-limit meters. Weekly
-# mode follows sustainable pace after preserving the hard 12% reserve; the
-# shorter window can only make that recommendation more conservative.
+# mode preserves 12 percentage points for every day until reset; the shorter
+# window can only make that recommendation more conservative.
 WEEKLY_CRITICAL_USABLE_PERCENT = 3.0
-WEEKLY_CRITICAL_PACE_RATIO = 0.35
-WEEKLY_CONSERVATIVE_PACE_RATIO = 0.75
-WEEKLY_AGGRESSIVE_PACE_RATIO = 1.35
+WEEKLY_CRITICAL_HEADROOM_DAYS = 0.35
+WEEKLY_CONSERVATIVE_HEADROOM_DAYS = 0.75
+WEEKLY_AGGRESSIVE_HEADROOM_DAYS = 1.35
 FIVE_HOUR_STOP_REMAINING_PERCENT = 2.0
 FIVE_HOUR_CRITICAL_REMAINING_PERCENT = 10.0
 FIVE_HOUR_CONSERVATIVE_REMAINING_PERCENT = 25.0
@@ -433,31 +433,29 @@ def most_constrained_meter(meters: Iterable[Meter], kind: str, now: datetime) ->
     return matching[0] if matching else None
 
 
-def weekly_mode(meter: Meter | None, now: datetime, stale: bool) -> tuple[str, float | None, float | None, str]:
+def weekly_mode(meter: Meter | None, now: datetime, stale: bool) -> tuple[str, float | None, float | None, float | None, str]:
     if stale:
-        return "UNKNOWN", None, None, "the newest local snapshot is stale"
+        return "UNKNOWN", None, None, None, "the newest local snapshot is stale"
     if not valid_meter(meter, now):
-        return "UNKNOWN", None, None, "weekly rate-limit data is unavailable or has an invalid reset time"
+        return "UNKNOWN", None, None, None, "weekly rate-limit data is unavailable or has an invalid reset time"
     assert meter is not None and meter.resets_at is not None and meter.duration_minutes is not None
     remaining = meter.remaining_percent
     assert remaining is not None
-    usable = max(0.0, remaining - WEEKLY_RESERVE_PERCENT)
     days = max(0.0, (meter.resets_at - now).total_seconds() / 86400)
-    if remaining <= WEEKLY_RESERVE_PERCENT:
-        return "STOP", usable, days, "weekly remaining is at or below the 12% reserve"
-    window_seconds = meter.duration_minutes * 60
-    fraction_remaining = clamp((meter.resets_at - now).total_seconds() / window_seconds, 0.0, 1.0)
-    planned_remaining = (100.0 - WEEKLY_RESERVE_PERCENT) * fraction_remaining
-    pace_ratio = float("inf") if planned_remaining == 0 else usable / planned_remaining
-    if usable <= WEEKLY_CRITICAL_USABLE_PERCENT or pace_ratio < WEEKLY_CRITICAL_PACE_RATIO:
+    reserve = clamp(days * WEEKLY_DAILY_RESERVE_PERCENT, 0.0, 100.0)
+    usable = max(0.0, remaining - reserve)
+    if remaining <= reserve:
+        return "STOP", usable, days, reserve, f"weekly remaining is at or below the {reserve:.2f}% reserve ({days:.2f} days x 12%)"
+    headroom_days = usable / WEEKLY_DAILY_RESERVE_PERCENT
+    if usable <= WEEKLY_CRITICAL_USABLE_PERCENT or headroom_days < WEEKLY_CRITICAL_HEADROOM_DAYS:
         mode = "CRITICAL"
-    elif pace_ratio < WEEKLY_CONSERVATIVE_PACE_RATIO:
+    elif headroom_days < WEEKLY_CONSERVATIVE_HEADROOM_DAYS:
         mode = "CONSERVATIVE"
-    elif pace_ratio <= WEEKLY_AGGRESSIVE_PACE_RATIO:
+    elif headroom_days <= WEEKLY_AGGRESSIVE_HEADROOM_DAYS:
         mode = "NORMAL"
     else:
         mode = "AGGRESSIVE"
-    return mode, usable, days, f"weekly sustainable-pace ratio is {pace_ratio:.2f}"
+    return mode, usable, days, reserve, f"weekly headroom is {headroom_days:.2f} days above the {reserve:.2f}% reserve"
 
 
 def effective_mode(weekly: str, five_hour: Meter | None, now: datetime, stale: bool) -> tuple[str, str | None]:
@@ -487,7 +485,7 @@ def build_report(snapshot: Snapshot | None, source: str | None, source_error: st
     meters = snapshot.meters if snapshot else ()
     five_hour = most_constrained_meter(meters, "five_hour", now)
     weekly = most_constrained_meter(meters, "weekly", now)
-    weekly_decision, usable, days, reason = weekly_mode(weekly, now, stale)
+    weekly_decision, usable, days, reserve, reason = weekly_mode(weekly, now, stale)
     mode, five_hour_reason = effective_mode(weekly_decision, five_hour, now, stale)
     if snapshot is None:
         reason = source_error or "Codex rate-limit telemetry is unavailable"
@@ -501,7 +499,14 @@ def build_report(snapshot: Snapshot | None, source: str | None, source_error: st
         "stale": stale,
         "metadata": weekly.metadata if weekly else (snapshot.metadata if snapshot else {}),
         "meters": [{"window": meter_kind(meter), **meter_output(meter, now), "metadata": meter.metadata} for meter in meters],
-        "budget": {"reserve_percent": int(WEEKLY_RESERVE_PERCENT), "usable_percent": rounded(usable), "days_until_reset": rounded(days), "recommended_mode": mode, "reason": reason},
+        "budget": {
+            "reserve_percent": rounded(reserve),
+            "reserve_percent_per_day": int(WEEKLY_DAILY_RESERVE_PERCENT),
+            "usable_percent": rounded(usable),
+            "days_until_reset": rounded(days),
+            "recommended_mode": mode,
+            "reason": reason,
+        },
     }
 
 
