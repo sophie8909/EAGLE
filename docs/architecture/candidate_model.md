@@ -7,7 +7,7 @@ Every candidate has two evolvable prompt components:
 | Concept | Current field | Meaning |
 | --- | --- | --- |
 | Policy gene | `strategy_prompt` | Concrete MicroRTS game-playing policy (`policy_prompt` conceptually). |
-| Translation gene | `generation_prompt` | Reusable instructions for faithfully translating policy into Java (`code_generation_prompt` conceptually). |
+| Translation gene | `generation_prompt` | Canonically rendered, bounded reusable rules for faithfully translating policy into Java (`code_generation_prompt` conceptually). |
 
 In the default `generated_phenotype` mode, the complete
 `ai.generated.CandidateAgent` Java source remains non-inherited phenotype and
@@ -44,6 +44,9 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
   in inherited mode, one independent Java choice.
 - Strategy Reflection may change only `strategy_prompt`.
 - Code Reflection may change only `generation_prompt`.
+- Successful Code Reflection applies a structured rule delta and deterministically
+  renders `generation_prompt`; policy-specific checklists and Java fragments are
+  rejected at the rewrite boundary.
 - Balance Reflection may atomically change both prompts, but never Java.
 - Generator and Evaluation do not modify either prompt gene.
 - Generator uses the canonical checked-in scaffold. Only inherited mode also

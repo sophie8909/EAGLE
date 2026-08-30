@@ -192,7 +192,12 @@ as a run-relative reference to the evaluated source candidate's canonical Java
 phenotype. In inherited mode it instead records `java_parent_id`,
 `reviewed_java_input: inherited_java`, and the child's canonical
 `reviewed_inherited_java_artifact`; that source is also the explicit Java input
-to the Generator. Neither path restores an implicit `previous_code` field.
+to the Generator. The persisted Reviewer request contains only that source's
+editable strategy region plus the immutable API guide, never fixed scaffold
+source. The Code Rewriter raw response is a `remove_rule_ids`/`add_rules` delta;
+its `rewritten_prompt` field is the deterministic canonical rule rendering that
+becomes `genotype/code_generation_prompt.txt`. Neither path restores an
+implicit `previous_code` field.
 
 ## Match ownership
 

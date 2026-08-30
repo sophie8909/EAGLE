@@ -10,7 +10,7 @@ required_variables = ["current_strategy_prompt", "aggregate_game_performance", "
 file = "code_reflection.txt"
 role = "reflector"
 stages = ["code_reflection"]
-required_variables = ["policy_prompt", "generated_java", "structural_evidence"]
+required_variables = ["policy_prompt", "editable_strategy_java", "action_api_guide", "structural_evidence"]
 
 [prompts.balance_reflection]
 file = "balance_reflection.txt"
@@ -28,7 +28,7 @@ required_variables = ["strategy_prompt", "reflection", "game_summary"]
 file = "code_rewrite.txt"
 role = "rewriter"
 stages = ["generation_prompt_rewrite"]
-required_variables = ["code_generation_prompt", "alignment_review", "action_api_guide"]
+required_variables = ["code_generation_prompt", "current_reusable_rules", "alignment_review", "action_api_guide"]
 
 [prompts.balance_strategy_rewrite]
 file = "balance_strategy_rewrite.txt"

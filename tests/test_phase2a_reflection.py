@@ -53,7 +53,12 @@ class Phase2AReflectionTests(unittest.TestCase):
             round_state_summary={"last_round": 90},
             behavior_summary={"attack_timing": "late"},
             game_performance=61.0,
-            latest_child_java="latest child Java",
+            latest_child_java=(
+                "FIXED_JAVA_SHOULD_NOT_BE_REVIEWED\n"
+                "// EAGLE_AGENT_STRATEGY_START\n"
+                "private void decide(AgentContext context) { // latest child Java\n}\n"
+                "// EAGLE_AGENT_STRATEGY_END\n"
+            ),
             raw_generation_response="raw response",
             validation_result={"ok": True},
             compilation_result={"ok": False, "errors": ["missing symbol"]},
@@ -84,7 +89,8 @@ class Phase2AReflectionTests(unittest.TestCase):
         prompt = build_code_reflection_prompt(self.candidate, self.context)
         for expected in (
             "Current policy prompt",
-            "Generated CandidateAgent.java",
+            "Editable CandidateAgent strategy region",
+            "Immutable scaffold/API contract",
             "Optional structural/compiler evidence",
             "Return exactly one JSON object",
             "Every value inside an alignment_review item must be one JSON string",
@@ -92,6 +98,7 @@ class Phase2AReflectionTests(unittest.TestCase):
         ):
             self.assertIn(expected, prompt)
         self.assertNotIn("Opponent summaries", prompt)
+        self.assertNotIn("FIXED_JAVA_SHOULD_NOT_BE_REVIEWED", prompt)
 
     def test_reflection_retries_invalid_output_and_records_attempts(self):
         valid = json.dumps({

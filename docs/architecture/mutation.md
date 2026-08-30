@@ -51,21 +51,24 @@ Canonical state transition:
 Code Reflection changes only `generation_prompt` (the code-generation gene):
 
 ```text
-current policy + current Java phenotype
+current policy + editable Java strategy region + immutable API guide
   -> Policy-Code Alignment Reviewer
   -> alignment review
-current code-generation prompt + alignment review
+current reusable rules + alignment review
   -> Code Prompt Rewriter
-  -> replacement generation_prompt
+  -> structured rule delta
+  -> deterministic replacement generation_prompt
 ```
 
-The Reviewer receives policy plus Java. Optional static/compiler evidence may
-explain structural failure. It never receives raw game logs as evidence and
-does not propose a better game policy. Each mismatch records the policy
-requirement, observed Java behavior, mismatch, and required generation
-behavior. The Reviewer distinguishes a clear policy violated by Java, an
-ambiguous policy, and faithful implementation. A bad but faithfully implemented
-policy belongs to Strategy Reflection.
+The Reviewer receives policy plus only the Java between the strategy markers.
+The immutable action/API guide is supplied separately so fixed helper semantics
+are known without exposing fixed scaffold source as behavioral evidence.
+Optional static/compiler evidence may explain structural failure. It never
+receives raw game logs as evidence and does not propose a better game policy.
+Each mismatch records the policy requirement, observed Java behavior, mismatch,
+and required generation behavior. The Reviewer distinguishes a clear policy
+violated by Java, an ambiguous policy, and faithful implementation. A bad but
+faithfully implemented policy belongs to Strategy Reflection.
 
 Reviewer fields are persisted and forwarded in canonical form. The parser
 accepts a local model splitting one textual generation correction into a JSON
@@ -73,10 +76,15 @@ string array (or a documented text object) and joins it into the required
 single string; it does not accept missing alignment fields, prose outside the
 JSON object, Java output, or an unknown alignment classification.
 
-The Code Prompt Rewriter receives only the current code-generation prompt and
-Reviewer output. It returns exactly one JSON object containing only the
-non-empty string field `rewritten_prompt`; the parsed value replaces the
-code-generation prompt and cannot modify policy.
+The Code Prompt Rewriter receives only the current code-generation prompt, its
+canonical reusable-rule view, Reviewer output, and immutable API guide. It
+returns exactly `remove_rule_ids` and `add_rules`. Added rules use a fixed
+category vocabulary and policy-agnostic prose: they cannot name a concrete
+strategy, unit type, Java/API symbol, or fixed scaffold edit. Runtime derives
+stable IDs, applies removals/additions in order, enforces a ten-rule bound, and
+deterministically renders the replacement prompt. A legacy free-form prompt has
+no retained canonical rules and is therefore replaced rather than copied when
+its first structured Code Rewrite succeeds.
 
 Canonical state transition:
 

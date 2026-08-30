@@ -162,8 +162,13 @@ Validated Coach results use the authoritative input parent policy; the model's
 echo is retained only in raw/parsed evidence.
 
 Code Reviewer/Rewriter evidence is stored under `mutation/code_reflection/`.
-The Rewriter uses the exact JSON object contract with the sole field
-`rewritten_prompt`.
+The Reviewer sees only the editable strategy region plus the immutable API
+guide, so fixed scaffold fields/helpers cannot be mistaken for reachable
+candidate behavior. The Rewriter returns exactly `remove_rule_ids` and
+policy-agnostic `add_rules`; runtime validates and deterministically renders a
+bounded canonical generation prompt with stable derived rule IDs. Concrete
+strategy/unit/Java instructions are rejected, and legacy free-form prompts are
+not copied into the canonical rule set on their next successful Code Rewrite.
 The canonical generated Java phenotype is `phenotype/CandidateAgent.java`.
 Default mode uses only the checked-in scaffold. In inherited mode the Generator
 also receives `genotype/inherited_java.java`; Code Reflection reviews the

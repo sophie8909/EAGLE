@@ -85,6 +85,11 @@ compilation, integration, and evaluation.
 
 Attempt order is stable and one-based. The owning stage artifact provides model/backend/request/response paths; timing may reference those paths in a versioned extension but must not duplicate their content.
 
+Code Prompt Rewrite attempts include structured reusable-rule validation inside
+the owning attempt duration. An invalid category, unknown removal ID, concrete
+policy/Java instruction, or ineffective delta is an ordinary failed rewrite
+attempt and retains the same raw-response and retry timing contract.
+
 Java generation has two distinct axes. `generation_attempt` (and stable
 `generation_attempt_id`) identifies the outer decoder step;
 `transport_attempt` identifies an HTTP transport try inside that sample. The

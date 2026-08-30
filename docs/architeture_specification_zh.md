@@ -64,11 +64,16 @@ Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。
 Reflection 在預設模式比較 policy 與當前 Java phenotype；在 inherited 模式則
 比較 child 當前 policy 與 independently selected Java component。兩者皆可選用
 static/compiler evidence，但不使用 raw game logs；Code Prompt Rewriter 只收到
-原 generation prompt 與 alignment review。Generator 永遠使用兩個 prompt gene
+原 generation prompt、其 canonical reusable-rule view、alignment review 與 immutable
+API guide。Reviewer 只會看到 strategy marker 之間的可編輯 Java；固定 scaffold
+欄位與 helper 不會作為 candidate 行為證據。Generator 永遠使用兩個 prompt gene
 與固定 checked-in Java scaffold，且在 inherited 模式額外收到完整 inherited Java。
 
-Code Prompt Rewriter 固定回傳且只回傳
-`{"rewritten_prompt":"..."}`。Generation 0 依 candidate mode 分流：預設模式仍是
+Code Prompt Rewriter 固定回傳 `remove_rule_ids` 與 `add_rules`。新增規則必須使用
+固定 category 且為 policy-agnostic prose，不得寫入特定 strategy、unit type、Java/API
+symbol 或 scaffold 修改；runtime 會產生穩定 rule ID、依序套用 delta，並確定性組成
+最多十條規則的 canonical `generation_prompt`。Legacy free-form prompt 可讀取，但下次
+成功 Code Reflection 時不會被複製進新 rule set。Generation 0 依 candidate mode 分流：預設模式仍是
 每個 seed 檔建立一個 candidate，直接載入 `initial_java_seed_path`，不呼叫
 Generator；inherited 模式必須只有一個 seed policy，將同一份 policy 與 callable
 no-op Java 複製到 `population_size` 個 genotype，並對每個 candidate 各呼叫一次

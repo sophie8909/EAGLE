@@ -114,11 +114,18 @@ echo remains raw/parsed evidence only.
 Code mutation in default mode compares the source parent's policy with its Java
 phenotype. In inherited mode it compares the child's independently selected
 policy with its inherited Java component and uses diagnostics from that Java
-parent only when they describe the selected source. It then performs Code
-Generation Prompt Rewrite before final Java generation and changes only
-`generation_prompt`; game logs are not Code Reflection evidence. The Code
-Prompt Rewriter returns exactly `{"rewritten_prompt":"..."}` so the transport's
-JSON-object mode and the parser enforce the same contract.
+parent only when they describe the selected source. The Reviewer receives only
+the Java between the strategy markers, plus the immutable action/API guide; it
+cannot treat fixed scaffold fields or helpers as candidate behavior. It then
+performs Code Generation Prompt Rewrite before final Java generation and changes
+only `generation_prompt`; game logs are not Code Reflection evidence.
+
+The Code Prompt Rewriter returns exactly one structured reusable-rule delta:
+`remove_rule_ids` plus policy-agnostic `add_rules`. Runtime validates categories,
+rejects concrete strategy/unit/Java instructions, derives stable IDs, and
+deterministically renders a bounded canonical generation prompt. Legacy
+free-form generation prompts remain loadable but are not copied into the new
+rule set on their next successful Code Reflection.
 
 Balance mutation receives only a bounded aggregate W/D/L table partitioned by
 opponent, map, and candidate side. It receives no prompt text, Java, compiler

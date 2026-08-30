@@ -7,12 +7,14 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from generation.agent_template import extract_strategy_region
+
 from .candidate import Candidate
-from .prompts import render_prompt
+from .prompts import load_prompt, render_prompt
 from .reflection_context import ReflectionContext, coerce_structured_context
 
 
-REFLECTION_PROMPT_SCHEMA_VERSION = "reflection-prompt-v1"
+REFLECTION_PROMPT_SCHEMA_VERSION = "reflection-prompt-v2"
 STRATEGY_BUDGETS = {
     "current_strategy_prompt": 12_000,
     "aggregate_game_performance": 4_000,
@@ -23,8 +25,9 @@ STRATEGY_BUDGETS = {
 }
 CODE_BUDGETS = {
     "policy_prompt": 8_000,
-    "generated_java": 24_000,
+    "editable_strategy_java": 18_000,
     "structural_evidence": 9_000,
+    "action_api_guide": 12_000,
 }
 BALANCE_BUDGETS = {"win_loss_table": 18_000}
 
@@ -47,7 +50,14 @@ def _bounded_text(value: object, budget: int, *, section: str, truncated: list[s
     return text[:budget] + f"\n[section {section} bounded; omitted={len(text) - budget} chars]"
 
 
-def _bounded_code(source: str, budget: int, diagnostics: dict[str, object], truncated: list[str]) -> str:
+def _bounded_code(
+    source: str,
+    budget: int,
+    diagnostics: dict[str, object],
+    truncated: list[str],
+    *,
+    section: str,
+) -> str:
     if len(source) <= budget:
         return source
     lines = source.splitlines()
@@ -63,14 +73,33 @@ def _bounded_code(source: str, budget: int, diagnostics: dict[str, object], trun
         end = min(len(lines), start + radius * 2)
         snippet = "\n".join(lines[start:end])
         if len(snippet) <= budget:
-            truncated.append("generated_code")
+            truncated.append(section)
             return f"// lines {start + 1}-{end} around compiler diagnostic\n{snippet}"
-    marker = "\n// generated code middle omitted\n"
+    marker = "\n// editable strategy middle omitted\n"
     side_budget = max(1, (budget - len(marker)) // 2)
     head = "\n".join(lines[: max(1, side_budget // 80)])
     tail = "\n".join(lines[-max(1, side_budget // 80):])
-    truncated.append("generated_code")
+    truncated.append(section)
     return (head + marker + tail)[:budget]
+
+
+def _editable_strategy_for_review(
+    source: str,
+    diagnostics: dict[str, object],
+) -> str:
+    """Return only Java that Code Reflection is allowed to influence.
+
+    A malformed or partial source must not make the immutable scaffold visible
+    to the Reviewer.  The extraction failure remains scoped structural evidence
+    so the role can describe an implementation failure without inventing
+    behavior from fixed fields or helpers.
+    """
+
+    try:
+        return extract_strategy_region(source)
+    except ValueError as exc:
+        diagnostics["strategy_region_extraction_failure"] = str(exc)
+        return "// Editable strategy region unavailable; use structural evidence only."
 
 
 def _metadata(section_values: dict[str, str], omitted: list[str], truncated: list[str], text: str) -> dict[str, object]:
@@ -142,11 +171,13 @@ def build_code_reflection_prompt_bundle(candidate: Candidate, context: Reflectio
         if candidate.inherited_java
         else context.candidate.strategy_prompt
     )
-    generated_code = _bounded_code(
-        candidate.inherited_java or context.candidate.generated_code,
-        CODE_BUDGETS["generated_java"],
+    reviewed_source = candidate.inherited_java or context.candidate.generated_code
+    editable_strategy_java = _bounded_code(
+        _editable_strategy_for_review(reviewed_source, diagnostics),
+        CODE_BUDGETS["editable_strategy_java"],
         diagnostics,
         truncated,
+        section="editable_strategy_java",
     )
     structural_evidence = _bounded_text(
         _json(diagnostics),
@@ -156,8 +187,14 @@ def build_code_reflection_prompt_bundle(candidate: Candidate, context: Reflectio
     )
     sections = {
         "policy_prompt": policy_prompt,
-        "generated_java": generated_code,
+        "editable_strategy_java": editable_strategy_java,
         "structural_evidence": structural_evidence,
+        "action_api_guide": _bounded_text(
+            load_prompt("action_api_guide"),
+            CODE_BUDGETS["action_api_guide"],
+            section="action_api_guide",
+            truncated=truncated,
+        ),
     }
     text = render_prompt("code_reflection", sections)
     return ReflectionPrompt(text, _metadata(sections, omitted, truncated, text))

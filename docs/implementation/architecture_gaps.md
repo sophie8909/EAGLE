@@ -10,7 +10,10 @@ The active architecture has one remaining non-blocking hardening gap.
 
 All previously tracked candidate, crossover, mutation, evaluation, scoring,
 artifact, runtime, prompt, and legacy-cleanup gaps are closed by the current
-source and contract tests. Historical gap rows remain available in Git history.
+source and contract tests. Code Reflection additionally scopes Reviewer source
+to the editable strategy region and uses deterministic reusable-rule deltas;
+these are active contracts rather than open gaps. Historical gap rows remain
+available in Git history.
 
 ## Gap update rule
 

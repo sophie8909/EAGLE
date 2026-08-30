@@ -21,7 +21,7 @@ can be established from their artifact schemas, timestamps, and Git history.
 | 4. What selection algorithm is active? | Exact opponent-wise lexicase for every parent request and for `(mu + lambda)` survivors. It has seven cases, random case order, no epsilon, exact-score filtering, random residual tie breaking, and survivor selection without replacement. NSGA-II, tournament, and uniform-random selection are not active. |
 | 5. How is game performance represented? | Each of seven opponent cases is the arithmetic mean of 18 shaped match scores (3 maps × 3 rounds × 2 sides). The seven values are the fitness representation. A weighted scalar is reporting-only. Code quality is diagnostic-only. |
 | 6. Is AOS changing operator behavior? | It can in source, but no locally preserved current run uses an adaptive mode: every inspected run records `static`, zero operator rewards, and unchanged probabilities. Thus there is no local empirical evidence that AOS has changed probabilities. |
-| 7. Are Game and Code Reflection behaviorally distinct? | **Structurally yes.** Strategy Reflection changes only policy; Code Reflection changes only code-generation instructions; both regenerate Java afterward. Their artifacts confirm this. **Semantically, grounding is unreliable:** a sampled Code Reflection misdiagnosed immutable scaffold fields as behavior and wrote questionable API instructions. |
+| 7. Are Game and Code Reflection behaviorally distinct? | **Yes.** Strategy Reflection changes only policy; Code Reflection changes only code-generation instructions; both regenerate Java afterward. Code Reflection now reviews only the editable strategy region and rewrites a deterministic policy-agnostic rule set, preventing the fixed-scaffold misdiagnosis observed in the historical 0829 run. |
 | 8. Do policies show meaningful strategy diversity? | Some do: worker rush, worker-first macro, early barracks/mixed-unit pressure, defensive/reactive, and harassment policies are distinguishable. However late populations often collapse to a few policy hashes, many policies are variations on worker/economy timing, and the newest Balance run contains impossible MicroRTS concepts. Text diversity therefore overstates executable strategic diversity. |
 | 9. Why do recent agents fail strong opponents? | The strongest evidence is a combination of weak/invalid phenotype strategies, severe seed dependence, semantically ungrounded reflection, deterministic and often low-information match repetition, and specialist-preserving lexicase pressure. Corrected blank-seed runs won zero games against the seven search opponents in final test; a worker-rush seed recovered wins against rush opponents but still went 0/60 against Mayari and TMA. |
 | 10. What is the most important next verification? | Run a paired, single-parent Strategy-vs-Code lineage assay and inspect the exact generator request and resulting Java behavior. It directly tests whether each gene delta reaches and meaningfully changes the phenotype before selection can confound the result. |
@@ -486,10 +486,14 @@ the selected Java evidence parent and are dropped if they describe a failed
 attempt rather than the inherited fallback source.
 
 The reviewer must classify the relation as policy-clear/Java-violating,
-policy-ambiguous, or faithful, with at most five mismatches. A second LLM call
-rewrites the reusable generation instructions under the immutable API guide.
-Only `generation_prompt` is replaced; policy remains byte-identical. The normal
-evaluation boundary then regenerates a complete Java phenotype.
+policy-ambiguous, or faithful, with at most five mismatches. It receives only
+the Java between the strategy markers; the immutable API guide is separate and
+fixed scaffold source is excluded. A second LLM call returns a structured
+`remove_rule_ids`/`add_rules` delta. Runtime rejects concrete strategy/unit/Java
+instructions, derives stable IDs, and deterministically renders the bounded
+reusable generation prompt. Only `generation_prompt` is replaced; policy
+remains byte-identical. The normal evaluation boundary then regenerates a
+complete Java phenotype.
 
 ```text
 Implementation:
@@ -507,14 +511,15 @@ and response, metadata, and original prompt files. Current `candidate.json`
 does not add a dedicated code-reflection artifact reference, but `mutation_type`
 and the directory make the operation recoverable.
 
-The structural contract works in real artifacts, but review quality is not
-reliable. For `gen_0001_df8fedf49520`, the reviewer correctly received the
-worker-rush policy and inherited Java. It then incorrectly called the immutable
+The historical 0829 artifacts exposed a review-quality failure. For
+`gen_0001_df8fedf49520`, the reviewer received the worker-rush policy and full
+inherited Java. It then incorrectly called the immutable
 `barracksType` field and generic helper support a behavioral violation, claimed
 queue semantics the API does not expose, and the rewriter proposed
 `context.player.getResources()` even though `context.player` is an integer.
-The later generation/repair boundary may reject or repair such instructions,
-but the reflection itself is not well grounded.
+Current source addresses that failure mode by excluding fixed source and by
+accepting only policy-agnostic reusable-rule deltas. The old run remains valid
+historical evidence and is not retroactively rewritten.
 
 ```text
 Observed behavior:
@@ -537,15 +542,15 @@ It is not yet demonstrated that Code Reflection consistently improves fidelity.
 
 | Aspect | Game / Strategy Reflection | Code Reflection |
 |---|---|---|
-| Input evidence | Up to 10 individual match traces plus deterministic all-126 summary and parent comparison | Policy + generated/inherited Java + bounded structural/compiler diagnostics |
+| Input evidence | Up to 10 individual match traces plus deterministic all-126 summary and parent comparison | Policy + editable generated/inherited Java strategy region + immutable API guide + bounded structural/compiler diagnostics |
 | LLM role | Match Commentator per trace, then Coach | Policy-Code Alignment Reviewer, then generation-prompt Rewriter |
 | Editable genotype component | `strategy_prompt` | `generation_prompt` |
 | Preserved component | Generation prompt and inherited Java | Policy and inherited Java |
 | Expected semantic effect | Change economy/combat intent based on game evidence | Make Java more faithful to existing intent |
-| Actual implementation | Single-gene policy mutation; real artifacts confirm isolation and generator propagation | Single-gene generation-instruction mutation; real artifacts confirm isolation and regeneration |
+| Actual implementation | Single-gene policy mutation; real artifacts confirm isolation and generator propagation | Single-gene deterministic reusable-rule mutation; historical free-form prompts canonicalize on their next successful Code Reflection |
 | Generated Java regeneration | Yes, at shared evaluation boundary | Yes, at shared evaluation boundary |
 | Saved artifacts | Selection, traces, individual analyses, global summary, Coach IO, parent/child policy, generator policy input | Reviewer IO, Rewriter IO, originals, metadata |
-| Main observed risk | Loss evidence can yield brittle or impossible policy instructions | Reviewer can misread scaffold/API and rewrite instructions around false mismatches |
+| Main observed risk | Loss evidence can yield brittle or impossible policy instructions | Reviewer may still misclassify editable behavior, but cannot use fixed scaffold source or persist policy-specific Java checklists |
 
 The operators share `create_offspring()`, the shared generator input assembly,
 generation retries/repair, and evaluation. They do **not** share the same
@@ -838,7 +843,7 @@ This is meaningful textual diversity but poor genotype-to-phenotype fidelity.
 
 | Hypothesis | Rating | Direct evidence |
 |---|---|---|
-| H1 — Reflection behavior is not correctly grounded | **Partially supported** | Gene routing and regeneration are correct, disproving the strongest “outputs ignored/overwritten” version. But real Code Reflection misread scaffold behavior and wrote questionable API instructions; Balance Reflection inferred events from aggregate W/D/L despite being told not to and introduced impossible units/tech. Semantic grounding is demonstrably unreliable. |
+| H1 — Reflection behavior is not correctly grounded | **Historically supported; Code path mitigated** | Gene routing and regeneration were correct, but the 0829 Code Reflection saw fixed scaffold source and wrote questionable API instructions. Current Code Reflection excludes fixed source and accepts only policy-agnostic rule deltas. Balance Reflection's historical inference from aggregate W/D/L remains separate evidence that LLM semantic grounding still requires empirical validation. |
 | H2 — Evolutionary selection pressure is ineffective | **Partially supported** | Lexicase is active and discriminating, but it selects exact opponent specialists. Aggregate-best candidates at gen12/gen4 did not remain final representatives, and different candidates own different case maxima. This pressure preserves niches but does not guarantee broad improvement. |
 | H3 — Phenotypes lack effective MicroRTS strategies | **Supported** | Corrected blank runs have verified gene deltas and many distinct compiled Java files yet zero final-test wins against all seven search opponents. Worker seed improves rush cases but remains 0/60 against Mayari and TMA. Compilability/API checks do not establish tactics. |
 | H4 — Evaluation/reflection evidence is sparse or biased | **Partially supported** | Strategy Reflection reads only up to 10 traces in depth, though it also receives an all-126 W/D/L summary and coverage is good. Three repeated rounds have no explicit match seed and can be redundant. Balance sees only aggregate W/D/L and nevertheless infers mechanisms. Evidence breadth is better than the simple intended description, but causal detail is weak. |

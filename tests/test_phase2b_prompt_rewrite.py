@@ -12,6 +12,27 @@ from eagle.rewrite import (
     build_code_rewrite_prompt,
     build_strategy_rewrite_prompt,
 )
+from eagle.reusable_generation_prompt import (
+    RULES_END_MARKER,
+    RULES_START_MARKER,
+    parse_reusable_generation_rules,
+)
+
+
+GENERIC_RULE = "Make every stated prerequisite reachable before its dependent behavior."
+
+
+def code_rule_delta(*, instruction: str = GENERIC_RULE, extra: bool = False) -> str:
+    payload = {
+        "remove_rule_ids": [],
+        "add_rules": [{
+            "category": "requirement_coverage",
+            "instruction": instruction,
+        }],
+    }
+    if extra:
+        payload["analysis"] = "not allowed"
+    return json.dumps(payload)
 
 
 class ScriptedRewriteBackend:
@@ -65,7 +86,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
     def test_code_rewrite_changes_only_generation_prompt(self):
         backend = ScriptedRewriteBackend((
             self._code_reflection(),
-            json.dumps({"rewritten_prompt": "new generation prompt"}),
+            code_rule_delta(),
         ))
         mutation = PromptRewriteMutation(
             self.config,
@@ -75,13 +96,15 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         )
         child = mutation.mutate(self.candidate, self.context)
         self.assertEqual(child.strategy_prompt, self.candidate.strategy_prompt)
-        self.assertEqual(child.generation_prompt, "new generation prompt")
+        self.assertIn(RULES_START_MARKER, child.generation_prompt)
+        self.assertIn(GENERIC_RULE, child.generation_prompt)
+        self.assertEqual(len(parse_reusable_generation_rules(child.generation_prompt)), 1)
         self.assertEqual(child.mutation_type, "code")
 
     def test_code_rewrite_requires_exact_json_contract_and_retries(self):
         backend = ScriptedRewriteBackend((
-            json.dumps({"rewritten_prompt": "bad", "analysis": "extra"}),
-            "```json\n{\"rewritten_prompt\":\"usable generation prompt\"}\n```",
+            code_rule_delta(extra=True),
+            "```json\n" + code_rule_delta() + "\n```",
         ))
         result = PromptRewriteStage(backend, max_attempts=2).run(
             rewrite_type="generation_prompt_rewrite",
@@ -89,12 +112,13 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
             request="rewrite request",
         )
         self.assertTrue(result.succeeded)
-        self.assertEqual(result.rewritten_prompt, "usable generation prompt")
+        self.assertIn(GENERIC_RULE, result.rewritten_prompt)
+        self.assertIn(RULES_END_MARKER, result.rewritten_prompt)
         self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
 
     def test_code_rewrite_rejects_java_inside_json(self):
         backend = ScriptedRewriteBackend((
-            json.dumps({"rewritten_prompt": "package ai.generated; public class CandidateAgent {}"}),
+            code_rule_delta(instruction="Call implementPolicy() before returning Java."),
         ))
         result = PromptRewriteStage(backend, max_attempts=1).run(
             rewrite_type="generation_prompt_rewrite",
@@ -102,7 +126,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
             request="rewrite request",
         )
         self.assertFalse(result.succeeded)
-        self.assertIn("only the rewritten prompt", result.error)
+        self.assertIn("plain policy-agnostic prose", result.error)
     def test_rewrite_prompt_builders_include_reflection_and_original_component(self):
         backend = ScriptedRewriteBackend((self._strategy_reflection(),))
         reflection = ReflectionStage(backend, max_attempts=1).run(
@@ -122,6 +146,8 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertIn("old strategy", strategy_prompt)
         self.assertIn("reflection", strategy_prompt)
         self.assertIn("old generation prompt", code_prompt)
+        self.assertIn("Current reusable rules", code_prompt)
+        self.assertIn('"add_rules"', code_prompt)
         self.assertIn("Policy-Code Alignment Review", code_prompt)
         self.assertIn("Immutable MicroRTS API contract", code_prompt)
         self.assertIn("commandMove", code_prompt)

@@ -336,10 +336,13 @@ class MockReflectionBackend:
             })
         if "Code Generation Prompt Rewrite stage" in prompt:
             return json.dumps({
-                "rewritten_prompt": (
-                    "Preserve the validated constraints and apply only the "
-                    "evidence-backed code-generation revision."
-                ),
+                "remove_rule_ids": [],
+                "add_rules": [{
+                    "category": "requirement_coverage",
+                    "instruction": (
+                        "Make every stated prerequisite reachable before its dependent behavior."
+                    ),
+                }],
             })
         if "MATCH_COMMENTATOR_OUTPUT=chunk" in prompt:
             source = prompt.split("MATCH_COMMENTATOR_OUTPUT=chunk", 1)[1]
