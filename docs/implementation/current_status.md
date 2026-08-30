@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-08-26. This file describes executable repository behavior.
+Snapshot: 2026-08-30. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -32,9 +32,11 @@ Snapshot: 2026-08-26. This file describes executable repository behavior.
   and `aos_head2head`. Strategy/Code/Balance probabilities mean fixed probabilities in
   static mode and initial probabilities in AOS modes. Static performs no reward
   work. Opponent AOS restores execution-first seven-case W/D/L-rank change.
-  Head-to-head AOS preserves the configured direct parent-A matrix and
-  `(wins + 0.5 × draws) / valid matches`. Both adaptive modes share the alpha
-  `0.20` EMA/probability-matching updater and configured minimum floor.
+  Head-to-head AOS preserves the configured direct comparison matrix and
+  `(wins + 0.5 × draws) / valid matches`. Both adaptive modes compare against
+  the mutation-evidence parent resolved from policy, generation-prompt, or Java
+  provenance, then share the alpha `0.20` EMA/probability-matching updater and
+  configured minimum floor.
 - The weighted aggregate Game Performance uses weights `1` for the three rush
   cases and `2` for AllInBot/Mayari/COAC/TMA, with denominator `11.0`, for
   reporting only.

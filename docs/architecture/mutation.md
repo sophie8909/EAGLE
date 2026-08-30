@@ -110,6 +110,12 @@ The configured static/AOS controller selects exactly one mutation operator.
 Reward calculation changes neither responsibility boundary nor the seven-case
 fitness contract.
 
+For adaptive credit, `create_offspring()` records the same evaluated parent
+used to construct mutation evidence as `comparison_parent_id`. Strategy routes
+through policy provenance. Code and Balance route through generation-prompt
+provenance in default mode and inherited-Java provenance in inherited mode.
+Direct-parent order and prompt-text equality never select the AOS baseline.
+
 New artifacts live under:
 
 ```text
@@ -131,9 +137,11 @@ provenance and the exact inherited source. The Rewriter still changes only the
 selected code-generation prompt.
 
 After crossover, Strategy Reflection evidence comes from the recorded policy
-parent. Code Reflection evidence comes from the recorded code-generation-prompt
-parent, so the reviewed policy/Java pair is the evaluated source that actually
-used the translation gene being mutated. Prompt text equality is never used to
+parent. In default mode, Code and Balance evidence comes from the recorded
+code-generation-prompt parent, whose evaluated phenotype used the translation
+gene being mutated. In inherited mode, Code and Balance evidence instead comes
+from the independently selected Java parent whose source is reviewed or whose
+W/D/L evidence drives the mutation. Prompt text equality is never used to
 choose evidence.
 
 ## Hard invariants

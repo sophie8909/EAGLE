@@ -25,6 +25,7 @@
   opt-in inherited Java third component;
 - inherited-mode single-policy generation-zero replication, independent Java
   generation, three-component crossover provenance, and resumable Java genotype artifacts.
+- mutation-evidence-parent provenance for opponent and head-to-head AOS credit.
 
 ## Remaining optional hardening
 

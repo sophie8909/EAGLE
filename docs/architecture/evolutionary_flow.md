@@ -29,8 +29,9 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    promoted phenotype through the complete pipeline. Integration/runtime
    failure never re-enters the decoder. `static` performs no credit update;
    `aos_opponent` reuses the seven normal opponent summaries;
-   `aos_head2head` runs the configured direct parent-A matrix. Both adaptive
-   modes feed one shared generation-level EMA updater.
+   `aos_head2head` runs the configured direct matrix against the recorded
+   mutation-evidence parent. Both adaptive modes feed one shared
+   generation-level EMA updater.
 7. From generation 1 onward, combine evaluated parents and offspring and fill
    the fixed population with seeded lexicase selection without replacement.
    This is the `(mu + lambda)` environmental-selection model; when both sets
@@ -70,6 +71,12 @@ indices, sides, and compiled classes. These matches never enter fitness, the
 opponent archive, lexicase, weighted Game Performance, or final testing.
 `aos_opponent` instead compares the existing seven normal opponent records;
 `static` performs neither form of credit assignment.
+
+Both adaptive modes use the mutation context's evidence parent as the
+comparison parent. Strategy uses `strategy_parent_id`; default-mode Code and
+Balance use `generation_prompt_parent_id`; inherited-mode Code and Balance use
+`java_parent_id`. Therefore component-wise crossover may select either direct
+parent without silently assigning AOS credit to the other one.
 
 ## Archive and analysis
 

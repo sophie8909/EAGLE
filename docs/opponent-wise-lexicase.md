@@ -46,9 +46,10 @@ preference. Aggregate Game Performance remains reporting-only and does not
 select survivors.
 
 Reflection operator selection is a separate credit path. `static` has no
-reward; `aos_opponent` compares the existing seven case W/D/L ranks with parent
-A; `aos_head2head` uses the offspring win-plus-half-draw rate over configured
-direct matches against parent A. Neither reward becomes a lexicase case.
+reward; `aos_opponent` compares the existing seven case W/D/L ranks with the
+recorded mutation-evidence parent; `aos_head2head` uses the offspring
+win-plus-half-draw rate over configured direct matches against that same
+parent. Neither reward becomes a lexicase case.
 
 ## Artifacts and analysis
 

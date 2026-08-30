@@ -1,6 +1,6 @@
 # EAGLE architecture specification
 
-Status: authoritative current contract, 2026-08-26.
+Status: authoritative current contract, 2026-08-30.
 
 This document describes executable EAGLE behavior. Historical NSGA-II,
 two-objective, ten-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
@@ -85,12 +85,22 @@ component values are equal. Default-mode lineage has no Java parent.
 The reflection operator is chosen by exactly one configured mode:
 
 - `static`: fixed Strategy/Code/Balance probabilities and no reward work;
-- `aos_opponent`: execution-first seven-case rank-change reward;
-- `aos_head2head`: configured parent-A versus offspring match matrix reward.
+- `aos_opponent`: execution-first seven-case rank-change reward against the
+  recorded mutation-evidence parent;
+- `aos_head2head`: configured mutation-evidence-parent versus offspring match
+  matrix reward.
 
 Both adaptive modes use the same alpha-`0.20` EMA and probability-matching
 updater with the configured minimum probability floor. AOS never changes the
 seven-case lexicase fitness.
+
+The adaptive comparison parent is the same evaluated candidate used to build
+the mutation context: the policy-component parent for Strategy mutation; the
+generation-prompt parent for Code/Balance mutation in default mode; and the
+Java-component parent for Code/Balance mutation in inherited mode. Component
+provenance, rather than direct-parent position or prompt-text equality, selects
+this parent. Both reward providers consume the resulting
+`comparison_parent_id`.
 
 Strategy mutation performs Match Commentator sampling, Coach reflection, and a
 Strategy Prompt rewrite before final Java generation. It changes only

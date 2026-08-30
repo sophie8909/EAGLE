@@ -616,12 +616,12 @@ so probabilities can remain unchanged indefinitely. State is one global
 controller for the run, persists in generation AOS records, and is restored on
 resume. Rewards are stored against the selected operator and child ID.
 
-There is a provenance weakness: `create_offspring()` always records
-`comparison_parent_id = parent_a.id`. After component-wise crossover, the
-mutated policy, generation prompt, or inherited Java may come from `parent_b`.
-AOS therefore credits the correct operator/child but can compare it with a
-parent that did not supply the mutated component. This makes reward noisy and
-can misattribute operator effect.
+The audit originally found a comparison-parent provenance weakness. The current
+source corrects it: `create_offspring()` records the evaluated parent used to
+construct mutation evidence. Strategy follows `strategy_parent_id`; default-mode
+Code/Balance follows `generation_prompt_parent_id`; inherited-mode Code/Balance
+follows `java_parent_id`. Component-wise crossover can therefore source either
+direct parent without AOS silently comparing the child with the other one.
 
 ```text
 Implementation:

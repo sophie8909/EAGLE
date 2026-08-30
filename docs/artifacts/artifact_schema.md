@@ -182,8 +182,10 @@ when later generation fails. Strategy Coach parsed output preserves the model's
 parent-policy echo, while validated `coach_result.json` takes the parent policy
 from the authoritative input artifact. Mutation-role run timing references the
 candidate-owned evidence without duplicating its prompt/response under
-`llm_logs/`. Adaptively credited offspring retain `aos/reward.json`;
-head-to-head match evidence remains below `aos/head_to_head/`.
+`llm_logs/`. Adaptively credited offspring retain `aos/reward.json`; its
+`comparison_parent_id` resolves the evaluated mutation-evidence parent through
+component provenance. Head-to-head match evidence remains below
+`aos/head_to_head/`.
 
 In default mode Code Reflection metadata records `reviewed_phenotype_artifact`
 as a run-relative reference to the evaluated source candidate's canonical Java

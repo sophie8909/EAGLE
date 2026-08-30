@@ -430,15 +430,15 @@ def create_offspring(
                 f"{progress_prefix} stage=mutation status=started operator={mutation_name}",
                 flush=True,
             )
-            evidence_parent_id = (
-                child.strategy_parent_id
-                if mutation_name == "strategy"
-                else code_feedback_parent_id
-            )
             # Reflection evidence must describe the evaluated source of the
             # gene being mutated.  This avoids reviewing one parent's Java as
             # if it had been produced by the other parent's translation gene.
-            feedback_parent = parent_for_component(evidence_parent_id, (parent_a, parent_b))
+            feedback_parent = mutation_evidence_parent(
+                child,
+                mutation_name=mutation_name,
+                candidate_java_mode=config.candidate_java_mode,
+                parents=(parent_a, parent_b),
+            )
             mutation_intent = None
             if mutation_name == "strategy":
                 mutation_intent = select_strategy_mutation_intent(rng=rng)
@@ -499,7 +499,10 @@ def create_offspring(
                 **child.metadata,
                 "aos": {
                     "generation": generation,
-                    "comparison_parent_id": parent_a.id,
+                    # Credit the operator against the same evaluated parent
+                    # whose component/evidence drove the mutation. Crossover
+                    # may source that parent from either direct-parent slot.
+                    "comparison_parent_id": feedback_parent.id,
                     "offspring_id": child.id,
                     "operator": OPERATOR_TO_MUTATION[operator_used],
                     "operator_id": operator_used,
@@ -534,6 +537,28 @@ def parent_for_component(parent_id: str | None, parents: tuple[Candidate, Candid
         if parent.id == parent_id:
             return parent
     raise ValueError(f"Recorded component parent {parent_id!r} is not a direct parent.")
+
+
+def mutation_evidence_parent(
+    child: Candidate,
+    *,
+    mutation_name: str,
+    candidate_java_mode: str,
+    parents: tuple[Candidate, Candidate],
+) -> Candidate:
+    """Resolve the evaluated parent that owns one mutation's evidence."""
+
+    if mutation_name == "strategy":
+        parent_id = child.strategy_parent_id
+    elif mutation_name in {"code", "balance"}:
+        parent_id = (
+            child.java_parent_id
+            if candidate_java_mode == "inherited_genotype"
+            else child.generation_prompt_parent_id
+        )
+    else:
+        raise ValueError(f"Unknown mutation name: {mutation_name!r}.")
+    return parent_for_component(parent_id, parents)
 
 
 def mutation_context_from_candidate(

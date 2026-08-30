@@ -1,6 +1,6 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-08-26 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-08-30 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
@@ -46,6 +46,13 @@ Reflection operator mode 只有三種：
 - `static`
 - `aos_opponent`
 - `aos_head2head`
+
+兩種 adaptive mode 都以 mutation context 實際使用的 evidence parent 作為
+`comparison_parent_id`：Strategy 依 policy component provenance；預設模式的 Code／
+Balance 依 generation-prompt provenance；inherited 模式的 Code／Balance 依 Java
+component provenance。Crossover 後即使 component 來自第二個 direct parent，也不會
+再固定把 AOS reward 歸到第一個 parent。`aos_opponent` 重用一般 126 場 evaluation，
+`aos_head2head` 則對同一 comparison parent 執行額外 18 場 direct matches。
 
 Strategy Mutation 只修改 `strategy_prompt`；Code Mutation 只修改
 `generation_prompt`。Balance Reflection 只接收依 opponent、map 與 candidate
