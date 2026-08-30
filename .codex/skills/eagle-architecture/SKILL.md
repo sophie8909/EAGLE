@@ -18,9 +18,14 @@ Do not read `docs/architeture_specification_zh.md` as an implementation source.
 
 ## Preserve
 
-- Keep exactly two genotype components: policy gene `strategy_prompt` and code-generation gene `generation_prompt`.
-- Keep all Java source as phenotype/evidence; never inherit parent Java into a child genotype or Generator request.
-- Keep generated full-file Java as phenotype, separate from the pre-generation genotype.
+- Preserve the configured candidate boundary: default `generated_phenotype` has
+  exactly the policy and code-generation prompt genes; explicit
+  `inherited_genotype` adds one complete inherited-Java component with
+  independent provenance.
+- Keep generated full-file Java as the current phenotype. In inherited mode,
+  keep the selected pre-generation Java input separate from that newly
+  generated phenotype and pass it to the Generator without letting mutation
+  edit it directly.
 - Make every offspring pass through final Java generation after crossover and optional mutation.
 - Keep exactly seven maximized opponent fitness cases and seeded lexicase parent/survivor selection; weighted `game_performance` and `code_quality` are diagnostics only.
 - Keep failed candidates in lexicase with the canonical per-case failure sentinel and failure-stage diagnostics.
