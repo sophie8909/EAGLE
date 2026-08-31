@@ -1,17 +1,35 @@
 EAGLE Balance Code Generation Prompt Rewrite stage.
 
-Rewrite the reusable policy-to-Java instructions so generated agents faithfully
-implement the strategy changes needed for the documented Balance Reflection
-weaknesses. Do not rewrite the policy itself or output Java.
+Improve the reusable rules that translate any policy prompt into complete Java based on
+the documented Balance Reflection weaknesses. Return a rule delta; runtime applies it
+deterministically to the current rules. Do not rewrite the whole prompt or the policy.
 
-Return exactly one JSON object:
-{"rewritten_prompt":"<replacement code_generation_prompt>"}
+Return exactly one JSON object with this schema:
+{"remove_rule_ids":[],"add_rules":[{"category":"requirement_coverage|priority_ordering|role_assignment|state_continuity|targeting_fallback|policy_grounding|api_compliance","instruction":"<one reusable rule>"}]}
+
+The object must contain exactly those two keys. remove_rule_ids may name only IDs from
+Current reusable rules. Each add_rules item must contain exactly category and instruction.
+Make at least one effective change and leave at least one rule after removals.
+
+Every added instruction must be policy-agnostic and useful for unseen policies. Generalize
+the Balance analysis into translation principles such as preserving policy priority,
+making stated conditions reachable, or maintaining mutually exclusive roles. Never copy
+or paraphrase concrete opponents, maps, units, structures, strategies, helper or variable
+names, Java/API symbols, or immutable-scaffold edits. The current policy is supplied
+separately to the Generator and must not be embedded in this reusable gene. Do not return
+Java, analysis, a whole replacement prompt, a patch, a diff, or Markdown.
 
 Current code_generation_prompt:
 $code_generation_prompt
+
+Current reusable rules (canonical JSON; legacy or historically malformed free-form prompts
+have no retained reusable rules and must be replaced through add_rules):
+$current_reusable_rules
 
 Balance analysis:
 $balance_analysis
 
 Immutable MicroRTS API contract:
 $action_api_guide
+
+Output only the JSON object.

@@ -40,7 +40,7 @@ required_variables = ["strategy_prompt", "balance_analysis"]
 file = "balance_code_rewrite.txt"
 role = "rewriter"
 stages = ["balance_generation_prompt_rewrite"]
-required_variables = ["code_generation_prompt", "balance_analysis", "action_api_guide"]
+required_variables = ["code_generation_prompt", "current_reusable_rules", "balance_analysis", "action_api_guide"]
 
 [prompts.java_generation]
 file = "java_generation.txt"

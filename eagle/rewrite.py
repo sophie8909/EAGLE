@@ -672,7 +672,10 @@ def build_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult
 
     return render_prompt("code_rewrite", {
         "code_generation_prompt": candidate.generation_prompt,
-        "current_reusable_rules": reusable_rules_json(candidate.generation_prompt),
+        "current_reusable_rules": reusable_rules_json(
+            candidate.generation_prompt,
+            recover_invalid_current=True,
+        ),
         "alignment_review": json.dumps(reflection.parsed_response or {}, ensure_ascii=False),
         "action_api_guide": load_prompt("action_api_guide"),
     })
@@ -692,6 +695,10 @@ def build_balance_code_rewrite_prompt(candidate: Candidate, reflection: Reflecti
 
     return render_prompt("balance_code_rewrite", {
         "code_generation_prompt": candidate.generation_prompt,
+        "current_reusable_rules": reusable_rules_json(
+            candidate.generation_prompt,
+            recover_invalid_current=True,
+        ),
         "balance_analysis": json.dumps(reflection.parsed_response or {}, ensure_ascii=False),
         "action_api_guide": load_prompt("action_api_guide"),
     })
@@ -705,19 +712,16 @@ def _parse_rewritten_prompt(
 ) -> str:
     if not isinstance(response, str) or not response.strip():
         raise ValueError("Rewrite response must contain a non-empty prompt.")
-    if rewrite_type == "generation_prompt_rewrite":
+    if rewrite_type in {
+        "generation_prompt_rewrite",
+        "balance_generation_prompt_rewrite",
+    }:
         payload = parse_json_object_response(response)
-        return apply_reusable_rule_delta(current_generation_prompt, payload)
-    if rewrite_type == "balance_generation_prompt_rewrite":
-        payload = parse_json_object_response(response)
-        if set(payload) != {"rewritten_prompt"}:
-            raise ValueError(
-                "Balance Code Rewrite response must contain exactly the rewritten_prompt key."
-            )
-        rewritten = payload["rewritten_prompt"]
-        if not isinstance(rewritten, str) or not rewritten.strip():
-            raise ValueError("Code Rewrite rewritten_prompt must be a non-empty string.")
-        response = rewritten
+        return apply_reusable_rule_delta(
+            current_generation_prompt,
+            payload,
+            recover_invalid_current=True,
+        )
     lowered = response.lower().strip()
     if (
         "```" in lowered

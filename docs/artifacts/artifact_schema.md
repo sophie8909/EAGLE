@@ -165,9 +165,11 @@ Balance Reflection evidence is stored under `mutation/balance_reflection/`.
 Its `reflection_context.json` is only the bounded opponent/map/side W/D/L
 table; the directory retains the reflection request/raw response and separately
 named strategy/code rewrite request/raw-response artifacts. Metadata records
-both rewrite statuses without embedding raw response bodies. A failed reflector
-or either failed rewrite retains completed evidence and leaves both prompt genes
-unchanged.
+both rewrite statuses without embedding raw response bodies. The code rewrite
+raw response is a `remove_rule_ids`/`add_rules` delta, while its
+`rewritten_prompt` metadata field is the deterministically rendered canonical
+generation prompt. A failed reflector or either failed rewrite retains completed
+evidence and leaves both prompt genes unchanged.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated

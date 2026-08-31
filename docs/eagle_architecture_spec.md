@@ -131,9 +131,13 @@ Balance mutation receives only a bounded aggregate W/D/L table partitioned by
 opponent, map, and candidate side. It receives no prompt text, Java, compiler
 diagnostics, per-match result, or raw trace. Its reflector identifies weak
 opponent/map/side cells, then bounded Strategy and Code Prompt Rewriters
-atomically replace both `strategy_prompt` and `generation_prompt`. If either
-rewrite fails, both parent prompt genes remain unchanged. Balance mutation never
-edits Java directly.
+atomically replace both `strategy_prompt` and `generation_prompt`. The Balance
+Code Prompt Rewriter uses the same structured reusable-rule delta and canonical
+renderer as Code Reflection; it cannot persist an unchecked whole generation
+prompt. If either rewrite fails, both parent prompt genes remain unchanged.
+Balance mutation never edits Java directly. A historically malformed marked
+generation prompt is exposed as an empty retained-rule set only at a rewrite
+boundary, so a validated delta replaces rather than copies it.
 
 All executable prompt bodies live as individual UTF-8 text files under
 `prompts/`. Python and YAML may reference, render, bound, transport, and validate

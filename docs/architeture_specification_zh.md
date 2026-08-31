@@ -57,7 +57,11 @@ component provenance。Crossover 後即使 component 來自第二個 direct pare
 Strategy Mutation 只修改 `strategy_prompt`；Code Mutation 只修改
 `generation_prompt`。Balance Reflection 只接收依 opponent、map 與 candidate
 side 匯總的 W/D/L 表，辨識弱 cell 後依序重寫兩個 prompt；兩次 rewrite 都成功才
-原子地套用，任何一步失敗都保留兩個原 prompt。三者完成後都必須重新產生完整 Java。
+原子地套用，任何一步失敗都保留兩個原 prompt。Balance 的 Code Prompt Rewriter
+同樣只回傳 `remove_rule_ids`／`add_rules` delta，經驗證後確定性組成 canonical
+`generation_prompt`，不接受未驗證的整份 replacement prompt。歷史上由 Balance
+產生但不符合 rule grammar 的 marked prompt，只在 rewrite boundary 視為零條可保留
+規則並由合法 delta 取代，不會複製污染內容。三者完成後都必須重新產生完整 Java。
 
 Strategy Reflection 只使用 policy 與 match evidence。Match Commentator 不會收到
 Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Code

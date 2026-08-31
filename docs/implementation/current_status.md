@@ -177,8 +177,13 @@ parent/artifact provenance. This explicit mode does not restore the removed
 unversioned `previous_code` field.
 Balance Reflection receives only aggregate opponent/map/side W/D/L evidence;
 it names weak cells and runs ordered Strategy then Code Prompt rewrites. Both
-prompt changes are committed atomically only after both rewrites succeed, with
-evidence under `mutation/balance_reflection/`; it receives no raw trace or Java.
+prompt changes are committed atomically only after both rewrites succeed. Its
+Code Prompt Rewriter uses the same validated reusable-rule delta and canonical
+renderer as Code Reflection, so unchecked whole prompts cannot enter the
+generation gene. At explicit rewrite boundaries, historically malformed marked
+Balance prompts retain zero rules and are replaced rather than copied. Evidence
+remains under `mutation/balance_reflection/`; the reflector receives no raw trace
+or Java.
 The immutable API guide is rendered after the evolvable decoder gene, and
 validation requires token-equivalent fixed scaffold source outside the strategy
 markers. Fixed action helpers reject wrong-owner and invalid-type commands.

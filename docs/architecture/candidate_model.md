@@ -47,7 +47,9 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
 - Successful Code Reflection applies a structured rule delta and deterministically
   renders `generation_prompt`; policy-specific checklists and Java fragments are
   rejected at the rewrite boundary.
-- Balance Reflection may atomically change both prompts, but never Java.
+- Balance Reflection may atomically change both prompts, but never Java; its
+  generation-prompt change also uses a validated reusable-rule delta and the
+  deterministic canonical renderer.
 - Generator and Evaluation do not modify either prompt gene.
 - Generator uses the canonical checked-in scaffold. Only inherited mode also
   receives the selected parent Java component.

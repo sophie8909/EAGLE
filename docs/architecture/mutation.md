@@ -103,7 +103,12 @@ candidate side. It must name weak cells as `opponent`, `map`, and `p0`, `p1`, or
 The resulting two rewrite calls are one atomic mutation: the Strategy Rewriter
 receives the current strategy prompt plus Balance analysis, and the Code
 Rewriter receives the current generation prompt, Balance analysis, and the
-immutable API guide. Both must succeed before either gene changes.
+canonical reusable-rule view plus immutable API guide. The Code Rewriter returns
+the same exact `remove_rule_ids`/`add_rules` delta used by Code Reflection, and
+runtime validates and canonically renders it. Both rewrites must succeed before
+either gene changes. Historical whole-prompt Balance output that imitated but
+violated the rule grammar is treated as having no retained rules only at this
+rewrite boundary and is never copied into the replacement.
 
 ```text
 (policy A1, code prompt B1, Java C1)
@@ -157,7 +162,8 @@ choose evidence.
 - Strategy mutation preserves `generation_prompt` exactly.
 - Code mutation preserves `strategy_prompt` exactly.
 - Balance mutation changes both prompt genes only after its reflector and both
-  rewrite stages succeed; otherwise it preserves both exactly.
+  rewrite stages succeed; its code rewrite is a validated reusable-rule delta,
+  and otherwise it preserves both genes exactly.
 - Both mutations preserve inherited Java input exactly and never edit it directly.
 - Generator and Evaluation preserve both prompt genes and the recorded
   pre-generation Java input exactly.

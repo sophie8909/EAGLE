@@ -18,6 +18,22 @@ from eagle.reflection_context import (
 )
 from eagle.reflection_prompts import build_balance_reflection_prompt_bundle
 from eagle.rewrite import BalanceReflectionMutation
+from eagle.reusable_generation_prompt import parse_reusable_generation_rules
+
+
+GENERIC_BALANCE_RULE = (
+    "Preserve policy-defined contingency priorities when several behaviors are simultaneously reachable."
+)
+
+
+def balance_rule_delta() -> str:
+    return json.dumps({
+        "remove_rule_ids": [],
+        "add_rules": [{
+            "category": "priority_ordering",
+            "instruction": GENERIC_BALANCE_RULE,
+        }],
+    })
 
 
 class ScriptedBackend:
@@ -106,7 +122,7 @@ class BalanceReflectionTests(unittest.TestCase):
         backend = ScriptedBackend((
             self._analysis(),
             "REWRITTEN STRATEGY",
-            json.dumps({"rewritten_prompt": "REWRITTEN CODE PROMPT"}),
+            balance_rule_delta(),
         ))
         config = ExperimentConfig.from_mapping({
             "mutation_max_attempts": 1,
@@ -124,7 +140,8 @@ class BalanceReflectionTests(unittest.TestCase):
 
             self.assertEqual(result.mutation_type, "balance")
             self.assertEqual(result.strategy_prompt, "REWRITTEN STRATEGY")
-            self.assertEqual(result.generation_prompt, "REWRITTEN CODE PROMPT")
+            self.assertIn(GENERIC_BALANCE_RULE, result.generation_prompt)
+            self.assertEqual(len(parse_reusable_generation_rules(result.generation_prompt)), 1)
             self.assertEqual(len(backend.prompts), 3)
             self.assertNotIn("ORIGINAL STRATEGY SECRET", backend.prompts[0])
             self.assertNotIn("ORIGINAL CODE PROMPT SECRET", backend.prompts[0])
@@ -155,6 +172,34 @@ class BalanceReflectionTests(unittest.TestCase):
                 snapshot["artifacts"]["balance_reflection"],
                 "mutation/balance_reflection/metadata.json",
             )
+
+    def test_balance_code_rewrite_rejects_whole_prompt_and_retries_delta(self) -> None:
+        backend = ScriptedBackend((
+            self._analysis(),
+            "REWRITTEN STRATEGY",
+            json.dumps({"rewritten_prompt": "UNVALIDATED WHOLE PROMPT"}),
+            balance_rule_delta(),
+        ))
+        config = ExperimentConfig.from_mapping({
+            "mutation_max_attempts": 2,
+            "balance_reflection_probability": 1.0,
+            "strategy_reflection_probability": 0.0,
+            "code_reflection_probability": 0.0,
+        })
+
+        result = BalanceReflectionMutation(
+            config,
+            reflection_backend=backend,
+            rewrite_backend=backend,
+        ).mutate(self.candidate, self.context)
+
+        self.assertTrue(result.metadata["mutation"]["applied"])
+        self.assertNotIn("UNVALIDATED WHOLE PROMPT", result.generation_prompt)
+        self.assertIn(GENERIC_BALANCE_RULE, result.generation_prompt)
+        self.assertEqual(
+            [attempt["status"] for attempt in result.timing["rewriter_llm"]["attempts"]],
+            ["success", "error", "success"],
+        )
 
     def test_failed_first_rewrite_preserves_both_genes_and_skips_code_rewrite(self) -> None:
         backend = ScriptedBackend((self._analysis(), ""))

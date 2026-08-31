@@ -107,6 +107,30 @@ class ReusableGenerationPromptTests(unittest.TestCase):
                 },
             )
 
+    def test_malformed_marked_prompt_is_strict_except_at_explicit_rewrite_boundary(self) -> None:
+        malformed = """Translate the policy.
+EAGLE_REUSABLE_RULES_START
+[**bad-id**] invalid_category | This historical whole-prompt rewrite is malformed.
+EAGLE_REUSABLE_RULES_END"""
+        with self.assertRaisesRegex(ValueError, "Invalid reusable generation rule line"):
+            parse_reusable_generation_rules(malformed)
+
+        recovered = apply_reusable_rule_delta(
+            malformed,
+            {
+                "remove_rule_ids": [],
+                "add_rules": [{
+                    "category": "requirement_coverage",
+                    "instruction": (
+                        "Make every stated prerequisite reachable before its dependent behavior."
+                    ),
+                }],
+            },
+            recover_invalid_current=True,
+        )
+        self.assertEqual(len(parse_reusable_generation_rules(recovered)), 1)
+        self.assertNotIn("bad-id", recovered)
+
 
 if __name__ == "__main__":
     unittest.main()

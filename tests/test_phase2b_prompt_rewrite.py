@@ -116,6 +116,38 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertIn(RULES_END_MARKER, result.rewritten_prompt)
         self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
 
+    def test_code_rewrite_recovers_historically_malformed_balance_prompt(self):
+        malformed_prompt = """Translate the policy.
+EAGLE_REUSABLE_RULES_START
+[**counterplay-priority**] counterplay_priority | Implement opponent-specific behavior:
+  - lightrush: produce a concrete counter
+EAGLE_REUSABLE_RULES_END"""
+        candidate = Candidate(
+            id="malformed-balance-child",
+            generation=2,
+            strategy_prompt=self.candidate.strategy_prompt,
+            generation_prompt=malformed_prompt,
+            operator="copy",
+        )
+        backend = ScriptedRewriteBackend((
+            self._code_reflection(),
+            code_rule_delta(),
+        ))
+
+        child = PromptRewriteMutation(
+            self.config,
+            mutation_type="code",
+            reflection_backend=backend,
+            rewrite_backend=backend,
+        ).mutate(candidate, self.context)
+
+        self.assertTrue(child.metadata["mutation"]["applied"])
+        self.assertNotIn("counterplay-priority", child.generation_prompt)
+        self.assertIn(GENERIC_RULE, child.generation_prompt)
+        self.assertEqual(len(parse_reusable_generation_rules(child.generation_prompt)), 1)
+        self.assertIn("Current reusable rules", backend.calls[1])
+        self.assertIn("[]", backend.calls[1])
+
     def test_code_rewrite_rejects_java_inside_json(self):
         backend = ScriptedRewriteBackend((
             code_rule_delta(instruction="Call implementPolicy() before returning Java."),

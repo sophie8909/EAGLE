@@ -130,9 +130,17 @@ def parse_reusable_generation_rules(prompt: str) -> tuple[ReusableGenerationRule
     return tuple(rules)
 
 
-def reusable_rules_json(prompt: str) -> str:
+def reusable_rules_json(
+    prompt: str,
+    *,
+    recover_invalid_current: bool = False,
+) -> str:
+    rules = _current_rules_for_rewrite(
+        prompt,
+        recover_invalid_current=recover_invalid_current,
+    )
     return json.dumps(
-        [rule.to_dict() for rule in parse_reusable_generation_rules(prompt)],
+        [rule.to_dict() for rule in rules],
         ensure_ascii=False,
         separators=(",", ":"),
     )
@@ -141,6 +149,8 @@ def reusable_rules_json(prompt: str) -> str:
 def apply_reusable_rule_delta(
     current_prompt: str,
     payload: dict[str, object],
+    *,
+    recover_invalid_current: bool = False,
 ) -> str:
     """Validate and deterministically apply one Code-Rewriter rule delta."""
 
@@ -157,7 +167,12 @@ def apply_reusable_rule_delta(
     if not isinstance(add_rules, list):
         raise ValueError("Code Rewrite add_rules must be an array.")
 
-    current_rules = list(parse_reusable_generation_rules(current_prompt))
+    current_rules = list(
+        _current_rules_for_rewrite(
+            current_prompt,
+            recover_invalid_current=recover_invalid_current,
+        )
+    )
     current_ids = {rule.rule_id for rule in current_rules}
     normalized_removals = [item.strip() for item in remove_rule_ids]
     if len(normalized_removals) != len(set(normalized_removals)):
@@ -229,6 +244,24 @@ def _derived_rule_id(category: str, instruction: str) -> str:
         f"{category}\0{instruction.casefold()}".encode("utf-8")
     ).hexdigest()[:12]
     return f"rule-{digest}"
+
+
+def _current_rules_for_rewrite(
+    prompt: str,
+    *,
+    recover_invalid_current: bool,
+) -> tuple[ReusableGenerationRule, ...]:
+    try:
+        return parse_reusable_generation_rules(prompt)
+    except ValueError:
+        if not recover_invalid_current:
+            raise
+        # Balance Rewrite historically accepted arbitrary whole prompts. Some
+        # persisted outputs imitated the canonical markers without satisfying
+        # the rule grammar. At an explicit rewrite boundary, treat that tainted
+        # value like a legacy free-form prompt: expose no retained rules and let
+        # a validated delta replace it rather than copying malformed content.
+        return ()
 
 
 def _normalize_instruction(value: str) -> str:
