@@ -4,15 +4,22 @@ import json
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts.codex_budget import (
     LOCAL_SNAPSHOT_STALE_SECONDS,
     build_report,
     combine_snapshots,
+    main,
     normalize_snapshot,
+    read_control_enabled,
+    read_controlled_usage,
     read_usage,
+    write_control_enabled,
 )
 
 
@@ -165,6 +172,48 @@ class CodexBudgetTests(unittest.TestCase):
         report = self.report_for(snapshot(weekly_reset=NOW - timedelta(seconds=1)))
         self.assertEqual(report["weekly"]["resets_at"], None)
         self.assertEqual(report["budget"]["recommended_mode"], "UNKNOWN")
+
+    def test_controller_defaults_to_enabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            enabled, path, error = read_control_enabled(directory)
+        self.assertTrue(enabled)
+        self.assertEqual(path.name, "codex-budget-control.json")
+        self.assertIsNone(error)
+
+    def test_disabled_controller_returns_unlimited_without_reading_telemetry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            write_control_enabled(False, directory)
+            with patch("scripts.codex_budget.read_usage") as read:
+                report = read_controlled_usage(directory, now=NOW)
+        read.assert_not_called()
+        self.assertFalse(report["controller"]["enabled"])
+        self.assertEqual(report["budget"]["recommended_mode"], "UNLIMITED")
+        self.assertIsNone(report["source"])
+
+    def test_cli_on_off_and_toggle_are_persistent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = StringIO()
+            with redirect_stdout(output):
+                main(["off", "--state-dir", directory, "--json"])
+            self.assertEqual(json.loads(output.getvalue())["budget"]["recommended_mode"], "UNLIMITED")
+            self.assertFalse(read_control_enabled(directory)[0])
+
+            with redirect_stdout(StringIO()):
+                main(["toggle", "--state-dir", directory, "--no-live", "--json"])
+            self.assertTrue(read_control_enabled(directory)[0])
+
+            with redirect_stdout(StringIO()):
+                main(["off", "--state-dir", directory, "--json"])
+                main(["on", "--state-dir", directory, "--no-live", "--json"])
+            self.assertTrue(read_control_enabled(directory)[0])
+
+    def test_malformed_controller_state_defaults_to_enabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "codex-budget-control.json"
+            path.write_text('{"enabled": "no"}', encoding="utf-8")
+            enabled, _, error = read_control_enabled(directory)
+        self.assertTrue(enabled)
+        self.assertIn("defaulting to enabled", error)
 
 
 if __name__ == "__main__":

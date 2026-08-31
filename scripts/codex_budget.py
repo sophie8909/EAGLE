@@ -30,6 +30,7 @@ LOCAL_SNAPSHOT_STALE_SECONDS = 30 * 60
 LIVE_RPC_TIMEOUT_SECONDS = 5.0
 REVERSE_READ_BLOCK_BYTES = 64 * 1024
 MAX_RECENT_FALLBACK_FILES = 48
+CONTROL_FILENAME = "codex-budget-control.json"
 
 # Workload thresholds operate on Codex's percentage rate-limit meters. Weekly
 # mode preserves 12 percentage points for every day until reset; the shorter
@@ -43,6 +44,7 @@ FIVE_HOUR_CRITICAL_REMAINING_PERCENT = 10.0
 FIVE_HOUR_CONSERVATIVE_REMAINING_PERCENT = 25.0
 
 MODE_ORDER = {"AGGRESSIVE": 0, "NORMAL": 1, "CONSERVATIVE": 2, "CRITICAL": 3, "STOP": 4}
+DISABLED_MODE = "UNLIMITED"
 
 
 @dataclass(frozen=True)
@@ -313,6 +315,7 @@ def state_directories(explicit: str | None = None) -> list[Path]:
                     check=False,
                     capture_output=True,
                     text=True,
+                    errors="replace",
                     timeout=2,
                 ).stdout.strip()
             except (OSError, subprocess.SubprocessError):
@@ -335,6 +338,50 @@ def state_directories(explicit: str | None = None) -> list[Path]:
         if directory not in unique:
             unique.append(directory)
     return unique
+
+
+def control_file(state_dir: str | None = None) -> Path:
+    """Return the shared persistent controller-state file."""
+    if state_dir is None:
+        installed_home = Path(__file__).resolve().parent.parent
+        if installed_home.name == ".codex":
+            return installed_home / CONTROL_FILENAME
+    directories = state_directories(state_dir)
+    root = directories[0] if directories else Path.home() / ".codex"
+    for directory in directories:
+        candidate = directory / CONTROL_FILENAME
+        if candidate.is_file():
+            return candidate
+    return root / CONTROL_FILENAME
+
+
+def read_control_enabled(state_dir: str | None = None) -> tuple[bool, Path, str | None]:
+    path = control_file(state_dir)
+    if not path.exists():
+        return True, path, None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        enabled = data.get("enabled") if isinstance(data, dict) else None
+        if not isinstance(enabled, bool):
+            raise ValueError("enabled must be a boolean")
+        return enabled, path, None
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        return True, path, f"invalid controller state; defaulting to enabled: {exc}"
+
+
+def write_control_enabled(enabled: bool, state_dir: str | None = None) -> Path:
+    path = control_file(state_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(json.dumps({"enabled": enabled, "version": 1}, indent=2) + "\n", encoding="utf-8")
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+    return path
 
 
 def reverse_jsonl_lines(path: Path) -> Iterable[str]:
@@ -524,11 +571,38 @@ def read_usage(state_dir: str | None = None, no_live: bool = False, now: datetim
     return build_report(None, None, "; ".join(reasons) or None, now)
 
 
+def read_controlled_usage(state_dir: str | None = None, no_live: bool = False, now: datetime | None = None) -> dict[str, Any]:
+    enabled, path, control_error = read_control_enabled(state_dir)
+    controller = {"enabled": enabled, "source": str(path), "error": control_error}
+    if not enabled:
+        report = build_report(None, None, None, now)
+        report["controller"] = controller
+        report["budget"]["recommended_mode"] = DISABLED_MODE
+        report["budget"]["reason"] = "usage controller is disabled; telemetry was not read"
+        return report
+    report = read_usage(state_dir, no_live, now)
+    report["controller"] = controller
+    return report
+
+
 def human_output(report: dict[str, Any]) -> str:
     def display(value: Any, suffix: str = "") -> str:
         return "unavailable" if value is None else f"{value}{suffix}"
 
-    lines = ["Codex usage", "", "5-hour:"]
+    controller = report.get("controller", {"enabled": True})
+    if not controller.get("enabled", True):
+        return "\n".join(
+            [
+                "Codex usage",
+                "",
+                "Controller: OFF",
+                f"Mode: {DISABLED_MODE}",
+                "Telemetry was not read.",
+                f"State: {controller.get('source')}",
+                "Run codex-budget on to restore usage-aware workload control.",
+            ]
+        )
+    lines = ["Codex usage", "Controller: ON", "", "5-hour:"]
     for label, key in (("used", "used_percent"), ("remaining", "remaining_percent"), ("reset", "resets_at")):
         suffix = "%" if key.endswith("percent") else ""
         lines.append(f"  {label + ':':<11}{display(report['five_hour'][key], suffix)}")
@@ -543,11 +617,16 @@ def human_output(report: dict[str, Any]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Read Codex rate-limit meters and recommend a workload mode.")
+    parser.add_argument("action", nargs="?", choices=("on", "off", "toggle"), help="persistently enable, disable, or toggle workload control")
     parser.add_argument("--json", action="store_true", help="emit stable machine-readable JSON")
-    parser.add_argument("--state-dir", help="override the discovered Codex state directory")
+    parser.add_argument("--state-dir", help="override the discovered Codex state and controller directory")
     parser.add_argument("--no-live", action="store_true", help="skip the Codex app-server and read only local state")
     arguments = parser.parse_args(argv)
-    report = read_usage(arguments.state_dir, arguments.no_live)
+    if arguments.action:
+        enabled, _, _ = read_control_enabled(arguments.state_dir)
+        requested = not enabled if arguments.action == "toggle" else arguments.action == "on"
+        write_control_enabled(requested, arguments.state_dir)
+    report = read_controlled_usage(arguments.state_dir, arguments.no_live)
     if arguments.json:
         print(json.dumps(report, indent=2, sort_keys=True))
     else:
