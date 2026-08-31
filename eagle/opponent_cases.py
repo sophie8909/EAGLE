@@ -5,6 +5,9 @@ from typing import Mapping
 
 
 LEXICASE_CASES = (
+    "passive",
+    "random",
+    "randombias",
     "lightrush",
     "heavyrush",
     "workerrush",
@@ -15,6 +18,9 @@ LEXICASE_CASES = (
 )
 
 OPPONENT_WEIGHTS = {
+    "passive": 0.5,
+    "random": 0.5,
+    "randombias": 0.5,
     "lightrush": 1.0,
     "heavyrush": 1.0,
     "workerrush": 1.0,

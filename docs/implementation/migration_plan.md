@@ -4,7 +4,7 @@
 
 - complete-file candidate model and first-class lineage;
 - Strategy/Code Reflection → Rewrite → Generation mutations;
-- seven-opponent, 126-match evaluation and seeded lexicase selection;
+- ten-opponent, 180-match evaluation and seeded lexicase selection;
 - three reflection-operator modes with one AOS updater;
 - unified experiment/model lifecycle;
 - one-file-per-prompt resources;

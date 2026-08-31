@@ -1,9 +1,9 @@
 # EAGLE architecture specification
 
-Status: authoritative current contract, 2026-08-30.
+Status: authoritative current contract, 2026-08-31.
 
 This document describes executable EAGLE behavior. Historical NSGA-II,
-two-objective, ten-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
+two-objective, seven-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
 contracts are intentionally absent; Git history is the archive for those designs.
 
 ## 1. System boundary
@@ -32,7 +32,7 @@ gene or the persisted pre-generation Java input.
 
 First-class candidate state includes identity, generation, direct parents,
 operator, mutation type, component-source IDs, generated Java, validation and
-compile status, seven-case fitness, diagnostics, failure state, artifact
+compile status, ten-case fitness, diagnostics, failure state, artifact
 references, and timing.
 
 New candidate identities are generation-qualified as
@@ -63,7 +63,7 @@ generation produces a fixed-size offspring population and performs:
 
 The fixed-size survivor population is selected from the joint evaluated parent
 and offspring pool. Parent and offspring candidates compete under the same
-seven cases; aggregate Game Performance and generation age do not break ties.
+ten cases; aggregate Game Performance and generation age do not break ties.
 
 ## 4. Reproducibility
 
@@ -85,14 +85,14 @@ component values are equal. Default-mode lineage has no Java parent.
 The reflection operator is chosen by exactly one configured mode:
 
 - `static`: fixed Strategy/Code/Balance probabilities and no reward work;
-- `aos_opponent`: execution-first seven-case rank-change reward against the
+- `aos_opponent`: execution-first ten-case rank-change reward against the
   recorded mutation-evidence parent;
 - `aos_head2head`: configured mutation-evidence-parent versus offspring match
   matrix reward.
 
 Both adaptive modes use the same alpha-`0.20` EMA and probability-matching
 updater with the configured minimum probability floor. AOS never changes the
-seven-case lexicase fitness.
+ten-case lexicase fitness.
 
 The adaptive comparison parent is the same evaluated candidate used to build
 the mutation context: the policy-component parent for Strategy mutation; the
@@ -240,16 +240,19 @@ matches. Integration failure does not re-enter the decoder.
 
 The fixed search roster is:
 
-1. LightRush
-2. HeavyRush
-3. WorkerRush
-4. AllInBot
-5. Mayari
-6. COAC
-7. TMA
+1. PassiveAI
+2. RandomAI
+3. RandomBiasedAI
+4. LightRush
+5. HeavyRush
+6. WorkerRush
+7. AllInBot
+8. Mayari
+9. COAC
+10. TMA
 
-Every runnable candidate uses the same source and compiled classes for 126
-matches: seven opponents × three maps × three rounds × two player sides.
+Every runnable candidate uses the same source and compiled classes for 180
+matches: ten opponents × three maps × three rounds × two player sides.
 
 AllInBot preflight verifies the pinned upstream class/JAR before execution.
 Its separately compiled reflection adapter is outside the candidate phenotype
@@ -259,10 +262,11 @@ its observed raw evidence but has canonical opponent-fault fields and a neutral
 zero-score draw for candidate scoring; it is neither a candidate win nor a
 candidate runtime failure.
 
-Fitness is a maximized mapping with exactly the seven opponent IDs. Failed or
+Fitness is a maximized mapping with exactly the ten opponent IDs. Failed or
 incomplete candidates receive `-1000.0` for every case. Aggregate Game
-Performance is reporting-only, using weights `1` for the three rush opponents
-and `2` for AllInBot, Mayari, COAC, and TMA.
+Performance is reporting-only, using weights `0.5` for PassiveAI, RandomAI, and
+RandomBiasedAI, `1` for the three rush opponents, and `2` for AllInBot, Mayari,
+COAC, and TMA.
 
 Code Quality is a diagnostic and mutation-evidence signal, not a selection
 objective. Successful Code Quality is:

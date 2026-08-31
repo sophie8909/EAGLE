@@ -203,10 +203,10 @@ class CodeQualityTests(unittest.TestCase):
 
     def test_optimizer_vector_contains_only_opponent_cases(self):
         candidate = Candidate(
-            fitness_objectives={"lightrush": 4, "heavyrush": 108}
+            fitness_objectives={"passive": 4, "random": 108}
         )
         self.assertEqual(candidate.objective_vector()[:2], (4.0, 108.0))
-        self.assertEqual(len(candidate.objective_vector()), 7)
+        self.assertEqual(len(candidate.objective_vector()), 10)
 
 if __name__ == "__main__":
     unittest.main()

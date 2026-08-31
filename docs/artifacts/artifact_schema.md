@@ -35,7 +35,7 @@ runs/<run_id>/
 `generations/generation_<nnnn>.json` contains:
 
 - generation number;
-- population entries with candidate ID, status, and seven-case fitness vector;
+- population entries with candidate ID, status, and ten-case fitness vector;
 - best/reporting candidate ID;
 - aggregate objective, opponent, diversity, and timing-derived metrics;
 - one canonical reflection-operator/AOS generation record.
@@ -220,8 +220,8 @@ matches/<match_id>/
 ```
 
 Every normal-evaluation `result.json` and `match_metadata.json` records a
-non-null canonical `opponent_id`. The 126 match directories must reconstruct
-exactly the seven configured case IDs with 18 matches per opponent, without
+non-null canonical `opponent_id`. The 180 match directories must reconstruct
+exactly the ten configured case IDs with 18 matches per opponent, without
 mapping Java class names back to fitness cases.
 
 Compact mode removes transient raw replay/round-state inputs after durable telemetry/trace creation. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.

@@ -170,7 +170,7 @@ class ExperimentConfig:
         if payload.get("application", "microrts") != "microrts":
             raise ValueError("The configured application is not supported.")
         if payload.get("objectives", {"opponent_cases": "maximize"}) != {"opponent_cases": "maximize"}:
-            raise ValueError("The evolutionary objective contract is the seven fixed opponent cases.")
+            raise ValueError("The evolutionary objective contract is the ten fixed opponent cases.")
         if schema_version == "experiment-v2" and not isinstance(payload.get("model"), dict):
             raise ValueError("experiment-v2 requires a model mapping.")
         forbidden = {
@@ -237,7 +237,7 @@ class ExperimentConfig:
         if configured_opponents is not None:
             parsed_opponents = _parse_evaluation_opponents(configured_opponents)
             if parsed_opponents != evaluation_opponents:
-                raise ValueError("evaluation.opponents must equal the canonical seven-opponent roster and weights.")
+                raise ValueError("evaluation.opponents must equal the canonical ten-opponent roster and weights.")
         if "aos" in payload:
             raise ValueError(
                 "The nested aos config is obsolete. Use reflection_operator_mode, "
@@ -249,7 +249,7 @@ class ExperimentConfig:
             payload.get("reflection_operator_mode", ReflectionOperatorMode.AOS_HEAD2HEAD.value)
         )
         if "eagle_opponent" in payload:
-            raise ValueError("eagle_opponent is obsolete; evolutionary evaluation uses only the seven fixed opponents.")
+            raise ValueError("eagle_opponent is obsolete; evolutionary evaluation uses only the ten fixed opponents.")
         if "match_seeds" in payload:
             raise ValueError(
                 "match_seeds is obsolete: MicroRTS never consumed the configured values. "
@@ -359,7 +359,7 @@ class ExperimentConfig:
         if self.match_artifact_mode not in {"compact", "full"}:
             raise ValueError("match_artifact_mode must be compact or full.")
         if tuple(item[0] for item in self.evaluation_opponents) != LEXICASE_CASES:
-            raise ValueError("evaluation_opponents must use the canonical seven-opponent order.")
+            raise ValueError("evaluation_opponents must use the canonical ten-opponent order.")
         if any(weight <= 0 for _, weight in self.evaluation_opponents):
             raise ValueError("evaluation opponent weights must be positive.")
         if abs(self.fixed_opponent_weight_sum - FIXED_OPPONENT_WEIGHT_SUM) > 1e-9:

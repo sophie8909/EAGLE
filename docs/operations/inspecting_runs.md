@@ -87,8 +87,8 @@ activate a historical artifact layout.
 | `javac` returns nonzero | compiler diagnostics | integration |
 | class, constructor, or method cannot load | integration checks | compilation or runtime match |
 | process starts but result is missing or partial | match output, result, and timing | valid loss or draw |
-| fewer than 126 valid matches in the canonical configuration | completed match evidence | successful aggregate |
-| objective looks inconsistent | formula/schema versions and seven-case opponent payload | lexicase selection before recomputation |
+| fewer than 180 valid matches in the canonical configuration | completed match evidence | successful aggregate |
+| objective looks inconsistent | formula/schema versions and ten-case opponent payload | lexicase selection before recomputation |
 
 ## Artifact boundary
 

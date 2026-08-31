@@ -15,12 +15,15 @@ from evaluation.runtime_evaluation import MatchResult
 
 
 class OpponentReflectionTests(unittest.TestCase):
-    def test_canonical_roster_excludes_passive_random_and_randombias(self):
-        self.assertEqual(len(EVALUATION_ROSTER), 7)
-        self.assertEqual(len({item.opponent_id for item in EVALUATION_ROSTER}), 7)
+    def test_canonical_roster_has_ten_ordered_search_opponents(self):
+        self.assertEqual(len(EVALUATION_ROSTER), 10)
+        self.assertEqual(len({item.opponent_id for item in EVALUATION_ROSTER}), 10)
         self.assertEqual(
             [item.opponent_id for item in EVALUATION_ROSTER],
-            ["lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma"],
+            [
+                "passive", "random", "randombias", "lightrush", "heavyrush",
+                "workerrush", "allinbot", "mayari", "coac", "tma",
+            ],
         )
         self.assertFalse(any("self" in item.opponent_id.lower() for item in EVALUATION_ROSTER))
         self.assertFalse(any("historical" in item.class_name.lower() for item in EVALUATION_ROSTER))
@@ -30,11 +33,11 @@ class OpponentReflectionTests(unittest.TestCase):
         metrics = compute_game_metrics(
             results,
             fixed_opponent_weights=dict(OPPONENT_WEIGHTS),
-            expected_match_count=7,
+            expected_match_count=10,
             expected_matches_per_opponent=1,
         )
-        self.assertEqual(len(metrics.opponent_results), 7)
-        self.assertEqual(metrics.opponent_scores, [10.0 + index for index in range(7)])
+        self.assertEqual(len(metrics.opponent_results), 10)
+        self.assertEqual(metrics.opponent_scores, [10.0 + index for index in range(10)])
         expected = sum(OPPONENT_WEIGHTS[item.opponent_id] * item.score for item in metrics.opponent_results) / sum(OPPONENT_WEIGHTS.values())
         self.assertEqual(metrics.objective, round(expected, 6))
 
@@ -52,7 +55,7 @@ class OpponentReflectionTests(unittest.TestCase):
         )
         metrics = compute_game_metrics(results)
         failed = metrics.opponent_results[4]
-        self.assertEqual(len(metrics.opponent_results), 7)
+        self.assertEqual(len(metrics.opponent_results), 10)
         self.assertEqual(failed.score, FAILED_GAME_PERFORMANCE)
         self.assertEqual(failed.status, "failed")
         self.assertEqual(failed.failure["category"], "timeout")

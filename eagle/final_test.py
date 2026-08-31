@@ -1,9 +1,8 @@
 """Run the post-evolution MicroRTS benchmark and write W/L/D tables.
 
-The final test is deliberately separate from the evolutionary seven-opponent
-evaluation.  It reuses the canonical MicroRTS process runner, but expands the
-roster with PassiveAI, RandomAI, and RandomBiasedAI and runs ten games for
-each map and candidate side.
+The final test is deliberately separate from evolutionary evaluation. It
+reuses the canonical ten-opponent roster and MicroRTS process runner, but runs
+ten games for each map and candidate side.
 """
 
 from __future__ import annotations
@@ -24,11 +23,7 @@ from eagle.evaluation import (
     preflight_evaluation_opponents,
     scoring_config_from_experiment,
 )
-from eagle.opponents import (
-    BASIC_OPPONENTS,
-    SEARCH_OPPONENT_REGISTRY,
-    rooted_jar_path,
-)
+from eagle.opponents import SEARCH_OPPONENT_REGISTRY, rooted_jar_path
 from evaluation.match_matrix import canonical_evaluation_maps
 from evaluation.microrts_runner import integrate_microrts_agent
 from evaluation.runtime_evaluation import run_microrts_match
@@ -38,7 +33,7 @@ from eagle.config import ExperimentConfig
 FINAL_TEST_SCHEMA_VERSION = "eagle-final-test-v2"
 FINAL_TEST_GAMES_PER_SIDE = 10
 AGENT_CLASS = "ai.generated.CandidateAgent"
-FINAL_TEST_OPPONENTS = (*SEARCH_OPPONENT_REGISTRY, *BASIC_OPPONENTS[:3])
+FINAL_TEST_OPPONENTS = SEARCH_OPPONENT_REGISTRY
 
 
 def main(argv: list[str] | None = None) -> int:

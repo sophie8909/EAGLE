@@ -1,6 +1,6 @@
 # EAGLE evolutionary flow
 
-This document describes the active implementation. The seven opponent cases are
+This document describes the active implementation. The ten opponent cases are
 the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 
 ## Population lifecycle
@@ -13,8 +13,9 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    candidate before validation, compilation, integration, and evaluation. Later
    children independently inherit policy, generation prompt, and Java parent
    provenance before the same final Generator boundary.
-3. Store one score for each fixed opponent case:
-   `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`, `coac`, and `tma`.
+3. Store one score for each fixed opponent case: `passive`, `random`,
+   `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
+   `coac`, and `tma`.
 4. Select parents with seeded lexicase selection. A random case order is drawn
    from the EA `random.Random` instance, and candidates are filtered to the
    best score for each case until one remains.
@@ -28,7 +29,7 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    promote the first validation+compilation success, then evaluate that single
    promoted phenotype through the complete pipeline. Integration/runtime
    failure never re-enters the decoder. `static` performs no credit update;
-   `aos_opponent` reuses the seven normal opponent summaries;
+   `aos_opponent` reuses the ten normal opponent summaries;
    `aos_head2head` runs the configured direct matrix against the recorded
    mutation-evidence parent. Both adaptive modes feed one shared
    generation-level EMA updater.
@@ -43,7 +44,7 @@ The implementation is in `eagle/search.py`, `eagle/selection.py`, and
 
 ## Objective contract
 
-`Candidate.objective_vector()` in `eagle/candidate.py` contains exactly the seven
+`Candidate.objective_vector()` in `eagle/candidate.py` contains exactly the ten
 opponent cases. All are maximized. Missing or failed cases use `-1000.0` from
 `eagle/opponent_cases.py`.
 
@@ -52,13 +53,13 @@ and failure/implementation signal. It is not an evolutionary objective and is
 not consulted by lexicase, survivor selection, or the opponent archive.
 
 The weighted Game Performance aggregate is calculated with the fixed weights
-in `eagle/opponent_cases.py` (weight sum `11.0`). It is used for reporting and
-the convenient final representative only; it does not replace the seven cases.
+in `eagle/opponent_cases.py` (weight sum `12.5`). It is used for reporting and
+the convenient final representative only; it does not replace the ten cases.
 
 ## Evaluation matrix
 
-Each candidate runs all seven opponents over three maps, three rounds, and both
-player positions: `7 × 3 × 3 × 2 = 126` matches. There is no previous-generation
+Each candidate runs all ten opponents over three maps, three rounds, and both
+player positions: `10 × 3 × 3 × 2 = 180` matches. There is no previous-generation
 EAGLE opponent or dynamic opponent weight.
 
 The generation-level `expected_match_count` and `completed_match_count` are sums
@@ -69,7 +70,7 @@ Only `aos_head2head` runs the separate `3 × 3 × 2 = 18` parent-vs-offspring
 matrix for each runnable mutated child. It reuses the configured maps, round
 indices, sides, and compiled classes. These matches never enter fitness, the
 opponent archive, lexicase, weighted Game Performance, or final testing.
-`aos_opponent` instead compares the existing seven normal opponent records;
+`aos_opponent` instead compares the existing ten normal opponent records;
 `static` performs neither form of credit assignment.
 
 Both adaptive modes use the mutation context's evidence parent as the
@@ -82,7 +83,7 @@ parent without silently assigning AOS credit to the other one.
 
 `runs/<run>/archives/opponents.json` keeps one best valid representative per
 opponent case. Each generation JSON stores objective statistics for all
-seven cases and `opponent_scores.by_opponent` stores reporting summaries. The
+ten cases and `opponent_scores.by_opponent` stores reporting summaries. The
 offline analysis writes `opponent_game_performance.csv` and one
 `game_performance_by_generation_<opponent>.png` per opponent. It also writes
 per-agent, per-opponent win-rate rows/plots and `match_game_performance.csv` for the

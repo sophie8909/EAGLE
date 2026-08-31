@@ -120,7 +120,7 @@ rewrite boundary and is never copied into the replacement.
 ## Selection and persistence
 
 The configured static/AOS controller selects exactly one mutation operator.
-Reward calculation changes neither responsibility boundary nor the seven-case
+Reward calculation changes neither responsibility boundary nor the ten-case
 fitness contract.
 
 For adaptive credit, `create_offspring()` records the same evaluated parent

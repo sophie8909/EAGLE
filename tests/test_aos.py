@@ -51,9 +51,9 @@ def evaluated_candidate(
         status="evaluated" if runnable else "failed",
         failure_stage=None if runnable else "compilation",
         game_eval_result={
-            "expected_match_count": 126,
-            "completed_match_count": 126 if runnable else 0,
-            "missing_match_count": 0 if runnable else 126,
+            "expected_match_count": 180,
+            "completed_match_count": 180 if runnable else 0,
+            "missing_match_count": 0 if runnable else 180,
             "opponent_results": opponent_results if runnable else [],
         },
         fitness_objectives={case: 0.0 for case in LEXICASE_CASES},
@@ -159,11 +159,11 @@ class ReflectionOperatorModeTests(unittest.TestCase):
             evaluated_candidate("child", generation=1, ranks=child_ranks),
             operator=STRATEGY_REFLECTION,
         )
-        self.assertAlmostEqual(reward.reward, 1 / 7)
+        self.assertAlmostEqual(reward.reward, 1 / 10)
         self.assertEqual(reward.reward_source, "opponent")
         self.assertEqual(reward.opponent_comparison["improved_cases"], list(LEXICASE_CASES[:2]))
         self.assertEqual(reward.opponent_comparison["regressed_cases"], [LEXICASE_CASES[2]])
-        self.assertEqual(reward.opponent_comparison["compared_cases"], 7)
+        self.assertEqual(reward.opponent_comparison["compared_cases"], 10)
 
     def test_opponent_rank_uses_wins_vs_losses_and_completed_rows_only(self):
         candidate = evaluated_candidate("candidate")
@@ -305,7 +305,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
         )
         self.assertEqual(reward.reward, 0.5)
 
-    def test_same_seven_cases_still_drive_lexicase(self):
+    def test_same_ten_cases_still_drive_lexicase(self):
         low = evaluated_candidate("low")
         high = evaluated_candidate("high")
         low = Candidate(**{**low.__dict__, "fitness_objectives": {case: 0.0 for case in LEXICASE_CASES}})

@@ -151,7 +151,7 @@ The run-level `archives/strategy.json` keeps one successfully evaluated
 representative per known niche, replacing it only when game performance is
 better (then code quality and deterministic candidate-ID tie-breaking). It is
 storage and analysis metadata only; it is not a population and never enters
-the seven opponent-wise lexicase cases.
+the ten opponent-wise lexicase cases.
 
 Generation snapshots include analysis-only metrics under
 `strategy_diversity`: unique niches, dominant niche ratio, new and revisited
@@ -159,7 +159,7 @@ niches, mean categorical signature distance, and overall/per-intent niche
 change rates. `./analyze.sh` emits `strategy_diversity.csv`,
 `strategy_niches.csv`. Strategy diversity remains available as CSV analysis
 metadata; it does not add plots to the compact current plot set. These metrics do not alter
-the seven opponent scores, aggregate reporting, survivor selection, crossover,
+the ten opponent scores, aggregate reporting, survivor selection, crossover,
 or parent selection.
 
 Generation snapshots also expose `light_rush_win_rate` and

@@ -31,7 +31,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
     def test_config_resolves_exact_search_roster_and_match_count(self):
         config = ExperimentConfig.from_mapping({})
 
-        self.assertEqual(config.expected_match_count, 126)
+        self.assertEqual(config.expected_match_count, 180)
         self.assertEqual(config.rounds_per_map, 3)
 
     def test_one_source_and_class_set_serves_search_roster_matches(self):
@@ -88,7 +88,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertEqual(len({item["class_hash"] for item in observed}), 1)
         self.assertEqual(len({str(item["classes_dir"]) for item in observed}), 1)
 
-    def test_canonical_match_artifacts_persist_all_seven_case_ids(self):
+    def test_canonical_match_artifacts_persist_all_ten_case_ids(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source = root / "CandidateAgent.java"
@@ -121,7 +121,7 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
             ]
 
         self.assertIsNone(error)
-        self.assertEqual(len(results), 126)
+        self.assertEqual(len(results), 180)
         expected = {item.opponent_id: 18 for item in EVALUATION_ROSTER}
         self.assertEqual(Counter(item["opponent_id"] for item in persisted), expected)
         self.assertEqual(Counter(item["opponent_id"] for item in metadata), expected)

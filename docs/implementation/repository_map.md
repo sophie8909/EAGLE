@@ -26,7 +26,7 @@ kept as documentation entries.
 | `eagle/search_runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
 | `eagle/search.py` | Initialization and evolutionary generation loop |
 | `eagle/resume.py` | v2 snapshot resume |
-| `eagle/selection.py` | Seeded seven-case lexicase parent selection and joint parent-plus-offspring survivor selection |
+| `eagle/selection.py` | Seeded ten-case lexicase parent selection and joint parent-plus-offspring survivor selection |
 | `eagle/aos.py` | Static and adaptive reflection-operator selection |
 
 ## Candidate and mutation
@@ -63,7 +63,7 @@ kept as documentation entries.
 | `evaluation/code_quality.py` | Static metrics and canonical simplicity diagnostic |
 | `evaluation/function_capability.py` | Function-capability diagnostic |
 | `evaluation/strategy_alignment.py` | Strategy-alignment diagnostic |
-| `evaluation/objectives.py` | Seven opponent fitness cases and reporting aggregate |
+| `evaluation/objectives.py` | Ten opponent fitness cases and reporting aggregate |
 | `evaluation/parent_offspring.py` | Head-to-head AOS evidence only |
 
 ## Persistence and analysis

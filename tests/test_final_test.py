@@ -18,13 +18,13 @@ from eagle.opponents import SAFE_ALLINBOT_CLASS_NAME
 
 
 class FinalTestTests(unittest.TestCase):
-    def test_roster_keeps_ea_opponents_and_adds_diagnostics(self):
+    def test_roster_reuses_all_ten_ea_opponents_without_duplicates(self):
         ids = [item.opponent_id for item in FINAL_TEST_OPPONENTS]
         self.assertEqual(
             ids,
             [
-                "lightrush", "heavyrush", "workerrush", "allinbot",
-                "mayari", "coac", "tma", "passive", "random", "randombias",
+                "passive", "random", "randombias", "lightrush", "heavyrush",
+                "workerrush", "allinbot", "mayari", "coac", "tma",
             ],
         )
         self.assertEqual(FINAL_TEST_GAMES_PER_SIDE, 10)

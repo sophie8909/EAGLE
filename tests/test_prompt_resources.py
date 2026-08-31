@@ -173,7 +173,7 @@ class PromptResourceTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, field):
                 ExperimentConfig.from_mapping({field: value})
         with self.assertRaisesRegex(ValueError, "derived"):
-            ExperimentConfig.from_mapping({"evaluation": {"matches_per_candidate": 126}})
+            ExperimentConfig.from_mapping({"evaluation": {"matches_per_candidate": 180}})
 
 
 if __name__ == "__main__":

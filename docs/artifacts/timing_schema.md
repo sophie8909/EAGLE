@@ -51,7 +51,7 @@ This is the canonical owner of candidate and LLM-attempt timing fields. Normativ
 }
 ```
 
-For a successful evaluation, `match_durations_seconds` has exactly 126 entries.
+For a successful evaluation, `match_durations_seconds` has exactly 180 entries.
 For partial failure it has one entry per attempted match and is interpreted with
 match statuses.
 
@@ -108,7 +108,7 @@ immediately previous complete source's structured validation/javac feedback.
 Each match-level `timing.json` records at least start, finish, duration, process start/finish if distinct, timeout limit, and status. Candidate totals must agree with the match duration list within documented measurement boundaries.
 
 AOS parent-vs-offspring matches use the same match-level timing schema under
-`aos/head_to_head/matches/`. They are separate from the 126 normal-evaluation
+`aos/head_to_head/matches/`. They are separate from the 180 normal-evaluation
 durations in candidate `timing.json`; their aggregate is reconstructable from
 the 18 AOS-owned match timing files and does not change normal evaluation counts.
 
@@ -118,7 +118,7 @@ the 18 AOS-owned match timing files and does not change normal evaluation counts
 - Attempt count/order matches persisted raw request/response artifacts.
 - Skipped/no-mutation stages are null with empty attempts.
 - Failure timestamps close at the terminal stage and preserve earlier durations.
-- Exactly 126 match durations on successful evaluation.
+- Exactly 180 match durations on successful evaluation.
 - Candidate total is not less than any contained stage duration.
 
 
@@ -132,7 +132,7 @@ when Java extraction or validation fails after Reflection and Rewrite have compl
 
 ## Phase 4 implementation note
 
-Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 126 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
+Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 180 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
 
 ## Canonical runtime timing additions
 

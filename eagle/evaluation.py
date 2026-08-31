@@ -1171,7 +1171,7 @@ def preflight_evaluation_opponents(
 
 
 def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int) -> tuple[list[MatchResult], str | None]:
-    """Run the complete fixed seven-opponent evaluation matrix."""
+    """Run the complete fixed ten-opponent evaluation matrix."""
     match_results: list[MatchResult] = []
     source_hash = hash_file(agent.source_path)
     candidate_classes_dir = classes_dir / candidate.id

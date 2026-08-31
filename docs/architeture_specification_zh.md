@@ -1,6 +1,6 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-08-30 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-08-31 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
@@ -30,7 +30,7 @@ Generator 成功產生的 child Java 會成為下一代可選取的 Java compone
 
 每一代依序執行 seeded lexicase parent selection、crossover、可選的 Strategy、
 Code 或 Balance mutation、完整 Java generation、validation、compilation、integration、
-126 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。Survivor
+180 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。Survivor
 selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
 選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
 `(n + n)`。
@@ -51,7 +51,7 @@ Reflection operator mode 只有三種：
 `comparison_parent_id`：Strategy 依 policy component provenance；預設模式的 Code／
 Balance 依 generation-prompt provenance；inherited 模式的 Code／Balance 依 Java
 component provenance。Crossover 後即使 component 來自第二個 direct parent，也不會
-再固定把 AOS reward 歸到第一個 parent。`aos_opponent` 重用一般 126 場 evaluation，
+再固定把 AOS reward 歸到第一個 parent。`aos_opponent` 重用一般 180 場 evaluation，
 `aos_head2head` 則對同一 comparison parent 執行額外 18 場 direct matches。
 
 Strategy Mutation 只修改 `strategy_prompt`；Code Mutation 只修改
@@ -105,7 +105,7 @@ Compile-guided decoder 只修正 phenotype 的可驗證編譯問題，不是 Cod
 guard 阻擋沒有診斷依據的大幅重寫，但此 guard 不能證明語意等價。每個通過
 validation 的完整 source 最多編譯一次，第一個編譯成功的 attempt 直接成為唯一
 canonical phenotype/classes；全部失敗時由最後一次 attempt 決定 failure stage，
-其 source 只算 generation evidence，不會偽裝成 phenotype。Integration 與 126 場
+其 source 只算 generation evidence，不會偽裝成 phenotype。Integration 與 180 場
 evaluation 只對選中的 attempt 執行一次，且 integration/runtime failure 不會觸發
 重新生成。舊設定預設仍為一次，`static_0824` 四個 production config 才明列上限
 五次。
@@ -159,14 +159,16 @@ Python 與 YAML 不再接受 inline prompt、seed template 或重複 prompt body
 
 ## Evaluation
 
-Evolution Evaluation 固定使用七個 opponent：LightRush、HeavyRush、WorkerRush、
-AllInBot、Mayari、COAC、TMA。每個可執行 candidate 使用同一份 Java source 與
-class directory，進行：
+Evolution Evaluation 固定使用十個 opponent：PassiveAI、RandomAI、
+RandomBiasedAI、LightRush、HeavyRush、WorkerRush、AllInBot、Mayari、COAC、TMA。
+每個可執行 candidate 使用同一份 Java source 與 class directory，進行：
 
-`7 opponents × 3 maps × 3 rounds × 2 sides = 126 matches`
+`10 opponents × 3 maps × 3 rounds × 2 sides = 180 matches`
 
-Fitness 是七個 maximized opponent case。失敗或 incomplete candidate 的每個
-case 都是 `-1000.0`。加權 aggregate Game Performance 只用於報表。
+Fitness 是十個 maximized opponent case。失敗或 incomplete candidate 的每個
+case 都是 `-1000.0`。加權 aggregate Game Performance 以 PassiveAI、RandomAI、
+RandomBiasedAI 權重各 `0.5`、三個 rush opponent 各 `1`、其餘四個 opponent 各
+`2` 計算，固定分母為 `12.5`，且只用於報表。
 WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的重複行為
 充當 identity adapter。每代的 expected/completed match count 是所有 candidate
 的加總，而不是第一個 candidate 的值。
@@ -197,7 +199,7 @@ Alignment 記為不適用且不呼叫 LLM。
 Integration 不使用空白 state：probe 會載入真實、含雙方 base/worker 的
 `basesWorkers8x8.xml` 兩次，分別以獨立的 one-argument candidate instance 與
 獨立 GameState 呼叫 player 0／player 1，確認 `PlayerAction` 非空、integrity
-合法、可 `issueSafe` 並各 cycle 一次。這能在 126 場前攔截座標越界與跨 side
+合法、可 `issueSafe` 並各 cycle 一次。這能在 180 場前攔截座標越界與跨 side
 state 殘留等 runtime 問題；integration failure 只記錄 evidence，不會回到 decoder
 retry。
 
