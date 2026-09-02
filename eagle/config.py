@@ -117,6 +117,7 @@ class ExperimentConfig:
     match_timeout_seconds: float = 120.0
     match_artifact_mode: str = "compact"
     evaluation_maps: tuple[str, ...] = DEFAULT_EVALUATION_MAPS
+    evaluation_map_tick_limits: tuple[int, ...] = ()
     rounds_per_map: int = 3
     swap_player_sides: bool = True
     evaluation_opponents: tuple[tuple[str, float], ...] = DEFAULT_SEARCH_OPPONENTS
@@ -225,8 +226,10 @@ class ExperimentConfig:
             raise ValueError(
                 "evaluation.matches_per_candidate is derived from maps, rounds, sides, and opponents."
             )
-        evaluation_maps = _parse_evaluation_maps(
-            evaluation_settings.get("maps", payload.get("evaluation_maps", DEFAULT_EVALUATION_MAPS))
+        tick_limit = int(payload.get("tick_limit", 100))
+        evaluation_maps, evaluation_map_tick_limits = _parse_evaluation_maps(
+            evaluation_settings.get("maps", payload.get("evaluation_maps", DEFAULT_EVALUATION_MAPS)),
+            default_tick_limit=tick_limit,
         )
         rounds_per_map = int(evaluation_settings.get("rounds_per_map", payload.get("rounds_per_map", 3)))
         swap_player_sides = bool(evaluation_settings.get("swap_player_sides", payload.get("swap_player_sides", True)))
@@ -282,10 +285,11 @@ class ExperimentConfig:
                 DEFAULT_INITIAL_JAVA_SEED_PATH,
             ),
             candidate_java_mode=str(payload.get("candidate_java_mode", "generated_phenotype")),
-            tick_limit=int(payload.get("tick_limit", 100)),
+            tick_limit=tick_limit,
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
             match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
             evaluation_maps=evaluation_maps,
+            evaluation_map_tick_limits=evaluation_map_tick_limits,
             rounds_per_map=rounds_per_map,
             swap_player_sides=swap_player_sides,
             evaluation_opponents=evaluation_opponents,
@@ -346,6 +350,11 @@ class ExperimentConfig:
             )
         if len(self.evaluation_maps) != 3:
             raise ValueError("evaluation.maps must contain exactly three maps.")
+        map_tick_limits = self.resolved_evaluation_map_tick_limits
+        if len(map_tick_limits) != len(self.evaluation_maps):
+            raise ValueError("evaluation map tick limits must align with evaluation.maps.")
+        if any(limit < 1 for limit in map_tick_limits):
+            raise ValueError("evaluation map tick limits must be at least 1.")
         if self.rounds_per_map != 3:
             raise ValueError("evaluation.rounds_per_map must be exactly 3.")
         if not self.swap_player_sides:
@@ -443,7 +452,14 @@ class ExperimentConfig:
             "match_timeout_seconds": self.match_timeout_seconds,
             "match_artifact_mode": self.match_artifact_mode,
             "evaluation": {
-                "maps": list(self.evaluation_maps),
+                "maps": [
+                    {"path": path, "tick_limit": tick_limit}
+                    for path, tick_limit in zip(
+                        self.evaluation_maps,
+                        self.resolved_evaluation_map_tick_limits,
+                        strict=True,
+                    )
+                ],
                 "rounds_per_map": self.rounds_per_map,
                 "swap_player_sides": self.swap_player_sides,
                 "opponents": [
@@ -490,6 +506,14 @@ class ExperimentConfig:
     @property
     def fixed_matches_per_opponent(self) -> int:
         return len(self.evaluation_maps) * self.rounds_per_map * 2
+
+    @property
+    def resolved_evaluation_map_tick_limits(self) -> tuple[int, ...]:
+        """Return one effective tick cap for each configured evaluation map."""
+
+        if not self.evaluation_map_tick_limits:
+            return (self.tick_limit,) * len(self.evaluation_maps)
+        return tuple(int(limit) for limit in self.evaluation_map_tick_limits)
 
     @property
     def expected_match_count(self) -> int:
@@ -579,18 +603,32 @@ def _parse_model(value: object, base_dir: Path) -> ModelConfig:
     return result
 
 
-def _parse_evaluation_maps(value: object) -> tuple[str, ...]:
+def _parse_evaluation_maps(
+    value: object,
+    *,
+    default_tick_limit: int,
+) -> tuple[tuple[str, ...], tuple[int, ...]]:
     if not isinstance(value, (list, tuple)):
-        raise ValueError("evaluation.maps must be a list of map paths.")
+        raise ValueError("evaluation.maps must be a list of paths or {path, tick_limit} mappings.")
     paths: list[str] = []
+    tick_limits: list[int] = []
     for item in value:
         if isinstance(item, dict):
-            item = item.get("path")
-        path = str(item or "").strip()
+            path_value = item.get("path")
+            tick_limit_value = item.get("tick_limit", default_tick_limit)
+        else:
+            path_value = item
+            tick_limit_value = default_tick_limit
+        path = str(path_value or "").strip()
         if not path:
             raise ValueError("evaluation map paths must not be empty.")
+        try:
+            tick_limit = int(tick_limit_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"evaluation map tick_limit must be an integer: {path}") from exc
         paths.append(path)
-    return tuple(paths)
+        tick_limits.append(tick_limit)
+    return tuple(paths), tuple(tick_limits)
 
 def _parse_unit_material_values(value: object) -> tuple[tuple[str, float], ...]:
     resolved = dict(DEFAULT_UNIT_MATERIAL_VALUES)

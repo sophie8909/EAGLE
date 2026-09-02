@@ -252,7 +252,11 @@ The fixed search roster is:
 10. TMA
 
 Every runnable candidate uses the same source and compiled classes for 180
-matches: ten opponents × three maps × three rounds × two player sides.
+matches: ten opponents × three maps × three rounds × two player sides. Each
+`evaluation.maps` entry may define its own positive `tick_limit`; string-only
+map entries inherit the top-level `tick_limit` for backward compatibility. The
+resolved per-map cap is carried by the match matrix and is used unchanged by
+normal evaluation, AOS head-to-head evaluation, and final testing.
 
 AllInBot preflight verifies the pinned upstream class/JAR before execution.
 Its separately compiled reflection adapter is outside the candidate phenotype

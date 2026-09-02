@@ -106,6 +106,9 @@ immediately previous complete source's structured validation/javac feedback.
 ## Match timing
 
 Each match-level `timing.json` records at least start, finish, duration, process start/finish if distinct, timeout limit, and status. Candidate totals must agree with the match duration list within documented measurement boundaries.
+The wall-clock `timeout_seconds` remains distinct from the map-specific game
+tick cap; the latter is persisted as `max_cycles` in match result/metadata
+evidence and does not change timing arithmetic.
 
 AOS parent-vs-offspring matches use the same match-level timing schema under
 `aos/head_to_head/matches/`. They are separate from the 180 normal-evaluation

@@ -11,6 +11,7 @@ from typing import Iterable
 class EvaluationMap:
     map_id: str
     path: str
+    tick_limit: int = 100
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class MatchSpecification:
     opponent_weight: float
     map_id: str
     map_path: str
+    tick_limit: int
     round_index: int
     candidate_player: int
     opponent_player: int
@@ -65,6 +67,7 @@ def build_match_matrix(
                             opponent_weight=opponent.weight,
                             map_id=evaluation_map.map_id,
                             map_path=evaluation_map.path,
+                            tick_limit=evaluation_map.tick_limit,
                             round_index=round_index,
                             candidate_player=candidate_player,
                             opponent_player=1 - candidate_player,
@@ -74,8 +77,25 @@ def build_match_matrix(
     return tuple(specifications)
 
 
-def canonical_evaluation_maps(paths: Iterable[str]) -> tuple[EvaluationMap, ...]:
+def canonical_evaluation_maps(
+    paths: Iterable[str],
+    *,
+    tick_limits: Iterable[int] | None = None,
+    default_tick_limit: int = 100,
+) -> tuple[EvaluationMap, ...]:
     paths = tuple(str(path) for path in paths)
     if len(paths) != 3:
         raise ValueError("evaluation requires exactly three maps")
-    return tuple(EvaluationMap(f"map_{index}", path) for index, path in enumerate(paths, start=1))
+    limits = (
+        (int(default_tick_limit),) * len(paths)
+        if tick_limits is None
+        else tuple(int(limit) for limit in tick_limits)
+    )
+    if len(limits) != len(paths):
+        raise ValueError("evaluation tick limits must align with evaluation maps")
+    if any(limit < 1 for limit in limits):
+        raise ValueError("evaluation tick limits must be positive")
+    return tuple(
+        EvaluationMap(f"map_{index}", path, limit)
+        for index, (path, limit) in enumerate(zip(paths, limits, strict=True), start=1)
+    )

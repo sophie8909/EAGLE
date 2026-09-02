@@ -24,7 +24,7 @@ runs/<run_id>/
 └── final_test/
 ```
 
-`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda` and `candidate_java_mode`, reflection mode/probabilities, and evaluation matrix. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
+`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda` and `candidate_java_mode`, reflection mode/probabilities, and evaluation matrix. Every resolved `evaluation.maps` entry is a `{path, tick_limit}` mapping, even when the source config used a string map path and inherited the top-level fallback. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
 
 `manifest.json` stays small: schema/run identity, timestamps, status, experiment/model/reflection identity, and `latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`; interrupted/failed records include resumability and their interruption/failure metadata without replacing the last atomic generation. It never embeds the config. `summary.json` stores completion/reporting fields, final population IDs, and a reference to the best runnable candidate in the final population; the reference is `null` when every final candidate failed. It does not copy candidate snapshots.
 
@@ -222,7 +222,10 @@ matches/<match_id>/
 Every normal-evaluation `result.json` and `match_metadata.json` records a
 non-null canonical `opponent_id`. The 180 match directories must reconstruct
 exactly the ten configured case IDs with 18 matches per opponent, without
-mapping Java class names back to fitness cases.
+mapping Java class names back to fitness cases. Each `result.json` `max_cycles`
+and `match_metadata.json` `evaluation_configuration.tick_limit` must equal the
+resolved cap of the associated map. Final-test summary map entries likewise
+retain `tick_limit` beside map ID and path.
 
 Compact mode removes transient raw replay/round-state inputs after durable telemetry/trace creation. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
 

@@ -17,7 +17,9 @@ Snapshot: 2026-08-31. This file describes executable repository behavior.
   `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
   `coac`, and `tma`.
 - Every candidate runs 180 matches: three maps × three rounds × both sides
-  for each opponent.
+  for each opponent. Evaluation maps may define independent positive tick caps;
+  string-only map entries retain the top-level `tick_limit` fallback. Normal,
+  AOS head-to-head, and final-test matrices share the resolved per-map caps.
 - Match repetitions are identified by `round_index`. The obsolete
   `match_seeds` field, unread `eagle.match.seed` JVM property, and match-level
   seed artifacts are removed; MicroRTS matches do not claim seeded

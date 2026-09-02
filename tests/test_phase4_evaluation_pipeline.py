@@ -20,7 +20,15 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             candidate = Candidate(id="phase4-success", strategy_prompt="Build an economy, produce units, and attack intelligently.")
-            config = ExperimentConfig.from_mapping({})
+            config = ExperimentConfig.from_mapping({
+                "evaluation": {
+                    "maps": [
+                        {"path": "maps/8x8/basesWorkers8x8.xml", "tick_limit": 1500},
+                        {"path": "maps/16x16/basesWorkers16x16.xml", "tick_limit": 3000},
+                        {"path": "maps/24x24/basesWorkers24x24.xml", "tick_limit": 4000},
+                    ]
+                }
+            })
             candidates_dir = root / "candidates"
             write_candidate_inputs(candidates_dir, candidate)
             evaluation = evaluate_candidate(
@@ -38,6 +46,10 @@ class Phase4EvaluationPipelineTests(unittest.TestCase):
 
             self.assertEqual(len(evaluation.match_results), config.expected_match_count)
             self.assertTrue(all(result.ok for result in evaluation.match_results))
+            self.assertEqual(
+                {result.map_path: result.max_cycles for result in evaluation.match_results},
+                dict(zip(config.evaluation_maps, (1500, 3000, 4000), strict=True)),
+            )
             self.assertIsNone(evaluation.result.failure_stage)
             self.assertEqual(set(evaluation.candidate.fitness_objectives), set(LEXICASE_CASES))
             self.assertTrue(all(value != -1000 for value in evaluation.candidate.fitness_objectives.values()))

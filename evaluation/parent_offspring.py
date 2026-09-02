@@ -87,7 +87,10 @@ def evaluate_parent_vs_offspring(
     parent_classes = classes_dir / comparison_parent.id
     specifications = build_match_matrix(
         (MatrixOpponent(comparison_parent.id),),
-        canonical_evaluation_maps(config.evaluation_maps),
+        canonical_evaluation_maps(
+            config.evaluation_maps,
+            tick_limits=config.resolved_evaluation_map_tick_limits,
+        ),
         rounds_per_map=config.rounds_per_map,
         swap_player_sides=config.swap_player_sides,
     )
@@ -104,7 +107,7 @@ def evaluate_parent_vs_offspring(
                 classes_dir=offspring_classes,
                 agent_class="ai.generated.CandidateAgent",
                 opponent=COMPARISON_PARENT_CLASS,
-                tick_limit=config.tick_limit,
+                tick_limit=specification.tick_limit,
                 match_index=specification.match_index,
                 match_artifacts_dir=match_artifacts_dir,
                 scoring_config=GamePerformanceConfig(

@@ -55,8 +55,17 @@ class FinalTestTests(unittest.TestCase):
 
     def test_summary_counts_contained_opponent_fault_as_neutral_draw(self):
         with tempfile.TemporaryDirectory() as directory:
+            config = ExperimentConfig.from_mapping({
+                "evaluation": {
+                    "maps": [
+                        {"path": "maps/8x8/basesWorkers8x8.xml", "tick_limit": 1500},
+                        {"path": "maps/16x16/basesWorkers16x16.xml", "tick_limit": 3000},
+                        {"path": "maps/24x24/basesWorkers24x24.xml", "tick_limit": 4000},
+                    ]
+                }
+            })
             summary = _build_summary(
-                config=ExperimentConfig.from_mapping({}),
+                config=config,
                 run_dir=Path(directory),
                 output_dir=Path(directory),
                 candidate={"candidate_id": "candidate-a"},
@@ -75,6 +84,10 @@ class FinalTestTests(unittest.TestCase):
 
         cell = summary["table"]["allinbot"]["map_1"]
         self.assertEqual(cell["draws"], 1)
+        self.assertEqual(
+            [item["tick_limit"] for item in summary["maps"]],
+            [1500, 3000, 4000],
+        )
         self.assertEqual(cell["opponent_fault_contained"], 1)
         self.assertEqual(cell["opponent_fault_recovered"], 1)
         self.assertEqual(summary["opponent_fault_contained_matches"], 1)

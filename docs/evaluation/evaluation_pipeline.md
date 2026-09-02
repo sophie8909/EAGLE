@@ -48,7 +48,10 @@ The fixed roster is defined by `eagle/opponent_cases.py` and resolved by
 `eagle/opponents.py`. Each opponent receives three configured maps, three
 rounds, and both candidate player positions. The matrix is owned by
 `evaluation/match_matrix.py`; execution is owned by
-`evaluation/microrts_runner.py`.
+`evaluation/runtime_evaluation.py`. A map entry may carry a positive `tick_limit`;
+otherwise it inherits the legacy top-level `tick_limit`. The matrix attaches
+the resolved limit to every match specification, so search, AOS head-to-head,
+and final-test matches use the same cap for a given map.
 
 The evaluator groups match results by opponent in
 `evaluation/game_metrics.py`. It retains per-opponent, per-map, per-side, and

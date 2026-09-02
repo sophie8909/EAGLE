@@ -165,6 +165,10 @@ RandomBiasedAI、LightRush、HeavyRush、WorkerRush、AllInBot、Mayari、COAC�
 
 `10 opponents × 3 maps × 3 rounds × 2 sides = 180 matches`
 
+每個 `evaluation.maps` 項目可以各自指定正整數 `tick_limit`；只有 path 的舊格式
+則沿用 top-level `tick_limit`。解析後的 per-map 上限會由 match matrix 帶入一般
+evaluation、AOS head-to-head 與 final test，確保同一張 map 在三條路徑使用相同上限。
+
 Fitness 是十個 maximized opponent case。失敗或 incomplete candidate 的每個
 case 都是 `-1000.0`。加權 aggregate Game Performance 以 PassiveAI、RandomAI、
 RandomBiasedAI 權重各 `0.5`、三個 rush opponent 各 `1`、其餘四個 opponent 各
