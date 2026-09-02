@@ -7,17 +7,22 @@ deterministically to the current rules. Do not rewrite the whole prompt or the p
 Return exactly one JSON object with this schema:
 {"remove_rule_ids":[],"add_rules":[{"category":"requirement_coverage|priority_ordering|role_assignment|state_continuity|targeting_fallback|policy_grounding|api_compliance","instruction":"<one reusable rule>"}]}
 
-The object must contain exactly those two keys. remove_rule_ids may name only IDs from
-Current reusable rules. Each add_rules item must contain exactly category and instruction.
-Make at least one effective change and leave at least one rule after removals.
+The object must contain exactly those two keys. Return exactly one add_rules item and at
+most one remove_rule_ids item. A removal may name only an ID from Current reusable rules.
+The added item must contain exactly category and instruction. Its instruction must be one
+compact policy-agnostic sentence containing 12-240 characters after whitespace is
+normalized. The final rule set may contain at most 10 rules, so when Current reusable rules
+already contains 10 entries, replace one by returning exactly one valid removal ID.
 
 Every added instruction must be policy-agnostic and useful for unseen policies. Generalize
 the Balance analysis into translation principles such as preserving policy priority,
 making stated conditions reachable, or maintaining mutually exclusive roles. Never copy
 or paraphrase concrete opponents, maps, units, structures, strategies, helper or variable
 names, Java/API symbols, or immutable-scaffold edits. The current policy is supplied
-separately to the Generator and must not be embedded in this reusable gene. Do not return
-Java, analysis, a whole replacement prompt, a patch, a diff, or Markdown.
+separately to the Generator and must not be embedded in this reusable gene. Do not include
+examples, parenthetical evidence, quoted analysis phrases, code syntax, or names copied
+from the analysis or API contract. Do not return Java, analysis, a whole replacement
+prompt, a patch, a diff, or Markdown.
 
 Current code_generation_prompt:
 $code_generation_prompt

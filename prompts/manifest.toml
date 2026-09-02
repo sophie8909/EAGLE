@@ -42,6 +42,12 @@ role = "rewriter"
 stages = ["balance_generation_prompt_rewrite"]
 required_variables = ["code_generation_prompt", "current_reusable_rules", "balance_analysis", "action_api_guide"]
 
+[prompts.rewrite_validation_retry]
+file = "rewrite_validation_retry.txt"
+role = "rewriter"
+stages = ["strategy_rewrite", "generation_prompt_rewrite", "balance_strategy_prompt_rewrite", "balance_generation_prompt_rewrite"]
+required_variables = ["validation_error", "original_request"]
+
 [prompts.java_generation]
 file = "java_generation.txt"
 role = "generator"

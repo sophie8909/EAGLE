@@ -73,11 +73,13 @@ API guide。Reviewer 只會看到 strategy marker 之間的可編輯 Java；固�
 欄位與 helper 不會作為 candidate 行為證據。Generator 永遠使用兩個 prompt gene
 與固定 checked-in Java scaffold，且在 inherited 模式額外收到完整 inherited Java。
 
-Code Prompt Rewriter 固定回傳 `remove_rule_ids` 與 `add_rules`。新增規則必須使用
-固定 category 且為 policy-agnostic prose，不得寫入特定 strategy、unit type、Java/API
-symbol 或 scaffold 修改；runtime 會產生穩定 rule ID、依序套用 delta，並確定性組成
-最多十條規則的 canonical `generation_prompt`。Legacy free-form prompt 可讀取，但下次
-成功 Code Reflection 時不會被複製進新 rule set。Generation 0 依 candidate mode 分流：預設模式仍是
+Code Prompt Rewriter 固定回傳 `remove_rule_ids` 與 `add_rules`；每次 mutation 必須
+新增一條 12–240 字元的 policy-agnostic 規則，並最多移除一條既有規則。新增規則
+必須使用固定 category，不得寫入特定 strategy、unit type、Java/API symbol 或
+scaffold 修改；runtime 會產生穩定 rule ID、依序套用 delta，並確定性組成最多十條
+規則的 canonical `generation_prompt`。若 semantic validation 拒絕輸出，下一次有界
+重試會收到原 request 與精確錯誤，且失敗 delta 不會被部分套用。Legacy free-form
+prompt 可讀取，但下次成功 Code Reflection 時不會被複製進新 rule set。Generation 0 依 candidate mode 分流：預設模式仍是
 每個 seed 檔建立一個 candidate，直接載入 `initial_java_seed_path`，不呼叫
 Generator；inherited 模式必須只有一個 seed policy，將同一份 policy 與 callable
 no-op Java 複製到 `population_size` 個 genotype，並對每個 candidate 各呼叫一次

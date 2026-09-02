@@ -17,6 +17,8 @@ REUSABLE_PROMPT_HEADER = (
 )
 MAX_REUSABLE_RULES = 10
 MAX_RULE_CHARS = 240
+RULE_DELTA_ADDITIONS = 1
+RULE_DELTA_REMOVALS = 1
 RULE_CATEGORIES: tuple[str, ...] = (
     "requirement_coverage",
     "priority_ordering",
@@ -177,19 +179,27 @@ def apply_reusable_rule_delta(
     normalized_removals = [item.strip() for item in remove_rule_ids]
     if len(normalized_removals) != len(set(normalized_removals)):
         raise ValueError("Code Rewrite remove_rule_ids must not contain duplicates.")
+    if len(normalized_removals) > RULE_DELTA_REMOVALS:
+        raise ValueError(
+            f"Code Rewrite remove_rule_ids may contain at most {RULE_DELTA_REMOVALS} rule."
+        )
     unknown = [rule_id for rule_id in normalized_removals if rule_id not in current_ids]
     if unknown:
         raise ValueError(f"Code Rewrite cannot remove unknown rule ids: {unknown}")
+    if len(add_rules) != RULE_DELTA_ADDITIONS:
+        raise ValueError(
+            f"Code Rewrite add_rules must contain exactly {RULE_DELTA_ADDITIONS} rule."
+        )
 
     retained = [rule for rule in current_rules if rule.rule_id not in normalized_removals]
     known_instructions = {
         (rule.category, rule.instruction.casefold()) for rule in retained
     }
     additions: list[ReusableGenerationRule] = []
-    for item in add_rules:
+    for index, item in enumerate(add_rules):
         if not isinstance(item, dict) or set(item) != {"category", "instruction"}:
             raise ValueError(
-                "Each Code Rewrite add_rules item must contain exactly category and instruction."
+                f"Code Rewrite add_rules[{index}] must contain exactly category and instruction."
             )
         category = item["category"]
         instruction = item["instruction"]
@@ -197,7 +207,10 @@ def apply_reusable_rule_delta(
             raise ValueError("Code Rewrite rule category and instruction must be strings.")
         category = category.strip()
         instruction = _normalize_instruction(instruction)
-        _validate_rule(category, instruction)
+        try:
+            _validate_rule(category, instruction)
+        except ValueError as exc:
+            raise ValueError(f"Code Rewrite add_rules[{index}] is invalid: {exc}") from exc
         key = (category, instruction.casefold())
         if key in known_instructions:
             continue
@@ -275,12 +288,14 @@ def _validate_rule(category: str, instruction: str) -> None:
         )
     if len(instruction) < 12 or len(instruction) > MAX_RULE_CHARS:
         raise ValueError(
-            f"Reusable generation rule must contain 12-{MAX_RULE_CHARS} characters."
+            f"Reusable generation rule has {len(instruction)} characters; "
+            f"expected 12-{MAX_RULE_CHARS}."
         )
-    if _FORBIDDEN_SPECIFIC_PATTERN.search(instruction):
+    forbidden_specific = _FORBIDDEN_SPECIFIC_PATTERN.search(instruction)
+    if forbidden_specific:
         raise ValueError(
             "Reusable generation rules must not name a concrete strategy, unit type, "
-            "agent, or Java/API symbol."
+            f"agent, or Java/API symbol; rejected term: {forbidden_specific.group(0)!r}."
         )
     if any(character in instruction for character in ("`", "{", "}", ";")) or _JAVA_CALL.search(instruction):
         raise ValueError("Reusable generation rules must be plain policy-agnostic prose, not Java.")

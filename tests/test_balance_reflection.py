@@ -154,8 +154,10 @@ class BalanceReflectionTests(unittest.TestCase):
                 "reflector_response_raw.txt",
                 "strategy_rewriter_request.txt",
                 "strategy_rewriter_response_raw.txt",
+                "strategy_rewriter_attempt_001_request.txt",
                 "code_rewriter_request.txt",
                 "code_rewriter_response_raw.txt",
+                "code_rewriter_attempt_001_request.txt",
                 "reflection_context.json",
                 "metadata.json",
             ):
@@ -196,6 +198,12 @@ class BalanceReflectionTests(unittest.TestCase):
         self.assertTrue(result.metadata["mutation"]["applied"])
         self.assertNotIn("UNVALIDATED WHOLE PROMPT", result.generation_prompt)
         self.assertIn(GENERIC_BALANCE_RULE, result.generation_prompt)
+        self.assertIn("previous response was rejected", backend.prompts[3].lower())
+        self.assertIn(
+            "Code Rewrite response must contain exactly remove_rule_ids and add_rules.",
+            backend.prompts[3],
+        )
+        self.assertIn("EAGLE Balance Code Generation Prompt Rewrite stage", backend.prompts[3])
         self.assertEqual(
             [attempt["status"] for attempt in result.timing["rewriter_llm"]["attempts"]],
             ["success", "error", "success"],

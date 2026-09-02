@@ -121,11 +121,14 @@ performs Code Generation Prompt Rewrite before final Java generation and changes
 only `generation_prompt`; game logs are not Code Reflection evidence.
 
 The Code Prompt Rewriter returns exactly one structured reusable-rule delta:
-`remove_rule_ids` plus policy-agnostic `add_rules`. Runtime validates categories,
-rejects concrete strategy/unit/Java instructions, derives stable IDs, and
-deterministically renders a bounded canonical generation prompt. Legacy
-free-form generation prompts remain loadable but are not copied into the new
-rule set on their next successful Code Reflection.
+`remove_rule_ids` plus one compact policy-agnostic `add_rules` entry; at most one
+existing rule may be removed in the same mutation. Runtime validates categories,
+length, and the ten-rule cap, rejects concrete strategy/unit/Java instructions,
+derives stable IDs, and deterministically renders a bounded canonical generation
+prompt. A rejected semantic attempt is retried with its validator error and is
+never partially applied. Legacy free-form generation prompts remain loadable
+but are not copied into the new rule set on their next successful Code
+Reflection.
 
 Balance mutation receives only a bounded aggregate W/D/L table partitioned by
 opponent, map, and candidate side. It receives no prompt text, Java, compiler

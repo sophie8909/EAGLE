@@ -1,0 +1,10 @@
+EAGLE Rewrite validation retry.
+
+The previous response was rejected by deterministic validation:
+$validation_error
+
+Return a fresh response that fixes that error and satisfies every constraint in the
+original request. Do not explain the correction or repeat the validation error.
+
+Original request:
+$original_request

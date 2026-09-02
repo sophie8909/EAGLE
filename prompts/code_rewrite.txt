@@ -7,9 +7,12 @@ whole prompt.
 Return exactly one JSON object with this schema:
 {"remove_rule_ids":[],"add_rules":[{"category":"requirement_coverage|priority_ordering|role_assignment|state_continuity|targeting_fallback|policy_grounding|api_compliance","instruction":"<one reusable rule>"}]}
 
-The object must contain exactly those two keys. remove_rule_ids may name only IDs from
-Current reusable rules. Each add_rules item must contain exactly category and instruction.
-Make at least one effective change and leave at least one rule after removals.
+The object must contain exactly those two keys. Return exactly one add_rules item and at
+most one remove_rule_ids item. A removal may name only an ID from Current reusable rules.
+The added item must contain exactly category and instruction. Its instruction must be one
+compact policy-agnostic sentence containing 12-240 characters after whitespace is
+normalized. The final rule set may contain at most 10 rules, so when Current reusable rules
+already contains 10 entries, replace one by returning exactly one valid removal ID.
 
 Every added instruction must be policy-agnostic and useful for unseen policies. Convert a
 specific mismatch into a general translation principle such as preserving policy priority,
@@ -17,7 +20,9 @@ making stated conditions reachable, or maintaining mutually exclusive roles. Nev
 paraphrase the current policy, name its concrete units/structures/strategy, prescribe helper
 or variable names, include Java fragments, or request edits to the immutable scaffold. The
 policy is supplied separately to the Generator and must not be embedded in this reusable
-gene. Do not return Java, analysis, a patch, a diff, or Markdown.
+gene. Do not include examples, parenthetical evidence, quoted policy phrases, code syntax,
+or names copied from the review or API contract. Do not return Java, analysis, a patch, a
+diff, or Markdown.
 
 Current code_generation_prompt:
 $code_generation_prompt

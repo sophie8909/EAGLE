@@ -182,9 +182,16 @@ Raw LLM output is persisted before parsing. Mutation retains reflection/rewrite
 request, raw response, UTC-bounded attempts, status, and failure evidence even
 when later generation fails. Strategy Coach parsed output preserves the model's
 parent-policy echo, while validated `coach_result.json` takes the parent policy
-from the authoritative input artifact. Mutation-role run timing references the
-candidate-owned evidence without duplicating its prompt/response under
-`llm_logs/`. Adaptively credited offspring retain `aos/reward.json`; its
+from the authoritative input artifact. The base Rewrite request remains in
+`rewriter_request.txt` (or its Balance-prefixed equivalent), while each bounded
+Rewrite attempt also retains the exact transported request and raw response as
+`rewriter_attempt_<NNN>_request.txt` and
+`rewriter_attempt_<NNN>_response_raw.txt`. Balance prefixes these files with
+`strategy_` or `code_`. A retry request includes the prior deterministic
+validation error; raw invalid output is never rewritten in place.
+Mutation-role run timing references the candidate-owned evidence without
+duplicating its prompt/response under `llm_logs/`. Adaptively credited offspring
+retain `aos/reward.json`; its
 `comparison_parent_id` resolves the evaluated mutation-evidence parent through
 component provenance. Head-to-head match evidence remains below
 `aos/head_to_head/`.

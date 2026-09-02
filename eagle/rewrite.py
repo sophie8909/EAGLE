@@ -136,8 +136,20 @@ class PromptRewriteStage:
             response = ""
             error: str | None = None
             status = "success"
+            attempt_request = (
+                request
+                if last_error is None
+                else _build_rewrite_validation_retry_prompt(request, last_error)
+            )
+            if artifact_dir is not None:
+                assert stage_dir is not None
+                _write_text(
+                    stage_dir
+                    / f"{artifact_prefix}{stage}_attempt_{attempt_number:03d}_request.txt",
+                    attempt_request,
+                )
             try:
-                response = self.backend.generate(request)
+                response = self.backend.generate(attempt_request)
                 last_response = response
                 rewritten_prompt = _parse_rewritten_prompt(
                     response,
@@ -169,7 +181,7 @@ class PromptRewriteStage:
             if self.logger is not None:
                 self.logger.write(
                     stage=stage,
-                    input_text=request,
+                    input_text=attempt_request,
                     response_text=response,
                     status=status,
                     backend=self.backend_name,
@@ -701,6 +713,15 @@ def build_balance_code_rewrite_prompt(candidate: Candidate, reflection: Reflecti
         ),
         "balance_analysis": json.dumps(reflection.parsed_response or {}, ensure_ascii=False),
         "action_api_guide": load_prompt("action_api_guide"),
+    })
+
+
+def _build_rewrite_validation_retry_prompt(original_request: str, error: str) -> str:
+    from .prompts import render_prompt
+
+    return render_prompt("rewrite_validation_retry", {
+        "validation_error": error,
+        "original_request": original_request,
     })
 
 

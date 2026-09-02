@@ -97,6 +97,45 @@ class ReusableGenerationPromptTests(unittest.TestCase):
                     },
                 )
 
+    def test_delta_rejects_multi_rule_mutation(self) -> None:
+        with self.assertRaisesRegex(ValueError, "add_rules must contain exactly 1 rule"):
+            apply_reusable_rule_delta(
+                load_prompt("initial_generation"),
+                {
+                    "remove_rule_ids": [],
+                    "add_rules": [
+                        {
+                            "category": "requirement_coverage",
+                            "instruction": (
+                                "Preserve each explicit threshold as a reachable condition."
+                            ),
+                        },
+                        {
+                            "category": "priority_ordering",
+                            "instruction": (
+                                "Resolve overlapping conditions in their stated priority order."
+                            ),
+                        },
+                    ],
+                },
+            )
+
+    def test_rule_length_error_reports_item_and_measured_length(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            r"add_rules\[0\].*has 241 characters; expected 12-240",
+        ):
+            apply_reusable_rule_delta(
+                load_prompt("initial_generation"),
+                {
+                    "remove_rule_ids": [],
+                    "add_rules": [{
+                        "category": "requirement_coverage",
+                        "instruction": "x" * 241,
+                    }],
+                },
+            )
+
     def test_delta_rejects_unknown_removal(self) -> None:
         with self.assertRaisesRegex(ValueError, "unknown rule ids"):
             apply_reusable_rule_delta(

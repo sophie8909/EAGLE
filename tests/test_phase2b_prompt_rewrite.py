@@ -115,6 +115,37 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertIn(GENERIC_RULE, result.rewritten_prompt)
         self.assertIn(RULES_END_MARKER, result.rewritten_prompt)
         self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
+        self.assertEqual(backend.calls[0], "rewrite request")
+        self.assertIn("previous response was rejected", backend.calls[1].lower())
+        self.assertIn("exactly remove_rule_ids and add_rules", backend.calls[1])
+        self.assertIn("rewrite request", backend.calls[1])
+
+    def test_code_rewrite_retries_multi_rule_output_with_actionable_feedback(self):
+        excessive_delta = json.dumps({
+            "remove_rule_ids": [],
+            "add_rules": [
+                {
+                    "category": "requirement_coverage",
+                    "instruction": "Preserve each explicit threshold as a reachable condition.",
+                },
+                {
+                    "category": "priority_ordering",
+                    "instruction": "Resolve overlapping conditions in their stated priority order.",
+                },
+            ],
+        })
+        backend = ScriptedRewriteBackend((excessive_delta, code_rule_delta()))
+
+        result = PromptRewriteStage(backend, max_attempts=2).run(
+            rewrite_type="generation_prompt_rewrite",
+            candidate=self.candidate,
+            request="original code rewrite request",
+        )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.attempts[0].error, "Code Rewrite add_rules must contain exactly 1 rule.")
+        self.assertIn(result.attempts[0].error, backend.calls[1])
+        self.assertIn("original code rewrite request", backend.calls[1])
 
     def test_code_rewrite_recovers_historically_malformed_balance_prompt(self):
         malformed_prompt = """Translate the policy.
@@ -183,6 +214,8 @@ EAGLE_REUSABLE_RULES_END"""
         self.assertIn("Policy-Code Alignment Review", code_prompt)
         self.assertIn("Immutable MicroRTS API contract", code_prompt)
         self.assertIn("commandMove", code_prompt)
+        self.assertIn("exactly one add_rules item", code_prompt)
+        self.assertIn("12-240 characters", code_prompt)
         self.assertNotIn("old strategy", code_prompt)
 
     def test_rewrite_output_rejects_java_and_retries(self):
@@ -213,6 +246,15 @@ EAGLE_REUSABLE_RULES_END"""
             self.assertTrue((mutation_dir / "reflector_response_raw.txt").exists())
             self.assertTrue((mutation_dir / "rewriter_request.txt").exists())
             self.assertTrue((mutation_dir / "rewriter_response_raw.txt").exists())
+            self.assertEqual(
+                (mutation_dir / "rewriter_attempt_001_request.txt").read_text(encoding="utf-8"),
+                backend.calls[1],
+            )
+            retry_request = (mutation_dir / "rewriter_attempt_002_request.txt").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("non-empty prompt", retry_request)
+            self.assertEqual(retry_request, backend.calls[2])
             self.assertTrue((mutation_dir / "original_policy_prompt.txt").exists())
             self.assertTrue((Path(temp) / "timing.json").exists())
 

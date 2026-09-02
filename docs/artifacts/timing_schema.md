@@ -89,7 +89,11 @@ Code Prompt Rewrite attempts, including the Balance code rewrite, include
 structured reusable-rule validation inside the owning attempt duration. An
 invalid category, unknown removal ID, concrete policy/Java instruction, whole
 replacement prompt, or ineffective delta is an ordinary failed rewrite attempt
-and retains the same raw-response and retry timing contract.
+and retains the same raw-response and retry timing contract. After deterministic
+validation rejects an attempt, the next bounded request wraps the original
+request with the exact prior error; its timing still covers one request plus
+validation and its request/raw-response evidence is stored under the matching
+one-based attempt number.
 
 Java generation has two distinct axes. `generation_attempt` (and stable
 `generation_attempt_id`) identifies the outer decoder step;

@@ -78,13 +78,17 @@ JSON object, Java output, or an unknown alignment classification.
 
 The Code Prompt Rewriter receives only the current code-generation prompt, its
 canonical reusable-rule view, Reviewer output, and immutable API guide. It
-returns exactly `remove_rule_ids` and `add_rules`. Added rules use a fixed
-category vocabulary and policy-agnostic prose: they cannot name a concrete
-strategy, unit type, Java/API symbol, or fixed scaffold edit. Runtime derives
-stable IDs, applies removals/additions in order, enforces a ten-rule bound, and
-deterministically renders the replacement prompt. A legacy free-form prompt has
-no retained canonical rules and is therefore replaced rather than copied when
-its first structured Code Rewrite succeeds.
+returns exactly `remove_rule_ids` and `add_rules`, with exactly one compact
+12–240-character addition and at most one removal per mutation. Added rules use
+a fixed category vocabulary and policy-agnostic prose: they cannot name a
+concrete strategy, unit type, Java/API symbol, or fixed scaffold edit. Runtime
+derives stable IDs, applies removals/additions in order, enforces a ten-rule
+bound, and deterministically renders the replacement prompt. A semantic
+validation failure remains a failed attempt; the next bounded attempt receives
+the original request plus the exact validator error so it can produce a fresh
+delta without runtime truncation, filtering, or partial application. A legacy
+free-form prompt has no retained canonical rules and is therefore replaced
+rather than copied when its first structured Code Rewrite succeeds.
 
 Canonical state transition:
 

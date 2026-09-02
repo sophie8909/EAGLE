@@ -168,10 +168,13 @@ Code Reviewer/Rewriter evidence is stored under `mutation/code_reflection/`.
 The Reviewer sees only the editable strategy region plus the immutable API
 guide, so fixed scaffold fields/helpers cannot be mistaken for reachable
 candidate behavior. The Rewriter returns exactly `remove_rule_ids` and
-policy-agnostic `add_rules`; runtime validates and deterministically renders a
-bounded canonical generation prompt with stable derived rule IDs. Concrete
-strategy/unit/Java instructions are rejected, and legacy free-form prompts are
-not copied into the canonical rule set on their next successful Code Rewrite.
+policy-agnostic `add_rules`; each mutation adds exactly one compact rule and may
+remove at most one existing rule. Runtime validates and deterministically
+renders a bounded canonical generation prompt with stable derived rule IDs.
+Concrete strategy/unit/Java instructions are rejected. A bounded retry receives
+the exact prior validator error instead of blindly repeating the same request,
+and legacy free-form prompts are not copied into the canonical rule set on
+their next successful Code Rewrite.
 The canonical generated Java phenotype is `phenotype/CandidateAgent.java`.
 Default mode uses only the checked-in scaffold. In inherited mode the Generator
 also receives `genotype/inherited_java.java`; Code Reflection reviews the
