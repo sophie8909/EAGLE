@@ -116,6 +116,15 @@ class InitialPopulationGenerationTests(unittest.TestCase):
         self.assertEqual({candidate.inherited_java for candidate in population}, {worker_java})
         self.assertEqual(len(backend.requests), 9)
         self.assertTrue(all("Generate one RTS strategy" in request for request in backend.requests))
+        self.assertTrue(
+            all(
+                "IMMUTABLE MICRORTS GAMEPLAY CONTRACT" in request
+                for request in backend.requests
+            )
+        )
+        self.assertTrue(
+            all("Opponent implementation name/class" in request for request in backend.requests)
+        )
         self.assertTrue(all(result["status"] == "success" for result in results))
         self.assertTrue(all(json.loads(raw)["strategy_prompt"] for raw in raw_responses))
         self.assertEqual(

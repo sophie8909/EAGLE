@@ -30,6 +30,7 @@ CODE_BUDGETS = {
     "action_api_guide": 12_000,
 }
 BALANCE_BUDGETS = {"win_loss_table": 18_000}
+MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
 
 
 @dataclass(frozen=True)
@@ -126,6 +127,7 @@ def build_strategy_reflection_prompt_bundle(candidate: Candidate, context: Refle
     opponents = aggregation.get("opponent_summaries") or [item.to_dict() for item in context.opponents]
     preserve = aggregation.get("behaviors_to_preserve") or []
     sections = {
+        "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
         "current_strategy_prompt": f"candidate_id: {context.candidate.candidate_id}\n{context.candidate.strategy_prompt}",
         "aggregate_game_performance": _bounded_text(_json(objective), STRATEGY_BUDGETS["aggregate_game_performance"], section="aggregate_game_performance", truncated=truncated),
         "parent_comparison": _bounded_text(parent, STRATEGY_BUDGETS["parent_comparison"], section="parent_comparison", truncated=truncated),

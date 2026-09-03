@@ -402,6 +402,7 @@ class ExperimentConfig:
                 required_variables=(
                     "sample_index",
                     "population_size",
+                    "gameplay_contract",
                     "existing_strategy_prompts",
                     "prior_error",
                 ),

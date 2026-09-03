@@ -197,6 +197,7 @@ class Phase4CodeQualityTests(unittest.TestCase):
         self.assertEqual(result.raw_response, backend.response)
         self.assertEqual(len(result.attempts), 1)
         self.assertIn("Build workers before attacking.", backend.requests[0])
+        self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", backend.requests[0])
 
     def test_strategy_alignment_accepts_full_json_fence_and_literal_newline(self):
         payload = '```json\n{"score": 7.5, "reason": "First line\nSecond line"}\n```'

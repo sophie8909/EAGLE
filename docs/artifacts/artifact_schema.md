@@ -176,7 +176,8 @@ in candidate or generation JSON.
 For `llm_generated_policies`, the first candidate's policy comes from the
 configured seed file and the remaining candidates own
 `initialization/policy_generation/`. Each attempt persists its exact rendered
-request before transport, raw response before parsing, semantic result, and UTC
+request before transport (including the immutable MicroRTS gameplay contract),
+raw response before parsing, semantic result, and UTC
 timing. Attempt results also retain backend/model/endpoint identity and
 request/response hashes. The compact result references
 `genotype/policy_prompt.txt` rather than
@@ -197,7 +198,9 @@ both rewrite statuses without embedding raw response bodies. The code rewrite
 raw response is a `remove_rule_ids`/`add_rules` delta, while its
 `rewritten_prompt` metadata field is the deterministically rendered canonical
 generation prompt. A failed reflector or either failed rewrite retains completed
-evidence and leaves both prompt genes unchanged.
+evidence and leaves both prompt genes unchanged. The Strategy Rewriter request
+contains the immutable gameplay contract as non-evidence domain context; the
+Balance Reflector request and `reflection_context.json` do not.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated

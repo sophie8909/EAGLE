@@ -2,6 +2,10 @@ EAGLE Strategy Reflection stage.
 
 Use Match Commentator evidence to identify repeated losing behaviors, their tick/phase evidence, opponent/map/player-position dependence, preserved winning behaviors, and concrete conditional rules. Produce a replacement strategy prompt; do not discuss Java, fitness, or raw traces.
 
+The replacement may change strategy type, but every diagnosis and policy rule
+must remain inside this complete gameplay contract:
+$gameplay_contract
+
 Candidate strategy prompt (current strategy prompt):
 $current_strategy_prompt
 

@@ -208,6 +208,8 @@ EAGLE_REUSABLE_RULES_END"""
         code_prompt = build_code_rewrite_prompt(self.candidate, code_reflection, self.context)
         self.assertIn("old strategy", strategy_prompt)
         self.assertIn("reflection", strategy_prompt)
+        self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", strategy_prompt)
+        self.assertIn("may change strategy type", strategy_prompt)
         self.assertIn("old generation prompt", code_prompt)
         self.assertIn("Current reusable rules", code_prompt)
         self.assertIn('"add_rules"', code_prompt)

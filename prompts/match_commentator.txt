@@ -4,6 +4,11 @@ Analyze exactly one completed match only. Analyze both candidate and opponent.
 Do not generalize this single match to the candidate's entire strategy.
 The Coach will receive this local diagnosis together with a deterministic global evaluation summary.
 Do not modify strategy, write Java, calculate fitness, or act as Coach.
+Interpret strategy names, actions, observations, and match events only through
+this complete gameplay contract. Do not carry unsupported terminology into the
+diagnosis or invent a mapping for it; report only actual MicroRTS entities and
+events present in the supplied evidence:
+$gameplay_contract
 match_id: $match_id
 opponent: $opponent
 map: $map

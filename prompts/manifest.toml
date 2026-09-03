@@ -4,7 +4,7 @@
 file = "strategy_reflection.txt"
 role = "reflector"
 stages = ["strategy_reflection"]
-required_variables = ["current_strategy_prompt", "aggregate_game_performance", "parent_comparison", "mutation_targets", "opponent_commentaries", "behaviors_to_preserve"]
+required_variables = ["gameplay_contract", "current_strategy_prompt", "aggregate_game_performance", "parent_comparison", "mutation_targets", "opponent_commentaries", "behaviors_to_preserve"]
 
 [prompts.code_reflection]
 file = "code_reflection.txt"
@@ -22,7 +22,7 @@ required_variables = ["win_loss_table"]
 file = "strategy_rewrite.txt"
 role = "rewriter"
 stages = ["strategy_rewrite"]
-required_variables = ["strategy_prompt", "reflection", "game_summary"]
+required_variables = ["gameplay_contract", "strategy_prompt", "reflection", "game_summary"]
 
 [prompts.code_rewrite]
 file = "code_rewrite.txt"
@@ -34,7 +34,7 @@ required_variables = ["code_generation_prompt", "current_reusable_rules", "align
 file = "balance_strategy_rewrite.txt"
 role = "rewriter"
 stages = ["balance_strategy_prompt_rewrite"]
-required_variables = ["strategy_prompt", "balance_analysis"]
+required_variables = ["gameplay_contract", "strategy_prompt", "balance_analysis"]
 
 [prompts.balance_code_rewrite]
 file = "balance_code_rewrite.txt"
@@ -76,37 +76,37 @@ required_variables = ["policy_prompt", "code_generation_prompt", "inherited_java
 file = "strategy_alignment.txt"
 role = "reflector"
 stages = ["strategy_alignment"]
-required_variables = ["strategy_prompt", "generated_java", "behavior_summary"]
+required_variables = ["gameplay_contract", "strategy_prompt", "generated_java", "behavior_summary"]
 
 [prompts.match_commentator]
 file = "match_commentator.txt"
 role = "match_commentator"
 stages = ["strategy_reflection"]
-required_variables = ["match_id", "opponent", "map", "player_position", "result", "candidate_basic_strategy", "opponent_basic_strategy", "complete_match_record", "raw_game_log"]
+required_variables = ["gameplay_contract", "match_id", "opponent", "map", "player_position", "result", "candidate_basic_strategy", "opponent_basic_strategy", "complete_match_record", "raw_game_log"]
 
 [prompts.coach_refine]
 file = "coach_refine.txt"
 role = "coach"
 stages = ["strategy_reflection"]
-required_variables = ["parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
+required_variables = ["gameplay_contract", "parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
 
 [prompts.coach_counter]
 file = "coach_counter.txt"
 role = "coach"
 stages = ["strategy_reflection"]
-required_variables = ["parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
+required_variables = ["gameplay_contract", "parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
 
 [prompts.coach_structural]
 file = "coach_structural.txt"
 role = "coach"
 stages = ["strategy_reflection"]
-required_variables = ["parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
+required_variables = ["gameplay_contract", "parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
 
 [prompts.coach_alternative]
 file = "coach_alternative.txt"
 role = "coach"
 stages = ["strategy_reflection"]
-required_variables = ["parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
+required_variables = ["gameplay_contract", "parent_strategy_prompt", "commentator_diagnoses_and_evaluation_metadata"]
 
 [prompts.initial_strategy]
 file = "initial_strategy.txt"
@@ -118,7 +118,7 @@ required_variables = []
 file = "initial_policy_generation.txt"
 role = "seed"
 stages = ["population_initialization"]
-required_variables = ["sample_index", "population_size", "existing_strategy_prompts", "prior_error"]
+required_variables = ["sample_index", "population_size", "gameplay_contract", "existing_strategy_prompts", "prior_error"]
 
 [prompts.initial_generation]
 file = "initial_generation.txt"
@@ -130,6 +130,12 @@ required_variables = []
 file = "action_api_guide.txt"
 role = "generator"
 stages = ["seed_generation", "mutation_generation", "crossover_generation"]
+required_variables = []
+
+[prompts.microrts_gameplay_contract]
+file = "microrts_gameplay_contract.txt"
+role = "reference"
+stages = ["population_initialization", "strategy_reflection", "strategy_rewrite", "balance_strategy_prompt_rewrite", "strategy_alignment"]
 required_variables = []
 
 [prompts.endpoint_preflight]

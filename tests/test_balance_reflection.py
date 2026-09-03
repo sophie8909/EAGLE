@@ -108,6 +108,7 @@ class BalanceReflectionTests(unittest.TestCase):
         self.assertIn('"opponent":"lightrush"', prompt)
         self.assertIn('"map":"map_3"', prompt)
         self.assertIn('"p0":{"draws":0,"games":6,"losses":6,"wins":0}', prompt)
+        self.assertNotIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", prompt)
         for forbidden in (
             "ORIGINAL STRATEGY SECRET",
             "ORIGINAL CODE PROMPT SECRET",
@@ -146,6 +147,8 @@ class BalanceReflectionTests(unittest.TestCase):
             self.assertNotIn("ORIGINAL STRATEGY SECRET", backend.prompts[0])
             self.assertNotIn("ORIGINAL CODE PROMPT SECRET", backend.prompts[0])
             self.assertIn("ORIGINAL STRATEGY SECRET", backend.prompts[1])
+            self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", backend.prompts[1])
+            self.assertIn("Translate opponent/map/side findings", backend.prompts[1])
             self.assertIn("ORIGINAL CODE PROMPT SECRET", backend.prompts[2])
 
             mutation_dir = root / "mutation" / "balance_reflection"

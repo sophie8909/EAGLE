@@ -670,9 +670,10 @@ class BalanceReflectionMutation:
 
 
 def build_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult, context: ReflectionContext) -> str:
-    from .prompts import render_prompt
+    from .prompts import load_prompt, render_prompt
 
     return render_prompt("strategy_rewrite", {
+        "gameplay_contract": load_prompt("microrts_gameplay_contract"),
         "strategy_prompt": candidate.strategy_prompt,
         "reflection": json.dumps({"analysis": reflection.parsed_response.get("analysis", {}) if reflection.parsed_response else {}, "proposed_revised_strategy_prompt": reflection.revised_prompt}, ensure_ascii=False),
         "game_summary": context.objectives.to_dict(),
@@ -694,9 +695,10 @@ def build_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult
 
 
 def build_balance_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult) -> str:
-    from .prompts import render_prompt
+    from .prompts import load_prompt, render_prompt
 
     return render_prompt("balance_strategy_rewrite", {
+        "gameplay_contract": load_prompt("microrts_gameplay_contract"),
         "strategy_prompt": candidate.strategy_prompt,
         "balance_analysis": json.dumps(reflection.parsed_response or {}, ensure_ascii=False),
     })

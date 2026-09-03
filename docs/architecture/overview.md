@@ -62,6 +62,10 @@ flowchart TD
 - `llm_generated_policies` keeps one configured policy, fills the other slots
   with independent policy-only LLM calls, and evaluates the same fixed Java seed
   for every generation-zero candidate without invoking the Java Generator.
+- Policy generation and strategy-facing reflection/rewrite roles share one
+  immutable closed-world MicroRTS gameplay contract; it permits strategy
+  diversity while grounding every rule in legal entities, actions, and
+  observable state.
 - In inherited mode crossover selects policy, generation prompt, and Java
   parents independently; generated child Java becomes the inheritable Java
   component available to the next generation.

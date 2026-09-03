@@ -23,13 +23,14 @@ from .candidate import Candidate
 from .llm import LLMCallLogger, truncate_prompt
 from .mutation import ReflectionContext, parse_json_object_response, utc_now
 from .opponent_cases import LEXICASE_CASES
-from .prompts import normalize_prompt, render_prompt
+from .prompts import load_prompt, normalize_prompt, render_prompt
 from .strategy_diversity import build_strategy_niche, normalize_strategy_signature
 
 
 CANONICAL_ROLES = ("match_commentator", "coach", "generator")
 ROLE_SCHEMA_VERSION = "strategy-reflection-v4"
-PROMPT_VERSION = "sports-team-v4"
+PROMPT_VERSION = "sports-team-v5"
+MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
 
 STRATEGY_MUTATION_INTENT_DISTRIBUTION = (
     ("REFINE", 0.40),
@@ -278,6 +279,7 @@ class StrategyReflectionPipeline:
             _write_json(artifact_dir, "reflection/coach_input.json", {
                 "prompt_name": coach_prompt_name,
                 "render_variables": {
+                    "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
                     "parent_strategy_prompt": json.dumps(candidate.strategy_prompt, ensure_ascii=False),
                     "commentator_diagnoses_and_evaluation_metadata": json.dumps(
                         coach_payload,
@@ -286,6 +288,7 @@ class StrategyReflectionPipeline:
                     ),
                 },
                 "semantic_payload": {
+                    "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
                     "parent_strategy_prompt": candidate.strategy_prompt,
                     "commentator_diagnoses_and_evaluation_metadata": coach_payload,
                 },
@@ -837,6 +840,7 @@ def cleanup_retired_match_traces(
 # Role prompt construction and response parsing -----------------------------
 def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, raw_log: list[dict[str, Any]]) -> str:
     return render_prompt("match_commentator", {
+        "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
         "match_id": json.dumps(match_id),
         "opponent": json.dumps(item.get("opponent_name") or item.get("opponent_id") or item.get("opponent") or "unknown"),
         "map": json.dumps(item.get("map_name") or item.get("map_id") or item.get("map") or "unknown"),
@@ -855,6 +859,7 @@ def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: 
 def _coach_prompt(parent_strategy: str, payload: dict[str, Any], mutation_intent: str) -> str:
     prompt_id = f"coach_{mutation_intent.lower()}"
     return render_prompt(prompt_id, {
+        "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
         "parent_strategy_prompt": json.dumps(parent_strategy, ensure_ascii=False),
         "commentator_diagnoses_and_evaluation_metadata": json.dumps(payload, ensure_ascii=False, sort_keys=True),
     })

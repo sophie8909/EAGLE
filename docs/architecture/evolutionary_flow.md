@@ -10,7 +10,8 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    In inherited `configured_seeds` mode, require one seed policy, copy it to
    `population_size`, and give every copy the same inherited Java input. In
    inherited `llm_generated_policies` mode, keep the configured policy in slot
-   one and fill every other slot through one policy-only LLM call.
+   one and fill every other slot through one policy-only LLM call. Each such
+   call receives the immutable closed-world MicroRTS gameplay contract.
 2. In inherited `configured_seeds` mode, call the Generator independently for
    every generation-zero candidate. In `llm_generated_policies` mode, directly
    validate, compile, integrate, and evaluate the same fixed Java seed for all
@@ -27,7 +28,9 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    configured reflection-operator controller choose Strategy Reflection,
    Generate-Code Reflection, or Balance Reflection. Strategy and Code mutate
    one owned prompt; Balance atomically rewrites both from aggregate
-   opponent/map/side W/D/L evidence. None directly edits inherited Java.
+   opponent/map/side W/D/L evidence. Strategy-facing roles receive the same
+   gameplay contract as fixed domain context, while the Balance Reflector itself
+   remains W/D/L-only. None directly edits inherited Java.
 6. Decode each child with its configured compile-guided attempt bound, using
    structured validation/javac evidence only after a complete source fails;
    promote the first validation+compilation success, then evaluate that single

@@ -118,6 +118,14 @@ this parent. Both reward providers consume the resulting
 Strategy mutation performs Match Commentator sampling, Coach reflection, and a
 Strategy Prompt rewrite before final Java generation. It changes only
 `strategy_prompt`.
+Initial policy generation, Match Commentator, Coach, the library Strategy
+Reflector/Rewriter path, Balance Strategy Rewrite, and Strategy Alignment all
+receive one immutable strategy-level MicroRTS gameplay contract. The contract
+defines the complete entity set, production graph, legal actions, and observable
+state. It permits arbitrary strategy types expressible in that world, while
+requiring every policy condition and response to be executable. This is fixed
+domain context, not match evidence; in particular the Balance Reflector still
+receives only its aggregate W/D/L table.
 Commentator and Coach transport, parsing, and semantic validation use one
 bounded attempt budget. Each attempt retains UTC boundaries and one run timing
 event without duplicating candidate-owned prompt/response evidence. A validated
@@ -354,7 +362,10 @@ An LLM-generated generation-zero policy additionally owns
 `initialization/policy_generation/`, containing one directory per attempt with
 the exact request, raw response, result, and timing, plus a compact result that
 references the canonical genotype policy. Raw output is written before parsing;
-the run timing stream has one `initial_policy_generation` event per request.
+the run timing stream has one `initial_policy_generation` event per request. Its
+request includes the same immutable gameplay contract used by strategy mutation,
+so diversity sampling is not limited to Worker Rush but remains inside actual
+MicroRTS mechanics.
 
 Strategy Reflection candidates additionally retain under
 `mutation/strategy_reflection/` the exact parent strategy

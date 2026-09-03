@@ -63,6 +63,14 @@ side 匯總的 W/D/L 表，辨識弱 cell 後依序重寫兩個 prompt；兩次 
 產生但不符合 rule grammar 的 marked prompt，只在 rewrite boundary 視為零條可保留
 規則並由合法 delta 取代，不會複製污染內容。三者完成後都必須重新產生完整 Java。
 
+所有會產生或解讀策略的 LLM 階段共用同一份不可變的
+`microrts_gameplay_contract`：包含完整 entity、production graph、合法 action 與
+可觀察 state。它允許策略大幅改成其他類型，但每個條件都必須能由遊戲 state
+觀察，每個回應都必須能用 MicroRTS 合法動作執行；不能把一般 RTS 的概念帶進
+policy。這份 contract 是固定 domain context，不是比賽 evidence，所以 Balance
+Reflector 仍然只看 W/D/L 表；只有後續 Strategy Rewriter 會再取得 contract，把
+opponent／map／side 弱點轉譯成可觀察的遊戲條件。
+
 Strategy Reflection 只使用 policy 與 match evidence。Match Commentator 不會收到
 Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Code
 Reflection 在預設模式比較 policy 與當前 Java phenotype；在 inherited 模式則
@@ -91,6 +99,8 @@ Generator。因此 population 10 會有 10 份 request／response，也可能得
 generation-0 邊界：第 1 個 candidate 保留設定檔中的 Worker Rush policy，第 2–10
 個 candidate 各自以「Generate one RTS strategy」prompt 呼叫 LLM，得到 9 份不同的
 RTS policy prompt；這裡的 random 指 LLM 策略取樣，不是 MicroRTS `RandomAI` agent。
+這些初始 policy request 也包含相同 gameplay contract，因此可以產生不同策略，
+但不能描述遊戲中不存在或無法觀察的規則。
 10 個 candidate 的 inherited Java 與 generation-0 phenotype 都使用同一份 checked-in
 `java_seeds/worker_rush/CandidateAgent.java`，因此此代只改變 policy gene，不呼叫 Java Generator。
 從 generation 1 起恢復一般 inherited-Java crossover、mutation 與完整 Java generation。

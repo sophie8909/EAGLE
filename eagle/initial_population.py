@@ -14,12 +14,13 @@ from .artifacts import write_candidate_inputs, write_json
 from .candidate import Candidate
 from .config import ExperimentConfig
 from .llm import LLMCallLogger, truncate_prompt
-from .prompts import normalize_prompt
+from .prompts import load_prompt, normalize_prompt
 from .timing import utc_now
 
 
 LLM_GENERATED_POLICIES = "llm_generated_policies"
 INITIAL_POLICY_SCHEMA_VERSION = "eagle-initial-policy-generation-v1"
+MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
 
 
 class InitialPolicyBackend(Protocol):
@@ -290,6 +291,7 @@ def _render_initial_policy_request(
 ) -> str:
     selected = "\n\n---\n\n".join(selected_prompts) or "none"
     request = string.Template(config.initial_policy_generation_prompt).substitute(
+        gameplay_contract=MICRORTS_GAMEPLAY_CONTRACT,
         sample_index=sample_index,
         population_size=config.population_size,
         existing_strategy_prompts=selected,

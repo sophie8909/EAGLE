@@ -131,7 +131,7 @@ def load_prompt_templates(path: str | Path = DEFAULT_PROMPT_MANIFEST_PATH) -> di
             template=body,
             source_path=prompt_path,
         )
-        if item.role not in {"reflector", "rewriter", "generator", "match_commentator", "coach", "seed", "preflight"}:
+        if item.role not in {"reflector", "rewriter", "generator", "match_commentator", "coach", "seed", "preflight", "reference"}:
             raise PromptTemplateError(f"{prompt_id}: unsupported role {item.role!r}.")
         item.validate()
         templates[item.prompt_id] = item

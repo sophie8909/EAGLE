@@ -131,7 +131,8 @@ placeholder contracts. This includes the reusable generation prompt, Code
 Reflection, the library Strategy Reflection/Rewrite
 path, Match Commentator, all four Coach intents, generation, Strategy Alignment,
 the compile-guided Java repair decoder, the action-API guide, and endpoint
-preflight. Experiment YAML files reference
+preflight. The manifest also owns one immutable strategy-level MicroRTS gameplay
+contract shared by policy generation and strategy-facing roles. Experiment YAML files reference
 `prompts/initial_generation.txt`; inline prompt/template fields are rejected.
 The `static_0826` experiment references blank, Worker-rush, and deterministic
 random seed policies in one three-candidate run. The
@@ -155,7 +156,10 @@ The `0903_llm_initial_population` config uses the separately checked-in
 generates nine policy prompts through `initial_policy_generation.txt`, and skips
 the Java Generator in generation zero so all ten candidates execute identical
 Worker Rush Java. Each generated policy call owns candidate-local request, raw
-response, validation, retry, and timing evidence.
+response, validation, retry, and timing evidence. Initial policy generation uses
+the shared immutable MicroRTS gameplay contract, allowing strategically diverse
+policies while limiting conditions, entities, and actions to the executable game
+world.
 
 ## Reflection boundary
 
@@ -163,7 +167,11 @@ Reflection context construction remains shared, but each operator projects a
 strictly scoped evidence view. Strategy Reflection consumes policy plus game
 evidence and changes only policy. Code Reflection consumes policy plus Java and
 optional structural/compiler diagnostics, then rewrites only the code-generation
-prompt; it receives no raw game logs. Strategy Reflection samples up to 10 matches with opponent/map-aware
+prompt; it receives no raw game logs. Strategy-facing roles also receive the
+immutable `microrts_gameplay_contract` as fixed domain context. It defines the
+complete entities, production relations, legal actions, and observable state,
+so a replacement may change strategy type without inventing non-game mechanics.
+Strategy Reflection samples up to 10 matches with opponent/map-aware
 coverage, calls one Commentator per selected log, and gives the Coach a
 deterministic all-match global summary. Coverage and fully-beaten diagnostics are
 stored under `mutation/strategy_reflection/`; this does not add a fitness objective
@@ -203,6 +211,9 @@ unversioned `previous_code` field.
 Balance Reflection receives only aggregate opponent/map/side W/D/L evidence;
 it names weak cells and runs ordered Strategy then Code Prompt rewrites. Both
 prompt changes are committed atomically only after both rewrites succeed. Its
+Strategy Rewriter receives the immutable gameplay contract and must translate
+named matchup weaknesses into observable in-game conditions; the Balance
+Reflector itself does not receive that contract or either source prompt. Its
 Code Prompt Rewriter uses the same validated reusable-rule delta and canonical
 renderer as Code Reflection, so unchecked whole prompts cannot enter the
 generation gene. At explicit rewrite boundaries, historically malformed marked

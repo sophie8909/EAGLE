@@ -21,7 +21,9 @@ selected match traces
 
 The Match Commentator receives the current policy, opponent identity, map,
 player side, result, an allowlisted compact match record, and the canonical
-raw/compact trace. It receives no Java, code-generation prompt, compiler
+raw/compact trace. It also receives the immutable strategy-level MicroRTS
+gameplay contract, which defines the complete entity/action/observable-state
+world but is domain context rather than match evidence. It receives no Java, code-generation prompt, compiler
 diagnostics, or fitness-writing task. It analyzes one game and reports observed
 strategies, turning points, strengths, weaknesses, and decisive causes.
 The response boundary validates the canonical MatchAnalysis schema and performs
@@ -30,10 +32,11 @@ unwrapped, strategy summaries may be strings, and `key_observations.time` ranges
 may supply the first tick. A response still fails when it has no numeric
 tick-backed turning point or crosses the role boundary.
 
-The Coach receives the current policy, selected MatchAnalysis summaries, and
-the existing global evaluation/selection metadata. It receives no Java or
-code-generation diagnostics. Its replacement policy describes economy,
-production, attack timing, defense, expansion, and targeting—not Java.
+The Coach receives the same immutable gameplay contract, the current policy,
+selected MatchAnalysis summaries, and the existing global evaluation/selection
+metadata. It receives no Java or code-generation diagnostics. Its replacement
+policy may change strategic type substantially, but every condition must map to
+observable MicroRTS state and every response must use a legal entity/action.
 Commentator and Coach transport, parsing, and semantic validation share the
 configured bounded attempt budget. Each attempt has candidate-owned raw
 evidence plus one run timing event. The validated Coach result always uses the
@@ -105,7 +108,10 @@ candidate side. It must name weak cells as `opponent`, `map`, and `p0`, `p1`, or
 `both`, then provide separate strategy and code-generation focus lists.
 
 The resulting two rewrite calls are one atomic mutation: the Strategy Rewriter
-receives the current strategy prompt plus Balance analysis, and the Code
+receives the immutable gameplay contract, current strategy prompt, and Balance
+analysis. It must translate opponent/map/side labels into executable responses
+to observable gameplay cues rather than treating implementation identity as
+runtime state. The Code
 Rewriter receives the current generation prompt, Balance analysis, and the
 canonical reusable-rule view plus immutable API guide. The Code Rewriter returns
 the same exact `remove_rule_ids`/`add_rules` delta used by Code Reflection, and
@@ -193,3 +199,5 @@ choose evidence.
   pre-generation Java input exactly.
 - Evidence routing tests use sentinels to prove Match Commentator/Coach exclude
   Java and code prompt, and Code Reviewer excludes raw game logs.
+- The immutable gameplay contract is shared domain context, not outcome
+  evidence; the Balance Reflector itself still receives only the W/D/L table.

@@ -144,6 +144,8 @@ class ReflectionContextRedesignTests(unittest.TestCase):
         self.assertIn("LightRush", prompt.text)
         self.assertIn("map_1", prompt.text)
         self.assertIn("p0_result", prompt.text)
+        self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", prompt.text)
+        self.assertIn("Every condition", prompt.text)
         self.assertNotIn("SECRET_COMPILER_LOG", prompt.text)
         self.assertNotIn("CandidateAgent {}", prompt.text)
         self.assertNotIn("complexity_penalty", prompt.text)

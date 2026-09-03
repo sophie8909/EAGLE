@@ -154,10 +154,18 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertEqual(selection["actual_sample_size"], 5)
             commentator_prompts = [prompt for prompt in backend.prompts if "ROLE: match_commentator" in prompt]
             self.assertEqual(len(commentator_prompts), 5)
+            self.assertTrue(
+                all(
+                    "IMMUTABLE MICRORTS GAMEPLAY CONTRACT" in prompt
+                    for prompt in commentator_prompts
+                )
+            )
             self.assertEqual(len(selection["selected_match_ids"]), 5)
             self.assertEqual(len({item for item in selection["selected_match_ids"]}), 5)
             self.assertTrue(all(Path(row["match_trace_path"]).exists() for row in rows))
             coach_prompt = next(prompt for prompt in backend.prompts if "ROLE: coach" in prompt)
+            self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", coach_prompt)
+            self.assertIn("genuinely different strategy type", coach_prompt)
             self.assertIn('"global_evaluation_summary"', coach_prompt)
             self.assertIn('"total_matches": 5', coach_prompt)
             self.assertNotIn("raw_game_log:", coach_prompt)
@@ -304,6 +312,14 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertEqual(
                 coach_input["render_variables"]["parent_strategy_prompt"],
                 json.dumps(parent_strategy, ensure_ascii=False),
+            )
+            self.assertIn(
+                "IMMUTABLE MICRORTS GAMEPLAY CONTRACT",
+                coach_input["render_variables"]["gameplay_contract"],
+            )
+            self.assertEqual(
+                coach_input["semantic_payload"]["gameplay_contract"],
+                coach_input["render_variables"]["gameplay_contract"],
             )
             self.assertEqual(
                 (reflection_dir / "coach_prompt.txt").read_text(encoding="utf-8"),

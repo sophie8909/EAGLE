@@ -1,0 +1,74 @@
+IMMUTABLE MICRORTS GAMEPLAY CONTRACT.
+
+Treat this as a closed-world description of the game available to a strategy.
+A policy may use any strategic identity, unit composition, timing, positioning,
+branching, or opponent adaptation expressible with these mechanics. It may
+depart substantially from its parent strategy. Do not assume an entity,
+capability, observation, or action that is not listed here.
+
+Game objective and world:
+- Two players act on a rectangular grid measured in cells and game cycles.
+- The evaluated game state is fully observable; there is no fog-of-war or
+  information-revealing scouting mechanic.
+- A player wins by eliminating every enemy-owned unit and building. A match
+  that reaches its configured cycle limit without a winner is a draw.
+- Cells may be blocked by terrain or occupied. Movement, production, and
+  building placement require a legal reachable or adjacent cell as applicable.
+- Resources are neutral map entities. Each player also has one scalar resource
+  stockpile used to pay production and construction costs.
+
+Complete entity set and production graph:
+- Resource: neutral, stationary, harvestable, and not a player unit.
+- Base: stationary stockpile; costs 10 resources, has 10 HP, and produces Worker.
+- Barracks: stationary; costs 5 resources, has 4 HP, and produces Light, Heavy,
+  or Ranged units.
+- Worker: costs 1, has 1 HP, moves, attacks at range 1, harvests one resource at
+  a time, returns carried resources to a friendly Base, and builds Base or
+  Barracks.
+- Light: costs 2, has 4 HP, moves fastest among the listed combat units, attacks
+  at range 1, and deals 2 damage.
+- Heavy: costs 2, has 4 HP, moves slower than Light, attacks at range 1, and
+  deals 4 damage.
+- Ranged: costs 2, has 1 HP, moves, attacks at range 3, and deals 1 damage.
+- Base and Barracks do not move, harvest, or attack. Light, Heavy, and Ranged
+  units do not harvest, return resources, construct buildings, or produce units.
+- Default action durations in game cycles are: Worker move 10, attack 5,
+  harvest 20, return 10; Light move 8 and attack 5; Heavy move 12 and attack 5;
+  Ranged move 10 and attack 5; Base construction or Worker production 250;
+  Barracks construction 200; Light production 80; Heavy production 120; Ranged
+  production 100.
+
+Complete strategic action set:
+- Assign an action only to an idle friendly unit; one unit executes one action
+  at a time and the action completes over game cycles.
+- Move a movable unit through orthogonally adjacent legal cells. Competing
+  movement or production into the same cell may be cancelled, so avoid
+  conflicting destinations.
+- Target an enemy-owned unit or building; move toward it when necessary and
+  attack once it is within the attacker's range.
+- Have a Worker harvest a Resource and return its carried resource to a
+  friendly Base.
+- Have a Base train a Worker into a free adjacent cell and pay its cost.
+- Have a Barracks train Light, Heavy, or Ranged into a free adjacent cell and
+  pay its cost.
+- Have a Worker build a Base or Barracks on a legal free cell and pay its cost.
+- Leave a unit idle when no higher-priority legal action applies.
+
+Observable strategy state:
+- Current game cycle, player side, player resource stockpile, and map width and
+  height.
+- Every current entity's type, owner, grid position, carried resource amount,
+  current HP, and maximum HP.
+- Whether a friendly unit is currently idle and whether a candidate grid cell
+  is in bounds and free.
+- Relative distance and counts may be derived from those observations.
+- Opponent implementation name/class, hidden intent, future actions, wall-clock
+  seconds, technology levels, upgrades, and any state not listed above are not
+  observable strategy conditions. Translate opponent-specific evidence into
+  responses to observable unit, building, economy, position, or timing cues.
+
+Grounding requirement:
+- Every condition in a generated policy must use observable state listed above.
+- Every response and fallback must use the listed entities and legal actions.
+- Before returning a policy or diagnosis, check every stated rule against this
+  contract and reformulate any rule that cannot be executed in this closed world.

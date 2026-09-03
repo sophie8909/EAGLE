@@ -9,14 +9,14 @@ role-local enablement, temperature, and the configurable sample budget
 all configured evaluation matches -> deterministic Global Evaluation Summary
 canonical match traces -> coverage-aware sample up to 10 -> match_selection.json
 each selected log -> one independent Match Commentator -> commentator_NN.json
-parent strategy + global summary + selected analyses -> Coach -> new_strategy_prompt
+gameplay contract + parent strategy + global summary + selected analyses -> Coach -> new_strategy_prompt
 new strategy + existing code-generation prompt -> Generator -> Java candidate
 ```
 
 | Role | Input | Output | Must not do |
 | --- | --- | --- | --- |
-| Match Commentator | One selected complete match per call | One local match analysis | Modify strategy or code; generalize one match to the whole candidate |
-| Coach | Parent strategy + global summary + selected analyses + selection metadata | New strategy prompt | Write Java or inspect raw ticks |
+| Match Commentator | Immutable gameplay contract + one selected complete match per call | One local match analysis | Modify strategy or code; generalize one match to the whole candidate |
+| Coach | Immutable gameplay contract + parent strategy + global summary + selected analyses + selection metadata | New strategy prompt | Write Java or inspect raw ticks |
 | Generator | Strategy + code-generation prompt | Java | Analyze matches |
 
 ## Match-trace lifecycle
@@ -44,7 +44,11 @@ Each selected raw log owns one independent Commentator role invocation. A role
 invocation may make bounded retry attempts, all under the same request identity,
 when transport, parsing, or semantic validation fails. The Coach receives only
 the resulting diagnoses and the deterministic global summary; raw game logs are
-never concatenated into the Coach request.
+never concatenated into the Coach request. Both roles also receive the same
+immutable strategy-level gameplay contract. It is closed-world domain context,
+not evidence: it permits any strategy type expressible with MicroRTS entities,
+production, actions, and observable state, and prevents unsupported RTS concepts
+from propagating into the replacement policy.
 
 The canonical response has top-level strategy objects and integer-backed
 `turning_points`. At the parser boundary EAGLE also normalizes the bounded local-

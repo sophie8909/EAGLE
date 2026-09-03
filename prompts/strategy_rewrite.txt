@@ -4,6 +4,10 @@ Return only the revised strategy_prompt. Do not return analysis, Java, JSON, a p
 Markdown fences. Preserve effective strategy elements and make concrete changes supported
 by the Reflection.
 
+The replacement may change strategy type, but every condition and action must
+be executable in this complete gameplay contract:
+$gameplay_contract
+
 Original strategy_prompt:
 $strategy_prompt
 
