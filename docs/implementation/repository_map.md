@@ -76,7 +76,7 @@ kept as documentation entries.
 | `eagle/run_artifacts.py` | v2 manifest, compact generation, candidate reconstruction, atomic writes |
 | `eagle/timing.py` | Timing events |
 | `eagle/analysis/loader.py` | v2-only run discovery and bounded materialization |
-| `eagle/analysis/report.py` | CSV/JSON/Markdown/PNG reports |
+| `eagle/analysis/report.py` | Survivor-snapshot-aligned CSV/JSON/Markdown/PNG reports |
 | `eagle/final_test.py` | Post-search final evaluation; never fitness |
 
 ## Configuration and assets

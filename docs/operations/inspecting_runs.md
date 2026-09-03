@@ -21,8 +21,11 @@ candidate snapshots, timing, and archived error memory. It never reads
 
 Individual agent Game Performance is written to
 `analysis/agent_game_performance.csv` and plotted in
-`analysis/plots/agent_game_performance.png`. To print one agent's score by
-generation, use:
+`analysis/plots/agent_game_performance.png`. Each row represents membership in
+one generation's selected survivor population: `generation` is the population
+snapshot generation and `birth_generation` is the candidate's creation
+generation. A retained parent therefore appears at every generation where it
+survives. To print one agent's score across survivor snapshots, use:
 
 ```bash
 ./analyze.sh --agent <candidate_id>
@@ -31,7 +34,8 @@ generation, use:
 
 Individual agent win rates are written separately to
 `analysis/agent_win_rate.csv` and one
-`analysis/plots/win_rate_by_generation_<opponent>.png` per opponent.
+`analysis/plots/win_rate_by_generation_<opponent>.png` per opponent. These rows
+and plots use the same survivor-snapshot generation convention.
 
 Per-opponent Game Performance is recorded for every completed generation in
 `analysis/opponent_game_performance.csv`. The plot set contains
@@ -47,6 +51,8 @@ Performance plots. For compact `eagle-generation-v3` snapshots, the offline
 loader resolves each candidate reference and reads the bounded analysis fields
 from `evaluation/game_performance.json`; generation JSON is not expected to
 duplicate `opponent_results.match_scores`.
+The single-match rows also retain `birth_generation`, but violin distributions
+are positioned at the survivor snapshot generation.
 
 `analysis/aos_operator_statistics.csv` and
 `analysis/plots/aos_operator_probabilities.png` contain operator usage, rewards,

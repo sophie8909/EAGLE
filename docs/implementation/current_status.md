@@ -88,7 +88,10 @@ Performance plots, per-opponent generation plots with single-match score
 violin distributions, and AOS operator statistics/probability plots. The v2 loader
 materializes bounded candidate analysis views from referenced candidate and
 evaluation artifacts, so compact v3 generation snapshots do not discard the
-single-match distributions.
+single-match distributions. Derived analysis schema `eagle-analysis-v2` places
+every selected candidate and its match evidence at the generation of the
+survivor population snapshot; `birth_generation` separately preserves when the
+candidate was created.
 
 ## Experiment lifecycle and run schema
 

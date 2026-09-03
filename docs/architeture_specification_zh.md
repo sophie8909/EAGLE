@@ -230,6 +230,11 @@ trace，generation 原子落盤後才清理非 survivor 的 trace。`match_log.j
 `resolved_config.json`、`generation_metrics.jsonl`、`final_population.json`、
 root `errors.jsonl` 與 run-v1 reader 已移除。
 
+離線分析以每個 generation artifact 中已選出的 population 作為該代 survivor
+snapshot。圖表與 per-agent／per-opponent／per-match CSV 的 `generation` 是 survivor
+所在的 snapshot 世代；candidate 自己的建立世代另存為 `birth_generation`。因此父代
+若連續存活，會在每個實際存活的世代各出現一次，不會全部被畫回出生世代。
+
 ## 執行入口
 
 ```bash

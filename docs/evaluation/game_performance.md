@@ -47,4 +47,7 @@ and overlay retained single-match scores as narrow, semi-transparent violin
 distributions with a median marker. A generation with only one value or no
 variance uses a short horizontal degenerate-distribution marker. Individual agent win rates are exported by opponent
 in `agent_win_rate.csv` and
-`win_rate_by_generation_<opponent>.png`.
+`win_rate_by_generation_<opponent>.png`. All per-agent and per-match plot rows
+are expanded from the selected population in each generation snapshot:
+`generation` means survivor snapshot generation, while `birth_generation`
+records the candidate's creation generation.

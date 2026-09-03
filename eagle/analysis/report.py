@@ -59,7 +59,7 @@ def generate_analysis(data: RunData, *, output_name: str = "analysis", force: bo
     _write_csv(output / "timing_statistics.csv", timing_rows)
     _write_csv(output / "error_statistics.csv", error_rows)
     summary = {
-        "schema_version": "eagle-analysis-v1",
+        "schema_version": "eagle-analysis-v2",
         "run_dir": str(data.run_dir),
         "status": data.manifest.get("status"),
         "completed_generations": data.manifest.get("completed_generations", []),
@@ -228,8 +228,9 @@ def _agent_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
             if not isinstance(objectives, dict):
                 objectives = {}
             rows.append({
-                "generation": item.get("generation", snapshot_generation),
+                "generation": _snapshot_generation(snapshot_generation, item),
                 "candidate_id": item.get("candidate_id") or item.get("id"),
+                "birth_generation": item.get("generation"),
                 "status": item.get("status"),
                 "operator": item.get("operator"),
                 "mutation_type": item.get("mutation_type"),
@@ -270,8 +271,9 @@ def _agent_win_rate_rows(data: RunData) -> list[dict[str, Any]]:
                 complete = bool(expected) and (completed is None or completed >= expected) and not missing
                 wins = int(opponent.get("wins") or 0)
                 rows.append({
-                    "generation": candidate.get("generation", snapshot_generation),
+                    "generation": _snapshot_generation(snapshot_generation, candidate),
                     "candidate_id": candidate.get("candidate_id") or candidate.get("id"),
+                    "birth_generation": candidate.get("generation"),
                     "opponent_id": str(opponent.get("opponent_id") or "unknown"),
                     "status": candidate.get("status"),
                     "wins": wins,
@@ -312,8 +314,9 @@ def _match_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
                 for match_index, score in enumerate(opponent.get("match_scores") or []):
                     if isinstance(score, (int, float)) and not isinstance(score, bool):
                         rows.append({
-                            "generation": candidate.get("generation", snapshot_generation),
+                            "generation": _snapshot_generation(snapshot_generation, candidate),
                             "candidate_id": candidate.get("candidate_id") or candidate.get("id"),
+                            "birth_generation": candidate.get("generation"),
                             "opponent_id": opponent.get("opponent_id"),
                             "match_index": match_index,
                             "game_performance": float(score),
@@ -322,6 +325,12 @@ def _match_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
         item.get("generation", -1), str(item.get("candidate_id") or ""),
         str(item.get("opponent_id") or ""), item.get("match_index", -1),
     ))
+
+
+def _snapshot_generation(snapshot_generation: Any, candidate: dict[str, Any]) -> Any:
+    """Use survivor-snapshot generation on analysis axes, retaining birth separately."""
+
+    return candidate.get("generation") if snapshot_generation is None else snapshot_generation
 
 
 def _opponent_game_performance_rows(data: RunData) -> list[dict[str, Any]]:
@@ -601,9 +610,9 @@ def _agent_game_performance_plot(path: Path, rows: list[dict[str, Any]]) -> None
         s=18,
         alpha=0.65,
     )
-    plt.xlabel("Generation")
+    plt.xlabel("Population generation")
     plt.ylabel("Game Performance")
-    plt.title("Individual agent Game Performance")
+    plt.title("Survivor Game Performance by population generation")
     _add_aggregate_neutral_line()
     plt.grid(True, alpha=0.2)
     plt.tight_layout()
@@ -663,11 +672,11 @@ def _win_rate_plot(path: Path, rows: list[dict[str, Any]], opponent_id: str) -> 
         [item["win_rate"] for item in points],
         s=18, alpha=0.65,
     )
-    plt.xlabel("Generation")
+    plt.xlabel("Population generation")
     plt.ylabel("Win rate")
     plt.gca().yaxis.set_major_formatter(PercentFormatter(1.0))
     plt.ylim(0.0, 1.0)
-    plt.title(f"Individual agent win rate vs {opponent_id}")
+    plt.title(f"Survivor win rate vs {opponent_id} by population generation")
     plt.grid(True, alpha=0.2)
     plt.tight_layout()
     plt.savefig(path)

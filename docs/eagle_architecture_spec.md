@@ -343,6 +343,13 @@ artifact references for every population member with a non-empty
 specialized generation, validation, compilation, integration, evaluation,
 mutation, lineage, and timing artifacts beside it.
 
+Derived analysis uses each generation file's selected population as that
+generation's survivor snapshot. Per-agent, per-opponent, and per-match analysis
+rows therefore use the snapshot generation on plot axes; the candidate's own
+creation generation is retained separately as `birth_generation`. A survivor
+appearing in multiple population snapshots appears once at each corresponding
+generation without duplicating its canonical candidate artifact.
+
 An LLM-generated generation-zero policy additionally owns
 `initialization/policy_generation/`, containing one directory per attempt with
 the exact request, raw response, result, and timing, plus a compact result that

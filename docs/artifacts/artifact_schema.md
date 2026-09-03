@@ -60,6 +60,13 @@ Static mode records `reward_source: static`, null rewards, and unchanged
 probabilities. Resume restores adaptive state from the latest generation file.
 There is no `generation_metrics.jsonl` or `final_population.json` in new runs.
 
+Derived `eagle-analysis-v2` agent, opponent-win-rate, and single-match rows are
+expanded from these selected-population snapshots. Their `generation` column is
+the survivor snapshot generation used on plot axes, while `birth_generation`
+retains the candidate's creation generation. A retained parent is consequently
+represented in every generation where it remains selected, without copying its
+canonical candidate state.
+
 ## Candidate snapshot and evidence
 
 ```text
