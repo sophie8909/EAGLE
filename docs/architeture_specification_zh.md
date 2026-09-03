@@ -1,6 +1,6 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-08-31 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-09-03 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
@@ -86,6 +86,17 @@ no-op Java 複製到 `population_size` 個 genotype，並對每個 candidate 各
 Generator。因此 population 10 會有 10 份 request／response，也可能得到 10 份
 不同 Java。三份 `static_0826_seed_variants` config 都使用此模式，後續每代以
 `10 + 10` joint pool 做 lexicase survivor selection。
+
+新增的 `initial_population_mode: llm_generated_policies` 是另一個明確的
+generation-0 邊界：第 1 個 candidate 保留設定檔中的 Worker Rush policy，第 2–10
+個 candidate 各自以「Generate one RTS strategy」prompt 呼叫 LLM，得到 9 份不同的
+RTS policy prompt；這裡的 random 指 LLM 策略取樣，不是 MicroRTS `RandomAI` agent。
+10 個 candidate 的 inherited Java 與 generation-0 phenotype 都使用同一份 checked-in
+`java_seeds/worker_rush/CandidateAgent.java`，因此此代只改變 policy gene，不呼叫 Java Generator。
+從 generation 1 起恢復一般 inherited-Java crossover、mutation 與完整 Java generation。
+每次初始 policy 呼叫的 request、raw response、解析／重試結果與 UTC timing 都保存在
+該 candidate 的 `initialization/policy_generation/`，run `timing.jsonl` 只另存一筆
+不重複 prompt／response 的 request timing event。
 
 Callable no-op Java 保留完整 action helper API，但 `decide` 不發出 action；同一
 檔案同時是這三份設定的初始 Java component 與 immutable scaffold。空白 policy

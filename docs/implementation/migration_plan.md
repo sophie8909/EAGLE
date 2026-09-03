@@ -26,6 +26,9 @@
 - inherited-mode single-policy generation-zero replication, independent Java
   generation, three-component crossover provenance, and resumable Java genotype artifacts.
 - mutation-evidence-parent provenance for opponent and head-to-head AOS credit.
+- mixed generation-zero initialization with one configured policy, LLM-generated
+  remaining policies, fixed shared Worker Rush Java, and candidate-owned policy
+  generation evidence.
 
 ## Remaining optional hardening
 

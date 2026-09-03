@@ -18,8 +18,14 @@ that successful phenotype is eligible for independent Java-component
 inheritance by children.
 
 Default-mode generation-zero seeds use one checked-in callable no-op phenotype.
-Inherited mode requires one seed policy, copies it to `population_size`, gives
-every copy the same no-op Java component, and invokes the Generator separately.
+Inherited `configured_seeds` mode requires one seed policy, copies it to
+`population_size`, gives every copy the same Java component, and invokes the
+Generator separately. Inherited `llm_generated_policies` mode retains the one
+configured policy, generates each remaining policy gene with an independent LLM
+call, and gives every candidate the same fixed Java component and phenotype.
+Its generated policy and Worker Rush Java are intentionally allowed to disagree
+at generation zero; subsequent variation and Generator calls operate on the
+normal three-component genotype.
 
 ## Required logical fields
 

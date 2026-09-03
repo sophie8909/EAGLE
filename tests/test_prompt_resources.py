@@ -79,15 +79,27 @@ class PromptResourceTests(unittest.TestCase):
             self.assertEqual(config.generation_prompt_file, DEFAULT_PROMPT_DIR / "initial_generation.txt", path)
             self.assertEqual(config.generation_prompt, load_prompt("initial_generation"), path)
             self.assertEqual(
-                config.initial_java_seed_path,
-                Path("eagle/java_seeds/CandidateAgent.java").resolve(),
+                config.initial_policy_generation_prompt_file,
+                DEFAULT_PROMPT_DIR / "initial_policy_generation.txt",
                 path,
             )
-            self.assertEqual(
-                hashlib.sha256(config.initial_java_seed_path.read_bytes()).hexdigest(),
-                "22ab7b94adbcee2cce69afec781cd5c183c066c85a95a151daac10c0e5ab820b",
-                path,
-            )
+            if config.initial_population_mode == "llm_generated_policies":
+                self.assertEqual(
+                    config.initial_java_seed_path,
+                    Path("eagle/java_seeds/worker_rush/CandidateAgent.java").resolve(),
+                    path,
+                )
+            else:
+                self.assertEqual(
+                    config.initial_java_seed_path,
+                    Path("eagle/java_seeds/CandidateAgent.java").resolve(),
+                    path,
+                )
+                self.assertEqual(
+                    hashlib.sha256(config.initial_java_seed_path.read_bytes()).hexdigest(),
+                    "22ab7b94adbcee2cce69afec781cd5c183c066c85a95a151daac10c0e5ab820b",
+                    path,
+                )
 
     def test_static_0826_uses_three_distinct_seed_policies_and_equal_operator_weights(self) -> None:
         config = ExperimentConfig.from_file(

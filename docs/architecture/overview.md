@@ -26,7 +26,8 @@ flowchart TD
     CFG["Config YAML or directory"] --> L["Experiment orchestrator"]
     L --> RI["experiment.yaml run index"]
     L --> RT["Owned llama.cpp runtime"]
-    RT --> P
+    RT --> Z["Generation 0: configured or LLM-generated policies"]
+    Z --> P
     P["Evaluated population"] --> S["Seeded lexicase parent selection"]
     S --> X["Crossover or copy"]
     X --> M{"Mutation?"}
@@ -56,7 +57,11 @@ flowchart TD
 
 - One generated source and one compiled class directory serve all 180 matches.
 - `inherited_genotype` generation zero replicates one seed policy to the fixed
-  population and performs one independent Generator call per individual.
+  population and performs one independent Generator call per individual under
+  `configured_seeds` initialization.
+- `llm_generated_policies` keeps one configured policy, fills the other slots
+  with independent policy-only LLM calls, and evaluates the same fixed Java seed
+  for every generation-zero candidate without invoking the Java Generator.
 - In inherited mode crossover selects policy, generation prompt, and Java
   parents independently; generated child Java becomes the inheritable Java
   component available to the next generation.

@@ -114,6 +114,12 @@ role = "seed"
 stages = ["population_initialization"]
 required_variables = []
 
+[prompts.initial_policy_generation]
+file = "initial_policy_generation.txt"
+role = "seed"
+stages = ["population_initialization"]
+required_variables = ["sample_index", "population_size", "existing_strategy_prompts", "prior_error"]
+
 [prompts.initial_generation]
 file = "initial_generation.txt"
 role = "seed"

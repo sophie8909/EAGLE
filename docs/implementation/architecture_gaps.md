@@ -1,6 +1,6 @@
 # Architecture gaps
 
-Snapshot: 2026-08-31.
+Snapshot: 2026-09-03.
 
 The active architecture has one remaining non-blocking hardening gap.
 

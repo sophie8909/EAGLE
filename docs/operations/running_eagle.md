@@ -43,6 +43,29 @@ policy and callable no-op Java are copied into ten generation-zero genotypes,
 then ten independent Generator calls may produce ten different Java agents.
 Every later generation performs exact `10 + 10` environmental selection.
 
+`configs/experiments/0903_llm_initial_population/` demonstrates mixed
+generation-zero initialization:
+
+```yaml
+candidate_java_mode: inherited_genotype
+initial_population_mode: llm_generated_policies
+seed_prompt_files: [seeds/worker_rush_policy.txt]
+initial_policy_generation_prompt_file: prompts/initial_policy_generation.txt
+initial_java_seed_path: eagle/java_seeds/worker_rush/CandidateAgent.java
+agent_template_path: eagle/java_seeds/CandidateAgent.java
+population_size: 10
+llm:
+  initial_policy_temperature: 0.8
+```
+
+Slot 1 uses the configured Worker Rush policy. Slots 2–10 are nine independent
+LLM policy samples from the “Generate one RTS strategy” prompt; they are not
+`RandomAI` agents. All ten generation-zero candidates directly use the same
+Worker Rush Java phenotype. `initial_policy_max_attempts` bounds invalid or
+duplicate policy-output retries, and the role-specific temperature controls
+sampling diversity without changing EA randomness. Generation 1 resumes the
+normal inherited-Java Generator path.
+
 ## Resume
 
 Resume can target one run and uses its immutable run-local configuration:

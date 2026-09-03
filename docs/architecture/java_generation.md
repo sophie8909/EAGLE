@@ -20,16 +20,25 @@ component as revision context. Neither mode receives game logs or may independen
 improve the policy. Output is one complete `ai.generated.CandidateAgent` Java
 source file; patches, methods, JSON, prose, and partial source are rejected.
 
-Default-mode generation zero does not call the Generator LLM. In inherited mode,
-one configured policy is copied to `population_size`; every copy receives the
-complete callable no-op source from `initial_java_seed_path` and makes its own
-bounded Generator call. The seed-variant configs use that same file as their
-fixed scaffold so callable helper and safety contracts match the inherited input.
+Default-mode generation zero does not call the Generator LLM. In inherited
+`configured_seeds` mode, one configured policy is copied to `population_size`;
+every copy receives the complete source from `initial_java_seed_path` and makes
+its own bounded Generator call. The seed-variant configs use the callable no-op
+file as both inherited input and scaffold.
+
+Inherited `llm_generated_policies` mode is a second explicit decoder exception:
+one configured policy is retained, the LLM fills the remaining policy genes, and
+every candidate directly uses the same `initial_java_seed_path` source as its
+generation-zero phenotype. The tracked `0903_llm_initial_population` config uses
+the checked-in `java_seeds/worker_rush/CandidateAgent.java` for that source and the normal no-op
+scaffold for generation 1 onward.
 
 Default mode creates one generation-zero candidate per seed file and records
-checked-in-source evidence with no request. In inherited mode, the pre-generation
-Java input is persisted for every replicated candidate and every candidate owns
-normal request/raw-response/attempt/timing evidence.
+checked-in-source evidence with no request. In inherited mode, the
+pre-generation Java input is persisted for every candidate. Only
+`configured_seeds` generation zero owns normal Java
+request/raw-response/attempt/timing evidence; `llm_generated_policies` owns
+policy-generation evidence instead.
 
 The raw response is persisted before extraction. The extracted response must
 still be a structurally complete Java file. After its external envelope and
@@ -40,7 +49,8 @@ enter validation, compilation, or the phenotype. Extracted/normalized generation
 evidence remains under `generation/`; only a compilation success creates the
 canonical `phenotype/CandidateAgent.java`.
 
-For every LLM-generated candidate, including inherited-mode generation zero,
+For every Java-LLM-generated candidate, including inherited `configured_seeds`
+generation zero,
 `generation_max_attempts` bounds compile-guided decoder
 attempts. The repository default is one so old configs and resumes retain their
 original semantics; the tracked `static_0824` production configs explicitly use
@@ -51,7 +61,8 @@ is marked `initial_decode_retry`. Once a complete source fails validation or
 same authoritative genes, immutable scaffold/API guide, the immediately previous
 complete source marked untrusted, and only that attempt's structured validation
 and compiler evidence. Every actual post-truncation request is separately hashed.
-Only default-mode generation zero loads once and records no LLM attempts.
+Default-mode and `llm_generated_policies` generation zero record no Java LLM
+attempts. The latter separately records its policy-only initialization attempts.
 
 ## Processing sequence
 

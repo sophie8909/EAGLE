@@ -72,6 +72,14 @@ candidates/<candidate_id>/
 │   ├── strategy_signature.json
 │   ├── code_generation_prompt.txt
 │   └── inherited_java.java             # inherited_genotype mode only
+├── initialization/
+│   └── policy_generation/               # LLM-generated seed policies only
+│       ├── result.json
+│       └── attempts/attempt_<nnn>/
+│           ├── request.txt
+│           ├── response_raw.txt
+│           ├── result.json
+│           └── timing.json
 ├── phenotype/                         # compilation success only
 │   └── CandidateAgent.java
 ├── crossover/provenance.json
@@ -113,7 +121,8 @@ candidates/<candidate_id>/
 
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, fitness vector, aggregate Game Performance, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
 
-For every bounded LLM decode, including inherited-mode generation zero, every
+For every bounded Java LLM decode, including inherited `configured_seeds`
+generation zero, every
 attempt owns its actual post-truncation
 request and hash, raw response, extracted/normalized source, validation,
 compilation, and timing. `request_kind` distinguishes `initial_decode`,
@@ -133,8 +142,9 @@ reference, and the projected request SHA-256. Attempt class workspaces are trans
 candidate-isolated; only promoted canonical classes remain for Integration and
 matches. A partial persisted attempt is audit-only and a rerun refuses to
 overwrite it; resume starts from the last atomic generation boundary rather than
-continuing a half-decoded candidate. Default fixed-seed generation zero has no
-`generation/attempts/` LLM evidence.
+continuing a half-decoded candidate. Default fixed-seed and inherited
+`llm_generated_policies` generation zero have no `generation/attempts/` Java LLM
+evidence.
 
 `extracted_candidate.java` is the normalized text extracted from the model's
 complete-file response and therefore preserves model-authored fixed-region
@@ -148,13 +158,24 @@ source references all use `normalized_candidate.java`.
 For default-mode generation-zero candidates, `genotype/policy_prompt.txt`
 retains the configured seed policy and `generation/result.json` records
 operation `initial_java_seed`, no attempts, and checked-in source provenance.
-Request/raw-response files are empty. In `inherited_genotype` mode,
+Request/raw-response files are empty. In inherited `configured_seeds` mode,
 `genotype/inherited_java.java` retains the exact pre-generation no-op Java input
 for each replicated seed candidate; each candidate then owns ordinary bounded
 generation attempts and a separately generated phenotype. Later children use
 the same file for the selected parent Java component, with `java_parent_id` in
 candidate/lineage/crossover provenance. Full inherited Java is never embedded
 in candidate or generation JSON.
+
+For `llm_generated_policies`, the first candidate's policy comes from the
+configured seed file and the remaining candidates own
+`initialization/policy_generation/`. Each attempt persists its exact rendered
+request before transport, raw response before parsing, semantic result, and UTC
+timing. Attempt results also retain backend/model/endpoint identity and
+request/response hashes. The compact result references
+`genotype/policy_prompt.txt` rather than
+duplicating the accepted policy text. `candidate.json` identifies the policy as
+configured or LLM-generated and references the initialization result. Failed or
+interrupted attempts remain evidence even when generation zero is not committed.
 
 When the policy prompt is empty, `strategy_alignment/result.json` records
 `status: not_applicable`, a null score, and no attempts; its request/raw files

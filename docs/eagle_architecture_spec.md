@@ -1,6 +1,6 @@
 # EAGLE architecture specification
 
-Status: authoritative current contract, 2026-08-31.
+Status: authoritative current contract, 2026-09-03.
 
 This document describes executable EAGLE behavior. Historical NSGA-II,
 two-objective, seven-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
@@ -45,10 +45,20 @@ while loading or resuming a run.
 In the default `generated_phenotype` mode, generation zero creates one candidate
 per configured seed policy file, pairs each policy with the checked-in callable
 no-op Java seed without calling the Generator, and does not replicate a seed to
-fill `population_size`. In `inherited_genotype` mode, exactly one configured
-seed policy is copied to `population_size`; every copy receives the same no-op
-Java component and independently calls the Generator before evaluation. Each later
-generation produces a fixed-size offspring population and performs:
+fill `population_size`. In inherited `configured_seeds` mode, exactly one
+configured seed policy is copied to `population_size`; every copy receives the
+same Java component and independently calls the Generator before evaluation.
+
+The explicit `initial_population_mode: llm_generated_policies` instead keeps
+that one configured policy as the first candidate and independently asks the
+LLM for one concrete RTS policy for every remaining population slot. Generation
+zero persists those policy-only calls, but all candidates inherit and directly
+evaluate the same configured Java seed without a Java Generator call. The
+tracked mixed initialization uses a Worker Rush policy and Worker Rush Java, so
+the generated strategies diversify only the policy gene at this boundary; they
+are not instances of the MicroRTS `RandomAI` opponent.
+
+Each later generation produces a fixed-size offspring population and performs:
 
 1. seeded lexicase parent selection;
 2. optional uniform component crossover (two prompt components, plus an
@@ -70,7 +80,10 @@ ten cases; aggregate Game Performance and generation age do not break ties.
 `random_seed` controls EA randomness, lexicase case ordering, operator choice,
 crossover choices, and deterministic reflection sampling. Match repetitions are
 identified by `round_index`; EAGLE does not claim seeded MicroRTS match
-reproducibility and does not pass a match-seed JVM property.
+reproducibility and does not pass a match-seed JVM property. It also does not
+make stochastic LLM sampling deterministic; initial policy generation is
+reconstructable from request/response artifacts rather than from `random_seed`
+alone. Its role-specific temperature controls sampling diversity.
 
 ## 5. Crossover and lineage
 
@@ -155,11 +168,14 @@ pre-generation components to produce the child's new Java.
 
 In `generated_phenotype` mode, generation 0 remains the decoder exception: the
 configured policy uses `initial_java_seed_path` as a fixed phenotype without a
-Generator call. In `inherited_genotype` mode, `initial_java_seed_path` is instead
-the third pre-generation component for every replicated seed candidate; each
-candidate makes an independent bounded Generator call and persists normal
-request, raw response, attempt, validation, and compilation evidence. The
-checked-in seed exposes callable helpers while its strategy issues no actions.
+Generator call. In inherited `configured_seeds` mode,
+`initial_java_seed_path` is the third pre-generation component for every
+replicated seed candidate; each candidate makes an independent bounded Generator
+call and persists normal request, raw response, attempt, validation, and
+compilation evidence. In inherited `llm_generated_policies` mode it is both the
+shared third component and the unchanged generation-zero phenotype; policy-only
+LLM calls fill the remaining population slots, and Java decoding starts with
+generation 1.
 
 Final generation always consumes the two prompt genes plus the fixed checked-in
 Java scaffold/API constraints and returns exactly one complete Java source file.
@@ -189,9 +205,10 @@ lineage, AOS state, selection case, or strategy intent and is distinct from Code
 Reflection. Each actual request and source owns its hash and evidence. The first
 validation+compilation success is the sole canonical phenotype. If all attempts
 fail, the final attempt owns the candidate failure classification and remains
-generation evidence rather than a canonical phenotype. Fixed-seed generation
-zero loads once; inherited-genotype generation zero uses the configured bounded
-attempt budget independently for every replicated candidate.
+generation evidence rather than a canonical phenotype. Fixed-Java generation
+zero loads once per candidate without a Java LLM attempt; inherited
+`configured_seeds` generation zero uses the configured bounded attempt budget
+independently for every replicated candidate.
 
 Validation requires:
 
@@ -325,6 +342,12 @@ artifact references for every population member with a non-empty
 `genotype/inherited_java.java`, `phenotype/CandidateAgent.java`, and
 specialized generation, validation, compilation, integration, evaluation,
 mutation, lineage, and timing artifacts beside it.
+
+An LLM-generated generation-zero policy additionally owns
+`initialization/policy_generation/`, containing one directory per attempt with
+the exact request, raw response, result, and timing, plus a compact result that
+references the canonical genotype policy. Raw output is written before parsing;
+the run timing stream has one `initial_policy_generation` event per request.
 
 Strategy Reflection candidates additionally retain under
 `mutation/strategy_reflection/` the exact parent strategy

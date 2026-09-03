@@ -28,11 +28,14 @@ Only the first compilation success is promoted. Exhaustion classifies the final
 attempt's generation, validation, or compilation failure; an Integration failure
 never re-enters the decoder.
 
-In `inherited_genotype` mode generation zero uses this same bounded decoder for
+Inherited `configured_seeds` generation zero uses this same bounded decoder for
 every replicated population slot, so a population of ten records ten separate
-requests/responses and can produce ten different Java phenotypes. Later
-generations pass the independently selected Java component into the base and
-compile-repair requests without mutating that stored input during evaluation.
+requests/responses and can produce ten different Java phenotypes. In inherited
+`llm_generated_policies` mode, generation zero instead uses ten policy genes but
+the same fixed Java seed for every candidate; the policy-only initialization
+calls occur before this evaluation boundary and Java generation is skipped.
+Later generations pass the independently selected Java component into the base
+and compile-repair requests without mutating that stored input during evaluation.
 
 The seven-check Integration probe is deliberately smaller than a match but is
 not an empty-state smoke: it loads separate populated 8×8 bases/workers maps,

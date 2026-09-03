@@ -7,12 +7,16 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 
 1. In default `generated_phenotype` mode, create one candidate per configured
    seed policy and load the callable no-op Java phenotype without an LLM call.
-   In `inherited_genotype` mode, require one seed policy, copy it to
-   `population_size`, and give every copy the same no-op inherited Java input.
-2. In inherited mode, call the Generator independently for every generation-zero
-   candidate before validation, compilation, integration, and evaluation. Later
-   children independently inherit policy, generation prompt, and Java parent
-   provenance before the same final Generator boundary.
+   In inherited `configured_seeds` mode, require one seed policy, copy it to
+   `population_size`, and give every copy the same inherited Java input. In
+   inherited `llm_generated_policies` mode, keep the configured policy in slot
+   one and fill every other slot through one policy-only LLM call.
+2. In inherited `configured_seeds` mode, call the Generator independently for
+   every generation-zero candidate. In `llm_generated_policies` mode, directly
+   validate, compile, integrate, and evaluate the same fixed Java seed for all
+   generation-zero candidates. Later children in both modes independently
+   inherit policy, generation prompt, and Java provenance before the same final
+   Generator boundary.
 3. Store one score for each fixed opponent case: `passive`, `random`,
    `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
    `coac`, and `tma`.

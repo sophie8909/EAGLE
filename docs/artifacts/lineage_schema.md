@@ -30,3 +30,8 @@ Mutation retains inherited provenance and records which operator rewrote one
 prompt gene. Text/source equality never determines
 provenance. Every referenced parent resolves to an earlier generation, lineage
 is written before evaluation, and downstream failure cannot erase it.
+
+Generation-zero candidates have no parent IDs in either initialization mode.
+The optional candidate metadata `initial_policy_source` distinguishes
+`configured_seed` from `llm_generated`; it is origin evidence, not ancestry and
+does not populate a component-parent field.

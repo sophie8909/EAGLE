@@ -25,6 +25,7 @@ kept as documentation entries.
 | `eagle/config.py` | File-only prompts, one execution mode, EA/model/evaluation validation |
 | `eagle/search_runtime.py` | Shared fresh/resume LLM, mutation, and controller bootstrap |
 | `eagle/search.py` | Initialization and evolutionary generation loop |
+| `eagle/initial_population.py` | Configured/LLM generation-zero policy construction and candidate-owned evidence |
 | `eagle/resume.py` | v2 snapshot resume |
 | `eagle/selection.py` | Seeded ten-case lexicase parent selection and joint parent-plus-offspring survivor selection |
 | `eagle/aos.py` | Static and adaptive reflection-operator selection |
@@ -52,6 +53,7 @@ kept as documentation entries.
 | `generation/agent_template.py` | Java template and canonical scaffold assembly contract |
 | `eagle/java_templates/CandidateAgent.java` | Hardened fixed scaffold for offspring decoding |
 | `eagle/java_seeds/CandidateAgent.java` | Shared callable no-op seed and configured inherited-mode scaffold |
+| `eagle/java_seeds/worker_rush/CandidateAgent.java` | Fixed Worker Rush generation-zero phenotype for mixed-policy initialization |
 | `eagle/evaluation.py` | Canonical child evaluation orchestration |
 | `evaluation/compiler.py` | Isolated javac and diagnostics |
 | `evaluation/microrts_runner.py` | Standalone seven-check integration probe only |

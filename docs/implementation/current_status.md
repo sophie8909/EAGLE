@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-08-31. This file describes executable repository behavior.
+Snapshot: 2026-09-03. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -13,6 +13,12 @@ Snapshot: 2026-08-31. This file describes executable repository behavior.
   `previous_code` field.
 - Automatically created candidate IDs use `gen_<zero-padded-generation>_<12-hex>`;
   explicitly loaded IDs remain unchanged for artifact and resume compatibility.
+- `initial_population_mode: llm_generated_policies` keeps one configured policy
+  and fills the remaining population slots with independent policy-only LLM
+  calls. The tracked mixed config therefore produces one Worker Rush policy plus
+  nine generated RTS policy prompts, while all ten generation-zero candidates
+  directly evaluate the same Worker Rush Java seed. This does not instantiate
+  the MicroRTS `RandomAI` opponent.
 - The search roster is exactly ten fixed opponents: `passive`, `random`,
   `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
   `coac`, and `tma`.
@@ -62,6 +68,7 @@ Snapshot: 2026-08-31. This file describes executable repository behavior.
 | Objective construction | `evaluation/objectives.py` |
 | Parent and survivor selection | `eagle/selection.py` |
 | Evolution loop | `eagle/search.py`, `eagle/resume.py` |
+| Generation-zero policy construction | `eagle/initial_population.py` |
 | Experiment/model lifecycle | `eagle/experiment.py`, `eagle/runtime/processes.py` |
 | Fully resolved experiment schema | `eagle/config.py`, run-local `config.yaml` |
 | Per-opponent archive | `eagle/opponent_archive.py` |
@@ -132,11 +139,20 @@ to ten generation-zero individuals, and performs ten independent Generator
 calls. Python modules
 only load, render, bound, transport, and validate executable prompt resources.
 In the default mode one configured seed file creates one generation-zero
-candidate. In inherited mode exactly one seed is required and replicated to the
-configured population; the no-op source may also be selected as the immutable
-Generator scaffold. Empty-policy
+candidate. In inherited `configured_seeds` mode exactly one seed is required and
+replicated to the configured population; the no-op source may also be selected
+as the immutable Generator scaffold. In inherited `llm_generated_policies` mode
+that one seed remains in slot one and policy-only LLM calls fill the other slots.
+Empty-policy
 candidates cannot enter Code Reflection, and Strategy Alignment is not
 applicable to them.
+
+The `0903_llm_initial_population` config uses the separately checked-in
+`eagle/java_seeds/worker_rush/CandidateAgent.java`. It preserves one configured Worker Rush policy,
+generates nine policy prompts through `initial_policy_generation.txt`, and skips
+the Java Generator in generation zero so all ten candidates execute identical
+Worker Rush Java. Each generated policy call owns candidate-local request, raw
+response, validation, retry, and timing evidence.
 
 ## Reflection boundary
 

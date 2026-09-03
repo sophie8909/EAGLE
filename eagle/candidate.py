@@ -256,7 +256,14 @@ def compact_candidate_metadata(
     """Return only metadata required by selection, mutation, and resume."""
 
     compact: dict[str, Any] = {}
-    for key in ("seed_index", "replicate_index", "failure_category", "failure_reason"):
+    for key in (
+        "seed_index",
+        "replicate_index",
+        "initial_policy_source",
+        "initial_policy_sample_index",
+        "failure_category",
+        "failure_reason",
+    ):
         if key in metadata:
             compact[key] = metadata[key]
     aos = metadata.get("aos")

@@ -17,7 +17,7 @@ from generation.agent_template import (
 from .candidate import DEFAULT_GENERATION_PROMPT
 from .aos import ReflectionOperatorMode, ReflectionOperatorSettings
 from .opponent_cases import LEXICASE_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SUM
-from .prompts import DEFAULT_PROMPT_DIR
+from .prompts import DEFAULT_PROMPT_DIR, PromptTemplate
 
 
 DEFAULT_EVALUATION_MAPS = (
@@ -30,6 +30,7 @@ DEFAULT_SEARCH_OPPONENTS = tuple((case, OPPONENT_WEIGHTS[case]) for case in LEXI
 FIXED_OPPONENT_WEIGHT_SUM = OPPONENT_WEIGHT_SUM
 MU_PLUS_LAMBDA_SELECTION = "mu_plus_lambda"
 CANDIDATE_JAVA_MODES = ("generated_phenotype", "inherited_genotype")
+INITIAL_POPULATION_MODES = ("configured_seeds", "llm_generated_policies")
 
 DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Resource", 0.0),
@@ -92,6 +93,10 @@ class ModelConfig:
 class ExperimentConfig:
     seed_prompts: tuple[str, ...]
     seed_prompt_files: tuple[Path, ...] = ()
+    initial_population_mode: str = "configured_seeds"
+    initial_policy_generation_prompt: str = ""
+    initial_policy_generation_prompt_file: Path = DEFAULT_PROMPT_DIR / "initial_policy_generation.txt"
+    initial_policy_max_attempts: int = 3
     experiment_name: str = "eagle_experiment"
     model: ModelConfig = field(default_factory=ModelConfig)
     generations: int = 1
@@ -104,6 +109,7 @@ class ExperimentConfig:
     survivor_selection: str = MU_PLUS_LAMBDA_SELECTION
     execution_mode: str = "openai"
     llm_temperature: float = 0.2
+    initial_policy_temperature: float = 0.8
     llm_max_tokens: int | None = None
     match_commentator_enabled: bool = True
     match_commentator_temperature: float = 0.2
@@ -202,6 +208,19 @@ class ExperimentConfig:
         seed_prompts = tuple(path.read_text(encoding="utf-8").strip() for path in seed_prompt_files)
         if not seed_prompts:
             raise ValueError("Experiment config must define at least one seed_prompt_files entry.")
+        initial_policy_generation_prompt_file = _parse_prompt_files(
+            (
+                payload.get(
+                    "initial_policy_generation_prompt_file",
+                    DEFAULT_PROMPT_DIR / "initial_policy_generation.txt",
+                ),
+            ),
+            repository_root,
+            "initial_policy_generation_prompt_file",
+        )[0]
+        initial_policy_generation_prompt = initial_policy_generation_prompt_file.read_text(
+            encoding="utf-8"
+        ).strip()
         generation_prompt_file_value = payload.get("generation_prompt_file")
         generation_prompt_file = (
             _parse_prompt_files((generation_prompt_file_value,), repository_root, "generation_prompt_file")[0]
@@ -261,6 +280,12 @@ class ExperimentConfig:
         return cls(
             seed_prompts=seed_prompts,
             seed_prompt_files=seed_prompt_files,
+            initial_population_mode=str(
+                payload.get("initial_population_mode", "configured_seeds")
+            ),
+            initial_policy_generation_prompt=initial_policy_generation_prompt,
+            initial_policy_generation_prompt_file=initial_policy_generation_prompt_file,
+            initial_policy_max_attempts=int(payload.get("initial_policy_max_attempts", 3)),
             experiment_name=str(payload.get("experiment_name", "eagle_experiment")),
             model=model,
             generations=int(payload.get("generations", 1)),
@@ -273,6 +298,9 @@ class ExperimentConfig:
             survivor_selection=survivor_selection,
             execution_mode=str(payload.get("execution_mode", "openai")),
             llm_temperature=float(llm_settings.get("temperature", 0.2)),
+            initial_policy_temperature=float(
+                llm_settings.get("initial_policy_temperature", 0.8)
+            ),
             llm_max_tokens=None if max_tokens is None else int(max_tokens),
             match_commentator_enabled=bool(commentator_settings.get("enabled", True)),
             match_commentator_temperature=float(commentator_settings.get("temperature", 0.2)),
@@ -321,6 +349,12 @@ class ExperimentConfig:
             raise ValueError("generations must be at least 1.")
         if self.population_size < 1:
             raise ValueError("population_size must be at least 1.")
+        if self.initial_population_mode not in INITIAL_POPULATION_MODES:
+            raise ValueError(
+                "initial_population_mode must be configured_seeds or llm_generated_policies."
+            )
+        if self.initial_policy_max_attempts < 1:
+            raise ValueError("initial_policy_max_attempts must be at least 1.")
         if self.survivor_selection != MU_PLUS_LAMBDA_SELECTION:
             raise ValueError(
                 "survivor_selection must be the canonical mu_plus_lambda mode."
@@ -348,6 +382,32 @@ class ExperimentConfig:
             raise ValueError(
                 "candidate_java_mode=inherited_genotype requires exactly one seed_prompt_files entry."
             )
+        if self.initial_population_mode == "llm_generated_policies":
+            if self.candidate_java_mode != "inherited_genotype":
+                raise ValueError(
+                    "initial_population_mode=llm_generated_policies requires "
+                    "candidate_java_mode=inherited_genotype."
+                )
+            if self.population_size <= len(self.seed_prompts):
+                raise ValueError(
+                    "initial_population_mode=llm_generated_policies requires population_size "
+                    "to exceed the configured seed count."
+                )
+            if not self.initial_policy_generation_prompt.strip():
+                raise ValueError("initial policy generation prompt must not be empty.")
+            PromptTemplate(
+                prompt_id="initial_policy_generation",
+                role="seed",
+                stages=("population_initialization",),
+                required_variables=(
+                    "sample_index",
+                    "population_size",
+                    "existing_strategy_prompts",
+                    "prior_error",
+                ),
+                template=self.initial_policy_generation_prompt,
+                source_path=self.initial_policy_generation_prompt_file,
+            ).validate()
         if len(self.evaluation_maps) != 3:
             raise ValueError("evaluation.maps must contain exactly three maps.")
         map_tick_limits = self.resolved_evaluation_map_tick_limits
@@ -375,6 +435,8 @@ class ExperimentConfig:
             raise ValueError(f"fixed opponent weights must sum to {FIXED_OPPONENT_WEIGHT_SUM}.")
         if self.llm_temperature < 0:
             raise ValueError("llm.temperature must not be negative.")
+        if self.initial_policy_temperature < 0:
+            raise ValueError("llm.initial_policy_temperature must not be negative.")
         if self.llm_max_tokens is not None and self.llm_max_tokens < 1:
             raise ValueError("llm.max_tokens must be positive.")
         if self.match_commentator_temperature < 0:
@@ -421,6 +483,11 @@ class ExperimentConfig:
                 "health_timeout_seconds": self.model.health_timeout_seconds,
             },
             "seed_prompt_files": [str(path) for path in self.seed_prompt_files],
+            "initial_population_mode": self.initial_population_mode,
+            "initial_policy_generation_prompt_file": str(
+                self.initial_policy_generation_prompt_file
+            ),
+            "initial_policy_max_attempts": self.initial_policy_max_attempts,
             "generations": self.generations,
             "population_size": self.population_size,
             "mutation_max_attempts": self.mutation_max_attempts,
@@ -436,6 +503,7 @@ class ExperimentConfig:
             "aos_minimum_probability": self.aos_minimum_probability,
             "llm": {
                 "temperature": self.llm_temperature,
+                "initial_policy_temperature": self.initial_policy_temperature,
                 "max_tokens": self.llm_max_tokens,
                 "match_commentator": {
                     "enabled": self.match_commentator_enabled,

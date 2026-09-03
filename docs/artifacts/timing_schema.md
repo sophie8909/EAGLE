@@ -56,10 +56,15 @@ For partial failure it has one entry per attempted match and is interpreted with
 match statuses.
 
 Default-mode generation-zero seed loading is not an LLM request and has null
-generation timing with an empty attempt list. Inherited-mode generation zero
-uses the normal bounded `generation_llm` attempt records independently for all
-`population_size` candidates. Strategy Alignment has null timing and no
-attempts when an empty policy makes the diagnostic not applicable.
+generation timing with an empty attempt list. Inherited `configured_seeds`
+generation zero uses the normal bounded `generation_llm` attempt records
+independently for all `population_size` candidates. Inherited
+`llm_generated_policies` generation zero also has null Java-generation timing;
+each generated policy instead owns UTC-bounded attempts below
+`initialization/policy_generation/`, and each actual request emits one run
+`timing.jsonl` event with `operation_type: initialization` and
+`operation_stage: initial_policy_generation`. Strategy Alignment has null timing
+and no attempts when an empty policy makes the diagnostic not applicable.
 
 For bounded Java decoding, `generation_llm.attempts` is the ordered outer
 `generation_attempt` list and includes `generation_attempt_id`, request hash,

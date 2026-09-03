@@ -35,6 +35,10 @@ from .run_artifacts import (
 )
 from .candidate import Candidate
 from .config import ExperimentConfig
+from .initial_population import (
+    generation_zero_uses_fixed_java,
+    initialize_population as build_initial_population,
+)
 from .crossover import CrossoverContext, crossover
 from .evaluation import evaluate_population, preflight_evaluation_opponents
 from .mutation import ReflectionContext
@@ -148,17 +152,22 @@ def _run_search_impl(
     operator_controller = runtime.operator_controller
     # Initialization is followed by the same evaluation boundary used for
     # every later offspring generation.
-    population = initialize_population(config)
-    # Generation zero enters the same evaluation boundary as every offspring so objective and failure records have one shape.
     generation_span = Stopwatch.start()
+    population = initialize_population(
+        config,
+        policy_backend=runtime.initial_policy_backend,
+        candidates_dir=candidates_dir,
+        timing_logger=runtime.llm_logger,
+    )
+    # Generation zero enters the same evaluation boundary as every offspring so objective and failure records have one shape.
     evaluated_population = evaluate_population(
         population,
         generation=0,
         config=config,
         backend=(
-            generation_backend
-            if config.candidate_java_mode == "inherited_genotype"
-            else InitialJavaSeedBackend(config.initial_java_seed_path)
+            InitialJavaSeedBackend(config.initial_java_seed_path)
+            if generation_zero_uses_fixed_java(config)
+            else generation_backend
         ),
         generated_agents_dir=generated_agents_dir,
         classes_dir=classes_dir,
@@ -302,37 +311,21 @@ def _run_search_impl(
     )
 
 
-def initialize_population(config: ExperimentConfig) -> list[Candidate]:
-    # The inherited mode deliberately replicates one policy/Java genotype so
-    # generation zero makes one independent decoder call per population slot.
-    # The default mode preserves the one-seed-file/one-candidate contract.
-    seed_prompts = config.seed_prompts
-    if config.candidate_java_mode == "inherited_genotype" and len(seed_prompts) == 1:
-        seed_prompts = tuple(seed_prompts[0] for _ in range(config.population_size))
-    inherited_java = (
-        config.initial_java_seed_path.read_text(encoding="utf-8")
-        if config.candidate_java_mode == "inherited_genotype"
-        else ""
+def initialize_population(
+    config: ExperimentConfig,
+    *,
+    policy_backend=None,
+    candidates_dir: Path | None = None,
+    timing_logger=None,
+) -> list[Candidate]:
+    """Compatibility entrypoint for the canonical initialization owner."""
+
+    return build_initial_population(
+        config,
+        policy_backend=policy_backend,
+        candidates_dir=candidates_dir,
+        timing_logger=timing_logger,
     )
-    population = [
-        Candidate(
-            generation=0,
-            strategy_prompt=prompt,
-            generation_prompt=config.generation_prompt,
-            inherited_java=inherited_java,
-            operator="seed",
-            metadata={
-                "seed_index": 0 if config.candidate_java_mode == "inherited_genotype" else index,
-                **(
-                    {"replicate_index": index}
-                    if config.candidate_java_mode == "inherited_genotype"
-                    else {}
-                ),
-            },
-        )
-        for index, prompt in enumerate(seed_prompts)
-    ]
-    return population[: config.population_size]
 
 
 def create_offspring(
