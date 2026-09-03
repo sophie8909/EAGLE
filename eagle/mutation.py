@@ -322,6 +322,21 @@ class MockReflectionBackend:
                 "mutation_plan": {"remove_or_reduce": [], "add_or_strengthen": ["preserve the tested strategy"], "conditional_behaviors": ["When evidence is unavailable, preserve validated behavior."]},
                 "revised_strategy_prompt": "Preserve deterministic behavior and address the observed strategic weakness with conditional rules.",
             })
+        if "Balance Reflection stage" in prompt:
+            return json.dumps({
+                "weaknesses": [],
+                "strategy_focus": [
+                    "Preserve the strongest observed matchup behavior while adding conditional fallbacks."
+                ],
+                "code_generation_focus": [
+                    "Translate every conditional fallback into reachable, mutually exclusive behavior."
+                ],
+            })
+        if "Balance Strategy Prompt Rewrite stage" in prompt:
+            return (
+                "Preserve the validated Worker Rush opening and add conditional "
+                "fallbacks for opponent, map, and side-specific pressure."
+            )
         if "Code Reflection stage" in prompt:
             return json.dumps({
                 "assessment": "java_faithfully_implements_policy",

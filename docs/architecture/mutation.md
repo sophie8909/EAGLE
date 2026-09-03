@@ -146,6 +146,26 @@ attempts, errors, and timing. Full Java is canonical only at
 `phenotype/CandidateAgent.java`; reflection metadata uses a path reference when
 the request artifact already contains the needed Java evidence.
 
+## Standalone reflection inspection
+
+`eagle.reflection_inspection` runs outside the evolutionary loop for controlled
+manual audits. It evaluates one configured checked-in Worker Rush parent, then
+creates one fixed generation-one inherited-Java subject. Strategy, Code, and
+Balance Reflection each run independently from that same subject and typed
+evaluation context; no trial consumes a previous trial's output. The configured
+Strategy intent and context index also remain fixed, so repeated root requests
+contain the same evidence while downstream Coach/Rewriter requests may differ
+because they consume earlier stochastic role output.
+
+Each trial retains the normal production mutation directory and adds a response
+index, final genotype component files, unified diffs, and an expected-versus-
+actual field-change summary. The inspection checks Strategy changes only the
+policy prompt, Code changes only the generation prompt, Balance changes both
+atomically, and all three preserve inherited Java. A failed/retried response is
+evidence rather than a discarded trial. Dedicated configs live under
+`configs/reflection_inspections/`, and generated inspection runs live below the
+ignored `runs/reflection_inspections/` tree.
+
 For Code Reflection, default-mode evidence identifies the evaluated source
 candidate's phenotype (`reviewed_phenotype_artifact`). In inherited mode the
 Reviewer instead evaluates the child's current policy against its independently
