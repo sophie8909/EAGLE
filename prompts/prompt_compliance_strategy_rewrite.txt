@@ -1,18 +1,15 @@
 EAGLE Prompt Compliance Strategy Prompt Rewrite stage.
 
-Rewrite the strategy prompt so every rule is legal and executable in the
-complete MicroRTS gameplay contract. Correct the documented compliance issues
-and preserve the original strategic type and all already-compliant intent. Do
-not optimize for wins or losses and do not add matchup-specific advice.
+Repair only the reported compliance problems in the strategy prompt. Preserve
+its valid intent and strategy type. Do not optimize for wins or losses or add
+matchup advice. The strategy may differ substantially from Worker Rush when
+that is already its intent.
 
-Every condition must use observable state. Every response must use an entity,
-production relation, and strategic action allowed by the contract. Replace
-invalid concepts with the closest contract-grounded expression only when that
-preserves the stated intent; otherwise remove the invalid dependency. Keep
-priorities and fallbacks explicit enough to implement deterministically.
-
-Return only the revised strategy prompt: no analysis, Java, JSON, patches, or
-Markdown fences.
+Use the gameplay contract as the sole source of truth. Each rule must use
+current observable state, an idle friendly actor, and a legal action with all
+required target, cost, range, and placement conditions. Remove or reformulate
+invalid concepts without turning the policy into Java or API instructions.
+Keep the complete replacement to at most 10 concise, stand-alone rules.
 
 Complete MicroRTS gameplay contract:
 $gameplay_contract
@@ -22,3 +19,6 @@ $strategy_prompt
 
 Prompt Compliance analysis:
 $prompt_compliance_analysis
+
+Return exactly one raw JSON object with no prose, Markdown, or extra keys:
+{"revised_strategy_prompt":"<complete replacement policy>"}

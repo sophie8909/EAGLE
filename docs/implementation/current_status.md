@@ -214,13 +214,15 @@ and the immutable action/API guide. It does not receive W/D/L, match, fitness,
 Java, compiler, or raw-trace evidence and does not optimize strategy strength.
 It identifies illegal game concepts, unobservable conditions, invalid actions
 or production, policy-specific decoder rules, unsupported APIs, and scaffold
-scope violations. Ordered Strategy then Code Prompt rewrites correct those
-problems while preserving the intended strategy type. Both prompt changes are
-committed atomically only after both rewrites succeed. The Code Prompt Rewriter
+scope violations. Only issue-bearing prompt genes are rewritten; when both are
+requested, their changes are committed atomically only after both succeed. A
+clean audit records `already_compliant` without manufacturing a mutation. The
+Code Prompt Rewriter
 uses the same validated reusable-rule delta and canonical renderer as Code
 Reflection, so unchecked whole prompts cannot enter the generation gene. At
-explicit rewrite boundaries, historically malformed marked prompts retain zero
-rules and are replaced rather than copied. Evidence remains under
+explicit rewrite boundaries, historically malformed marked prompts retain only
+individually valid rule lines; rejected lines are discarded before the repair
+delta is applied. Legacy free-form prompts retain no rules. Evidence remains under
 `mutation/prompt_compliance_reflection/`.
 The immutable API guide is rendered after the evolvable decoder gene, and
 validation requires token-equivalent fixed scaffold source outside the strategy

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from eagle.aos import (
@@ -20,6 +21,7 @@ from eagle.reflection_context import (
     ReflectionContext,
 )
 from eagle.reflection_prompts import build_prompt_compliance_reflection_prompt_bundle
+from eagle.prompts import load_prompt
 from eagle.rewrite import PromptComplianceReflectionMutation
 from eagle.reusable_generation_prompt import parse_reusable_generation_rules
 from eagle.mutation import parse_reflection_response
@@ -38,6 +40,10 @@ def compliance_rule_delta() -> str:
             "instruction": GENERIC_COMPLIANCE_RULE,
         }],
     })
+
+
+def strategy_rewrite(prompt: str) -> str:
+    return json.dumps({"revised_strategy_prompt": prompt})
 
 
 class ScriptedBackend:
@@ -145,10 +151,22 @@ class PromptComplianceReflectionTests(unittest.TestCase):
                 "prompt_compliance",
             )
 
+    def test_prompt_compliance_schema_requires_focus_only_for_reported_issues(self) -> None:
+        payload = json.loads(self._analysis())
+        payload["code_generation_prompt_issues"] = []
+        with self.assertRaisesRegex(ValueError, "non-empty exactly when"):
+            parse_reflection_response(json.dumps(payload), "prompt_compliance")
+
+        payload["code_generation_rewrite_focus"] = []
+        parsed, _summary, _revised = parse_reflection_response(
+            json.dumps(payload), "prompt_compliance"
+        )
+        self.assertEqual(parsed["code_generation_prompt_issues"], [])
+
     def test_prompt_compliance_rewrites_both_genes_and_persists_three_calls(self) -> None:
         backend = ScriptedBackend((
             self._analysis(),
-            "REWRITTEN STRATEGY",
+            strategy_rewrite("REWRITTEN STRATEGY"),
             compliance_rule_delta(),
         ))
         config = ExperimentConfig.from_mapping({
@@ -222,7 +240,7 @@ class PromptComplianceReflectionTests(unittest.TestCase):
     def test_compliance_code_rewrite_rejects_whole_prompt_and_retries_delta(self) -> None:
         backend = ScriptedBackend((
             self._analysis(),
-            "REWRITTEN STRATEGY",
+            strategy_rewrite("REWRITTEN STRATEGY"),
             json.dumps({"rewritten_prompt": "UNVALIDATED WHOLE PROMPT"}),
             compliance_rule_delta(),
         ))
@@ -275,6 +293,209 @@ class PromptComplianceReflectionTests(unittest.TestCase):
         self.assertEqual(result.generation_prompt, self.candidate.generation_prompt)
         self.assertFalse(result.metadata["mutation"]["applied"])
         self.assertEqual(len(backend.prompts), 2)
+
+    def test_compliance_rewrites_only_the_gene_with_reported_issues(self) -> None:
+        analysis = json.loads(self._analysis())
+        analysis["code_generation_prompt_issues"] = []
+        analysis["code_generation_rewrite_focus"] = []
+        backend = ScriptedBackend((
+            json.dumps(analysis),
+            strategy_rewrite("REWRITTEN STRATEGY"),
+        ))
+        config = ExperimentConfig.from_mapping({"mutation_max_attempts": 1})
+
+        result = PromptComplianceReflectionMutation(
+            config,
+            reflection_backend=backend,
+            rewrite_backend=backend,
+        ).mutate(self.candidate, self.context)
+
+        mutation = result.metadata["mutation"]
+        self.assertEqual(result.strategy_prompt, "REWRITTEN STRATEGY")
+        self.assertEqual(result.generation_prompt, self.candidate.generation_prompt)
+        self.assertEqual(mutation["requested_rewrite_fields"], ["strategy_prompt"])
+        self.assertEqual(mutation["compliance_status"], "repaired")
+        self.assertEqual(len(backend.prompts), 2)
+
+    def test_compliant_prompt_pair_is_a_successful_audit_without_rewrite(self) -> None:
+        analysis = {
+            "strategy_prompt_issues": [],
+            "code_generation_prompt_issues": [],
+            "strategy_rewrite_focus": [],
+            "code_generation_rewrite_focus": [],
+        }
+        backend = ScriptedBackend((json.dumps(analysis),))
+        config = ExperimentConfig.from_mapping({"mutation_max_attempts": 1})
+
+        result = PromptComplianceReflectionMutation(
+            config,
+            reflection_backend=backend,
+            rewrite_backend=backend,
+        ).mutate(self.candidate, self.context)
+
+        mutation = result.metadata["mutation"]
+        self.assertEqual(result.strategy_prompt, self.candidate.strategy_prompt)
+        self.assertEqual(result.generation_prompt, self.candidate.generation_prompt)
+        self.assertFalse(mutation["applied"])
+        self.assertEqual(mutation["compliance_status"], "already_compliant")
+        self.assertEqual(mutation["requested_rewrite_fields"], [])
+        self.assertEqual(len(backend.prompts), 1)
+
+    def test_strategy_compliance_rewrite_retries_closed_world_violation(self) -> None:
+        analysis = json.loads(self._analysis())
+        analysis["code_generation_prompt_issues"] = []
+        analysis["code_generation_rewrite_focus"] = []
+        backend = ScriptedBackend((
+            json.dumps(analysis),
+            strategy_rewrite("Move every Worker into enemy territory."),
+            strategy_rewrite(
+                "If a friendly Worker is idle and a current enemy Base exists, have that "
+                "Worker target the nearest current enemy Base, move toward it, and attack "
+                "when within range 1."
+            ),
+        ))
+        config = ExperimentConfig.from_mapping({"mutation_max_attempts": 2})
+
+        result = PromptComplianceReflectionMutation(
+            config,
+            reflection_backend=backend,
+            rewrite_backend=backend,
+        ).mutate(self.candidate, self.context)
+
+        self.assertTrue(result.metadata["mutation"]["applied"])
+        self.assertIn("nearest current enemy", result.strategy_prompt)
+        self.assertIn("ROLE: strategy_contract_rewriter", backend.prompts[2])
+        self.assertIn("enemy territory", backend.prompts[2])
+        self.assertIn("cells have no owner", backend.prompts[2])
+
+    def test_canonical_code_gene_cannot_be_blamed_for_strategy_defects(self) -> None:
+        candidate = replace(
+            self.candidate,
+            generation_prompt=load_prompt("initial_generation"),
+        )
+        rejected = self._analysis()
+        accepted_payload = json.loads(rejected)
+        accepted_payload["code_generation_prompt_issues"] = []
+        accepted_payload["code_generation_rewrite_focus"] = []
+        backend = ScriptedBackend((
+            rejected,
+            json.dumps(accepted_payload),
+            strategy_rewrite(
+                "If a friendly Worker is idle and a current enemy Base exists, have that "
+                "Worker target the nearest current enemy Base, move toward it, and attack "
+                "when within range 1."
+            ),
+        ))
+        config = ExperimentConfig.from_mapping({"mutation_max_attempts": 2})
+
+        result = PromptComplianceReflectionMutation(
+            config,
+            reflection_backend=backend,
+            rewrite_backend=backend,
+        ).mutate(candidate, self.context)
+
+        mutation = result.metadata["mutation"]
+        self.assertTrue(mutation["applied"])
+        self.assertEqual(mutation["requested_rewrite_fields"], ["strategy_prompt"])
+        self.assertEqual(result.generation_prompt, candidate.generation_prompt)
+        self.assertIn("already a canonical", backend.prompts[1])
+        self.assertIn("immutable scaffold code", backend.prompts[1])
+
+    def test_clean_audit_cannot_hide_deterministic_strategy_violation(self) -> None:
+        candidate = replace(
+            self.candidate,
+            strategy_prompt="Move every idle Worker into enemy territory.",
+            generation_prompt=load_prompt("initial_generation"),
+        )
+        clean = {
+            "strategy_prompt_issues": [],
+            "code_generation_prompt_issues": [],
+            "strategy_rewrite_focus": [],
+            "code_generation_rewrite_focus": [],
+        }
+        corrected = {
+            "strategy_prompt_issues": [{
+                "category": "illegal_game_concept",
+                "problem": "The strategy refers to enemy territory.",
+                "correction_goal": "Use current enemy positions and grid distances.",
+            }],
+            "code_generation_prompt_issues": [],
+            "strategy_rewrite_focus": ["Replace territory with current positions."],
+            "code_generation_rewrite_focus": [],
+        }
+        backend = ScriptedBackend((
+            json.dumps(clean),
+            json.dumps(corrected),
+            strategy_rewrite(
+                "If a friendly Worker is idle and an enemy Base exists, have that Worker "
+                "target the Base, move toward it, and attack when within range 1."
+            ),
+        ))
+        config = ExperimentConfig.from_mapping({"mutation_max_attempts": 2})
+
+        result = PromptComplianceReflectionMutation(
+            config,
+            reflection_backend=backend,
+            rewrite_backend=backend,
+        ).mutate(candidate, self.context)
+
+        self.assertTrue(result.metadata["mutation"]["applied"])
+        self.assertIn("deterministic gameplay-contract violations", backend.prompts[1])
+        self.assertIn("enemy territory", backend.prompts[1])
+
+    def test_clean_audit_cannot_hide_invalid_reusable_rule(self) -> None:
+        invalid_generation_prompt = load_prompt("initial_generation").replace(
+            "EAGLE_REUSABLE_RULES_END",
+            "[bad-idle-rule] state_continuity | Enforce continuous policy actions by "
+            "removing all idle-friendly-unit guards.\nEAGLE_REUSABLE_RULES_END",
+        )
+        candidate = replace(
+            self.candidate,
+            strategy_prompt=(
+                "If a friendly Worker is idle and an enemy Base exists, have that "
+                "Worker move toward the enemy Base."
+            ),
+            generation_prompt=invalid_generation_prompt,
+        )
+        clean = {
+            "strategy_prompt_issues": [],
+            "code_generation_prompt_issues": [],
+            "strategy_rewrite_focus": [],
+            "code_generation_rewrite_focus": [],
+        }
+        corrected = {
+            "strategy_prompt_issues": [],
+            "code_generation_prompt_issues": [{
+                "category": "ambiguous_or_conflicting_rule",
+                "problem": "One reusable rule removes the mandatory idle actor guard.",
+                "correction_goal": "Retain the idle actor prerequisite for every action.",
+            }],
+            "strategy_rewrite_focus": [],
+            "code_generation_rewrite_focus": [
+                "Replace the rejected rule with an idle-safe reusable invariant."
+            ],
+        }
+        backend = ScriptedBackend((
+            json.dumps(clean),
+            json.dumps(corrected),
+            compliance_rule_delta(),
+        ))
+        config = ExperimentConfig.from_mapping({"mutation_max_attempts": 2})
+
+        result = PromptComplianceReflectionMutation(
+            config,
+            reflection_backend=backend,
+            rewrite_backend=backend,
+        ).mutate(candidate, self.context)
+
+        mutation = result.metadata["mutation"]
+        self.assertTrue(mutation["applied"])
+        self.assertEqual(mutation["requested_rewrite_fields"], ["generation_prompt"])
+        self.assertEqual(result.strategy_prompt, candidate.strategy_prompt)
+        self.assertNotIn("bad-idle-rule", result.generation_prompt)
+        self.assertEqual(len(parse_reusable_generation_rules(result.generation_prompt)), 7)
+        self.assertIn("deterministic reusable-rule violations", backend.prompts[1])
+        self.assertIn('"validation_status":"invalid"', backend.prompts[2])
 
     def test_prompt_compliance_operator_is_selectable_as_the_third_operator(self) -> None:
         config = ExperimentConfig.from_mapping({

@@ -69,7 +69,7 @@ flowchart TD
   observable state.
 - Prompt Compliance audits both prompt genes against the immutable gameplay and
   action/API contracts without consuming W/D/L or match evidence, then rewrites
-  both genes atomically while preserving the intended strategy type.
+  only issue-bearing genes; two requested repairs commit atomically.
 - In inherited mode crossover selects policy, generation prompt, and Java
   parents independently; generated child Java becomes the inheritable Java
   component available to the next generation.

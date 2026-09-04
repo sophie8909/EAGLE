@@ -24,6 +24,12 @@ role = "rewriter"
 stages = ["strategy_rewrite"]
 required_variables = ["gameplay_contract", "strategy_prompt", "reflection", "game_summary"]
 
+[prompts.strategy_contract_rewrite]
+file = "strategy_contract_rewrite.txt"
+role = "rewriter"
+stages = ["strategy_reflection"]
+required_variables = ["gameplay_contract", "proposed_strategy_prompt", "validation_error"]
+
 [prompts.code_rewrite]
 file = "code_rewrite.txt"
 role = "rewriter"
@@ -46,7 +52,13 @@ required_variables = ["code_generation_prompt", "current_reusable_rules", "promp
 file = "rewrite_validation_retry.txt"
 role = "rewriter"
 stages = ["strategy_rewrite", "generation_prompt_rewrite", "prompt_compliance_strategy_prompt_rewrite", "prompt_compliance_generation_prompt_rewrite"]
-required_variables = ["validation_error", "original_request"]
+required_variables = ["original_request", "previous_response", "validation_error"]
+
+[prompts.role_validation_retry]
+file = "role_validation_retry.txt"
+role = "reflector"
+stages = ["strategy_reflection", "code_reflection", "prompt_compliance_reflection"]
+required_variables = ["original_request", "previous_response", "validation_error"]
 
 [prompts.java_generation]
 file = "java_generation.txt"

@@ -50,6 +50,8 @@ class PromptResourceTests(unittest.TestCase):
         self.assertIn("Light", contract)
         self.assertIn("Heavy", contract)
         self.assertIn("Ranged", contract)
+        self.assertIn("Worker move 10, attack 5,\n  harvest 20, return 10, and production 50", contract)
+        self.assertIn("Base construction 250", contract)
         self.assertIn("may use any strategic identity", contract)
         self.assertNotIn("Worker Rush", contract)
 

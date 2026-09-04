@@ -117,22 +117,24 @@ policy-specific instructions, unsupported API assumptions, immutable-scaffold
 edits, or conflicting reusable rules. The exact source prompts, their canonical
 reusable-rule view, and both immutable contracts are its complete evidence.
 
-The resulting two rewrite calls are one atomic mutation. The Strategy Rewriter
-corrects only compliance problems, preserves the intended strategy type, and
-expresses every condition and response through observable state and legal game
-actions. The Code Rewriter corrects the highest-priority compliance problem
-through the same exact `remove_rule_ids`/`add_rules` delta used by Code
-Reflection and receives both immutable contracts again; runtime validates and
-canonically renders it. Both rewrites must
-succeed before either gene changes. Historical malformed whole-prompt output is
-treated as having no retained rules only at this rewrite boundary and is never
-copied into the replacement.
+Each source can be declared clean. Only issue-bearing genes are sent to their
+Rewriter, so the operator never invents a change to a compliant prompt. The
+Strategy Rewriter preserves the intended strategy type and expresses every
+condition and response through observable state and legal game actions. The
+Code Rewriter corrects the highest-priority compliance problem through the same
+exact `remove_rule_ids`/`add_rules` delta used by Code Reflection and receives
+both immutable contracts again; runtime validates and canonically renders it.
+When both rewrites are requested, both must succeed before either gene changes.
+A clean audit records `already_compliant` without changing the genotype.
+At this rewrite boundary, a malformed marked prompt retains only rule lines
+that individually pass the current validator; rejected lines are discarded
+before the validated delta is applied. A legacy free-form prompt retains none.
 
 ```text
 (policy A1, code prompt B1, Java C1)
   -> prompt genes + gameplay/API contracts -> Prompt Compliance Reflection
-  -> strategy rewrite A2 + generation-prompt rewrite B2
-  -> (policy A2, code prompt B2, Java C1) -> Java C2
+  -> requested strategy rewrite A2 and/or generation-prompt rewrite B2
+  -> (policy A1|A2, code prompt B1|B2, Java C1) -> Java C2
 ```
 
 ## Selection and persistence
@@ -184,8 +186,9 @@ to differ rather than satisfy the fixed-input equality check.
 Each trial retains the normal production mutation directory and adds a response
 index, final genotype component files, unified diffs, and an expected-versus-
 actual field-change summary. The inspection checks Strategy changes only the
-policy prompt, Code changes only the generation prompt, Prompt Compliance changes both
-atomically, and all three preserve inherited Java. A failed/retried response is
+policy prompt, Code changes only the generation prompt, and Prompt Compliance
+changes exactly the issue-bearing prompt fields (atomically when both are
+requested). All three preserve inherited Java. A failed/retried response is
 evidence rather than a discarded trial. Dedicated configs live under
 `configs/reflection_inspections/`, and generated inspection runs live below the
 ignored `runs/reflection_inspections/` tree.
@@ -209,9 +212,10 @@ examines the child's active prompt pair.
 
 - Strategy mutation preserves `generation_prompt` exactly.
 - Code mutation preserves `strategy_prompt` exactly.
-- Prompt Compliance mutation changes both prompt genes only after its reflector and both
-  rewrite stages succeed; its code rewrite is a validated reusable-rule delta,
-  and otherwise it preserves both genes exactly.
+- Prompt Compliance mutation changes only genes named by non-empty issue arrays;
+  when both are named, it commits both only after both rewrites succeed. Its
+  code rewrite is a validated reusable-rule delta, and failure preserves both
+  genes exactly.
 - All mutation operators preserve inherited Java input exactly and never edit it directly.
 - Generator and Evaluation preserve both prompt genes and the recorded
   pre-generation Java input exactly.

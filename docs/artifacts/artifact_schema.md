@@ -198,13 +198,15 @@ references the separately stored source-prompt artifacts, retains the reusable
 rules and contract resource names, and lists the excluded Java, match, compiler,
 fitness, and W/D/L evidence classes. The directory also retains the reflection
 request/raw response and separately named strategy/code rewrite
-request/raw-response artifacts. Metadata records both rewrite statuses without
+request/raw-response artifacts for each requested rewrite. Metadata records
+`requested_rewrite_fields`, `compliance_status`, and both optional rewrite statuses without
 embedding raw response bodies. The code rewrite raw response is a
 `remove_rule_ids`/`add_rules` delta, while its `rewritten_prompt` metadata field
 is the deterministically rendered canonical generation prompt; its request also
 contains both immutable contracts. A failed
-reflector or either failed rewrite retains completed evidence and leaves both
-prompt genes unchanged.
+reflector or requested rewrite retains completed evidence and leaves both
+prompt genes unchanged. A clean audit has no rewrite artifacts and records
+`compliance_status: already_compliant`.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated

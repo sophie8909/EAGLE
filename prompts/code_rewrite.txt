@@ -24,11 +24,16 @@ gene. Do not include examples, parenthetical evidence, quoted policy phrases, co
 or names copied from the review or API contract. Do not return Java, analysis, a patch, a
 diff, or Markdown.
 
+Describe a policy-agnostic translation invariant, not a concrete strategy,
+Java/API detail, scaffold edit, or invented runtime mechanism. Preserve the
+idle-friendly-actor requirement for every translated action.
+
 Current code_generation_prompt:
 $code_generation_prompt
 
-Current reusable rules (canonical JSON; legacy free-form prompts have no reusable rules and
-must be replaced through add_rules):
+Current reusable rules (either a valid canonical JSON array, or an invalid status object whose
+recoverable_rules are retained while rejected rules are discarded; legacy free-form prompts
+have no retained reusable rules and must be repaired through add_rules):
 $current_reusable_rules
 
 Policy-Code Alignment Review:

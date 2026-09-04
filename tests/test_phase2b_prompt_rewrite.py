@@ -35,6 +35,10 @@ def code_rule_delta(*, instruction: str = GENERIC_RULE, extra: bool = False) -> 
     return json.dumps(payload)
 
 
+def strategy_rewrite(prompt: str) -> str:
+    return json.dumps({"revised_strategy_prompt": prompt})
+
+
 class ScriptedRewriteBackend:
     def __init__(self, responses):
         self.responses = iter(responses)
@@ -66,7 +70,10 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         )
 
     def test_strategy_rewrite_call_order_and_component_isolation(self):
-        backend = ScriptedRewriteBackend((self._strategy_reflection(), "new strategy prompt"))
+        backend = ScriptedRewriteBackend((
+            self._strategy_reflection(),
+            strategy_rewrite("new strategy prompt"),
+        ))
         mutation = PromptRewriteMutation(
             self.config,
             mutation_type="strategy",
@@ -221,7 +228,10 @@ EAGLE_REUSABLE_RULES_END"""
         self.assertNotIn("old strategy", code_prompt)
 
     def test_rewrite_output_rejects_java_and_retries(self):
-        backend = ScriptedRewriteBackend(("package ai.generated; class CandidateAgent {}", "usable revised prompt"))
+        backend = ScriptedRewriteBackend((
+            "package ai.generated; class CandidateAgent {}",
+            strategy_rewrite("usable revised prompt"),
+        ))
         result = PromptRewriteStage(backend, max_attempts=2).run(
             rewrite_type="strategy_prompt_rewrite",
             candidate=self.candidate,
@@ -230,6 +240,38 @@ EAGLE_REUSABLE_RULES_END"""
         self.assertTrue(result.succeeded)
         self.assertEqual(result.rewritten_prompt, "usable revised prompt")
         self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
+
+    def test_strategy_rewrite_requires_exact_json_string_contract(self):
+        backend = ScriptedRewriteBackend((
+            "plain strategy prompt",
+            json.dumps({"revised_strategy_prompt": {"rules": []}}),
+        ))
+        result = PromptRewriteStage(backend, max_attempts=2).run(
+            rewrite_type="strategy_prompt_rewrite",
+            candidate=self.candidate,
+            request="rewrite request",
+        )
+        self.assertFalse(result.succeeded)
+        self.assertIn("non-empty string", result.error)
+        self.assertIn("plain strategy prompt", backend.calls[1])
+        self.assertIn("Expecting value", backend.calls[1])
+
+    def test_strategy_rewrite_reuses_string_list_as_retry_context(self):
+        backend = ScriptedRewriteBackend((
+            json.dumps({
+                "revised_strategy_prompt": ["First legal rule.", "Second legal rule."]
+            }),
+            strategy_rewrite("usable revised prompt"),
+        ))
+        result = PromptRewriteStage(backend, max_attempts=2).run(
+            rewrite_type="strategy_prompt_rewrite",
+            candidate=self.candidate,
+            request="rewrite request",
+        )
+        self.assertTrue(result.succeeded)
+        self.assertIn("ROLE: strategy_contract_rewriter", backend.calls[1])
+        self.assertIn("1. First legal rule.", backend.calls[1])
+        self.assertIn("2. Second legal rule.", backend.calls[1])
 
     def test_reflection_and_rewrite_artifacts_survive_rewrite_failure(self):
         backend = ScriptedRewriteBackend((self._strategy_reflection(), "", ""))
@@ -257,6 +299,10 @@ EAGLE_REUSABLE_RULES_END"""
             )
             self.assertIn("non-empty prompt", retry_request)
             self.assertEqual(retry_request, backend.calls[2])
+            self.assertGreater(
+                retry_request.rfind("non-empty prompt"),
+                retry_request.rfind("Original request:"),
+            )
             self.assertTrue((mutation_dir / "original_policy_prompt.txt").exists())
             self.assertTrue((Path(temp) / "timing.json").exists())
 

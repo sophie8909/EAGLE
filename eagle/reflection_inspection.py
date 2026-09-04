@@ -575,12 +575,17 @@ def _write_trial_review(
         "generated_java": (subject.generated_java, child.generated_java),
     }
     changed = tuple(name for name, (before, after) in compared.items() if before != after)
+    mutation_record = child.metadata.get("mutation") or {}
     expected = EXPECTED_CHANGED_FIELDS[reflection_type]
+    if reflection_type == "prompt_compliance":
+        requested = mutation_record.get("requested_rewrite_fields")
+        if isinstance(requested, list) and all(isinstance(item, str) for item in requested):
+            expected = tuple(requested)
     forbidden = tuple(name for name in changed if name not in expected)
     missing = tuple(name for name in expected if name not in changed)
-    mutation_record = child.metadata.get("mutation") or {}
     applied = bool(mutation_record.get("applied"))
-    scope_matches = applied and not forbidden and not missing
+    already_compliant = mutation_record.get("compliance_status") == "already_compliant"
+    scope_matches = (applied or already_compliant) and not forbidden and not missing
 
     changes_dir = trial_dir / "changes"
     changes_dir.mkdir(parents=True, exist_ok=True)
@@ -609,7 +614,9 @@ def _write_trial_review(
         "context_sha256": context_fingerprint,
         "root_request_set_sha256": index["root_request_set_sha256"],
         "pipeline_request_set_sha256": index["pipeline_request_set_sha256"],
-        "mutation_status": "applied" if applied else "failed",
+        "mutation_status": (
+            "applied" if applied else "compliant_no_change" if already_compliant else "failed"
+        ),
         "mutation_error": (
             mutation_record.get("reflection_error")
             or mutation_record.get("rewrite_error")
@@ -814,12 +821,14 @@ def _render_markdown_summary(
         "",
         "## 一致性總覽",
         "",
-        "| Reflection | 預期改動 | 成功套用 | Scope 符合 | Context 相同 | Root request 相同 | 全 pipeline request 相同 | Response attempts |",
+        "| Reflection | Scope 規則 | 成功套用 | Scope 符合 | Context 相同 | Root request 相同 | 全 pipeline request 相同 | Response attempts |",
         "|---|---|---:|---:|---|---|---|---:|",
         ]
     )
     for group in grouped:
         expected = ", ".join(str(item) for item in group["expected_changed_fields"])
+        if group["reflection_type"] == "prompt_compliance":
+            expected = "strategy_prompt and/or generation_prompt（依偵測到的問題）"
         lines.append(
             f"| {group['reflection_type']} | {expected} | "
             f"{group['applied_count']}/{group['trial_count']} | "
@@ -862,7 +871,7 @@ def _render_markdown_summary(
             "",
             "1. Strategy／Code 的固定輸入應相同；串接模式下 Prompt Compliance 的輸入應能對回一個成功的上游 trial，且 prompt hash 與該子代輸出相同。",
             "2. 再看 `mutation/<type>_reflection/` 內的解析結果與 validation/retry artifact。",
-            "3. 最後看 `changes/`：Strategy 只能改 policy prompt；Code 只能改 code-generation prompt；Prompt Compliance 必須同時改兩者；Java 必須保持不變。",
+            "3. 最後看 `changes/`：Strategy 只能改 policy prompt；Code 只能改 code-generation prompt；Prompt Compliance 只修正被判定異常的 prompt gene（可為其中一個或兩個）；Java 必須保持不變。",
             "4. `scope_matches_expectation=false` 代表 reflection 失敗、缺少預期改動，或動到不該動的欄位，需人工判讀原因。",
             "",
             "Baseline 完整評估證據位於 `baseline/`，固定輸入與 hash 位於 `inputs/`。",

@@ -53,8 +53,9 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
 - Successful Code Reflection applies a structured rule delta and deterministically
   renders `generation_prompt`; policy-specific checklists and Java fragments are
   rejected at the rewrite boundary.
-- Prompt Compliance Reflection may atomically change both prompts, but never Java; its
-  generation-prompt change also uses a validated reusable-rule delta and the
+- Prompt Compliance Reflection changes only prompt genes with reported contract
+  issues and commits both atomically when both are requested; it never changes
+  Java. A generation-prompt repair uses a validated reusable-rule delta and the
   deterministic canonical renderer.
 - Generator and Evaluation do not modify either prompt gene.
 - Generator uses the canonical checked-in scaffold. Only inherited mode also

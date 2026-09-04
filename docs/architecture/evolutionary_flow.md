@@ -27,9 +27,9 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 5. Apply crossover/copy to every active genotype component and let the
    configured reflection-operator controller choose Strategy Reflection,
    Generate-Code Reflection, or Prompt Compliance Reflection. Strategy and Code
-   mutate one owned prompt; Prompt Compliance atomically rewrites both after
-   auditing the active prompt pair against the immutable gameplay and API
-   contracts. It receives no W/D/L, match, Java, compiler, or fitness evidence.
+   mutate one owned prompt; Prompt Compliance audits the active prompt pair and
+   rewrites only issue-bearing genes, committing atomically when both need
+   repair. It receives no W/D/L, match, Java, compiler, or fitness evidence.
    None directly edits inherited Java.
 6. Decode each child with its configured compile-guided attempt bound, using
    structured validation/javac evidence only after a complete source fails;

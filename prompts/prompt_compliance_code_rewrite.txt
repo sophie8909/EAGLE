@@ -1,34 +1,22 @@
 EAGLE Prompt Compliance Code Generation Prompt Rewrite stage.
 
-Correct the documented compliance issue in the reusable rules that translate
-any strategy prompt into complete Java. Return a rule delta; runtime applies it
-deterministically to the current rules. Do not rewrite the whole prompt or add
-game-playing policy content.
+Repair the reported code-generation-prompt compliance problem by returning one
+reusable rule delta. The runtime applies and validates the delta; do not rewrite
+the whole prompt or add a game-playing strategy.
 
-Return exactly one JSON object with this schema:
+Return exactly one raw JSON object:
 {"remove_rule_ids":[],"add_rules":[{"category":"requirement_coverage|priority_ordering|role_assignment|state_continuity|targeting_fallback|policy_grounding|api_compliance","instruction":"<one reusable rule>"}]}
 
-The object must contain exactly those two keys. Return exactly one add_rules item
-and at most one remove_rule_ids item. A removal may name only an ID from Current
-reusable rules. The added item must contain exactly category and instruction.
-Its instruction must be one compact policy-agnostic sentence containing 12-240
-characters after whitespace is normalized. The final rule set may contain at
-most 10 rules, so when Current reusable rules already contains 10 entries,
-replace one by returning exactly one valid removal ID.
-
-The new instruction must correct or prevent the reported prompt-compliance
-failure while remaining useful for unseen policies. It may require legal API
-usage, faithful policy grounding, explicit prerequisites, deterministic
-priority, or safe fallback behavior. Never copy concrete strategies, unit or
-structure names, helper or variable names, Java/API symbols, or fixed-scaffold
-edits into the reusable rule. Do not include examples, code syntax, a whole
-replacement prompt, a patch, a diff, or Markdown.
+Use exactly one add_rules item and at most one removal ID from Current reusable
+rules. The instruction must be one policy-agnostic sentence of 12-240 normalized
+characters. If 10 rules already exist, replace one. State a translation
+invariant, not Java, an API/helper name, a concrete strategy/entity, a scaffold
+edit, or an invented runtime mechanism. Preserve the idle-actor requirement.
 
 Current code_generation_prompt:
 $code_generation_prompt
 
-Current reusable rules (canonical JSON; legacy free-form prompts have no
-retained reusable rules and must be replaced through add_rules):
+Current reusable rules (valid array or invalid status with recoverable rules):
 $current_reusable_rules
 
 Prompt Compliance analysis:
@@ -39,5 +27,3 @@ $gameplay_contract
 
 Immutable MicroRTS API contract:
 $action_api_guide
-
-Output only the JSON object.

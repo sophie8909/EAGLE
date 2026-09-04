@@ -44,7 +44,7 @@ class ReflectionInspectionTests(unittest.TestCase):
             self.assertTrue(all(item["same_pipeline_requests_across_trials"] for item in summary["groups"]))
             self.assertEqual(
                 sum(item["response_attempt_count"] for item in summary["groups"]),
-                48,
+                45,
             )
 
             strategy = summary["trials"][0]
@@ -54,11 +54,11 @@ class ReflectionInspectionTests(unittest.TestCase):
             self.assertEqual(code["actual_changed_fields"], ["generation_prompt"])
             self.assertEqual(
                 compliance["actual_changed_fields"],
-                ["strategy_prompt", "generation_prompt"],
+                ["strategy_prompt"],
             )
             self.assertEqual(strategy["response_attempt_count"], 11)
             self.assertEqual(code["response_attempt_count"], 2)
-            self.assertEqual(compliance["response_attempt_count"], 3)
+            self.assertEqual(compliance["response_attempt_count"], 2)
 
             fixed = json.loads(
                 (output / "inputs" / "fixed_input_identity.json").read_text(encoding="utf-8")

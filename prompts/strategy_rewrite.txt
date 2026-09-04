@@ -1,8 +1,11 @@
 EAGLE Strategy Prompt Rewrite stage.
 
-Return only the revised strategy_prompt. Do not return analysis, Java, JSON, a patch, or
-Markdown fences. Preserve effective strategy elements and make concrete changes supported
-by the Reflection.
+Return exactly one raw JSON object with exactly this shape:
+{"revised_strategy_prompt":"<complete replacement policy>"}
+The first character must be { and the last character must be }. Do not return
+analysis, Java, a patch, Markdown fences, additional keys, or a second JSON
+object. Preserve effective strategy elements and make concrete changes
+supported by the Reflection.
 
 The replacement may change strategy type, but every condition and action must
 be executable in this complete gameplay contract:
@@ -17,4 +20,4 @@ $reflection
 Game evaluation summary:
 $game_summary
 
-Output only the new strategy prompt.
+Output only the JSON object.

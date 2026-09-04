@@ -33,8 +33,8 @@ Complete entity set and production graph:
 - Base and Barracks do not move, harvest, or attack. Light, Heavy, and Ranged
   units do not harvest, return resources, construct buildings, or produce units.
 - Default action durations in game cycles are: Worker move 10, attack 5,
-  harvest 20, return 10; Light move 8 and attack 5; Heavy move 12 and attack 5;
-  Ranged move 10 and attack 5; Base construction or Worker production 250;
+  harvest 20, return 10, and production 50; Light move 8 and attack 5; Heavy
+  move 12 and attack 5; Ranged move 10 and attack 5; Base construction 250;
   Barracks construction 200; Light production 80; Heavy production 120; Ranged
   production 100.
 
@@ -54,6 +54,41 @@ Complete strategic action set:
 - Have a Worker build a Base or Barracks on a legal free cell and pay its cost.
 - Leave a unit idle when no higher-priority legal action applies.
 
+Canonical form for executable policy rules:
+- Every action rule is stand-alone. It names an idle friendly actor and all
+  prerequisites in the same rule; it never assumes that an earlier rule has
+  completed.
+- Write one complete condition/action sentence per numbered rule. Do not add an
+  "otherwise" or second-sentence action that reuses "that unit" without again
+  naming the idle friendly actor and its complete prerequisites.
+- Worker production example: if a friendly Base is idle, the stockpile is at
+  least 1, and a free cell adjacent to that Base exists, have that Base train a
+  Worker into that cell.
+- Combat production example: if a friendly Barracks is idle, the stockpile is
+  at least 2, and a free cell adjacent to that Barracks exists, have that
+  Barracks train one named combat-unit type into that cell.
+- Construction example: if a friendly Worker is idle, the stockpile meets the
+  building cost, and a legal free cell adjacent to that Worker exists, have
+  that Worker build the named building on that cell.
+- Harvest example: if a friendly Worker is idle, carries no resource, and a
+  reachable Resource exists, have that Worker harvest the nearest reachable
+  Resource.
+- Return example: if a friendly Worker is idle, carries a resource, and a
+  friendly Base exists, have that Worker return the resource to the nearest
+  friendly Base.
+- Combat example: if a friendly movable attacker is idle and a current enemy
+  entity exists, have the attacker target that entity, move toward it if it is
+  outside attack range, and attack it when it enters range.
+- A distance or attack-range condition for combat is measured from the acting
+  unit named in that rule, not from some other friendly unit or building. Base
+  and Barracks have no attack range. Never target or attack a friendly entity.
+- An immediate attack rule must state that its target is currently within the
+  acting unit's own attack range. If the target may be outside that range, the
+  same rule must target it, move toward it, and attack only after it enters the
+  actor's range. Split mixed unit types when their legal ranges differ.
+- Never target or attack a Resource or combine it with an enemy-target
+  fallback. Resource appears only in a Worker's fully guarded harvest rule.
+
 Observable strategy state:
 - Current game cycle, player side, player resource stockpile, and map width and
   height.
@@ -66,6 +101,30 @@ Observable strategy state:
   seconds, technology levels, upgrades, and any state not listed above are not
   observable strategy conditions. Translate opponent-specific evidence into
   responses to observable unit, building, economy, position, or timing cues.
+
+Closed-world interpretation rules:
+- Fully observable means every currently existing enemy entity is present in
+  the current state. Do not invent fog of war, partial visibility, scouting, or
+  a distinction between an existing entity and a visible entity.
+- Cells have terrain and occupancy, but no owner, territory, starting-cell,
+  spawn-location, safety, or capture status. Describe positioning with current
+  coordinates, free cells, map bounds, and distances to current entities.
+- Current positions do not reveal movement history, velocity, convergence,
+  intent, an action target, or whether a unit or building is under attack.
+  Express danger with current enemy type, position, attack range, and distance;
+  express a response with a listed action such as target, move, or attack.
+- Current entities do not reveal when an opponent built or produced them, when
+  another entity was destroyed, production trends, unit creation timestamps,
+  or whether an economy is stagnant. Test current entity counts/types and the
+  current cycle instead of historical events.
+- Strategy prompts describe game-level behavior, not Java implementation. They
+  must not contain helper names, method calls, variable names, code fragments,
+  or API instructions.
+- Words such as "immediately" may specify the highest priority for the next
+  idle-unit decision; they never imply zero-duration movement, training, or
+  construction. A "defensive" strategy is valid, but each defensive response
+  must resolve to a listed target, movement, attack, production, build, harvest,
+  return, or idle action rather than an undefined defend/block command.
 
 Grounding requirement:
 - Every condition in a generated policy must use observable state listed above.

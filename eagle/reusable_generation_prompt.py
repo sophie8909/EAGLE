@@ -34,6 +34,22 @@ _RULE_LINE = re.compile(
     r"(?P<category>[a-z_]+)\s+\|\s+(?P<instruction>.+)$"
 )
 _JAVA_CALL = re.compile(r"\b[A-Za-z_$][A-Za-z0-9_$]*\s*\(")
+_FORBIDDEN_RUNTIME_MECHANISM = re.compile(
+    r"\b(?:loop|loops|poll|polling|schedule|scheduled|scheduling|queue|queued|"
+    r"state machine|tracking|persistent state|state attributes?)\b",
+    re.IGNORECASE,
+)
+_FORBIDDEN_IDLE_BYPASS = re.compile(
+    r"\b(?:omit|omitting|skip|skipping|ignore|ignoring|bypass|bypassing)\b.{0,40}"
+    r"\bidle(?:-friendly-unit)?\s+(?:check|checks|guard|guards|condition|conditions|state|states)\b|"
+    r"\b(?:remove|removes|removing)\b.{0,40}"
+    r"\bidle(?:-friendly-unit)?\s+(?:check|checks|guard|guards|condition|conditions|state|states)\b|"
+    r"\bwithout\s+(?:relying\s+on|checking|requiring|using)\b.{0,40}"
+    r"\bidle(?:-friendly-unit)?\s+(?:check|checks|guard|guards|condition|conditions|state|states)\b|"
+    r"\bwithout\b.{0,64}\bidle(?:-friendly-unit)?\s+"
+    r"(?:check|checks|guard|guards|condition|conditions|state|states)\b",
+    re.IGNORECASE,
+)
 _FORBIDDEN_SPECIFIC_TERMS = (
     "allinbot",
     "agentcontext",
@@ -137,10 +153,22 @@ def reusable_rules_json(
     *,
     recover_invalid_current: bool = False,
 ) -> str:
-    rules = _current_rules_for_rewrite(
-        prompt,
-        recover_invalid_current=recover_invalid_current,
-    )
+    try:
+        rules = parse_reusable_generation_rules(prompt)
+    except ValueError as exc:
+        if not recover_invalid_current:
+            raise
+        return json.dumps(
+            {
+                "validation_status": "invalid",
+                "validation_error": str(exc),
+                "recoverable_rules": [
+                    rule.to_dict() for rule in _recover_valid_rules(prompt)
+                ],
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
     return json.dumps(
         [rule.to_dict() for rule in rules],
         ensure_ascii=False,
@@ -269,12 +297,47 @@ def _current_rules_for_rewrite(
     except ValueError:
         if not recover_invalid_current:
             raise
-        # Balance Rewrite historically accepted arbitrary whole prompts. Some
-        # persisted outputs imitated the canonical markers without satisfying
-        # the rule grammar. At an explicit rewrite boundary, treat that tainted
-        # value like a legacy free-form prompt: expose no retained rules and let
-        # a validated delta replace it rather than copying malformed content.
+        # Older whole-prompt rewrites and previously accepted bad deltas may
+        # leave one tainted rule among valid canonical rules. At an explicit
+        # repair boundary, retain only rules that individually satisfy the
+        # current contract; the validated addition then replaces the discarded
+        # defect without erasing unrelated core translation invariants.
+        return _recover_valid_rules(prompt)
+
+
+def _recover_valid_rules(prompt: str) -> tuple[ReusableGenerationRule, ...]:
+    """Recover individually valid canonical lines from an invalid prompt."""
+
+    source = str(prompt or "").strip()
+    if source.count(RULES_START_MARKER) != 1 or source.count(RULES_END_MARKER) != 1:
         return ()
+    start = source.index(RULES_START_MARKER) + len(RULES_START_MARKER)
+    end = source.index(RULES_END_MARKER)
+    if start >= end:
+        return ()
+
+    recovered: list[ReusableGenerationRule] = []
+    seen_ids: set[str] = set()
+    for raw_line in source[start:end].splitlines():
+        match = _RULE_LINE.fullmatch(raw_line.strip())
+        if match is None:
+            continue
+        rule = ReusableGenerationRule(
+            rule_id=match.group("rule_id"),
+            category=match.group("category"),
+            instruction=_normalize_instruction(match.group("instruction")),
+        )
+        try:
+            _validate_rule(rule.category, rule.instruction)
+        except ValueError:
+            continue
+        if rule.rule_id in seen_ids:
+            continue
+        seen_ids.add(rule.rule_id)
+        recovered.append(rule)
+        if len(recovered) == MAX_REUSABLE_RULES - RULE_DELTA_ADDITIONS:
+            break
+    return tuple(recovered)
 
 
 def _normalize_instruction(value: str) -> str:
@@ -299,3 +362,23 @@ def _validate_rule(category: str, instruction: str) -> None:
         )
     if any(character in instruction for character in ("`", "{", "}", ";")) or _JAVA_CALL.search(instruction):
         raise ValueError("Reusable generation rules must be plain policy-agnostic prose, not Java.")
+    runtime_claim = re.sub(
+        r"\b(?:without|never|do\s+not|don't)\b.{0,64}"
+        r"\b(?:loops?|polling|scheduling|queues?|state\s+machines?|tracking|"
+        r"persistent\s+state|state\s+attributes?)\b",
+        "",
+        instruction,
+        flags=re.IGNORECASE,
+    )
+    mechanism = _FORBIDDEN_RUNTIME_MECHANISM.search(runtime_claim)
+    if mechanism:
+        raise ValueError(
+            "Reusable generation rules must describe translation invariants, not invented "
+            f"runtime mechanisms; rejected term: {mechanism.group(0)!r}."
+        )
+    idle_bypass = _FORBIDDEN_IDLE_BYPASS.search(instruction)
+    if idle_bypass:
+        raise ValueError(
+            "Reusable generation rules must preserve the idle-friendly-unit action guard; "
+            f"rejected phrase: {idle_bypass.group(0)!r}."
+        )

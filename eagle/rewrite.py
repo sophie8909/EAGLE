@@ -34,6 +34,7 @@ from .reusable_generation_prompt import (
     apply_reusable_rule_delta,
     reusable_rules_json,
 )
+from .strategy_compliance import validate_strategy_prompt_contract
 
 
 REWRITE_SCHEMA_VERSION = "phase2b-v2"
@@ -139,7 +140,12 @@ class PromptRewriteStage:
             attempt_request = (
                 request
                 if last_error is None
-                else _build_rewrite_validation_retry_prompt(request, last_error)
+                else _build_rewrite_retry_prompt(
+                    request,
+                    last_response,
+                    last_error,
+                    rewrite_type=rewrite_type,
+                )
             )
             if artifact_dir is not None:
                 assert stage_dir is not None
@@ -416,43 +422,65 @@ class PromptComplianceReflectionMutation:
                 original_strategy, original_generation, applied=False, target_dir=target_dir,
             )
 
-        strategy_rewrite = self.rewrite.run(
-            rewrite_type="prompt_compliance_strategy_prompt_rewrite",
-            candidate=candidate,
-            request=build_prompt_compliance_strategy_rewrite_prompt(candidate, reflection),
-            artifact_dir=target_dir,
-            artifact_mutation_type="prompt_compliance",
-            artifact_prefix="strategy_",
-        )
-        if not strategy_rewrite.succeeded:
+        analysis = reflection.parsed_response or {}
+        rewrite_strategy = bool(analysis.get("strategy_prompt_issues"))
+        rewrite_code = bool(analysis.get("code_generation_prompt_issues"))
+        if not rewrite_strategy and not rewrite_code:
             return self._result(
-                candidate, context, reflection, strategy_rewrite, None,
+                candidate, context, reflection, None, None,
                 original_strategy, original_generation, applied=False, target_dir=target_dir,
             )
 
-        code_rewrite = self.rewrite.run(
-            rewrite_type="prompt_compliance_generation_prompt_rewrite",
-            candidate=candidate,
-            request=build_prompt_compliance_code_rewrite_prompt(candidate, reflection),
-            artifact_dir=target_dir,
-            artifact_mutation_type="prompt_compliance",
-            artifact_prefix="code_",
-        )
-        if not code_rewrite.succeeded:
+        strategy_rewrite: RewriteResult | None = None
+        if rewrite_strategy:
+            strategy_rewrite = self.rewrite.run(
+                rewrite_type="prompt_compliance_strategy_prompt_rewrite",
+                candidate=candidate,
+                request=build_prompt_compliance_strategy_rewrite_prompt(candidate, reflection),
+                artifact_dir=target_dir,
+                artifact_mutation_type="prompt_compliance",
+                artifact_prefix="strategy_",
+            )
+            if not strategy_rewrite.succeeded:
+                return self._result(
+                    candidate, context, reflection, strategy_rewrite, None,
+                    original_strategy, original_generation, applied=False, target_dir=target_dir,
+                )
+
+        code_rewrite: RewriteResult | None = None
+        if rewrite_code:
+            code_rewrite = self.rewrite.run(
+                rewrite_type="prompt_compliance_generation_prompt_rewrite",
+                candidate=candidate,
+                request=build_prompt_compliance_code_rewrite_prompt(candidate, reflection),
+                artifact_dir=target_dir,
+                artifact_mutation_type="prompt_compliance",
+                artifact_prefix="code_",
+            )
+            if not code_rewrite.succeeded:
+                return self._result(
+                    candidate, context, reflection, strategy_rewrite, code_rewrite,
+                    original_strategy, original_generation, applied=False, target_dir=target_dir,
+                )
+        strategy_prompt = original_strategy
+        if strategy_rewrite is not None:
+            strategy_prompt = normalize_prompt(
+                strategy_rewrite.rewritten_prompt,
+                max_chars=self.config.max_prompt_chars,
+                max_lines=self.config.max_prompt_lines,
+            )
+        generation_prompt = original_generation
+        if code_rewrite is not None:
+            generation_prompt = normalize_prompt(
+                code_rewrite.rewritten_prompt,
+                max_chars=self.config.max_prompt_chars,
+                max_lines=self.config.max_prompt_lines,
+            )
+        if strategy_prompt == original_strategy and generation_prompt == original_generation:
             return self._result(
                 candidate, context, reflection, strategy_rewrite, code_rewrite,
                 original_strategy, original_generation, applied=False, target_dir=target_dir,
             )
-        strategy_prompt = normalize_prompt(
-            strategy_rewrite.rewritten_prompt,
-            max_chars=self.config.max_prompt_chars,
-            max_lines=self.config.max_prompt_lines,
-        )
-        generation_prompt = normalize_prompt(
-            code_rewrite.rewritten_prompt,
-            max_chars=self.config.max_prompt_chars,
-            max_lines=self.config.max_prompt_lines,
-        )
         return self._result(
             candidate, context, reflection, strategy_rewrite, code_rewrite,
             strategy_prompt, generation_prompt, applied=True, target_dir=target_dir,
@@ -486,6 +514,31 @@ class PromptComplianceReflectionMutation:
             (rewrite.error for rewrite in (strategy_rewrite, code_rewrite) if rewrite is not None and rewrite.error),
             None,
         )
+        parsed = reflection.parsed_response or {}
+        requested_rewrite_fields = [
+            field
+            for issue_key, field in (
+                ("strategy_prompt_issues", "strategy_prompt"),
+                ("code_generation_prompt_issues", "generation_prompt"),
+            )
+            if parsed.get(issue_key)
+        ]
+        compliance_status = (
+            "repaired"
+            if applied
+            else "already_compliant"
+            if reflection.succeeded and not requested_rewrite_fields
+            else "failed"
+        )
+        rewrite_status = (
+            None
+            if not requested_rewrite_fields
+            else "failed"
+            if rewrite_error is not None
+            else "success"
+            if rewrite_attempts
+            else "failed"
+        )
         mutation_record = {
             "schema_version": "prompt-compliance-reflection-v1",
             "reflection_schema_version": REFLECTION_SCHEMA_VERSION,
@@ -493,6 +546,8 @@ class PromptComplianceReflectionMutation:
             "feedback_candidate_id": context.candidate.candidate_id or candidate.id,
             "operation": "prompt_compliance_mutation",
             "applied": applied,
+            "compliance_status": compliance_status,
+            "requested_rewrite_fields": requested_rewrite_fields,
             "type": "prompt_compliance",
             "evidence": _prompt_compliance_evidence(candidate),
             "prompt_metadata": reflection.prompt_metadata,
@@ -502,7 +557,9 @@ class PromptComplianceReflectionMutation:
             "reflection_attempts": len(reflection.attempts),
             "rewrite_attempts": len(rewrite_attempts),
             "reflection_status": reflection.status,
-            "rewrite_status": None if code_rewrite is None else code_rewrite.status,
+            "rewrite_status": rewrite_status,
+            "strategy_rewrite_status": None if strategy_rewrite is None else strategy_rewrite.status,
+            "code_rewrite_status": None if code_rewrite is None else code_rewrite.status,
             "reflection_error": reflection.error,
             "rewrite_error": rewrite_error,
             "original_strategy_prompt": original_strategy,
@@ -727,13 +784,66 @@ def build_prompt_compliance_code_rewrite_prompt(
     })
 
 
-def _build_rewrite_validation_retry_prompt(original_request: str, error: str) -> str:
+def _build_rewrite_validation_retry_prompt(
+    original_request: str,
+    previous_response: str,
+    error: str,
+) -> str:
     from .prompts import render_prompt
 
     return render_prompt("rewrite_validation_retry", {
         "validation_error": error,
+        "previous_response": previous_response,
         "original_request": original_request,
     })
+
+
+def _build_rewrite_retry_prompt(
+    original_request: str,
+    previous_response: str,
+    error: str,
+    *,
+    rewrite_type: str,
+) -> str:
+    """Use a compact contract-only retry after a parseable strategy proposal."""
+
+    if rewrite_type in {
+        "strategy_prompt_rewrite",
+        "prompt_compliance_strategy_prompt_rewrite",
+    }:
+        try:
+            payload = parse_json_object_response(previous_response)
+        except ValueError:
+            payload = {}
+        proposed = _strategy_retry_candidate(payload.get("revised_strategy_prompt"))
+        if proposed:
+            from .prompts import load_prompt, render_prompt
+
+            return render_prompt("strategy_contract_rewrite", {
+                "gameplay_contract": load_prompt("microrts_gameplay_contract"),
+                "proposed_strategy_prompt": proposed.strip(),
+                "validation_error": error,
+            })
+    return _build_rewrite_validation_retry_prompt(
+        original_request,
+        previous_response,
+        error,
+    )
+
+
+def _strategy_retry_candidate(value: object) -> str:
+    """Recover strategy prose for retry context without accepting bad output."""
+
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list) and value and all(
+        isinstance(item, str) and item.strip() for item in value
+    ):
+        return "\n".join(
+            f"{index}. {' '.join(item.strip().split())}"
+            for index, item in enumerate(value, start=1)
+        )
+    return ""
 
 
 def _parse_rewritten_prompt(
@@ -754,16 +864,23 @@ def _parse_rewritten_prompt(
             payload,
             recover_invalid_current=True,
         )
-    lowered = response.lower().strip()
-    if (
-        "```" in lowered
-        or "package ai.generated" in lowered
-        or "public class candidateagent" in lowered
-        or lowered.startswith("new_strategy_prompt:")
-        or lowered.startswith("new_generation_prompt:")
-    ):
-        raise ValueError("Rewrite response must contain only the rewritten prompt.")
-    return response.strip()
+    payload = parse_json_object_response(response)
+    if set(payload) != {"revised_strategy_prompt"}:
+        raise ValueError(
+            "Strategy Rewrite JSON must contain exactly revised_strategy_prompt."
+        )
+    rewritten = payload["revised_strategy_prompt"]
+    if not isinstance(rewritten, str) or not rewritten.strip():
+        raise ValueError(
+            "Strategy Rewrite revised_strategy_prompt must be a non-empty string, "
+            "not an object or array."
+        )
+    rewritten = rewritten.strip()
+    lowered = rewritten.lower()
+    if "package ai.generated" in lowered or "public class candidateagent" in lowered:
+        raise ValueError("Strategy Rewrite must not contain generated Java.")
+    validate_strategy_prompt_contract(rewritten)
+    return rewritten
 
 
 def _mutation_metadata_record(record: dict[str, Any]) -> dict[str, Any]:

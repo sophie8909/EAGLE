@@ -116,7 +116,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
         rewrite_response = (
             code_rule_delta(rewritten)
             if mutation_type == "code"
-            else rewritten
+            else json.dumps({"revised_strategy_prompt": rewritten})
         )
         backend = ScriptedMutationBackend((reflection, rewrite_response))
         config = ExperimentConfig.from_mapping(

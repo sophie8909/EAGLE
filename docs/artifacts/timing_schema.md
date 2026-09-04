@@ -152,8 +152,9 @@ Run-level timing.jsonl contains event=generation and event=llm_request records. 
 
 Candidate timing.json contains operation-specific mutation and crossover generation-only spans, the shared child_generation span, separate validation/compilation/integration/evaluation spans, and child_total. Durations use a monotonic clock; UTC fields are display timestamps.
 
-Prompt Compliance Reflection records one `reflector_llm` attempt stream and two ordered
-rewrite attempts in `rewriter_llm` (strategy first, code-generation second).
+Prompt Compliance Reflection records one `reflector_llm` attempt stream and
+zero, one, or two ordered rewrite streams in `rewriter_llm` according to the
+reported issue-bearing genes (strategy before code-generation when both apply).
 Each request emits one run-level `llm_request` event and remains candidate-owned
 under `mutation/prompt_compliance_reflection/`.
 

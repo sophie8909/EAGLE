@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from eagle.prompts import load_prompt
@@ -8,6 +9,7 @@ from eagle.reusable_generation_prompt import (
     RULES_START_MARKER,
     apply_reusable_rule_delta,
     parse_reusable_generation_rules,
+    reusable_rules_json,
 )
 
 
@@ -97,6 +99,77 @@ class ReusableGenerationPromptTests(unittest.TestCase):
                     },
                 )
 
+    def test_delta_rejects_invented_runtime_mechanisms(self) -> None:
+        for instruction in (
+            "Schedule repeated actions until the policy condition becomes false.",
+            "Poll state inside a loop until every requested behavior completes.",
+        ):
+            with self.subTest(instruction=instruction), self.assertRaisesRegex(
+                ValueError, "runtime mechanisms"
+            ):
+                apply_reusable_rule_delta(
+                    "legacy prompt",
+                    {
+                        "remove_rule_ids": [],
+                        "add_rules": [{
+                            "category": "state_continuity",
+                            "instruction": instruction,
+                        }],
+                    },
+                )
+
+    def test_delta_accepts_explicit_runtime_mechanism_prohibition(self) -> None:
+        updated = apply_reusable_rule_delta(
+            "legacy prompt",
+            {
+                "remove_rule_ids": [],
+                "add_rules": [{
+                    "category": "state_continuity",
+                    "instruction": (
+                        "Reevaluate policy conditions each decision cycle without "
+                        "introducing loops or state machines."
+                    ),
+                }],
+            },
+        )
+        self.assertIn("without introducing loops or state machines", updated)
+
+    def test_delta_rejects_persistent_role_tracking_mechanism(self) -> None:
+        with self.assertRaisesRegex(ValueError, "runtime mechanisms"):
+            apply_reusable_rule_delta(
+                "legacy prompt",
+                {
+                    "remove_rule_ids": [],
+                    "add_rules": [{
+                        "category": "role_assignment",
+                        "instruction": (
+                            "Preserve roles by tracking dedicated actors in persistent state."
+                        ),
+                    }],
+                },
+            )
+
+    def test_delta_rejects_bypassing_idle_action_guard(self) -> None:
+        for instruction in (
+            "Keep continuous roles active by omitting conditional idle checks.",
+            "Prioritize policy-critical actions without relying on unit idle states.",
+            "Enforce continuous policy actions by removing all idle-friendly-unit guards.",
+            "Evaluate continuous actions without blocking on idle state or prerequisite checks.",
+        ):
+            with self.subTest(instruction=instruction), self.assertRaisesRegex(
+                ValueError, "idle-friendly-unit action guard"
+            ):
+                apply_reusable_rule_delta(
+                    "legacy prompt",
+                    {
+                        "remove_rule_ids": [],
+                        "add_rules": [{
+                            "category": "state_continuity",
+                            "instruction": instruction,
+                        }],
+                    },
+                )
+
     def test_delta_rejects_multi_rule_mutation(self) -> None:
         with self.assertRaisesRegex(ValueError, "add_rules must contain exactly 1 rule"):
             apply_reusable_rule_delta(
@@ -169,6 +242,34 @@ EAGLE_REUSABLE_RULES_END"""
         )
         self.assertEqual(len(parse_reusable_generation_rules(recovered)), 1)
         self.assertNotIn("bad-id", recovered)
+
+    def test_repair_preserves_valid_rules_but_discards_invalid_rule(self) -> None:
+        current = load_prompt("initial_generation").replace(
+            RULES_END_MARKER,
+            "[bad-idle-rule] state_continuity | Enforce continuous policy actions by "
+            "removing all idle-friendly-unit guards.\n" + RULES_END_MARKER,
+        )
+
+        audit = json.loads(reusable_rules_json(current, recover_invalid_current=True))
+        self.assertEqual(audit["validation_status"], "invalid")
+        self.assertIn("idle-friendly-unit action guard", audit["validation_error"])
+        self.assertEqual(len(audit["recoverable_rules"]), 6)
+
+        repaired = apply_reusable_rule_delta(
+            current,
+            {
+                "remove_rule_ids": [],
+                "add_rules": [{
+                    "category": "state_continuity",
+                    "instruction": (
+                        "Reevaluate each policy condition only for idle actors in every decision cycle."
+                    ),
+                }],
+            },
+            recover_invalid_current=True,
+        )
+        self.assertEqual(len(parse_reusable_generation_rules(repaired)), 7)
+        self.assertNotIn("bad-idle-rule", repaired)
 
 
 if __name__ == "__main__":

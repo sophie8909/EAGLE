@@ -156,15 +156,19 @@ contract, and the immutable action/API guide. It receives no Java, compiler
 diagnostics, match result, aggregate W/D/L table, fitness value, or raw trace.
 Its reflector identifies rules that use nonexistent game concepts,
 unobservable conditions, illegal actions/production, policy-specific decoder
-instructions, unsupported APIs, or immutable-scaffold edits. Bounded Strategy
-and Code Prompt Rewriters then atomically replace both prompt genes while
-preserving the intended strategy type. The Code Prompt Rewriter uses the same
+instructions, unsupported APIs, or immutable-scaffold edits. Each source may
+be reported clean; only a prompt gene with reported issues is sent to its
+bounded Rewriter. When both genes need repair, their replacements remain one
+atomic mutation. The Strategy Prompt Rewriter preserves the intended strategy
+type. The Code Prompt Rewriter uses the same
 structured reusable-rule delta and canonical renderer as Code Reflection; it
-cannot persist an unchecked whole generation prompt. If the reflector or either
-rewrite fails, both parent prompt genes remain unchanged. Prompt Compliance
-mutation never edits Java directly. A historically malformed marked generation
-prompt is exposed as an empty retained-rule set only at a rewrite boundary, so
-a validated delta replaces rather than copies it.
+cannot persist an unchecked whole generation prompt. If a requested rewrite
+fails, every parent prompt gene remains unchanged. A clean audit records
+`already_compliant` and performs no rewrite. Prompt Compliance
+mutation never edits Java directly. At a rewrite boundary, a historically
+malformed marked generation prompt retains only rule lines that individually
+pass the current validator; rejected lines are discarded before the validated
+delta is applied. A legacy free-form prompt retains no rules.
 
 The canonical config key is
 `prompt_compliance_reflection_probability`, the operator ID is
