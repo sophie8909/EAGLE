@@ -100,9 +100,9 @@ class EaglePipelineTests(unittest.TestCase):
         scenarios = (
             ("strategy", "generated_phenotype", parent_b.id),
             ("code", "generated_phenotype", parent_a.id),
-            ("balance", "generated_phenotype", parent_a.id),
+            ("prompt_compliance", "generated_phenotype", parent_a.id),
             ("code", "inherited_genotype", parent_b.id),
-            ("balance", "inherited_genotype", parent_b.id),
+            ("prompt_compliance", "inherited_genotype", parent_b.id),
         )
         for mutation_name, java_mode, expected in scenarios:
             with self.subTest(mutation_name=mutation_name, candidate_java_mode=java_mode):
@@ -461,7 +461,11 @@ class EaglePipelineTests(unittest.TestCase):
             generation_one_aos = next(item["aos"] for item in metrics if item["generation"] == 1)
             self.assertEqual(
                 set(generation_one_aos["operators"]),
-                {"strategy_reflection", "generate_code_reflection", "balance_reflection"},
+                {
+                    "strategy_reflection",
+                    "generate_code_reflection",
+                    "prompt_compliance_reflection",
+                },
             )
             self.assertAlmostEqual(
                 sum(generation_one_aos["post_update_probabilities"].values()), 1.0

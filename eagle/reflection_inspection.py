@@ -34,12 +34,12 @@ from .search_runtime import build_search_runtime
 from .strategy_reflection import normalize_mutation_intent
 
 
-INSPECTION_SCHEMA_VERSION = "eagle-reflection-inspection-v1"
-REFLECTION_TYPES = ("strategy", "code", "balance")
+INSPECTION_SCHEMA_VERSION = "eagle-reflection-inspection-v2"
+REFLECTION_TYPES = ("strategy", "code", "prompt_compliance")
 EXPECTED_CHANGED_FIELDS = {
     "strategy": ("strategy_prompt",),
     "code": ("generation_prompt",),
-    "balance": ("strategy_prompt", "generation_prompt"),
+    "prompt_compliance": ("strategy_prompt", "generation_prompt"),
 }
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -97,7 +97,7 @@ class ReflectionInspectionConfig:
         order = tuple(str(item).strip().lower() for item in payload.get("reflection_order", REFLECTION_TYPES))
         if len(order) != len(REFLECTION_TYPES) or set(order) != set(REFLECTION_TYPES):
             raise ValueError(
-                "reflection_order must contain strategy, code, and balance exactly once."
+                "reflection_order must contain strategy, code, and prompt_compliance exactly once."
             )
         return cls(name, experiment_path, output_root, trials, intent, order)
 
@@ -676,9 +676,9 @@ def _render_markdown_summary(
             "",
             "## 人工確認順序",
             "",
-            "1. 先確認 `Root request 相同=是`：Strategy 比對 10 個 commentator request；Code/Balance 比對 reflector request。後續 request 會包含前一角色的隨機輸出，本來就可能不同。",
+            "1. 先確認 `Root request 相同=是`：Strategy 比對 10 個 commentator request；Code/Prompt Compliance 比對 reflector request。後續 request 會包含前一角色的隨機輸出，本來就可能不同。",
             "2. 再看 `mutation/<type>_reflection/` 內的解析結果與 validation/retry artifact。",
-            "3. 最後看 `changes/`：Strategy 只能改 policy prompt；Code 只能改 code-generation prompt；Balance 必須同時改兩者；Java 必須保持不變。",
+            "3. 最後看 `changes/`：Strategy 只能改 policy prompt；Code 只能改 code-generation prompt；Prompt Compliance 必須同時改兩者；Java 必須保持不變。",
             "4. `scope_matches_expectation=false` 代表 reflection 失敗、缺少預期改動，或動到不該動的欄位，需人工判讀原因。",
             "",
             "Baseline 完整評估證據位於 `baseline/`，固定輸入與 hash 位於 `inputs/`。",

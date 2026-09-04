@@ -17,7 +17,7 @@ from .llm import LLMCallLogger, LLMClient, LLMServerError
 from .initial_population import MockInitialPolicyBackend
 from .mutation import build_reflection_backend
 from .prompts import load_prompt
-from .rewrite import BalanceReflectionMutation, PromptRewriteMutation
+from .rewrite import PromptComplianceReflectionMutation, PromptRewriteMutation
 from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation
 
 
@@ -104,7 +104,7 @@ def build_search_runtime(
             logger=logger,
             backend_name=backend_name,
         ),
-        "balance": BalanceReflectionMutation(
+        "prompt_compliance": PromptComplianceReflectionMutation(
             config,
             reflection_backend=reflection_backend,
             rewrite_backend=rewrite_backend,

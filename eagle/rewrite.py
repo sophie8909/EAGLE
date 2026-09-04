@@ -23,7 +23,7 @@ from .mutation import (
     ReflectionResult,
     ReflectionStage,
     build_code_reflection_prompt_bundle,
-    build_balance_reflection_prompt_bundle,
+    build_prompt_compliance_reflection_prompt_bundle,
     build_strategy_reflection_prompt_bundle,
     parse_json_object_response,
     _timing_payload,
@@ -352,13 +352,13 @@ class PromptRewriteMutation:
     def _result_candidate(self, *args: Any, **kwargs: Any) -> Candidate:
         """Share the established single-gene mutation artifact writer."""
 
-        return BalanceReflectionMutation._result_candidate(self, *args, **kwargs)
+        return PromptComplianceReflectionMutation._result_candidate(self, *args, **kwargs)
 
 
-class BalanceReflectionMutation:
-    """Use aggregate outcome balance evidence to atomically revise both prompt genes."""
+class PromptComplianceReflectionMutation:
+    """Diagnose both prompt genes and atomically repair contract violations."""
 
-    mutation_type = "balance"
+    mutation_type = "prompt_compliance"
 
     def __init__(
         self,
@@ -402,9 +402,9 @@ class BalanceReflectionMutation:
         context = coerce_structured_context(context, candidate)
         original_strategy = candidate.strategy_prompt
         original_generation = candidate.generation_prompt
-        bundle = build_balance_reflection_prompt_bundle(candidate, context)
+        bundle = build_prompt_compliance_reflection_prompt_bundle(candidate, context)
         reflection = self.reflection.run(
-            reflection_type="balance",
+            reflection_type="prompt_compliance",
             candidate=candidate,
             request=bundle.text,
             artifact_dir=target_dir,
@@ -417,11 +417,11 @@ class BalanceReflectionMutation:
             )
 
         strategy_rewrite = self.rewrite.run(
-            rewrite_type="balance_strategy_prompt_rewrite",
+            rewrite_type="prompt_compliance_strategy_prompt_rewrite",
             candidate=candidate,
-            request=build_balance_strategy_rewrite_prompt(candidate, reflection),
+            request=build_prompt_compliance_strategy_rewrite_prompt(candidate, reflection),
             artifact_dir=target_dir,
-            artifact_mutation_type="balance",
+            artifact_mutation_type="prompt_compliance",
             artifact_prefix="strategy_",
         )
         if not strategy_rewrite.succeeded:
@@ -431,11 +431,11 @@ class BalanceReflectionMutation:
             )
 
         code_rewrite = self.rewrite.run(
-            rewrite_type="balance_generation_prompt_rewrite",
+            rewrite_type="prompt_compliance_generation_prompt_rewrite",
             candidate=candidate,
-            request=build_balance_code_rewrite_prompt(candidate, reflection),
+            request=build_prompt_compliance_code_rewrite_prompt(candidate, reflection),
             artifact_dir=target_dir,
-            artifact_mutation_type="balance",
+            artifact_mutation_type="prompt_compliance",
             artifact_prefix="code_",
         )
         if not code_rewrite.succeeded:
@@ -487,16 +487,14 @@ class BalanceReflectionMutation:
             None,
         )
         mutation_record = {
-            "schema_version": "balance-reflection-v1",
+            "schema_version": "prompt-compliance-reflection-v1",
             "reflection_schema_version": REFLECTION_SCHEMA_VERSION,
             "candidate_id": candidate.id,
             "feedback_candidate_id": context.candidate.candidate_id or candidate.id,
-            "operation": "balance_mutation",
+            "operation": "prompt_compliance_mutation",
             "applied": applied,
-            "type": "balance",
-            "objectives": context.objectives.to_dict(),
-            "evaluation_status": context.candidate.status,
-            "evidence": {"outcome_table": _balance_outcome_table(context)},
+            "type": "prompt_compliance",
+            "evidence": _prompt_compliance_evidence(candidate),
             "prompt_metadata": reflection.prompt_metadata,
             "model": reflection.model,
             "reflection_operation": reflection.operation,
@@ -519,17 +517,17 @@ class BalanceReflectionMutation:
         metadata = dict(candidate.metadata)
         history = [
             item for item in list(metadata.get("reflection_history") or ())
-            if isinstance(item, dict) and item.get("reflection_type") == "balance"
+            if isinstance(item, dict) and item.get("reflection_type") == "prompt_compliance"
         ][-1:]
         history.append({
-            "reflection_type": "balance",
+            "reflection_type": "prompt_compliance",
             "parent_candidate_id": mutation_record["feedback_candidate_id"],
             "analysis_summary": reflection.analysis_summary,
             "generation_index": candidate.generation,
         })
         mutation_record["reflection_history"] = history
         if target_dir is not None:
-            mutation_dir = target_dir / "mutation" / "balance_reflection"
+            mutation_dir = target_dir / "mutation" / "prompt_compliance_reflection"
             _write_text(mutation_dir / "original_policy_prompt.txt", original_strategy)
             _write_text(mutation_dir / "original_code_generation_prompt.txt", original_generation)
             _write_json(mutation_dir / "reflection_context.json", mutation_record["evidence"])
@@ -546,7 +544,7 @@ class BalanceReflectionMutation:
             strategy_prompt=strategy_prompt,
             generation_prompt=generation_prompt,
             operator=("crossover+mutation" if candidate.operator == "crossover" else "mutation") if applied else candidate.operator,
-            mutation_type="balance",
+            mutation_type="prompt_compliance",
             timing=timing,
             metadata=metadata,
         )
@@ -694,26 +692,37 @@ def build_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult
     })
 
 
-def build_balance_strategy_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult) -> str:
+def build_prompt_compliance_strategy_rewrite_prompt(
+    candidate: Candidate,
+    reflection: ReflectionResult,
+) -> str:
     from .prompts import load_prompt, render_prompt
 
-    return render_prompt("balance_strategy_rewrite", {
+    return render_prompt("prompt_compliance_strategy_rewrite", {
         "gameplay_contract": load_prompt("microrts_gameplay_contract"),
         "strategy_prompt": candidate.strategy_prompt,
-        "balance_analysis": json.dumps(reflection.parsed_response or {}, ensure_ascii=False),
+        "prompt_compliance_analysis": json.dumps(
+            reflection.parsed_response or {}, ensure_ascii=False
+        ),
     })
 
 
-def build_balance_code_rewrite_prompt(candidate: Candidate, reflection: ReflectionResult) -> str:
+def build_prompt_compliance_code_rewrite_prompt(
+    candidate: Candidate,
+    reflection: ReflectionResult,
+) -> str:
     from .prompts import load_prompt, render_prompt
 
-    return render_prompt("balance_code_rewrite", {
+    return render_prompt("prompt_compliance_code_rewrite", {
         "code_generation_prompt": candidate.generation_prompt,
         "current_reusable_rules": reusable_rules_json(
             candidate.generation_prompt,
             recover_invalid_current=True,
         ),
-        "balance_analysis": json.dumps(reflection.parsed_response or {}, ensure_ascii=False),
+        "prompt_compliance_analysis": json.dumps(
+            reflection.parsed_response or {}, ensure_ascii=False
+        ),
+        "gameplay_contract": load_prompt("microrts_gameplay_contract"),
         "action_api_guide": load_prompt("action_api_guide"),
     })
 
@@ -737,7 +746,7 @@ def _parse_rewritten_prompt(
         raise ValueError("Rewrite response must contain a non-empty prompt.")
     if rewrite_type in {
         "generation_prompt_rewrite",
-        "balance_generation_prompt_rewrite",
+        "prompt_compliance_generation_prompt_rewrite",
     }:
         payload = parse_json_object_response(response)
         return apply_reusable_rule_delta(
@@ -795,17 +804,28 @@ def _rewrite_artifact_dir(root: Path | None, rewrite_type: str, *, mutation_type
     return root / "mutation" / f"{mutation_type}_reflection"
 
 
-def _balance_outcome_table(context: ReflectionContext) -> list[dict[str, object]]:
-    table: list[dict[str, object]] = []
-    for opponent in context.opponents:
-        for map_result in opponent.map_results:
-            table.append({
-                "opponent": opponent.opponent_id,
-                "map": map_result.map_name,
-                "p0": {key: int(map_result.p0_result.get(key) or 0) for key in ("wins", "losses", "draws", "games")},
-                "p1": {key: int(map_result.p1_result.get(key) or 0) for key in ("wins", "losses", "draws", "games")},
-            })
-    return table
+def _prompt_compliance_evidence(candidate: Candidate) -> dict[str, object]:
+    return {
+        "strategy_prompt_artifact": "original_policy_prompt.txt",
+        "code_generation_prompt_artifact": "original_code_generation_prompt.txt",
+        "current_reusable_rules": json.loads(
+            reusable_rules_json(
+                candidate.generation_prompt,
+                recover_invalid_current=True,
+            )
+        ),
+        "domain_context_prompts": [
+            "prompts/microrts_gameplay_contract.txt",
+            "prompts/action_api_guide.txt",
+        ],
+        "excluded_evidence": [
+            "generated_java",
+            "match_results",
+            "match_traces",
+            "compiler_diagnostics",
+            "fitness_objectives",
+        ],
+    }
 
 
 def _write_text(path: Path, value: str) -> None:

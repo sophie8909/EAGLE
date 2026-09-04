@@ -10,7 +10,7 @@ from eagle.aos import (
     AdaptiveOperatorSelection,
     AdaptiveOperatorSelector,
     GENERATE_CODE_REFLECTION,
-    BALANCE_REFLECTION,
+    PROMPT_COMPLIANCE_REFLECTION,
     STRATEGY_REFLECTION,
     StaticOperatorSelector,
     OperatorReward,
@@ -78,7 +78,7 @@ def config_for(mode: str, **overrides) -> ExperimentConfig:
         "reflection_operator_mode": mode,
         "strategy_reflection_probability": 0.20,
         "code_reflection_probability": 0.80,
-        "balance_reflection_probability": 0.0,
+        "prompt_compliance_reflection_probability": 0.0,
         "aos_minimum_probability": 0.10,
         **overrides,
     }
@@ -104,11 +104,15 @@ class ReflectionOperatorModeTests(unittest.TestCase):
             self.assertIsNone(record["code_reward"])
             self.assertEqual(record["strategy_probability_before"], record["strategy_probability_after"])
             self.assertEqual(record["code_probability_before"], record["code_probability_after"])
+            self.assertEqual(record["schema_version"], "eagle-reflection-operator-v4")
+            self.assertIsNone(record["prompt_compliance_reward"])
             self.assertTrue({
                 "mode", "reward_source",
                 "strategy_probability_before", "code_probability_before",
+                "prompt_compliance_probability_before",
                 "strategy_probability_after", "code_probability_after",
-                "strategy_reward", "code_reward",
+                "prompt_compliance_probability_after",
+                "strategy_reward", "code_reward", "prompt_compliance_reward",
             }.issubset(record))
 
     def test_operator_preconditions_condition_selection_and_usage_on_eligible_set(self):
@@ -275,7 +279,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
             self.assertEqual(controller.updater.probabilities, {
                 STRATEGY_REFLECTION: 0.20,
                 GENERATE_CODE_REFLECTION: 0.80,
-                BALANCE_REFLECTION: 0.0,
+                PROMPT_COMPLIANCE_REFLECTION: 0.0,
             })
             for index in range(12):
                 record = controller.update_generation([
@@ -314,6 +318,44 @@ class ReflectionOperatorModeTests(unittest.TestCase):
 
 
 class ReflectionOperatorConfigTests(unittest.TestCase):
+    def test_prompt_compliance_probability_is_canonical_and_legacy_alias_loads(self):
+        canonical = config_for(
+            "static",
+            strategy_reflection_probability=0.0,
+            code_reflection_probability=0.0,
+            prompt_compliance_reflection_probability=1.0,
+        )
+        self.assertEqual(canonical.prompt_compliance_reflection_probability, 1.0)
+        self.assertIn(
+            "prompt_compliance_reflection_probability",
+            canonical.to_mapping(),
+        )
+        self.assertNotIn("balance_reflection_probability", canonical.to_mapping())
+
+        legacy = ExperimentConfig.from_mapping({
+            "strategy_reflection_probability": 0.0,
+            "code_reflection_probability": 0.0,
+            "balance_reflection_probability": 1.0,
+        })
+        self.assertEqual(legacy.prompt_compliance_reflection_probability, 1.0)
+
+        with self.assertRaisesRegex(ValueError, "cannot be combined"):
+            ExperimentConfig.from_mapping({
+                "prompt_compliance_reflection_probability": 1.0,
+                "balance_reflection_probability": 0.0,
+            })
+
+    def test_removed_balance_operator_state_cannot_resume_under_new_semantics(self):
+        config = config_for("static")
+        with self.assertRaisesRegex(ValueError, "removed Balance Reflection"):
+            build_reflection_operator_controller(
+                config,
+                state={
+                    "mode": "static",
+                    "total_usage": {"balance_reflection": 4},
+                },
+            )
+
     def test_rejects_probabilities_that_do_not_sum_to_one(self):
         with self.assertRaisesRegex(ValueError, "must equal 1.0"):
             config_for(

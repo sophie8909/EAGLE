@@ -2,7 +2,7 @@
 
 Prompt rewriting is intentionally owned by the next migration stage. This
 module currently provides typed evidence, a transport abstraction, retry
-handling, timing, and durable Reflection results for both mutation types.
+handling, timing, and durable Reflection results for all prompt mutation types.
 """
 
 from __future__ import annotations
@@ -32,10 +32,10 @@ from .reflection_context import (
 )
 # Compatibility re-exports used by the reflection/rewrite API and tests.
 from .reflection_prompts import (
-    build_balance_reflection_prompt,
-    build_balance_reflection_prompt_bundle,
     build_code_reflection_prompt,
     build_code_reflection_prompt_bundle,
+    build_prompt_compliance_reflection_prompt,
+    build_prompt_compliance_reflection_prompt_bundle,
     build_strategy_reflection_prompt,
     build_strategy_reflection_prompt_bundle,
 )
@@ -227,27 +227,67 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
         except ValueError as exc:
             raise ValueError("Code Reviewer required_generation_behaviors items must be text corrections.") from exc
         return normalized_payload, json.dumps(normalized_payload, ensure_ascii=False, sort_keys=True), ""
-    elif reflection_type == "balance":
-        weaknesses = payload.get("weaknesses")
-        strategy_focus = payload.get("strategy_focus")
-        code_focus = payload.get("code_generation_focus")
-        if not isinstance(weaknesses, list) or not isinstance(strategy_focus, list) or not isinstance(code_focus, list):
+    elif reflection_type == "prompt_compliance":
+        expected_fields = {
+            "strategy_prompt_issues",
+            "code_generation_prompt_issues",
+            "strategy_rewrite_focus",
+            "code_generation_rewrite_focus",
+        }
+        if set(payload) != expected_fields:
             raise ValueError(
-                "Balance Reflection response must contain weaknesses, strategy_focus, and code_generation_focus arrays."
+                "Prompt Compliance Reflection response must contain exactly "
+                "strategy_prompt_issues, code_generation_prompt_issues, "
+                "strategy_rewrite_focus, and code_generation_rewrite_focus."
             )
-        for item in weaknesses:
-            if not isinstance(item, dict) or not all(
-                isinstance(item.get(key), str) and item[key].strip()
-                for key in ("opponent", "map", "side", "reason")
+        issue_specs = {
+            "strategy_prompt_issues": {
+                "illegal_game_concept",
+                "unobservable_condition",
+                "illegal_action_or_production",
+                "ambiguous_or_conflicting_rule",
+            },
+            "code_generation_prompt_issues": {
+                "policy_specific_instruction",
+                "unsupported_api_assumption",
+                "scope_or_scaffold_violation",
+                "ambiguous_or_conflicting_rule",
+            },
+        }
+        for field, categories in issue_specs.items():
+            issues = payload.get(field)
+            if not isinstance(issues, list):
+                raise ValueError(
+                    "Prompt Compliance Reflection response must contain "
+                    "strategy_prompt_issues and code_generation_prompt_issues arrays."
+                )
+            for issue in issues:
+                if not isinstance(issue, dict) or set(issue) != {
+                    "category", "problem", "correction_goal"
+                }:
+                    raise ValueError(
+                        f"Each {field} item must contain exactly category, problem, "
+                        "and correction_goal."
+                    )
+                if issue.get("category") not in categories:
+                    raise ValueError(
+                        f"Prompt Compliance Reflection {field} category is invalid."
+                    )
+                if not all(
+                    isinstance(issue.get(key), str) and str(issue[key]).strip()
+                    for key in ("problem", "correction_goal")
+                ):
+                    raise ValueError(
+                        f"Prompt Compliance Reflection {field} text must be non-empty."
+                    )
+        for field in ("strategy_rewrite_focus", "code_generation_rewrite_focus"):
+            values = payload.get(field)
+            if not isinstance(values, list) or not values or not all(
+                isinstance(item, str) and item.strip() for item in values
             ):
                 raise ValueError(
-                    "Each Balance Reflection weakness must identify opponent, map, side, and reason."
+                    f"Prompt Compliance Reflection {field} must be a non-empty string array."
                 )
-            if item["side"] not in {"p0", "p1", "both"}:
-                raise ValueError("Each Balance Reflection weakness side must be p0, p1, or both.")
-        for values, field in ((strategy_focus, "strategy_focus"), (code_focus, "code_generation_focus")):
-            if not all(isinstance(item, str) and item.strip() for item in values):
-                raise ValueError(f"Balance Reflection {field} entries must be non-empty strings.")
         return payload, json.dumps(payload, ensure_ascii=False, sort_keys=True), ""
     else:
         raise ValueError(f"Unknown reflection type: {reflection_type}")
@@ -322,20 +362,29 @@ class MockReflectionBackend:
                 "mutation_plan": {"remove_or_reduce": [], "add_or_strengthen": ["preserve the tested strategy"], "conditional_behaviors": ["When evidence is unavailable, preserve validated behavior."]},
                 "revised_strategy_prompt": "Preserve deterministic behavior and address the observed strategic weakness with conditional rules.",
             })
-        if "Balance Reflection stage" in prompt:
+        if "Prompt Compliance Reflection stage" in prompt:
             return json.dumps({
-                "weaknesses": [],
-                "strategy_focus": [
-                    "Preserve the strongest observed matchup behavior while adding conditional fallbacks."
+                "strategy_prompt_issues": [{
+                    "category": "ambiguous_or_conflicting_rule",
+                    "problem": "The policy leaves fallback priority implicit.",
+                    "correction_goal": "State one observable and executable fallback priority.",
+                }],
+                "code_generation_prompt_issues": [{
+                    "category": "ambiguous_or_conflicting_rule",
+                    "problem": "The reusable rules do not define how dependent behaviors remain reachable.",
+                    "correction_goal": "Require prerequisites before their dependent behaviors.",
+                }],
+                "strategy_rewrite_focus": [
+                    "Replace implicit fallbacks with observable legal conditions and actions."
                 ],
-                "code_generation_focus": [
-                    "Translate every conditional fallback into reachable, mutually exclusive behavior."
+                "code_generation_rewrite_focus": [
+                    "Generalize prerequisite reachability into one reusable translation rule."
                 ],
             })
-        if "Balance Strategy Prompt Rewrite stage" in prompt:
+        if "Prompt Compliance Strategy Prompt Rewrite stage" in prompt:
             return (
-                "Preserve the validated Worker Rush opening and add conditional "
-                "fallbacks for opponent, map, and side-specific pressure."
+                "Preserve the intended strategy while expressing every condition through "
+                "observable MicroRTS state and every response through legal actions."
             )
         if "Code Reflection stage" in prompt:
             return json.dumps({

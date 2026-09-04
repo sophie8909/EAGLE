@@ -242,7 +242,7 @@ class InitialPopulationGenerationTests(unittest.TestCase):
                     "reflection_operator_mode": "static",
                     "strategy_reflection_probability": 0.2,
                     "code_reflection_probability": 0.2,
-                    "balance_reflection_probability": 0.6,
+                    "prompt_compliance_reflection_probability": 0.6,
                 }
             )
             result = run_search(config, mock=True, run_id="mixed-initialization")

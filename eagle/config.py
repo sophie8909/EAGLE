@@ -143,7 +143,7 @@ class ExperimentConfig:
     reflection_operator_mode: ReflectionOperatorMode = ReflectionOperatorMode.AOS_HEAD2HEAD
     strategy_reflection_probability: float = 0.20
     code_reflection_probability: float = 0.80
-    balance_reflection_probability: float = 0.0
+    prompt_compliance_reflection_probability: float = 0.0
     aos_minimum_probability: float = 0.10
 
     @classmethod
@@ -264,9 +264,21 @@ class ExperimentConfig:
             raise ValueError(
                 "The nested aos config is obsolete. Use reflection_operator_mode, "
                 "strategy_reflection_probability, code_reflection_probability, "
-                "balance_reflection_probability, and "
+                "prompt_compliance_reflection_probability, and "
                 "aos_minimum_probability at the top level."
             )
+        if (
+            "prompt_compliance_reflection_probability" in payload
+            and "balance_reflection_probability" in payload
+        ):
+            raise ValueError(
+                "Use prompt_compliance_reflection_probability only; it cannot be "
+                "combined with the legacy balance_reflection_probability alias."
+            )
+        prompt_compliance_probability = payload.get(
+            "prompt_compliance_reflection_probability",
+            payload.get("balance_reflection_probability", 0.0),
+        )
         reflection_operator_mode = ReflectionOperatorMode.parse(
             payload.get("reflection_operator_mode", ReflectionOperatorMode.AOS_HEAD2HEAD.value)
         )
@@ -337,7 +349,9 @@ class ExperimentConfig:
             reflection_operator_mode=reflection_operator_mode,
             strategy_reflection_probability=float(payload.get("strategy_reflection_probability", 0.20)),
             code_reflection_probability=float(payload.get("code_reflection_probability", 0.80)),
-            balance_reflection_probability=float(payload.get("balance_reflection_probability", 0.0)),
+            prompt_compliance_reflection_probability=float(
+                prompt_compliance_probability
+            ),
             aos_minimum_probability=float(payload.get("aos_minimum_probability", 0.10)),
         )
 
@@ -500,7 +514,9 @@ class ExperimentConfig:
             "reflection_operator_mode": self.reflection_operator_mode.value,
             "strategy_reflection_probability": self.strategy_reflection_probability,
             "code_reflection_probability": self.code_reflection_probability,
-            "balance_reflection_probability": self.balance_reflection_probability,
+            "prompt_compliance_reflection_probability": (
+                self.prompt_compliance_reflection_probability
+            ),
             "aos_minimum_probability": self.aos_minimum_probability,
             "llm": {
                 "temperature": self.llm_temperature,
@@ -568,7 +584,9 @@ class ExperimentConfig:
             mode=ReflectionOperatorMode.parse(self.reflection_operator_mode),
             strategy_probability=self.strategy_reflection_probability,
             code_probability=self.code_reflection_probability,
-            balance_probability=self.balance_reflection_probability,
+            prompt_compliance_probability=(
+                self.prompt_compliance_reflection_probability
+            ),
             minimum_probability=self.aos_minimum_probability,
         )
 

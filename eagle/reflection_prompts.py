@@ -12,6 +12,7 @@ from generation.agent_template import extract_strategy_region
 from .candidate import Candidate
 from .prompts import load_prompt, render_prompt
 from .reflection_context import ReflectionContext, coerce_structured_context
+from .reusable_generation_prompt import reusable_rules_json
 
 
 REFLECTION_PROMPT_SCHEMA_VERSION = "reflection-prompt-v2"
@@ -29,7 +30,13 @@ CODE_BUDGETS = {
     "structural_evidence": 9_000,
     "action_api_guide": 12_000,
 }
-BALANCE_BUDGETS = {"win_loss_table": 18_000}
+PROMPT_COMPLIANCE_BUDGETS = {
+    "strategy_prompt": 12_000,
+    "code_generation_prompt": 12_000,
+    "current_reusable_rules": 8_000,
+    "gameplay_contract": 12_000,
+    "action_api_guide": 12_000,
+}
 MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
 
 
@@ -202,43 +209,54 @@ def build_code_reflection_prompt_bundle(candidate: Candidate, context: Reflectio
     return ReflectionPrompt(text, _metadata(sections, omitted, truncated, text))
 
 
-def build_balance_reflection_prompt_bundle(candidate: Candidate, context: ReflectionContext) -> ReflectionPrompt:
-    """Render balance-only evidence without exposing Java, prompts, or raw traces."""
+def build_prompt_compliance_reflection_prompt_bundle(
+    candidate: Candidate,
+    context: ReflectionContext,
+) -> ReflectionPrompt:
+    """Inspect both prompt genes without exposing Java or match evidence."""
 
-    context = coerce_structured_context(context, candidate)
+    # Keep the public mutation signature aligned with the other operators while
+    # making the evidence boundary explicit: this operator diagnoses the active
+    # prompt genes, not the evaluated parent's outcomes or phenotype.
+    coerce_structured_context(context, candidate)
     truncated: list[str] = []
-    table: list[dict[str, object]] = []
-    for opponent in context.opponents:
-        for map_result in opponent.map_results:
-            table.append({
-                "opponent": opponent.opponent_id,
-                "map": map_result.map_name,
-                "p0": _win_loss_draw(map_result.p0_result),
-                "p1": _win_loss_draw(map_result.p1_result),
-                "total": {
-                    "wins": map_result.wins,
-                    "losses": map_result.losses,
-                    "draws": map_result.draws,
-                    "games": map_result.games,
-                },
-            })
     sections = {
-        "win_loss_table": _bounded_text(
-            _json(table),
-            BALANCE_BUDGETS["win_loss_table"],
-            section="win_loss_table",
+        "strategy_prompt": _bounded_text(
+            candidate.strategy_prompt,
+            PROMPT_COMPLIANCE_BUDGETS["strategy_prompt"],
+            section="strategy_prompt",
+            truncated=truncated,
+        ),
+        "code_generation_prompt": _bounded_text(
+            candidate.generation_prompt,
+            PROMPT_COMPLIANCE_BUDGETS["code_generation_prompt"],
+            section="code_generation_prompt",
+            truncated=truncated,
+        ),
+        "current_reusable_rules": _bounded_text(
+            reusable_rules_json(
+                candidate.generation_prompt,
+                recover_invalid_current=True,
+            ),
+            PROMPT_COMPLIANCE_BUDGETS["current_reusable_rules"],
+            section="current_reusable_rules",
+            truncated=truncated,
+        ),
+        "gameplay_contract": _bounded_text(
+            MICRORTS_GAMEPLAY_CONTRACT,
+            PROMPT_COMPLIANCE_BUDGETS["gameplay_contract"],
+            section="gameplay_contract",
+            truncated=truncated,
+        ),
+        "action_api_guide": _bounded_text(
+            load_prompt("action_api_guide"),
+            PROMPT_COMPLIANCE_BUDGETS["action_api_guide"],
+            section="action_api_guide",
             truncated=truncated,
         ),
     }
-    text = render_prompt("balance_reflection", sections)
+    text = render_prompt("prompt_compliance_reflection", sections)
     return ReflectionPrompt(text, _metadata(sections, [], truncated, text))
-
-
-def _win_loss_draw(value: dict[str, object]) -> dict[str, int]:
-    return {
-        key: int(value.get(key) or 0)
-        for key in ("wins", "losses", "draws", "games")
-    }
 
 
 def build_strategy_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
@@ -249,5 +267,8 @@ def build_code_reflection_prompt(candidate: Candidate, context: ReflectionContex
     return build_code_reflection_prompt_bundle(candidate, context).text
 
 
-def build_balance_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
-    return build_balance_reflection_prompt_bundle(candidate, context).text
+def build_prompt_compliance_reflection_prompt(
+    candidate: Candidate,
+    context: ReflectionContext,
+) -> str:
+    return build_prompt_compliance_reflection_prompt_bundle(candidate, context).text

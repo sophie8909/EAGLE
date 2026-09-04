@@ -543,7 +543,7 @@ def mutation_evidence_parent(
 
     if mutation_name == "strategy":
         parent_id = child.strategy_parent_id
-    elif mutation_name in {"code", "balance"}:
+    elif mutation_name in {"code", "prompt_compliance"}:
         parent_id = (
             child.java_parent_id
             if candidate_java_mode == "inherited_genotype"

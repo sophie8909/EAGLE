@@ -30,7 +30,7 @@ class ReflectionInspectionTests(unittest.TestCase):
             self.assertTrue(summary["all_trials_match_expected_scope"])
             self.assertEqual(
                 [item["reflection_type"] for item in summary["groups"]],
-                ["strategy", "code", "balance"],
+                ["strategy", "code", "prompt_compliance"],
             )
             self.assertTrue(all(item["same_context_across_trials"] for item in summary["groups"]))
             self.assertTrue(all(item["same_root_requests_across_trials"] for item in summary["groups"]))
@@ -42,16 +42,16 @@ class ReflectionInspectionTests(unittest.TestCase):
 
             strategy = summary["trials"][0]
             code = summary["trials"][3]
-            balance = summary["trials"][6]
+            compliance = summary["trials"][6]
             self.assertEqual(strategy["actual_changed_fields"], ["strategy_prompt"])
             self.assertEqual(code["actual_changed_fields"], ["generation_prompt"])
             self.assertEqual(
-                balance["actual_changed_fields"],
+                compliance["actual_changed_fields"],
                 ["strategy_prompt", "generation_prompt"],
             )
             self.assertEqual(strategy["response_attempt_count"], 11)
             self.assertEqual(code["response_attempt_count"], 2)
-            self.assertEqual(balance["response_attempt_count"], 3)
+            self.assertEqual(compliance["response_attempt_count"], 3)
 
             fixed = json.loads(
                 (output / "inputs" / "fixed_input_identity.json").read_text(encoding="utf-8")

@@ -154,7 +154,7 @@ EAGLE_REUSABLE_RULES_START
   - lightrush: produce a concrete counter
 EAGLE_REUSABLE_RULES_END"""
         candidate = Candidate(
-            id="malformed-balance-child",
+            id="malformed-prompt-compliance-child",
             generation=2,
             strategy_prompt=self.candidate.strategy_prompt,
             generation_prompt=malformed_prompt,

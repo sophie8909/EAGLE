@@ -5,7 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from eagle.aos import BALANCE_REFLECTION, build_reflection_operator_controller
+from eagle.aos import (
+    PROMPT_COMPLIANCE_REFLECTION,
+    build_reflection_operator_controller,
+)
 from eagle.artifacts import write_candidate_snapshot
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
@@ -16,22 +19,23 @@ from eagle.reflection_context import (
     OpponentReflectionSummary,
     ReflectionContext,
 )
-from eagle.reflection_prompts import build_balance_reflection_prompt_bundle
-from eagle.rewrite import BalanceReflectionMutation
+from eagle.reflection_prompts import build_prompt_compliance_reflection_prompt_bundle
+from eagle.rewrite import PromptComplianceReflectionMutation
 from eagle.reusable_generation_prompt import parse_reusable_generation_rules
+from eagle.mutation import parse_reflection_response
 
 
-GENERIC_BALANCE_RULE = (
+GENERIC_COMPLIANCE_RULE = (
     "Preserve policy-defined contingency priorities when several behaviors are simultaneously reachable."
 )
 
 
-def balance_rule_delta() -> str:
+def compliance_rule_delta() -> str:
     return json.dumps({
         "remove_rule_ids": [],
         "add_rules": [{
             "category": "priority_ordering",
-            "instruction": GENERIC_BALANCE_RULE,
+            "instruction": GENERIC_COMPLIANCE_RULE,
         }],
     })
 
@@ -46,10 +50,10 @@ class ScriptedBackend:
         return next(self.responses)
 
 
-class BalanceReflectionTests(unittest.TestCase):
+class PromptComplianceReflectionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.candidate = Candidate(
-            id="balance-child",
+            id="prompt-compliance-child",
             generation=4,
             parent_ids=("parent",),
             strategy_prompt="ORIGINAL STRATEGY SECRET",
@@ -92,66 +96,97 @@ class BalanceReflectionTests(unittest.TestCase):
 
     def _analysis(self) -> str:
         return json.dumps({
-            "weaknesses": [{
-                "opponent": "lightrush",
-                "map": "map_3",
-                "side": "p0",
-                "reason": "lost all six p0 games",
+            "strategy_prompt_issues": [{
+                "category": "unobservable_condition",
+                "problem": "The policy depends on hidden opponent intent.",
+                "correction_goal": "Use only current observable enemy units and positions.",
             }],
-            "strategy_focus": ["use a safer map_3 opening as p0"],
-            "code_generation_focus": ["preserve side-aware opening branches"],
+            "code_generation_prompt_issues": [{
+                "category": "scope_or_scaffold_violation",
+                "problem": "The prompt asks the model to edit immutable scaffold code.",
+                "correction_goal": "Keep generated behavior inside the editable strategy region.",
+            }],
+            "strategy_rewrite_focus": [
+                "Replace hidden-intent conditions with observable game-state conditions."
+            ],
+            "code_generation_rewrite_focus": [
+                "Add one reusable rule that preserves the immutable scaffold boundary."
+            ],
         })
 
-    def test_balance_reflection_receives_only_aggregate_outcome_table(self) -> None:
-        prompt = build_balance_reflection_prompt_bundle(self.candidate, self.context).text
+    def test_prompt_compliance_reflection_receives_only_prompt_and_contract_evidence(self) -> None:
+        prompt = build_prompt_compliance_reflection_prompt_bundle(
+            self.candidate,
+            self.context,
+        ).text
 
-        self.assertIn('"opponent":"lightrush"', prompt)
-        self.assertIn('"map":"map_3"', prompt)
-        self.assertIn('"p0":{"draws":0,"games":6,"losses":6,"wins":0}', prompt)
-        self.assertNotIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", prompt)
+        self.assertIn("ORIGINAL STRATEGY SECRET", prompt)
+        self.assertIn("ORIGINAL CODE PROMPT SECRET", prompt)
+        self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", prompt)
+        self.assertIn("IMMUTABLE MICRORTS ACTION AND JAVA API CONTRACT", prompt)
+        self.assertIn("strategic type is not a compliance violation", prompt)
+        self.assertIn("does not evaluate wins", prompt)
         for forbidden in (
-            "ORIGINAL STRATEGY SECRET",
-            "ORIGINAL CODE PROMPT SECRET",
             "PARENT POLICY SECRET",
             "PARENT CODE SECRET",
             "JAVA SECRET",
             "MUST NOT LEAK",
+            '"opponent":"lightrush"',
+            '"map":"map_3"',
         ):
             self.assertNotIn(forbidden, prompt)
 
-    def test_balance_reflection_rewrites_both_genes_and_persists_three_calls(self) -> None:
+    def test_prompt_compliance_schema_rejects_performance_analysis_fields(self) -> None:
+        payload = json.loads(self._analysis())
+        payload["win_loss_summary"] = {"wins": 0, "losses": 9}
+        with self.assertRaisesRegex(ValueError, "must contain exactly"):
+            parse_reflection_response(
+                json.dumps(payload),
+                "prompt_compliance",
+            )
+
+    def test_prompt_compliance_rewrites_both_genes_and_persists_three_calls(self) -> None:
         backend = ScriptedBackend((
             self._analysis(),
             "REWRITTEN STRATEGY",
-            balance_rule_delta(),
+            compliance_rule_delta(),
         ))
         config = ExperimentConfig.from_mapping({
             "mutation_max_attempts": 1,
-            "balance_reflection_probability": 1.0,
+            "prompt_compliance_reflection_probability": 1.0,
             "strategy_reflection_probability": 0.0,
             "code_reflection_probability": 0.0,
         })
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / self.candidate.id
-            result = BalanceReflectionMutation(
+            result = PromptComplianceReflectionMutation(
                 config,
                 reflection_backend=backend,
                 rewrite_backend=backend,
             ).mutate(self.candidate, self.context, artifact_dir=root)
 
-            self.assertEqual(result.mutation_type, "balance")
+            self.assertEqual(result.mutation_type, "prompt_compliance")
             self.assertEqual(result.strategy_prompt, "REWRITTEN STRATEGY")
-            self.assertIn(GENERIC_BALANCE_RULE, result.generation_prompt)
+            self.assertIn(GENERIC_COMPLIANCE_RULE, result.generation_prompt)
             self.assertEqual(len(parse_reusable_generation_rules(result.generation_prompt)), 1)
             self.assertEqual(len(backend.prompts), 3)
-            self.assertNotIn("ORIGINAL STRATEGY SECRET", backend.prompts[0])
-            self.assertNotIn("ORIGINAL CODE PROMPT SECRET", backend.prompts[0])
+            self.assertIn("ORIGINAL STRATEGY SECRET", backend.prompts[0])
+            self.assertIn("ORIGINAL CODE PROMPT SECRET", backend.prompts[0])
+            self.assertNotIn('"opponent":"lightrush"', backend.prompts[0])
             self.assertIn("ORIGINAL STRATEGY SECRET", backend.prompts[1])
             self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", backend.prompts[1])
-            self.assertIn("Translate opponent/map/side findings", backend.prompts[1])
+            self.assertIn(
+                "Do not optimize for wins or losses",
+                " ".join(backend.prompts[1].split()),
+            )
             self.assertIn("ORIGINAL CODE PROMPT SECRET", backend.prompts[2])
+            self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", backend.prompts[2])
+            self.assertIn(
+                "IMMUTABLE MICRORTS ACTION AND JAVA API CONTRACT",
+                backend.prompts[2],
+            )
 
-            mutation_dir = root / "mutation" / "balance_reflection"
+            mutation_dir = root / "mutation" / "prompt_compliance_reflection"
             for name in (
                 "reflector_request.txt",
                 "reflector_response_raw.txt",
@@ -169,30 +204,36 @@ class BalanceReflectionTests(unittest.TestCase):
             self.assertNotIn("raw_response", metadata["reflection"])
             self.assertNotIn("raw_response", metadata["strategy_rewrite"])
             self.assertNotIn("raw_response", metadata["generation_rewrite"])
+            self.assertNotIn("objectives", metadata)
+            persisted_context = json.loads(
+                (mutation_dir / "reflection_context.json").read_text(encoding="utf-8")
+            )
+            self.assertNotIn("outcome_table", persisted_context)
+            self.assertIn("match_results", persisted_context["excluded_evidence"])
             self.assertEqual(len(result.timing["reflector_llm"]["attempts"]), 1)
             self.assertEqual(len(result.timing["rewriter_llm"]["attempts"]), 2)
             write_candidate_snapshot(root.parent, result)
             snapshot = json.loads((root / "candidate.json").read_text(encoding="utf-8"))
             self.assertEqual(
-                snapshot["artifacts"]["balance_reflection"],
-                "mutation/balance_reflection/metadata.json",
+                snapshot["artifacts"]["prompt_compliance_reflection"],
+                "mutation/prompt_compliance_reflection/metadata.json",
             )
 
-    def test_balance_code_rewrite_rejects_whole_prompt_and_retries_delta(self) -> None:
+    def test_compliance_code_rewrite_rejects_whole_prompt_and_retries_delta(self) -> None:
         backend = ScriptedBackend((
             self._analysis(),
             "REWRITTEN STRATEGY",
             json.dumps({"rewritten_prompt": "UNVALIDATED WHOLE PROMPT"}),
-            balance_rule_delta(),
+            compliance_rule_delta(),
         ))
         config = ExperimentConfig.from_mapping({
             "mutation_max_attempts": 2,
-            "balance_reflection_probability": 1.0,
+            "prompt_compliance_reflection_probability": 1.0,
             "strategy_reflection_probability": 0.0,
             "code_reflection_probability": 0.0,
         })
 
-        result = BalanceReflectionMutation(
+        result = PromptComplianceReflectionMutation(
             config,
             reflection_backend=backend,
             rewrite_backend=backend,
@@ -200,13 +241,16 @@ class BalanceReflectionTests(unittest.TestCase):
 
         self.assertTrue(result.metadata["mutation"]["applied"])
         self.assertNotIn("UNVALIDATED WHOLE PROMPT", result.generation_prompt)
-        self.assertIn(GENERIC_BALANCE_RULE, result.generation_prompt)
+        self.assertIn(GENERIC_COMPLIANCE_RULE, result.generation_prompt)
         self.assertIn("previous response was rejected", backend.prompts[3].lower())
         self.assertIn(
             "Code Rewrite response must contain exactly remove_rule_ids and add_rules.",
             backend.prompts[3],
         )
-        self.assertIn("EAGLE Balance Code Generation Prompt Rewrite stage", backend.prompts[3])
+        self.assertIn(
+            "EAGLE Prompt Compliance Code Generation Prompt Rewrite stage",
+            backend.prompts[3],
+        )
         self.assertEqual(
             [attempt["status"] for attempt in result.timing["rewriter_llm"]["attempts"]],
             ["success", "error", "success"],
@@ -216,12 +260,12 @@ class BalanceReflectionTests(unittest.TestCase):
         backend = ScriptedBackend((self._analysis(), ""))
         config = ExperimentConfig.from_mapping({
             "mutation_max_attempts": 1,
-            "balance_reflection_probability": 1.0,
+            "prompt_compliance_reflection_probability": 1.0,
             "strategy_reflection_probability": 0.0,
             "code_reflection_probability": 0.0,
         })
 
-        result = BalanceReflectionMutation(
+        result = PromptComplianceReflectionMutation(
             config,
             reflection_backend=backend,
             rewrite_backend=backend,
@@ -232,17 +276,23 @@ class BalanceReflectionTests(unittest.TestCase):
         self.assertFalse(result.metadata["mutation"]["applied"])
         self.assertEqual(len(backend.prompts), 2)
 
-    def test_balance_operator_is_selectable_as_a_configured_third_operator(self) -> None:
+    def test_prompt_compliance_operator_is_selectable_as_the_third_operator(self) -> None:
         config = ExperimentConfig.from_mapping({
             "reflection_operator_mode": "static",
             "strategy_reflection_probability": 0.0,
             "code_reflection_probability": 0.0,
-            "balance_reflection_probability": 1.0,
+            "prompt_compliance_reflection_probability": 1.0,
         })
         controller = build_reflection_operator_controller(config)
         import random
 
-        self.assertEqual(controller.select_operator(random.Random(7)), BALANCE_REFLECTION)
+        self.assertEqual(
+            controller.select_operator(random.Random(7)),
+            PROMPT_COMPLIANCE_REFLECTION,
+        )
         record = controller.update_generation([])
-        self.assertEqual(record["operators"][BALANCE_REFLECTION]["usage_count"], 1)
-        self.assertEqual(record["balance_probability_after"], 1.0)
+        self.assertEqual(
+            record["operators"][PROMPT_COMPLIANCE_REFLECTION]["usage_count"],
+            1,
+        )
+        self.assertEqual(record["prompt_compliance_probability_after"], 1.0)
