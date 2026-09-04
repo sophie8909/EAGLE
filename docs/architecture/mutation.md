@@ -164,12 +164,22 @@ the request artifact already contains the needed Java evidence.
 
 `eagle.reflection_inspection` runs outside the evolutionary loop for controlled
 manual audits. It evaluates one configured checked-in Worker Rush parent, then
-creates one fixed generation-one inherited-Java subject. Strategy, Code, and
-Prompt Compliance Reflection each run independently from that same subject and typed
-evaluation context; no trial consumes a previous trial's output. The configured
-Strategy intent and context index also remain fixed, so repeated root requests
-contain the same evidence while downstream Coach/Rewriter requests may differ
-because they consume earlier stochastic role output.
+creates one fixed generation-one inherited-Java subject. The default mode runs
+Strategy, Code, and Prompt Compliance Reflection independently from that same
+subject and typed evaluation context; no trial consumes a previous trial's
+output. The configured Strategy intent and context index also remain fixed, so
+repeated root requests contain the same evidence while downstream
+Coach/Rewriter requests may differ because they consume earlier stochastic role
+output.
+
+The optional `successful_strategy_and_code_children` parent mode first runs the
+configured Strategy and Code trials independently from the fixed subject. Each
+successful prompt-changing child then becomes one distinct Prompt Compliance
+input; failed upstream mutations remain audit evidence but are not reused as
+unchanged parents. The summary records the source operator, source trial,
+source artifact, and exact input/output genotype hashes. Because chained
+Compliance parents differ, their context and root-request hashes are expected
+to differ rather than satisfy the fixed-input equality check.
 
 Each trial retains the normal production mutation directory and adds a response
 index, final genotype component files, unified diffs, and an expected-versus-

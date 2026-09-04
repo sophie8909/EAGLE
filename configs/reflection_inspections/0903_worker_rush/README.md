@@ -3,6 +3,8 @@
 This standalone experiment evaluates the checked-in Worker Rush policy and Java
 once, then runs Strategy, Code, and Prompt Compliance Reflection independently three times
 from the same fixed mutation subject and evidence.
+For the chained child-parent validation, use
+`../0904_prompt_compliance_children/inspection.yaml` instead.
 
 Run the deterministic validation first:
 

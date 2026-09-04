@@ -386,6 +386,16 @@ class MockReflectionBackend:
                 "Preserve the intended strategy while expressing every condition through "
                 "observable MicroRTS state and every response through legal actions."
             )
+        if "Prompt Compliance Code Generation Prompt Rewrite stage" in prompt:
+            return json.dumps({
+                "remove_rule_ids": [],
+                "add_rules": [{
+                    "category": "priority_ordering",
+                    "instruction": (
+                        "Resolve overlapping policy conditions with one explicit deterministic priority."
+                    ),
+                }],
+            })
         if "Code Reflection stage" in prompt:
             return json.dumps({
                 "assessment": "java_faithfully_implements_policy",

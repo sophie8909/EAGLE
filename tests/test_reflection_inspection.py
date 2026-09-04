@@ -14,6 +14,13 @@ from eagle.reflection_inspection import (
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "configs" / "reflection_inspections" / "0903_worker_rush" / "inspection.yaml"
+CHAINED_CONFIG = (
+    ROOT
+    / "configs"
+    / "reflection_inspections"
+    / "0904_prompt_compliance_children"
+    / "inspection.yaml"
+)
 
 
 class ReflectionInspectionTests(unittest.TestCase):
@@ -69,6 +76,70 @@ class ReflectionInspectionTests(unittest.TestCase):
                     / "coach_raw.txt"
                 ).is_file()
             )
+
+    def test_chained_inspection_feeds_successful_strategy_and_code_children_to_compliance(self) -> None:
+        inspection = ReflectionInspectionConfig.from_file(CHAINED_CONFIG)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "inspection"
+            result = run_reflection_inspection(inspection, mock=True, output_dir=output)
+
+            self.assertEqual(len(result.trial_summaries), 12)
+            self.assertTrue(result.all_trials_match_expected_scope)
+            summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                summary["prompt_compliance_parent_mode"],
+                "successful_strategy_and_code_children",
+            )
+            self.assertEqual(
+                summary["prompt_compliance_parent_sources"]["counts"],
+                {"strategy": 3, "code": 3},
+            )
+            self.assertTrue(
+                summary["prompt_compliance_parent_sources"][
+                    "all_required_source_types_present"
+                ]
+            )
+            compliance = [
+                item
+                for item in summary["trials"]
+                if item["reflection_type"] == "prompt_compliance"
+            ]
+            self.assertEqual(len(compliance), 6)
+            self.assertEqual(
+                [item["source_reflection_type"] for item in compliance],
+                ["strategy", "strategy", "strategy", "code", "code", "code"],
+            )
+            for item in compliance:
+                source_summary = json.loads(
+                    (output / item["source_trial_artifact"]).read_text(encoding="utf-8")
+                )
+                self.assertEqual(source_summary["mutation_status"], "applied")
+                self.assertEqual(
+                    item["input_genotype_sha256"],
+                    source_summary["output_genotype_sha256"],
+                )
+            manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["trial_count_expected"], 12)
+            self.assertEqual(manifest["trial_count_completed"], 12)
+            self.assertTrue(manifest["all_required_parent_sources_present"])
+
+    def test_chained_mode_requires_upstream_reflections_before_compliance(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "inspection.yaml"
+            path.write_text(
+                "\n".join(
+                    [
+                        f"schema_version: {INSPECTION_SCHEMA_VERSION}",
+                        "name: invalid_chained_order",
+                        f"experiment_config: {CONFIG.parent / 'worker_rush_base.yaml'}",
+                        "reflection_order: [prompt_compliance, strategy, code]",
+                        "prompt_compliance_parent_mode: successful_strategy_and_code_children",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "requires reflection_order"):
+                ReflectionInspectionConfig.from_file(path)
 
     def test_config_rejects_missing_reflection_type(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

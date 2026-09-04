@@ -243,6 +243,15 @@ its `rewritten_prompt` field is the deterministic canonical rule rendering that
 becomes `genotype/code_generation_prompt.txt`. Neither path restores an
 implicit `previous_code` field.
 
+Standalone reflection inspections live below `runs/reflection_inspections/`
+and are not `eagle-run-v2` search runs. Their optional chained Prompt
+Compliance mode retains the independent Strategy/Code trial artifacts, runs
+Compliance only for successfully changed children, and records each source as
+`source_reflection_type`, `source_trial`, and `source_trial_artifact` beside
+matching input/output genotype hashes. Per-parent Compliance contexts live
+under `inputs/prompt_compliance/from_<type>_trial_<NN>/`; a run summary reports
+whether both Strategy and Code supplied at least one successful child.
+
 ## Match ownership
 
 Each normal or head-to-head match has one canonical `result.json`. Distinct specialized evidence remains separate:
