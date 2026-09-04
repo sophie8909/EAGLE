@@ -26,11 +26,11 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    best score for each case until one remains.
 5. Apply crossover/copy to every active genotype component and let the
    configured reflection-operator controller choose Strategy Reflection,
-   Generate-Code Reflection, or Balance Reflection. Strategy and Code mutate
-   one owned prompt; Balance atomically rewrites both from aggregate
-   opponent/map/side W/D/L evidence. Strategy-facing roles receive the same
-   gameplay contract as fixed domain context, while the Balance Reflector itself
-   remains W/D/L-only. None directly edits inherited Java.
+   Generate-Code Reflection, or Prompt Compliance Reflection. Strategy and Code
+   mutate one owned prompt; Prompt Compliance atomically rewrites both after
+   auditing the active prompt pair against the immutable gameplay and API
+   contracts. It receives no W/D/L, match, Java, compiler, or fitness evidence.
+   None directly edits inherited Java.
 6. Decode each child with its configured compile-guided attempt bound, using
    structured validation/javac evidence only after a complete source fails;
    promote the first validation+compilation success, then evaluate that single
@@ -82,7 +82,8 @@ opponent archive, lexicase, weighted Game Performance, or final testing.
 
 Both adaptive modes use the mutation context's evidence parent as the
 comparison parent. Strategy uses `strategy_parent_id`; default-mode Code and
-Balance use `generation_prompt_parent_id`; inherited-mode Code and Balance use
+Prompt Compliance use `generation_prompt_parent_id`; inherited-mode Code and
+Prompt Compliance use
 `java_parent_id`. Therefore component-wise crossover may select either direct
 parent without silently assigning AOS credit to the other one.
 

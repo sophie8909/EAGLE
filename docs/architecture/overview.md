@@ -11,7 +11,8 @@ In scope:
 
 - a game-playing policy prompt, a policy-to-Java code-generation prompt, and
   optionally inherited Java;
-- crossover, Strategy Reflection, Code Reflection, and final Java generation;
+- crossover, Strategy Reflection, Code Reflection, Prompt Compliance Reflection,
+  and final Java generation;
 - validation, compilation, integration, and the fixed ten-opponent evaluation;
 - opponent-wise fitness, seeded lexicase selection, artifacts, and analysis.
 - one resolved experiment config and one owned llama.cpp lifecycle.
@@ -33,7 +34,7 @@ flowchart TD
     X --> M{"Mutation?"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
     M -->|Code| CR["Code Reflection + prompt rewrite"]
-    M -->|Balance| BR["Balance Reflection + two prompt rewrites"]
+    M -->|Prompt Compliance| BR["Prompt Compliance Reflection + two prompt rewrites"]
     M -->|No| G["Final Java Generation"]
     SR --> G
     CR --> G
@@ -66,6 +67,9 @@ flowchart TD
   immutable closed-world MicroRTS gameplay contract; it permits strategy
   diversity while grounding every rule in legal entities, actions, and
   observable state.
+- Prompt Compliance audits both prompt genes against the immutable gameplay and
+  action/API contracts without consuming W/D/L or match evidence, then rewrites
+  both genes atomically while preserving the intended strategy type.
 - In inherited mode crossover selects policy, generation prompt, and Java
   parents independently; generated child Java becomes the inheritable Java
   component available to the next generation.

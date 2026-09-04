@@ -29,7 +29,7 @@ Generator 成功產生的 child Java 會成為下一代可選取的 Java compone
 辨識與排序。從既有 artifact 或 resume 載入的明確 ID 不會被重新命名。
 
 每一代依序執行 seeded lexicase parent selection、crossover、可選的 Strategy、
-Code 或 Balance mutation、完整 Java generation、validation、compilation、integration、
+Code 或 Prompt Compliance mutation、完整 Java generation、validation、compilation、integration、
 180 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。Survivor
 selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
 選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
@@ -49,27 +49,28 @@ Reflection operator mode 只有三種：
 
 兩種 adaptive mode 都以 mutation context 實際使用的 evidence parent 作為
 `comparison_parent_id`：Strategy 依 policy component provenance；預設模式的 Code／
-Balance 依 generation-prompt provenance；inherited 模式的 Code／Balance 依 Java
+Prompt Compliance 依 generation-prompt provenance；inherited 模式的 Code／Prompt Compliance 依 Java
 component provenance。Crossover 後即使 component 來自第二個 direct parent，也不會
 再固定把 AOS reward 歸到第一個 parent。`aos_opponent` 重用一般 180 場 evaluation，
 `aos_head2head` 則對同一 comparison parent 執行額外 18 場 direct matches。
 
 Strategy Mutation 只修改 `strategy_prompt`；Code Mutation 只修改
-`generation_prompt`。Balance Reflection 只接收依 opponent、map 與 candidate
-side 匯總的 W/D/L 表，辨識弱 cell 後依序重寫兩個 prompt；兩次 rewrite 都成功才
-原子地套用，任何一步失敗都保留兩個原 prompt。Balance 的 Code Prompt Rewriter
-同樣只回傳 `remove_rule_ids`／`add_rules` delta，經驗證後確定性組成 canonical
-`generation_prompt`，不接受未驗證的整份 replacement prompt。歷史上由 Balance
-產生但不符合 rule grammar 的 marked prompt，只在 rewrite boundary 視為零條可保留
-規則並由合法 delta 取代，不會複製污染內容。三者完成後都必須重新產生完整 Java。
+`generation_prompt`。Prompt Compliance Reflection 同時取得兩個 prompt gene、
+canonical reusable rules、完整 gameplay contract 與 action/API guide，只檢查內容是否
+符合實際遊戲與生成邊界。它不接收 W/D/L、match、fitness、Java 或 compiler evidence，
+也不判斷策略強弱。Reflector 分別找出不存在的遊戲概念、不可觀察條件、非法 action／
+production、policy-specific decoder rule、錯誤 API 與 scaffold scope 違規，再依序重寫
+兩個 prompt；兩次 rewrite 都成功才原子套用，任何一步失敗都保留兩個原 prompt。
+Code Prompt Rewriter 仍只回傳 `remove_rule_ids`／`add_rules` delta，經驗證後確定性組成
+canonical `generation_prompt`，不接受未驗證的整份 replacement prompt。合法的 aggressive、
+defensive、economic 或其他策略類型都必須保留，不會因勝負或風格被改寫。
 
 所有會產生或解讀策略的 LLM 階段共用同一份不可變的
 `microrts_gameplay_contract`：包含完整 entity、production graph、合法 action 與
 可觀察 state。它允許策略大幅改成其他類型，但每個條件都必須能由遊戲 state
 觀察，每個回應都必須能用 MicroRTS 合法動作執行；不能把一般 RTS 的概念帶進
-policy。這份 contract 是固定 domain context，不是比賽 evidence，所以 Balance
-Reflector 仍然只看 W/D/L 表；只有後續 Strategy Rewriter 會再取得 contract，把
-opponent／map／side 弱點轉譯成可觀察的遊戲條件。
+policy。這份 contract 是固定 domain context，不是比賽 evidence；Prompt Compliance
+Reflector 與其 Strategy Rewriter 都直接使用它來修正規則違規，而不是根據勝負調整策略。
 
 Strategy Reflection 只使用 policy 與 match evidence。Match Commentator 不會收到
 Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Code
@@ -171,9 +172,9 @@ evaluation。
 `genotype/code_generation_prompt.txt`；inherited 模式另保存
 `genotype/inherited_java.java` 與 `java_parent_id`。Generator 輸出放在
 `phenotype/CandidateAgent.java`；Code Reflection evidence 放在
-`mutation/code_reflection/`；Balance Reflection evidence 放在
-`mutation/balance_reflection/`，並保存 W/D/L table、reflector 與兩個 rewriter 的
-request/response evidence。Snapshot JSON 不重複內嵌完整 inherited Java，resume
+`mutation/code_reflection/`；Prompt Compliance Reflection evidence 放在
+`mutation/prompt_compliance_reflection/`，並保存兩個原 prompt、contract-grounded
+reflector 與兩個 rewriter 的 request/response evidence。Snapshot JSON 不重複內嵌完整 inherited Java，resume
 由 canonical genotype 檔重建。
 
 所有 executable prompt body 都放在 `prompts/`，一個 prompt 一個 UTF-8

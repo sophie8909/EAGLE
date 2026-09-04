@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-09-03. This file describes executable repository behavior.
+Snapshot: 2026-09-04. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -37,7 +37,7 @@ Snapshot: 2026-09-03. This file describes executable repository behavior.
   (`mu_plus_lambda`) pool until the fixed population is full; aggregate Game
   Performance and generation age are reporting-only.
 - The reflection-operator controller supports exactly `static`, `aos_opponent`,
-  and `aos_head2head`. Strategy/Code/Balance probabilities mean fixed probabilities in
+  and `aos_head2head`. Strategy/Code/Prompt Compliance probabilities mean fixed probabilities in
   static mode and initial probabilities in AOS modes. Static performs no reward
   work. Opponent AOS uses execution-first ten-case W/D/L-rank change.
   Head-to-head AOS preserves the configured direct comparison matrix and
@@ -208,18 +208,20 @@ also receives `genotype/inherited_java.java`; Code Reflection reviews the
 child's current policy against that exact Java component and records its Java
 parent/artifact provenance. This explicit mode does not restore the removed
 unversioned `previous_code` field.
-Balance Reflection receives only aggregate opponent/map/side W/D/L evidence;
-it names weak cells and runs ordered Strategy then Code Prompt rewrites. Both
-prompt changes are committed atomically only after both rewrites succeed. Its
-Strategy Rewriter receives the immutable gameplay contract and must translate
-named matchup weaknesses into observable in-game conditions; the Balance
-Reflector itself does not receive that contract or either source prompt. Its
-Code Prompt Rewriter uses the same validated reusable-rule delta and canonical
-renderer as Code Reflection, so unchecked whole prompts cannot enter the
-generation gene. At explicit rewrite boundaries, historically malformed marked
-Balance prompts retain zero rules and are replaced rather than copied. Evidence
-remains under `mutation/balance_reflection/`; the reflector receives no raw trace
-or Java.
+Prompt Compliance Reflection receives the active strategy and code-generation
+prompts, their canonical reusable-rule view, the immutable gameplay contract,
+and the immutable action/API guide. It does not receive W/D/L, match, fitness,
+Java, compiler, or raw-trace evidence and does not optimize strategy strength.
+It identifies illegal game concepts, unobservable conditions, invalid actions
+or production, policy-specific decoder rules, unsupported APIs, and scaffold
+scope violations. Ordered Strategy then Code Prompt rewrites correct those
+problems while preserving the intended strategy type. Both prompt changes are
+committed atomically only after both rewrites succeed. The Code Prompt Rewriter
+uses the same validated reusable-rule delta and canonical renderer as Code
+Reflection, so unchecked whole prompts cannot enter the generation gene. At
+explicit rewrite boundaries, historically malformed marked prompts retain zero
+rules and are replaced rather than copied. Evidence remains under
+`mutation/prompt_compliance_reflection/`.
 The immutable API guide is rendered after the evolvable decoder gene, and
 validation requires token-equivalent fixed scaffold source outside the strategy
 markers. Fixed action helpers reject wrong-owner and invalid-type commands.

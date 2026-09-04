@@ -2,10 +2,11 @@
 
 EAGLE has three mutation operators over its two prompt spaces.
 Strategy Reflection searches policy space; Code Reflection searches reusable
-policy-to-code translation instructions. Both stop at a prompt gene. The
-Generator remains a separate complete-Java revision stage. In
+policy-to-code translation instructions; Prompt Compliance repairs contract
+violations in both genes. All stop at prompt genes. The Generator remains a
+separate complete-Java revision stage. In
 `inherited_genotype` mode the selected Java component is preserved through
-mutation and supplied to that stage; neither mutation edits Java directly.
+mutation and supplied to that stage; no mutation edits Java directly.
 
 ## Strategy Reflection
 
@@ -99,30 +100,37 @@ Canonical state transition:
 (policy A1, code prompt B1, Java C1) -> (policy A1, code prompt B2, Java C1) -> Java C2
 ```
 
-## Balance Reflection
+## Prompt Compliance Reflection
 
-Balance Reflection diagnoses uneven outcomes without consuming gameplay traces,
-Java, either source prompt, compiler diagnostics, or objective-writing tasks.
-Its sole reflector input is a bounded W/D/L table grouped by opponent, map, and
-candidate side. It must name weak cells as `opponent`, `map`, and `p0`, `p1`, or
-`both`, then provide separate strategy and code-generation focus lists.
+Prompt Compliance Reflection audits the active strategy and code-generation
+prompt genes against the immutable MicroRTS gameplay contract and action/API
+guide. It does not consume Java, compiler diagnostics, match records, aggregate
+W/D/L data, fitness values, or raw traces, and it does not judge whether a
+strategy is strong. Aggressive, defensive, economic, mixed, and unconventional
+strategies are equally valid when all their rules are executable in the closed
+game world.
 
-The resulting two rewrite calls are one atomic mutation: the Strategy Rewriter
-receives the immutable gameplay contract, current strategy prompt, and Balance
-analysis. It must translate opponent/map/side labels into executable responses
-to observable gameplay cues rather than treating implementation identity as
-runtime state. The Code
-Rewriter receives the current generation prompt, Balance analysis, and the
-canonical reusable-rule view plus immutable API guide. The Code Rewriter returns
-the same exact `remove_rule_ids`/`add_rules` delta used by Code Reflection, and
-runtime validates and canonically renders it. Both rewrites must succeed before
-either gene changes. Historical whole-prompt Balance output that imitated but
-violated the rule grammar is treated as having no retained rules only at this
-rewrite boundary and is never copied into the replacement.
+The reflector separately identifies strategy-prompt violations—nonexistent
+game concepts, unobservable conditions, illegal actions or production, and
+implementation-blocking ambiguity—and generation-prompt violations such as
+policy-specific instructions, unsupported API assumptions, immutable-scaffold
+edits, or conflicting reusable rules. The exact source prompts, their canonical
+reusable-rule view, and both immutable contracts are its complete evidence.
+
+The resulting two rewrite calls are one atomic mutation. The Strategy Rewriter
+corrects only compliance problems, preserves the intended strategy type, and
+expresses every condition and response through observable state and legal game
+actions. The Code Rewriter corrects the highest-priority compliance problem
+through the same exact `remove_rule_ids`/`add_rules` delta used by Code
+Reflection and receives both immutable contracts again; runtime validates and
+canonically renders it. Both rewrites must
+succeed before either gene changes. Historical malformed whole-prompt output is
+treated as having no retained rules only at this rewrite boundary and is never
+copied into the replacement.
 
 ```text
 (policy A1, code prompt B1, Java C1)
-  -> aggregate opponent × map × side W/D/L Balance Reflection
+  -> prompt genes + gameplay/API contracts -> Prompt Compliance Reflection
   -> strategy rewrite A2 + generation-prompt rewrite B2
   -> (policy A2, code prompt B2, Java C1) -> Java C2
 ```
@@ -135,7 +143,7 @@ fitness contract.
 
 For adaptive credit, `create_offspring()` records the same evaluated parent
 used to construct mutation evidence as `comparison_parent_id`. Strategy routes
-through policy provenance. Code and Balance route through generation-prompt
+through policy provenance. Code and Prompt Compliance route through generation-prompt
 provenance in default mode and inherited-Java provenance in inherited mode.
 Direct-parent order and prompt-text equality never select the AOS baseline.
 
@@ -144,7 +152,7 @@ New artifacts live under:
 ```text
 mutation/strategy_reflection/
 mutation/code_reflection/
-mutation/balance_reflection/
+mutation/prompt_compliance_reflection/
 ```
 
 Each directory retains requests, raw responses, parsed/scoped evidence,
@@ -157,7 +165,7 @@ the request artifact already contains the needed Java evidence.
 `eagle.reflection_inspection` runs outside the evolutionary loop for controlled
 manual audits. It evaluates one configured checked-in Worker Rush parent, then
 creates one fixed generation-one inherited-Java subject. Strategy, Code, and
-Balance Reflection each run independently from that same subject and typed
+Prompt Compliance Reflection each run independently from that same subject and typed
 evaluation context; no trial consumes a previous trial's output. The configured
 Strategy intent and context index also remain fixed, so repeated root requests
 contain the same evidence while downstream Coach/Rewriter requests may differ
@@ -166,7 +174,7 @@ because they consume earlier stochastic role output.
 Each trial retains the normal production mutation directory and adds a response
 index, final genotype component files, unified diffs, and an expected-versus-
 actual field-change summary. The inspection checks Strategy changes only the
-policy prompt, Code changes only the generation prompt, Balance changes both
+policy prompt, Code changes only the generation prompt, Prompt Compliance changes both
 atomically, and all three preserve inherited Java. A failed/retried response is
 evidence rather than a discarded trial. Dedicated configs live under
 `configs/reflection_inspections/`, and generated inspection runs live below the
@@ -180,24 +188,24 @@ provenance and the exact inherited source. The Rewriter still changes only the
 selected code-generation prompt.
 
 After crossover, Strategy Reflection evidence comes from the recorded policy
-parent. In default mode, Code and Balance evidence comes from the recorded
+parent. In default mode, Code and Prompt Compliance evidence comes from the recorded
 code-generation-prompt parent, whose evaluated phenotype used the translation
-gene being mutated. In inherited mode, Code and Balance evidence instead comes
-from the independently selected Java parent whose source is reviewed or whose
-W/D/L evidence drives the mutation. Prompt text equality is never used to
-choose evidence.
+gene being mutated. In inherited mode, Code and Prompt Compliance uses the
+independently selected Java parent as its AOS comparison parent. Prompt text
+equality is never used to choose evidence; the compliance audit itself always
+examines the child's active prompt pair.
 
 ## Hard invariants
 
 - Strategy mutation preserves `generation_prompt` exactly.
 - Code mutation preserves `strategy_prompt` exactly.
-- Balance mutation changes both prompt genes only after its reflector and both
+- Prompt Compliance mutation changes both prompt genes only after its reflector and both
   rewrite stages succeed; its code rewrite is a validated reusable-rule delta,
   and otherwise it preserves both genes exactly.
-- Both mutations preserve inherited Java input exactly and never edit it directly.
+- All mutation operators preserve inherited Java input exactly and never edit it directly.
 - Generator and Evaluation preserve both prompt genes and the recorded
   pre-generation Java input exactly.
 - Evidence routing tests use sentinels to prove Match Commentator/Coach exclude
   Java and code prompt, and Code Reviewer excludes raw game logs.
-- The immutable gameplay contract is shared domain context, not outcome
-  evidence; the Balance Reflector itself still receives only the W/D/L table.
+- Prompt Compliance receives only the two prompt genes and immutable gameplay/API
+  contracts; it never receives outcome or implementation evidence.

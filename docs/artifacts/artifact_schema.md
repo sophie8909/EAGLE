@@ -54,8 +54,8 @@ known, they also reference the parent strategy prompt and the candidate's
 Strategy Reflection metadata. Full strategy text is not duplicated in this
 index.
 
-The AOS record contains `mode`, probabilities before/after, nullable
-Strategy/Code/Balance rewards, `reward_source`, operator state, and transitions.
+The `eagle-reflection-operator-v4` AOS record contains `mode`, probabilities before/after, nullable
+Strategy/Code/Prompt Compliance rewards, `reward_source`, operator state, and transitions.
 Static mode records `reward_source: static`, null rewards, and unchanged
 probabilities. Resume restores adaptive state from the latest generation file.
 There is no `generation_metrics.jsonl` or `final_population.json` in new runs.
@@ -93,7 +93,7 @@ candidates/<candidate_id>/
 ├── mutation/
 │   ├── strategy_reflection/
 │   ├── code_reflection/
-│   └── balance_reflection/
+│   └── prompt_compliance_reflection/
 ├── aos/
 ├── generation/
 │   ├── request.txt
@@ -190,17 +190,21 @@ When the policy prompt is empty, `strategy_alignment/result.json` records
 are empty. This is distinct from an Alignment blocked by an earlier evaluation
 failure.
 
-Balance Reflection evidence is stored under `mutation/balance_reflection/`.
-Its `reflection_context.json` is only the bounded opponent/map/side W/D/L
-table; the directory retains the reflection request/raw response and separately
-named strategy/code rewrite request/raw-response artifacts. Metadata records
-both rewrite statuses without embedding raw response bodies. The code rewrite
-raw response is a `remove_rule_ids`/`add_rules` delta, while its
-`rewritten_prompt` metadata field is the deterministically rendered canonical
-generation prompt. A failed reflector or either failed rewrite retains completed
-evidence and leaves both prompt genes unchanged. The Strategy Rewriter request
-contains the immutable gameplay contract as non-evidence domain context; the
-Balance Reflector request and `reflection_context.json` do not.
+Prompt Compliance Reflection evidence is stored under
+`mutation/prompt_compliance_reflection/`. Its exact reflector request contains
+the two source prompts, canonical reusable-rule view, immutable gameplay
+contract, and immutable action/API guide. Its `reflection_context.json`
+references the separately stored source-prompt artifacts, retains the reusable
+rules and contract resource names, and lists the excluded Java, match, compiler,
+fitness, and W/D/L evidence classes. The directory also retains the reflection
+request/raw response and separately named strategy/code rewrite
+request/raw-response artifacts. Metadata records both rewrite statuses without
+embedding raw response bodies. The code rewrite raw response is a
+`remove_rule_ids`/`add_rules` delta, while its `rewritten_prompt` metadata field
+is the deterministically rendered canonical generation prompt; its request also
+contains both immutable contracts. A failed
+reflector or either failed rewrite retains completed evidence and leaves both
+prompt genes unchanged.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated
@@ -214,10 +218,10 @@ request, raw response, UTC-bounded attempts, status, and failure evidence even
 when later generation fails. Strategy Coach parsed output preserves the model's
 parent-policy echo, while validated `coach_result.json` takes the parent policy
 from the authoritative input artifact. The base Rewrite request remains in
-`rewriter_request.txt` (or its Balance-prefixed equivalent), while each bounded
+`rewriter_request.txt` (or its Prompt-Compliance-prefixed equivalent), while each bounded
 Rewrite attempt also retains the exact transported request and raw response as
 `rewriter_attempt_<NNN>_request.txt` and
-`rewriter_attempt_<NNN>_response_raw.txt`. Balance prefixes these files with
+`rewriter_attempt_<NNN>_response_raw.txt`. Prompt Compliance prefixes these files with
 `strategy_` or `code_`. A retry request includes the prior deterministic
 validation error; raw invalid output is never rewritten in place.
 Mutation-role run timing references the candidate-owned evidence without

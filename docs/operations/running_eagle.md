@@ -115,15 +115,22 @@ Mock mode does not adapt or start llama.cpp, inspect the configured port, valida
 reflection_operator_mode: aos_head2head # static | aos_opponent | aos_head2head
 strategy_reflection_probability: 0.20
 code_reflection_probability: 0.80
-balance_reflection_probability: 0.00
+prompt_compliance_reflection_probability: 0.00
 aos_minimum_probability: 0.10
 ```
 
-Strategy/Code/Balance probabilities must sum to 1.0; they are fixed in `static`
-and initial in either AOS mode. Set Balance above zero to enable its aggregate
-opponent/map/side W/D/L reflection. Every YAML creates fresh population, RNG,
+Strategy/Code/Prompt Compliance probabilities must sum to 1.0; they are fixed
+in `static` and initial in either AOS mode. Set Prompt Compliance above zero to
+audit and repair both prompt genes against the immutable gameplay/API contracts;
+it does not consume W/D/L or match evidence. Every YAML creates fresh population, RNG,
 operator controller/AOS state, archives, IDs, and run directory; only a
 compatible LLM process may be reused.
+
+The legacy `balance_reflection_probability` config key is accepted only as an
+input alias for starting a fresh run and is resolved to
+`prompt_compliance_reflection_probability`. Because the operator's meaning and
+persisted state changed, a run containing the removed `balance_reflection`
+operator state cannot be resumed as Prompt Compliance; start a new run instead.
 
 There are no separate `run` or `runtime` compatibility entrypoints. The
 experiment orchestrator is the only model/search lifecycle owner.

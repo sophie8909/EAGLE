@@ -1,6 +1,6 @@
 # EAGLE architecture specification
 
-Status: authoritative current contract, 2026-09-03.
+Status: authoritative current contract, 2026-09-04.
 
 This document describes executable EAGLE behavior. Historical NSGA-II,
 two-objective, seven-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
@@ -63,7 +63,7 @@ Each later generation produces a fixed-size offspring population and performs:
 1. seeded lexicase parent selection;
 2. optional uniform component crossover (two prompt components, plus an
    independent Java-component choice in `inherited_genotype` mode);
-3. optional Strategy, Code, or Balance mutation;
+3. optional Strategy, Code, or Prompt Compliance mutation;
 4. final complete-file Java generation;
 5. validation, compilation, integration, and evaluation;
 6. optional AOS reward collection;
@@ -97,7 +97,7 @@ component values are equal. Default-mode lineage has no Java parent.
 
 The reflection operator is chosen by exactly one configured mode:
 
-- `static`: fixed Strategy/Code/Balance probabilities and no reward work;
+- `static`: fixed Strategy/Code/Prompt Compliance probabilities and no reward work;
 - `aos_opponent`: execution-first ten-case rank-change reward against the
   recorded mutation-evidence parent;
 - `aos_head2head`: configured mutation-evidence-parent versus offspring match
@@ -109,8 +109,8 @@ ten-case lexicase fitness.
 
 The adaptive comparison parent is the same evaluated candidate used to build
 the mutation context: the policy-component parent for Strategy mutation; the
-generation-prompt parent for Code/Balance mutation in default mode; and the
-Java-component parent for Code/Balance mutation in inherited mode. Component
+generation-prompt parent for Code/Prompt Compliance mutation in default mode;
+and the Java-component parent for Code/Prompt Compliance mutation in inherited mode. Component
 provenance, rather than direct-parent position or prompt-text equality, selects
 this parent. Both reward providers consume the resulting
 `comparison_parent_id`.
@@ -119,13 +119,12 @@ Strategy mutation performs Match Commentator sampling, Coach reflection, and a
 Strategy Prompt rewrite before final Java generation. It changes only
 `strategy_prompt`.
 Initial policy generation, Match Commentator, Coach, the library Strategy
-Reflector/Rewriter path, Balance Strategy Rewrite, and Strategy Alignment all
+Reflector/Rewriter path, Prompt Compliance Reflection/Strategy Rewrite, and Strategy Alignment all
 receive one immutable strategy-level MicroRTS gameplay contract. The contract
 defines the complete entity set, production graph, legal actions, and observable
 state. It permits arbitrary strategy types expressible in that world, while
 requiring every policy condition and response to be executable. This is fixed
-domain context, not match evidence; in particular the Balance Reflector still
-receives only its aggregate W/D/L table.
+domain context, not match evidence.
 Commentator and Coach transport, parsing, and semantic validation use one
 bounded attempt budget. Each attempt retains UTC boundaries and one run timing
 event without duplicating candidate-owned prompt/response evidence. A validated
@@ -151,17 +150,28 @@ never partially applied. Legacy free-form generation prompts remain loadable
 but are not copied into the new rule set on their next successful Code
 Reflection.
 
-Balance mutation receives only a bounded aggregate W/D/L table partitioned by
-opponent, map, and candidate side. It receives no prompt text, Java, compiler
-diagnostics, per-match result, or raw trace. Its reflector identifies weak
-opponent/map/side cells, then bounded Strategy and Code Prompt Rewriters
-atomically replace both `strategy_prompt` and `generation_prompt`. The Balance
-Code Prompt Rewriter uses the same structured reusable-rule delta and canonical
-renderer as Code Reflection; it cannot persist an unchecked whole generation
-prompt. If either rewrite fails, both parent prompt genes remain unchanged.
-Balance mutation never edits Java directly. A historically malformed marked
-generation prompt is exposed as an empty retained-rule set only at a rewrite
-boundary, so a validated delta replaces rather than copies it.
+Prompt Compliance mutation receives the active `strategy_prompt` and
+`generation_prompt`, their canonical reusable-rule view, the immutable gameplay
+contract, and the immutable action/API guide. It receives no Java, compiler
+diagnostics, match result, aggregate W/D/L table, fitness value, or raw trace.
+Its reflector identifies rules that use nonexistent game concepts,
+unobservable conditions, illegal actions/production, policy-specific decoder
+instructions, unsupported APIs, or immutable-scaffold edits. Bounded Strategy
+and Code Prompt Rewriters then atomically replace both prompt genes while
+preserving the intended strategy type. The Code Prompt Rewriter uses the same
+structured reusable-rule delta and canonical renderer as Code Reflection; it
+cannot persist an unchecked whole generation prompt. If the reflector or either
+rewrite fails, both parent prompt genes remain unchanged. Prompt Compliance
+mutation never edits Java directly. A historically malformed marked generation
+prompt is exposed as an empty retained-rule set only at a rewrite boundary, so
+a validated delta replaces rather than copies it.
+
+The canonical config key is
+`prompt_compliance_reflection_probability`, the operator ID is
+`prompt_compliance_reflection`, and mutation type is `prompt_compliance`.
+Reflection-operator state uses `eagle-reflection-operator-v4`; persisted state
+containing the removed `balance_reflection` operator cannot resume under the
+new semantics.
 
 All executable prompt bodies live as individual UTF-8 text files under
 `prompts/`. Python and YAML may reference, render, bound, transport, and validate

@@ -31,7 +31,7 @@ random_seed: 7
 reflection_operator_mode: static
 strategy_reflection_probability: 0.20
 code_reflection_probability: 0.20
-balance_reflection_probability: 0.60
+prompt_compliance_reflection_probability: 0.60
 aos_minimum_probability: 0.10
 llm:
   temperature: 0.2

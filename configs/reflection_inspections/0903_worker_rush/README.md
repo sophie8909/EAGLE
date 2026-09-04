@@ -1,7 +1,7 @@
 # Worker Rush reflection inspection
 
 This standalone experiment evaluates the checked-in Worker Rush policy and Java
-once, then runs Strategy, Code, and Balance Reflection independently three times
+once, then runs Strategy, Code, and Prompt Compliance Reflection independently three times
 from the same fixed mutation subject and evidence.
 
 Run the deterministic validation first:
@@ -35,5 +35,6 @@ Expected scope:
 
 - Strategy changes only `strategy_prompt`.
 - Code changes only `generation_prompt`.
-- Balance changes both prompt genes atomically.
+- Prompt Compliance checks both prompt genes against the gameplay and API
+  contracts, then changes both atomically without using win/loss evidence.
 - No reflection trial changes the inherited Worker Rush Java.

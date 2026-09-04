@@ -1,5 +1,9 @@
 # EAGLE Current State — 2026-08-30
 
+> Historical snapshot. Its Balance Reflection descriptions are not current:
+> Prompt Compliance Reflection replaced that W/D/L-based operator on
+> 2026-09-04. See `docs/eagle_architecture_spec.md` for the active contract.
+
 This is a repository-grounded audit of **EAGLE: Evolutionary Algorithm for
 Game-playing with LLM-Enabled Agents**. It does not describe GEPA, ACE, MIPRO,
 CAPO, or generic context optimization.
