@@ -13,7 +13,7 @@ from typing import Protocol
 from .artifacts import write_candidate_inputs, write_json
 from .candidate import Candidate
 from .config import ExperimentConfig
-from .llm import LLMCallLogger, truncate_prompt
+from .llm import LLMCallLogger, parse_json_object_response, truncate_prompt
 from .prompts import load_prompt, normalize_prompt
 from .timing import utc_now
 
@@ -193,7 +193,7 @@ def _generate_initial_policy(
             raw = backend.generate(request)
             # Raw output is durable before JSON parsing or semantic validation.
             (attempt_dir / "response_raw.txt").write_text(raw, encoding="utf-8")
-            parsed = json.loads(raw)
+            parsed = parse_json_object_response(raw)
             if (
                 not isinstance(parsed, dict)
                 or set(parsed) != {"strategy_prompt"}

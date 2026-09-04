@@ -191,6 +191,40 @@ class InitialPopulationGenerationTests(unittest.TestCase):
         self.assertIn("duplicates", first["error"])
         self.assertIn("duplicates", backend.requests[1])
 
+    def test_generation_accepts_fenced_json_with_literal_newlines(self) -> None:
+        config = ExperimentConfig.from_mapping(
+            {
+                "candidate_java_mode": "inherited_genotype",
+                "initial_population_mode": "llm_generated_policies",
+                "population_size": 2,
+                "seed_prompt_files": ["seeds/worker_rush_policy.txt"],
+                "initial_java_seed_path": "eagle/java_seeds/worker_rush/CandidateAgent.java",
+            }
+        )
+        backend = ScriptedPolicyBackend(
+            [
+                """```json
+{"strategy_prompt":"Train Workers.
+Harvest resources.
+Attack the nearest enemy Base."}
+```"""
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            population = initialize_population(
+                config,
+                policy_backend=backend,
+                candidates_dir=Path(temp_dir) / "candidates",
+            )
+
+        self.assertEqual(
+            population[1].strategy_prompt,
+            "Train Workers.\nHarvest resources.\nAttack the nearest enemy Base.",
+        )
+        self.assertIn("Do not use Markdown", backend.requests[0])
+        self.assertIn("escape line breaks", backend.requests[0])
+
     def test_llm_population_mode_rejects_incompatible_boundaries(self) -> None:
         for payload, message in (
             (

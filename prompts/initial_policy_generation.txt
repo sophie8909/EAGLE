@@ -14,5 +14,6 @@ $existing_strategy_prompts
 
 If a previous attempt failed validation, correct this issue: $prior_error
 
-Return only one JSON object with exactly this shape:
+Return only one valid JSON object with exactly this shape. Do not use Markdown
+fences or prose, and escape line breaks inside the JSON string as \n:
 {"strategy_prompt":"the complete generated RTS policy prompt"}

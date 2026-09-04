@@ -29,6 +29,7 @@ __all__ = [
     "LLMClient",
     "LLMServerError",
     "llm_request_progress",
+    "parse_json_object_response",
     "read_chat_completion_content",
     "safe_name",
     "truncate_prompt",
@@ -159,6 +160,55 @@ def _content_from_payload(payload: object) -> str:
         raise KeyError("choices")
     message = choices[0]["message"]
     return str(message["content"])
+
+
+def parse_json_object_response(response: str) -> dict[str, object]:
+    """Parse one JSON object while tolerating common local-model formatting.
+
+    Raw responses remain unchanged in artifacts. This compatibility boundary
+    accepts only an optional full Markdown JSON fence and repairs otherwise
+    invalid literal control characters inside JSON strings; it does not extract
+    arbitrary prose or complete truncated objects.
+    """
+
+    source = str(response).lstrip("\ufeff").strip()
+    fence = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", source, re.DOTALL | re.IGNORECASE)
+    if fence:
+        source = fence.group(1).strip()
+    try:
+        payload = json.loads(source)
+    except json.JSONDecodeError:
+        repaired = _escape_json_string_control_characters(source)
+        if repaired == source:
+            raise
+        payload = json.loads(repaired)
+    if not isinstance(payload, dict):
+        raise ValueError("Role response must be one JSON object.")
+    return payload
+
+
+def _escape_json_string_control_characters(source: str) -> str:
+    output: list[str] = []
+    in_string = False
+    escaped = False
+    for character in source:
+        if escaped:
+            output.append(character)
+            escaped = False
+            continue
+        if in_string and character == "\\":
+            output.append(character)
+            escaped = True
+            continue
+        if character == '"':
+            output.append(character)
+            in_string = not in_string
+            continue
+        if in_string and character in {"\n", "\r", "\t"}:
+            output.append({"\n": "\\n", "\r": "\\r", "\t": "\\t"}[character])
+            continue
+        output.append(character)
+    return "".join(output)
 
 # Blocking-request progress reporting
 @contextmanager
