@@ -14,3 +14,13 @@ Use its effective mode to control scope:
 - `UNKNOWN`: proceed cautiously and do not assume quota is unlimited.
 
 For substantial tasks, order work as independently useful milestones: inspect, implement core behavior, run targeted validation, make secondary improvements, then run broad validation. Re-read the budget before another expensive milestone. If the mode degrades, reduce remaining scope, but always leave the repository coherent and never intentionally leave it broken.
+
+## Long-running experiments
+
+When the user asks to execute an experiment:
+
+- Prefer the existing user-visible VS Code terminal when it is accessible. If the environment cannot control that exact terminal, use a persistent local PTY and state that limitation.
+- Start the experiment and retain its terminal session and run-directory identifiers. Do not continuously stream or analyze routine progress output.
+- Check the process approximately once per hour. Check sooner only when the process reports completion, failure, or a request for user input.
+- When the experiment finishes, report the result in the originating task so the Codex/ChatGPT mobile app can deliver its normal completion notification. Remind the user to enable mobile notifications if delivery is not configured.
+- Create monitoring only after a concrete experiment has started; do not leave a generic idle monitor running between experiments.
