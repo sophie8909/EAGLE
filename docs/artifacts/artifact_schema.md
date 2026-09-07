@@ -204,12 +204,14 @@ retains `reflector_request.txt`, the raw and parsed conclusion in
 `reflector_response_raw.txt` and `reflection_conclusion.json`, every transported
 diagnosis attempt, `revision_request.txt`, every Java-revision attempt/raw
 response, `parent_candidate.java`, `reflected_candidate.java`, hashes, attempt
-timing, and terminal status. The revision request contains the exact parsed
-conclusion and the source-matching validation/compiler diagnostics supplied to
-the diagnosis; neither Code Reflection stage receives gameplay-performance
-evidence. A successful reflected source enters the normal generation attempt
-ledger as `code_reflection_output` but causes no additional final Generator LLM
-request.
+timing, and terminal status. The parsed conclusion independently records strategy
+fidelity, code simplicity, and game compliance. The revision request contains the
+exact parsed conclusion, the explicit interface/unit reference, and the
+source-matching validation/compiler diagnostics supplied to the diagnosis; neither
+Code Reflection stage receives gameplay-performance evidence. When every dimension
+passes, revision status is `not_required` and the parent Java is preserved. A
+successful reflected source enters the normal generation attempt ledger as
+`code_reflection_output` but causes no additional final Generator LLM request.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated

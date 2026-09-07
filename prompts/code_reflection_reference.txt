@@ -1,0 +1,42 @@
+IMMUTABLE CODE REFLECTION IMPLEMENTATION REFERENCE.
+
+Available action interfaces. They return false when their fixed ownership/type/bounds
+guards fail; strategy code must still check that the actor is idle and that the action's
+resource, reachability, adjacency, occupancy, and range prerequisites are satisfied:
+- commandMove(Unit unit, int x, int y): move a friendly movable unit toward an in-bounds
+  coordinate.
+- commandHarvest(Unit worker, Unit resource, Unit base): assign a friendly Worker to
+  harvest a neutral Resource and return it to a friendly Base.
+- commandTrain(Unit producer, UnitType unitType): a Base may train Worker; a Barracks may
+  train Light, Heavy, or Ranged.
+- commandBuild(Unit worker, UnitType buildingType, int x, int y): a friendly Worker may
+  build a Base or Barracks at an in-bounds legal free coordinate.
+- commandAttack(Unit attacker, Unit target): a friendly attack-capable unit may target an
+  enemy unit or building; movement toward an out-of-range target is handled by the
+  abstraction layer.
+- commandIdle(Unit unit): explicitly leave a friendly unit idle.
+
+Available lookup interfaces:
+- isIdleAlly(Unit unit, AgentContext context): true only for a friendly unit with neither
+  a current engine action nor a queued abstraction action.
+- nearestEnemy(Unit source, AgentContext context): nearest current enemy-owned unit or
+  building by Manhattan distance, or null.
+- nearestResource(Unit source, AgentContext context): nearest neutral Resource by
+  Manhattan distance, or null.
+- ownBase(AgentContext context): one current friendly Base, or null.
+- isFreeCell(AgentContext context, int x, int y): true only when the coordinate is in the
+  current map and unoccupied.
+
+Complete available entity/unit list and Java symbols:
+- Resource (resourceType): neutral, stationary, harvestable; never an attack target.
+- Base (baseType): friendly/enemy building; cost 10, 10 HP; produces Worker only.
+- Barracks (barracksType): friendly/enemy building; cost 5, 4 HP; produces Light, Heavy,
+  or Ranged only.
+- Worker (workerType): cost 1, 1 HP, attack range 1; moves, attacks, harvests/returns one
+  resource, and builds Base or Barracks.
+- Light (lightType): cost 2, 4 HP, attack range 1, damage 2; fastest combat mover.
+- Heavy (heavyType): cost 2, 4 HP, attack range 1, damage 4; slower combat mover.
+- Ranged (rangedType): cost 2, 1 HP, attack range 3, damage 1.
+
+There are no other units, buildings, resources, observations, actions, or helper
+interfaces available to editable strategy code.

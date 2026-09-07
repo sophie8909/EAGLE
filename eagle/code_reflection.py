@@ -28,7 +28,7 @@ from .reflection_context import coerce_structured_context
 from .reflection_prompts import structural_code_evidence
 
 
-CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v2"
+CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v3"
 
 
 class CodeReflectionMutation:
@@ -98,6 +98,7 @@ class CodeReflectionMutation:
             )
 
         reflection_conclusion = reflection.parsed_response or {}
+        revision_required = _revision_required(reflection_conclusion)
         base_request = (
             self._revision_request(
                 candidate,
@@ -105,7 +106,7 @@ class CodeReflectionMutation:
                 reflection_conclusion,
                 diagnostics,
             )
-            if reflection.succeeded
+            if reflection.succeeded and revision_required
             else ""
         )
         revision_attempts: list[ReflectionAttempt] = []
@@ -177,7 +178,7 @@ class CodeReflectionMutation:
                 break
             time.sleep(0)
 
-        succeeded = bool(reflection.succeeded and reflected_java)
+        succeeded = bool(reflection.succeeded and revision_required and reflected_java)
         # A failed diagnosis or revision preserves and evaluates the selected parent Java;
         # it never falls through to an unrelated fresh Generator decode.
         direct_java = reflected_java or parent_java
@@ -188,7 +189,11 @@ class CodeReflectionMutation:
             "status": (
                 "success"
                 if succeeded
-                else "failed" if reflection.succeeded else "not_run"
+                else "not_required"
+                if reflection.succeeded and not revision_required
+                else "failed"
+                if reflection.succeeded
+                else "not_run"
             ),
             "attempts": [attempt.to_dict() for attempt in revision_attempts],
             "error": None if succeeded else last_revision_error,
@@ -296,6 +301,9 @@ class CodeReflectionMutation:
                 ),
                 "gameplay_contract": load_prompt("microrts_gameplay_contract"),
                 "action_api_guide": load_prompt("action_api_guide"),
+                "code_reflection_reference": load_prompt(
+                    "code_reflection_reference"
+                ),
                 "java_scaffold": load_java_template(
                     JavaTemplatePaths(self.config.agent_template_path)
                 ),
@@ -326,6 +334,9 @@ class CodeReflectionMutation:
                 ),
                 "gameplay_contract": load_prompt("microrts_gameplay_contract"),
                 "action_api_guide": load_prompt("action_api_guide"),
+                "code_reflection_reference": load_prompt(
+                    "code_reflection_reference"
+                ),
                 "java_scaffold": load_java_template(
                     JavaTemplatePaths(self.config.agent_template_path)
                 ),
@@ -380,6 +391,17 @@ class CodeReflectionMutation:
 
 def _sha256(value: str) -> str | None:
     return hashlib.sha256(value.encode("utf-8")).hexdigest() if value else None
+
+
+def _revision_required(conclusion: dict[str, object]) -> bool:
+    return any(
+        conclusion.get(dimension) == failing_value
+        for dimension, failing_value in (
+            ("strategy_fidelity", "unfaithful"),
+            ("code_simplicity", "needs_simplification"),
+            ("game_compliance", "noncompliant"),
+        )
+    )
 
 
 def _write_text(path: Path, value: str) -> None:

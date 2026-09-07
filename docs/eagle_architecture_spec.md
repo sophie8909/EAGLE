@@ -136,10 +136,12 @@ updated prompt gene.
 Code mutation first reflects on the selected parent Java, then revises it. The
 Reflector receives the child's `strategy_prompt`, the complete selected parent
 Java, the immutable gameplay and action/API contracts, the canonical fixed
-scaffold, and source-matching validation/compiler diagnostics, and returns a
-validated structured diagnosis with required changes and behaviors to preserve.
+scaffold, a concise fixed-interface and complete-unit reference, and source-matching
+validation/compiler diagnostics. It independently reports strategy fidelity, code
+simplicity, and game compliance, with required changes and behaviors to preserve.
 The Java revision call receives that exact parsed conclusion plus the same
-authoritative inputs. Neither call receives game performance, opponent scores,
+authoritative inputs only when at least one dimension requires correction. An
+all-passing conclusion preserves the parent Java without a revision call. Neither call receives game performance, opponent scores,
 W/D/L summaries, match results, traces, logs, aggregate fitness, other gameplay
 evidence, or `generation_prompt`. The revision response
 must be exactly one complete `CandidateAgent.java`; both prompt genes and the

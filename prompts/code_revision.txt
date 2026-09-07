@@ -25,15 +25,18 @@ $gameplay_contract
 Immutable Java/action API contract:
 $action_api_guide
 
+Concise Code Reflection interface and unit reference:
+$code_reflection_reference
+
 Canonical fixed scaffold:
 $java_scaffold
 
 Preserve the package, class, constructors, lifecycle methods, fixed fields, helpers, and
 the exact strategy-region markers from the canonical scaffold. Make only the minimum
-coherent changes inside the editable strategy region that the conclusion requires, while
-preserving its listed correct behaviors. Every condition must use observable state and
-every action must be legal under the supplied contracts. If the conclusion requires no
-revision, return the parent source unchanged.
+coherent changes inside the editable strategy region for dimensions explicitly marked
+unfaithful, needs_simplification, or noncompliant, while preserving its listed correct
+behaviors. Every condition must use observable state and every action must be legal under
+the supplied contracts. Do not change a dimension marked faithful, concise, or compliant.
 
 Return exactly one complete CandidateAgent.java source file with no prose, JSON, diff, or
 Markdown fence.

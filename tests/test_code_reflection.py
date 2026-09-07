@@ -83,14 +83,12 @@ class ScriptedReflectionBackend:
 
 def reflection_response(*, requires_revision: bool = True) -> str:
     return json.dumps({
-        "assessment": (
-            "code_requires_revision"
-            if requires_revision
-            else "code_faithfully_implements_strategy"
-        ),
+        "strategy_fidelity": "unfaithful" if requires_revision else "faithful",
+        "code_simplicity": "concise",
+        "game_compliance": "compliant",
         "diagnosis": ([{
-            "strategy_requirement": "Workers must attack the enemy Base.",
-            "observed_java_behavior": "The editable strategy does not record this test marker.",
+            "dimension": "strategy_fidelity",
+            "evidence": "The editable strategy does not implement Worker attacks.",
             "required_code_change": "Add the minimal Worker attack behavior in the editable region.",
         }] if requires_revision else []),
         "behaviors_to_preserve": ["Preserve legal Worker production."],
@@ -165,12 +163,16 @@ class CodeReflectionTests(unittest.TestCase):
             self.assertEqual(backend.request_kinds, ["code_reflection"])
             self.assertEqual(len(reflector.prompts), 1)
             self.assertIn("diagnosis stage", reflector.prompts[0])
+            self.assertIn("Available action interfaces", reflector.prompts[0])
+            self.assertIn("Complete available entity/unit list", reflector.prompts[0])
             self.assertIn(COMPILER_SENTINEL, reflector.prompts[0])
             self.assertIn(VALIDATION_SENTINEL, reflector.prompts[0])
             request = backend.requests[0]
             self.assertIn("Java revision stage", request)
             self.assertIn("required_code_change", request)
             self.assertIn("Add the minimal Worker attack behavior", request)
+            self.assertIn("Available action interfaces", request)
+            self.assertIn("Resource (resourceType)", request)
             self.assertIn(candidate.strategy_prompt, request)
             self.assertIn(PARENT_JAVA, request)
             self.assertIn(COMPILER_SENTINEL, request)
@@ -198,7 +200,9 @@ class CodeReflectionTests(unittest.TestCase):
             conclusion = json.loads(
                 (mutation_dir / "reflection_conclusion.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(conclusion["assessment"], "code_requires_revision")
+            self.assertEqual(conclusion["strategy_fidelity"], "unfaithful")
+            self.assertEqual(conclusion["code_simplicity"], "concise")
+            self.assertEqual(conclusion["game_compliance"], "compliant")
             self.assertTrue((mutation_dir / "revision_request.txt").exists())
             self.assertTrue((mutation_dir / "revision_response_raw.txt").exists())
 
@@ -282,8 +286,14 @@ class CodeReflectionTests(unittest.TestCase):
     def test_code_diagnosis_normalizes_structured_preservation_descriptions(self) -> None:
         backend = ScriptedJavaBackend((PARENT_JAVA,))
         reflector = ScriptedReflectionBackend((json.dumps({
-            "assessment": "code_faithfully_implements_strategy",
-            "diagnosis": [],
+            "strategy_fidelity": "faithful",
+            "code_simplicity": "needs_simplification",
+            "game_compliance": "compliant",
+            "diagnosis": [{
+                "dimension": "code_simplicity",
+                "evidence": "A duplicate branch is unreachable.",
+                "required_code_change": "Remove only the duplicate branch.",
+            }],
             "behaviors_to_preserve": [{
                 "description": "Preserve continuous legal Worker production.",
                 "evidence": [{"method": "trainWorkers"}],
@@ -318,6 +328,30 @@ class CodeReflectionTests(unittest.TestCase):
             backend.requests[0],
         )
         self.assertIn("Preserve the legal harvest-and-return loop.", backend.requests[0])
+
+    def test_all_passing_conclusions_preserve_parent_without_revision_call(self) -> None:
+        backend = ScriptedJavaBackend((RuntimeError("revision must not run"),))
+        reflector = ScriptedReflectionBackend((reflection_response(requires_revision=False),))
+        candidate = Candidate(
+            id="child",
+            generation=1,
+            strategy_prompt="Worker Rush.",
+            generation_prompt="prompt gene",
+            inherited_java=PARENT_JAVA,
+            java_parent_id="parent",
+        )
+
+        child = CodeReflectionMutation(
+            config(), backend=backend, reflection_backend=reflector
+        ).mutate(candidate, context())
+
+        self.assertEqual(child.generated_java, PARENT_JAVA)
+        self.assertEqual(backend.requests, [])
+        self.assertFalse(child.metadata["mutation"]["applied"])
+        self.assertEqual(
+            child.metadata["mutation"]["revision_status"],
+            "not_required",
+        )
 
     def test_direct_code_output_skips_final_generator(self) -> None:
         backend = ScriptedJavaBackend((RuntimeError("final Generator must not run"),))

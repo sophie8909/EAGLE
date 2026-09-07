@@ -65,17 +65,22 @@ it from that persisted conclusion:
 
 ```text
 current strategy_prompt + selected parent Java
-+ immutable gameplay/API contracts + canonical scaffold
++ immutable gameplay/API contracts + concise interface/unit reference + canonical scaffold
 + source-matching validation/compiler diagnostics
-  -> structured code diagnosis
+  -> three-part structured diagnosis: strategy fidelity, code simplicity,
+     and game compliance
   -> diagnosis + the same authoritative inputs
   -> complete corrected CandidateAgent.java
   -> validation -> javac -> integration -> evaluation
 ```
 
-The Reflector classifies whether revision is required and records concrete code
-changes plus behaviors to preserve; it never returns Java. The Java revision
-stage receives that exact parsed conclusion. Neither stage receives
+The Reflector independently reports whether the Java is faithful to the strategy,
+concise, and compliant with the game setting, and records concrete code changes
+plus behaviors to preserve; it never returns Java. The two Code calls also receive
+an explicit list of the fixed interfaces and every available entity/unit with its
+Java symbol and mechanics. The Java revision stage receives the exact parsed
+conclusion only when at least one dimension requires correction; an all-passing
+conclusion preserves the parent Java without a second LLM call. Neither stage receives
 `generation_prompt`, game performance, opponent scores, W/D/L summaries, match
 results, traces, logs, aggregate fitness, or other gameplay evidence. The
 revision output must be one complete Java source. Both prompt genes and the
@@ -136,5 +141,6 @@ Worker Rush subject. Its expected scopes are `strategy_prompt`,
 - Generator and Evaluation never change prompt genes or pre-generation Java.
 - Match Commentator/Coach exclude Java and generation prompts.
 - Prompt Reviewer excludes raw game logs and fixed-scaffold behavior.
-- Code diagnosis receives only strategy, parent Java, immutable contracts, and
-  scaffold; Java revision additionally receives exactly that diagnosis.
+- Code diagnosis receives only strategy, parent Java, immutable contracts,
+  interface/unit reference, and scaffold; Java revision additionally receives
+  exactly that diagnosis and runs only for a reported defect.

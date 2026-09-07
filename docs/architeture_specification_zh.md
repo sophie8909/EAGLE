@@ -62,6 +62,10 @@ Strategy Mutation 只修改 `strategy_prompt`。Prompt Mutation 是舊 Code Refl
 inherited Java input 都不變。Code Reflection 同樣只用策略、父代完整 Java 和對應的
 validation／compiler 錯誤，先保存結構化反思結論，再把該結論
 連同同一份父代 Java 與 immutable contract 交給第二次 LLM 呼叫修正程式。
+Code Reflection 的兩階段都會明確收到可用 action／lookup 介面，以及 Resource、
+Base、Barracks、Worker、Light、Heavy、Ranged 的完整列表與能力說明。反思結論分別
+回報策略忠實度、程式碼精簡度、遊戲設定相容性；只有任一項需要修正才呼叫第二次
+LLM，全數通過則直接保留父代 Java。
 成功的 Code Reflection 直接進 validation／javac，
 不再呼叫 Generator 覆蓋結果。Prompt Reflection 和 Code Reflection 都不接收
 game performance、對手分數、W/D/L、match result、trace、log、aggregate fitness

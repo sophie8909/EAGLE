@@ -22,13 +22,27 @@ $gameplay_contract
 Immutable Java/action API contract:
 $action_api_guide
 
+Concise Code Reflection interface and unit reference:
+$code_reflection_reference
+
 Canonical fixed scaffold:
 $java_scaffold
 
 Judge only legal behavior that can be implemented with the supplied contracts. The fixed
 scaffold is immutable: diagnose only reachable behavior in the editable strategy region.
-If the strategy prompt is blank or ambiguous, do not invent its intent. Report at most
-five concrete corrections and only behaviors already correct as preservation targets.
+If the strategy prompt is blank or ambiguous, do not invent its intent. Assess all three
+dimensions independently:
+1. strategy_fidelity: faithful only when the reachable Java behavior implements the
+   concrete strategy without contradicting it; use ambiguous_strategy when fidelity
+   cannot be judged from the policy.
+2. code_simplicity: concise when the editable region has no duplicate, unreachable, or
+   unnecessary branches/helpers; required guards and clear fallbacks are not bloat.
+3. game_compliance: compliant only when units, observations, APIs, conditions, and actions
+   conform to the supplied closed-world game and Java contracts.
+
+For every unfaithful, needs_simplification, or noncompliant result, include at least one
+diagnosis item for that dimension. Do not diagnose a dimension that passed. Report at
+most five concrete corrections and only behaviors already correct as preservation targets.
 
 Return exactly one JSON object with no prose or Markdown:
-{"assessment":"code_requires_revision|code_faithfully_implements_strategy|strategy_ambiguous","diagnosis":[{"strategy_requirement":"","observed_java_behavior":"","required_code_change":""}],"behaviors_to_preserve":[]}
+{"strategy_fidelity":"faithful|unfaithful|ambiguous_strategy","code_simplicity":"concise|needs_simplification","game_compliance":"compliant|noncompliant","diagnosis":[{"dimension":"strategy_fidelity|code_simplicity|game_compliance","evidence":"","required_code_change":""}],"behaviors_to_preserve":[]}

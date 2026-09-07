@@ -10,13 +10,13 @@ required_variables = ["gameplay_contract", "current_strategy_prompt", "aggregate
 file = "code_reflection.txt"
 role = "reflector"
 stages = ["code_reflection"]
-required_variables = ["strategy_prompt", "parent_java", "structural_evidence", "gameplay_contract", "action_api_guide", "java_scaffold"]
+required_variables = ["strategy_prompt", "parent_java", "structural_evidence", "gameplay_contract", "action_api_guide", "code_reflection_reference", "java_scaffold"]
 
 [prompts.code_revision]
 file = "code_revision.txt"
 role = "generator"
 stages = ["code_reflection"]
-required_variables = ["strategy_prompt", "reflection_conclusion", "parent_java", "structural_evidence", "gameplay_contract", "action_api_guide", "java_scaffold"]
+required_variables = ["strategy_prompt", "reflection_conclusion", "parent_java", "structural_evidence", "gameplay_contract", "action_api_guide", "code_reflection_reference", "java_scaffold"]
 
 [prompts.prompt_reflection]
 file = "prompt_reflection.txt"
@@ -142,6 +142,12 @@ required_variables = []
 file = "action_api_guide.txt"
 role = "generator"
 stages = ["seed_generation", "mutation_generation", "crossover_generation", "code_reflection", "prompt_reflection", "generation_prompt_rewrite"]
+required_variables = []
+
+[prompts.code_reflection_reference]
+file = "code_reflection_reference.txt"
+role = "reference"
+stages = ["code_reflection"]
 required_variables = []
 
 [prompts.microrts_gameplay_contract]

@@ -67,10 +67,12 @@ Default-mode and `llm_generated_policies` generation zero record no Java LLM
 attempts. The latter separately records its policy-only initialization attempts.
 
 Code Reflection first sends the policy, selected parent Java, immutable gameplay
-and action/API contracts, canonical scaffold, and source-matching
-validation/compiler diagnostics to a structured Reflector. A separate Java
-revision call receives the parsed conclusion plus those same authoritative
-inputs. Neither receives the reusable generation prompt, game performance,
+and action/API contracts, a concise interface/unit reference, canonical scaffold,
+and source-matching validation/compiler diagnostics to a structured Reflector.
+The conclusion separately reports strategy fidelity, code simplicity, and game
+compliance. When any dimension requires correction, a separate Java revision call
+receives the parsed conclusion plus those same authoritative inputs; otherwise the
+parent Java is retained without that call. Neither receives the reusable generation prompt, game performance,
 opponent scores, W/D/L summaries, match results, traces, logs, aggregate fitness,
 or other gameplay evidence. The revision's complete output is validated as attempt
 1 under `code_reflection_output`; a validation or javac failure may enter the

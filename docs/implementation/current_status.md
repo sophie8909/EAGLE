@@ -215,8 +215,13 @@ unversioned `previous_code` field.
 Code Reflection stores a separate diagnosis request/raw response/parsed
 conclusion, followed by the conclusion-guided Java revision request/raw
 responses, parent source, and extracted reflected source under
-`mutation/code_reflection/`. Neither call receives the reusable generation
-prompt, W/D/L, matches, traces, fitness, or compiler diagnostics. A complete
+`mutation/code_reflection/`. Its immutable context now explicitly lists every
+available action/lookup interface and every available entity/unit. The parsed
+conclusion separately reports strategy fidelity, code simplicity, and game
+compliance. A revision call runs only when one of those dimensions requires a
+correction; otherwise the parent Java is preserved with `not_required` status.
+Neither call receives the reusable generation prompt, W/D/L, matches, traces, or fitness;
+only source-matching validation/compiler diagnostics are allowed. A complete
 reflected source bypasses final Java generation and enters
 validation/compilation directly; bounded compile repair remains available only
 after a structurally complete source fails. A failed diagnosis or
