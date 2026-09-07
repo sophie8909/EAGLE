@@ -226,6 +226,9 @@ class CodeReflectionTests(unittest.TestCase):
             "behaviors_to_preserve": [{
                 "description": "Preserve continuous legal Worker production.",
                 "evidence": [{"method": "trainWorkers"}],
+            }, {
+                "rule": "Worker harvesting",
+                "implementation": "Preserve the legal harvest-and-return loop.",
             }],
         }),))
         candidate = Candidate(
@@ -244,12 +247,16 @@ class CodeReflectionTests(unittest.TestCase):
         conclusion = child.metadata["mutation"]["reflection_conclusion"]
         self.assertEqual(
             conclusion["behaviors_to_preserve"],
-            ["Preserve continuous legal Worker production."],
+            [
+                "Preserve continuous legal Worker production.",
+                "Preserve the legal harvest-and-return loop.",
+            ],
         )
         self.assertIn(
             "Preserve continuous legal Worker production.",
             backend.requests[0],
         )
+        self.assertIn("Preserve the legal harvest-and-return loop.", backend.requests[0])
 
     def test_direct_code_output_skips_final_generator(self) -> None:
         backend = ScriptedJavaBackend((RuntimeError("final Generator must not run"),))

@@ -265,6 +265,10 @@ def _alignment_review_text(value: object, *, field: str) -> str:
                     "correction",
                     "detail",
                     "description",
+                    "implementation",
+                    "observed_java_behavior",
+                    "strategy_requirement",
+                    "rule",
                     "summary",
                     "text",
                 )
