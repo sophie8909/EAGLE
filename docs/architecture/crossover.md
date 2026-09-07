@@ -23,5 +23,6 @@ Persist `strategy_parent_id`, `generation_prompt_parent_id`, optional
 type. Provenance is recorded even when component values are equal.
 
 Tests force independent component choices, verify exact provenance and empty
-pre-evaluation phenotype, and verify final Java generation consumes the active
-genotype plus fixed scaffold.
+pre-mutation phenotype, and verify normal final Java generation consumes the
+active genotype plus fixed scaffold while Code Reflection consumes the selected
+parent Java directly.

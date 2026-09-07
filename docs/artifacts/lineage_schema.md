@@ -26,8 +26,9 @@ input after failure) supplied the child's pre-generation Java component.
 
 Copy assigns all active component fields to one parent. Crossover makes two
 independent prompt choices and, in inherited mode, an independent Java choice.
-Mutation retains inherited provenance and records which operator rewrote one or
-both prompt genes. Text/source equality never determines
+Mutation retains inherited provenance and records whether Strategy rewrote the
+policy prompt, Prompt rewrote the generation prompt, or Code directly revised
+the selected parent Java. Text/source equality never determines
 provenance. Every referenced parent resolves to an earlier generation, lineage
 is written before evaluation, and downstream failure cannot erase it.
 

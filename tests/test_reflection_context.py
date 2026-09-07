@@ -5,7 +5,7 @@ from pathlib import Path
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.evaluation import evaluate_candidate
-from eagle.mutation import build_code_reflection_prompt, build_strategy_reflection_prompt, ReflectionContext
+from eagle.mutation import build_prompt_reflection_prompt, build_strategy_reflection_prompt, ReflectionContext
 from eagle.search import mutation_context_from_candidate
 from generation.backend import MockGenerationBackend
 from eagle.opponent_cases import FAILED_OPPONENT_SCORE as FAILED_GAME_PERFORMANCE, LEXICASE_CASES
@@ -75,7 +75,7 @@ class ReflectionContextTests(unittest.TestCase):
         self.assertEqual(context.game_performance, FAILED_GAME_PERFORMANCE)
         self.assertEqual(context.failure_stage, "compilation")
         self.assertIn("missing symbol", context.error_message)
-        prompt = build_code_reflection_prompt(candidate, context)
+        prompt = build_prompt_reflection_prompt(candidate, context)
         self.assertIn("missing symbol: commandAttack", prompt)
 
     def test_strategy_template_keeps_canonical_envelope_in_stable_field(self):

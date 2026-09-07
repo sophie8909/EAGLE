@@ -142,8 +142,8 @@ class ExperimentConfig:
     stagnation_generations: int = 10
     reflection_operator_mode: ReflectionOperatorMode = ReflectionOperatorMode.AOS_HEAD2HEAD
     strategy_reflection_probability: float = 0.20
-    code_reflection_probability: float = 0.80
-    prompt_compliance_reflection_probability: float = 0.0
+    prompt_reflection_probability: float = 0.80
+    code_reflection_probability: float = 0.0
     aos_minimum_probability: float = 0.10
 
     @classmethod
@@ -263,22 +263,39 @@ class ExperimentConfig:
         if "aos" in payload:
             raise ValueError(
                 "The nested aos config is obsolete. Use reflection_operator_mode, "
-                "strategy_reflection_probability, code_reflection_probability, "
-                "prompt_compliance_reflection_probability, and "
+                "strategy_reflection_probability, prompt_reflection_probability, "
+                "code_reflection_probability, and "
                 "aos_minimum_probability at the top level."
             )
         if (
-            "prompt_compliance_reflection_probability" in payload
-            and "balance_reflection_probability" in payload
+            "balance_reflection_probability" in payload
+            and "prompt_compliance_reflection_probability" in payload
         ):
             raise ValueError(
-                "Use prompt_compliance_reflection_probability only; it cannot be "
-                "combined with the legacy balance_reflection_probability alias."
+                "A legacy config cannot contain both balance_reflection_probability and "
+                "prompt_compliance_reflection_probability."
             )
-        prompt_compliance_probability = payload.get(
-            "prompt_compliance_reflection_probability",
-            payload.get("balance_reflection_probability", 0.0),
-        )
+        if (
+            "prompt_compliance_reflection_probability" in payload
+            and "prompt_reflection_probability" in payload
+        ):
+            raise ValueError(
+                "A config cannot mix prompt_reflection_probability with the retired "
+                "prompt_compliance_reflection_probability key."
+            )
+        if "prompt_reflection_probability" not in payload:
+            # Unambiguous migration for the previous three-operator schema:
+            # old Code becomes Prompt; old Compliance (when present) becomes
+            # direct Code. Two-operator historical configs therefore keep the
+            # behavior they named Code, now under its canonical Prompt name.
+            prompt_probability = payload.get("code_reflection_probability", 0.80)
+            code_probability = payload.get(
+                "prompt_compliance_reflection_probability",
+                payload.get("balance_reflection_probability", 0.0),
+            )
+        else:
+            prompt_probability = payload["prompt_reflection_probability"]
+            code_probability = payload.get("code_reflection_probability", 0.0)
         reflection_operator_mode = ReflectionOperatorMode.parse(
             payload.get("reflection_operator_mode", ReflectionOperatorMode.AOS_HEAD2HEAD.value)
         )
@@ -348,10 +365,8 @@ class ExperimentConfig:
             stagnation_generations=int(payload.get("stagnation_generations", 10)),
             reflection_operator_mode=reflection_operator_mode,
             strategy_reflection_probability=float(payload.get("strategy_reflection_probability", 0.20)),
-            code_reflection_probability=float(payload.get("code_reflection_probability", 0.80)),
-            prompt_compliance_reflection_probability=float(
-                prompt_compliance_probability
-            ),
+            prompt_reflection_probability=float(prompt_probability),
+            code_reflection_probability=float(code_probability),
             aos_minimum_probability=float(payload.get("aos_minimum_probability", 0.10)),
         )
 
@@ -513,10 +528,8 @@ class ExperimentConfig:
             "execution_mode": "mock" if mock else self.execution_mode,
             "reflection_operator_mode": self.reflection_operator_mode.value,
             "strategy_reflection_probability": self.strategy_reflection_probability,
+            "prompt_reflection_probability": self.prompt_reflection_probability,
             "code_reflection_probability": self.code_reflection_probability,
-            "prompt_compliance_reflection_probability": (
-                self.prompt_compliance_reflection_probability
-            ),
             "aos_minimum_probability": self.aos_minimum_probability,
             "llm": {
                 "temperature": self.llm_temperature,
@@ -583,10 +596,8 @@ class ExperimentConfig:
         return ReflectionOperatorSettings(
             mode=ReflectionOperatorMode.parse(self.reflection_operator_mode),
             strategy_probability=self.strategy_reflection_probability,
+            prompt_probability=self.prompt_reflection_probability,
             code_probability=self.code_reflection_probability,
-            prompt_compliance_probability=(
-                self.prompt_compliance_reflection_probability
-            ),
             minimum_probability=self.aos_minimum_probability,
         )
 

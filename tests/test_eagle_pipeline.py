@@ -99,10 +99,10 @@ class EaglePipelineTests(unittest.TestCase):
         )
         scenarios = (
             ("strategy", "generated_phenotype", parent_b.id),
+            ("prompt", "generated_phenotype", parent_a.id),
             ("code", "generated_phenotype", parent_a.id),
-            ("prompt_compliance", "generated_phenotype", parent_a.id),
+            ("prompt", "inherited_genotype", parent_b.id),
             ("code", "inherited_genotype", parent_b.id),
-            ("prompt_compliance", "inherited_genotype", parent_b.id),
         )
         for mutation_name, java_mode, expected in scenarios:
             with self.subTest(mutation_name=mutation_name, candidate_java_mode=java_mode):
@@ -463,8 +463,8 @@ class EaglePipelineTests(unittest.TestCase):
                 set(generation_one_aos["operators"]),
                 {
                     "strategy_reflection",
-                    "generate_code_reflection",
-                    "prompt_compliance_reflection",
+                    "prompt_reflection",
+                    "code_reflection",
                 },
             )
             self.assertAlmostEqual(
@@ -475,7 +475,7 @@ class EaglePipelineTests(unittest.TestCase):
             aos_reward = json.loads(aos_reward_path.read_text(encoding="utf-8"))
             self.assertEqual(aos_reward["schema_version"], "eagle-aos-reward-v3")
             self.assertEqual(aos_reward["offspring_id"], aos_reward_path.parents[1].name)
-            self.assertIn(aos_reward["operator"], {"strategy", "code"})
+            self.assertIn(aos_reward["operator"], {"strategy", "prompt", "code"})
             self.assertIn(aos_reward["operator_id"], generation_one_aos["operators"])
             self.assertTrue(
                 aos_reward_path.parents[2].joinpath(aos_reward["comparison_parent_id"]).is_dir()

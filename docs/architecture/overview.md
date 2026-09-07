@@ -11,8 +11,8 @@ In scope:
 
 - a game-playing policy prompt, a policy-to-Java code-generation prompt, and
   optionally inherited Java;
-- crossover, Strategy Reflection, Code Reflection, Prompt Compliance Reflection,
-  and final Java generation;
+- crossover, Strategy Reflection, Prompt Reflection, Code Reflection, and Java
+  generation;
 - validation, compilation, integration, and the fixed ten-opponent evaluation;
 - opponent-wise fitness, seeded lexicase selection, artifacts, and analysis.
 - one resolved experiment config and one owned llama.cpp lifecycle.
@@ -33,12 +33,12 @@ flowchart TD
     S --> X["Crossover or copy"]
     X --> M{"Mutation?"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
-    M -->|Code| CR["Code Reflection + prompt rewrite"]
-    M -->|Prompt Compliance| BR["Prompt Compliance Reflection + two prompt rewrites"]
+    M -->|Prompt| PR["Prompt Reflection + prompt rewrite"]
+    M -->|Code| CR["Code Reflection: direct parent-Java revision"]
     M -->|No| G["Final Java Generation"]
     SR --> G
-    CR --> G
-    BR --> G
+    PR --> G
+    CR --> V
     G --> V["Validation"] --> C["Compile"] --> I["Integration"]
     I --> E["180 MicroRTS matches"]
     E --> O["10 opponent scores + reporting aggregate"]
@@ -67,9 +67,9 @@ flowchart TD
   immutable closed-world MicroRTS gameplay contract; it permits strategy
   diversity while grounding every rule in legal entities, actions, and
   observable state.
-- Prompt Compliance audits both prompt genes against the immutable gameplay and
-  action/API contracts without consuming W/D/L or match evidence, then rewrites
-  only issue-bearing genes; two requested repairs commit atomically.
+- Prompt Reflection audits policy/Java alignment and changes only the reusable
+  generation prompt. Code Reflection directly corrects the selected parent Java
+  from immutable gameplay/API/scaffold context and bypasses final generation.
 - In inherited mode crossover selects policy, generation prompt, and Java
   parents independently; generated child Java becomes the inheritable Java
   component available to the next generation.

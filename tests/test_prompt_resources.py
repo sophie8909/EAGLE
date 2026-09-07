@@ -134,7 +134,8 @@ class PromptResourceTests(unittest.TestCase):
         self.assertEqual(config.population_size, 3)
         self.assertEqual(config.survivor_selection, "mu_plus_lambda")
         self.assertEqual(config.strategy_reflection_probability, 0.5)
-        self.assertEqual(config.code_reflection_probability, 0.5)
+        self.assertEqual(config.prompt_reflection_probability, 0.5)
+        self.assertEqual(config.code_reflection_probability, 0.0)
         self.assertEqual(config.initial_java_seed_path, Path("eagle/java_seeds/CandidateAgent.java").resolve())
         self.assertEqual(config.seed_prompts[0], "")
         self.assertIn("continuous Worker-rush", config.seed_prompts[1])
@@ -160,7 +161,8 @@ class PromptResourceTests(unittest.TestCase):
         self.assertTrue(all(config.survivor_selection == "mu_plus_lambda" for config in configs))
         self.assertTrue(all(config.candidate_java_mode == "inherited_genotype" for config in configs))
         self.assertTrue(all(config.strategy_reflection_probability == 0.5 for config in configs))
-        self.assertTrue(all(config.code_reflection_probability == 0.5 for config in configs))
+        self.assertTrue(all(config.prompt_reflection_probability == 0.5 for config in configs))
+        self.assertTrue(all(config.code_reflection_probability == 0.0 for config in configs))
 
         java_paths = {config.initial_java_seed_path for config in configs}
         self.assertEqual(java_paths, {Path("eagle/java_seeds/CandidateAgent.java").resolve()})

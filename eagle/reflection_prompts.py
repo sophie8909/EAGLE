@@ -12,7 +12,6 @@ from generation.agent_template import extract_strategy_region
 from .candidate import Candidate
 from .prompts import load_prompt, render_prompt
 from .reflection_context import ReflectionContext, coerce_structured_context
-from .reusable_generation_prompt import reusable_rules_json
 
 
 REFLECTION_PROMPT_SCHEMA_VERSION = "reflection-prompt-v2"
@@ -24,17 +23,10 @@ STRATEGY_BUDGETS = {
     "opponent_commentaries": 18_000,
     "behaviors_to_preserve": 3_000,
 }
-CODE_BUDGETS = {
+PROMPT_BUDGETS = {
     "policy_prompt": 8_000,
     "editable_strategy_java": 18_000,
     "structural_evidence": 9_000,
-    "action_api_guide": 12_000,
-}
-PROMPT_COMPLIANCE_BUDGETS = {
-    "strategy_prompt": 12_000,
-    "code_generation_prompt": 12_000,
-    "current_reusable_rules": 8_000,
-    "gameplay_contract": 12_000,
     "action_api_guide": 12_000,
 }
 MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
@@ -95,7 +87,7 @@ def _editable_strategy_for_review(
     source: str,
     diagnostics: dict[str, object],
 ) -> str:
-    """Return only Java that Code Reflection is allowed to influence.
+    """Return only Java that Prompt Reflection is allowed to review.
 
     A malformed or partial source must not make the immutable scaffold visible
     to the Reviewer.  The extraction failure remains scoped structural evidence
@@ -146,7 +138,7 @@ def build_strategy_reflection_prompt_bundle(candidate: Candidate, context: Refle
     return ReflectionPrompt(text, _metadata(sections, omitted, truncated, text))
 
 
-def build_code_reflection_prompt_bundle(candidate: Candidate, context: ReflectionContext) -> ReflectionPrompt:
+def build_prompt_reflection_prompt_bundle(candidate: Candidate, context: ReflectionContext) -> ReflectionPrompt:
     context = coerce_structured_context(context, candidate)
     truncated: list[str] = []
     omitted: list[str] = []
@@ -183,14 +175,14 @@ def build_code_reflection_prompt_bundle(candidate: Candidate, context: Reflectio
     reviewed_source = candidate.inherited_java or context.candidate.generated_code
     editable_strategy_java = _bounded_code(
         _editable_strategy_for_review(reviewed_source, diagnostics),
-        CODE_BUDGETS["editable_strategy_java"],
+        PROMPT_BUDGETS["editable_strategy_java"],
         diagnostics,
         truncated,
         section="editable_strategy_java",
     )
     structural_evidence = _bounded_text(
         _json(diagnostics),
-        CODE_BUDGETS["structural_evidence"],
+        PROMPT_BUDGETS["structural_evidence"],
         section="structural_evidence",
         truncated=truncated,
     )
@@ -200,75 +192,18 @@ def build_code_reflection_prompt_bundle(candidate: Candidate, context: Reflectio
         "structural_evidence": structural_evidence,
         "action_api_guide": _bounded_text(
             load_prompt("action_api_guide"),
-            CODE_BUDGETS["action_api_guide"],
+            PROMPT_BUDGETS["action_api_guide"],
             section="action_api_guide",
             truncated=truncated,
         ),
     }
-    text = render_prompt("code_reflection", sections)
+    text = render_prompt("prompt_reflection", sections)
     return ReflectionPrompt(text, _metadata(sections, omitted, truncated, text))
-
-
-def build_prompt_compliance_reflection_prompt_bundle(
-    candidate: Candidate,
-    context: ReflectionContext,
-) -> ReflectionPrompt:
-    """Inspect both prompt genes without exposing Java or match evidence."""
-
-    # Keep the public mutation signature aligned with the other operators while
-    # making the evidence boundary explicit: this operator diagnoses the active
-    # prompt genes, not the evaluated parent's outcomes or phenotype.
-    coerce_structured_context(context, candidate)
-    truncated: list[str] = []
-    sections = {
-        "strategy_prompt": _bounded_text(
-            candidate.strategy_prompt,
-            PROMPT_COMPLIANCE_BUDGETS["strategy_prompt"],
-            section="strategy_prompt",
-            truncated=truncated,
-        ),
-        "code_generation_prompt": _bounded_text(
-            candidate.generation_prompt,
-            PROMPT_COMPLIANCE_BUDGETS["code_generation_prompt"],
-            section="code_generation_prompt",
-            truncated=truncated,
-        ),
-        "current_reusable_rules": _bounded_text(
-            reusable_rules_json(
-                candidate.generation_prompt,
-                recover_invalid_current=True,
-            ),
-            PROMPT_COMPLIANCE_BUDGETS["current_reusable_rules"],
-            section="current_reusable_rules",
-            truncated=truncated,
-        ),
-        "gameplay_contract": _bounded_text(
-            MICRORTS_GAMEPLAY_CONTRACT,
-            PROMPT_COMPLIANCE_BUDGETS["gameplay_contract"],
-            section="gameplay_contract",
-            truncated=truncated,
-        ),
-        "action_api_guide": _bounded_text(
-            load_prompt("action_api_guide"),
-            PROMPT_COMPLIANCE_BUDGETS["action_api_guide"],
-            section="action_api_guide",
-            truncated=truncated,
-        ),
-    }
-    text = render_prompt("prompt_compliance_reflection", sections)
-    return ReflectionPrompt(text, _metadata(sections, [], truncated, text))
 
 
 def build_strategy_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
     return build_strategy_reflection_prompt_bundle(candidate, context).text
 
 
-def build_code_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
-    return build_code_reflection_prompt_bundle(candidate, context).text
-
-
-def build_prompt_compliance_reflection_prompt(
-    candidate: Candidate,
-    context: ReflectionContext,
-) -> str:
-    return build_prompt_compliance_reflection_prompt_bundle(candidate, context).text
+def build_prompt_reflection_prompt(candidate: Candidate, context: ReflectionContext) -> str:
+    return build_prompt_reflection_prompt_bundle(candidate, context).text

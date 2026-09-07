@@ -145,7 +145,7 @@ class InheritedJavaGenotypeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exactly one seed_prompt_files"):
             config.validate()
 
-    def test_code_reflection_reviews_child_policy_and_inherited_java(self) -> None:
+    def test_prompt_reflection_reviews_child_policy_and_inherited_java(self) -> None:
         config = ExperimentConfig.from_mapping({"candidate_java_mode": "inherited_genotype"})
         backend = ScriptedBackend((
             '{"assessment":"java_faithfully_implements_policy","alignment_review":[],"required_generation_behaviors":[]}',
@@ -163,7 +163,7 @@ class InheritedJavaGenotypeTests(unittest.TestCase):
         )
         mutated = PromptRewriteMutation(
             config,
-            mutation_type="code",
+            mutation_type="prompt",
             reflection_backend=backend,
             rewrite_backend=backend,
         ).mutate(child, MutationContext(generation=1, index=0))

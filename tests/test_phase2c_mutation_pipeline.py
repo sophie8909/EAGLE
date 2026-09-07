@@ -66,9 +66,9 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             untouched="original generation prompt",
         )
 
-    def test_code_mutation_rewrite_generation_persists_complete_pipeline(self):
+    def test_prompt_mutation_rewrite_generation_persists_complete_pipeline(self):
         self._assert_complete_pipeline(
-            mutation_type="code",
+            mutation_type="prompt",
             rewritten="rewritten generation prompt",
             untouched="original strategy prompt",
         )
@@ -85,7 +85,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
         candidate = self._candidate()
         mutated = PromptRewriteMutation(
             config,
-            mutation_type="code",
+            mutation_type="prompt",
             reflection_backend=backend,
             rewrite_backend=backend,
         ).mutate(candidate, self._context())
@@ -105,8 +105,8 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
             write_candidate_artifacts(root / "candidates", evaluation)
             candidate_dir = root / "candidates" / candidate.id
             self.assertEqual(evaluation.candidate.status, "failed")
-            self.assertTrue((candidate_dir / "mutation" / "code_reflection" / "reflector_response_raw.txt").exists())
-            self.assertTrue((candidate_dir / "mutation" / "code_reflection" / "rewriter_response_raw.txt").exists())
+            self.assertTrue((candidate_dir / "mutation" / "prompt_reflection" / "reflector_response_raw.txt").exists())
+            self.assertTrue((candidate_dir / "mutation" / "prompt_reflection" / "rewriter_response_raw.txt").exists())
             self.assertTrue((candidate_dir / "generation" / "response_raw.txt").exists())
             timing = json.loads((candidate_dir / "timing.json").read_text(encoding="utf-8"))
             self.assertEqual(timing["generation_llm"]["attempts"][0]["status"], "error")
@@ -115,7 +115,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
         reflection = self._strategy_reflection() if mutation_type == "strategy" else self._code_reflection()
         rewrite_response = (
             code_rule_delta(rewritten)
-            if mutation_type == "code"
+            if mutation_type == "prompt"
             else json.dumps({"revised_strategy_prompt": rewritten})
         )
         backend = ScriptedMutationBackend((reflection, rewrite_response))

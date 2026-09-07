@@ -8,7 +8,7 @@ from eagle.config import ExperimentConfig
 from eagle.mutation import (
     MutationContext,
     ReflectionStage,
-    build_code_reflection_prompt,
+    build_prompt_reflection_prompt,
     build_strategy_reflection_prompt,
     parse_reflection_response,
 )
@@ -85,8 +85,8 @@ class Phase2AReflectionTests(unittest.TestCase):
             self.assertIn(expected, prompt)
         self.assertNotIn("Parent generated_java", prompt)
 
-    def test_code_prompt_contains_complete_failure_evidence(self):
-        prompt = build_code_reflection_prompt(self.candidate, self.context)
+    def test_prompt_reflection_contains_complete_failure_evidence(self):
+        prompt = build_prompt_reflection_prompt(self.candidate, self.context)
         for expected in (
             "Current policy prompt",
             "Editable CandidateAgent strategy region",
@@ -135,14 +135,14 @@ class Phase2AReflectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             result = ReflectionStage(backend, max_attempts=2).run(
-                reflection_type="code_reflection",
+                reflection_type="prompt_reflection",
                 candidate=self.candidate,
                 request="ORIGINAL REVIEW REQUEST",
                 artifact_dir=root,
             )
 
             self.assertTrue(result.succeeded)
-            mutation_dir = root / "mutation" / "code_reflection"
+            mutation_dir = root / "mutation" / "prompt_reflection"
             first = (mutation_dir / "reflector_attempt_001_request.txt").read_text()
             second = (mutation_dir / "reflector_attempt_002_request.txt").read_text()
             self.assertEqual(first, backend.calls[0])
@@ -150,13 +150,13 @@ class Phase2AReflectionTests(unittest.TestCase):
             self.assertEqual(first, "ORIGINAL REVIEW REQUEST")
             self.assertIn("Expecting value", second)
 
-    def test_code_reflection_accepts_full_json_markdown_fence(self):
+    def test_prompt_reflection_accepts_full_json_markdown_fence(self):
         response = "```json\n" + json.dumps({
             "assessment": "java_faithfully_implements_policy",
             "alignment_review": [],
             "required_generation_behaviors": [],
         }) + "\n```"
-        parsed, _summary, _revised = parse_reflection_response(response, "code")
+        parsed, _summary, _revised = parse_reflection_response(response, "prompt")
         self.assertEqual(parsed["assessment"], "java_faithfully_implements_policy")
 
     def test_blank_policy_rejects_invented_code_requirements_and_retries(self):
@@ -178,7 +178,7 @@ class Phase2AReflectionTests(unittest.TestCase):
         backend = ScriptedBackend((invented, ambiguous))
 
         result = ReflectionStage(backend, max_attempts=2).run(
-            reflection_type="code_reflection",
+            reflection_type="prompt_reflection",
             candidate=Candidate(strategy_prompt=""),
             request="review",
         )
@@ -187,7 +187,7 @@ class Phase2AReflectionTests(unittest.TestCase):
         self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
         self.assertEqual(result.parsed_response["assessment"], "policy_ambiguous")
 
-    def test_code_reflection_normalizes_0823_array_corrections(self):
+    def test_prompt_reflection_normalizes_0823_array_corrections(self):
         response = json.dumps({
             "assessment": "policy_clear_but_java_violates",
             "alignment_review": [{
@@ -204,7 +204,7 @@ class Phase2AReflectionTests(unittest.TestCase):
             ],
         })
 
-        parsed, summary, _revised = parse_reflection_response(response, "code")
+        parsed, summary, _revised = parse_reflection_response(response, "prompt")
         item = parsed["alignment_review"][0]
         self.assertEqual(
             item["required_generation_behavior"],
@@ -220,12 +220,12 @@ class Phase2AReflectionTests(unittest.TestCase):
         backend = ScriptedBackend(("", ""))
         with tempfile.TemporaryDirectory() as temp:
             result = ReflectionStage(backend, max_attempts=2).run(
-                reflection_type="code_reflection",
+                reflection_type="prompt_reflection",
                 candidate=self.candidate,
                 request="full request",
                 artifact_dir=Path(temp),
             )
-            mutation_dir = Path(temp) / "mutation" / "code_reflection"
+            mutation_dir = Path(temp) / "mutation" / "prompt_reflection"
             self.assertEqual(result.status, "failed")
             self.assertEqual(len(result.attempts), 2)
             self.assertTrue((mutation_dir / "reflector_request.txt").exists())

@@ -31,7 +31,8 @@ random_seed: 7
 
 reflection_operator_mode: aos_head2head
 strategy_reflection_probability: 0.20
-code_reflection_probability: 0.80
+prompt_reflection_probability: 0.80
+code_reflection_probability: 0.00
 aos_minimum_probability: 0.10
 
 llm:

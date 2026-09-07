@@ -9,7 +9,7 @@ from eagle.mutation import MutationContext, ReflectionStage, build_strategy_refl
 from eagle.rewrite import (
     PromptRewriteMutation,
     PromptRewriteStage,
-    build_code_rewrite_prompt,
+    build_prompt_rewrite_prompt,
     build_strategy_rewrite_prompt,
 )
 from eagle.reusable_generation_prompt import (
@@ -90,14 +90,14 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertTrue(child.metadata["mutation"]["applied"])
         self.assertEqual(child.metadata["mutation"]["original_strategy_prompt"], "old strategy")
 
-    def test_code_rewrite_changes_only_generation_prompt(self):
+    def test_prompt_reflection_changes_only_generation_prompt(self):
         backend = ScriptedRewriteBackend((
-            self._code_reflection(),
+            self._prompt_reflection(),
             code_rule_delta(),
         ))
         mutation = PromptRewriteMutation(
             self.config,
-            mutation_type="code",
+            mutation_type="prompt",
             reflection_backend=backend,
             rewrite_backend=backend,
         )
@@ -106,7 +106,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertIn(RULES_START_MARKER, child.generation_prompt)
         self.assertIn(GENERIC_RULE, child.generation_prompt)
         self.assertEqual(len(parse_reusable_generation_rules(child.generation_prompt)), 1)
-        self.assertEqual(child.mutation_type, "code")
+        self.assertEqual(child.mutation_type, "prompt")
 
     def test_code_rewrite_requires_exact_json_contract_and_retries(self):
         backend = ScriptedRewriteBackend((
@@ -168,13 +168,13 @@ EAGLE_REUSABLE_RULES_END"""
             operator="copy",
         )
         backend = ScriptedRewriteBackend((
-            self._code_reflection(),
+            self._prompt_reflection(),
             code_rule_delta(),
         ))
 
         child = PromptRewriteMutation(
             self.config,
-            mutation_type="code",
+            mutation_type="prompt",
             reflection_backend=backend,
             rewrite_backend=backend,
         ).mutate(candidate, self.context)
@@ -205,14 +205,14 @@ EAGLE_REUSABLE_RULES_END"""
             request=build_strategy_reflection_prompt(self.candidate, self.context),
         )
         strategy_prompt = build_strategy_rewrite_prompt(self.candidate, reflection, self.context)
-        code_reflection = ReflectionStage(
-            ScriptedRewriteBackend((self._code_reflection(),)), max_attempts=1
+        prompt_reflection = ReflectionStage(
+            ScriptedRewriteBackend((self._prompt_reflection(),)), max_attempts=1
         ).run(
-            reflection_type="code",
+            reflection_type="prompt",
             candidate=self.candidate,
             request="review",
         )
-        code_prompt = build_code_rewrite_prompt(self.candidate, code_reflection, self.context)
+        code_prompt = build_prompt_rewrite_prompt(self.candidate, prompt_reflection, self.context)
         self.assertIn("old strategy", strategy_prompt)
         self.assertIn("reflection", strategy_prompt)
         self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", strategy_prompt)
@@ -314,7 +314,7 @@ EAGLE_REUSABLE_RULES_END"""
         })
 
     @staticmethod
-    def _code_reflection():
+    def _prompt_reflection():
         return json.dumps({
             "assessment": "java_faithfully_implements_policy",
             "alignment_review": [],

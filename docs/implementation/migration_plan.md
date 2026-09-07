@@ -3,7 +3,7 @@
 ## Completed migrations
 
 - complete-file candidate model and first-class lineage;
-- Strategy/Code Reflection → Rewrite → Generation mutations;
+- Strategy/Prompt Reflection → Rewrite → Generation mutations and direct-Java Code Reflection;
 - ten-opponent, 180-match evaluation and seeded lexicase selection;
 - three reflection-operator modes with one AOS updater;
 - unified experiment/model lifecycle;
@@ -16,7 +16,7 @@
 - shared fresh/resume search bootstrap;
 - removal of obsolete run/runtime CLI wrappers and `eagle-run-v1` analysis.
 - removal of inherited `previous_code` and phenotype-parent provenance;
-- two-gene crossover, fixed-scaffold generation, and separated Strategy/Code evidence;
+- two-gene crossover, fixed-scaffold generation, and separated Strategy/Prompt/Code evidence;
 - genotype/phenotype and responsibility-specific mutation artifact layout.
 - resumable config-folder batches driven by the atomic `experiment.yaml` index.
 - joint parent-plus-offspring `(mu + lambda)` lexicase survivor selection;

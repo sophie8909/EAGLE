@@ -225,7 +225,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "generation-zero only"):
             backend.generate(Candidate(generation=1), "CandidateAgent")
 
-    def test_blank_policy_bootstrap_forces_strategy_reflection_before_code(self) -> None:
+    def test_blank_policy_bootstrap_forces_strategy_reflection_before_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = ExperimentConfig.from_mapping({
                 "runs_dir": temp_dir,
@@ -235,7 +235,8 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
                 "crossover_rate": 0.0,
                 "reflection_operator_mode": "static",
                 "strategy_reflection_probability": 0.0,
-                "code_reflection_probability": 1.0,
+                "prompt_reflection_probability": 1.0,
+                "code_reflection_probability": 0.0,
             })
 
             result = run_search(config, mock=True, run_id="blank-policy-bootstrap")

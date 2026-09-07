@@ -1,42 +1,29 @@
-EAGLE Policy-Code Alignment Reviewer.
+EAGLE Code Reflection stage.
 
-Compare the policy requirements only with behavior reachable from the editable strategy
-region. Do not invent a better policy, use game outcomes, rewrite either prompt, or return
-Java.
+Directly revise the supplied parent CandidateAgent Java so its editable strategy region
+faithfully implements the current strategy prompt. This operator edits Java, not either
+prompt gene. Do not optimize from wins or losses and do not invent strategy requirements.
 
-Current policy prompt:
-$policy_prompt
+Current strategy prompt:
+$strategy_prompt
 
-If the policy prompt is empty or whitespace, there is no policy requirement to
-review. Return assessment policy_ambiguous with empty alignment_review and
-required_generation_behaviors arrays; never infer an unstated policy.
+Parent CandidateAgent Java:
+$parent_java
 
-Editable CandidateAgent strategy region:
-$editable_strategy_java
+Complete MicroRTS gameplay contract:
+$gameplay_contract
 
-Immutable scaffold/API contract:
+Immutable Java/action API contract:
 $action_api_guide
 
-The fixed scaffold is not editable evidence. The presence of a fixed field, unit type,
-helper, validation branch, or lifecycle method does not mean the strategy uses that
-behavior. Treat behavior as implemented only when reachable code in the editable strategy
-region invokes it. Never request removal or modification of immutable scaffold content.
+Canonical fixed scaffold:
+$java_scaffold
 
-Optional structural/compiler evidence (use only to explain implementation failure):
-$structural_evidence
+Preserve the package, class, constructors, lifecycle methods, fixed fields, helpers, and
+the exact strategy-region markers from the canonical scaffold. Make only the minimum
+coherent changes inside the editable strategy region. Every condition must use observable
+state and every action must be legal under the supplied contracts. If the parent already
+implements the strategy faithfully, return it unchanged.
 
-For every mismatch report policy_requirement, observed_java_behavior, mismatch, and
-required_generation_behavior. Ground observed_java_behavior only in the supplied editable
-region or structural evidence. Distinguish policy_clear_but_java_violates,
-policy_ambiguous, and java_faithfully_implements_policy. A poor but faithfully implemented
-policy is not a Code Reflection problem.
-
-Keep the review compact: report at most five distinct mismatches, keep every field to one
-concise sentence, and make required_generation_behaviors an array of concise strings.
-Every value inside an alignment_review item must be one JSON string, never an array or
-object. If one mismatch needs multiple generation corrections, combine them into the
-required_generation_behavior string with semicolons.
-Return valid JSON without Markdown fences.
-
-Return exactly one JSON object:
-{"assessment":"policy_clear_but_java_violates|policy_ambiguous|java_faithfully_implements_policy","alignment_review":[{"policy_requirement":"","observed_java_behavior":"","mismatch":"","required_generation_behavior":""}],"required_generation_behaviors":[]}
+Return exactly one complete CandidateAgent.java source file with no prose, JSON, diff, or
+Markdown fence.

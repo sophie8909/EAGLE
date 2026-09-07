@@ -31,6 +31,12 @@ This is the canonical owner of candidate and LLM-attempt timing fields. Normativ
     "duration_seconds": null,
     "attempts": []
   },
+  "code_reflector_llm": {
+    "started_at": null,
+    "finished_at": null,
+    "duration_seconds": null,
+    "attempts": []
+  },
   "generation_llm": {
     "started_at": "",
     "finished_at": "",
@@ -90,7 +96,7 @@ compilation, integration, and evaluation.
 
 Attempt order is stable and one-based. The owning stage artifact provides model/backend/request/response paths; timing may reference those paths in a versioned extension but must not duplicate their content.
 
-Code Prompt Rewrite attempts, including the Prompt Compliance code rewrite, include
+Prompt Reflection rewrite attempts include
 structured reusable-rule validation inside the owning attempt duration. An
 invalid category, unknown removal ID, concrete policy/Java instruction, whole
 replacement prompt, or ineffective delta is an ordinary failed rewrite attempt
@@ -152,11 +158,12 @@ Run-level timing.jsonl contains event=generation and event=llm_request records. 
 
 Candidate timing.json contains operation-specific mutation and crossover generation-only spans, the shared child_generation span, separate validation/compilation/integration/evaluation spans, and child_total. Durations use a monotonic clock; UTC fields are display timestamps.
 
-Prompt Compliance Reflection records one `reflector_llm` attempt stream and
-zero, one, or two ordered rewrite streams in `rewriter_llm` according to the
-reported issue-bearing genes (strategy before code-generation when both apply).
-Each request emits one run-level `llm_request` event and remains candidate-owned
-under `mutation/prompt_compliance_reflection/`.
+Prompt Reflection records one `reflector_llm` attempt stream and one bounded
+`rewriter_llm` stream. Code Reflection records its Java-producing calls in
+`code_reflector_llm`; the subsequent direct validation attempt adds no
+`generation_llm` transport event unless compile repair is required. Each actual
+request emits one run-level `llm_request` event and remains candidate-owned under
+its mutation directory.
 
 ## Compact snapshot retention (2026-08-04)
 

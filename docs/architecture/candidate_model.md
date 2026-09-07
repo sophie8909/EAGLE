@@ -11,7 +11,7 @@ Every candidate has two evolvable prompt components:
 
 In the default `generated_phenotype` mode, the complete
 `ai.generated.CandidateAgent` Java source remains non-inherited phenotype and
-Code Reflection evidence. In explicit `inherited_genotype` mode, a third
+Prompt/Code Reflection evidence. In explicit `inherited_genotype` mode, a third
 pre-generation component stores the complete inherited Java source and its
 parent ID. The Generator revises it into the candidate's new Java phenotype;
 that successful phenotype is eligible for independent Java-component
@@ -49,15 +49,13 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
 - Whole-component uniform crossover makes two independent prompt choices and,
   in inherited mode, one independent Java choice.
 - Strategy Reflection may change only `strategy_prompt`.
-- Code Reflection may change only `generation_prompt`.
-- Successful Code Reflection applies a structured rule delta and deterministically
+- Prompt Reflection may change only `generation_prompt`.
+- Successful Prompt Reflection applies a structured rule delta and deterministically
   renders `generation_prompt`; policy-specific checklists and Java fragments are
   rejected at the rewrite boundary.
-- Prompt Compliance Reflection changes only prompt genes with reported contract
-  issues and commits both atomically when both are requested; it never changes
-  Java. A generation-prompt repair uses a validated reusable-rule delta and the
-  deterministic canonical renderer.
-- Generator and Evaluation do not modify either prompt gene.
+- Code Reflection preserves both prompt genes and directly revises the selected
+  parent Java; its successful result bypasses the final Generator.
+- Generator, Code Reflection, and Evaluation do not modify either prompt gene.
 - Generator uses the canonical checked-in scaffold. Only inherited mode also
   receives the selected parent Java component.
 - Failure never erases genotype, partial phenotype, lineage, mutation evidence, or timing.

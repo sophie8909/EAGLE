@@ -10,7 +10,7 @@ from eagle.config import ExperimentConfig
 from eagle.mutation import ReflectionStage
 from eagle.reflection_context import build_reflection_context
 from eagle.reflection_prompts import (
-    build_code_reflection_prompt_bundle,
+    build_prompt_reflection_prompt_bundle,
     build_strategy_reflection_prompt_bundle,
 )
 from eagle.rewrite import PromptRewriteMutation
@@ -84,7 +84,7 @@ class ReflectionContextRedesignTests(unittest.TestCase):
             },
             metadata={
                 "reflection_history": [
-                    {"reflection_type": "code", "analysis_summary": "old code advice", "revised_prompt": "old code prompt"},
+                    {"reflection_type": "prompt", "analysis_summary": "old prompt advice", "revised_prompt": "old prompt"},
                     {"reflection_type": "strategy", "analysis_summary": "latest strategy advice", "revised_prompt": "latest strategy prompt"},
                 ],
             },
@@ -150,16 +150,16 @@ class ReflectionContextRedesignTests(unittest.TestCase):
         self.assertNotIn("CandidateAgent {}", prompt.text)
         self.assertNotIn("complexity_penalty", prompt.text)
 
-    def test_code_formatter_receives_only_structural_compiler_diagnostics(self):
-        context = build_reflection_context(self.candidate(), generation=5, index=2, reflection_type="code")
-        prompt = build_code_reflection_prompt_bundle(self.candidate(), context)
+    def test_prompt_formatter_receives_only_structural_compiler_diagnostics(self):
+        context = build_reflection_context(self.candidate(), generation=5, index=2, reflection_type="prompt")
+        prompt = build_prompt_reflection_prompt_bundle(self.candidate(), context)
         self.assertIn("unchecked conversion", prompt.text)
         self.assertNotIn("FIXED_REGION_SENTINEL", prompt.text)
         self.assertNotIn("code_quality", prompt.text)
         self.assertNotIn("complexity_penalty", prompt.text)
         self.assertNotIn("strategy_alignment", prompt.text)
 
-    def test_code_formatter_excludes_match_table_and_bounds_code(self):
+    def test_prompt_formatter_excludes_match_table_and_bounds_code(self):
         candidate = self.candidate()
         candidate = Candidate(**{
             **candidate.__dict__,
@@ -170,8 +170,8 @@ class ReflectionContextRedesignTests(unittest.TestCase):
                 + "\n// EAGLE_AGENT_STRATEGY_END\n"
             ),
         })
-        context = build_reflection_context(candidate, generation=5, index=2, reflection_type="code")
-        prompt = build_code_reflection_prompt_bundle(candidate, context)
+        context = build_reflection_context(candidate, generation=5, index=2, reflection_type="prompt")
+        prompt = build_prompt_reflection_prompt_bundle(candidate, context)
         self.assertIn("Optional structural/compiler evidence", prompt.text)
         self.assertNotIn('"map_1"', prompt.text)
         self.assertIn("editable_strategy_java", prompt.metadata["truncated_sections"])

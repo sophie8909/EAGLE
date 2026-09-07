@@ -45,7 +45,6 @@ from .mutation import ReflectionContext
 from .reflection_context import build_reflection_context
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
 from .prompts import normalize_prompt
-from .rewrite import PromptRewriteMutation
 from .strategy_reflection import cleanup_retired_match_traces, select_strategy_mutation_intent
 from .search_runtime import build_search_runtime
 from .strategy_diversity import (
@@ -395,22 +394,9 @@ def create_offspring(
             f"{child.id}"
         )
         if rng.random() < config.mutation_rate:
-            code_feedback_parent_id = (
-                child.java_parent_id
-                if config.candidate_java_mode == "inherited_genotype"
-                else child.generation_prompt_parent_id
-            )
-            code_feedback_parent = parent_for_component(
-                code_feedback_parent_id,
-                (parent_a, parent_b),
-            )
             eligible_operators = (
                 (STRATEGY_REFLECTION,)
-                if not (
-                    child.strategy_prompt.strip()
-                    if config.candidate_java_mode == "inherited_genotype"
-                    else code_feedback_parent.strategy_prompt.strip()
-                )
+                if not child.strategy_prompt.strip()
                 else config.reflection_operator_settings.enabled_operators
             )
             operator_used = operator_controller.select_operator(
@@ -543,7 +529,7 @@ def mutation_evidence_parent(
 
     if mutation_name == "strategy":
         parent_id = child.strategy_parent_id
-    elif mutation_name in {"code", "prompt_compliance"}:
+    elif mutation_name in {"prompt", "code"}:
         parent_id = (
             child.java_parent_id
             if candidate_java_mode == "inherited_genotype"

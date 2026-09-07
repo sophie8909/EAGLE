@@ -16,12 +16,12 @@ from .opponent_cases import LEXICASE_CASES
 
 
 STRATEGY_REFLECTION = "strategy_reflection"
-GENERATE_CODE_REFLECTION = "generate_code_reflection"
-PROMPT_COMPLIANCE_REFLECTION = "prompt_compliance_reflection"
+PROMPT_REFLECTION = "prompt_reflection"
+CODE_REFLECTION = "code_reflection"
 OPERATORS = (
     STRATEGY_REFLECTION,
-    GENERATE_CODE_REFLECTION,
-    PROMPT_COMPLIANCE_REFLECTION,
+    PROMPT_REFLECTION,
+    CODE_REFLECTION,
 )
 TRANSITIONS = (
     "failed_parent_to_runnable_child",
@@ -31,8 +31,8 @@ TRANSITIONS = (
 )
 OPERATOR_TO_MUTATION = {
     STRATEGY_REFLECTION: "strategy",
-    GENERATE_CODE_REFLECTION: "code",
-    PROMPT_COMPLIANCE_REFLECTION: "prompt_compliance",
+    PROMPT_REFLECTION: "prompt",
+    CODE_REFLECTION: "code",
 }
 
 
@@ -106,8 +106,8 @@ class ReflectionOperatorSettings:
 
     mode: ReflectionOperatorMode = ReflectionOperatorMode.AOS_HEAD2HEAD
     strategy_probability: float = 0.20
-    code_probability: float = 0.80
-    prompt_compliance_probability: float = 0.0
+    prompt_probability: float = 0.80
+    code_probability: float = 0.0
     minimum_probability: float = 0.10
     credit_alpha: float = AOS_CREDIT_ALPHA
 
@@ -115,8 +115,8 @@ class ReflectionOperatorSettings:
     def initial_probabilities(self) -> dict[str, float]:
         return {
             STRATEGY_REFLECTION: self.strategy_probability,
-            GENERATE_CODE_REFLECTION: self.code_probability,
-            PROMPT_COMPLIANCE_REFLECTION: self.prompt_compliance_probability,
+            PROMPT_REFLECTION: self.prompt_probability,
+            CODE_REFLECTION: self.code_probability,
         }
 
     @property
@@ -130,16 +130,16 @@ class ReflectionOperatorSettings:
     def validate(self) -> None:
         values = {
             "strategy_reflection_probability": self.strategy_probability,
+            "prompt_reflection_probability": self.prompt_probability,
             "code_reflection_probability": self.code_probability,
-            "prompt_compliance_reflection_probability": self.prompt_compliance_probability,
         }
         for name, value in values.items():
             if not math.isfinite(value) or not 0.0 <= value <= 1.0:
                 raise ValueError(f"{name} must be a finite number in [0, 1]; got {value!r}.")
         if not math.isclose(sum(values.values()), 1.0, rel_tol=0.0, abs_tol=1e-9):
             raise ValueError(
-                "strategy_reflection_probability + code_reflection_probability + "
-                "prompt_compliance_reflection_probability "
+                "strategy_reflection_probability + prompt_reflection_probability + "
+                "code_reflection_probability "
                 f"must equal 1.0; got {sum(values.values()):.12g}."
             )
         if not math.isfinite(self.minimum_probability):
@@ -639,8 +639,13 @@ def build_reflection_operator_controller(
     """Create the only mode-specific object used by search and resume."""
 
     settings = config.reflection_operator_settings
+    retired_operators = {
+        "balance_reflection",
+        "generate_code_reflection",
+        "prompt_compliance_reflection",
+    }
     if state and any(
-        "balance_reflection" in (state.get(field) or {})
+        retired_operators.intersection(state.get(field) or {})
         for field in (
             "probabilities",
             "credits",
@@ -650,9 +655,8 @@ def build_reflection_operator_controller(
         )
     ):
         raise ValueError(
-            "This run uses the removed Balance Reflection state and cannot be "
-            "resumed as Prompt Compliance Reflection. Start a new run with the "
-            "updated configuration."
+            "This run uses retired reflection-operator semantics and cannot be "
+            "resumed under Strategy/Prompt/Code Reflection. Start a new run."
         )
     if state and state.get("mode") != settings.mode.value:
         raise ValueError(
@@ -880,18 +884,18 @@ def _canonical_generation_record(
     cumulative_transitions: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     return {
-        "schema_version": "eagle-reflection-operator-v4",
+        "schema_version": "eagle-reflection-operator-v5",
         "mode": settings.mode.value,
         "reward_source": settings.mode.reward_source,
         "strategy_probability_before": before[STRATEGY_REFLECTION],
-        "code_probability_before": before[GENERATE_CODE_REFLECTION],
-        "prompt_compliance_probability_before": before[PROMPT_COMPLIANCE_REFLECTION],
+        "prompt_probability_before": before[PROMPT_REFLECTION],
+        "code_probability_before": before[CODE_REFLECTION],
         "strategy_probability_after": after[STRATEGY_REFLECTION],
-        "code_probability_after": after[GENERATE_CODE_REFLECTION],
-        "prompt_compliance_probability_after": after[PROMPT_COMPLIANCE_REFLECTION],
+        "prompt_probability_after": after[PROMPT_REFLECTION],
+        "code_probability_after": after[CODE_REFLECTION],
         "strategy_reward": operators[STRATEGY_REFLECTION].get("mean_reward"),
-        "code_reward": operators[GENERATE_CODE_REFLECTION].get("mean_reward"),
-        "prompt_compliance_reward": operators[PROMPT_COMPLIANCE_REFLECTION].get("mean_reward"),
+        "prompt_reward": operators[PROMPT_REFLECTION].get("mean_reward"),
+        "code_reward": operators[CODE_REFLECTION].get("mean_reward"),
         "selection_probabilities": dict(before),
         "post_update_probabilities": dict(after),
         "operators": operators,

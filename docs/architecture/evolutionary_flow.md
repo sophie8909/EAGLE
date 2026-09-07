@@ -26,12 +26,12 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    best score for each case until one remains.
 5. Apply crossover/copy to every active genotype component and let the
    configured reflection-operator controller choose Strategy Reflection,
-   Generate-Code Reflection, or Prompt Compliance Reflection. Strategy and Code
-   mutate one owned prompt; Prompt Compliance audits the active prompt pair and
-   rewrites only issue-bearing genes, committing atomically when both need
-   repair. It receives no W/D/L, match, Java, compiler, or fitness evidence.
-   None directly edits inherited Java.
-6. Decode each child with its configured compile-guided attempt bound, using
+   Prompt Reflection, or Code Reflection. Strategy changes only the policy
+   prompt. Prompt changes only the reusable generation prompt. Code directly
+   revises the selected parent Java while preserving both prompt genes.
+6. Decode Strategy/Prompt/no-mutation children with the configured Generator.
+   Send a successful Code Reflection source directly to validation/compilation
+   without allowing the Generator to overwrite it. In either path, use the
    structured validation/javac evidence only after a complete source fails;
    promote the first validation+compilation success, then evaluate that single
    promoted phenotype through the complete pipeline. Integration/runtime
@@ -81,9 +81,8 @@ opponent archive, lexicase, weighted Game Performance, or final testing.
 `static` performs neither form of credit assignment.
 
 Both adaptive modes use the mutation context's evidence parent as the
-comparison parent. Strategy uses `strategy_parent_id`; default-mode Code and
-Prompt Compliance use `generation_prompt_parent_id`; inherited-mode Code and
-Prompt Compliance use
+comparison parent. Strategy uses `strategy_parent_id`; default-mode Prompt and
+Code use `generation_prompt_parent_id`; inherited-mode Prompt and Code use
 `java_parent_id`. Therefore component-wise crossover may select either direct
 parent without silently assigning AOS credit to the other one.
 

@@ -1,6 +1,6 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-09-03 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-09-07 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
@@ -29,7 +29,7 @@ Generator 成功產生的 child Java 會成為下一代可選取的 Java compone
 辨識與排序。從既有 artifact 或 resume 載入的明確 ID 不會被重新命名。
 
 每一代依序執行 seeded lexicase parent selection、crossover、可選的 Strategy、
-Code 或 Prompt Compliance mutation、完整 Java generation、validation、compilation、integration、
+Prompt 或 Code mutation、Java generation（Code Reflection 成功時略過）、validation、compilation、integration、
 180 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。Survivor
 selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
 選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
@@ -48,47 +48,46 @@ Reflection operator mode 只有三種：
 - `aos_head2head`
 
 兩種 adaptive mode 都以 mutation context 實際使用的 evidence parent 作為
-`comparison_parent_id`：Strategy 依 policy component provenance；預設模式的 Code／
-Prompt Compliance 依 generation-prompt provenance；inherited 模式的 Code／Prompt Compliance 依 Java
+`comparison_parent_id`：Strategy 依 policy component provenance；預設模式的 Prompt／
+Code 依 generation-prompt provenance；inherited 模式的 Prompt／Code 依 Java
 component provenance。Crossover 後即使 component 來自第二個 direct parent，也不會
 再固定把 AOS reward 歸到第一個 parent。`aos_opponent` 重用一般 180 場 evaluation，
 `aos_head2head` 則對同一 comparison parent 執行額外 18 場 direct matches。
 
-Strategy Mutation 只修改 `strategy_prompt`；Code Mutation 只修改
-`generation_prompt`。Prompt Compliance Reflection 同時取得兩個 prompt gene、
-canonical reusable rules、完整 gameplay contract 與 action/API guide，只檢查內容是否
-符合實際遊戲與生成邊界。它不接收 W/D/L、match、fitness、Java 或 compiler evidence，
-也不判斷策略強弱。Reflector 分別找出不存在的遊戲概念、不可觀察條件、非法 action／
-production、policy-specific decoder rule、錯誤 API 與 scaffold scope 違規，再依序重寫
-兩個 prompt；兩次 rewrite 都成功才原子套用，任何一步失敗都保留兩個原 prompt。
-Code Prompt Rewriter 仍只回傳 `remove_rule_ids`／`add_rules` delta，經驗證後確定性組成
-canonical `generation_prompt`，不接受未驗證的整份 replacement prompt。合法的 aggressive、
-defensive、economic 或其他策略類型都必須保留，不會因勝負或風格被改寫。
+Strategy Mutation 只修改 `strategy_prompt`。Prompt Mutation 是舊 Code Reflection
+行為：比較 policy 與父代 Java 的可編輯策略區，經 Reviewer 與 Rewriter 只修改
+`generation_prompt`。Code Mutation 是舊 Compliance operator 的位置，但新行為是直接
+把選定父代 Java 修正成一份完整 `CandidateAgent.java`；兩個 prompt gene 與原始
+inherited Java input 都不變。成功的 Code Reflection 直接進 validation／javac，
+不再呼叫 Generator 覆蓋結果。它不接收 reusable generation prompt、W/D/L、match、
+trace、fitness 或 compiler evidence，只接收 policy、父代 Java、不可變 gameplay/API
+contract 與 canonical scaffold。
 
 所有會產生或解讀策略的 LLM 階段共用同一份不可變的
 `microrts_gameplay_contract`：包含完整 entity、production graph、合法 action 與
 可觀察 state。它允許策略大幅改成其他類型，但每個條件都必須能由遊戲 state
 觀察，每個回應都必須能用 MicroRTS 合法動作執行；不能把一般 RTS 的概念帶進
-policy。這份 contract 是固定 domain context，不是比賽 evidence；Prompt Compliance
-Reflector 與其 Strategy Rewriter 都直接使用它來修正規則違規，而不是根據勝負調整策略。
+policy。這份 contract 是固定 domain context，不是比賽 evidence；Strategy 與 Code
+Reflection 使用它來限制輸出為可執行的遊戲規則，而不是根據勝負調整策略。
 
 Strategy Reflection 只使用 policy 與 match evidence。Match Commentator 不會收到
-Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Code
+Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Prompt
 Reflection 在預設模式比較 policy 與當前 Java phenotype；在 inherited 模式則
 比較 child 當前 policy 與 independently selected Java component。兩者皆可選用
-static/compiler evidence，但不使用 raw game logs；Code Prompt Rewriter 只收到
+static/compiler evidence，但不使用 raw game logs；Prompt Rewriter 只收到
 原 generation prompt、其 canonical reusable-rule view、alignment review 與 immutable
 API guide。Reviewer 只會看到 strategy marker 之間的可編輯 Java；固定 scaffold
-欄位與 helper 不會作為 candidate 行為證據。Generator 永遠使用兩個 prompt gene
-與固定 checked-in Java scaffold，且在 inherited 模式額外收到完整 inherited Java。
+欄位與 helper 不會作為 candidate 行為證據。Strategy／Prompt／無 mutation 路徑的
+Generator 使用兩個 prompt gene 與固定 checked-in Java scaffold，且在 inherited
+模式額外收到完整 inherited Java；Code Reflection 成功路徑不呼叫這個 Generator。
 
-Code Prompt Rewriter 固定回傳 `remove_rule_ids` 與 `add_rules`；每次 mutation 必須
+Prompt Rewriter 固定回傳 `remove_rule_ids` 與 `add_rules`；每次 mutation 必須
 新增一條 12–240 字元的 policy-agnostic 規則，並最多移除一條既有規則。新增規則
 必須使用固定 category，不得寫入特定 strategy、unit type、Java/API symbol 或
 scaffold 修改；runtime 會產生穩定 rule ID、依序套用 delta，並確定性組成最多十條
 規則的 canonical `generation_prompt`。若 semantic validation 拒絕輸出，下一次有界
 重試會收到原 request 與精確錯誤，且失敗 delta 不會被部分套用。Legacy free-form
-prompt 可讀取，但下次成功 Code Reflection 時不會被複製進新 rule set。Generation 0 依 candidate mode 分流：預設模式仍是
+prompt 可讀取，但下次成功 Prompt Reflection 時不會被複製進新 rule set。Generation 0 依 candidate mode 分流：預設模式仍是
 每個 seed 檔建立一個 candidate，直接載入 `initial_java_seed_path`，不呼叫
 Generator；inherited 模式必須只有一個 seed policy，將同一份 policy 與 callable
 no-op Java 複製到 `population_size` 個 genotype，並對每個 candidate 各呼叫一次
@@ -171,10 +170,10 @@ evaluation。
 新 candidate artifact 將兩個 prompt gene 放在 `genotype/policy_prompt.txt` 與
 `genotype/code_generation_prompt.txt`；inherited 模式另保存
 `genotype/inherited_java.java` 與 `java_parent_id`。Generator 輸出放在
-`phenotype/CandidateAgent.java`；Code Reflection evidence 放在
-`mutation/code_reflection/`；Prompt Compliance Reflection evidence 放在
-`mutation/prompt_compliance_reflection/`，並保存兩個原 prompt、contract-grounded
-reflector 與兩個 rewriter 的 request/response evidence。Snapshot JSON 不重複內嵌完整 inherited Java，resume
+`phenotype/CandidateAgent.java`；Prompt Reflection evidence 放在
+`mutation/prompt_reflection/`；Code Reflection evidence 放在
+`mutation/code_reflection/`，並保存父代 Java、contract-grounded request、raw response
+與抽取出的 reflected source。Snapshot JSON 不重複內嵌完整 inherited Java，resume
 由 canonical genotype 檔重建。
 
 所有 executable prompt body 都放在 `prompts/`，一個 prompt 一個 UTF-8

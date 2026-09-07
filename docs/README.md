@@ -20,7 +20,7 @@ When code and the specification differ, preserve the specification and update [`
 | --- | --- |
 | Modify the Candidate model or genotype/phenotype boundary | [architecture spec](eagle_architecture_spec.md) + [candidate model](architecture/candidate_model.md) + [lineage schema](artifacts/lineage_schema.md) |
 | Modify overall pipeline or lexicase flow | [opponent-wise lexicase](opponent-wise-lexicase.md) + [overview](architecture/overview.md) + [evolutionary flow](architecture/evolutionary_flow.md) |
-| Modify Strategy, Code, or Prompt Compliance Mutation | [architecture spec](eagle_architecture_spec.md) + [mutation](architecture/mutation.md) + [artifact schema](artifacts/artifact_schema.md) + [timing schema](artifacts/timing_schema.md) |
+| Modify Strategy, Prompt, or Code Mutation | [architecture spec](eagle_architecture_spec.md) + [mutation](architecture/mutation.md) + [artifact schema](artifacts/artifact_schema.md) + [timing schema](artifacts/timing_schema.md) |
 | Modify Uniform Crossover | [architecture spec](eagle_architecture_spec.md) + [crossover](architecture/crossover.md) + [lineage schema](artifacts/lineage_schema.md) |
 | Modify Java generation, validation, or compilation | [architecture spec](eagle_architecture_spec.md) + [Java generation](architecture/java_generation.md) + [failure classification](evaluation/failure_classification.md) |
 | Modify MicroRTS execution | [evaluation pipeline](evaluation/evaluation_pipeline.md) + [failure classification](evaluation/failure_classification.md) + [artifact schema](artifacts/artifact_schema.md) |
@@ -42,7 +42,7 @@ When code and the specification differ, preserve the specification and update [`
 | Candidate model and inheritance | [`architecture/candidate_model.md`](architecture/candidate_model.md) |
 | Population lifecycle, selection, and opponent-wise lexicase | [`architecture/evolutionary_flow.md`](architecture/evolutionary_flow.md) |
 | Uniform Crossover | [`architecture/crossover.md`](architecture/crossover.md) |
-| Strategy, Code, and Prompt Compliance Mutation | [`architecture/mutation.md`](architecture/mutation.md) |
+| Strategy, Prompt, and Code Mutation | [`architecture/mutation.md`](architecture/mutation.md) |
 | Full-file Java generation, validation, and compilation | [`architecture/java_generation.md`](architecture/java_generation.md) |
 | Evaluation protocol | [`evaluation/evaluation_pipeline.md`](evaluation/evaluation_pipeline.md) |
 | `game_performance` formula | [`evaluation/game_performance.md`](evaluation/game_performance.md) |

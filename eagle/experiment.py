@@ -172,11 +172,8 @@ def _print_non_batch_output(
     kind = "initial" if config.reflection_operator_mode.adaptive else "fixed"
     print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
     print(f"Strategy {kind} probability: {config.strategy_reflection_probability:.2f}")
+    print(f"Prompt {kind} probability: {config.prompt_reflection_probability:.2f}")
     print(f"Code {kind} probability: {config.code_reflection_probability:.2f}")
-    print(
-        "Prompt Compliance "
-        f"{kind} probability: {config.prompt_compliance_reflection_probability:.2f}"
-    )
     print(f"AOS minimum probability: {config.aos_minimum_probability:.2f}")
     print(f"run_dir={config_path}")
     print(f"completed_generation={completed_generation}")

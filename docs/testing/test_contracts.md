@@ -22,8 +22,8 @@ Use narrower test modules while iterating, then run the full suite. A real Micro
 | Lineage | seed/copy/crossover/mutation schemas; prompt and optional Java parent IDs resolve; graph acyclic |
 | Crossover | independent whole-component choices for both prompts and, when enabled, Java; exact provenance; equal-text case; default mode has no Java inheritance |
 | Strategy Mutation | Commentator per selected match → Coach → final Java generation; only policy changes; no Java/code-prompt evidence |
-| Code Mutation | Strategy-region Policy-Code Reviewer → exact reusable-rule delta JSON → deterministic generation-prompt rendering → final Java generation; only code-generation prompt changes; no raw game logs |
-| Prompt Compliance Mutation | Both prompt genes + canonical reusable rules + immutable gameplay/API contracts → separate compliance diagnoses → ordered strategy rewrite and exact reusable-rule delta JSON → deterministic generation-prompt rendering → final Java generation; no W/D/L, match, Java, compiler, or fitness leakage; arbitrary legal strategy types remain allowed; either rewrite failure preserves both genes; malformed historical marked prompts are replaced at the rewrite boundary; chained inspection proves successful Strategy/Code child hashes become Compliance parent hashes |
+| Prompt Mutation | Strategy-region Policy-Code Reviewer → exact reusable-rule delta JSON → deterministic generation-prompt rendering → final Java generation; only code-generation prompt changes; no raw game logs |
+| Code Mutation | Policy + selected parent Java + immutable gameplay/API/scaffold context → complete corrected Java → direct validation/compilation; both prompt genes and inherited Java input are preserved; no W/D/L, matches, traces, fitness, compiler evidence, or reusable generation prompt; successful output is not overwritten by Generator |
 | Generation | default seed-phenotype initialization; inherited configured-seed replication with one decoder call per slot; mixed initialization with one configured policy, LLM-generated remaining policy genes, and one shared fixed generation-zero Java phenotype; active genes + fixed scaffold/API constraints; complete extracted envelope/security checks followed by deterministic canonical-scaffold-plus-strategy normalization; distinct extracted/normalized evidence; base retry only after extraction failure; compile-guided retry from the immediately previous normalized complete failed source and structured diagnostics; unchanged genes/lineage/AOS; per-attempt request hashes and interruption-safe evidence; deterministic non-diagnostic drift guard; first compile success selected; failed source is not phenotype; no game logs |
 | Validation | exact `ai.generated.CandidateAgent` package/class/superclass, both constructors, required `getAction`/`reset`/`clone`, security restrictions, direct strategy-map reads rejected in favor of bounds-safe `isFreeCell`, and no fixed internal layout |
 | Compilation | attempt-isolated output; each validated source compiled at most once; first success promoted without recompilation; warning flags; diagnostic parsing/deduplication |
@@ -75,8 +75,9 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
   normalized source restores the configured scaffold, the strategy region is
   unchanged, and compilation occurs without a scaffold-only repair attempt.
 - Use sentinel-based structural tests to prove Commentator/Coach exclude Java,
-  Code Reviewer excludes raw game logs, and both mutation operators preserve the
-  gene they do not own.
+  Prompt Reviewer excludes raw game logs, Code Reflection excludes the reusable
+  generation prompt and match evidence, and all operators preserve fields they
+  do not own.
 - Keep regression fixtures for observed structured-output variants: wrapped
   Commentator analyses with tick ranges and Reviewer generation corrections
   split into arrays. Assert their canonical parsed form as well as rejection of

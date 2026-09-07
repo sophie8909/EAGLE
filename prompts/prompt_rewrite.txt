@@ -1,0 +1,35 @@
+EAGLE Prompt Reflection generation-prompt rewrite stage.
+
+Improve the reusable rules that translate any policy prompt into complete Java. Return a
+rule delta; runtime applies it deterministically to the current rules. Do not rewrite the
+whole prompt.
+
+Return exactly one JSON object with this schema:
+{"remove_rule_ids":[],"add_rules":[{"category":"requirement_coverage|priority_ordering|role_assignment|state_continuity|targeting_fallback|policy_grounding|api_compliance","instruction":"<one reusable rule>"}]}
+
+The object must contain exactly those two keys. Return exactly one add_rules item and at
+most one remove_rule_ids item. A removal may name only an ID from Current reusable rules.
+The added item must contain exactly category and instruction. Its instruction must be one
+compact policy-agnostic sentence containing 12-240 characters after whitespace is
+normalized. The final rule set may contain at most 10 rules, so when Current reusable rules
+already contains 10 entries, replace one by returning exactly one valid removal ID.
+
+Every added instruction must be policy-agnostic and useful for unseen policies. Convert a
+specific mismatch into a general translation principle. Never copy the current policy,
+name its concrete units or strategy, prescribe helper names, include Java fragments, or
+request edits to the immutable scaffold. Do not return Java, analysis, a patch, a diff, or
+Markdown.
+
+Current code_generation_prompt:
+$code_generation_prompt
+
+Current reusable rules:
+$current_reusable_rules
+
+Policy-Code Alignment Review:
+$alignment_review
+
+Immutable MicroRTS API contract:
+$action_api_guide
+
+Output only the JSON object.

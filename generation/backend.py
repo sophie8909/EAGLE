@@ -117,7 +117,12 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
         self._generation_attempt_id = attempt_id
 
     def set_generation_request_kind(self, request_kind: str) -> None:
-        if request_kind not in {"initial_decode", "initial_decode_retry", "compile_repair"}:
+        if request_kind not in {
+            "initial_decode",
+            "initial_decode_retry",
+            "compile_repair",
+            "code_reflection",
+        }:
             raise ValueError(f"Unsupported generation request kind: {request_kind}")
         self._generation_request_kind = request_kind
 
@@ -160,11 +165,10 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
             candidate.generation_prompt,
             candidate.inherited_java,
         ) == genotype_before
-        module_name = (
-            "java_compile_repair"
-            if self._generation_request_kind == "compile_repair"
-            else "complete_java_agent"
-        )
+        module_name = {
+            "compile_repair": "java_compile_repair",
+            "code_reflection": "code_reflection",
+        }.get(self._generation_request_kind, "complete_java_agent")
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],

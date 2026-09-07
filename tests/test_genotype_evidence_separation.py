@@ -9,8 +9,8 @@ from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.mutation import ReflectionContext
 from eagle.reflection_context import build_reflection_context
-from eagle.reflection_prompts import build_code_reflection_prompt_bundle
-from eagle.rewrite import PromptRewriteMutation, build_code_rewrite_prompt
+from eagle.reflection_prompts import build_prompt_reflection_prompt_bundle
+from eagle.rewrite import PromptRewriteMutation, build_prompt_rewrite_prompt
 from eagle.strategy_reflection import (
     MockRoleBackend,
     StrategyReflectionMutation,
@@ -111,17 +111,17 @@ class GenotypeEvidenceSeparationTests(unittest.TestCase):
         self.assertNotIn(JAVA_SENTINEL, prompt)
         self.assertNotIn(CODE_PROMPT_SENTINEL, prompt)
 
-    def test_code_reviewer_receives_policy_and_java_but_no_game_logs(self) -> None:
+    def test_prompt_reviewer_receives_policy_and_java_but_no_game_logs(self) -> None:
         candidate = self.candidate()
-        context = build_reflection_context(candidate, generation=3, index=0, reflection_type="code")
-        prompt = build_code_reflection_prompt_bundle(candidate, context).text
+        context = build_reflection_context(candidate, generation=3, index=0, reflection_type="prompt")
+        prompt = build_prompt_reflection_prompt_bundle(candidate, context).text
         self.assertIn(POLICY_SENTINEL, prompt)
         self.assertIn(JAVA_SENTINEL, prompt)
         self.assertNotIn(FIXED_JAVA_SENTINEL, prompt)
         self.assertNotIn(GAME_LOG_SENTINEL, prompt)
         self.assertNotIn(CODE_PROMPT_SENTINEL, prompt)
 
-    def test_code_reflection_records_source_phenotype_without_previous_code_gene(self) -> None:
+    def test_prompt_reflection_records_source_phenotype_without_previous_code_gene(self) -> None:
         source = self.candidate()
         child = Candidate(
             id="child-candidate",
@@ -130,14 +130,14 @@ class GenotypeEvidenceSeparationTests(unittest.TestCase):
             generation_prompt=source.generation_prompt,
             generation_prompt_parent_id=source.id,
         )
-        context = build_reflection_context(source, generation=3, index=0, reflection_type="code")
+        context = build_reflection_context(source, generation=3, index=0, reflection_type="prompt")
         backend = ScriptedBackend((
             code_review(),
             code_rule_delta(),
         ))
         mutation = PromptRewriteMutation(
             ExperimentConfig.from_mapping({"mutation_max_attempts": 1}),
-            mutation_type="code",
+            mutation_type="prompt",
             reflection_backend=backend,
             rewrite_backend=backend,
         )
@@ -145,7 +145,7 @@ class GenotypeEvidenceSeparationTests(unittest.TestCase):
             root = Path(directory)
             result = mutation.mutate(child, context, artifact_dir=root)
             metadata = json.loads(
-                (root / "mutation" / "code_reflection" / "metadata.json").read_text()
+                (root / "mutation" / "prompt_reflection" / "metadata.json").read_text()
             )
         self.assertIn(JAVA_SENTINEL, backend.prompts[0])
         self.assertEqual(
@@ -172,9 +172,9 @@ Attack the enemy Base."}
         from eagle.mutation import ReflectionStage
 
         review = ReflectionStage(backend, max_attempts=1).run(
-            reflection_type="code", candidate=candidate, request="review"
+            reflection_type="prompt", candidate=candidate, request="review"
         )
-        prompt = build_code_rewrite_prompt(candidate, review, ReflectionContext())
+        prompt = build_prompt_rewrite_prompt(candidate, review, ReflectionContext())
         self.assertIn(CODE_PROMPT_SENTINEL, prompt)
         self.assertIn("defensive prerequisite", prompt)
         self.assertNotIn(POLICY_SENTINEL, prompt)
@@ -189,7 +189,7 @@ Attack the enemy Base."}
         )
         self.assertEqual(result.generation_prompt, candidate.generation_prompt)
 
-    def test_code_mutation_cannot_modify_policy_prompt(self) -> None:
+    def test_prompt_mutation_cannot_modify_policy_prompt(self) -> None:
         candidate = self.candidate()
         backend = ScriptedBackend((
             code_review(),
@@ -197,14 +197,14 @@ Attack the enemy Base."}
         ))
         mutation = PromptRewriteMutation(
             ExperimentConfig.from_mapping({"mutation_max_attempts": 1}),
-            mutation_type="code",
+            mutation_type="prompt",
             reflection_backend=backend,
             rewrite_backend=backend,
         )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             result = mutation.mutate(candidate, ReflectionContext(), artifact_dir=root)
-            metadata = (root / "mutation" / "code_reflection" / "metadata.json").read_text()
+            metadata = (root / "mutation" / "prompt_reflection" / "metadata.json").read_text()
             self.assertNotIn(JAVA_SENTINEL, metadata)
         self.assertEqual(result.strategy_prompt, candidate.strategy_prompt)
         self.assertIn(GENERIC_RULE, result.generation_prompt)

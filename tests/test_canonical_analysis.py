@@ -345,7 +345,7 @@ class CanonicalAnalysisTests(unittest.TestCase):
                         "recent_credit": 0.0, "selection_probability": 0.2,
                         "selection_probability_before": 0.2,
                     },
-                    "generate_code_reflection": {
+                    "code_reflection": {
                         "usage_count": 1, "reward_count": 1, "mean_reward": 1.0,
                         "operator_quality_before": 0.0, "operator_quality_after": 0.2,
                         "recent_credit": 0.2, "selection_probability": 0.8,
@@ -369,7 +369,7 @@ class CanonicalAnalysisTests(unittest.TestCase):
             self.assertIn("aos_head2head", aos_csv)
             self.assertIn("head2head", aos_csv)
             self.assertIn("parent_vs_offspring_wins", aos_csv)
-            self.assertIn("generate_code_reflection,1,1,1.0,0.0,0.2", aos_csv)
+            self.assertIn("code_reflection,1,1,1.0,0.0,0.2", aos_csv)
             self.assertIn(",18,0,0,0,18,", aos_csv)
 
     def test_plot_set_contains_only_objectives_agents_and_opponents(self):

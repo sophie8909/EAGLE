@@ -9,8 +9,8 @@ from unittest.mock import Mock, patch
 from eagle.aos import (
     AdaptiveOperatorSelection,
     AdaptiveOperatorSelector,
-    GENERATE_CODE_REFLECTION,
-    PROMPT_COMPLIANCE_REFLECTION,
+    CODE_REFLECTION,
+    PROMPT_REFLECTION,
     STRATEGY_REFLECTION,
     StaticOperatorSelector,
     OperatorReward,
@@ -67,7 +67,13 @@ def selected(child: Candidate, parent: Candidate, operator: str) -> Candidate:
             "generation": child.generation,
             "comparison_parent_id": parent.id,
             "offspring_id": child.id,
-            "operator": "strategy" if operator == STRATEGY_REFLECTION else "code",
+            "operator": (
+                "strategy"
+                if operator == STRATEGY_REFLECTION
+                else "prompt"
+                if operator == PROMPT_REFLECTION
+                else "code"
+            ),
             "operator_id": operator,
         }},
     })
@@ -77,8 +83,8 @@ def config_for(mode: str, **overrides) -> ExperimentConfig:
     payload = {
         "reflection_operator_mode": mode,
         "strategy_reflection_probability": 0.20,
-        "code_reflection_probability": 0.80,
-        "prompt_compliance_reflection_probability": 0.0,
+        "prompt_reflection_probability": 0.80,
+        "code_reflection_probability": 0.0,
         "aos_minimum_probability": 0.10,
         **overrides,
     }
@@ -104,15 +110,15 @@ class ReflectionOperatorModeTests(unittest.TestCase):
             self.assertIsNone(record["code_reward"])
             self.assertEqual(record["strategy_probability_before"], record["strategy_probability_after"])
             self.assertEqual(record["code_probability_before"], record["code_probability_after"])
-            self.assertEqual(record["schema_version"], "eagle-reflection-operator-v4")
-            self.assertIsNone(record["prompt_compliance_reward"])
+            self.assertEqual(record["schema_version"], "eagle-reflection-operator-v5")
+            self.assertIsNone(record["prompt_reward"])
             self.assertTrue({
                 "mode", "reward_source",
                 "strategy_probability_before", "code_probability_before",
-                "prompt_compliance_probability_before",
+                "prompt_probability_before",
                 "strategy_probability_after", "code_probability_after",
-                "prompt_compliance_probability_after",
-                "strategy_reward", "code_reward", "prompt_compliance_reward",
+                "prompt_probability_after",
+                "strategy_reward", "prompt_reward", "code_reward",
             }.issubset(record))
 
     def test_operator_preconditions_condition_selection_and_usage_on_eligible_set(self):
@@ -131,7 +137,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
             20,
         )
         self.assertEqual(
-            record["operators"][GENERATE_CODE_REFLECTION]["usage_count"],
+            record["operators"][PROMPT_REFLECTION]["usage_count"],
             0,
         )
 
@@ -195,7 +201,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
                 reward = calculate_opponent_reward(
                     evaluated_candidate("parent", runnable=parent_ok),
                     evaluated_candidate("child", runnable=child_ok, generation=1),
-                    operator=GENERATE_CODE_REFLECTION,
+                    operator=PROMPT_REFLECTION,
                 )
                 self.assertEqual(reward.reward, expected)
 
@@ -222,7 +228,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
         config = config_for("aos_head2head")
         controller = build_reflection_operator_controller(config)
         parent = evaluated_candidate("parent")
-        child = selected(evaluated_candidate("child", generation=1), parent, GENERATE_CODE_REFLECTION)
+        child = selected(evaluated_candidate("child", generation=1), parent, PROMPT_REFLECTION)
         direct_result = Mock(
             reward=0.5,
             to_dict=Mock(return_value={
@@ -249,7 +255,7 @@ class ReflectionOperatorModeTests(unittest.TestCase):
         self.assertEqual(rewards[0].head_to_head["total_matches"], 18)
         record = controller.update_generation(rewards)
         self.assertEqual(record["reward_source"], "head2head")
-        self.assertAlmostEqual(record["operators"][GENERATE_CODE_REFLECTION]["operator_quality_after"], 0.1)
+        self.assertAlmostEqual(record["operators"][PROMPT_REFLECTION]["operator_quality_after"], 0.1)
 
     def test_failed_head2head_offspring_gets_zero_without_direct_matches(self):
         config = config_for("aos_head2head")
@@ -278,8 +284,8 @@ class ReflectionOperatorModeTests(unittest.TestCase):
             self.assertIsInstance(controller.updater, AdaptiveOperatorSelection)
             self.assertEqual(controller.updater.probabilities, {
                 STRATEGY_REFLECTION: 0.20,
-                GENERATE_CODE_REFLECTION: 0.80,
-                PROMPT_COMPLIANCE_REFLECTION: 0.0,
+                PROMPT_REFLECTION: 0.80,
+                CODE_REFLECTION: 0.0,
             })
             for index in range(12):
                 record = controller.update_generation([
@@ -290,13 +296,13 @@ class ReflectionOperatorModeTests(unittest.TestCase):
                         comparison_parent_runnable=True, offspring_runnable=True,
                     ),
                     OperatorReward(
-                        operator=GENERATE_CODE_REFLECTION,
+                        operator=PROMPT_REFLECTION,
                         comparison_parent_id="p", offspring_id=f"c-{index}", reward=0.0,
                         reward_source=controller.mode.reward_source,
                         comparison_parent_runnable=True, offspring_runnable=True,
                     ),
                 ])
-            self.assertEqual(record["code_probability_after"], 0.10)
+            self.assertEqual(record["prompt_probability_after"], 0.10)
             self.assertEqual(record["strategy_probability_after"], 0.90)
 
     def test_head_to_head_formula_remains_win_one_draw_half_loss_zero(self):
@@ -318,18 +324,15 @@ class ReflectionOperatorModeTests(unittest.TestCase):
 
 
 class ReflectionOperatorConfigTests(unittest.TestCase):
-    def test_prompt_compliance_probability_is_canonical_and_legacy_alias_loads(self):
+    def test_prompt_and_code_probabilities_are_canonical_and_legacy_schema_migrates(self):
         canonical = config_for(
             "static",
             strategy_reflection_probability=0.0,
-            code_reflection_probability=0.0,
-            prompt_compliance_reflection_probability=1.0,
+            prompt_reflection_probability=0.0,
+            code_reflection_probability=1.0,
         )
-        self.assertEqual(canonical.prompt_compliance_reflection_probability, 1.0)
-        self.assertIn(
-            "prompt_compliance_reflection_probability",
-            canonical.to_mapping(),
-        )
+        self.assertEqual(canonical.code_reflection_probability, 1.0)
+        self.assertIn("prompt_reflection_probability", canonical.to_mapping())
         self.assertNotIn("balance_reflection_probability", canonical.to_mapping())
 
         legacy = ExperimentConfig.from_mapping({
@@ -337,9 +340,10 @@ class ReflectionOperatorConfigTests(unittest.TestCase):
             "code_reflection_probability": 0.0,
             "balance_reflection_probability": 1.0,
         })
-        self.assertEqual(legacy.prompt_compliance_reflection_probability, 1.0)
+        self.assertEqual(legacy.prompt_reflection_probability, 0.0)
+        self.assertEqual(legacy.code_reflection_probability, 1.0)
 
-        with self.assertRaisesRegex(ValueError, "cannot be combined"):
+        with self.assertRaisesRegex(ValueError, "cannot contain both"):
             ExperimentConfig.from_mapping({
                 "prompt_compliance_reflection_probability": 1.0,
                 "balance_reflection_probability": 0.0,
@@ -347,7 +351,7 @@ class ReflectionOperatorConfigTests(unittest.TestCase):
 
     def test_removed_balance_operator_state_cannot_resume_under_new_semantics(self):
         config = config_for("static")
-        with self.assertRaisesRegex(ValueError, "removed Balance Reflection"):
+        with self.assertRaisesRegex(ValueError, "retired reflection-operator semantics"):
             build_reflection_operator_controller(
                 config,
                 state={
@@ -361,16 +365,17 @@ class ReflectionOperatorConfigTests(unittest.TestCase):
             config_for(
                 "static",
                 strategy_reflection_probability=0.4,
+                prompt_reflection_probability=0.4,
                 code_reflection_probability=0.4,
             )
 
     def test_rejects_operator_probability_outside_unit_interval(self):
-        for strategy, code in ((-0.1, 1.1), (1.1, -0.1)):
+        for strategy, prompt in ((-0.1, 1.1), (1.1, -0.1)):
             with self.subTest(strategy=strategy), self.assertRaisesRegex(ValueError, r"\[0, 1\]"):
                 config_for(
                     "static",
                     strategy_reflection_probability=strategy,
-                    code_reflection_probability=code,
+                    prompt_reflection_probability=prompt,
                 )
 
     def test_rejects_invalid_mode(self):
@@ -396,7 +401,8 @@ class ReflectionOperatorConfigTests(unittest.TestCase):
         )
         self.assertEqual(config.reflection_operator_mode.value, "aos_head2head")
         self.assertEqual(config.strategy_reflection_probability, 0.20)
-        self.assertEqual(config.code_reflection_probability, 0.80)
+        self.assertEqual(config.prompt_reflection_probability, 0.80)
+        self.assertEqual(config.code_reflection_probability, 0.0)
         self.assertEqual(config.aos_minimum_probability, 0.10)
 
 

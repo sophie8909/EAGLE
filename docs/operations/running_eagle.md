@@ -114,23 +114,22 @@ Mock mode does not adapt or start llama.cpp, inspect the configured port, valida
 ```yaml
 reflection_operator_mode: aos_head2head # static | aos_opponent | aos_head2head
 strategy_reflection_probability: 0.20
-code_reflection_probability: 0.80
-prompt_compliance_reflection_probability: 0.00
+prompt_reflection_probability: 0.80
+code_reflection_probability: 0.00
 aos_minimum_probability: 0.10
 ```
 
-Strategy/Code/Prompt Compliance probabilities must sum to 1.0; they are fixed
-in `static` and initial in either AOS mode. Set Prompt Compliance above zero to
-audit and repair both prompt genes against the immutable gameplay/API contracts;
-it does not consume W/D/L or match evidence. Every YAML creates fresh population, RNG,
+Strategy/Prompt/Code probabilities must sum to 1.0; they are fixed in `static`
+and initial in either AOS mode. Prompt Reflection rewrites reusable generation
+rules; Code Reflection directly revises selected parent Java. Every YAML creates fresh population, RNG,
 operator controller/AOS state, archives, IDs, and run directory; only a
 compatible LLM process may be reused.
 
-The legacy `balance_reflection_probability` config key is accepted only as an
-input alias for starting a fresh run and is resolved to
-`prompt_compliance_reflection_probability`. Because the operator's meaning and
-persisted state changed, a run containing the removed `balance_reflection`
-operator state cannot be resumed as Prompt Compliance; start a new run instead.
+Historical configs without `prompt_reflection_probability` are migrated on
+load: the old `code_reflection_probability` becomes Prompt Reflection and the
+old compliance/balance probability becomes direct Code Reflection. New configs
+must use only the three canonical keys above. Runs containing retired operator
+state cannot resume under the new semantics; start a new run instead.
 
 There are no separate `run` or `runtime` compatibility entrypoints. The
 experiment orchestrator is the only model/search lifecycle owner.

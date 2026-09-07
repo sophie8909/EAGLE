@@ -1,11 +1,10 @@
 """Standalone, repeatable inspection of EAGLE's three reflection operators.
 
 The inspection owns one evaluated Worker Rush parent and runs each production
-reflection operator without entering the evolutionary search loop. It can run
-all operators independently from one fixed subject, or feed successful Strategy
-and Code children into Prompt Compliance. Its artifacts are intentionally
-redundant and human-oriented: the production mutation artifacts remain intact,
-while per-trial indexes and diffs make request/response auditing inexpensive.
+reflection operator independently from one fixed subject without entering the
+evolutionary search loop. Its artifacts are intentionally redundant and
+human-oriented: the production mutation artifacts remain intact, while
+per-trial indexes and diffs make request/response auditing inexpensive.
 """
 
 from __future__ import annotations
@@ -35,16 +34,12 @@ from .search_runtime import build_search_runtime
 from .strategy_reflection import normalize_mutation_intent
 
 
-INSPECTION_SCHEMA_VERSION = "eagle-reflection-inspection-v2"
-REFLECTION_TYPES = ("strategy", "code", "prompt_compliance")
-PROMPT_COMPLIANCE_PARENT_MODES = (
-    "fixed_subject",
-    "successful_strategy_and_code_children",
-)
+INSPECTION_SCHEMA_VERSION = "eagle-reflection-inspection-v3"
+REFLECTION_TYPES = ("strategy", "prompt", "code")
 EXPECTED_CHANGED_FIELDS = {
     "strategy": ("strategy_prompt",),
-    "code": ("generation_prompt",),
-    "prompt_compliance": ("strategy_prompt", "generation_prompt"),
+    "prompt": ("generation_prompt",),
+    "code": ("generated_java",),
 }
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -59,7 +54,6 @@ class ReflectionInspectionConfig:
     trials_per_reflection: int = 3
     strategy_mutation_intent: str = "REFINE"
     reflection_order: tuple[str, ...] = REFLECTION_TYPES
-    prompt_compliance_parent_mode: str = "fixed_subject"
 
     @classmethod
     def from_file(cls, path: str | Path) -> "ReflectionInspectionConfig":
@@ -80,7 +74,6 @@ class ReflectionInspectionConfig:
             "trials_per_reflection",
             "strategy_mutation_intent",
             "reflection_order",
-            "prompt_compliance_parent_mode",
         }
         unknown = sorted(set(payload) - allowed)
         if unknown:
@@ -104,23 +97,7 @@ class ReflectionInspectionConfig:
         order = tuple(str(item).strip().lower() for item in payload.get("reflection_order", REFLECTION_TYPES))
         if len(order) != len(REFLECTION_TYPES) or set(order) != set(REFLECTION_TYPES):
             raise ValueError(
-                "reflection_order must contain strategy, code, and prompt_compliance exactly once."
-            )
-        parent_mode = str(
-            payload.get("prompt_compliance_parent_mode") or "fixed_subject"
-        ).strip().lower()
-        if parent_mode not in PROMPT_COMPLIANCE_PARENT_MODES:
-            raise ValueError(
-                "prompt_compliance_parent_mode must be fixed_subject or "
-                "successful_strategy_and_code_children."
-            )
-        if (
-            parent_mode == "successful_strategy_and_code_children"
-            and order != REFLECTION_TYPES
-        ):
-            raise ValueError(
-                "successful_strategy_and_code_children requires reflection_order "
-                "[strategy, code, prompt_compliance]."
+                "reflection_order must contain strategy, prompt, and code exactly once."
             )
         return cls(
             name,
@@ -129,7 +106,6 @@ class ReflectionInspectionConfig:
             trials,
             intent,
             order,
-            parent_mode,
         )
 
     def to_mapping(self) -> dict[str, object]:
@@ -141,7 +117,6 @@ class ReflectionInspectionConfig:
             "trials_per_reflection": self.trials_per_reflection,
             "strategy_mutation_intent": self.strategy_mutation_intent,
             "reflection_order": list(self.reflection_order),
-            "prompt_compliance_parent_mode": self.prompt_compliance_parent_mode,
         }
 
 
@@ -163,7 +138,7 @@ def run_reflection_inspection(
     output_dir: Path | None = None,
     runtime_factory=RuntimeManager,
 ) -> ReflectionInspectionResult:
-    """Evaluate Worker Rush once, then inspect independent or chained mutations."""
+    """Evaluate Worker Rush once, then inspect independent mutations."""
 
     experiment = ExperimentConfig.from_file(inspection.experiment_config_path)
     experiment.validate()
@@ -181,11 +156,8 @@ def run_reflection_inspection(
         "trials_per_reflection": inspection.trials_per_reflection,
         "reflection_order": list(inspection.reflection_order),
         "strategy_mutation_intent": inspection.strategy_mutation_intent,
-        "prompt_compliance_parent_mode": inspection.prompt_compliance_parent_mode,
         "trial_count_expected": (
             len(inspection.reflection_order) * inspection.trials_per_reflection
-            if inspection.prompt_compliance_parent_mode == "fixed_subject"
-            else 2 * inspection.trials_per_reflection
         ),
         "trial_count_completed": 0,
         "error": None,
@@ -218,52 +190,26 @@ def run_reflection_inspection(
             llm_client=runtime.client,
         )
         subject = _build_fixed_subject(parent)
-        _write_subject_inputs(run_dir, parent, subject, experiment, inspection)
+        _write_subject_inputs(run_dir, parent, subject, experiment)
 
         summaries: list[dict[str, object]] = []
-        compliance_sources: list[tuple[str, int, Candidate]] = []
         for reflection_type in inspection.reflection_order:
-            if (
-                reflection_type == "prompt_compliance"
-                and inspection.prompt_compliance_parent_mode
-                == "successful_strategy_and_code_children"
-            ):
-                trials = tuple(enumerate(compliance_sources, start=1))
-                manifest["trial_count_expected"] = len(summaries) + len(trials)
-                manifest["prompt_compliance_source_count"] = len(trials)
-                manifest["prompt_compliance_source_counts"] = _source_counts(
-                    compliance_sources
+            trials = tuple(
+                range(
+                    1, inspection.trials_per_reflection + 1
                 )
-                _write_json(run_dir / "manifest.json", manifest)
-            else:
-                trials = tuple(
-                    (trial_number, None)
-                    for trial_number in range(
-                        1, inspection.trials_per_reflection + 1
-                    )
-                )
+            )
 
-            for trial_number, source in trials:
-                trial_subject = subject if source is None else source[2]
-                source_type = None if source is None else source[0]
-                source_trial = None if source is None else source[1]
-                context_relative_dir = (
-                    Path("inputs") / reflection_type
-                    if source is None
-                    else Path("inputs")
-                    / reflection_type
-                    / f"from_{source_type}_trial_{source_trial:02d}"
-                )
+            for trial_number in trials:
+                context_relative_dir = Path("inputs") / reflection_type
                 context, context_fingerprint = _write_reflection_input(
                     run_dir,
                     parent=parent,
-                    subject=trial_subject,
+                    subject=subject,
                     reflection_type=reflection_type,
-                    context_index=0 if source is None else trial_number - 1,
+                    context_index=0,
                     relative_dir=context_relative_dir,
                     strategy_mutation_intent=inspection.strategy_mutation_intent,
-                    source_reflection_type=source_type,
-                    source_trial=source_trial,
                 )
                 trial_dir = (
                     run_dir
@@ -275,20 +221,20 @@ def run_reflection_inspection(
                 print(
                     f"[reflection inspection] type={reflection_type} "
                     f"trial={trial_number}/{len(trials)} "
-                    f"source={source_type or 'fixed_subject'} status=started",
+                    "source=fixed_subject status=started",
                     flush=True,
                 )
                 mutation = runtime.mutations[reflection_type]
                 if reflection_type == "strategy":
                     child = mutation.mutate(
-                        trial_subject,
+                        subject,
                         context,
                         artifact_dir=trial_dir,
                         mutation_intent=inspection.strategy_mutation_intent,
                     )
                 else:
                     child = mutation.mutate(
-                        trial_subject,
+                        subject,
                         context,
                         artifact_dir=trial_dir,
                     )
@@ -296,25 +242,14 @@ def run_reflection_inspection(
                     trial_dir,
                     reflection_type=reflection_type,
                     trial_number=trial_number,
-                    subject=trial_subject,
+                    subject=subject,
                     child=child,
                     context_fingerprint=context_fingerprint,
                     context_artifact=str(
                         context_relative_dir / "reflection_context.json"
                     ),
-                    source_reflection_type=source_type,
-                    source_trial=source_trial,
                 )
                 summaries.append(summary)
-                if (
-                    inspection.prompt_compliance_parent_mode
-                    == "successful_strategy_and_code_children"
-                    and reflection_type in {"strategy", "code"}
-                    and summary["mutation_status"] == "applied"
-                ):
-                    compliance_sources.append(
-                        (reflection_type, trial_number, child)
-                    )
                 print(
                     f"[reflection inspection] type={reflection_type} "
                     f"trial={trial_number}/{len(trials)} "
@@ -326,27 +261,12 @@ def run_reflection_inspection(
                 _write_json(run_dir / "manifest.json", manifest)
 
         grouped = _group_summary(summaries, inspection.reflection_order)
-        source_counts = _source_counts(compliance_sources)
-        required_parent_sources_present = (
-            inspection.prompt_compliance_parent_mode == "fixed_subject"
-            or all(source_counts.get(kind, 0) > 0 for kind in ("strategy", "code"))
-        )
         _write_json(
             run_dir / "summary.json",
             {
                 "schema_version": INSPECTION_SCHEMA_VERSION,
                 "parent_candidate_id": parent.id,
                 "subject_candidate_id": subject.id,
-                "prompt_compliance_parent_mode": inspection.prompt_compliance_parent_mode,
-                "prompt_compliance_parent_sources": {
-                    "successful_children_only": (
-                        inspection.prompt_compliance_parent_mode
-                        == "successful_strategy_and_code_children"
-                    ),
-                    "counts": source_counts,
-                    "required_source_types": ["strategy", "code"],
-                    "all_required_source_types_present": required_parent_sources_present,
-                },
                 "all_trials_match_expected_scope": all(
                     bool(item["scope_matches_expectation"]) for item in summaries
                 ),
@@ -373,7 +293,6 @@ def run_reflection_inspection(
                 "all_trials_match_expected_scope": all(
                     bool(item["scope_matches_expectation"]) for item in summaries
                 ),
-                "all_required_parent_sources_present": required_parent_sources_present,
                 "summary": "summary.md",
             }
         )
@@ -479,7 +398,6 @@ def _write_subject_inputs(
     parent: Candidate,
     subject: Candidate,
     experiment: ExperimentConfig,
-    inspection: ReflectionInspectionConfig,
 ) -> None:
     root = run_dir / "inputs"
     write_candidate_inputs(root / "subject", subject)
@@ -496,9 +414,6 @@ def _write_subject_inputs(
             "genotype_sha256": _genotype_hashes(subject),
             "independence_contract": (
                 "Every trial starts from this subject; no trial consumes another trial's output."
-                if inspection.prompt_compliance_parent_mode == "fixed_subject"
-                else "Strategy and Code trials start from this subject; Prompt Compliance "
-                "consumes only their successfully changed children."
             ),
         },
     )
@@ -513,8 +428,6 @@ def _write_reflection_input(
     context_index: int,
     relative_dir: Path,
     strategy_mutation_intent: str,
-    source_reflection_type: str | None,
-    source_trial: int | None,
 ) -> tuple[ReflectionContext, str]:
     context = build_reflection_context(
         parent,
@@ -541,8 +454,6 @@ def _write_reflection_input(
             "strategy_mutation_intent": (
                 strategy_mutation_intent if reflection_type == "strategy" else None
             ),
-            "source_reflection_type": source_reflection_type,
-            "source_trial": source_trial,
         },
     )
     return context, context_fingerprint
@@ -557,8 +468,6 @@ def _write_trial_review(
     child: Candidate,
     context_fingerprint: str,
     context_artifact: str,
-    source_reflection_type: str | None = None,
-    source_trial: int | None = None,
 ) -> dict[str, object]:
     output_dir = trial_dir / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -577,15 +486,10 @@ def _write_trial_review(
     changed = tuple(name for name, (before, after) in compared.items() if before != after)
     mutation_record = child.metadata.get("mutation") or {}
     expected = EXPECTED_CHANGED_FIELDS[reflection_type]
-    if reflection_type == "prompt_compliance":
-        requested = mutation_record.get("requested_rewrite_fields")
-        if isinstance(requested, list) and all(isinstance(item, str) for item in requested):
-            expected = tuple(requested)
     forbidden = tuple(name for name in changed if name not in expected)
     missing = tuple(name for name in expected if name not in changed)
     applied = bool(mutation_record.get("applied"))
-    already_compliant = mutation_record.get("compliance_status") == "already_compliant"
-    scope_matches = (applied or already_compliant) and not forbidden and not missing
+    scope_matches = applied and not forbidden and not missing
 
     changes_dir = trial_dir / "changes"
     changes_dir.mkdir(parents=True, exist_ok=True)
@@ -604,18 +508,11 @@ def _write_trial_review(
         "trial": trial_number,
         "parent_candidate_id": subject.parent_ids[0],
         "subject_candidate_id": subject.id,
-        "source_reflection_type": source_reflection_type,
-        "source_trial": source_trial,
-        "source_trial_artifact": (
-            None
-            if source_reflection_type is None or source_trial is None
-            else f"trials/{source_reflection_type}/trial_{source_trial:02d}/trial_summary.json"
-        ),
         "context_sha256": context_fingerprint,
         "root_request_set_sha256": index["root_request_set_sha256"],
         "pipeline_request_set_sha256": index["pipeline_request_set_sha256"],
         "mutation_status": (
-            "applied" if applied else "compliant_no_change" if already_compliant else "failed"
+            "applied" if applied else "failed"
         ),
         "mutation_error": (
             mutation_record.get("reflection_error")
@@ -641,15 +538,6 @@ def _write_trial_review(
     }
     _write_json(trial_dir / "trial_summary.json", summary)
     return summary
-
-
-def _source_counts(
-    sources: Iterable[tuple[str, int, Candidate]],
-) -> dict[str, int]:
-    counts = {"strategy": 0, "code": 0}
-    for reflection_type, _, _ in sources:
-        counts[reflection_type] += 1
-    return counts
 
 
 def _request_response_index(trial_dir: Path) -> dict[str, object]:
@@ -783,39 +671,16 @@ def _render_markdown_summary(
     grouped: list[dict[str, object]],
     mock: bool,
 ) -> str:
-    chained = (
-        inspection.prompt_compliance_parent_mode
-        == "successful_strategy_and_code_children"
-    )
-    compliance_trials = [
-        item for item in summaries if item["reflection_type"] == "prompt_compliance"
-    ]
-    compliance_source_counts = {
-        kind: sum(item["source_reflection_type"] == kind for item in compliance_trials)
-        for kind in ("strategy", "code")
-    }
     lines = [
         f"# {inspection.name}",
         "",
         f"- 執行模式：`{'mock' if mock else 'openai'}`",
         f"- 固定父代：`{parent.id}`（Worker Rush policy + checked-in Worker Rush Java）",
         f"- 固定 mutation subject：`{subject.id}`",
-        f"- Strategy／Code 各自嘗試次數：`{inspection.trials_per_reflection}`",
+        f"- 每個 reflection 嘗試次數：`{inspection.trials_per_reflection}`",
         f"- Strategy mutation intent：`{inspection.strategy_mutation_intent}`",
-        f"- Prompt Compliance 父代模式：`{inspection.prompt_compliance_parent_mode}`",
-        (
-            "- 串接規則：Strategy／Code 每次都從固定 subject 開始；只有成功改動 prompt 的子代會各自成為一次 Prompt Compliance 父代。"
-            if chained
-            else "- 獨立性：每次 trial 都重新從同一 subject 開始，不使用前一次輸出。"
-        ),
+        "- 獨立性：每次 trial 都重新從同一 subject 開始，不使用前一次輸出。",
     ]
-    if chained:
-        lines.extend(
-            [
-                f"- Prompt Compliance 有效父代：Strategy `{compliance_source_counts['strategy']}`、Code `{compliance_source_counts['code']}`。",
-                "- 串接模式下 Compliance 的 Context／Root request 隨父代 prompt 改變，預期不相同。",
-            ]
-        )
     lines.extend(
         [
         "",
@@ -827,8 +692,6 @@ def _render_markdown_summary(
     )
     for group in grouped:
         expected = ", ".join(str(item) for item in group["expected_changed_fields"])
-        if group["reflection_type"] == "prompt_compliance":
-            expected = "strategy_prompt and/or generation_prompt（依偵測到的問題）"
         lines.append(
             f"| {group['reflection_type']} | {expected} | "
             f"{group['applied_count']}/{group['trial_count']} | "
@@ -843,8 +706,8 @@ def _render_markdown_summary(
             "",
             "## Trial 明細",
             "",
-            "| Reflection | Trial | Compliance 父代來源 | 執行 | 實際改動 | 符合預期 | Response attempts | Request / response | Diff |",
-            "|---|---:|---|---|---|---|---:|---|---|",
+            "| Reflection | Trial | 執行 | 實際改動 | 符合預期 | Response attempts | Request / response | Diff |",
+            "|---|---:|---|---|---|---:|---|---|",
         ]
     )
     for item in summaries:
@@ -852,13 +715,8 @@ def _render_markdown_summary(
         trial = int(item["trial"])
         root = f"trials/{kind}/trial_{trial:02d}"
         changed = ", ".join(str(value) for value in item["actual_changed_fields"]) or "無"
-        source = (
-            "固定 subject"
-            if item["source_reflection_type"] is None
-            else f"{item['source_reflection_type']} trial {item['source_trial']}"
-        )
         lines.append(
-            f"| {kind} | {trial} | {source} | {item['mutation_status']} | {changed} | "
+            f"| {kind} | {trial} | {item['mutation_status']} | {changed} | "
             f"{'是' if item['scope_matches_expectation'] else '否'} | "
             f"{item['response_attempt_count']} | "
             f"[索引]({root}/request_response_index.json) | "
@@ -869,9 +727,9 @@ def _render_markdown_summary(
             "",
             "## 人工確認順序",
             "",
-            "1. Strategy／Code 的固定輸入應相同；串接模式下 Prompt Compliance 的輸入應能對回一個成功的上游 trial，且 prompt hash 與該子代輸出相同。",
-            "2. 再看 `mutation/<type>_reflection/` 內的解析結果與 validation/retry artifact。",
-            "3. 最後看 `changes/`：Strategy 只能改 policy prompt；Code 只能改 code-generation prompt；Prompt Compliance 只修正被判定異常的 prompt gene（可為其中一個或兩個）；Java 必須保持不變。",
+            "1. 三個 reflection 的固定輸入與 context hash 應相同。",
+            "2. 再看 `mutation/<type>_reflection/` 內的 request、response 與 validation/retry artifact。",
+            "3. 最後看 `changes/`：Strategy 只能改 policy prompt；Prompt 只能改 code-generation prompt；Code 只能改 reflected Java。",
             "4. `scope_matches_expectation=false` 代表 reflection 失敗、缺少預期改動，或動到不該動的欄位，需人工判讀原因。",
             "",
             "Baseline 完整評估證據位於 `baseline/`，固定輸入與 hash 位於 `inputs/`。",

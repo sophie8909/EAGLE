@@ -37,16 +37,14 @@ from .reflection_context import (
 )
 # Compatibility re-exports used by the reflection/rewrite API and tests.
 from .reflection_prompts import (
-    build_code_reflection_prompt,
-    build_code_reflection_prompt_bundle,
-    build_prompt_compliance_reflection_prompt,
-    build_prompt_compliance_reflection_prompt_bundle,
+    build_prompt_reflection_prompt,
+    build_prompt_reflection_prompt_bundle,
     build_strategy_reflection_prompt,
     build_strategy_reflection_prompt_bundle,
 )
 
 
-# Typed request/result records and response parsing are shared by Code
+# Typed request/result records and response parsing are shared by Prompt
 # Reflection and Strategy Reflection. The concrete strategy role sequence is
 # intentionally kept in eagle.strategy_reflection.
 REFLECTION_SCHEMA_VERSION = "reflection-v2"
@@ -122,7 +120,7 @@ class ReflectionResult:
 
 
 def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict[str, object], str, str]:
-    """Parse the single JSON contract shared by Strategy and Code Reflection."""
+    """Parse the JSON contracts used by Strategy and Prompt Reflection."""
     lowered = str(response).lower()
     if "```java" in lowered or "package ai.generated" in lowered or "public class candidateagent" in lowered:
         raise ValueError("Reflection response must not contain generated Java.")
@@ -141,17 +139,17 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
         analysis = payload.get("analysis")
         if not isinstance(analysis, dict):
             raise ValueError("Reflection response must contain an analysis object.")
-    elif reflection_type == "code":
+    elif reflection_type == "prompt":
         assessment = payload.get("assessment")
         if assessment not in {
             "policy_clear_but_java_violates",
             "policy_ambiguous",
             "java_faithfully_implements_policy",
         }:
-            raise ValueError("Code Reviewer response must classify policy-code alignment.")
+            raise ValueError("Prompt Reviewer response must classify policy-code alignment.")
         review = payload.get("alignment_review")
         if not isinstance(review, list):
-            raise ValueError("Code Reviewer response must contain alignment_review array.")
+            raise ValueError("Prompt Reviewer response must contain alignment_review array.")
         normalized_review: list[dict[str, object]] = []
         for item in review:
             if not isinstance(item, dict):
@@ -172,7 +170,7 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
             normalized_review.append(normalized_item)
         corrections = payload.get("required_generation_behaviors")
         if not isinstance(corrections, list):
-            raise ValueError("Code Reviewer response must contain required_generation_behaviors array.")
+            raise ValueError("Prompt Reviewer response must contain required_generation_behaviors array.")
         normalized_payload = dict(payload)
         normalized_payload["alignment_review"] = normalized_review
         try:
@@ -181,79 +179,8 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
                 for item in corrections
             ]
         except ValueError as exc:
-            raise ValueError("Code Reviewer required_generation_behaviors items must be text corrections.") from exc
+            raise ValueError("Prompt Reviewer required_generation_behaviors items must be text corrections.") from exc
         return normalized_payload, json.dumps(normalized_payload, ensure_ascii=False, sort_keys=True), ""
-    elif reflection_type == "prompt_compliance":
-        expected_fields = {
-            "strategy_prompt_issues",
-            "code_generation_prompt_issues",
-            "strategy_rewrite_focus",
-            "code_generation_rewrite_focus",
-        }
-        if set(payload) != expected_fields:
-            raise ValueError(
-                "Prompt Compliance Reflection response must contain exactly "
-                "strategy_prompt_issues, code_generation_prompt_issues, "
-                "strategy_rewrite_focus, and code_generation_rewrite_focus."
-            )
-        issue_specs = {
-            "strategy_prompt_issues": {
-                "illegal_game_concept",
-                "unobservable_condition",
-                "illegal_action_or_production",
-                "ambiguous_or_conflicting_rule",
-            },
-            "code_generation_prompt_issues": {
-                "policy_specific_instruction",
-                "unsupported_api_assumption",
-                "scope_or_scaffold_violation",
-                "ambiguous_or_conflicting_rule",
-            },
-        }
-        for field, categories in issue_specs.items():
-            issues = payload.get(field)
-            if not isinstance(issues, list):
-                raise ValueError(
-                    "Prompt Compliance Reflection response must contain "
-                    "strategy_prompt_issues and code_generation_prompt_issues arrays."
-                )
-            for issue in issues:
-                if not isinstance(issue, dict) or set(issue) != {
-                    "category", "problem", "correction_goal"
-                }:
-                    raise ValueError(
-                        f"Each {field} item must contain exactly category, problem, "
-                        "and correction_goal."
-                    )
-                if issue.get("category") not in categories:
-                    raise ValueError(
-                        f"Prompt Compliance Reflection {field} category is invalid."
-                    )
-                if not all(
-                    isinstance(issue.get(key), str) and str(issue[key]).strip()
-                    for key in ("problem", "correction_goal")
-                ):
-                    raise ValueError(
-                        f"Prompt Compliance Reflection {field} text must be non-empty."
-                    )
-        focus_pairs = (
-            ("strategy_prompt_issues", "strategy_rewrite_focus"),
-            ("code_generation_prompt_issues", "code_generation_rewrite_focus"),
-        )
-        for issue_field, field in focus_pairs:
-            values = payload.get(field)
-            if not isinstance(values, list) or not all(
-                isinstance(item, str) and item.strip() for item in values
-            ):
-                raise ValueError(
-                    f"Prompt Compliance Reflection {field} must be a string array."
-                )
-            if bool(payload[issue_field]) != bool(values):
-                raise ValueError(
-                    f"Prompt Compliance Reflection {field} must be non-empty exactly "
-                    f"when {issue_field} is non-empty."
-                )
-        return payload, json.dumps(payload, ensure_ascii=False, sort_keys=True), ""
     else:
         raise ValueError(f"Unknown reflection type: {reflection_type}")
     for key in required:
@@ -327,44 +254,17 @@ class MockReflectionBackend:
                 "mutation_plan": {"remove_or_reduce": [], "add_or_strengthen": ["preserve the tested strategy"], "conditional_behaviors": ["When evidence is unavailable, preserve validated behavior."]},
                 "revised_strategy_prompt": "Preserve deterministic behavior and address the observed strategic weakness with conditional rules.",
             })
-        if "Prompt Compliance Reflection stage" in prompt:
-            canonical_code_gene = '"rule_id"' in prompt or "already a canonical" in prompt
-            return json.dumps({
-                "strategy_prompt_issues": [{
-                    "category": "ambiguous_or_conflicting_rule",
-                    "problem": "The policy leaves fallback priority implicit.",
-                    "correction_goal": "State one observable and executable fallback priority.",
-                }],
-                "code_generation_prompt_issues": [] if canonical_code_gene else [{
-                    "category": "ambiguous_or_conflicting_rule",
-                    "problem": "The reusable rules do not define how dependent behaviors remain reachable.",
-                    "correction_goal": "Require prerequisites before their dependent behaviors.",
-                }],
-                "strategy_rewrite_focus": [
-                    "Replace implicit fallbacks with observable legal conditions and actions."
-                ],
-                "code_generation_rewrite_focus": [] if canonical_code_gene else [
-                    "Generalize prerequisite reachability into one reusable translation rule."
-                ],
-            })
-        if "Prompt Compliance Strategy Prompt Rewrite stage" in prompt:
-            return json.dumps({
-                "revised_strategy_prompt": (
-                    "Preserve the intended strategy while expressing every condition through "
-                    "observable MicroRTS state and every response through legal actions."
-                ),
-            })
-        if "Prompt Compliance Code Generation Prompt Rewrite stage" in prompt:
+        if "Prompt Reflection generation-prompt rewrite stage" in prompt:
             return json.dumps({
                 "remove_rule_ids": [],
                 "add_rules": [{
-                    "category": "priority_ordering",
+                    "category": "requirement_coverage",
                     "instruction": (
-                        "Resolve overlapping policy conditions with one explicit deterministic priority."
+                        "Make every stated prerequisite reachable before its dependent behavior."
                     ),
                 }],
             })
-        if "Code Reflection stage" in prompt:
+        if "Policy-Code Alignment Reviewer for Prompt Reflection" in prompt:
             return json.dumps({
                 "assessment": "java_faithfully_implements_policy",
                 "alignment_review": [],
@@ -672,39 +572,7 @@ def _validate_reflection_candidate_preconditions(
     """Reject role output that invents requirements for an absent policy gene."""
 
     normalized_type = reflection_type.removesuffix("_reflection")
-    if normalized_type == "prompt_compliance":
-        from .reusable_generation_prompt import parse_reusable_generation_rules
-        from .strategy_compliance import validate_strategy_prompt_contract
-
-        try:
-            canonical_rules = parse_reusable_generation_rules(candidate.generation_prompt)
-        except ValueError as exc:
-            canonical_rules = ()
-            if not parsed.get("code_generation_prompt_issues"):
-                raise ValueError(
-                    "The current code-generation prompt has deterministic reusable-rule "
-                    f"violations that must be reported: {exc} Return non-empty "
-                    "code_generation_prompt_issues and "
-                    "code_generation_rewrite_focus arrays."
-                ) from exc
-        if canonical_rules and parsed.get("code_generation_prompt_issues"):
-            raise ValueError(
-                "The current code-generation prompt is already a canonical, validated "
-                "reusable-rule gene. Do not attribute strategy-policy defects to it; "
-                "return empty code_generation_prompt_issues and "
-                "code_generation_rewrite_focus arrays."
-            )
-        try:
-            validate_strategy_prompt_contract(candidate.strategy_prompt)
-        except ValueError as exc:
-            if not parsed.get("strategy_prompt_issues"):
-                raise ValueError(
-                    "The current strategy prompt has deterministic gameplay-contract "
-                    f"violations that must be reported: {exc} Return non-empty "
-                    "strategy_prompt_issues and strategy_rewrite_focus arrays."
-                ) from exc
-        return
-    if normalized_type != "code":
+    if normalized_type != "prompt":
         return
     if candidate.strategy_prompt.strip():
         return
@@ -714,7 +582,7 @@ def _validate_reflection_candidate_preconditions(
         or parsed.get("required_generation_behaviors")
     ):
         raise ValueError(
-            "Code Reflection requires a non-blank policy before it can propose "
+            "Prompt Reflection requires a non-blank policy before it can propose "
             "generation-prompt corrections."
         )
 

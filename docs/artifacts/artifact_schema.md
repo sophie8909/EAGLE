@@ -54,8 +54,8 @@ known, they also reference the parent strategy prompt and the candidate's
 Strategy Reflection metadata. Full strategy text is not duplicated in this
 index.
 
-The `eagle-reflection-operator-v4` AOS record contains `mode`, probabilities before/after, nullable
-Strategy/Code/Prompt Compliance rewards, `reward_source`, operator state, and transitions.
+The `eagle-reflection-operator-v5` AOS record contains `mode`, probabilities before/after, nullable
+Strategy/Prompt/Code rewards, `reward_source`, operator state, and transitions.
 Static mode records `reward_source: static`, null rewards, and unchanged
 probabilities. Resume restores adaptive state from the latest generation file.
 There is no `generation_metrics.jsonl` or `final_population.json` in new runs.
@@ -92,8 +92,8 @@ candidates/<candidate_id>/
 ├── crossover/provenance.json
 ├── mutation/
 │   ├── strategy_reflection/
+│   ├── prompt_reflection/
 │   ├── code_reflection/
-│   └── prompt_compliance_reflection/
 ├── aos/
 ├── generation/
 │   ├── request.txt
@@ -133,7 +133,7 @@ generation zero, every
 attempt owns its actual post-truncation
 request and hash, raw response, extracted/normalized source, validation,
 compilation, and timing. `request_kind` distinguishes `initial_decode`,
-`initial_decode_retry`, and `compile_repair`. Repair records also identify
+`code_reflection_output`, `initial_decode_retry`, and `compile_repair`. Repair records also identify
 `repair_of_attempt`, the previous source SHA-256, and a `repair_input.json`
 containing only that previous attempt's structured diagnostics. The compact
 `repair_ledger.json` links the chain without duplicating source or diagnostics.
@@ -190,23 +190,19 @@ When the policy prompt is empty, `strategy_alignment/result.json` records
 are empty. This is distinct from an Alignment blocked by an earlier evaluation
 failure.
 
-Prompt Compliance Reflection evidence is stored under
-`mutation/prompt_compliance_reflection/`. Its exact reflector request contains
-the two source prompts, canonical reusable-rule view, immutable gameplay
-contract, and immutable action/API guide. Its `reflection_context.json`
-references the separately stored source-prompt artifacts, retains the reusable
-rules and contract resource names, and lists the excluded Java, match, compiler,
-fitness, and W/D/L evidence classes. The directory also retains the reflection
-request/raw response and separately named strategy/code rewrite
-request/raw-response artifacts for each requested rewrite. Metadata records
-`requested_rewrite_fields`, `compliance_status`, and both optional rewrite statuses without
-embedding raw response bodies. The code rewrite raw response is a
-`remove_rule_ids`/`add_rules` delta, while its `rewritten_prompt` metadata field
-is the deterministically rendered canonical generation prompt; its request also
-contains both immutable contracts. A failed
-reflector or requested rewrite retains completed evidence and leaves both
-prompt genes unchanged. A clean audit has no rewrite artifacts and records
-`compliance_status: already_compliant`.
+Prompt Reflection evidence is stored under `mutation/prompt_reflection/`. It
+retains the exact alignment-review request/raw response, the separately bounded
+prompt-rewrite requests/raw responses, structured reusable-rule delta, attempts,
+and errors. The Reviewer sees the policy and selected parent's editable Java
+strategy region; the Rewriter deterministically changes only
+`genotype/code_generation_prompt.txt`.
+
+Code Reflection evidence is stored under `mutation/code_reflection/`. It
+retains `reflector_request.txt`, every transported request/raw response,
+`parent_candidate.java`, `reflected_candidate.java` when extractable, hashes,
+attempt timing, and terminal status. The successful reflected source enters the
+normal generation attempt ledger as `code_reflection_output` but causes no final
+Generator LLM request.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated
@@ -220,11 +216,10 @@ request, raw response, UTC-bounded attempts, status, and failure evidence even
 when later generation fails. Strategy Coach parsed output preserves the model's
 parent-policy echo, while validated `coach_result.json` takes the parent policy
 from the authoritative input artifact. The base Rewrite request remains in
-`rewriter_request.txt` (or its Prompt-Compliance-prefixed equivalent), while each bounded
+`rewriter_request.txt`, while each bounded
 Rewrite attempt also retains the exact transported request and raw response as
 `rewriter_attempt_<NNN>_request.txt` and
-`rewriter_attempt_<NNN>_response_raw.txt`. Prompt Compliance prefixes these files with
-`strategy_` or `code_`. A retry request includes the prior deterministic
+`rewriter_attempt_<NNN>_response_raw.txt`. A retry request includes the prior deterministic
 validation error; raw invalid output is never rewritten in place.
 Mutation-role run timing references the candidate-owned evidence without
 duplicating its prompt/response under `llm_logs/`. Adaptively credited offspring
@@ -233,26 +228,22 @@ retain `aos/reward.json`; its
 component provenance. Head-to-head match evidence remains below
 `aos/head_to_head/`.
 
-In default mode Code Reflection metadata records `reviewed_phenotype_artifact`
+In default mode Prompt Reflection metadata records `reviewed_phenotype_artifact`
 as a run-relative reference to the evaluated source candidate's canonical Java
 phenotype. In inherited mode it instead records `java_parent_id`,
 `reviewed_java_input: inherited_java`, and the child's canonical
 `reviewed_inherited_java_artifact`; that source is also the explicit Java input
-to the Generator. The persisted Reviewer request contains only that source's
+to the Generator. The persisted Prompt Reviewer request contains only that source's
 editable strategy region plus the immutable API guide, never fixed scaffold
-source. The Code Rewriter raw response is a `remove_rule_ids`/`add_rules` delta;
+source. The Prompt Rewriter raw response is a `remove_rule_ids`/`add_rules` delta;
 its `rewritten_prompt` field is the deterministic canonical rule rendering that
 becomes `genotype/code_generation_prompt.txt`. Neither path restores an
 implicit `previous_code` field.
 
 Standalone reflection inspections live below `runs/reflection_inspections/`
-and are not `eagle-run-v2` search runs. Their optional chained Prompt
-Compliance mode retains the independent Strategy/Code trial artifacts, runs
-Compliance only for successfully changed children, and records each source as
-`source_reflection_type`, `source_trial`, and `source_trial_artifact` beside
-matching input/output genotype hashes. Per-parent Compliance contexts live
-under `inputs/prompt_compliance/from_<type>_trial_<NN>/`; a run summary reports
-whether both Strategy and Code supplied at least one successful child.
+and are not `eagle-run-v2` search runs. They run Strategy, Prompt, and Code
+independently from one fixed subject and retain matching input/output hashes,
+requests, responses, mutation artifacts, and field-level diffs.
 
 ## Match ownership
 

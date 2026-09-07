@@ -1,6 +1,6 @@
 # EAGLE architecture specification
 
-Status: authoritative current contract, 2026-09-04.
+Status: authoritative current contract, 2026-09-07.
 
 This document describes executable EAGLE behavior. Historical NSGA-II,
 two-objective, seven-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
@@ -12,7 +12,7 @@ EAGLE evolves prompt-defined Java MicroRTS agents offline. An LLM may generate o
 reflect on candidates before evaluation, but a running match never calls an LLM.
 Each phenotype is one complete `ai.generated.CandidateAgent` Java source file.
 
-EAGLE does not evolve patches, fixed method bodies, runtime LLM policies,
+EAGLE does not evolve patches, runtime LLM policies,
 surrogate fitness models, or previous-generation self-play opponents.
 
 ## 2. Candidate model
@@ -63,8 +63,9 @@ Each later generation produces a fixed-size offspring population and performs:
 1. seeded lexicase parent selection;
 2. optional uniform component crossover (two prompt components, plus an
    independent Java-component choice in `inherited_genotype` mode);
-3. optional Strategy, Code, or Prompt Compliance mutation;
-4. final complete-file Java generation;
+3. optional Strategy, Prompt, or Code mutation;
+4. final complete-file Java generation for Strategy, Prompt, and unmutated
+   children; a Code Reflection child instead supplies its complete Java here;
 5. validation, compilation, integration, and evaluation;
 6. optional AOS reward collection;
 7. seeded lexicase survivor selection without replacement from the joint
@@ -97,7 +98,7 @@ component values are equal. Default-mode lineage has no Java parent.
 
 The reflection operator is chosen by exactly one configured mode:
 
-- `static`: fixed Strategy/Code/Prompt Compliance probabilities and no reward work;
+- `static`: fixed Strategy/Prompt/Code probabilities and no reward work;
 - `aos_opponent`: execution-first ten-case rank-change reward against the
   recorded mutation-evidence parent;
 - `aos_head2head`: configured mutation-evidence-parent versus offspring match
@@ -109,82 +110,53 @@ ten-case lexicase fitness.
 
 The adaptive comparison parent is the same evaluated candidate used to build
 the mutation context: the policy-component parent for Strategy mutation; the
-generation-prompt parent for Code/Prompt Compliance mutation in default mode;
-and the Java-component parent for Code/Prompt Compliance mutation in inherited mode. Component
+generation-prompt parent for Prompt and Code mutation in default mode; and the
+Java-component parent for Prompt and Code mutation in inherited mode. Component
 provenance, rather than direct-parent position or prompt-text equality, selects
 this parent. Both reward providers consume the resulting
 `comparison_parent_id`.
 
-Strategy mutation performs Match Commentator sampling, Coach reflection, and a
-Strategy Prompt rewrite before final Java generation. It changes only
-`strategy_prompt`.
-Initial policy generation, Match Commentator, Coach, the library Strategy
-Reflector/Rewriter path, Prompt Compliance Reflection/Strategy Rewrite, and Strategy Alignment all
-receive one immutable strategy-level MicroRTS gameplay contract. The contract
-defines the complete entity set, production graph, legal actions, and observable
-state. It permits arbitrary strategy types expressible in that world, while
-requiring every policy condition and response to be executable. This is fixed
-domain context, not match evidence.
-Commentator and Coach transport, parsing, and semantic validation use one
-bounded attempt budget. Each attempt retains UTC boundaries and one run timing
-event without duplicating candidate-owned prompt/response evidence. A validated
-Coach result takes its parent policy from the authoritative input; any model
-echo remains raw/parsed evidence only.
+Strategy mutation performs Match Commentator sampling and Coach reflection. It
+changes only `strategy_prompt`, after which the normal final Generator decodes
+the child. Initial policy generation, Match Commentator, Coach, the library
+Strategy path, and Strategy Alignment receive the immutable closed-world
+MicroRTS gameplay contract. The contract permits arbitrary legal strategy types.
 
-Code mutation in default mode compares the source parent's policy with its Java
-phenotype. In inherited mode it compares the child's independently selected
-policy with its inherited Java component and uses diagnostics from that Java
-parent only when they describe the selected source. The Reviewer receives only
-the Java between the strategy markers, plus the immutable action/API guide; it
-cannot treat fixed scaffold fields or helpers as candidate behavior. It then
-performs Code Generation Prompt Rewrite before final Java generation and changes
-only `generation_prompt`; game logs are not Code Reflection evidence.
+Prompt mutation is the former Code Reflection behavior. In default mode it
+compares the source parent's policy with its Java phenotype. In inherited mode
+it compares the child's independently selected policy with its inherited Java.
+The Reviewer receives only the editable Java strategy region, the policy, the
+immutable action/API guide, and source-matching structural diagnostics. It never
+receives game logs. The Prompt Rewriter then returns one validated reusable-rule
+delta and changes only `generation_prompt`; the normal final Generator decodes
+the child from the updated prompt gene.
 
-The Code Prompt Rewriter returns exactly one structured reusable-rule delta:
-`remove_rule_ids` plus one compact policy-agnostic `add_rules` entry; at most one
-existing rule may be removed in the same mutation. Runtime validates categories,
-length, and the ten-rule cap, rejects concrete strategy/unit/Java instructions,
-derives stable IDs, and deterministically renders a bounded canonical generation
-prompt. A rejected semantic attempt is retried with its validator error and is
-never partially applied. Legacy free-form generation prompts remain loadable
-but are not copied into the new rule set on their next successful Code
-Reflection.
+Code mutation directly revises the selected parent Java. It receives the
+child's `strategy_prompt`, the complete selected parent Java, the immutable
+gameplay and action/API contracts, and the canonical fixed scaffold. It receives
+no match results, traces, fitness values, or `generation_prompt`. The response
+must be exactly one complete `CandidateAgent.java`; both prompt genes and the
+pre-mutation inherited Java remain unchanged. The returned source enters the
+normal validation and compilation stages directly, so a successful Code
+Reflection is not overwritten by a second final Generator call. If extraction
+fails, the selected parent Java is preserved. Validation or javac failure may
+enter the existing bounded diagnostic-only compile-repair chain.
 
-Prompt Compliance mutation receives the active `strategy_prompt` and
-`generation_prompt`, their canonical reusable-rule view, the immutable gameplay
-contract, and the immutable action/API guide. It receives no Java, compiler
-diagnostics, match result, aggregate W/D/L table, fitness value, or raw trace.
-Its reflector identifies rules that use nonexistent game concepts,
-unobservable conditions, illegal actions/production, policy-specific decoder
-instructions, unsupported APIs, or immutable-scaffold edits. Each source may
-be reported clean; only a prompt gene with reported issues is sent to its
-bounded Rewriter. When both genes need repair, their replacements remain one
-atomic mutation. The Strategy Prompt Rewriter preserves the intended strategy
-type. The Code Prompt Rewriter uses the same
-structured reusable-rule delta and canonical renderer as Code Reflection; it
-cannot persist an unchecked whole generation prompt. If a requested rewrite
-fails, every parent prompt gene remains unchanged. A clean audit records
-`already_compliant` and performs no rewrite. Prompt Compliance
-mutation never edits Java directly. At a rewrite boundary, a historically
-malformed marked generation prompt retains only rule lines that individually
-pass the current validator; rejected lines are discarded before the validated
-delta is applied. A legacy free-form prompt retains no rules.
-
-The canonical config key is
-`prompt_compliance_reflection_probability`, the operator ID is
-`prompt_compliance_reflection`, and mutation type is `prompt_compliance`.
-Reflection-operator state uses `eagle-reflection-operator-v4`; persisted state
-containing the removed `balance_reflection` operator cannot resume under the
-new semantics.
+The canonical probability keys are `strategy_reflection_probability`,
+`prompt_reflection_probability`, and `code_reflection_probability`; operator
+IDs are `strategy_reflection`, `prompt_reflection`, and `code_reflection`.
+Reflection-operator state uses `eagle-reflection-operator-v5`; state containing
+`balance_reflection`, `generate_code_reflection`, or
+`prompt_compliance_reflection` cannot resume under the new semantics.
 
 All executable prompt bodies live as individual UTF-8 text files under
 `prompts/`. Python and YAML may reference, render, bound, transport, and validate
 prompt resources but may not contain alternate executable prompt bodies.
 
-No mutation operator directly edits the inherited Java component. In
-`inherited_genotype` mode crossover/copy chooses that component first, mutation
-changes only its owned prompt, and the final Generator consumes all three
-pre-generation components to produce the child's new Java.
+In `inherited_genotype` mode crossover/copy chooses the Java component before
+mutation. Strategy and Prompt preserve it for the final Generator. Code uses it
+as the parent source and directly produces the child's candidate Java while
+retaining the selected input as lineage evidence.
 
 ## 7. Java generation and validation
 
@@ -199,10 +171,12 @@ shared third component and the unchanged generation-zero phenotype; policy-only
 LLM calls fill the remaining population slots, and Java decoding starts with
 generation 1.
 
-Final generation always consumes the two prompt genes plus the fixed checked-in
-Java scaffold/API constraints and returns exactly one complete Java source file.
-In `inherited_genotype` mode it additionally receives the selected inherited
-Java component as revision context; default mode receives no parent Java. It
+Except for Code Reflection children, final generation consumes the two prompt
+genes plus the fixed checked-in Java scaffold/API constraints and returns
+exactly one complete Java source file. In `inherited_genotype` mode it
+additionally receives the selected inherited Java component as revision
+context; default mode receives no parent Java. A Code Reflection child instead
+enters this boundary with the complete source returned by the operator. It
 never receives game logs. Raw response, extracted source, normalized source,
 attempts, model identity, errors, and timing are persisted.
 
@@ -216,9 +190,11 @@ the strategy region therefore remain visible in `response_raw.txt` and
 canonical phenotype. A partial, structurally invalid, or prohibited response is
 not made valid by scaffold normalization.
 
-Offspring decoding may use up to `generation_max_attempts`. Attempt 1 consumes
-the authoritative active-genotype generation request. An extraction failure may repeat
-that base request. After a complete source fails validation or compilation, the
+Offspring decoding may use up to `generation_max_attempts`. Normal attempt 1
+consumes the authoritative active-genotype generation request; a Code Reflection
+attempt 1 consumes the already-returned complete source without another LLM
+call. A normal extraction failure may repeat that base request. After a complete
+source fails validation or compilation, the
 next attempt consumes the separate compile-repair prompt containing the unchanged
 authoritative genes, immutable scaffold/API guide, the immediately previous
 complete source as untrusted phenotype evidence, and only that attempt's

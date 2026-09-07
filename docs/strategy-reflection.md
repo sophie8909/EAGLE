@@ -123,7 +123,8 @@ Coach receives compact analyses, the all-match global summary, parent strategy,
 and selection metadata but never raw ticks. Generator budgeting is
 unchanged.
 
-Code Reflection remains a separate mutation path for Java validation,
+Prompt and Code Reflection remain separate mutation paths: Prompt rewrites the
+generation prompt, while Code directly revises parent Java before validation,
 compilation, integration, and code-quality evidence.
 
 ## Strategy diversity metadata

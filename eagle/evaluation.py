@@ -153,6 +153,21 @@ class BoundedGenerationResult:
         return self.representative_attempt.compile_error
 
 
+class _DirectCodeReflectionBackend(GenerationBackend):
+    """Expose an already-produced Code Reflection source to validation."""
+
+    operation = "code_reflection_direct"
+    model = None
+
+    def __init__(self, source: str) -> None:
+        self.source = source
+
+    def generate(self, candidate: Candidate, class_name: str) -> str:
+        if class_name != "CandidateAgent":
+            raise ValueError("Code Reflection produces only CandidateAgent.")
+        return self.source
+
+
 @dataclass(frozen=True)
 class EvaluationOpponent:
     opponent_id: str
@@ -236,7 +251,9 @@ def decode_validate_compile_candidate(
 ) -> BoundedGenerationResult:
     """Run bounded compile-guided decoding and compile valid sources once.
 
-    Attempt one uses the authoritative two-gene generation request. After a
+    Attempt one normally uses the authoritative two-gene generation request.
+    A Code Reflection child instead validates the Java already returned by its
+    mutation and does not invoke the final Generator again. After a
     complete source fails validation or javac, later attempts receive a
     separate compile-repair request containing that phenotype and structured
     failure evidence. Extraction failures have no repairable complete source
@@ -247,11 +264,20 @@ def decode_validate_compile_candidate(
 
     _validate_candidate_path_component(candidate.id)
     initial_seed_source = getattr(backend, "operation", None) == "initial_java_seed"
+    direct_code_source = (
+        candidate.generated_java
+        if candidate.mutation_type == "code" and candidate.generated_java
+        else ""
+    )
     max_attempts = 1 if initial_seed_source else config.generation_max_attempts
     if max_attempts < 1:
         raise ValueError("generation_max_attempts must be at least 1.")
-    base_request = "" if initial_seed_source else (
-        backend.authoritative_request(candidate, "CandidateAgent")
+    base_request = (
+        ""
+        if initial_seed_source
+        else "Direct Java source from mutation/code_reflection/reflected_candidate.java"
+        if direct_code_source
+        else backend.authoritative_request(candidate, "CandidateAgent")
         if hasattr(backend, "authoritative_request")
         else candidate.generation_input(class_name="CandidateAgent")
     )
@@ -279,7 +305,9 @@ def decode_validate_compile_candidate(
         for attempt_number in range(1, max_attempts + 1):
             attempt_name = f"attempt_{attempt_number:03d}"
             request_kind = (
-                "compile_repair"
+                "code_reflection_output"
+                if direct_code_source and attempt_number == 1
+                else "compile_repair"
                 if not initial_seed_source and repair_parent is not None
                 else "initial_decode_retry"
                 if not initial_seed_source and attempt_number > 1
@@ -316,18 +344,23 @@ def decode_validate_compile_candidate(
                     "normalized_candidate.java",
                 ):
                     (attempt_artifact_dir / filename).write_text("", encoding="utf-8")
-            if hasattr(backend, "set_generation_attempt_context"):
-                backend.set_generation_attempt_context(
+            attempt_backend = (
+                _DirectCodeReflectionBackend(direct_code_source)
+                if direct_code_source and attempt_number == 1
+                else backend
+            )
+            if hasattr(attempt_backend, "set_generation_attempt_context"):
+                attempt_backend.set_generation_attempt_context(
                     attempt_number,
                     f"{candidate.id}:generation:{attempt_number:03d}",
                 )
-            if hasattr(backend, "set_generation_request_kind"):
-                backend.set_generation_request_kind(request_kind)
+            if hasattr(attempt_backend, "set_generation_request_kind"):
+                attempt_backend.set_generation_request_kind(request_kind)
             generation_started_at = _utc_now()
             generation_started = time.monotonic()
             generation = generate_java_agent_result(
                 candidate,
-                backend,
+                attempt_backend,
                 generated_agents_dir,
                 template_paths=JavaTemplatePaths(
                     config.initial_java_seed_path if initial_seed_source else config.agent_template_path
@@ -688,9 +721,21 @@ def evaluate_candidate(
                 else None
             ),
         }
+    elif candidate.mutation_type == "code" and candidate.generated_java:
+        source_provenance = {
+            "kind": "code_reflection",
+            "path": "mutation/code_reflection/reflected_candidate.java",
+            "sha256": hashlib.sha256(
+                candidate.generated_java.encode("utf-8")
+            ).hexdigest(),
+        }
     generation_timing = {
         "stage": "generation",
-        "operation": getattr(backend, "operation", None),
+        "operation": (
+            "code_reflection_direct"
+            if candidate.mutation_type == "code" and candidate.generated_java
+            else getattr(backend, "operation", None)
+        ),
         "model": getattr(backend, "model", None),
         "started_at": None if initial_seed_source else generation_attempts[0].generation_timing.get("started_at"),
         "finished_at": None if initial_seed_source else generation_attempts[-1].generation_timing.get("finished_at"),

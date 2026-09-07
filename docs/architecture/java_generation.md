@@ -1,6 +1,8 @@
 # Java generation, validation, and compilation
 
-The Generator is a genotype-to-phenotype decoder.
+The Generator is the normal genotype-to-phenotype decoder. A successful Code
+Reflection is the one exception: it already returns a complete revised Java
+phenotype and therefore enters validation/compilation directly.
 
 ## Exact input and output
 
@@ -49,7 +51,7 @@ enter validation, compilation, or the phenotype. Extracted/normalized generation
 evidence remains under `generation/`; only a compilation success creates the
 canonical `phenotype/CandidateAgent.java`.
 
-For every Java-LLM-generated candidate, including inherited `configured_seeds`
+For every Generator-decoded candidate, including inherited `configured_seeds`
 generation zero,
 `generation_max_attempts` bounds compile-guided decoder
 attempts. The repository default is one so old configs and resumes retain their
@@ -64,12 +66,20 @@ and compiler evidence. Every actual post-truncation request is separately hashed
 Default-mode and `llm_generated_policies` generation zero record no Java LLM
 attempts. The latter separately records its policy-only initialization attempts.
 
+Code Reflection receives the policy, selected parent Java, immutable gameplay
+and action/API contracts, and canonical scaffold. It receives no reusable
+generation prompt or match/fitness evidence. Its complete output is validated
+as attempt 1 under `code_reflection_output`; a validation or javac failure may
+enter the same bounded compile-repair chain. An unextractable response preserves
+the selected parent Java rather than falling through to a fresh Generator call.
+
 ## Processing sequence
 
 1. Persist the unchanged active genotype and lineage, including inherited Java
    input and Java-parent provenance when enabled.
 2. Render the active genotype with canonical scaffold/API constraints for the
-   initial decode.
+   normal initial decode, or accept the complete Code Reflection result as the
+   direct initial source.
 3. Before each request, persist its candidate-owned attempt envelope, then
    persist the raw response before extraction.
 4. Extract each complete source, reject an invalid external/security envelope,

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 # Writers are grouped by lifecycle boundary: genotype inputs first,
 # stage/evaluation evidence next, and run summaries/configuration last.
-ARTIFACT_SCHEMA_VERSION = "phase4-v4"
+ARTIFACT_SCHEMA_VERSION = "phase4-v5"
 
 
 def write_candidate_inputs(candidates_dir: Path, candidate: Candidate) -> None:
@@ -637,15 +637,9 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
             "strategy_reflection": "mutation/strategy_reflection/metadata.json",
             "generator_strategy_input": "mutation/strategy_reflection/generator_strategy_input.txt",
         })
-    if (
-        candidate_dir
-        / "mutation"
-        / "prompt_compliance_reflection"
-        / "metadata.json"
-    ).is_file():
-        artifact_references["prompt_compliance_reflection"] = (
-            "mutation/prompt_compliance_reflection/metadata.json"
-        )
+    for mutation_name in ("prompt_reflection", "code_reflection"):
+        if (candidate_dir / "mutation" / mutation_name / "metadata.json").is_file():
+            artifact_references[mutation_name] = f"mutation/{mutation_name}/metadata.json"
     if (candidate_dir / "initialization" / "policy_generation" / "result.json").is_file():
         artifact_references["initial_policy_generation"] = (
             "initialization/policy_generation/result.json"

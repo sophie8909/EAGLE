@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-09-04. This file describes executable repository behavior.
+Snapshot: 2026-09-07. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -37,7 +37,7 @@ Snapshot: 2026-09-04. This file describes executable repository behavior.
   (`mu_plus_lambda`) pool until the fixed population is full; aggregate Game
   Performance and generation age are reporting-only.
 - The reflection-operator controller supports exactly `static`, `aos_opponent`,
-  and `aos_head2head`. Strategy/Code/Prompt Compliance probabilities mean fixed probabilities in
+  and `aos_head2head`. Strategy/Prompt/Code probabilities mean fixed probabilities in
   static mode and initial probabilities in AOS modes. Static performs no reward
   work. Opponent AOS uses execution-first ten-case W/D/L-rank change.
   Head-to-head AOS preserves the configured direct comparison matrix and
@@ -148,7 +148,7 @@ replicated to the configured population; the no-op source may also be selected
 as the immutable Generator scaffold. In inherited `llm_generated_policies` mode
 that one seed remains in slot one and policy-only LLM calls fill the other slots.
 Empty-policy
-candidates cannot enter Code Reflection, and Strategy Alignment is not
+candidates cannot enter Prompt Reflection, and Strategy Alignment is not
 applicable to them.
 
 The `0903_llm_initial_population` config uses the separately checked-in
@@ -165,9 +165,11 @@ world.
 
 Reflection context construction remains shared, but each operator projects a
 strictly scoped evidence view. Strategy Reflection consumes policy plus game
-evidence and changes only policy. Code Reflection consumes policy plus Java and
-optional structural/compiler diagnostics, then rewrites only the code-generation
-prompt; it receives no raw game logs. Strategy-facing roles also receive the
+evidence and changes only policy. Prompt Reflection consumes policy plus Java
+and optional structural/compiler diagnostics, then rewrites only the
+code-generation prompt; it receives no raw game logs. Code Reflection receives
+the policy plus selected parent Java and immutable contracts, then directly
+returns corrected complete Java. Strategy-facing roles also receive the
 immutable `microrts_gameplay_contract` as fixed domain context. It defines the
 complete entities, production relations, legal actions, and observable state,
 so a replacement may change strategy type without inventing non-game mechanics.
@@ -191,7 +193,7 @@ run timing event, without duplicating prompts/responses under `llm_logs/`.
 Validated Coach results use the authoritative input parent policy; the model's
 echo is retained only in raw/parsed evidence.
 
-Code Reviewer/Rewriter evidence is stored under `mutation/code_reflection/`.
+Prompt Reviewer/Rewriter evidence is stored under `mutation/prompt_reflection/`.
 The Reviewer sees only the editable strategy region plus the immutable API
 guide, so fixed scaffold fields/helpers cannot be mistaken for reachable
 candidate behavior. The Rewriter returns exactly `remove_rule_ids` and
@@ -201,29 +203,20 @@ renders a bounded canonical generation prompt with stable derived rule IDs.
 Concrete strategy/unit/Java instructions are rejected. A bounded retry receives
 the exact prior validator error instead of blindly repeating the same request,
 and legacy free-form prompts are not copied into the canonical rule set on
-their next successful Code Rewrite.
+their next successful Prompt Rewrite.
 The canonical generated Java phenotype is `phenotype/CandidateAgent.java`.
 Default mode uses only the checked-in scaffold. In inherited mode the Generator
-also receives `genotype/inherited_java.java`; Code Reflection reviews the
+also receives `genotype/inherited_java.java`; Prompt Reflection reviews the
 child's current policy against that exact Java component and records its Java
 parent/artifact provenance. This explicit mode does not restore the removed
 unversioned `previous_code` field.
-Prompt Compliance Reflection receives the active strategy and code-generation
-prompts, their canonical reusable-rule view, the immutable gameplay contract,
-and the immutable action/API guide. It does not receive W/D/L, match, fitness,
-Java, compiler, or raw-trace evidence and does not optimize strategy strength.
-It identifies illegal game concepts, unobservable conditions, invalid actions
-or production, policy-specific decoder rules, unsupported APIs, and scaffold
-scope violations. Only issue-bearing prompt genes are rewritten; when both are
-requested, their changes are committed atomically only after both succeed. A
-clean audit records `already_compliant` without manufacturing a mutation. The
-Code Prompt Rewriter
-uses the same validated reusable-rule delta and canonical renderer as Code
-Reflection, so unchecked whole prompts cannot enter the generation gene. At
-explicit rewrite boundaries, historically malformed marked prompts retain only
-individually valid rule lines; rejected lines are discarded before the repair
-delta is applied. Legacy free-form prompts retain no rules. Evidence remains under
-`mutation/prompt_compliance_reflection/`.
+Code Reflection stores its direct Java request, raw responses, parent source,
+and extracted reflected source under `mutation/code_reflection/`. It does not
+receive the reusable generation prompt, W/D/L, matches, traces, fitness, or
+compiler diagnostics. A complete reflected source bypasses final Java
+generation and enters validation/compilation directly; bounded compile repair
+remains available only after a structurally complete source fails. An
+unextractable reflection preserves the selected parent Java.
 The immutable API guide is rendered after the evolvable decoder gene, and
 validation requires token-equivalent fixed scaffold source outside the strategy
 markers. Fixed action helpers reject wrong-owner and invalid-type commands.

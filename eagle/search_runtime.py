@@ -12,12 +12,13 @@ from typing import Any
 from generation.backend import MockGenerationBackend
 
 from .aos import ReflectionOperatorController, build_reflection_operator_controller
+from .code_reflection import CodeReflectionMutation
 from .config import ExperimentConfig
 from .llm import LLMCallLogger, LLMClient, LLMServerError
 from .initial_population import MockInitialPolicyBackend
 from .mutation import build_reflection_backend
 from .prompts import load_prompt
-from .rewrite import PromptComplianceReflectionMutation, PromptRewriteMutation
+from .rewrite import PromptRewriteMutation
 from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation
 
 
@@ -95,22 +96,19 @@ def build_search_runtime(
             sample_budget=config.match_commentator_sample_count,
             timing_logger=logger,
         ),
-        "code": PromptRewriteMutation(
+        "prompt": PromptRewriteMutation(
             config,
-            mutation_type="code",
+            mutation_type="prompt",
             reflection_backend=reflection_backend,
             rewrite_backend=rewrite_backend,
             artifact_root=candidates_dir,
             logger=logger,
             backend_name=backend_name,
         ),
-        "prompt_compliance": PromptComplianceReflectionMutation(
+        "code": CodeReflectionMutation(
             config,
-            reflection_backend=reflection_backend,
-            rewrite_backend=rewrite_backend,
+            backend=generation_backend,
             artifact_root=candidates_dir,
-            logger=logger,
-            backend_name=backend_name,
         ),
     }
     return SearchRuntime(
