@@ -8,9 +8,15 @@ required_variables = ["gameplay_contract", "current_strategy_prompt", "aggregate
 
 [prompts.code_reflection]
 file = "code_reflection.txt"
-role = "generator"
+role = "reflector"
 stages = ["code_reflection"]
 required_variables = ["strategy_prompt", "parent_java", "gameplay_contract", "action_api_guide", "java_scaffold"]
+
+[prompts.code_revision]
+file = "code_revision.txt"
+role = "generator"
+stages = ["code_reflection"]
+required_variables = ["strategy_prompt", "reflection_conclusion", "parent_java", "gameplay_contract", "action_api_guide", "java_scaffold"]
 
 [prompts.prompt_reflection]
 file = "prompt_reflection.txt"
@@ -48,8 +54,8 @@ role = "reflector"
 stages = ["strategy_reflection", "prompt_reflection"]
 required_variables = ["original_request", "previous_response", "validation_error"]
 
-[prompts.code_reflection_retry]
-file = "code_reflection_retry.txt"
+[prompts.code_revision_retry]
+file = "code_revision_retry.txt"
 role = "generator"
 stages = ["code_reflection"]
 required_variables = ["original_request", "previous_response", "validation_error"]

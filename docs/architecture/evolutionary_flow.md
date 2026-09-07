@@ -27,8 +27,9 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 5. Apply crossover/copy to every active genotype component and let the
    configured reflection-operator controller choose Strategy Reflection,
    Prompt Reflection, or Code Reflection. Strategy changes only the policy
-   prompt. Prompt changes only the reusable generation prompt. Code directly
-   revises the selected parent Java while preserving both prompt genes.
+   prompt. Prompt changes only the reusable generation prompt. Code first
+   records a structured diagnosis and then directly revises the selected parent
+   Java from it while preserving both prompt genes.
 6. Decode Strategy/Prompt/no-mutation children with the configured Generator.
    Send a successful Code Reflection source directly to validation/compilation
    without allowing the Generator to overwrite it. In either path, use the

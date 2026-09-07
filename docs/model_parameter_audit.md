@@ -237,8 +237,9 @@ the llama.cpp command or HTTP payload.
 | EAGLE call | Prompt source | Temperature | Maximum output | Other decoding difference |
 |---|---|---:|---:|---|
 | Generator | `initial_generation.txt`, `java_generation.txt`, strategy and API prompt material | 0.2 shared | omitted | none |
-| Code reflection | `code_reflection.txt` | 0.2 shared | 2048 | JSON response required |
-| Code generation-prompt rewrite | `code_rewrite.txt` | 0.2 shared | 2048 | JSON response required |
+| Code reflection diagnosis | `code_reflection.txt` | 0.2 shared | configured shared maximum | JSON response required |
+| Code reflection Java revision | `code_revision.txt` | 0.2 shared | configured shared maximum | complete Java response required |
+| Prompt reflection generation-prompt rewrite | `prompt_rewrite.txt` | 0.2 shared | configured shared maximum | JSON response required |
 | Commentator | `match_commentator.txt` | 0.2 commentator setting | 2048 | JSON response required |
 | Coach | one of `coach_refine.txt`, `coach_counter.txt`, `coach_structural.txt`, `coach_alternative.txt` | 0.2 commentator setting | 2048 | uses the same backend instance as Commentator |
 | Strategy alignment | `strategy_alignment.txt` | 0.2 shared | omitted | JSON response required |

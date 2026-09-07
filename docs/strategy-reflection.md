@@ -124,8 +124,9 @@ and selection metadata but never raw ticks. Generator budgeting is
 unchanged.
 
 Prompt and Code Reflection remain separate mutation paths: Prompt rewrites the
-generation prompt, while Code directly revises parent Java before validation,
-compilation, integration, and code-quality evidence.
+generation prompt, while Code records a diagnosis and then directly revises
+parent Java from it before validation, compilation, integration, and
+code-quality evidence.
 
 ## Strategy diversity metadata
 

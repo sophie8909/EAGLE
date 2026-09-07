@@ -131,16 +131,19 @@ receives game logs. The Prompt Rewriter then returns one validated reusable-rule
 delta and changes only `generation_prompt`; the normal final Generator decodes
 the child from the updated prompt gene.
 
-Code mutation directly revises the selected parent Java. It receives the
-child's `strategy_prompt`, the complete selected parent Java, the immutable
-gameplay and action/API contracts, and the canonical fixed scaffold. It receives
-no match results, traces, fitness values, or `generation_prompt`. The response
+Code mutation first reflects on the selected parent Java, then revises it. The
+Reflector receives the child's `strategy_prompt`, the complete selected parent
+Java, the immutable gameplay and action/API contracts, and the canonical fixed
+scaffold, and returns a validated structured diagnosis with required changes
+and behaviors to preserve. The Java revision call receives that exact parsed
+conclusion plus the same authoritative inputs. Neither call receives match
+results, traces, fitness values, or `generation_prompt`. The revision response
 must be exactly one complete `CandidateAgent.java`; both prompt genes and the
 pre-mutation inherited Java remain unchanged. The returned source enters the
 normal validation and compilation stages directly, so a successful Code
-Reflection is not overwritten by a second final Generator call. If extraction
-fails, the selected parent Java is preserved. Validation or javac failure may
-enter the existing bounded diagnostic-only compile-repair chain.
+Reflection is not overwritten by a third final Generator call. If diagnosis or
+extraction fails, the selected parent Java is preserved. Validation or javac
+failure may enter the existing bounded diagnostic-only compile-repair chain.
 
 The canonical probability keys are `strategy_reflection_probability`,
 `prompt_reflection_probability`, and `code_reflection_probability`; operator

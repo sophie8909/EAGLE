@@ -198,11 +198,14 @@ strategy region; the Rewriter deterministically changes only
 `genotype/code_generation_prompt.txt`.
 
 Code Reflection evidence is stored under `mutation/code_reflection/`. It
-retains `reflector_request.txt`, every transported request/raw response,
-`parent_candidate.java`, `reflected_candidate.java` when extractable, hashes,
-attempt timing, and terminal status. The successful reflected source enters the
-normal generation attempt ledger as `code_reflection_output` but causes no final
-Generator LLM request.
+retains `reflector_request.txt`, the raw and parsed conclusion in
+`reflector_response_raw.txt` and `reflection_conclusion.json`, every transported
+diagnosis attempt, `revision_request.txt`, every Java-revision attempt/raw
+response, `parent_candidate.java`, `reflected_candidate.java`, hashes, attempt
+timing, and terminal status. The revision request contains the exact parsed
+conclusion. A successful reflected source enters the normal generation attempt
+ledger as `code_reflection_output` but causes no additional final Generator LLM
+request.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated

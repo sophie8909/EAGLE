@@ -38,7 +38,7 @@ kept as documentation entries.
 | `eagle/crossover.py` | Independent prompt and optional inherited-Java crossover with provenance |
 | `eagle/mutation.py` | Reflection context and transport contracts |
 | `eagle/rewrite.py` | Prompt-only mutation rewrite |
-| `eagle/code_reflection.py` | Direct parent-Java Code Reflection |
+| `eagle/code_reflection.py` | Diagnosis-guided direct parent-Java Code Reflection |
 | `eagle/strategy_reflection.py` | Match sampling, Commentator, Coach, trace lifecycle |
 | `eagle/reflection_context.py` | Structured mutation evidence |
 | `eagle/reflection_prompts.py` | Prompt Reflection reviewer rendering |

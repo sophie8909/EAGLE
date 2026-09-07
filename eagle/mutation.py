@@ -120,7 +120,7 @@ class ReflectionResult:
 
 
 def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict[str, object], str, str]:
-    """Parse the JSON contracts used by Strategy and Prompt Reflection."""
+    """Parse the JSON contracts used by Strategy, Prompt, and Code Reflection."""
     lowered = str(response).lower()
     if "```java" in lowered or "package ai.generated" in lowered or "public class candidateagent" in lowered:
         raise ValueError("Reflection response must not contain generated Java.")
@@ -181,6 +181,56 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
         except ValueError as exc:
             raise ValueError("Prompt Reviewer required_generation_behaviors items must be text corrections.") from exc
         return normalized_payload, json.dumps(normalized_payload, ensure_ascii=False, sort_keys=True), ""
+    elif reflection_type == "code":
+        assessment = payload.get("assessment")
+        if assessment not in {
+            "code_requires_revision",
+            "code_faithfully_implements_strategy",
+            "strategy_ambiguous",
+        }:
+            raise ValueError("Code Reflection must classify the parent Java assessment.")
+        diagnosis = payload.get("diagnosis")
+        if not isinstance(diagnosis, list):
+            raise ValueError("Code Reflection must contain a diagnosis array.")
+        normalized_diagnosis: list[dict[str, str]] = []
+        for item in diagnosis:
+            if not isinstance(item, dict):
+                raise ValueError("Each Code Reflection diagnosis item must be an object.")
+            try:
+                normalized_diagnosis.append({
+                    key: _alignment_review_text(item[key], field=key)
+                    for key in (
+                        "strategy_requirement",
+                        "observed_java_behavior",
+                        "required_code_change",
+                    )
+                })
+            except (KeyError, ValueError) as exc:
+                raise ValueError(
+                    "Each Code Reflection diagnosis item must contain strategy_requirement, "
+                    "observed_java_behavior, and required_code_change text."
+                ) from exc
+        preserve = payload.get("behaviors_to_preserve")
+        if not isinstance(preserve, list):
+            raise ValueError("Code Reflection must contain a behaviors_to_preserve array.")
+        try:
+            normalized_preserve = [
+                _alignment_review_text(item, field="behaviors_to_preserve")
+                for item in preserve
+            ]
+        except ValueError as exc:
+            raise ValueError("Code Reflection behaviors_to_preserve items must be text.") from exc
+        if assessment == "code_requires_revision" and not normalized_diagnosis:
+            raise ValueError("Code Reflection must diagnose at least one required revision.")
+        if assessment != "code_requires_revision" and normalized_diagnosis:
+            raise ValueError("Code Reflection diagnosis must be empty when no revision is required.")
+        normalized_payload = {
+            "assessment": assessment,
+            "diagnosis": normalized_diagnosis,
+            "behaviors_to_preserve": normalized_preserve,
+        }
+        summary = json.dumps(normalized_payload, ensure_ascii=False, sort_keys=True)
+        return normalized_payload, summary, ""
     else:
         raise ValueError(f"Unknown reflection type: {reflection_type}")
     for key in required:
@@ -275,6 +325,12 @@ class MockReflectionBackend:
                 "assessment": "java_faithfully_implements_policy",
                 "alignment_review": [],
                 "required_generation_behaviors": [],
+            })
+        if "Code Reflection diagnosis stage" in prompt:
+            return json.dumps({
+                "assessment": "code_faithfully_implements_strategy",
+                "diagnosis": [],
+                "behaviors_to_preserve": ["Preserve the validated parent behavior."],
             })
         if "Code Generation Prompt Rewrite stage" in prompt:
             return json.dumps({

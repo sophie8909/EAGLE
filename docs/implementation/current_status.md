@@ -210,13 +210,15 @@ also receives `genotype/inherited_java.java`; Prompt Reflection reviews the
 child's current policy against that exact Java component and records its Java
 parent/artifact provenance. This explicit mode does not restore the removed
 unversioned `previous_code` field.
-Code Reflection stores its direct Java request, raw responses, parent source,
-and extracted reflected source under `mutation/code_reflection/`. It does not
-receive the reusable generation prompt, W/D/L, matches, traces, fitness, or
-compiler diagnostics. A complete reflected source bypasses final Java
-generation and enters validation/compilation directly; bounded compile repair
-remains available only after a structurally complete source fails. An
-unextractable reflection preserves the selected parent Java.
+Code Reflection stores a separate diagnosis request/raw response/parsed
+conclusion, followed by the conclusion-guided Java revision request/raw
+responses, parent source, and extracted reflected source under
+`mutation/code_reflection/`. Neither call receives the reusable generation
+prompt, W/D/L, matches, traces, fitness, or compiler diagnostics. A complete
+reflected source bypasses final Java generation and enters
+validation/compilation directly; bounded compile repair remains available only
+after a structurally complete source fails. A failed diagnosis or
+unextractable revision preserves the selected parent Java.
 The immutable API guide is rendered after the evolvable decoder gene, and
 validation requires token-equivalent fixed scaffold source outside the strategy
 markers. Fixed action helpers reject wrong-owner and invalid-type commands.

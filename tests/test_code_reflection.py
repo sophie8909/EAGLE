@@ -22,10 +22,11 @@ class ScriptedJavaBackend:
     operation = "generation"
     model = "test-model"
 
-    def __init__(self, responses: tuple[str, ...]) -> None:
+    def __init__(self, responses: tuple[str, ...], events: list[str] | None = None) -> None:
         self.responses = iter(responses)
         self.requests: list[str] = []
         self.request_kinds: list[str] = []
+        self.events = events
 
     def prepare_request(self, request: str) -> str:
         return request
@@ -42,11 +43,48 @@ class ScriptedJavaBackend:
         class_name: str,
         request: str,
     ) -> str:
+        if self.events is not None:
+            self.events.append("revision")
         self.requests.append(request)
         value = next(self.responses)
         if isinstance(value, Exception):
             raise value
         return value
+
+
+class ScriptedReflectionBackend:
+    operation = "reflection"
+    model = "test-model"
+
+    def __init__(self, responses: tuple[str, ...], events: list[str] | None = None) -> None:
+        self.responses = iter(responses)
+        self.prompts: list[str] = []
+        self.events = events
+
+    def generate(self, prompt: str) -> str:
+        if self.events is not None:
+            self.events.append("reflection")
+        self.prompts.append(prompt)
+        value = next(self.responses)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+
+def reflection_response(*, requires_revision: bool = True) -> str:
+    return json.dumps({
+        "assessment": (
+            "code_requires_revision"
+            if requires_revision
+            else "code_faithfully_implements_strategy"
+        ),
+        "diagnosis": ([{
+            "strategy_requirement": "Workers must attack the enemy Base.",
+            "observed_java_behavior": "The editable strategy does not record this test marker.",
+            "required_code_change": "Add the minimal Worker attack behavior in the editable region.",
+        }] if requires_revision else []),
+        "behaviors_to_preserve": ["Preserve legal Worker production."],
+    })
 
 
 def config() -> ExperimentConfig:
@@ -76,7 +114,9 @@ class CodeReflectionTests(unittest.TestCase):
             "// EAGLE_AGENT_STRATEGY_START\n        // direct code reflection",
             1,
         )
-        backend = ScriptedJavaBackend((revised,))
+        events: list[str] = []
+        backend = ScriptedJavaBackend((revised,), events)
+        reflector = ScriptedReflectionBackend((reflection_response(),), events)
         candidate = Candidate(
             id="child",
             generation=1,
@@ -90,7 +130,10 @@ class CodeReflectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             child = CodeReflectionMutation(
-                config(), backend=backend, artifact_root=root
+                config(),
+                backend=backend,
+                reflection_backend=reflector,
+                artifact_root=root,
             ).mutate(candidate, context(), artifact_dir=root / candidate.id)
 
             self.assertEqual(child.strategy_prompt, candidate.strategy_prompt)
@@ -98,9 +141,14 @@ class CodeReflectionTests(unittest.TestCase):
             self.assertEqual(child.inherited_java, candidate.inherited_java)
             self.assertEqual(child.generated_java, revised.strip())
             self.assertEqual(child.mutation_type, "code")
+            self.assertEqual(events, ["reflection", "revision"])
             self.assertEqual(backend.request_kinds, ["code_reflection"])
+            self.assertEqual(len(reflector.prompts), 1)
+            self.assertIn("diagnosis stage", reflector.prompts[0])
             request = backend.requests[0]
-            self.assertIn("Directly revise", request)
+            self.assertIn("Java revision stage", request)
+            self.assertIn("required_code_change", request)
+            self.assertIn("Add the minimal Worker attack behavior", request)
             self.assertIn(candidate.strategy_prompt, request)
             self.assertIn(PARENT_JAVA, request)
             self.assertNotIn(candidate.generation_prompt, request)
@@ -114,9 +162,18 @@ class CodeReflectionTests(unittest.TestCase):
             )
             self.assertTrue(metadata["applied"])
             self.assertTrue(metadata["java_changed"])
+            self.assertEqual(metadata["reflection_status"], "success")
+            self.assertEqual(metadata["revision_status"], "success")
+            conclusion = json.loads(
+                (mutation_dir / "reflection_conclusion.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(conclusion["assessment"], "code_requires_revision")
+            self.assertTrue((mutation_dir / "revision_request.txt").exists())
+            self.assertTrue((mutation_dir / "revision_response_raw.txt").exists())
 
-    def test_failed_response_preserves_parent_java_for_direct_evaluation(self) -> None:
+    def test_failed_revision_preserves_parent_java_for_direct_evaluation(self) -> None:
         backend = ScriptedJavaBackend(("", ""))
+        reflector = ScriptedReflectionBackend((reflection_response(),))
         candidate = Candidate(
             id="child",
             generation=1,
@@ -126,7 +183,9 @@ class CodeReflectionTests(unittest.TestCase):
             java_parent_id="parent",
         )
 
-        child = CodeReflectionMutation(config(), backend=backend).mutate(
+        child = CodeReflectionMutation(
+            config(), backend=backend, reflection_backend=reflector
+        ).mutate(
             candidate,
             context(),
         )
@@ -136,6 +195,28 @@ class CodeReflectionTests(unittest.TestCase):
         self.assertEqual(child.operator, candidate.operator)
         self.assertEqual(len(backend.requests), 2)
         self.assertIn("could not be used", backend.requests[1])
+
+    def test_failed_diagnosis_never_calls_java_revision(self) -> None:
+        backend = ScriptedJavaBackend((RuntimeError("revision must not run"),))
+        reflector = ScriptedReflectionBackend(("not json", "still not json"))
+        candidate = Candidate(
+            id="child",
+            generation=1,
+            strategy_prompt="Worker Rush.",
+            generation_prompt="prompt gene",
+            inherited_java=PARENT_JAVA,
+            java_parent_id="parent",
+        )
+
+        child = CodeReflectionMutation(
+            config(), backend=backend, reflection_backend=reflector
+        ).mutate(candidate, context())
+
+        self.assertEqual(child.generated_java, PARENT_JAVA)
+        self.assertFalse(child.metadata["mutation"]["applied"])
+        self.assertEqual(child.metadata["mutation"]["reflection_status"], "failed")
+        self.assertEqual(child.metadata["mutation"]["revision_status"], "not_run")
+        self.assertEqual(backend.requests, [])
 
     def test_direct_code_output_skips_final_generator(self) -> None:
         backend = ScriptedJavaBackend((RuntimeError("final Generator must not run"),))

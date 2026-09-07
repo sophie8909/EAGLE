@@ -108,7 +108,10 @@ def build_search_runtime(
         "code": CodeReflectionMutation(
             config,
             backend=generation_backend,
+            reflection_backend=reflection_backend,
             artifact_root=candidates_dir,
+            logger=logger,
+            backend_name=backend_name,
         ),
     }
     return SearchRuntime(

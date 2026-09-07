@@ -1,4 +1,4 @@
-"""Direct Java mutation for the Code Reflection operator."""
+"""Diagnosis-guided direct Java mutation for the Code Reflection operator."""
 
 from __future__ import annotations
 
@@ -15,16 +15,23 @@ from generation.java_agent_generator import extract_code_from_output, normalize_
 from .candidate import Candidate, compact_mutation_record
 from .config import ExperimentConfig
 from .llm import LLMServerError
-from .mutation import ReflectionAttempt, ReflectionContext, _timing_payload, utc_now
+from .mutation import (
+    ReflectionAttempt,
+    ReflectionContext,
+    ReflectionResult,
+    ReflectionStage,
+    _timing_payload,
+    utc_now,
+)
 from .prompts import load_prompt, render_prompt
 from .reflection_context import coerce_structured_context
 
 
-CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v1"
+CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v2"
 
 
 class CodeReflectionMutation:
-    """Ask the Java-capable backend to revise one selected parent source directly."""
+    """Diagnose one parent source, then revise it from that conclusion."""
 
     mutation_type = "code"
 
@@ -33,11 +40,21 @@ class CodeReflectionMutation:
         config: ExperimentConfig,
         *,
         backend: Any,
+        reflection_backend: Any,
         artifact_root: Path | None = None,
+        logger: Any | None = None,
+        backend_name: str | None = None,
     ) -> None:
         self.config = config
         self.backend = backend
         self.artifact_root = artifact_root
+        self.reflector = ReflectionStage(
+            reflection_backend,
+            max_attempts=config.mutation_max_attempts,
+            logger=logger,
+            model=None if config.execution_mode == "mock" else config.llm_model,
+            backend_name=backend_name or config.execution_mode,
+        )
 
     def mutate(
         self,
@@ -52,25 +69,52 @@ class CodeReflectionMutation:
         )
         parent_java = candidate.inherited_java or context.candidate.generated_code
         feedback_candidate_id = context.candidate.candidate_id or candidate.id
-        base_request = self._request(candidate, parent_java) if parent_java.strip() else ""
-        attempts: list[ReflectionAttempt] = []
-        response = ""
+        reflection_request = (
+            self._reflection_request(candidate, parent_java)
+            if parent_java.strip()
+            else ""
+        )
+        if reflection_request:
+            reflection = self.reflector.run(
+                reflection_type="code",
+                candidate=candidate,
+                request=reflection_request,
+                artifact_dir=target_dir,
+            )
+        else:
+            reflection = ReflectionResult(
+                stage="reflector",
+                reflection_type="code",
+                request="",
+                raw_response="",
+                reflection="",
+                status="failed",
+                error="Code Reflection requires a non-empty selected parent Java source.",
+            )
+
+        reflection_conclusion = reflection.parsed_response or {}
+        base_request = (
+            self._revision_request(candidate, parent_java, reflection_conclusion)
+            if reflection.succeeded
+            else ""
+        )
+        revision_attempts: list[ReflectionAttempt] = []
+        revision_response = ""
         reflected_java = ""
-        last_error: str | None = None
+        last_revision_error: str | None = None
 
         for attempt_number in range(1, self.config.mutation_max_attempts + 1):
             if not base_request:
-                last_error = "Code Reflection requires a non-empty selected parent Java source."
                 break
             attempt_request = (
                 base_request
-                if last_error is None
+                if last_revision_error is None
                 else render_prompt(
-                    "code_reflection_retry",
+                    "code_revision_retry",
                     {
                         "original_request": base_request,
-                        "previous_response": response,
-                        "validation_error": last_error,
+                        "previous_response": revision_response,
+                        "validation_error": last_revision_error,
                     },
                 )
             )
@@ -79,7 +123,7 @@ class CodeReflectionMutation:
             if hasattr(self.backend, "set_generation_attempt_context"):
                 self.backend.set_generation_attempt_context(
                     attempt_number,
-                    f"{candidate.id}:code_reflection:{attempt_number:03d}",
+                    f"{candidate.id}:code_revision:{attempt_number:03d}",
                 )
             if hasattr(self.backend, "set_generation_request_kind"):
                 self.backend.set_generation_request_kind("code_reflection")
@@ -88,22 +132,22 @@ class CodeReflectionMutation:
             status = "success"
             error: str | None = None
             try:
-                response = self.backend.generate_from_request(
+                revision_response = self.backend.generate_from_request(
                     candidate,
                     "CandidateAgent",
                     attempt_request,
                 )
                 reflected_java = normalize_java_agent_source(
-                    extract_code_from_output(response)
+                    extract_code_from_output(revision_response)
                 )
             except LLMServerError:
                 raise
             except (OSError, RuntimeError, TimeoutError, ValueError) as exc:
                 status = "error"
                 error = str(exc) or type(exc).__name__
-                last_error = error
+                last_revision_error = error
             finished_at = utc_now()
-            attempts.append(
+            revision_attempts.append(
                 ReflectionAttempt(
                     attempt=attempt_number,
                     started_at=started_at,
@@ -113,20 +157,34 @@ class CodeReflectionMutation:
                     error=error,
                 )
             )
-            self._write_attempt(
+            self._write_revision_attempt(
                 target_dir,
                 attempt_number=attempt_number,
                 request=attempt_request,
-                response=response,
+                response=revision_response,
             )
             if status == "success":
                 break
             time.sleep(0)
 
-        succeeded = bool(reflected_java)
-        # A failed reflection preserves and evaluates the selected parent Java;
+        succeeded = bool(reflection.succeeded and reflected_java)
+        # A failed diagnosis or revision preserves and evaluates the selected parent Java;
         # it never falls through to an unrelated fresh Generator decode.
         direct_java = reflected_java or parent_java
+        revision = {
+            "stage": "code_revision",
+            "request": base_request,
+            "raw_response": revision_response,
+            "status": (
+                "success"
+                if succeeded
+                else "failed" if reflection.succeeded else "not_run"
+            ),
+            "attempts": [attempt.to_dict() for attempt in revision_attempts],
+            "error": None if succeeded else last_revision_error,
+            "model": getattr(self.backend, "model", None),
+            "operation": getattr(self.backend, "operation", None),
+        }
         mutation_record = {
             "schema_version": CODE_REFLECTION_SCHEMA_VERSION,
             "candidate_id": candidate.id,
@@ -134,13 +192,17 @@ class CodeReflectionMutation:
             "operation": "code_reflection_mutation",
             "type": "code",
             "applied": succeeded,
-            "reflection_status": "success" if succeeded else "failed",
-            "reflection_error": None if succeeded else last_error,
-            "reflection_attempts": len(attempts),
-            "attempts": [attempt.to_dict() for attempt in attempts],
+            "reflection_status": reflection.status,
+            "reflection_error": reflection.error,
+            "reflection_attempts": len(reflection.attempts),
+            "revision_status": revision["status"],
+            "revision_error": revision["error"],
+            "revision_attempts": len(revision_attempts),
+            "attempts": [attempt.to_dict() for attempt in revision_attempts],
             "rewrite_attempts": 0,
-            "model": getattr(self.backend, "model", None),
-            "reflection_operation": getattr(self.backend, "operation", None),
+            "model": reflection.model or getattr(self.backend, "model", None),
+            "reflection_operation": reflection.operation,
+            "revision_operation": getattr(self.backend, "operation", None),
             "original_strategy_prompt": candidate.strategy_prompt,
             "original_generation_prompt": candidate.generation_prompt,
             "parent_java_sha256": _sha256(parent_java),
@@ -158,15 +220,17 @@ class CodeReflectionMutation:
                     "generation_prompt",
                 ],
             },
+            "reflection": reflection.to_dict(),
+            "reflection_conclusion": reflection_conclusion,
+            "revision": revision,
         }
         timing = dict(candidate.timing)
-        timing["code_reflector_llm"] = _timing_payload(tuple(attempts))
+        timing["code_reflector_llm"] = _timing_payload(reflection.attempts)
+        timing["code_revision_llm"] = _timing_payload(tuple(revision_attempts))
         history = [{
             "reflection_type": "code",
             "parent_candidate_id": feedback_candidate_id,
-            "analysis_summary": (
-                "direct_java_revision" if succeeded else "parent_java_preserved"
-            ),
+            "analysis_summary": reflection.analysis_summary,
             "generation_index": candidate.generation,
         }]
         metadata = dict(candidate.metadata)
@@ -179,9 +243,12 @@ class CodeReflectionMutation:
         self._write_result(
             target_dir,
             request=base_request,
-            response=response,
+            response=revision_response,
             parent_java=parent_java,
             reflected_java=direct_java,
+            reflection=reflection,
+            reflection_conclusion=reflection_conclusion,
+            revision=revision,
             metadata=mutation_record,
         )
         return replace(
@@ -197,7 +264,7 @@ class CodeReflectionMutation:
             metadata=metadata,
         )
 
-    def _request(self, candidate: Candidate, parent_java: str) -> str:
+    def _reflection_request(self, candidate: Candidate, parent_java: str) -> str:
         return render_prompt(
             "code_reflection",
             {
@@ -211,8 +278,32 @@ class CodeReflectionMutation:
             },
         )
 
+    def _revision_request(
+        self,
+        candidate: Candidate,
+        parent_java: str,
+        reflection_conclusion: dict[str, object],
+    ) -> str:
+        return render_prompt(
+            "code_revision",
+            {
+                "strategy_prompt": candidate.strategy_prompt,
+                "parent_java": parent_java,
+                "reflection_conclusion": json.dumps(
+                    reflection_conclusion,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+                "gameplay_contract": load_prompt("microrts_gameplay_contract"),
+                "action_api_guide": load_prompt("action_api_guide"),
+                "java_scaffold": load_java_template(
+                    JavaTemplatePaths(self.config.agent_template_path)
+                ),
+            },
+        )
+
     @staticmethod
-    def _write_attempt(
+    def _write_revision_attempt(
         target_dir: Path | None,
         *,
         attempt_number: int,
@@ -223,11 +314,11 @@ class CodeReflectionMutation:
             return
         directory = target_dir / "mutation" / "code_reflection"
         _write_text(
-            directory / f"reflector_attempt_{attempt_number:03d}_request.txt",
+            directory / f"revision_attempt_{attempt_number:03d}_request.txt",
             request,
         )
         _write_text(
-            directory / f"reflector_attempt_{attempt_number:03d}_response_raw.txt",
+            directory / f"revision_attempt_{attempt_number:03d}_response_raw.txt",
             response,
         )
 
@@ -239,16 +330,22 @@ class CodeReflectionMutation:
         response: str,
         parent_java: str,
         reflected_java: str,
+        reflection: ReflectionResult,
+        reflection_conclusion: dict[str, object],
+        revision: dict[str, object],
         metadata: dict[str, object],
     ) -> None:
         if target_dir is None:
             return
         directory = target_dir / "mutation" / "code_reflection"
-        _write_text(directory / "reflector_request.txt", request)
-        _write_text(directory / "reflector_response_raw.txt", response)
+        _write_text(directory / "reflector_request.txt", reflection.request)
+        _write_text(directory / "reflector_response_raw.txt", reflection.raw_response)
+        _write_json(directory / "reflection_conclusion.json", reflection_conclusion)
+        _write_text(directory / "revision_request.txt", request)
+        _write_text(directory / "revision_response_raw.txt", response)
         _write_text(directory / "parent_candidate.java", parent_java)
         _write_text(directory / "reflected_candidate.java", reflected_java)
-        _write_json(directory / "metadata.json", metadata)
+        _write_json(directory / "metadata.json", _metadata_record(metadata))
 
 
 def _sha256(value: str) -> str | None:
@@ -266,3 +363,16 @@ def _write_json(path: Path, value: object) -> None:
         json.dumps(value, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def _metadata_record(record: dict[str, object]) -> dict[str, object]:
+    payload = dict(record)
+    for key in ("reflection", "revision"):
+        stage = payload.get(key)
+        if isinstance(stage, dict):
+            payload[key] = {
+                name: value
+                for name, value in stage.items()
+                if name not in {"request", "raw_response", "reflection"}
+            }
+    return payload

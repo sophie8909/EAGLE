@@ -53,8 +53,9 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
 - Successful Prompt Reflection applies a structured rule delta and deterministically
   renders `generation_prompt`; policy-specific checklists and Java fragments are
   rejected at the rewrite boundary.
-- Code Reflection preserves both prompt genes and directly revises the selected
-  parent Java; its successful result bypasses the final Generator.
+- Code Reflection preserves both prompt genes, records a structured diagnosis,
+  and directly revises the selected parent Java from that conclusion; its
+  successful result bypasses the final Generator.
 - Generator, Code Reflection, and Evaluation do not modify either prompt gene.
 - Generator uses the canonical checked-in scaffold. Only inherited mode also
   receives the selected parent Java component.

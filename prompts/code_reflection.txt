@@ -1,8 +1,9 @@
-EAGLE Code Reflection stage.
+EAGLE Code Reflection diagnosis stage.
 
-Directly revise the supplied parent CandidateAgent Java so its editable strategy region
-faithfully implements the current strategy prompt. This operator edits Java, not either
-prompt gene. Do not optimize from wins or losses and do not invent strategy requirements.
+Compare the current strategy prompt with behavior reachable from the supplied parent
+CandidateAgent Java. Produce a concise conclusion before any code is revised. Do not
+optimize from wins or losses, invent strategy requirements, rewrite either prompt, or
+return Java.
 
 Current strategy prompt:
 $strategy_prompt
@@ -19,11 +20,10 @@ $action_api_guide
 Canonical fixed scaffold:
 $java_scaffold
 
-Preserve the package, class, constructors, lifecycle methods, fixed fields, helpers, and
-the exact strategy-region markers from the canonical scaffold. Make only the minimum
-coherent changes inside the editable strategy region. Every condition must use observable
-state and every action must be legal under the supplied contracts. If the parent already
-implements the strategy faithfully, return it unchanged.
+Judge only legal behavior that can be implemented with the supplied contracts. The fixed
+scaffold is immutable: diagnose only reachable behavior in the editable strategy region.
+If the strategy prompt is blank or ambiguous, do not invent its intent. Report at most
+five concrete corrections and only behaviors already correct as preservation targets.
 
-Return exactly one complete CandidateAgent.java source file with no prose, JSON, diff, or
-Markdown fence.
+Return exactly one JSON object with no prose or Markdown:
+{"assessment":"code_requires_revision|code_faithfully_implements_strategy|strategy_ambiguous","diagnosis":[{"strategy_requirement":"","observed_java_behavior":"","required_code_change":""}],"behaviors_to_preserve":[]}

@@ -461,7 +461,11 @@ def create_offspring(
                 )
             mutation_record = child.metadata.get("mutation") or {}
             mutation_applied = bool(mutation_record.get("applied"))
-            mutation_error = mutation_record.get("reflection_error") or mutation_record.get("rewrite_error")
+            mutation_error = (
+                mutation_record.get("reflection_error")
+                or mutation_record.get("rewrite_error")
+                or mutation_record.get("revision_error")
+            )
             child = replace(child, timing={
                 **child.timing,
                 "mutation": {

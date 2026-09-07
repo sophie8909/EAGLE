@@ -3,7 +3,7 @@
 ## Completed migrations
 
 - complete-file candidate model and first-class lineage;
-- Strategy/Prompt Reflection → Rewrite → Generation mutations and direct-Java Code Reflection;
+- Strategy/Prompt Reflection → Rewrite → Generation mutations and diagnosis-guided direct-Java Code Reflection;
 - ten-opponent, 180-match evaluation and seeded lexicase selection;
 - three reflection-operator modes with one AOS updater;
 - unified experiment/model lifecycle;

@@ -280,7 +280,12 @@ class OpenAICompatibleGenerationBackend(GenerationBackend):
                 "url": self.chat_completions_url,
                 "endpoint": self.base_url,
                 "operation": self.operation,
-                "operation_type": "mutation" if candidate.operator in {"mutation", "crossover+mutation"} else "crossover" if candidate.operator == "crossover" else None,
+                "operation_type": (
+                    "mutation"
+                    if self._generation_request_kind == "code_reflection"
+                    or candidate.operator in {"mutation", "crossover+mutation"}
+                    else "crossover" if candidate.operator == "crossover" else None
+                ),
                 "generation_attempt": self._generation_attempt,
                 "generation_attempt_id": self._generation_attempt_id,
                 "transport_attempt": attempt,

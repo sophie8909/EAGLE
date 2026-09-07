@@ -37,6 +37,12 @@ This is the canonical owner of candidate and LLM-attempt timing fields. Normativ
     "duration_seconds": null,
     "attempts": []
   },
+  "code_revision_llm": {
+    "started_at": null,
+    "finished_at": null,
+    "duration_seconds": null,
+    "attempts": []
+  },
   "generation_llm": {
     "started_at": "",
     "finished_at": "",
@@ -159,11 +165,12 @@ Run-level timing.jsonl contains event=generation and event=llm_request records. 
 Candidate timing.json contains operation-specific mutation and crossover generation-only spans, the shared child_generation span, separate validation/compilation/integration/evaluation spans, and child_total. Durations use a monotonic clock; UTC fields are display timestamps.
 
 Prompt Reflection records one `reflector_llm` attempt stream and one bounded
-`rewriter_llm` stream. Code Reflection records its Java-producing calls in
-`code_reflector_llm`; the subsequent direct validation attempt adds no
+`rewriter_llm` stream. Code Reflection records the structured diagnosis calls
+in `code_reflector_llm` and the conclusion-guided Java-producing calls in
+`code_revision_llm`; the subsequent direct validation attempt adds no
 `generation_llm` transport event unless compile repair is required. Each actual
-request emits one run-level `llm_request` event and remains candidate-owned under
-its mutation directory.
+request emits one run-level `llm_request` event and remains candidate-owned
+under its mutation directory.
 
 ## Compact snapshot retention (2026-08-04)
 

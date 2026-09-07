@@ -34,7 +34,7 @@ flowchart TD
     X --> M{"Mutation?"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
     M -->|Prompt| PR["Prompt Reflection + prompt rewrite"]
-    M -->|Code| CR["Code Reflection: direct parent-Java revision"]
+    M -->|Code| CR["Code Reflection: diagnosis + parent-Java revision"]
     M -->|No| G["Final Java Generation"]
     SR --> G
     PR --> G
@@ -68,8 +68,9 @@ flowchart TD
   diversity while grounding every rule in legal entities, actions, and
   observable state.
 - Prompt Reflection audits policy/Java alignment and changes only the reusable
-  generation prompt. Code Reflection directly corrects the selected parent Java
-  from immutable gameplay/API/scaffold context and bypasses final generation.
+  generation prompt. Code Reflection first records a structured diagnosis,
+  then directly corrects the selected parent Java from that conclusion and the
+  immutable gameplay/API/scaffold context; it bypasses final generation.
 - In inherited mode crossover selects policy, generation prompt, and Java
   parents independently; generated child Java becomes the inheritable Java
   component available to the next generation.

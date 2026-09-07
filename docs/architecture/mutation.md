@@ -57,20 +57,26 @@ deterministically. A failed attempt does not partially modify the gene.
 
 ## Code Reflection
 
-Code Reflection directly revises the selected parent Java:
+Code Reflection first diagnoses the selected parent Java, then directly revises
+it from that persisted conclusion:
 
 ```text
 current strategy_prompt + selected parent Java
 + immutable gameplay/API contracts + canonical scaffold
+  -> structured code diagnosis
+  -> diagnosis + the same authoritative inputs
   -> complete corrected CandidateAgent.java
   -> validation -> javac -> integration -> evaluation
 ```
 
-It receives neither `generation_prompt` nor match results, traces, fitness, or
-W/D/L summaries. The output must be one complete Java source. Both prompt genes
-and the pre-mutation inherited Java remain byte-identical. The output is sent
-directly to validation and compilation and is not overwritten by a final
-Generator call. If the LLM response cannot be extracted, the selected parent
+The Reflector classifies whether revision is required and records concrete code
+changes plus behaviors to preserve; it never returns Java. The Java revision
+stage receives that exact parsed conclusion. Neither stage receives
+`generation_prompt`, match results, traces, fitness, or W/D/L summaries. The
+revision output must be one complete Java source. Both prompt genes and the
+pre-mutation inherited Java remain byte-identical. The output is sent directly
+to validation and compilation and is not overwritten by a final Generator
+call. If either the diagnosis or Java response is unusable, the selected parent
 Java is preserved. A structurally complete response that fails validation or
 javac may enter the existing bounded diagnostic-only compile-repair chain.
 
@@ -106,9 +112,10 @@ mutation/code_reflection/
 ```
 
 Prompt artifacts retain reviewer/rewrite requests, raw responses, structured
-rule deltas, attempts, and errors. Code artifacts retain the exact request, raw
-response, selected parent source, extracted reflected source, hashes, attempts,
-and status. The validated/compiled result remains canonical at
+rule deltas, attempts, and errors. Code artifacts retain the diagnosis request,
+raw and parsed conclusion, Java-revision request/raw response, selected parent
+source, extracted reflected source, hashes, attempts, and status. The
+validated/compiled result remains canonical at
 `phenotype/CandidateAgent.java`.
 
 The standalone inspection runs all three operators independently from one fixed
@@ -124,4 +131,5 @@ Worker Rush subject. Its expected scopes are `strategy_prompt`,
 - Generator and Evaluation never change prompt genes or pre-generation Java.
 - Match Commentator/Coach exclude Java and generation prompts.
 - Prompt Reviewer excludes raw game logs and fixed-scaffold behavior.
-- Code receives only strategy, parent Java, immutable contracts, and scaffold.
+- Code diagnosis receives only strategy, parent Java, immutable contracts, and
+  scaffold; Java revision additionally receives exactly that diagnosis.

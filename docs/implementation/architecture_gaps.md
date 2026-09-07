@@ -12,8 +12,9 @@ All previously tracked candidate, crossover, mutation, evaluation, scoring,
 artifact, runtime, prompt, and legacy-cleanup gaps are closed by the current
 source and contract tests. Prompt Reflection scopes Reviewer source to the
 editable strategy region and uses deterministic reusable-rule deltas. Code
-Reflection directly revises parent Java and bypasses final generation while
-preserving both prompt genes. These are active contracts rather than open gaps.
+Reflection persists a structured diagnosis, revises parent Java from that
+conclusion, and bypasses final generation while preserving both prompt genes.
+These are active contracts rather than open gaps.
 Historical gap rows remain available in Git history.
 
 ## Gap update rule

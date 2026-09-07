@@ -121,9 +121,9 @@ aos_minimum_probability: 0.10
 
 Strategy/Prompt/Code probabilities must sum to 1.0; they are fixed in `static`
 and initial in either AOS mode. Prompt Reflection rewrites reusable generation
-rules; Code Reflection directly revises selected parent Java. Every YAML creates fresh population, RNG,
-operator controller/AOS state, archives, IDs, and run directory; only a
-compatible LLM process may be reused.
+rules; Code Reflection first diagnoses and then directly revises selected parent
+Java. Every YAML creates fresh population, RNG, operator controller/AOS state,
+archives, IDs, and run directory; only a compatible LLM process may be reused.
 
 Historical configs without `prompt_reflection_probability` are migrated on
 load: the old `code_reflection_probability` becomes Prompt Reflection and the

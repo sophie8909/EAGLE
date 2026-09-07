@@ -281,6 +281,17 @@ def _write_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> Non
         (mutation_dir / "rewriter_response_raw.txt").write_text(
             str(rewrite.get("raw_response") or ""), encoding="utf-8"
         )
+    revision = mutation_record.get("revision")
+    if revision:
+        (mutation_dir / "revision_request.txt").write_text(
+            str(revision.get("request") or ""), encoding="utf-8"
+        )
+        (mutation_dir / "revision_response_raw.txt").write_text(
+            str(revision.get("raw_response") or ""), encoding="utf-8"
+        )
+    reflection_conclusion = mutation_record.get("reflection_conclusion")
+    if isinstance(reflection_conclusion, dict):
+        write_json(mutation_dir / "reflection_conclusion.json", reflection_conclusion)
     for prefix, rewrite in (("strategy_", mutation_record.get("strategy_rewrite")), ("code_", mutation_record.get("generation_rewrite"))):
         if isinstance(rewrite, dict):
             (mutation_dir / f"{prefix}rewriter_request.txt").write_text(
@@ -293,7 +304,7 @@ def _write_mutation_artifacts(candidate_dir: Path, mutation_record: dict) -> Non
 
 def _mutation_metadata_record(record: dict) -> dict:
     payload = dict(record)
-    for key in ("reflection", "rewrite", "strategy_rewrite", "generation_rewrite"):
+    for key in ("reflection", "rewrite", "revision", "strategy_rewrite", "generation_rewrite"):
         stage = payload.get(key)
         if isinstance(stage, dict):
             payload[key] = {
