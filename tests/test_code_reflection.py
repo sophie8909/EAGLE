@@ -218,6 +218,39 @@ class CodeReflectionTests(unittest.TestCase):
         self.assertEqual(child.metadata["mutation"]["revision_status"], "not_run")
         self.assertEqual(backend.requests, [])
 
+    def test_code_diagnosis_normalizes_structured_preservation_descriptions(self) -> None:
+        backend = ScriptedJavaBackend((PARENT_JAVA,))
+        reflector = ScriptedReflectionBackend((json.dumps({
+            "assessment": "code_faithfully_implements_strategy",
+            "diagnosis": [],
+            "behaviors_to_preserve": [{
+                "description": "Preserve continuous legal Worker production.",
+                "evidence": [{"method": "trainWorkers"}],
+            }],
+        }),))
+        candidate = Candidate(
+            id="child",
+            generation=1,
+            strategy_prompt="Worker Rush.",
+            generation_prompt="prompt gene",
+            inherited_java=PARENT_JAVA,
+            java_parent_id="parent",
+        )
+
+        child = CodeReflectionMutation(
+            config(), backend=backend, reflection_backend=reflector
+        ).mutate(candidate, context())
+
+        conclusion = child.metadata["mutation"]["reflection_conclusion"]
+        self.assertEqual(
+            conclusion["behaviors_to_preserve"],
+            ["Preserve continuous legal Worker production."],
+        )
+        self.assertIn(
+            "Preserve continuous legal Worker production.",
+            backend.requests[0],
+        )
+
     def test_direct_code_output_skips_final_generator(self) -> None:
         backend = ScriptedJavaBackend((RuntimeError("final Generator must not run"),))
         candidate = Candidate(
