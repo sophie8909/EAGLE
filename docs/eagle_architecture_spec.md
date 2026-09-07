@@ -1,9 +1,9 @@
 # EAGLE architecture specification
 
-Status: authoritative current contract, 2026-08-26.
+Status: authoritative current contract, 2026-09-04.
 
 This document describes executable EAGLE behavior. Historical NSGA-II,
-two-objective, ten-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
+two-objective, seven-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
 contracts are intentionally absent; Git history is the archive for those designs.
 
 ## 1. System boundary
@@ -32,7 +32,7 @@ gene or the persisted pre-generation Java input.
 
 First-class candidate state includes identity, generation, direct parents,
 operator, mutation type, component-source IDs, generated Java, validation and
-compile status, seven-case fitness, diagnostics, failure state, artifact
+compile status, ten-case fitness, diagnostics, failure state, artifact
 references, and timing.
 
 New candidate identities are generation-qualified as
@@ -45,15 +45,25 @@ while loading or resuming a run.
 In the default `generated_phenotype` mode, generation zero creates one candidate
 per configured seed policy file, pairs each policy with the checked-in callable
 no-op Java seed without calling the Generator, and does not replicate a seed to
-fill `population_size`. In `inherited_genotype` mode, exactly one configured
-seed policy is copied to `population_size`; every copy receives the same no-op
-Java component and independently calls the Generator before evaluation. Each later
-generation produces a fixed-size offspring population and performs:
+fill `population_size`. In inherited `configured_seeds` mode, exactly one
+configured seed policy is copied to `population_size`; every copy receives the
+same Java component and independently calls the Generator before evaluation.
+
+The explicit `initial_population_mode: llm_generated_policies` instead keeps
+that one configured policy as the first candidate and independently asks the
+LLM for one concrete RTS policy for every remaining population slot. Generation
+zero persists those policy-only calls, but all candidates inherit and directly
+evaluate the same configured Java seed without a Java Generator call. The
+tracked mixed initialization uses a Worker Rush policy and Worker Rush Java, so
+the generated strategies diversify only the policy gene at this boundary; they
+are not instances of the MicroRTS `RandomAI` opponent.
+
+Each later generation produces a fixed-size offspring population and performs:
 
 1. seeded lexicase parent selection;
 2. optional uniform component crossover (two prompt components, plus an
    independent Java-component choice in `inherited_genotype` mode);
-3. optional Strategy, Code, or Balance mutation;
+3. optional Strategy, Code, or Prompt Compliance mutation;
 4. final complete-file Java generation;
 5. validation, compilation, integration, and evaluation;
 6. optional AOS reward collection;
@@ -63,14 +73,17 @@ generation produces a fixed-size offspring population and performs:
 
 The fixed-size survivor population is selected from the joint evaluated parent
 and offspring pool. Parent and offspring candidates compete under the same
-seven cases; aggregate Game Performance and generation age do not break ties.
+ten cases; aggregate Game Performance and generation age do not break ties.
 
 ## 4. Reproducibility
 
 `random_seed` controls EA randomness, lexicase case ordering, operator choice,
 crossover choices, and deterministic reflection sampling. Match repetitions are
 identified by `round_index`; EAGLE does not claim seeded MicroRTS match
-reproducibility and does not pass a match-seed JVM property.
+reproducibility and does not pass a match-seed JVM property. It also does not
+make stochastic LLM sampling deterministic; initial policy generation is
+reconstructable from request/response artifacts rather than from `random_seed`
+alone. Its role-specific temperature controls sampling diversity.
 
 ## 5. Crossover and lineage
 
@@ -84,17 +97,34 @@ component values are equal. Default-mode lineage has no Java parent.
 
 The reflection operator is chosen by exactly one configured mode:
 
-- `static`: fixed Strategy/Code/Balance probabilities and no reward work;
-- `aos_opponent`: execution-first seven-case rank-change reward;
-- `aos_head2head`: configured parent-A versus offspring match matrix reward.
+- `static`: fixed Strategy/Code/Prompt Compliance probabilities and no reward work;
+- `aos_opponent`: execution-first ten-case rank-change reward against the
+  recorded mutation-evidence parent;
+- `aos_head2head`: configured mutation-evidence-parent versus offspring match
+  matrix reward.
 
 Both adaptive modes use the same alpha-`0.20` EMA and probability-matching
 updater with the configured minimum probability floor. AOS never changes the
-seven-case lexicase fitness.
+ten-case lexicase fitness.
+
+The adaptive comparison parent is the same evaluated candidate used to build
+the mutation context: the policy-component parent for Strategy mutation; the
+generation-prompt parent for Code/Prompt Compliance mutation in default mode;
+and the Java-component parent for Code/Prompt Compliance mutation in inherited mode. Component
+provenance, rather than direct-parent position or prompt-text equality, selects
+this parent. Both reward providers consume the resulting
+`comparison_parent_id`.
 
 Strategy mutation performs Match Commentator sampling, Coach reflection, and a
 Strategy Prompt rewrite before final Java generation. It changes only
 `strategy_prompt`.
+Initial policy generation, Match Commentator, Coach, the library Strategy
+Reflector/Rewriter path, Prompt Compliance Reflection/Strategy Rewrite, and Strategy Alignment all
+receive one immutable strategy-level MicroRTS gameplay contract. The contract
+defines the complete entity set, production graph, legal actions, and observable
+state. It permits arbitrary strategy types expressible in that world, while
+requiring every policy condition and response to be executable. This is fixed
+domain context, not match evidence.
 Commentator and Coach transport, parsing, and semantic validation use one
 bounded attempt budget. Each attempt retains UTC boundaries and one run timing
 event without duplicating candidate-owned prompt/response evidence. A validated
@@ -104,19 +134,48 @@ echo remains raw/parsed evidence only.
 Code mutation in default mode compares the source parent's policy with its Java
 phenotype. In inherited mode it compares the child's independently selected
 policy with its inherited Java component and uses diagnostics from that Java
-parent only when they describe the selected source. It then performs Code
-Generation Prompt Rewrite before final Java generation and changes only
-`generation_prompt`; game logs are not Code Reflection evidence. The Code
-Prompt Rewriter returns exactly `{"rewritten_prompt":"..."}` so the transport's
-JSON-object mode and the parser enforce the same contract.
+parent only when they describe the selected source. The Reviewer receives only
+the Java between the strategy markers, plus the immutable action/API guide; it
+cannot treat fixed scaffold fields or helpers as candidate behavior. It then
+performs Code Generation Prompt Rewrite before final Java generation and changes
+only `generation_prompt`; game logs are not Code Reflection evidence.
 
-Balance mutation receives only a bounded aggregate W/D/L table partitioned by
-opponent, map, and candidate side. It receives no prompt text, Java, compiler
-diagnostics, per-match result, or raw trace. Its reflector identifies weak
-opponent/map/side cells, then bounded Strategy and Code Prompt Rewriters
-atomically replace both `strategy_prompt` and `generation_prompt`. If either
-rewrite fails, both parent prompt genes remain unchanged. Balance mutation never
-edits Java directly.
+The Code Prompt Rewriter returns exactly one structured reusable-rule delta:
+`remove_rule_ids` plus one compact policy-agnostic `add_rules` entry; at most one
+existing rule may be removed in the same mutation. Runtime validates categories,
+length, and the ten-rule cap, rejects concrete strategy/unit/Java instructions,
+derives stable IDs, and deterministically renders a bounded canonical generation
+prompt. A rejected semantic attempt is retried with its validator error and is
+never partially applied. Legacy free-form generation prompts remain loadable
+but are not copied into the new rule set on their next successful Code
+Reflection.
+
+Prompt Compliance mutation receives the active `strategy_prompt` and
+`generation_prompt`, their canonical reusable-rule view, the immutable gameplay
+contract, and the immutable action/API guide. It receives no Java, compiler
+diagnostics, match result, aggregate W/D/L table, fitness value, or raw trace.
+Its reflector identifies rules that use nonexistent game concepts,
+unobservable conditions, illegal actions/production, policy-specific decoder
+instructions, unsupported APIs, or immutable-scaffold edits. Each source may
+be reported clean; only a prompt gene with reported issues is sent to its
+bounded Rewriter. When both genes need repair, their replacements remain one
+atomic mutation. The Strategy Prompt Rewriter preserves the intended strategy
+type. The Code Prompt Rewriter uses the same
+structured reusable-rule delta and canonical renderer as Code Reflection; it
+cannot persist an unchecked whole generation prompt. If a requested rewrite
+fails, every parent prompt gene remains unchanged. A clean audit records
+`already_compliant` and performs no rewrite. Prompt Compliance
+mutation never edits Java directly. At a rewrite boundary, a historically
+malformed marked generation prompt retains only rule lines that individually
+pass the current validator; rejected lines are discarded before the validated
+delta is applied. A legacy free-form prompt retains no rules.
+
+The canonical config key is
+`prompt_compliance_reflection_probability`, the operator ID is
+`prompt_compliance_reflection`, and mutation type is `prompt_compliance`.
+Reflection-operator state uses `eagle-reflection-operator-v4`; persisted state
+containing the removed `balance_reflection` operator cannot resume under the
+new semantics.
 
 All executable prompt bodies live as individual UTF-8 text files under
 `prompts/`. Python and YAML may reference, render, bound, transport, and validate
@@ -131,11 +190,14 @@ pre-generation components to produce the child's new Java.
 
 In `generated_phenotype` mode, generation 0 remains the decoder exception: the
 configured policy uses `initial_java_seed_path` as a fixed phenotype without a
-Generator call. In `inherited_genotype` mode, `initial_java_seed_path` is instead
-the third pre-generation component for every replicated seed candidate; each
-candidate makes an independent bounded Generator call and persists normal
-request, raw response, attempt, validation, and compilation evidence. The
-checked-in seed exposes callable helpers while its strategy issues no actions.
+Generator call. In inherited `configured_seeds` mode,
+`initial_java_seed_path` is the third pre-generation component for every
+replicated seed candidate; each candidate makes an independent bounded Generator
+call and persists normal request, raw response, attempt, validation, and
+compilation evidence. In inherited `llm_generated_policies` mode it is both the
+shared third component and the unchanged generation-zero phenotype; policy-only
+LLM calls fill the remaining population slots, and Java decoding starts with
+generation 1.
 
 Final generation always consumes the two prompt genes plus the fixed checked-in
 Java scaffold/API constraints and returns exactly one complete Java source file.
@@ -165,9 +227,10 @@ lineage, AOS state, selection case, or strategy intent and is distinct from Code
 Reflection. Each actual request and source owns its hash and evidence. The first
 validation+compilation success is the sole canonical phenotype. If all attempts
 fail, the final attempt owns the candidate failure classification and remains
-generation evidence rather than a canonical phenotype. Fixed-seed generation
-zero loads once; inherited-genotype generation zero uses the configured bounded
-attempt budget independently for every replicated candidate.
+generation evidence rather than a canonical phenotype. Fixed-Java generation
+zero loads once per candidate without a Java LLM attempt; inherited
+`configured_seeds` generation zero uses the configured bounded attempt budget
+independently for every replicated candidate.
 
 Validation requires:
 
@@ -219,16 +282,23 @@ matches. Integration failure does not re-enter the decoder.
 
 The fixed search roster is:
 
-1. LightRush
-2. HeavyRush
-3. WorkerRush
-4. AllInBot
-5. Mayari
-6. COAC
-7. TMA
+1. PassiveAI
+2. RandomAI
+3. RandomBiasedAI
+4. LightRush
+5. HeavyRush
+6. WorkerRush
+7. AllInBot
+8. Mayari
+9. COAC
+10. TMA
 
-Every runnable candidate uses the same source and compiled classes for 126
-matches: seven opponents × three maps × three rounds × two player sides.
+Every runnable candidate uses the same source and compiled classes for 180
+matches: ten opponents × three maps × three rounds × two player sides. Each
+`evaluation.maps` entry may define its own positive `tick_limit`; string-only
+map entries inherit the top-level `tick_limit` for backward compatibility. The
+resolved per-map cap is carried by the match matrix and is used unchanged by
+normal evaluation, AOS head-to-head evaluation, and final testing.
 
 AllInBot preflight verifies the pinned upstream class/JAR before execution.
 Its separately compiled reflection adapter is outside the candidate phenotype
@@ -238,10 +308,11 @@ its observed raw evidence but has canonical opponent-fault fields and a neutral
 zero-score draw for candidate scoring; it is neither a candidate win nor a
 candidate runtime failure.
 
-Fitness is a maximized mapping with exactly the seven opponent IDs. Failed or
+Fitness is a maximized mapping with exactly the ten opponent IDs. Failed or
 incomplete candidates receive `-1000.0` for every case. Aggregate Game
-Performance is reporting-only, using weights `1` for the three rush opponents
-and `2` for AllInBot, Mayari, COAC, and TMA.
+Performance is reporting-only, using weights `0.5` for PassiveAI, RandomAI, and
+RandomBiasedAI, `1` for the three rush opponents, and `2` for AllInBot, Mayari,
+COAC, and TMA.
 
 Code Quality is a diagnostic and mutation-evidence signal, not a selection
 objective. Successful Code Quality is:
@@ -293,6 +364,22 @@ artifact references for every population member with a non-empty
 `genotype/inherited_java.java`, `phenotype/CandidateAgent.java`, and
 specialized generation, validation, compilation, integration, evaluation,
 mutation, lineage, and timing artifacts beside it.
+
+Derived analysis uses each generation file's selected population as that
+generation's survivor snapshot. Per-agent, per-opponent, and per-match analysis
+rows therefore use the snapshot generation on plot axes; the candidate's own
+creation generation is retained separately as `birth_generation`. A survivor
+appearing in multiple population snapshots appears once at each corresponding
+generation without duplicating its canonical candidate artifact.
+
+An LLM-generated generation-zero policy additionally owns
+`initialization/policy_generation/`, containing one directory per attempt with
+the exact request, raw response, result, and timing, plus a compact result that
+references the canonical genotype policy. Raw output is written before parsing;
+the run timing stream has one `initial_policy_generation` event per request. Its
+request includes the same immutable gameplay contract used by strategy mutation,
+so diversity sampling is not limited to Worker Rush but remains inside actual
+MicroRTS mechanics.
 
 Strategy Reflection candidates additionally retain under
 `mutation/strategy_reflection/` the exact parent strategy

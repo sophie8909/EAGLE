@@ -1,0 +1,8 @@
+schema_version: eagle-reflection-inspection-v2
+name: worker_rush_prompt_compliance_from_reflection_children
+experiment_config: configs/reflection_inspections/0903_worker_rush/worker_rush_base.yaml
+output_root: runs/reflection_inspections
+trials_per_reflection: 3
+strategy_mutation_intent: REFINE
+reflection_order: [strategy, code, prompt_compliance]
+prompt_compliance_parent_mode: successful_strategy_and_code_children

@@ -2,6 +2,9 @@ Evaluate how well the generated MicroRTS Java implements the intended strategy.
 Return only one JSON object with exactly:
 {"score": <number from 0 to 10>, "reason": "<concise evidence-based reason>"}
 
+Interpret the intended strategy only through this complete gameplay contract:
+$gameplay_contract
+
 Strategy prompt:
 $strategy_prompt
 

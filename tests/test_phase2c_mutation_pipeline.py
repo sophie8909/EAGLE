@@ -12,6 +12,16 @@ from eagle.rewrite import PromptRewriteMutation
 from generation.backend import GenerationBackend, MockGenerationBackend
 
 
+def code_rule_delta(instruction: str) -> str:
+    return json.dumps({
+        "remove_rule_ids": [],
+        "add_rules": [{
+            "category": "requirement_coverage",
+            "instruction": instruction,
+        }],
+    })
+
+
 class ScriptedMutationBackend:
     def __init__(self, responses):
         self.responses = iter(responses)
@@ -67,7 +77,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
     def test_mutation_artifacts_survive_final_generation_failure(self):
         backend = ScriptedMutationBackend((
             self._code_reflection(),
-            json.dumps({"rewritten_prompt": "rewritten prompt"}),
+            code_rule_delta("Preserve every stated prerequisite in reachable behavior."),
         ))
         config = ExperimentConfig.from_mapping(
             {"mutation_max_attempts": 1}
@@ -104,9 +114,9 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
     def _assert_complete_pipeline(self, *, mutation_type, rewritten, untouched):
         reflection = self._strategy_reflection() if mutation_type == "strategy" else self._code_reflection()
         rewrite_response = (
-            json.dumps({"rewritten_prompt": rewritten})
+            code_rule_delta(rewritten)
             if mutation_type == "code"
-            else rewritten
+            else json.dumps({"revised_strategy_prompt": rewritten})
         )
         backend = ScriptedMutationBackend((reflection, rewrite_response))
         config = ExperimentConfig.from_mapping(
@@ -133,7 +143,7 @@ class Phase2CMutationPipelineTests(unittest.TestCase):
                 self.assertEqual(mutated.generation_prompt, untouched)
             else:
                 self.assertEqual(mutated.strategy_prompt, untouched)
-                self.assertEqual(mutated.generation_prompt, rewritten)
+                self.assertIn(rewritten, mutated.generation_prompt)
 
             evaluation = evaluate_candidate(
                 mutated,

@@ -24,7 +24,7 @@ runs/<run_id>/
 └── final_test/
 ```
 
-`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda` and `candidate_java_mode`, reflection mode/probabilities, and evaluation matrix. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
+`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda` and `candidate_java_mode`, reflection mode/probabilities, and evaluation matrix. Every resolved `evaluation.maps` entry is a `{path, tick_limit}` mapping, even when the source config used a string map path and inherited the top-level fallback. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
 
 `manifest.json` stays small: schema/run identity, timestamps, status, experiment/model/reflection identity, and `latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`; interrupted/failed records include resumability and their interruption/failure metadata without replacing the last atomic generation. It never embeds the config. `summary.json` stores completion/reporting fields, final population IDs, and a reference to the best runnable candidate in the final population; the reference is `null` when every final candidate failed. It does not copy candidate snapshots.
 
@@ -35,7 +35,7 @@ runs/<run_id>/
 `generations/generation_<nnnn>.json` contains:
 
 - generation number;
-- population entries with candidate ID, status, and seven-case fitness vector;
+- population entries with candidate ID, status, and ten-case fitness vector;
 - best/reporting candidate ID;
 - aggregate objective, opponent, diversity, and timing-derived metrics;
 - one canonical reflection-operator/AOS generation record.
@@ -54,11 +54,18 @@ known, they also reference the parent strategy prompt and the candidate's
 Strategy Reflection metadata. Full strategy text is not duplicated in this
 index.
 
-The AOS record contains `mode`, probabilities before/after, nullable
-Strategy/Code/Balance rewards, `reward_source`, operator state, and transitions.
+The `eagle-reflection-operator-v4` AOS record contains `mode`, probabilities before/after, nullable
+Strategy/Code/Prompt Compliance rewards, `reward_source`, operator state, and transitions.
 Static mode records `reward_source: static`, null rewards, and unchanged
 probabilities. Resume restores adaptive state from the latest generation file.
 There is no `generation_metrics.jsonl` or `final_population.json` in new runs.
+
+Derived `eagle-analysis-v2` agent, opponent-win-rate, and single-match rows are
+expanded from these selected-population snapshots. Their `generation` column is
+the survivor snapshot generation used on plot axes, while `birth_generation`
+retains the candidate's creation generation. A retained parent is consequently
+represented in every generation where it remains selected, without copying its
+canonical candidate state.
 
 ## Candidate snapshot and evidence
 
@@ -72,13 +79,21 @@ candidates/<candidate_id>/
 │   ├── strategy_signature.json
 │   ├── code_generation_prompt.txt
 │   └── inherited_java.java             # inherited_genotype mode only
+├── initialization/
+│   └── policy_generation/               # LLM-generated seed policies only
+│       ├── result.json
+│       └── attempts/attempt_<nnn>/
+│           ├── request.txt
+│           ├── response_raw.txt
+│           ├── result.json
+│           └── timing.json
 ├── phenotype/                         # compilation success only
 │   └── CandidateAgent.java
 ├── crossover/provenance.json
 ├── mutation/
 │   ├── strategy_reflection/
 │   ├── code_reflection/
-│   └── balance_reflection/
+│   └── prompt_compliance_reflection/
 ├── aos/
 ├── generation/
 │   ├── request.txt
@@ -113,7 +128,8 @@ candidates/<candidate_id>/
 
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, fitness vector, aggregate Game Performance, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
 
-For every bounded LLM decode, including inherited-mode generation zero, every
+For every bounded Java LLM decode, including inherited `configured_seeds`
+generation zero, every
 attempt owns its actual post-truncation
 request and hash, raw response, extracted/normalized source, validation,
 compilation, and timing. `request_kind` distinguishes `initial_decode`,
@@ -133,8 +149,9 @@ reference, and the projected request SHA-256. Attempt class workspaces are trans
 candidate-isolated; only promoted canonical classes remain for Integration and
 matches. A partial persisted attempt is audit-only and a rerun refuses to
 overwrite it; resume starts from the last atomic generation boundary rather than
-continuing a half-decoded candidate. Default fixed-seed generation zero has no
-`generation/attempts/` LLM evidence.
+continuing a half-decoded candidate. Default fixed-seed and inherited
+`llm_generated_policies` generation zero have no `generation/attempts/` Java LLM
+evidence.
 
 `extracted_candidate.java` is the normalized text extracted from the model's
 complete-file response and therefore preserves model-authored fixed-region
@@ -148,7 +165,7 @@ source references all use `normalized_candidate.java`.
 For default-mode generation-zero candidates, `genotype/policy_prompt.txt`
 retains the configured seed policy and `generation/result.json` records
 operation `initial_java_seed`, no attempts, and checked-in source provenance.
-Request/raw-response files are empty. In `inherited_genotype` mode,
+Request/raw-response files are empty. In inherited `configured_seeds` mode,
 `genotype/inherited_java.java` retains the exact pre-generation no-op Java input
 for each replicated seed candidate; each candidate then owns ordinary bounded
 generation attempts and a separately generated phenotype. Later children use
@@ -156,18 +173,40 @@ the same file for the selected parent Java component, with `java_parent_id` in
 candidate/lineage/crossover provenance. Full inherited Java is never embedded
 in candidate or generation JSON.
 
+For `llm_generated_policies`, the first candidate's policy comes from the
+configured seed file and the remaining candidates own
+`initialization/policy_generation/`. Each attempt persists its exact rendered
+request before transport (including the immutable MicroRTS gameplay contract),
+raw response before parsing, semantic result, and UTC
+timing. Attempt results also retain backend/model/endpoint identity and
+request/response hashes. The compact result references
+`genotype/policy_prompt.txt` rather than
+duplicating the accepted policy text. `candidate.json` identifies the policy as
+configured or LLM-generated and references the initialization result. Failed or
+interrupted attempts remain evidence even when generation zero is not committed.
+
 When the policy prompt is empty, `strategy_alignment/result.json` records
 `status: not_applicable`, a null score, and no attempts; its request/raw files
 are empty. This is distinct from an Alignment blocked by an earlier evaluation
 failure.
 
-Balance Reflection evidence is stored under `mutation/balance_reflection/`.
-Its `reflection_context.json` is only the bounded opponent/map/side W/D/L
-table; the directory retains the reflection request/raw response and separately
-named strategy/code rewrite request/raw-response artifacts. Metadata records
-both rewrite statuses without embedding raw response bodies. A failed reflector
-or either failed rewrite retains completed evidence and leaves both prompt genes
-unchanged.
+Prompt Compliance Reflection evidence is stored under
+`mutation/prompt_compliance_reflection/`. Its exact reflector request contains
+the two source prompts, canonical reusable-rule view, immutable gameplay
+contract, and immutable action/API guide. Its `reflection_context.json`
+references the separately stored source-prompt artifacts, retains the reusable
+rules and contract resource names, and lists the excluded Java, match, compiler,
+fitness, and W/D/L evidence classes. The directory also retains the reflection
+request/raw response and separately named strategy/code rewrite
+request/raw-response artifacts for each requested rewrite. Metadata records
+`requested_rewrite_fields`, `compliance_status`, and both optional rewrite statuses without
+embedding raw response bodies. The code rewrite raw response is a
+`remove_rule_ids`/`add_rules` delta, while its `rewritten_prompt` metadata field
+is the deterministically rendered canonical generation prompt; its request also
+contains both immutable contracts. A failed
+reflector or requested rewrite retains completed evidence and leaves both
+prompt genes unchanged. A clean audit has no rewrite artifacts and records
+`compliance_status: already_compliant`.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated
@@ -180,17 +219,40 @@ Raw LLM output is persisted before parsing. Mutation retains reflection/rewrite
 request, raw response, UTC-bounded attempts, status, and failure evidence even
 when later generation fails. Strategy Coach parsed output preserves the model's
 parent-policy echo, while validated `coach_result.json` takes the parent policy
-from the authoritative input artifact. Mutation-role run timing references the
-candidate-owned evidence without duplicating its prompt/response under
-`llm_logs/`. Adaptively credited offspring retain `aos/reward.json`;
-head-to-head match evidence remains below `aos/head_to_head/`.
+from the authoritative input artifact. The base Rewrite request remains in
+`rewriter_request.txt` (or its Prompt-Compliance-prefixed equivalent), while each bounded
+Rewrite attempt also retains the exact transported request and raw response as
+`rewriter_attempt_<NNN>_request.txt` and
+`rewriter_attempt_<NNN>_response_raw.txt`. Prompt Compliance prefixes these files with
+`strategy_` or `code_`. A retry request includes the prior deterministic
+validation error; raw invalid output is never rewritten in place.
+Mutation-role run timing references the candidate-owned evidence without
+duplicating its prompt/response under `llm_logs/`. Adaptively credited offspring
+retain `aos/reward.json`; its
+`comparison_parent_id` resolves the evaluated mutation-evidence parent through
+component provenance. Head-to-head match evidence remains below
+`aos/head_to_head/`.
 
 In default mode Code Reflection metadata records `reviewed_phenotype_artifact`
 as a run-relative reference to the evaluated source candidate's canonical Java
 phenotype. In inherited mode it instead records `java_parent_id`,
 `reviewed_java_input: inherited_java`, and the child's canonical
 `reviewed_inherited_java_artifact`; that source is also the explicit Java input
-to the Generator. Neither path restores an implicit `previous_code` field.
+to the Generator. The persisted Reviewer request contains only that source's
+editable strategy region plus the immutable API guide, never fixed scaffold
+source. The Code Rewriter raw response is a `remove_rule_ids`/`add_rules` delta;
+its `rewritten_prompt` field is the deterministic canonical rule rendering that
+becomes `genotype/code_generation_prompt.txt`. Neither path restores an
+implicit `previous_code` field.
+
+Standalone reflection inspections live below `runs/reflection_inspections/`
+and are not `eagle-run-v2` search runs. Their optional chained Prompt
+Compliance mode retains the independent Strategy/Code trial artifacts, runs
+Compliance only for successfully changed children, and records each source as
+`source_reflection_type`, `source_trial`, and `source_trial_artifact` beside
+matching input/output genotype hashes. Per-parent Compliance contexts live
+under `inputs/prompt_compliance/from_<type>_trial_<NN>/`; a run summary reports
+whether both Strategy and Code supplied at least one successful child.
 
 ## Match ownership
 
@@ -211,9 +273,12 @@ matches/<match_id>/
 ```
 
 Every normal-evaluation `result.json` and `match_metadata.json` records a
-non-null canonical `opponent_id`. The 126 match directories must reconstruct
-exactly the seven configured case IDs with 18 matches per opponent, without
-mapping Java class names back to fitness cases.
+non-null canonical `opponent_id`. The 180 match directories must reconstruct
+exactly the ten configured case IDs with 18 matches per opponent, without
+mapping Java class names back to fitness cases. Each `result.json` `max_cycles`
+and `match_metadata.json` `evaluation_configuration.tick_limit` must equal the
+resolved cap of the associated map. Final-test summary map entries likewise
+retain `tick_limit` beside map ID and path.
 
 Compact mode removes transient raw replay/round-state inputs after durable telemetry/trace creation. `raw_result.json` is the unnormalized Java-runner payload and therefore is not a duplicate. New writers do not emit `match_result.json`.
 

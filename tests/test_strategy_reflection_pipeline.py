@@ -154,10 +154,18 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertEqual(selection["actual_sample_size"], 5)
             commentator_prompts = [prompt for prompt in backend.prompts if "ROLE: match_commentator" in prompt]
             self.assertEqual(len(commentator_prompts), 5)
+            self.assertTrue(
+                all(
+                    "IMMUTABLE MICRORTS GAMEPLAY CONTRACT" in prompt
+                    for prompt in commentator_prompts
+                )
+            )
             self.assertEqual(len(selection["selected_match_ids"]), 5)
             self.assertEqual(len({item for item in selection["selected_match_ids"]}), 5)
             self.assertTrue(all(Path(row["match_trace_path"]).exists() for row in rows))
             coach_prompt = next(prompt for prompt in backend.prompts if "ROLE: coach" in prompt)
+            self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", coach_prompt)
+            self.assertIn("genuinely different strategy type", coach_prompt)
             self.assertIn('"global_evaluation_summary"', coach_prompt)
             self.assertIn('"total_matches": 5', coach_prompt)
             self.assertNotIn("raw_game_log:", coach_prompt)
@@ -165,7 +173,11 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
 
     def test_strategy_reflection_persists_exact_observation_flow_without_extra_calls(self) -> None:
         parent_strategy = "Parent policy.\nKeep this exact trailing space.  "
-        raw_child_strategy = "Revised policy.  \n\n\nAttack conditionally.   "
+        raw_child_strategy = (
+            "If no higher-priority legal action applies, leave each idle friendly Worker idle.  "
+            "\n\n\nIf a friendly Base is idle, the stockpile is at least 1, and a free adjacent "
+            "cell exists, have that Base train a Worker into that cell.   "
+        )
 
         class ExactBackend:
             def __init__(self) -> None:
@@ -305,6 +317,14 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
                 coach_input["render_variables"]["parent_strategy_prompt"],
                 json.dumps(parent_strategy, ensure_ascii=False),
             )
+            self.assertIn(
+                "IMMUTABLE MICRORTS GAMEPLAY CONTRACT",
+                coach_input["render_variables"]["gameplay_contract"],
+            )
+            self.assertEqual(
+                coach_input["semantic_payload"]["gameplay_contract"],
+                coach_input["render_variables"]["gameplay_contract"],
+            )
             self.assertEqual(
                 (reflection_dir / "coach_prompt.txt").read_text(encoding="utf-8"),
                 next(item for item in backend.prompts if "ROLE: coach" in item),
@@ -317,7 +337,12 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             coach_result = json.loads((reflection_dir / "coach_result.json").read_text(encoding="utf-8"))
             self.assertEqual(coach_result["parent_strategy_prompt"], parent_strategy)
             self.assertEqual(result.coach.parent_strategy_prompt, parent_strategy)
-            self.assertEqual(result.candidate.strategy_prompt, "Revised policy.\n\nAttack conditionally.")
+            self.assertEqual(
+                result.candidate.strategy_prompt,
+                "If no higher-priority legal action applies, leave each idle friendly Worker idle."
+                "\n\nIf a friendly Base is idle, the stockpile is at least 1, and a free adjacent "
+                "cell exists, have that Base train a Worker into that cell.",
+            )
             self.assertEqual(
                 (reflection_dir / "child_strategy_prompt.txt").read_text(encoding="utf-8"),
                 result.candidate.strategy_prompt,
@@ -436,7 +461,7 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertIn("commentator_diagnoses_and_evaluation_metadata", coach_request)
             self.assertIn("stable opening", coach_request)
             self.assertNotIn("ROLE: manager", "\n".join(mutation.backend.prompts))
-            self.assertIn("If the first combat group is ready", result.candidate.strategy_prompt)
+            self.assertIn("nearest current enemy Base", result.candidate.strategy_prompt)
 
     def test_repeated_siblings_can_reuse_the_same_parent_trace(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -587,6 +612,71 @@ class StrategyReflectionPipelineTests(unittest.TestCase):
             self.assertEqual(first_attempt["status"], "error")
             self.assertIn("public void", first_attempt["response"])
             self.assertEqual(second_attempt["status"], "success")
+            second_request = json.loads(
+                (reflection_dir / "coach_request_attempt_002.json").read_text(encoding="utf-8")
+            )
+            self.assertIn("coach output must not contain Java", second_request["prompt"])
+            self.assertEqual(second_attempt["prompt"], second_request["prompt"])
+
+    def test_gameplay_invalid_coach_policy_uses_short_contract_rewriter(self) -> None:
+        class ContractRewriteBackend:
+            def __init__(self) -> None:
+                self.mock = MockRoleBackend()
+                self.coach_attempts = 0
+                self.contract_rewrite_attempts = 0
+
+            def generate(self, prompt: str) -> str:
+                if "ROLE: strategy_contract_rewriter" in prompt:
+                    self.contract_rewrite_attempts += 1
+                if "ROLE: coach" in prompt:
+                    self.coach_attempts += 1
+                    payload = json.loads(self.mock.generate(prompt))
+                    payload["new_strategy_prompt"] = (
+                        "Move every Worker into enemy territory."
+                    )
+                    return json.dumps(payload)
+                return self.mock.generate(prompt)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            states = root / "states"
+            write_mock_round_state(states, tick=0, p0_resource=10, p1_resource=10)
+            log_path = root / "match_trace.jsonl.gz"
+            _write_trace(
+                log_path,
+                metadata={"match_id": "match-contract"},
+                round_state_dir=states,
+                raw_result={},
+                tick_limit=0,
+            )
+            backend = ContractRewriteBackend()
+            result = StrategyReflectionMutation(backend, max_attempts=2).run(
+                Candidate(id="contract-rewrite", strategy_prompt="Defend, then attack."),
+                ReflectionContext(
+                    generation=1,
+                    index=0,
+                    candidate_id="parent",
+                    per_match_results=({
+                        "match_id": "match-contract",
+                        "match_trace_path": str(log_path),
+                    },),
+                ),
+                artifact_dir=root / "child",
+            )
+
+            self.assertEqual(result.status, "success")
+            self.assertEqual(backend.coach_attempts, 1)
+            self.assertEqual(backend.contract_rewrite_attempts, 1)
+            self.assertNotIn("territory", result.candidate.strategy_prompt)
+            reflection_dir = root / "child" / "mutation" / "strategy_reflection"
+            rewrite_record = json.loads(
+                (reflection_dir / "strategy_contract_rewrite.json").read_text()
+            )
+            self.assertTrue(rewrite_record["applied"])
+            self.assertIn("enemy territory", rewrite_record["initial_validation_error"])
+            self.assertTrue(
+                (reflection_dir / "strategy_contract_rewriter_output.json").exists()
+            )
 
     def test_commentary_failure_preserves_trace_without_changing_candidate(self) -> None:
         class BadBackend:

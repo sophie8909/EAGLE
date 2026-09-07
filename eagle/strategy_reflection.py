@@ -1,8 +1,9 @@
 """Commentator-to-Coach Strategy Reflection pipeline.
 
 The Commentator diagnoses selected matches and the Coach directly converts
-those diagnoses plus canonical matchup metadata into a revised strategy.
-Java generation remains outside this module.
+those diagnoses plus canonical matchup metadata into a revised strategy. A
+short contract-rewrite stage repairs only a proposed policy that fails the
+deterministic MicroRTS contract. Java generation remains outside this module.
 """
 
 from __future__ import annotations
@@ -22,14 +23,16 @@ from evaluation.match_trace import iter_match_trace
 from .candidate import Candidate
 from .llm import LLMCallLogger, truncate_prompt
 from .mutation import ReflectionContext, parse_json_object_response, utc_now
+from .strategy_compliance import validate_strategy_prompt_contract
 from .opponent_cases import LEXICASE_CASES
-from .prompts import normalize_prompt, render_prompt
+from .prompts import load_prompt, normalize_prompt, render_prompt
 from .strategy_diversity import build_strategy_niche, normalize_strategy_signature
 
 
 CANONICAL_ROLES = ("match_commentator", "coach", "generator")
-ROLE_SCHEMA_VERSION = "strategy-reflection-v4"
-PROMPT_VERSION = "sports-team-v4"
+ROLE_SCHEMA_VERSION = "strategy-reflection-v5"
+PROMPT_VERSION = "sports-team-v6"
+MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
 
 STRATEGY_MUTATION_INTENT_DISTRIBUTION = (
     ("REFINE", 0.40),
@@ -113,6 +116,22 @@ class MockRoleBackend:
 
     def generate(self, prompt: str) -> str:
         self.prompts.append(prompt)
+        if "ROLE: strategy_contract_rewriter" in prompt:
+            return json.dumps({
+                "revised_strategy_prompt": (
+                    "If a friendly Worker is idle, carries no resource, and a reachable "
+                    "Resource exists, have that Worker harvest the nearest reachable Resource. "
+                    "If a friendly Worker is idle, carries a resource, and a friendly Base "
+                    "exists, have that Worker return it to the nearest friendly Base. If a "
+                    "friendly Base is idle, stockpile >= 1, and a free adjacent cell exists, "
+                    "have that Base train a Worker into that cell. If a friendly Worker is "
+                    "idle and an enemy Base exists, have that Worker target the nearest current "
+                    "enemy Base, move toward it, and attack when in range. If no enemy Base "
+                    "exists, a current enemy unit or building exists, and a friendly Worker is "
+                    "idle, have that Worker target the nearest current enemy unit or building, "
+                    "move toward it, and attack when in range."
+                ),
+            })
         if "ROLE: match_commentator" in prompt:
             match_id = _json_value(prompt, "match_id") or "match"
             return json.dumps({
@@ -131,7 +150,19 @@ class MockRoleBackend:
                 "strategy_changes": {"preserved": ["stable opening"], "removed_or_reduced": [], "added_or_strengthened": ["attack after the first combat group is ready"]},
                 "strategy_signature": {"opening": "worker_first", "economy": "balanced_worker", "production": ["worker", "light"], "attack_timing": "mid", "combat_style": "pressure", "expansion": "conditional", "defense": "reactive", "target_priority": "workers"},
                 "parent_strategy_prompt": parent,
-                "new_strategy_prompt": parent + "\nIf the first combat group is ready, attack before floating resources.",
+                "new_strategy_prompt": (
+                    "If a friendly Worker is idle, carries no resource, and a reachable "
+                    "Resource exists, have that Worker harvest the nearest reachable Resource. "
+                    "If a friendly Worker is idle, carries a resource, and a friendly Base "
+                    "exists, have that Worker return it to the nearest friendly Base. If a "
+                    "friendly Base is idle, stockpile >= 1, and a free adjacent cell exists, "
+                    "have that Base train a Worker into that cell. If a friendly Worker is "
+                    "idle and an enemy Base exists, have that Worker target the nearest current "
+                    "enemy Base, move toward it, and attack when in range. If no enemy Base "
+                    "exists, a current enemy unit or building exists, and a friendly Worker is "
+                    "idle, have that Worker target the nearest current enemy unit or building, "
+                    "move toward it, and attack when in range."
+                ),
             })
         return ""
 
@@ -278,6 +309,7 @@ class StrategyReflectionPipeline:
             _write_json(artifact_dir, "reflection/coach_input.json", {
                 "prompt_name": coach_prompt_name,
                 "render_variables": {
+                    "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
                     "parent_strategy_prompt": json.dumps(candidate.strategy_prompt, ensure_ascii=False),
                     "commentator_diagnoses_and_evaluation_metadata": json.dumps(
                         coach_payload,
@@ -286,6 +318,7 @@ class StrategyReflectionPipeline:
                     ),
                 },
                 "semantic_payload": {
+                    "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
                     "parent_strategy_prompt": candidate.strategy_prompt,
                     "commentator_diagnoses_and_evaluation_metadata": coach_payload,
                 },
@@ -300,7 +333,7 @@ class StrategyReflectionPipeline:
                 candidate,
                 artifact_dir,
                 extra=coach_extra,
-                validator=lambda raw: _validate_coach_response(
+                validator=lambda raw: _validate_coach_structure_response(
                     raw,
                     parent_strategy_prompt=candidate.strategy_prompt,
                 ),
@@ -308,12 +341,67 @@ class StrategyReflectionPipeline:
             _write_text(artifact_dir, "reflection/coach_raw.txt", coach_raw)
             coach_output, coach = validated_coach
             _write_json(artifact_dir, "reflection/coach_output.json", coach_output)
+            proposed_strategy = normalize_prompt(
+                coach.new_strategy_prompt,
+                max_chars=4000,
+                max_lines=80,
+            )
+            _write_text(
+                artifact_dir,
+                "reflection/coach_proposed_strategy_prompt.txt",
+                proposed_strategy,
+            )
+            contract_rewrite_applied = False
+            try:
+                validate_strategy_prompt_contract(proposed_strategy)
+                corrected_strategy = proposed_strategy
+                _write_json(artifact_dir, "reflection/strategy_contract_rewrite.json", {
+                    "applied": False,
+                    "initial_validation_error": None,
+                })
+            except ValueError as exc:
+                initial_validation_error = str(exc)
+                contract_request = render_prompt("strategy_contract_rewrite", {
+                    "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
+                    "proposed_strategy_prompt": proposed_strategy,
+                    "validation_error": initial_validation_error,
+                })
+                _write_text(
+                    artifact_dir,
+                    "reflection/strategy_contract_rewriter_prompt.txt",
+                    contract_request,
+                )
+                contract_raw, validated_contract = self._call_role(
+                    "strategy_contract_rewriter",
+                    contract_request,
+                    candidate,
+                    artifact_dir,
+                    extra=coach_extra,
+                    validator=_validate_strategy_contract_rewrite_response,
+                )
+                contract_output, corrected_strategy = validated_contract
+                contract_rewrite_applied = True
+                _write_text(
+                    artifact_dir,
+                    "reflection/strategy_contract_rewriter_raw.txt",
+                    contract_raw,
+                )
+                _write_json(
+                    artifact_dir,
+                    "reflection/strategy_contract_rewriter_output.json",
+                    contract_output,
+                )
+                _write_json(artifact_dir, "reflection/strategy_contract_rewrite.json", {
+                    "applied": True,
+                    "initial_validation_error": initial_validation_error,
+                })
+            coach = replace(coach, new_strategy_prompt=corrected_strategy)
             child_signature = normalize_strategy_signature(coach.strategy_signature)
             child_niche = build_strategy_niche(child_signature)
             niche_changed = parent_niche != "unknown" and child_niche != parent_niche
             child = replace(
                 candidate,
-                strategy_prompt=normalize_prompt(coach.new_strategy_prompt, max_chars=4000, max_lines=80),
+                strategy_prompt=coach.new_strategy_prompt,
                 strategy_signature=child_signature,
                 strategy_niche=child_niche,
                 mutation_intent=intent,
@@ -328,6 +416,7 @@ class StrategyReflectionPipeline:
                         "analyses": [item.to_dict() for item in analyses],
                         "coach_input": coach_payload,
                         "coach_result": coach.to_dict(),
+                        "contract_rewrite_applied": contract_rewrite_applied,
                         "mutation_intent": intent,
                         "parent_strategy_niche": parent_niche,
                         "child_strategy_niche": child_niche,
@@ -408,12 +497,34 @@ class StrategyReflectionPipeline:
         name = "request.json" if not suffix else f"request_{suffix}.json"
         _write_json(artifact_dir, f"commentary/{match_id}/{name}" if match_id else f"reflection/{role}_{name}", {**trace, "prompt": bounded})
         last_error = ""
+        last_response = ""
         for attempt in range(1, self.max_attempts + 1):
             started_at = utc_now()
             started = time.monotonic()
             raw = ""
+            attempt_prompt = (
+                bounded
+                if not last_error
+                else truncate_prompt(
+                    render_prompt("role_validation_retry", {
+                        "validation_error": last_error,
+                        "previous_response": last_response,
+                        "original_request": bounded,
+                    }),
+                    max_chars=self.max_prompt_chars,
+                )
+            )
+            attempt_request_name = f"request_attempt_{attempt:03d}.json"
+            _write_json(
+                artifact_dir,
+                f"commentary/{match_id}/{attempt_request_name}"
+                if match_id
+                else f"reflection/{role}_{attempt_request_name}",
+                {**trace, "attempt": attempt, "prompt": attempt_prompt},
+            )
             try:
-                raw = self.backend.generate(bounded)
+                raw = self.backend.generate(attempt_prompt)
+                last_response = raw
                 validated = validator(raw)
             except (OSError, RuntimeError, TypeError, ValueError) as exc:
                 last_error = str(exc) or type(exc).__name__
@@ -427,6 +538,7 @@ class StrategyReflectionPipeline:
                     "finished_at": finished_at,
                     "duration_seconds": duration_seconds,
                     "response": raw,
+                    "prompt": attempt_prompt,
                     "error": last_error,
                 }
                 attempt_name = f"response_attempt_{attempt:03d}.json"
@@ -453,6 +565,7 @@ class StrategyReflectionPipeline:
                 "finished_at": finished_at,
                 "duration_seconds": duration_seconds,
                 "response": raw,
+                "prompt": attempt_prompt,
             }
             response_name = "response.json" if not suffix else f"response_{suffix}.json"
             _write_json(artifact_dir, f"commentary/{match_id}/{response_name}" if match_id else f"reflection/{role}_{response_name}", envelope)
@@ -837,6 +950,7 @@ def cleanup_retired_match_traces(
 # Role prompt construction and response parsing -----------------------------
 def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: dict[str, Any], match_id: str, raw_log: list[dict[str, Any]]) -> str:
     return render_prompt("match_commentator", {
+        "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
         "match_id": json.dumps(match_id),
         "opponent": json.dumps(item.get("opponent_name") or item.get("opponent_id") or item.get("opponent") or "unknown"),
         "map": json.dumps(item.get("map_name") or item.get("map_id") or item.get("map") or "unknown"),
@@ -855,6 +969,7 @@ def _commentator_prompt(candidate: Candidate, context: ReflectionContext, item: 
 def _coach_prompt(parent_strategy: str, payload: dict[str, Any], mutation_intent: str) -> str:
     prompt_id = f"coach_{mutation_intent.lower()}"
     return render_prompt(prompt_id, {
+        "gameplay_contract": MICRORTS_GAMEPLAY_CONTRACT,
         "parent_strategy_prompt": json.dumps(parent_strategy, ensure_ascii=False),
         "commentator_diagnoses_and_evaluation_metadata": json.dumps(payload, ensure_ascii=False, sort_keys=True),
     })
@@ -968,13 +1083,31 @@ def _validate_commentary_response(raw: str, match_id: str) -> tuple[dict[str, ob
     return payload, _parse_commentary(payload, match_id)
 
 
-def _validate_coach_response(
+def _validate_coach_structure_response(
     raw: str,
     *,
     parent_strategy_prompt: str,
 ) -> tuple[dict[str, object], CoachResult]:
     payload = parse_json_object_response(raw)
     return payload, _parse_coach(raw, parent_strategy_prompt=parent_strategy_prompt)
+
+
+def _validate_strategy_contract_rewrite_response(
+    raw: str,
+) -> tuple[dict[str, object], str]:
+    payload = parse_json_object_response(raw)
+    if set(payload) != {"revised_strategy_prompt"}:
+        raise ValueError(
+            "Strategy contract rewrite JSON must contain exactly revised_strategy_prompt."
+        )
+    prompt = payload["revised_strategy_prompt"]
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError(
+            "Strategy contract rewrite revised_strategy_prompt must be a non-empty string."
+        )
+    normalized = normalize_prompt(prompt, max_chars=4000, max_lines=80)
+    validate_strategy_prompt_contract(normalized)
+    return payload, normalized
 
 
 def _parse_json(raw: str) -> dict[str, Any]:

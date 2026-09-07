@@ -50,7 +50,13 @@ class ReflectionContextRedesignTests(unittest.TestCase):
             parent_ids=("parent-a", "parent-b"),
             strategy_prompt="Build workers, defend the first base, then pressure the opponent.",
             generation_prompt="Return a complete CandidateAgent.java file.",
-            generated_java="package ai.generated;\npublic class CandidateAgent {}\n",
+            generated_java=(
+                "package ai.generated;\n"
+                "// FIXED_REGION_SENTINEL\n"
+                "// EAGLE_AGENT_STRATEGY_START\n"
+                "private void decide(AgentContext context) { }\n"
+                "// EAGLE_AGENT_STRATEGY_END\n"
+            ),
             status="evaluated",
             fitness_objectives={"game_performance": 21.5, "code_quality": 604.0},
             game_eval_result=self.game_payload(),
@@ -138,6 +144,8 @@ class ReflectionContextRedesignTests(unittest.TestCase):
         self.assertIn("LightRush", prompt.text)
         self.assertIn("map_1", prompt.text)
         self.assertIn("p0_result", prompt.text)
+        self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", prompt.text)
+        self.assertIn("Every condition", prompt.text)
         self.assertNotIn("SECRET_COMPILER_LOG", prompt.text)
         self.assertNotIn("CandidateAgent {}", prompt.text)
         self.assertNotIn("complexity_penalty", prompt.text)
@@ -146,18 +154,28 @@ class ReflectionContextRedesignTests(unittest.TestCase):
         context = build_reflection_context(self.candidate(), generation=5, index=2, reflection_type="code")
         prompt = build_code_reflection_prompt_bundle(self.candidate(), context)
         self.assertIn("unchecked conversion", prompt.text)
+        self.assertNotIn("FIXED_REGION_SENTINEL", prompt.text)
         self.assertNotIn("code_quality", prompt.text)
         self.assertNotIn("complexity_penalty", prompt.text)
         self.assertNotIn("strategy_alignment", prompt.text)
 
     def test_code_formatter_excludes_match_table_and_bounds_code(self):
         candidate = self.candidate()
-        candidate = Candidate(**{**candidate.__dict__, "generated_java": "\n".join(f"line {index}" for index in range(5000))})
+        candidate = Candidate(**{
+            **candidate.__dict__,
+            "generated_java": (
+                "FIXED_REGION_SENTINEL\n"
+                "// EAGLE_AGENT_STRATEGY_START\n"
+                + "\n".join(f"// strategy line {index}" for index in range(5000))
+                + "\n// EAGLE_AGENT_STRATEGY_END\n"
+            ),
+        })
         context = build_reflection_context(candidate, generation=5, index=2, reflection_type="code")
         prompt = build_code_reflection_prompt_bundle(candidate, context)
         self.assertIn("Optional structural/compiler evidence", prompt.text)
         self.assertNotIn('"map_1"', prompt.text)
-        self.assertIn("generated_code", prompt.metadata["truncated_sections"])
+        self.assertIn("editable_strategy_java", prompt.metadata["truncated_sections"])
+        self.assertNotIn("FIXED_REGION_SENTINEL", prompt.text)
         self.assertTrue(prompt.metadata["estimated_prompt_size"] < 30_000)
 
     def test_reflection_stage_accepts_structured_json_without_final_slice(self):

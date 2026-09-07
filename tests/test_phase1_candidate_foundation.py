@@ -239,13 +239,19 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
             })
 
             result = run_search(config, mock=True, run_id="blank-policy-bootstrap")
+            offspring = [
+                load_candidate(result.run_dir, path.parent.name)
+                for path in (result.run_dir / "candidates").glob("*/candidate.json")
+                if json.loads(path.read_text(encoding="utf-8"))["generation"] == 1
+            ]
 
         self.assertEqual(len(result.final_population), 3)
-        self.assertTrue(all(item.mutation_type == "strategy" for item in result.final_population))
-        self.assertTrue(all(item.strategy_prompt.strip() for item in result.final_population))
+        self.assertEqual(len(offspring), 3)
+        self.assertTrue(all(item.mutation_type == "strategy" for item in offspring))
+        self.assertTrue(all(item.strategy_prompt.strip() for item in offspring))
         self.assertTrue(all(
             item.metadata["aos"]["eligible_operator_ids"] == ["strategy_reflection"]
-            for item in result.final_population
+            for item in offspring
         ))
 
     def test_initial_java_seed_artifacts_record_no_llm_call_and_source_provenance(self) -> None:
@@ -307,7 +313,7 @@ class Phase1CandidateFoundationTests(unittest.TestCase):
                 (result.run_dir / "generations" / "generation_0001.json").read_text()
             )
         self.assertEqual(len(generation_zero["population"]), 1)
-        self.assertEqual(generation_zero["metrics"]["expected_match_count"], 126)
+        self.assertEqual(generation_zero["metrics"]["expected_match_count"], 180)
         self.assertEqual(len(generation_one["population"]), 2)
         by_id = {record["candidate_id"]: record for record in records}
         for record in records:

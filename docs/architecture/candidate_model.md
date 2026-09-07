@@ -7,7 +7,7 @@ Every candidate has two evolvable prompt components:
 | Concept | Current field | Meaning |
 | --- | --- | --- |
 | Policy gene | `strategy_prompt` | Concrete MicroRTS game-playing policy (`policy_prompt` conceptually). |
-| Translation gene | `generation_prompt` | Reusable instructions for faithfully translating policy into Java (`code_generation_prompt` conceptually). |
+| Translation gene | `generation_prompt` | Canonically rendered, bounded reusable rules for faithfully translating policy into Java (`code_generation_prompt` conceptually). |
 
 In the default `generated_phenotype` mode, the complete
 `ai.generated.CandidateAgent` Java source remains non-inherited phenotype and
@@ -18,8 +18,14 @@ that successful phenotype is eligible for independent Java-component
 inheritance by children.
 
 Default-mode generation-zero seeds use one checked-in callable no-op phenotype.
-Inherited mode requires one seed policy, copies it to `population_size`, gives
-every copy the same no-op Java component, and invokes the Generator separately.
+Inherited `configured_seeds` mode requires one seed policy, copies it to
+`population_size`, gives every copy the same Java component, and invokes the
+Generator separately. Inherited `llm_generated_policies` mode retains the one
+configured policy, generates each remaining policy gene with an independent LLM
+call, and gives every candidate the same fixed Java component and phenotype.
+Its generated policy and Worker Rush Java are intentionally allowed to disagree
+at generation zero; subsequent variation and Generator calls operate on the
+normal three-component genotype.
 
 ## Required logical fields
 
@@ -44,7 +50,13 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
   in inherited mode, one independent Java choice.
 - Strategy Reflection may change only `strategy_prompt`.
 - Code Reflection may change only `generation_prompt`.
-- Balance Reflection may atomically change both prompts, but never Java.
+- Successful Code Reflection applies a structured rule delta and deterministically
+  renders `generation_prompt`; policy-specific checklists and Java fragments are
+  rejected at the rewrite boundary.
+- Prompt Compliance Reflection changes only prompt genes with reported contract
+  issues and commits both atomically when both are requested; it never changes
+  Java. A generation-prompt repair uses a validated reusable-rule delta and the
+  deterministic canonical renderer.
 - Generator and Evaluation do not modify either prompt gene.
 - Generator uses the canonical checked-in scaffold. Only inherited mode also
   receives the selected parent Java component.

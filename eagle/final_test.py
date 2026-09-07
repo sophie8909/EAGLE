@@ -1,9 +1,8 @@
 """Run the post-evolution MicroRTS benchmark and write W/L/D tables.
 
-The final test is deliberately separate from the evolutionary seven-opponent
-evaluation.  It reuses the canonical MicroRTS process runner, but expands the
-roster with PassiveAI, RandomAI, and RandomBiasedAI and runs ten games for
-each map and candidate side.
+The final test is deliberately separate from evolutionary evaluation. It
+reuses the canonical ten-opponent roster and MicroRTS process runner, but runs
+ten games for each map and candidate side.
 """
 
 from __future__ import annotations
@@ -24,11 +23,7 @@ from eagle.evaluation import (
     preflight_evaluation_opponents,
     scoring_config_from_experiment,
 )
-from eagle.opponents import (
-    BASIC_OPPONENTS,
-    SEARCH_OPPONENT_REGISTRY,
-    rooted_jar_path,
-)
+from eagle.opponents import SEARCH_OPPONENT_REGISTRY, rooted_jar_path
 from evaluation.match_matrix import canonical_evaluation_maps
 from evaluation.microrts_runner import integrate_microrts_agent
 from evaluation.runtime_evaluation import run_microrts_match
@@ -38,7 +33,7 @@ from eagle.config import ExperimentConfig
 FINAL_TEST_SCHEMA_VERSION = "eagle-final-test-v2"
 FINAL_TEST_GAMES_PER_SIDE = 10
 AGENT_CLASS = "ai.generated.CandidateAgent"
-FINAL_TEST_OPPONENTS = (*SEARCH_OPPONENT_REGISTRY, *BASIC_OPPONENTS[:3])
+FINAL_TEST_OPPONENTS = SEARCH_OPPONENT_REGISTRY
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -213,7 +208,10 @@ def _run_final_matrix(
     candidate_generation = int(candidate.get("generation") or 0)
     source_hash = hash_file(_candidate_source_path(classes_dir, candidate_id))
     class_hash = hash_class_directory(classes_dir)
-    maps = canonical_evaluation_maps(config.evaluation_maps)
+    maps = canonical_evaluation_maps(
+        config.evaluation_maps,
+        tick_limits=config.resolved_evaluation_map_tick_limits,
+    )
     scoring_config = scoring_config_from_experiment(config)
     worker_classes = _prepare_worker_rush_opponent(config, classes_dir=output_dir / "classes")
     safe_allinbot_classes = _prepare_safe_allinbot_opponent(
@@ -250,7 +248,7 @@ def _run_final_matrix(
                         classes_dir=classes_dir,
                         agent_class=AGENT_CLASS,
                         opponent=opponent.class_name,
-                        tick_limit=config.tick_limit,
+                        tick_limit=evaluation_map.tick_limit,
                         match_index=match_index,
                         match_artifacts_dir=output_dir / "matches",
                         match_output_dir=match_dir,
@@ -360,7 +358,13 @@ def _build_summary(
             {"id": item.opponent_id, "name": item.display_name, "class": item.class_name}
             for item in FINAL_TEST_OPPONENTS
         ],
-        "maps": [{"id": item.map_id, "path": item.path} for item in canonical_evaluation_maps(config.evaluation_maps)],
+        "maps": [
+            {"id": item.map_id, "path": item.path, "tick_limit": item.tick_limit}
+            for item in canonical_evaluation_maps(
+                config.evaluation_maps,
+                tick_limits=config.resolved_evaluation_map_tick_limits,
+            )
+        ],
         "games_per_side_per_map": FINAL_TEST_GAMES_PER_SIDE,
         "total_matches": len(results),
         "opponent_fault_contained_matches": sum(

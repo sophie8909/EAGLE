@@ -226,6 +226,8 @@ def compact_mutation_record(record: dict[str, Any]) -> dict[str, Any]:
         "operation",
         "applied",
         "type",
+        "compliance_status",
+        "requested_rewrite_fields",
         "objectives",
         "evaluation_status",
         "token_counts",
@@ -236,6 +238,8 @@ def compact_mutation_record(record: dict[str, Any]) -> dict[str, Any]:
         "rewrite_attempts",
         "reflection_status",
         "rewrite_status",
+        "strategy_rewrite_status",
+        "code_rewrite_status",
         "reflection_error",
         "rewrite_error",
         "mutation_intent",
@@ -256,7 +260,14 @@ def compact_candidate_metadata(
     """Return only metadata required by selection, mutation, and resume."""
 
     compact: dict[str, Any] = {}
-    for key in ("seed_index", "replicate_index", "failure_category", "failure_reason"):
+    for key in (
+        "seed_index",
+        "replicate_index",
+        "initial_policy_source",
+        "initial_policy_sample_index",
+        "failure_category",
+        "failure_reason",
+    ):
         if key in metadata:
             compact[key] = metadata[key]
     aos = metadata.get("aos")

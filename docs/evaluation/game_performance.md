@@ -20,20 +20,20 @@ Each active opponent has 18 records (three maps × three rounds × p0/p1). The
 fixed weights are:
 
 ```text
+passive/random/randombias = 0.5 each
 lightrush/heavyrush/workerrush = 1 each
 allinbot/mayari/coac/tma = 2 each
 ```
 
-PassiveAI, RandomAI, and RandomBiasedAI are not part of the EA roster. The
-denominator is `11.0`. The weighted mean is stored as
+The denominator is `12.5`. The weighted mean is stored as
 `game_eval_result.game_performance` and is reporting-only. It is not an
-evolutionary objective and does not replace the seven opponent scores stored in
+evolutionary objective and does not replace the ten opponent scores stored in
 `Candidate.fitness_objectives`.
 
 ## Failure behavior
 
 If generation, validation, compilation, integration, runtime, or matrix
-completion fails, each of the seven opponent fitness cases is `-1000.0`. Partial
+completion fails, each of the ten opponent fitness cases is `-1000.0`. Partial
 match results and failure diagnostics remain in the candidate artifacts.
 
 ## Analysis
@@ -47,4 +47,7 @@ and overlay retained single-match scores as narrow, semi-transparent violin
 distributions with a median marker. A generation with only one value or no
 variance uses a short horizontal degenerate-distribution marker. Individual agent win rates are exported by opponent
 in `agent_win_rate.csv` and
-`win_rate_by_generation_<opponent>.png`.
+`win_rate_by_generation_<opponent>.png`. All per-agent and per-match plot rows
+are expanded from the selected population in each generation snapshot:
+`generation` means survivor snapshot generation, while `birth_generation`
+records the candidate's creation generation.

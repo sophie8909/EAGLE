@@ -17,7 +17,7 @@ from generation.agent_template import (
 from .candidate import DEFAULT_GENERATION_PROMPT
 from .aos import ReflectionOperatorMode, ReflectionOperatorSettings
 from .opponent_cases import LEXICASE_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SUM
-from .prompts import DEFAULT_PROMPT_DIR
+from .prompts import DEFAULT_PROMPT_DIR, PromptTemplate
 
 
 DEFAULT_EVALUATION_MAPS = (
@@ -30,6 +30,7 @@ DEFAULT_SEARCH_OPPONENTS = tuple((case, OPPONENT_WEIGHTS[case]) for case in LEXI
 FIXED_OPPONENT_WEIGHT_SUM = OPPONENT_WEIGHT_SUM
 MU_PLUS_LAMBDA_SELECTION = "mu_plus_lambda"
 CANDIDATE_JAVA_MODES = ("generated_phenotype", "inherited_genotype")
+INITIAL_POPULATION_MODES = ("configured_seeds", "llm_generated_policies")
 
 DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Resource", 0.0),
@@ -92,6 +93,10 @@ class ModelConfig:
 class ExperimentConfig:
     seed_prompts: tuple[str, ...]
     seed_prompt_files: tuple[Path, ...] = ()
+    initial_population_mode: str = "configured_seeds"
+    initial_policy_generation_prompt: str = ""
+    initial_policy_generation_prompt_file: Path = DEFAULT_PROMPT_DIR / "initial_policy_generation.txt"
+    initial_policy_max_attempts: int = 3
     experiment_name: str = "eagle_experiment"
     model: ModelConfig = field(default_factory=ModelConfig)
     generations: int = 1
@@ -104,6 +109,7 @@ class ExperimentConfig:
     survivor_selection: str = MU_PLUS_LAMBDA_SELECTION
     execution_mode: str = "openai"
     llm_temperature: float = 0.2
+    initial_policy_temperature: float = 0.8
     llm_max_tokens: int | None = None
     match_commentator_enabled: bool = True
     match_commentator_temperature: float = 0.2
@@ -117,6 +123,7 @@ class ExperimentConfig:
     match_timeout_seconds: float = 120.0
     match_artifact_mode: str = "compact"
     evaluation_maps: tuple[str, ...] = DEFAULT_EVALUATION_MAPS
+    evaluation_map_tick_limits: tuple[int, ...] = ()
     rounds_per_map: int = 3
     swap_player_sides: bool = True
     evaluation_opponents: tuple[tuple[str, float], ...] = DEFAULT_SEARCH_OPPONENTS
@@ -136,7 +143,7 @@ class ExperimentConfig:
     reflection_operator_mode: ReflectionOperatorMode = ReflectionOperatorMode.AOS_HEAD2HEAD
     strategy_reflection_probability: float = 0.20
     code_reflection_probability: float = 0.80
-    balance_reflection_probability: float = 0.0
+    prompt_compliance_reflection_probability: float = 0.0
     aos_minimum_probability: float = 0.10
 
     @classmethod
@@ -170,7 +177,7 @@ class ExperimentConfig:
         if payload.get("application", "microrts") != "microrts":
             raise ValueError("The configured application is not supported.")
         if payload.get("objectives", {"opponent_cases": "maximize"}) != {"opponent_cases": "maximize"}:
-            raise ValueError("The evolutionary objective contract is the seven fixed opponent cases.")
+            raise ValueError("The evolutionary objective contract is the ten fixed opponent cases.")
         if schema_version == "experiment-v2" and not isinstance(payload.get("model"), dict):
             raise ValueError("experiment-v2 requires a model mapping.")
         forbidden = {
@@ -201,6 +208,19 @@ class ExperimentConfig:
         seed_prompts = tuple(path.read_text(encoding="utf-8").strip() for path in seed_prompt_files)
         if not seed_prompts:
             raise ValueError("Experiment config must define at least one seed_prompt_files entry.")
+        initial_policy_generation_prompt_file = _parse_prompt_files(
+            (
+                payload.get(
+                    "initial_policy_generation_prompt_file",
+                    DEFAULT_PROMPT_DIR / "initial_policy_generation.txt",
+                ),
+            ),
+            repository_root,
+            "initial_policy_generation_prompt_file",
+        )[0]
+        initial_policy_generation_prompt = initial_policy_generation_prompt_file.read_text(
+            encoding="utf-8"
+        ).strip()
         generation_prompt_file_value = payload.get("generation_prompt_file")
         generation_prompt_file = (
             _parse_prompt_files((generation_prompt_file_value,), repository_root, "generation_prompt_file")[0]
@@ -225,8 +245,10 @@ class ExperimentConfig:
             raise ValueError(
                 "evaluation.matches_per_candidate is derived from maps, rounds, sides, and opponents."
             )
-        evaluation_maps = _parse_evaluation_maps(
-            evaluation_settings.get("maps", payload.get("evaluation_maps", DEFAULT_EVALUATION_MAPS))
+        tick_limit = int(payload.get("tick_limit", 100))
+        evaluation_maps, evaluation_map_tick_limits = _parse_evaluation_maps(
+            evaluation_settings.get("maps", payload.get("evaluation_maps", DEFAULT_EVALUATION_MAPS)),
+            default_tick_limit=tick_limit,
         )
         rounds_per_map = int(evaluation_settings.get("rounds_per_map", payload.get("rounds_per_map", 3)))
         swap_player_sides = bool(evaluation_settings.get("swap_player_sides", payload.get("swap_player_sides", True)))
@@ -237,19 +259,31 @@ class ExperimentConfig:
         if configured_opponents is not None:
             parsed_opponents = _parse_evaluation_opponents(configured_opponents)
             if parsed_opponents != evaluation_opponents:
-                raise ValueError("evaluation.opponents must equal the canonical seven-opponent roster and weights.")
+                raise ValueError("evaluation.opponents must equal the canonical ten-opponent roster and weights.")
         if "aos" in payload:
             raise ValueError(
                 "The nested aos config is obsolete. Use reflection_operator_mode, "
                 "strategy_reflection_probability, code_reflection_probability, "
-                "balance_reflection_probability, and "
+                "prompt_compliance_reflection_probability, and "
                 "aos_minimum_probability at the top level."
             )
+        if (
+            "prompt_compliance_reflection_probability" in payload
+            and "balance_reflection_probability" in payload
+        ):
+            raise ValueError(
+                "Use prompt_compliance_reflection_probability only; it cannot be "
+                "combined with the legacy balance_reflection_probability alias."
+            )
+        prompt_compliance_probability = payload.get(
+            "prompt_compliance_reflection_probability",
+            payload.get("balance_reflection_probability", 0.0),
+        )
         reflection_operator_mode = ReflectionOperatorMode.parse(
             payload.get("reflection_operator_mode", ReflectionOperatorMode.AOS_HEAD2HEAD.value)
         )
         if "eagle_opponent" in payload:
-            raise ValueError("eagle_opponent is obsolete; evolutionary evaluation uses only the seven fixed opponents.")
+            raise ValueError("eagle_opponent is obsolete; evolutionary evaluation uses only the ten fixed opponents.")
         if "match_seeds" in payload:
             raise ValueError(
                 "match_seeds is obsolete: MicroRTS never consumed the configured values. "
@@ -258,6 +292,12 @@ class ExperimentConfig:
         return cls(
             seed_prompts=seed_prompts,
             seed_prompt_files=seed_prompt_files,
+            initial_population_mode=str(
+                payload.get("initial_population_mode", "configured_seeds")
+            ),
+            initial_policy_generation_prompt=initial_policy_generation_prompt,
+            initial_policy_generation_prompt_file=initial_policy_generation_prompt_file,
+            initial_policy_max_attempts=int(payload.get("initial_policy_max_attempts", 3)),
             experiment_name=str(payload.get("experiment_name", "eagle_experiment")),
             model=model,
             generations=int(payload.get("generations", 1)),
@@ -270,6 +310,9 @@ class ExperimentConfig:
             survivor_selection=survivor_selection,
             execution_mode=str(payload.get("execution_mode", "openai")),
             llm_temperature=float(llm_settings.get("temperature", 0.2)),
+            initial_policy_temperature=float(
+                llm_settings.get("initial_policy_temperature", 0.8)
+            ),
             llm_max_tokens=None if max_tokens is None else int(max_tokens),
             match_commentator_enabled=bool(commentator_settings.get("enabled", True)),
             match_commentator_temperature=float(commentator_settings.get("temperature", 0.2)),
@@ -282,10 +325,11 @@ class ExperimentConfig:
                 DEFAULT_INITIAL_JAVA_SEED_PATH,
             ),
             candidate_java_mode=str(payload.get("candidate_java_mode", "generated_phenotype")),
-            tick_limit=int(payload.get("tick_limit", 100)),
+            tick_limit=tick_limit,
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
             match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
             evaluation_maps=evaluation_maps,
+            evaluation_map_tick_limits=evaluation_map_tick_limits,
             rounds_per_map=rounds_per_map,
             swap_player_sides=swap_player_sides,
             evaluation_opponents=evaluation_opponents,
@@ -305,7 +349,9 @@ class ExperimentConfig:
             reflection_operator_mode=reflection_operator_mode,
             strategy_reflection_probability=float(payload.get("strategy_reflection_probability", 0.20)),
             code_reflection_probability=float(payload.get("code_reflection_probability", 0.80)),
-            balance_reflection_probability=float(payload.get("balance_reflection_probability", 0.0)),
+            prompt_compliance_reflection_probability=float(
+                prompt_compliance_probability
+            ),
             aos_minimum_probability=float(payload.get("aos_minimum_probability", 0.10)),
         )
 
@@ -317,6 +363,12 @@ class ExperimentConfig:
             raise ValueError("generations must be at least 1.")
         if self.population_size < 1:
             raise ValueError("population_size must be at least 1.")
+        if self.initial_population_mode not in INITIAL_POPULATION_MODES:
+            raise ValueError(
+                "initial_population_mode must be configured_seeds or llm_generated_policies."
+            )
+        if self.initial_policy_max_attempts < 1:
+            raise ValueError("initial_policy_max_attempts must be at least 1.")
         if self.survivor_selection != MU_PLUS_LAMBDA_SELECTION:
             raise ValueError(
                 "survivor_selection must be the canonical mu_plus_lambda mode."
@@ -344,8 +396,40 @@ class ExperimentConfig:
             raise ValueError(
                 "candidate_java_mode=inherited_genotype requires exactly one seed_prompt_files entry."
             )
+        if self.initial_population_mode == "llm_generated_policies":
+            if self.candidate_java_mode != "inherited_genotype":
+                raise ValueError(
+                    "initial_population_mode=llm_generated_policies requires "
+                    "candidate_java_mode=inherited_genotype."
+                )
+            if self.population_size <= len(self.seed_prompts):
+                raise ValueError(
+                    "initial_population_mode=llm_generated_policies requires population_size "
+                    "to exceed the configured seed count."
+                )
+            if not self.initial_policy_generation_prompt.strip():
+                raise ValueError("initial policy generation prompt must not be empty.")
+            PromptTemplate(
+                prompt_id="initial_policy_generation",
+                role="seed",
+                stages=("population_initialization",),
+                required_variables=(
+                    "sample_index",
+                    "population_size",
+                    "gameplay_contract",
+                    "existing_strategy_prompts",
+                    "prior_error",
+                ),
+                template=self.initial_policy_generation_prompt,
+                source_path=self.initial_policy_generation_prompt_file,
+            ).validate()
         if len(self.evaluation_maps) != 3:
             raise ValueError("evaluation.maps must contain exactly three maps.")
+        map_tick_limits = self.resolved_evaluation_map_tick_limits
+        if len(map_tick_limits) != len(self.evaluation_maps):
+            raise ValueError("evaluation map tick limits must align with evaluation.maps.")
+        if any(limit < 1 for limit in map_tick_limits):
+            raise ValueError("evaluation map tick limits must be at least 1.")
         if self.rounds_per_map != 3:
             raise ValueError("evaluation.rounds_per_map must be exactly 3.")
         if not self.swap_player_sides:
@@ -359,13 +443,15 @@ class ExperimentConfig:
         if self.match_artifact_mode not in {"compact", "full"}:
             raise ValueError("match_artifact_mode must be compact or full.")
         if tuple(item[0] for item in self.evaluation_opponents) != LEXICASE_CASES:
-            raise ValueError("evaluation_opponents must use the canonical seven-opponent order.")
+            raise ValueError("evaluation_opponents must use the canonical ten-opponent order.")
         if any(weight <= 0 for _, weight in self.evaluation_opponents):
             raise ValueError("evaluation opponent weights must be positive.")
         if abs(self.fixed_opponent_weight_sum - FIXED_OPPONENT_WEIGHT_SUM) > 1e-9:
             raise ValueError(f"fixed opponent weights must sum to {FIXED_OPPONENT_WEIGHT_SUM}.")
         if self.llm_temperature < 0:
             raise ValueError("llm.temperature must not be negative.")
+        if self.initial_policy_temperature < 0:
+            raise ValueError("llm.initial_policy_temperature must not be negative.")
         if self.llm_max_tokens is not None and self.llm_max_tokens < 1:
             raise ValueError("llm.max_tokens must be positive.")
         if self.match_commentator_temperature < 0:
@@ -412,6 +498,11 @@ class ExperimentConfig:
                 "health_timeout_seconds": self.model.health_timeout_seconds,
             },
             "seed_prompt_files": [str(path) for path in self.seed_prompt_files],
+            "initial_population_mode": self.initial_population_mode,
+            "initial_policy_generation_prompt_file": str(
+                self.initial_policy_generation_prompt_file
+            ),
+            "initial_policy_max_attempts": self.initial_policy_max_attempts,
             "generations": self.generations,
             "population_size": self.population_size,
             "mutation_max_attempts": self.mutation_max_attempts,
@@ -423,10 +514,13 @@ class ExperimentConfig:
             "reflection_operator_mode": self.reflection_operator_mode.value,
             "strategy_reflection_probability": self.strategy_reflection_probability,
             "code_reflection_probability": self.code_reflection_probability,
-            "balance_reflection_probability": self.balance_reflection_probability,
+            "prompt_compliance_reflection_probability": (
+                self.prompt_compliance_reflection_probability
+            ),
             "aos_minimum_probability": self.aos_minimum_probability,
             "llm": {
                 "temperature": self.llm_temperature,
+                "initial_policy_temperature": self.initial_policy_temperature,
                 "max_tokens": self.llm_max_tokens,
                 "match_commentator": {
                     "enabled": self.match_commentator_enabled,
@@ -443,7 +537,14 @@ class ExperimentConfig:
             "match_timeout_seconds": self.match_timeout_seconds,
             "match_artifact_mode": self.match_artifact_mode,
             "evaluation": {
-                "maps": list(self.evaluation_maps),
+                "maps": [
+                    {"path": path, "tick_limit": tick_limit}
+                    for path, tick_limit in zip(
+                        self.evaluation_maps,
+                        self.resolved_evaluation_map_tick_limits,
+                        strict=True,
+                    )
+                ],
                 "rounds_per_map": self.rounds_per_map,
                 "swap_player_sides": self.swap_player_sides,
                 "opponents": [
@@ -483,13 +584,23 @@ class ExperimentConfig:
             mode=ReflectionOperatorMode.parse(self.reflection_operator_mode),
             strategy_probability=self.strategy_reflection_probability,
             code_probability=self.code_reflection_probability,
-            balance_probability=self.balance_reflection_probability,
+            prompt_compliance_probability=(
+                self.prompt_compliance_reflection_probability
+            ),
             minimum_probability=self.aos_minimum_probability,
         )
 
     @property
     def fixed_matches_per_opponent(self) -> int:
         return len(self.evaluation_maps) * self.rounds_per_map * 2
+
+    @property
+    def resolved_evaluation_map_tick_limits(self) -> tuple[int, ...]:
+        """Return one effective tick cap for each configured evaluation map."""
+
+        if not self.evaluation_map_tick_limits:
+            return (self.tick_limit,) * len(self.evaluation_maps)
+        return tuple(int(limit) for limit in self.evaluation_map_tick_limits)
 
     @property
     def expected_match_count(self) -> int:
@@ -579,18 +690,32 @@ def _parse_model(value: object, base_dir: Path) -> ModelConfig:
     return result
 
 
-def _parse_evaluation_maps(value: object) -> tuple[str, ...]:
+def _parse_evaluation_maps(
+    value: object,
+    *,
+    default_tick_limit: int,
+) -> tuple[tuple[str, ...], tuple[int, ...]]:
     if not isinstance(value, (list, tuple)):
-        raise ValueError("evaluation.maps must be a list of map paths.")
+        raise ValueError("evaluation.maps must be a list of paths or {path, tick_limit} mappings.")
     paths: list[str] = []
+    tick_limits: list[int] = []
     for item in value:
         if isinstance(item, dict):
-            item = item.get("path")
-        path = str(item or "").strip()
+            path_value = item.get("path")
+            tick_limit_value = item.get("tick_limit", default_tick_limit)
+        else:
+            path_value = item
+            tick_limit_value = default_tick_limit
+        path = str(path_value or "").strip()
         if not path:
             raise ValueError("evaluation map paths must not be empty.")
+        try:
+            tick_limit = int(tick_limit_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"evaluation map tick_limit must be an integer: {path}") from exc
         paths.append(path)
-    return tuple(paths)
+        tick_limits.append(tick_limit)
+    return tuple(paths), tuple(tick_limits)
 
 def _parse_unit_material_values(value: object) -> tuple[tuple[str, float], ...]:
     resolved = dict(DEFAULT_UNIT_MATERIAL_VALUES)

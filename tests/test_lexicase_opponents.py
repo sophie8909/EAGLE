@@ -28,14 +28,15 @@ class LexicaseOpponentTests(unittest.TestCase):
         config = ExperimentConfig.from_mapping({})
         self.assertEqual(config.evaluation_opponent_ids, LEXICASE_CASES)
         self.assertEqual(config.fixed_opponent_weight_sum, FIXED_OPPONENT_WEIGHT_SUM)
-        self.assertEqual(config.expected_match_count, 126)
+        self.assertEqual(config.fixed_opponent_weight_sum, 12.5)
+        self.assertEqual(config.expected_match_count, 180)
         self.assertEqual(
             config.evaluation_opponent_ids,
-            ("lightrush", "heavyrush", "workerrush", "allinbot", "mayari", "coac", "tma"),
+            (
+                "passive", "random", "randombias", "lightrush", "heavyrush",
+                "workerrush", "allinbot", "mayari", "coac", "tma",
+            ),
         )
-        self.assertNotIn("passive", config.evaluation_opponent_ids)
-        self.assertNotIn("random", config.evaluation_opponent_ids)
-        self.assertNotIn("randombias", config.evaluation_opponent_ids)
 
     def test_lexicase_is_reproducible_and_uses_all_cases(self) -> None:
         left = candidate("left", {case: 10.0 if case == "lightrush" else 0.0 for case in LEXICASE_CASES})

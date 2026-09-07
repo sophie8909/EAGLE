@@ -17,7 +17,12 @@ from eagle.crossover import CrossoverContext, crossover
 from eagle.evaluation import evaluate_candidate, print_progress
 from eagle.mutation import MutationContext
 from eagle.prompts import normalize_prompt
-from eagle.search import create_offspring, population_signature, run_search
+from eagle.search import (
+    create_offspring,
+    mutation_evidence_parent,
+    population_signature,
+    run_search,
+)
 from eagle.selection import select_parent
 from evaluation.compiler import CompileResult, compile_generated_agent
 from evaluation.game_performance import (
@@ -71,6 +76,44 @@ def quality_fixture() -> CodeQualityBreakdown:
         compile_error_count=0,
     )
 class EaglePipelineTests(unittest.TestCase):
+    def test_aos_comparison_parent_follows_mutation_evidence_provenance(self) -> None:
+        parent_a = Candidate(
+            id="parent-a",
+            strategy_prompt="policy-a",
+            generation_prompt="prompt-a",
+            generated_java="java-a",
+            fitness_objectives={case: 0.0 for case in LEXICASE_CASES},
+        )
+        parent_b = Candidate(
+            id="parent-b",
+            strategy_prompt="policy-b",
+            generation_prompt="prompt-b",
+            generated_java="java-b",
+            fitness_objectives={case: 0.0 for case in LEXICASE_CASES},
+        )
+        child = Candidate(
+            id="child",
+            strategy_parent_id=parent_b.id,
+            generation_prompt_parent_id=parent_a.id,
+            java_parent_id=parent_b.id,
+        )
+        scenarios = (
+            ("strategy", "generated_phenotype", parent_b.id),
+            ("code", "generated_phenotype", parent_a.id),
+            ("prompt_compliance", "generated_phenotype", parent_a.id),
+            ("code", "inherited_genotype", parent_b.id),
+            ("prompt_compliance", "inherited_genotype", parent_b.id),
+        )
+        for mutation_name, java_mode, expected in scenarios:
+            with self.subTest(mutation_name=mutation_name, candidate_java_mode=java_mode):
+                resolved = mutation_evidence_parent(
+                    child,
+                    mutation_name=mutation_name,
+                    candidate_java_mode=java_mode,
+                    parents=(parent_a, parent_b),
+                )
+                self.assertEqual(resolved.id, expected)
+
     def test_offspring_mutation_progress_includes_generation_and_candidate_ordinal(self) -> None:
         class StrategyOnlyController:
             mode = SimpleNamespace(value="static")
@@ -111,8 +154,12 @@ class EaglePipelineTests(unittest.TestCase):
             generation_prompt="generate Java",
             fitness_objectives={case: 0.0 for case in LEXICASE_CASES},
         )
+        comparison_parent = replace(parent, id="strategy-evidence-parent")
         output = StringIO()
-        with redirect_stdout(output):
+        with patch(
+            "eagle.search.mutation_evidence_parent",
+            return_value=comparison_parent,
+        ), redirect_stdout(output):
             offspring = create_offspring(
                 [parent],
                 config=config,
@@ -123,6 +170,10 @@ class EaglePipelineTests(unittest.TestCase):
             )
 
         self.assertEqual(len(offspring), 1)
+        self.assertEqual(
+            offspring[0].metadata["aos"]["comparison_parent_id"],
+            comparison_parent.id,
+        )
         lines = output.getvalue().splitlines()
         self.assertEqual(len(lines), 2)
         self.assertRegex(
@@ -410,7 +461,11 @@ class EaglePipelineTests(unittest.TestCase):
             generation_one_aos = next(item["aos"] for item in metrics if item["generation"] == 1)
             self.assertEqual(
                 set(generation_one_aos["operators"]),
-                {"strategy_reflection", "generate_code_reflection", "balance_reflection"},
+                {
+                    "strategy_reflection",
+                    "generate_code_reflection",
+                    "prompt_compliance_reflection",
+                },
             )
             self.assertAlmostEqual(
                 sum(generation_one_aos["post_update_probabilities"].values()), 1.0

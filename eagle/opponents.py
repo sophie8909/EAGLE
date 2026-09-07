@@ -72,13 +72,10 @@ MICRORTS_VARIANT_OPPONENTS = (
 )
 
 # The search-time roster is resolved from this registry in the canonical order
-# supplied by the experiment configuration. PassiveAI, RandomAI, and
-# RandomBiasedAI remain available as basic definitions for compatibility and
-# visual inspection, but are intentionally excluded from EA evolution.
+# supplied by the experiment configuration. External entries are intentionally
+# available here; setup/preflight must fail if one is unavailable.
 SEARCH_OPPONENT_REGISTRY = (
-    BASIC_OPPONENTS[3],
-    BASIC_OPPONENTS[4],
-    BASIC_OPPONENTS[5],
+    *BASIC_OPPONENTS,
     ALLINBOT_SEARCH_OPPONENT,
     EXTERNAL_OPPONENTS[1],
     EXTERNAL_OPPONENTS[2],

@@ -1171,7 +1171,7 @@ def preflight_evaluation_opponents(
 
 
 def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int) -> tuple[list[MatchResult], str | None]:
-    """Run the complete fixed seven-opponent evaluation matrix."""
+    """Run the complete fixed ten-opponent evaluation matrix."""
     match_results: list[MatchResult] = []
     source_hash = hash_file(agent.source_path)
     candidate_classes_dir = classes_dir / candidate.id
@@ -1194,7 +1194,10 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
         )
         specifications = build_match_matrix(
             matrix_opponents,
-            canonical_evaluation_maps(config.evaluation_maps),
+            canonical_evaluation_maps(
+                config.evaluation_maps,
+                tick_limits=config.resolved_evaluation_map_tick_limits,
+            ),
             rounds_per_map=config.rounds_per_map,
             swap_player_sides=config.swap_player_sides,
         )
@@ -1213,7 +1216,7 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                     agent_class=agent.qualified_class_name, opponent=opponent.class_name,
                     opponent_id=opponent.opponent_id,
                     opponent_name=_opponent_display_name(opponent.opponent_id),
-                    tick_limit=config.tick_limit, match_index=specification.match_index,
+                    tick_limit=specification.tick_limit, match_index=specification.match_index,
                     match_artifacts_dir=match_artifacts_dir,
                     scoring_config=scoring_config_from_experiment(config), mock=mock,
                     mock_score=config.mock_score_base + config.mock_score_step * (

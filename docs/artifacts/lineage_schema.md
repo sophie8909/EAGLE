@@ -26,7 +26,12 @@ input after failure) supplied the child's pre-generation Java component.
 
 Copy assigns all active component fields to one parent. Crossover makes two
 independent prompt choices and, in inherited mode, an independent Java choice.
-Mutation retains inherited provenance and records which operator rewrote one
-prompt gene. Text/source equality never determines
+Mutation retains inherited provenance and records which operator rewrote one or
+both prompt genes. Text/source equality never determines
 provenance. Every referenced parent resolves to an earlier generation, lineage
 is written before evaluation, and downstream failure cannot erase it.
+
+Generation-zero candidates have no parent IDs in either initialization mode.
+The optional candidate metadata `initial_policy_source` distinguishes
+`configured_seed` from `llm_generated`; it is origin evidence, not ancestry and
+does not populate a component-parent field.

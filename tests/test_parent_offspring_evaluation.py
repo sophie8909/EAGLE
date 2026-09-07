@@ -28,7 +28,15 @@ class ParentOffspringEvaluationTests(unittest.TestCase):
                 )
 
     def test_matrix_runs_both_sides_for_every_map_round_pair(self):
-        config = ExperimentConfig.from_mapping({})
+        config = ExperimentConfig.from_mapping({
+            "evaluation": {
+                "maps": [
+                    {"path": "maps/8x8/basesWorkers8x8.xml", "tick_limit": 1500},
+                    {"path": "maps/16x16/basesWorkers16x16.xml", "tick_limit": 3000},
+                    {"path": "maps/24x24/basesWorkers24x24.xml", "tick_limit": 4000},
+                ]
+            }
+        })
         offspring = Candidate(
             id="offspring",
             generation=1,
@@ -76,6 +84,10 @@ class ParentOffspringEvaluationTests(unittest.TestCase):
             )
         self.assertEqual(len(grouped), 9)
         self.assertTrue(all(sorted(sides) == [0, 1] for sides in grouped.values()))
+        self.assertEqual(
+            {item["map_path"]: item["tick_limit"] for item in observed},
+            dict(zip(config.evaluation_maps, (1500, 3000, 4000), strict=True)),
+        )
         self.assertTrue(all(
             item["java_system_properties"]["eagle.comparison.parent.classes"].endswith("/parent")
             for item in observed

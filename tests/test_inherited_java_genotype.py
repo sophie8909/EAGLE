@@ -149,11 +149,17 @@ class InheritedJavaGenotypeTests(unittest.TestCase):
         config = ExperimentConfig.from_mapping({"candidate_java_mode": "inherited_genotype"})
         backend = ScriptedBackend((
             '{"assessment":"java_faithfully_implements_policy","alignment_review":[],"required_generation_behaviors":[]}',
-            '{"rewritten_prompt":"rewritten translation"}',
+            '{"remove_rule_ids":[],"add_rules":[{"category":"requirement_coverage","instruction":"Preserve every stated prerequisite in reachable strategy behavior."}]}',
         ))
         child = Candidate(
             id="child", strategy_prompt="CHILD_POLICY", generation_prompt="parent translation",
-            inherited_java="INHERITED_JAVA", java_parent_id="java-parent",
+            inherited_java=(
+                "FIXED_INHERITED_JAVA\n"
+                "// EAGLE_AGENT_STRATEGY_START\n"
+                "private void decide(AgentContext context) { // INHERITED_JAVA\n}\n"
+                "// EAGLE_AGENT_STRATEGY_END\n"
+            ),
+            java_parent_id="java-parent",
         )
         mutated = PromptRewriteMutation(
             config,
@@ -163,6 +169,7 @@ class InheritedJavaGenotypeTests(unittest.TestCase):
         ).mutate(child, MutationContext(generation=1, index=0))
         self.assertIn("CHILD_POLICY", backend.calls[0])
         self.assertIn("INHERITED_JAVA", backend.calls[0])
+        self.assertNotIn("FIXED_INHERITED_JAVA", backend.calls[0])
         evidence = mutated.metadata["mutation"]["evidence"]
         self.assertEqual(evidence["java_parent_id"], "java-parent")
         self.assertEqual(evidence["reviewed_java_input"], "inherited_java")

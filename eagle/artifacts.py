@@ -637,8 +637,19 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
             "strategy_reflection": "mutation/strategy_reflection/metadata.json",
             "generator_strategy_input": "mutation/strategy_reflection/generator_strategy_input.txt",
         })
-    if (candidate_dir / "mutation" / "balance_reflection" / "metadata.json").is_file():
-        artifact_references["balance_reflection"] = "mutation/balance_reflection/metadata.json"
+    if (
+        candidate_dir
+        / "mutation"
+        / "prompt_compliance_reflection"
+        / "metadata.json"
+    ).is_file():
+        artifact_references["prompt_compliance_reflection"] = (
+            "mutation/prompt_compliance_reflection/metadata.json"
+        )
+    if (candidate_dir / "initialization" / "policy_generation" / "result.json").is_file():
+        artifact_references["initial_policy_generation"] = (
+            "initialization/policy_generation/result.json"
+        )
     payload = {
         "candidate_schema_version": "eagle-candidate-v5",
         "candidate_id": candidate.id,

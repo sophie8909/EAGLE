@@ -14,9 +14,10 @@ from generation.backend import MockGenerationBackend
 from .aos import ReflectionOperatorController, build_reflection_operator_controller
 from .config import ExperimentConfig
 from .llm import LLMCallLogger, LLMClient, LLMServerError
+from .initial_population import MockInitialPolicyBackend
 from .mutation import build_reflection_backend
 from .prompts import load_prompt
-from .rewrite import BalanceReflectionMutation, PromptRewriteMutation
+from .rewrite import PromptComplianceReflectionMutation, PromptRewriteMutation
 from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation
 
 
@@ -24,6 +25,8 @@ from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation
 class SearchRuntime:
     client: LLMClient
     generation_backend: Any
+    initial_policy_backend: Any
+    llm_logger: LLMCallLogger
     mutations: dict[str, Any]
     operator_controller: ReflectionOperatorController
 
@@ -55,6 +58,14 @@ def build_search_runtime(
     generation_backend = (
         MockGenerationBackend(config.agent_template_path)
         if mock else client.generation_backend(logger=logger)
+    )
+    initial_policy_backend = (
+        MockInitialPolicyBackend()
+        if mock
+        else client.prompt_backend(
+            operation="initial_policy_generation",
+            temperature=config.initial_policy_temperature,
+        )
     )
     # The mock and production generator must render the same configured
     # immutable scaffold, including inherited-Java requests.
@@ -93,7 +104,7 @@ def build_search_runtime(
             logger=logger,
             backend_name=backend_name,
         ),
-        "balance": BalanceReflectionMutation(
+        "prompt_compliance": PromptComplianceReflectionMutation(
             config,
             reflection_backend=reflection_backend,
             rewrite_backend=rewrite_backend,
@@ -105,6 +116,8 @@ def build_search_runtime(
     return SearchRuntime(
         client=client,
         generation_backend=generation_backend,
+        initial_policy_backend=initial_policy_backend,
+        llm_logger=logger,
         mutations=mutations,
         operator_controller=build_reflection_operator_controller(config, state=controller_state),
     )

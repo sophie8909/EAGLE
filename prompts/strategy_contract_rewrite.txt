@@ -1,0 +1,20 @@
+ROLE: strategy_contract_rewriter
+
+Repair the proposed MicroRTS policy using the deterministic validation error.
+Preserve its strategic intent; change only what is needed for every rule to use
+observable current state, an idle friendly actor, and legal actions with their
+required target, cost, range, and placement conditions. The acting unit—not the
+target—determines attack range. Keep at most 10 stand-alone rules. Do not add
+performance analysis, Java, API language, or a different strategy objective.
+
+Complete gameplay contract:
+$gameplay_contract
+
+Proposed strategy:
+$proposed_strategy_prompt
+
+Validation error to correct:
+$validation_error
+
+Return exactly one raw JSON object with no prose, Markdown, or extra keys:
+{"revised_strategy_prompt":"<complete corrected policy>"}

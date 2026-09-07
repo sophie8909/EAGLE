@@ -1,6 +1,6 @@
 # Architecture gaps
 
-Snapshot: 2026-08-19.
+Snapshot: 2026-09-04.
 
 The active architecture has one remaining non-blocking hardening gap.
 
@@ -10,7 +10,12 @@ The active architecture has one remaining non-blocking hardening gap.
 
 All previously tracked candidate, crossover, mutation, evaluation, scoring,
 artifact, runtime, prompt, and legacy-cleanup gaps are closed by the current
-source and contract tests. Historical gap rows remain available in Git history.
+source and contract tests. Code Reflection additionally scopes Reviewer source
+to the editable strategy region and uses deterministic reusable-rule deltas;
+Prompt Compliance replaces the former W/D/L-based Balance operator and audits
+both prompt genes against immutable gameplay/API contracts; these are active
+contracts rather than open gaps. Historical gap rows remain available in Git
+history.
 
 ## Gap update rule
 

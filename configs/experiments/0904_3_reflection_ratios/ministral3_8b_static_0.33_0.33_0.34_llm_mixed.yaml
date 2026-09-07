@@ -1,0 +1,53 @@
+schema_version: experiment-v2
+experiment_name: ministral3_8b_static_0.33_0.33_0.34_llm_mixed
+algorithm: lexicase
+survivor_selection: mu_plus_lambda
+candidate_java_mode: inherited_genotype
+initial_population_mode: llm_generated_policies
+application: microrts
+objectives: {opponent_cases: maximize}
+model:
+  name: ministral3_8b
+  path: experiment_env/model/ministral3-8b-instruct-q4-k-m/Ministral-3-8B-Instruct-2512-Q4_K_M.gguf
+  llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
+  host: 127.0.0.1
+  port: 8080
+  context_size: 32768
+  gpu_layers: -1
+  threads: 8
+  batch_size: 512
+  parallel: 1
+seed_prompt_files: [seeds/worker_rush_policy.txt]
+initial_policy_generation_prompt_file: prompts/initial_policy_generation.txt
+initial_policy_max_attempts: 3
+generation_prompt_file: prompts/initial_generation.txt
+initial_java_seed_path: eagle/java_seeds/worker_rush/CandidateAgent.java
+agent_template_path: eagle/java_seeds/CandidateAgent.java
+generations: 20
+population_size: 10
+execution_mode: openai
+mutation_max_attempts: 3
+generation_max_attempts: 5
+crossover_rate: 0.75
+mutation_rate: 0.85
+random_seed: 7
+reflection_operator_mode: static
+strategy_reflection_probability: 0.33
+code_reflection_probability: 0.33
+prompt_compliance_reflection_probability: 0.34
+aos_minimum_probability: 0.10
+llm:
+  temperature: 0.2
+  initial_policy_temperature: 0.8
+  match_commentator: {enabled: true, temperature: 0.2, sample_count: 10}
+microrts_dir: third_party/microrts
+match_timeout_seconds: 120
+match_artifact_mode: compact
+stagnation_generations: 10
+evaluation:
+  maps:
+    - {path: maps/8x8/basesWorkers8x8.xml, tick_limit: 1500}
+    - {path: maps/16x16/basesWorkers16x16.xml, tick_limit: 3000}
+    - {path: maps/24x24/basesWorkers24x24.xml, tick_limit: 4000}
+  rounds_per_map: 3
+  swap_player_sides: true

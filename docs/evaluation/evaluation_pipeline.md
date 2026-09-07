@@ -12,12 +12,12 @@ matrix, diagnostics, objective construction, and candidate artifact writing.
 | Source validation | validated source | validation diagnostics |
 | Compilation | isolated class directory | compiler stdout/stderr and structured errors |
 | Integration | loadable MicroRTS agent | seven integration checks |
-| Match execution | 126 matches across seven opponents | retained match results and runtime failure |
-| Objective construction | seven opponent scores | seven `-1000.0` case scores on failure |
+| Match execution | 180 matches across ten opponents | retained match results and runtime failure |
+| Objective construction | ten opponent scores | ten `-1000.0` case scores on failure |
 
 `decode_validate_compile_candidate` is the single production boundary for the
 first three rows and can be called by a decoder smoke without launching
-Integration or the 126-match matrix. `evaluate_candidate` consumes that helper;
+Integration or the 180-match matrix. `evaluate_candidate` consumes that helper;
 it does not maintain a second retry implementation. Attempt 1 uses the active
 genotype request (two prompts, plus inherited Java when configured); extraction
 failures may repeat that request, while a complete
@@ -28,18 +28,21 @@ Only the first compilation success is promoted. Exhaustion classifies the final
 attempt's generation, validation, or compilation failure; an Integration failure
 never re-enters the decoder.
 
-In `inherited_genotype` mode generation zero uses this same bounded decoder for
+Inherited `configured_seeds` generation zero uses this same bounded decoder for
 every replicated population slot, so a population of ten records ten separate
-requests/responses and can produce ten different Java phenotypes. Later
-generations pass the independently selected Java component into the base and
-compile-repair requests without mutating that stored input during evaluation.
+requests/responses and can produce ten different Java phenotypes. In inherited
+`llm_generated_policies` mode, generation zero instead uses ten policy genes but
+the same fixed Java seed for every candidate; the policy-only initialization
+calls occur before this evaluation boundary and Java generation is skipped.
+Later generations pass the independently selected Java component into the base
+and compile-repair requests without mutating that stored input during evaluation.
 
 The seven-check Integration probe is deliberately smaller than a match but is
 not an empty-state smoke: it loads separate populated 8×8 bases/workers maps,
 invokes independent one-argument agent instances for the two player sides, and
 rejects null or integrity-invalid `PlayerAction` values before safe issuance and
 one cycle per state. This exposes map-coordinate and cross-side state faults
-before the 126-match matrix without treating an Integration failure as a decoder
+before the 180-match matrix without treating an Integration failure as a decoder
 retry signal.
 
 ## Match protocol
@@ -48,12 +51,15 @@ The fixed roster is defined by `eagle/opponent_cases.py` and resolved by
 `eagle/opponents.py`. Each opponent receives three configured maps, three
 rounds, and both candidate player positions. The matrix is owned by
 `evaluation/match_matrix.py`; execution is owned by
-`evaluation/microrts_runner.py`.
+`evaluation/runtime_evaluation.py`. A map entry may carry a positive `tick_limit`;
+otherwise it inherits the legacy top-level `tick_limit`. The matrix attaches
+the resolved limit to every match specification, so search, AOS head-to-head,
+and final-test matches use the same cap for a given map.
 
 The evaluator groups match results by opponent in
 `evaluation/game_metrics.py`. It retains per-opponent, per-map, per-side, and
 per-match summaries, then computes the weighted aggregate only for reporting.
-The aggregate denominator is the fixed weight sum `11.0`.
+The aggregate denominator is the fixed weight sum `12.5`.
 
 AllInBot remains the pinned upstream implementation: preflight verifies its
 original class and JAR hash.  Real search and final-test matches instantiate a
@@ -70,7 +76,7 @@ so an upstream defect can neither crash the JVM nor become a candidate win.
 ## Objective and diagnostics
 
 `evaluation/objectives.py` returns exactly one evolutionary score for each of
-the seven cases. `code_quality`, compiler diagnostics, function coverage,
+the ten cases. `code_quality`, compiler diagnostics, function coverage,
 strategy alignment, and runtime failure details remain in their diagnostic
 artifacts and reflection context; none is inserted into the evolutionary
 objective vector.
@@ -81,7 +87,7 @@ Per-candidate evaluation artifacts include:
 
 - `evaluation/game_performance.json`: aggregate Game Performance, opponent
   score mapping, opponent summaries, map/side summaries, and match summaries;
-- `evaluation/objectives.json`: seven-case objective mapping;
+- `evaluation/objectives.json`: ten-case objective mapping;
 - `evaluation/code_quality.json`: code-quality diagnostics;
 - `evaluation/matches.json`: compact individual match records.
 
@@ -106,12 +112,12 @@ MicroRTS match seeds are not part of the active contract. The old
 they never controlled MicroRTS randomness. Repeated games are identified by
 `round_index`; match artifacts do not claim seeded reproducibility.
 
-The direct W/D/L summary is consumed only by AOS. It is not added to the seven
+The direct W/D/L summary is consumed only by AOS. It is not added to the ten
 opponent objectives, Game Performance, lexicase, or the opponent archive. An
 offspring that fails generation, validation, compilation, integration, or its
 normal runtime matrix does not launch this evaluator.
 
-`aos_opponent` launches no direct matches: its credit provider reuses the seven
+`aos_opponent` launches no direct matches: its credit provider reuses the ten
 completed opponent summaries from normal evaluation. `static` calculates no
 reward at all. Both adaptive providers feed the updater in `eagle/aos.py` and
 do not alter the normal evaluation vector.

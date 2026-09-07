@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-08-26. This file describes executable repository behavior.
+Snapshot: 2026-09-04. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -13,30 +13,41 @@ Snapshot: 2026-08-26. This file describes executable repository behavior.
   `previous_code` field.
 - Automatically created candidate IDs use `gen_<zero-padded-generation>_<12-hex>`;
   explicitly loaded IDs remain unchanged for artifact and resume compatibility.
-- The search roster is exactly seven fixed opponents: `lightrush`, `heavyrush`,
-  `workerrush`, `allinbot`, `mayari`, `coac`, and `tma`. `PassiveAI`, `RandomAI`,
-  and `RandomBiasedAI` remain available as definitions but are excluded from EA.
-- Every candidate runs 126 matches: three maps × three rounds × both sides
-  for each opponent.
+- `initial_population_mode: llm_generated_policies` keeps one configured policy
+  and fills the remaining population slots with independent policy-only LLM
+  calls. The tracked mixed config therefore produces one Worker Rush policy plus
+  nine generated RTS policy prompts, while all ten generation-zero candidates
+  directly evaluate the same Worker Rush Java seed. This does not instantiate
+  the MicroRTS `RandomAI` opponent.
+- The search roster is exactly ten fixed opponents: `passive`, `random`,
+  `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
+  `coac`, and `tma`.
+- Every candidate runs 180 matches: three maps × three rounds × both sides
+  for each opponent. Evaluation maps may define independent positive tick caps;
+  string-only map entries retain the top-level `tick_limit` fallback. Normal,
+  AOS head-to-head, and final-test matrices share the resolved per-map caps.
 - Match repetitions are identified by `round_index`. The obsolete
   `match_seeds` field, unread `eagle.match.seed` JVM property, and match-level
   seed artifacts are removed; MicroRTS matches do not claim seeded
   reproducibility.
-- Candidate fitness is a seven-field opponent score mapping. Failed or
+- Candidate fitness is a ten-field opponent score mapping. Failed or
   incomplete candidates receive `-1000.0` for every case.
 - Parent selection is seeded lexicase. Survivor selection repeatedly applies
   seeded lexicase without replacement to the joint parent-plus-offspring
   (`mu_plus_lambda`) pool until the fixed population is full; aggregate Game
   Performance and generation age are reporting-only.
 - The reflection-operator controller supports exactly `static`, `aos_opponent`,
-  and `aos_head2head`. Strategy/Code/Balance probabilities mean fixed probabilities in
+  and `aos_head2head`. Strategy/Code/Prompt Compliance probabilities mean fixed probabilities in
   static mode and initial probabilities in AOS modes. Static performs no reward
-  work. Opponent AOS restores execution-first seven-case W/D/L-rank change.
-  Head-to-head AOS preserves the configured direct parent-A matrix and
-  `(wins + 0.5 × draws) / valid matches`. Both adaptive modes share the alpha
-  `0.20` EMA/probability-matching updater and configured minimum floor.
-- The weighted aggregate Game Performance uses weights `1` for the three rush
-  cases and `2` for AllInBot/Mayari/COAC/TMA, with denominator `11.0`, for
+  work. Opponent AOS uses execution-first ten-case W/D/L-rank change.
+  Head-to-head AOS preserves the configured direct comparison matrix and
+  `(wins + 0.5 × draws) / valid matches`. Both adaptive modes compare against
+  the mutation-evidence parent resolved from policy, generation-prompt, or Java
+  provenance, then share the alpha `0.20` EMA/probability-matching updater and
+  configured minimum floor.
+- The weighted aggregate Game Performance uses weights `0.5` for the three
+  baseline cases, `1` for the three rush cases, and `2` for
+  AllInBot/Mayari/COAC/TMA, with denominator `12.5`, for
   reporting only.
 - `code_quality` is a diagnostic and mutation-evidence signal, not an objective
   and not an AOS operator schedule.
@@ -57,6 +68,7 @@ Snapshot: 2026-08-26. This file describes executable repository behavior.
 | Objective construction | `evaluation/objectives.py` |
 | Parent and survivor selection | `eagle/selection.py` |
 | Evolution loop | `eagle/search.py`, `eagle/resume.py` |
+| Generation-zero policy construction | `eagle/initial_population.py` |
 | Experiment/model lifecycle | `eagle/experiment.py`, `eagle/runtime/processes.py` |
 | Fully resolved experiment schema | `eagle/config.py`, run-local `config.yaml` |
 | Per-opponent archive | `eagle/opponent_archive.py` |
@@ -65,7 +77,7 @@ Snapshot: 2026-08-26. This file describes executable repository behavior.
 
 ## Persisted per-generation evidence
 
-Each `generations/generation_*.json` stores candidate IDs with seven-case
+Each `generations/generation_*.json` stores candidate IDs with ten-case
 fitness vectors, one aggregate `metrics` object, and the generation AOS record.
 Candidate state lives once in `candidates/<id>/candidate.json`; specialized
 opponent evidence remains in `evaluation/game_performance.json`.
@@ -76,7 +88,10 @@ Performance plots, per-opponent generation plots with single-match score
 violin distributions, and AOS operator statistics/probability plots. The v2 loader
 materializes bounded candidate analysis views from referenced candidate and
 evaluation artifacts, so compact v3 generation snapshots do not discard the
-single-match distributions.
+single-match distributions. Derived analysis schema `eagle-analysis-v2` places
+every selected candidate and its match evidence at the generation of the
+survivor population snapshot; `birth_generation` separately preserves when the
+candidate was created.
 
 ## Experiment lifecycle and run schema
 
@@ -116,7 +131,8 @@ placeholder contracts. This includes the reusable generation prompt, Code
 Reflection, the library Strategy Reflection/Rewrite
 path, Match Commentator, all four Coach intents, generation, Strategy Alignment,
 the compile-guided Java repair decoder, the action-API guide, and endpoint
-preflight. Experiment YAML files reference
+preflight. The manifest also owns one immutable strategy-level MicroRTS gameplay
+contract shared by policy generation and strategy-facing roles. Experiment YAML files reference
 `prompts/initial_generation.txt`; inline prompt/template fields are rejected.
 The `static_0826` experiment references blank, Worker-rush, and deterministic
 random seed policies in one three-candidate run. The
@@ -127,11 +143,23 @@ to ten generation-zero individuals, and performs ten independent Generator
 calls. Python modules
 only load, render, bound, transport, and validate executable prompt resources.
 In the default mode one configured seed file creates one generation-zero
-candidate. In inherited mode exactly one seed is required and replicated to the
-configured population; the no-op source may also be selected as the immutable
-Generator scaffold. Empty-policy
+candidate. In inherited `configured_seeds` mode exactly one seed is required and
+replicated to the configured population; the no-op source may also be selected
+as the immutable Generator scaffold. In inherited `llm_generated_policies` mode
+that one seed remains in slot one and policy-only LLM calls fill the other slots.
+Empty-policy
 candidates cannot enter Code Reflection, and Strategy Alignment is not
 applicable to them.
+
+The `0903_llm_initial_population` config uses the separately checked-in
+`eagle/java_seeds/worker_rush/CandidateAgent.java`. It preserves one configured Worker Rush policy,
+generates nine policy prompts through `initial_policy_generation.txt`, and skips
+the Java Generator in generation zero so all ten candidates execute identical
+Worker Rush Java. Each generated policy call owns candidate-local request, raw
+response, validation, retry, and timing evidence. Initial policy generation uses
+the shared immutable MicroRTS gameplay contract, allowing strategically diverse
+policies while limiting conditions, entities, and actions to the executable game
+world.
 
 ## Reflection boundary
 
@@ -139,7 +167,11 @@ Reflection context construction remains shared, but each operator projects a
 strictly scoped evidence view. Strategy Reflection consumes policy plus game
 evidence and changes only policy. Code Reflection consumes policy plus Java and
 optional structural/compiler diagnostics, then rewrites only the code-generation
-prompt; it receives no raw game logs. Strategy Reflection samples up to 10 matches with opponent/map-aware
+prompt; it receives no raw game logs. Strategy-facing roles also receive the
+immutable `microrts_gameplay_contract` as fixed domain context. It defines the
+complete entities, production relations, legal actions, and observable state,
+so a replacement may change strategy type without inventing non-game mechanics.
+Strategy Reflection samples up to 10 matches with opponent/map-aware
 coverage, calls one Commentator per selected log, and gives the Coach a
 deterministic all-match global summary. Coverage and fully-beaten diagnostics are
 stored under `mutation/strategy_reflection/`; this does not add a fitness objective
@@ -160,18 +192,38 @@ Validated Coach results use the authoritative input parent policy; the model's
 echo is retained only in raw/parsed evidence.
 
 Code Reviewer/Rewriter evidence is stored under `mutation/code_reflection/`.
-The Rewriter uses the exact JSON object contract with the sole field
-`rewritten_prompt`.
+The Reviewer sees only the editable strategy region plus the immutable API
+guide, so fixed scaffold fields/helpers cannot be mistaken for reachable
+candidate behavior. The Rewriter returns exactly `remove_rule_ids` and
+policy-agnostic `add_rules`; each mutation adds exactly one compact rule and may
+remove at most one existing rule. Runtime validates and deterministically
+renders a bounded canonical generation prompt with stable derived rule IDs.
+Concrete strategy/unit/Java instructions are rejected. A bounded retry receives
+the exact prior validator error instead of blindly repeating the same request,
+and legacy free-form prompts are not copied into the canonical rule set on
+their next successful Code Rewrite.
 The canonical generated Java phenotype is `phenotype/CandidateAgent.java`.
 Default mode uses only the checked-in scaffold. In inherited mode the Generator
 also receives `genotype/inherited_java.java`; Code Reflection reviews the
 child's current policy against that exact Java component and records its Java
 parent/artifact provenance. This explicit mode does not restore the removed
 unversioned `previous_code` field.
-Balance Reflection receives only aggregate opponent/map/side W/D/L evidence;
-it names weak cells and runs ordered Strategy then Code Prompt rewrites. Both
-prompt changes are committed atomically only after both rewrites succeed, with
-evidence under `mutation/balance_reflection/`; it receives no raw trace or Java.
+Prompt Compliance Reflection receives the active strategy and code-generation
+prompts, their canonical reusable-rule view, the immutable gameplay contract,
+and the immutable action/API guide. It does not receive W/D/L, match, fitness,
+Java, compiler, or raw-trace evidence and does not optimize strategy strength.
+It identifies illegal game concepts, unobservable conditions, invalid actions
+or production, policy-specific decoder rules, unsupported APIs, and scaffold
+scope violations. Only issue-bearing prompt genes are rewritten; when both are
+requested, their changes are committed atomically only after both succeed. A
+clean audit records `already_compliant` without manufacturing a mutation. The
+Code Prompt Rewriter
+uses the same validated reusable-rule delta and canonical renderer as Code
+Reflection, so unchecked whole prompts cannot enter the generation gene. At
+explicit rewrite boundaries, historically malformed marked prompts retain only
+individually valid rule lines; rejected lines are discarded before the repair
+delta is applied. Legacy free-form prompts retain no rules. Evidence remains under
+`mutation/prompt_compliance_reflection/`.
 The immutable API guide is rendered after the evolvable decoder gene, and
 validation requires token-equivalent fixed scaffold source outside the strategy
 markers. Fixed action helpers reject wrong-owner and invalid-type commands.

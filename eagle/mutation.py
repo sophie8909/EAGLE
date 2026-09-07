@@ -2,13 +2,12 @@
 
 Prompt rewriting is intentionally owned by the next migration stage. This
 module currently provides typed evidence, a transport abstraction, retry
-handling, timing, and durable Reflection results for both mutation types.
+handling, timing, and durable Reflection results for all prompt mutation types.
 """
 
 from __future__ import annotations
 
 import json
-import re
 import time
 import urllib.error
 import urllib.request
@@ -19,7 +18,13 @@ from typing import Any, Protocol
 
 from .candidate import Candidate
 from .config import ExperimentConfig
-from .llm import LLMServerError, llm_request_progress, read_chat_completion_content, truncate_prompt
+from .llm import (
+    LLMServerError,
+    llm_request_progress,
+    parse_json_object_response,
+    read_chat_completion_content,
+    truncate_prompt,
+)
 from .reflection_context import (
     CandidateReflectionSummary,
     CodeDiagnostics,
@@ -32,10 +37,10 @@ from .reflection_context import (
 )
 # Compatibility re-exports used by the reflection/rewrite API and tests.
 from .reflection_prompts import (
-    build_balance_reflection_prompt,
-    build_balance_reflection_prompt_bundle,
     build_code_reflection_prompt,
     build_code_reflection_prompt_bundle,
+    build_prompt_compliance_reflection_prompt,
+    build_prompt_compliance_reflection_prompt_bundle,
     build_strategy_reflection_prompt,
     build_strategy_reflection_prompt_bundle,
 )
@@ -116,55 +121,6 @@ class ReflectionResult:
         }
 
 
-def parse_json_object_response(response: str) -> dict[str, object]:
-    """Parse one JSON object while tolerating common local-model formatting.
-
-    Raw responses remain unchanged in artifacts.  This compatibility boundary
-    accepts only an optional full Markdown JSON fence and repairs otherwise
-    invalid literal control characters inside JSON strings; it does not extract
-    arbitrary prose or complete truncated objects.
-    """
-
-    source = str(response).lstrip("\ufeff").strip()
-    fence = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", source, re.DOTALL | re.IGNORECASE)
-    if fence:
-        source = fence.group(1).strip()
-    try:
-        payload = json.loads(source)
-    except json.JSONDecodeError:
-        repaired = _escape_json_string_control_characters(source)
-        if repaired == source:
-            raise
-        payload = json.loads(repaired)
-    if not isinstance(payload, dict):
-        raise ValueError("Role response must be one JSON object.")
-    return payload
-
-
-def _escape_json_string_control_characters(source: str) -> str:
-    output: list[str] = []
-    in_string = False
-    escaped = False
-    for character in source:
-        if escaped:
-            output.append(character)
-            escaped = False
-            continue
-        if in_string and character == "\\":
-            output.append(character)
-            escaped = True
-            continue
-        if character == '"':
-            output.append(character)
-            in_string = not in_string
-            continue
-        if in_string and character in {"\n", "\r", "\t"}:
-            output.append({"\n": "\\n", "\r": "\\r", "\t": "\\t"}[character])
-            continue
-        output.append(character)
-    return "".join(output)
-
-
 def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict[str, object], str, str]:
     """Parse the single JSON contract shared by Strategy and Code Reflection."""
     lowered = str(response).lower()
@@ -227,27 +183,76 @@ def parse_reflection_response(response: str, reflection_type: str) -> tuple[dict
         except ValueError as exc:
             raise ValueError("Code Reviewer required_generation_behaviors items must be text corrections.") from exc
         return normalized_payload, json.dumps(normalized_payload, ensure_ascii=False, sort_keys=True), ""
-    elif reflection_type == "balance":
-        weaknesses = payload.get("weaknesses")
-        strategy_focus = payload.get("strategy_focus")
-        code_focus = payload.get("code_generation_focus")
-        if not isinstance(weaknesses, list) or not isinstance(strategy_focus, list) or not isinstance(code_focus, list):
+    elif reflection_type == "prompt_compliance":
+        expected_fields = {
+            "strategy_prompt_issues",
+            "code_generation_prompt_issues",
+            "strategy_rewrite_focus",
+            "code_generation_rewrite_focus",
+        }
+        if set(payload) != expected_fields:
             raise ValueError(
-                "Balance Reflection response must contain weaknesses, strategy_focus, and code_generation_focus arrays."
+                "Prompt Compliance Reflection response must contain exactly "
+                "strategy_prompt_issues, code_generation_prompt_issues, "
+                "strategy_rewrite_focus, and code_generation_rewrite_focus."
             )
-        for item in weaknesses:
-            if not isinstance(item, dict) or not all(
-                isinstance(item.get(key), str) and item[key].strip()
-                for key in ("opponent", "map", "side", "reason")
+        issue_specs = {
+            "strategy_prompt_issues": {
+                "illegal_game_concept",
+                "unobservable_condition",
+                "illegal_action_or_production",
+                "ambiguous_or_conflicting_rule",
+            },
+            "code_generation_prompt_issues": {
+                "policy_specific_instruction",
+                "unsupported_api_assumption",
+                "scope_or_scaffold_violation",
+                "ambiguous_or_conflicting_rule",
+            },
+        }
+        for field, categories in issue_specs.items():
+            issues = payload.get(field)
+            if not isinstance(issues, list):
+                raise ValueError(
+                    "Prompt Compliance Reflection response must contain "
+                    "strategy_prompt_issues and code_generation_prompt_issues arrays."
+                )
+            for issue in issues:
+                if not isinstance(issue, dict) or set(issue) != {
+                    "category", "problem", "correction_goal"
+                }:
+                    raise ValueError(
+                        f"Each {field} item must contain exactly category, problem, "
+                        "and correction_goal."
+                    )
+                if issue.get("category") not in categories:
+                    raise ValueError(
+                        f"Prompt Compliance Reflection {field} category is invalid."
+                    )
+                if not all(
+                    isinstance(issue.get(key), str) and str(issue[key]).strip()
+                    for key in ("problem", "correction_goal")
+                ):
+                    raise ValueError(
+                        f"Prompt Compliance Reflection {field} text must be non-empty."
+                    )
+        focus_pairs = (
+            ("strategy_prompt_issues", "strategy_rewrite_focus"),
+            ("code_generation_prompt_issues", "code_generation_rewrite_focus"),
+        )
+        for issue_field, field in focus_pairs:
+            values = payload.get(field)
+            if not isinstance(values, list) or not all(
+                isinstance(item, str) and item.strip() for item in values
             ):
                 raise ValueError(
-                    "Each Balance Reflection weakness must identify opponent, map, side, and reason."
+                    f"Prompt Compliance Reflection {field} must be a string array."
                 )
-            if item["side"] not in {"p0", "p1", "both"}:
-                raise ValueError("Each Balance Reflection weakness side must be p0, p1, or both.")
-        for values, field in ((strategy_focus, "strategy_focus"), (code_focus, "code_generation_focus")):
-            if not all(isinstance(item, str) and item.strip() for item in values):
-                raise ValueError(f"Balance Reflection {field} entries must be non-empty strings.")
+            if bool(payload[issue_field]) != bool(values):
+                raise ValueError(
+                    f"Prompt Compliance Reflection {field} must be non-empty exactly "
+                    f"when {issue_field} is non-empty."
+                )
         return payload, json.dumps(payload, ensure_ascii=False, sort_keys=True), ""
     else:
         raise ValueError(f"Unknown reflection type: {reflection_type}")
@@ -322,6 +327,43 @@ class MockReflectionBackend:
                 "mutation_plan": {"remove_or_reduce": [], "add_or_strengthen": ["preserve the tested strategy"], "conditional_behaviors": ["When evidence is unavailable, preserve validated behavior."]},
                 "revised_strategy_prompt": "Preserve deterministic behavior and address the observed strategic weakness with conditional rules.",
             })
+        if "Prompt Compliance Reflection stage" in prompt:
+            canonical_code_gene = '"rule_id"' in prompt or "already a canonical" in prompt
+            return json.dumps({
+                "strategy_prompt_issues": [{
+                    "category": "ambiguous_or_conflicting_rule",
+                    "problem": "The policy leaves fallback priority implicit.",
+                    "correction_goal": "State one observable and executable fallback priority.",
+                }],
+                "code_generation_prompt_issues": [] if canonical_code_gene else [{
+                    "category": "ambiguous_or_conflicting_rule",
+                    "problem": "The reusable rules do not define how dependent behaviors remain reachable.",
+                    "correction_goal": "Require prerequisites before their dependent behaviors.",
+                }],
+                "strategy_rewrite_focus": [
+                    "Replace implicit fallbacks with observable legal conditions and actions."
+                ],
+                "code_generation_rewrite_focus": [] if canonical_code_gene else [
+                    "Generalize prerequisite reachability into one reusable translation rule."
+                ],
+            })
+        if "Prompt Compliance Strategy Prompt Rewrite stage" in prompt:
+            return json.dumps({
+                "revised_strategy_prompt": (
+                    "Preserve the intended strategy while expressing every condition through "
+                    "observable MicroRTS state and every response through legal actions."
+                ),
+            })
+        if "Prompt Compliance Code Generation Prompt Rewrite stage" in prompt:
+            return json.dumps({
+                "remove_rule_ids": [],
+                "add_rules": [{
+                    "category": "priority_ordering",
+                    "instruction": (
+                        "Resolve overlapping policy conditions with one explicit deterministic priority."
+                    ),
+                }],
+            })
         if "Code Reflection stage" in prompt:
             return json.dumps({
                 "assessment": "java_faithfully_implements_policy",
@@ -336,10 +378,13 @@ class MockReflectionBackend:
             })
         if "Code Generation Prompt Rewrite stage" in prompt:
             return json.dumps({
-                "rewritten_prompt": (
-                    "Preserve the validated constraints and apply only the "
-                    "evidence-backed code-generation revision."
-                ),
+                "remove_rule_ids": [],
+                "add_rules": [{
+                    "category": "requirement_coverage",
+                    "instruction": (
+                        "Make every stated prerequisite reachable before its dependent behavior."
+                    ),
+                }],
             })
         if "MATCH_COMMENTATOR_OUTPUT=chunk" in prompt:
             source = prompt.split("MATCH_COMMENTATOR_OUTPUT=chunk", 1)[1]
@@ -496,8 +541,21 @@ class ReflectionStage:
             status = "success"
             error: str | None = None
             response = ""
+            attempt_request = (
+                request
+                if last_error is None
+                else _build_role_validation_retry_prompt(
+                    request, last_response, last_error
+                )
+            )
+            if artifact_dir is not None:
+                assert stage_dir is not None
+                _write_text(
+                    stage_dir / f"{stage}_attempt_{attempt_number:03d}_request.txt",
+                    attempt_request,
+                )
             try:
-                response = self.backend.generate(request)
+                response = self.backend.generate(attempt_request)
                 last_response = response
                 parsed, analysis_summary, revised_prompt = parse_reflection_response(response, reflection_type)
                 _validate_reflection_candidate_preconditions(
@@ -534,7 +592,7 @@ class ReflectionStage:
             if self.logger is not None:
                 self.logger.write(
                     stage=stage,
-                    input_text=request,
+                    input_text=attempt_request,
                     response_text=response,
                     status=status,
                     backend=self.backend_name,
@@ -592,6 +650,20 @@ class ReflectionStage:
         )
 
 
+def _build_role_validation_retry_prompt(
+    original_request: str,
+    previous_response: str,
+    error: str,
+) -> str:
+    from .prompts import render_prompt
+
+    return render_prompt("role_validation_retry", {
+        "validation_error": error,
+        "previous_response": previous_response,
+        "original_request": original_request,
+    })
+
+
 def _validate_reflection_candidate_preconditions(
     candidate: Candidate,
     reflection_type: str,
@@ -599,7 +671,40 @@ def _validate_reflection_candidate_preconditions(
 ) -> None:
     """Reject role output that invents requirements for an absent policy gene."""
 
-    if reflection_type.removesuffix("_reflection") != "code":
+    normalized_type = reflection_type.removesuffix("_reflection")
+    if normalized_type == "prompt_compliance":
+        from .reusable_generation_prompt import parse_reusable_generation_rules
+        from .strategy_compliance import validate_strategy_prompt_contract
+
+        try:
+            canonical_rules = parse_reusable_generation_rules(candidate.generation_prompt)
+        except ValueError as exc:
+            canonical_rules = ()
+            if not parsed.get("code_generation_prompt_issues"):
+                raise ValueError(
+                    "The current code-generation prompt has deterministic reusable-rule "
+                    f"violations that must be reported: {exc} Return non-empty "
+                    "code_generation_prompt_issues and "
+                    "code_generation_rewrite_focus arrays."
+                ) from exc
+        if canonical_rules and parsed.get("code_generation_prompt_issues"):
+            raise ValueError(
+                "The current code-generation prompt is already a canonical, validated "
+                "reusable-rule gene. Do not attribute strategy-policy defects to it; "
+                "return empty code_generation_prompt_issues and "
+                "code_generation_rewrite_focus arrays."
+            )
+        try:
+            validate_strategy_prompt_contract(candidate.strategy_prompt)
+        except ValueError as exc:
+            if not parsed.get("strategy_prompt_issues"):
+                raise ValueError(
+                    "The current strategy prompt has deterministic gameplay-contract "
+                    f"violations that must be reported: {exc} Return non-empty "
+                    "strategy_prompt_issues and strategy_rewrite_focus arrays."
+                ) from exc
+        return
+    if normalized_type != "code":
         return
     if candidate.strategy_prompt.strip():
         return

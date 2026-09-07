@@ -37,6 +37,24 @@ class PromptResourceTests(unittest.TestCase):
             self.assertEqual(template.placeholders, tuple(dict.fromkeys(template.required_variables)))
             self.assertTrue(template.render(template.mock_context()).strip())
 
+    def test_gameplay_contract_is_closed_world_and_strategy_neutral(self) -> None:
+        contract = load_prompt("microrts_gameplay_contract")
+
+        self.assertIn("closed-world description", contract)
+        self.assertIn("Complete entity set and production graph", contract)
+        self.assertIn("Complete strategic action set", contract)
+        self.assertIn("Observable strategy state", contract)
+        self.assertIn("Base: stationary stockpile", contract)
+        self.assertIn("Barracks", contract)
+        self.assertIn("Worker", contract)
+        self.assertIn("Light", contract)
+        self.assertIn("Heavy", contract)
+        self.assertIn("Ranged", contract)
+        self.assertIn("Worker move 10, attack 5,\n  harvest 20, return 10, and production 50", contract)
+        self.assertIn("Base construction 250", contract)
+        self.assertIn("may use any strategic identity", contract)
+        self.assertNotIn("Worker Rush", contract)
+
     def test_prompt_bodies_are_not_embedded_in_runtime_python(self) -> None:
         runtime_sources = "\n".join(
             path.read_text(encoding="utf-8")
@@ -79,15 +97,27 @@ class PromptResourceTests(unittest.TestCase):
             self.assertEqual(config.generation_prompt_file, DEFAULT_PROMPT_DIR / "initial_generation.txt", path)
             self.assertEqual(config.generation_prompt, load_prompt("initial_generation"), path)
             self.assertEqual(
-                config.initial_java_seed_path,
-                Path("eagle/java_seeds/CandidateAgent.java").resolve(),
+                config.initial_policy_generation_prompt_file,
+                DEFAULT_PROMPT_DIR / "initial_policy_generation.txt",
                 path,
             )
-            self.assertEqual(
-                hashlib.sha256(config.initial_java_seed_path.read_bytes()).hexdigest(),
-                "22ab7b94adbcee2cce69afec781cd5c183c066c85a95a151daac10c0e5ab820b",
-                path,
-            )
+            if config.initial_population_mode == "llm_generated_policies":
+                self.assertEqual(
+                    config.initial_java_seed_path,
+                    Path("eagle/java_seeds/worker_rush/CandidateAgent.java").resolve(),
+                    path,
+                )
+            else:
+                self.assertEqual(
+                    config.initial_java_seed_path,
+                    Path("eagle/java_seeds/CandidateAgent.java").resolve(),
+                    path,
+                )
+                self.assertEqual(
+                    hashlib.sha256(config.initial_java_seed_path.read_bytes()).hexdigest(),
+                    "22ab7b94adbcee2cce69afec781cd5c183c066c85a95a151daac10c0e5ab820b",
+                    path,
+                )
 
     def test_static_0826_uses_three_distinct_seed_policies_and_equal_operator_weights(self) -> None:
         config = ExperimentConfig.from_file(
@@ -173,7 +203,7 @@ class PromptResourceTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, field):
                 ExperimentConfig.from_mapping({field: value})
         with self.assertRaisesRegex(ValueError, "derived"):
-            ExperimentConfig.from_mapping({"evaluation": {"matches_per_candidate": 126}})
+            ExperimentConfig.from_mapping({"evaluation": {"matches_per_candidate": 180}})
 
 
 if __name__ == "__main__":

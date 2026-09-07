@@ -51,15 +51,20 @@ This is the canonical owner of candidate and LLM-attempt timing fields. Normativ
 }
 ```
 
-For a successful evaluation, `match_durations_seconds` has exactly 126 entries.
+For a successful evaluation, `match_durations_seconds` has exactly 180 entries.
 For partial failure it has one entry per attempted match and is interpreted with
 match statuses.
 
 Default-mode generation-zero seed loading is not an LLM request and has null
-generation timing with an empty attempt list. Inherited-mode generation zero
-uses the normal bounded `generation_llm` attempt records independently for all
-`population_size` candidates. Strategy Alignment has null timing and no
-attempts when an empty policy makes the diagnostic not applicable.
+generation timing with an empty attempt list. Inherited `configured_seeds`
+generation zero uses the normal bounded `generation_llm` attempt records
+independently for all `population_size` candidates. Inherited
+`llm_generated_policies` generation zero also has null Java-generation timing;
+each generated policy instead owns UTC-bounded attempts below
+`initialization/policy_generation/`, and each actual request emits one run
+`timing.jsonl` event with `operation_type: initialization` and
+`operation_stage: initial_policy_generation`. Strategy Alignment has null timing
+and no attempts when an empty policy makes the diagnostic not applicable.
 
 For bounded Java decoding, `generation_llm.attempts` is the ordered outer
 `generation_attempt` list and includes `generation_attempt_id`, request hash,
@@ -85,6 +90,16 @@ compilation, integration, and evaluation.
 
 Attempt order is stable and one-based. The owning stage artifact provides model/backend/request/response paths; timing may reference those paths in a versioned extension but must not duplicate their content.
 
+Code Prompt Rewrite attempts, including the Prompt Compliance code rewrite, include
+structured reusable-rule validation inside the owning attempt duration. An
+invalid category, unknown removal ID, concrete policy/Java instruction, whole
+replacement prompt, or ineffective delta is an ordinary failed rewrite attempt
+and retains the same raw-response and retry timing contract. After deterministic
+validation rejects an attempt, the next bounded request wraps the original
+request with the exact prior error; its timing still covers one request plus
+validation and its request/raw-response evidence is stored under the matching
+one-based attempt number.
+
 Java generation has two distinct axes. `generation_attempt` (and stable
 `generation_attempt_id`) identifies the outer decoder step;
 `transport_attempt` identifies an HTTP transport try inside that sample. The
@@ -100,9 +115,12 @@ immediately previous complete source's structured validation/javac feedback.
 ## Match timing
 
 Each match-level `timing.json` records at least start, finish, duration, process start/finish if distinct, timeout limit, and status. Candidate totals must agree with the match duration list within documented measurement boundaries.
+The wall-clock `timeout_seconds` remains distinct from the map-specific game
+tick cap; the latter is persisted as `max_cycles` in match result/metadata
+evidence and does not change timing arithmetic.
 
 AOS parent-vs-offspring matches use the same match-level timing schema under
-`aos/head_to_head/matches/`. They are separate from the 126 normal-evaluation
+`aos/head_to_head/matches/`. They are separate from the 180 normal-evaluation
 durations in candidate `timing.json`; their aggregate is reconstructable from
 the 18 AOS-owned match timing files and does not change normal evaluation counts.
 
@@ -112,7 +130,7 @@ the 18 AOS-owned match timing files and does not change normal evaluation counts
 - Attempt count/order matches persisted raw request/response artifacts.
 - Skipped/no-mutation stages are null with empty attempts.
 - Failure timestamps close at the terminal stage and preserve earlier durations.
-- Exactly 126 match durations on successful evaluation.
+- Exactly 180 match durations on successful evaluation.
 - Candidate total is not less than any contained stage duration.
 
 
@@ -126,7 +144,7 @@ when Java extraction or validation fails after Reflection and Rewrite have compl
 
 ## Phase 4 implementation note
 
-Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 126 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
+Candidate timing now includes post-Integration evaluation start/finish/duration, one duration for every attempted match, total match duration, Strategy Alignment request-attempt timing, and objective-calculation timing. Successful evaluation has exactly 180 match durations; partial runtime failure retains one duration per attempted match. Candidate-total plus selection/crossover timing remain tracked broader artifact work.
 
 ## Canonical runtime timing additions
 
@@ -134,10 +152,11 @@ Run-level timing.jsonl contains event=generation and event=llm_request records. 
 
 Candidate timing.json contains operation-specific mutation and crossover generation-only spans, the shared child_generation span, separate validation/compilation/integration/evaluation spans, and child_total. Durations use a monotonic clock; UTC fields are display timestamps.
 
-Balance Reflection records one `reflector_llm` attempt stream and two ordered
-rewrite attempts in `rewriter_llm` (strategy first, code-generation second).
+Prompt Compliance Reflection records one `reflector_llm` attempt stream and
+zero, one, or two ordered rewrite streams in `rewriter_llm` according to the
+reported issue-bearing genes (strategy before code-generation when both apply).
 Each request emits one run-level `llm_request` event and remains candidate-owned
-under `mutation/balance_reflection/`.
+under `mutation/prompt_compliance_reflection/`.
 
 ## Compact snapshot retention (2026-08-04)
 

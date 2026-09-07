@@ -12,6 +12,31 @@ from eagle.rewrite import (
     build_code_rewrite_prompt,
     build_strategy_rewrite_prompt,
 )
+from eagle.reusable_generation_prompt import (
+    RULES_END_MARKER,
+    RULES_START_MARKER,
+    parse_reusable_generation_rules,
+)
+
+
+GENERIC_RULE = "Make every stated prerequisite reachable before its dependent behavior."
+
+
+def code_rule_delta(*, instruction: str = GENERIC_RULE, extra: bool = False) -> str:
+    payload = {
+        "remove_rule_ids": [],
+        "add_rules": [{
+            "category": "requirement_coverage",
+            "instruction": instruction,
+        }],
+    }
+    if extra:
+        payload["analysis"] = "not allowed"
+    return json.dumps(payload)
+
+
+def strategy_rewrite(prompt: str) -> str:
+    return json.dumps({"revised_strategy_prompt": prompt})
 
 
 class ScriptedRewriteBackend:
@@ -45,7 +70,10 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         )
 
     def test_strategy_rewrite_call_order_and_component_isolation(self):
-        backend = ScriptedRewriteBackend((self._strategy_reflection(), "new strategy prompt"))
+        backend = ScriptedRewriteBackend((
+            self._strategy_reflection(),
+            strategy_rewrite("new strategy prompt"),
+        ))
         mutation = PromptRewriteMutation(
             self.config,
             mutation_type="strategy",
@@ -65,7 +93,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
     def test_code_rewrite_changes_only_generation_prompt(self):
         backend = ScriptedRewriteBackend((
             self._code_reflection(),
-            json.dumps({"rewritten_prompt": "new generation prompt"}),
+            code_rule_delta(),
         ))
         mutation = PromptRewriteMutation(
             self.config,
@@ -75,13 +103,15 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         )
         child = mutation.mutate(self.candidate, self.context)
         self.assertEqual(child.strategy_prompt, self.candidate.strategy_prompt)
-        self.assertEqual(child.generation_prompt, "new generation prompt")
+        self.assertIn(RULES_START_MARKER, child.generation_prompt)
+        self.assertIn(GENERIC_RULE, child.generation_prompt)
+        self.assertEqual(len(parse_reusable_generation_rules(child.generation_prompt)), 1)
         self.assertEqual(child.mutation_type, "code")
 
     def test_code_rewrite_requires_exact_json_contract_and_retries(self):
         backend = ScriptedRewriteBackend((
-            json.dumps({"rewritten_prompt": "bad", "analysis": "extra"}),
-            "```json\n{\"rewritten_prompt\":\"usable generation prompt\"}\n```",
+            code_rule_delta(extra=True),
+            "```json\n" + code_rule_delta() + "\n```",
         ))
         result = PromptRewriteStage(backend, max_attempts=2).run(
             rewrite_type="generation_prompt_rewrite",
@@ -89,12 +119,76 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
             request="rewrite request",
         )
         self.assertTrue(result.succeeded)
-        self.assertEqual(result.rewritten_prompt, "usable generation prompt")
+        self.assertIn(GENERIC_RULE, result.rewritten_prompt)
+        self.assertIn(RULES_END_MARKER, result.rewritten_prompt)
         self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
+        self.assertEqual(backend.calls[0], "rewrite request")
+        self.assertIn("previous response was rejected", backend.calls[1].lower())
+        self.assertIn("exactly remove_rule_ids and add_rules", backend.calls[1])
+        self.assertIn("rewrite request", backend.calls[1])
+
+    def test_code_rewrite_retries_multi_rule_output_with_actionable_feedback(self):
+        excessive_delta = json.dumps({
+            "remove_rule_ids": [],
+            "add_rules": [
+                {
+                    "category": "requirement_coverage",
+                    "instruction": "Preserve each explicit threshold as a reachable condition.",
+                },
+                {
+                    "category": "priority_ordering",
+                    "instruction": "Resolve overlapping conditions in their stated priority order.",
+                },
+            ],
+        })
+        backend = ScriptedRewriteBackend((excessive_delta, code_rule_delta()))
+
+        result = PromptRewriteStage(backend, max_attempts=2).run(
+            rewrite_type="generation_prompt_rewrite",
+            candidate=self.candidate,
+            request="original code rewrite request",
+        )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.attempts[0].error, "Code Rewrite add_rules must contain exactly 1 rule.")
+        self.assertIn(result.attempts[0].error, backend.calls[1])
+        self.assertIn("original code rewrite request", backend.calls[1])
+
+    def test_code_rewrite_recovers_historically_malformed_balance_prompt(self):
+        malformed_prompt = """Translate the policy.
+EAGLE_REUSABLE_RULES_START
+[**counterplay-priority**] counterplay_priority | Implement opponent-specific behavior:
+  - lightrush: produce a concrete counter
+EAGLE_REUSABLE_RULES_END"""
+        candidate = Candidate(
+            id="malformed-prompt-compliance-child",
+            generation=2,
+            strategy_prompt=self.candidate.strategy_prompt,
+            generation_prompt=malformed_prompt,
+            operator="copy",
+        )
+        backend = ScriptedRewriteBackend((
+            self._code_reflection(),
+            code_rule_delta(),
+        ))
+
+        child = PromptRewriteMutation(
+            self.config,
+            mutation_type="code",
+            reflection_backend=backend,
+            rewrite_backend=backend,
+        ).mutate(candidate, self.context)
+
+        self.assertTrue(child.metadata["mutation"]["applied"])
+        self.assertNotIn("counterplay-priority", child.generation_prompt)
+        self.assertIn(GENERIC_RULE, child.generation_prompt)
+        self.assertEqual(len(parse_reusable_generation_rules(child.generation_prompt)), 1)
+        self.assertIn("Current reusable rules", backend.calls[1])
+        self.assertIn("[]", backend.calls[1])
 
     def test_code_rewrite_rejects_java_inside_json(self):
         backend = ScriptedRewriteBackend((
-            json.dumps({"rewritten_prompt": "package ai.generated; public class CandidateAgent {}"}),
+            code_rule_delta(instruction="Call implementPolicy() before returning Java."),
         ))
         result = PromptRewriteStage(backend, max_attempts=1).run(
             rewrite_type="generation_prompt_rewrite",
@@ -102,7 +196,7 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
             request="rewrite request",
         )
         self.assertFalse(result.succeeded)
-        self.assertIn("only the rewritten prompt", result.error)
+        self.assertIn("plain policy-agnostic prose", result.error)
     def test_rewrite_prompt_builders_include_reflection_and_original_component(self):
         backend = ScriptedRewriteBackend((self._strategy_reflection(),))
         reflection = ReflectionStage(backend, max_attempts=1).run(
@@ -121,14 +215,23 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         code_prompt = build_code_rewrite_prompt(self.candidate, code_reflection, self.context)
         self.assertIn("old strategy", strategy_prompt)
         self.assertIn("reflection", strategy_prompt)
+        self.assertIn("IMMUTABLE MICRORTS GAMEPLAY CONTRACT", strategy_prompt)
+        self.assertIn("may change strategy type", strategy_prompt)
         self.assertIn("old generation prompt", code_prompt)
+        self.assertIn("Current reusable rules", code_prompt)
+        self.assertIn('"add_rules"', code_prompt)
         self.assertIn("Policy-Code Alignment Review", code_prompt)
         self.assertIn("Immutable MicroRTS API contract", code_prompt)
         self.assertIn("commandMove", code_prompt)
+        self.assertIn("exactly one add_rules item", code_prompt)
+        self.assertIn("12-240 characters", code_prompt)
         self.assertNotIn("old strategy", code_prompt)
 
     def test_rewrite_output_rejects_java_and_retries(self):
-        backend = ScriptedRewriteBackend(("package ai.generated; class CandidateAgent {}", "usable revised prompt"))
+        backend = ScriptedRewriteBackend((
+            "package ai.generated; class CandidateAgent {}",
+            strategy_rewrite("usable revised prompt"),
+        ))
         result = PromptRewriteStage(backend, max_attempts=2).run(
             rewrite_type="strategy_prompt_rewrite",
             candidate=self.candidate,
@@ -137,6 +240,38 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
         self.assertTrue(result.succeeded)
         self.assertEqual(result.rewritten_prompt, "usable revised prompt")
         self.assertEqual([attempt.status for attempt in result.attempts], ["error", "success"])
+
+    def test_strategy_rewrite_requires_exact_json_string_contract(self):
+        backend = ScriptedRewriteBackend((
+            "plain strategy prompt",
+            json.dumps({"revised_strategy_prompt": {"rules": []}}),
+        ))
+        result = PromptRewriteStage(backend, max_attempts=2).run(
+            rewrite_type="strategy_prompt_rewrite",
+            candidate=self.candidate,
+            request="rewrite request",
+        )
+        self.assertFalse(result.succeeded)
+        self.assertIn("non-empty string", result.error)
+        self.assertIn("plain strategy prompt", backend.calls[1])
+        self.assertIn("Expecting value", backend.calls[1])
+
+    def test_strategy_rewrite_reuses_string_list_as_retry_context(self):
+        backend = ScriptedRewriteBackend((
+            json.dumps({
+                "revised_strategy_prompt": ["First legal rule.", "Second legal rule."]
+            }),
+            strategy_rewrite("usable revised prompt"),
+        ))
+        result = PromptRewriteStage(backend, max_attempts=2).run(
+            rewrite_type="strategy_prompt_rewrite",
+            candidate=self.candidate,
+            request="rewrite request",
+        )
+        self.assertTrue(result.succeeded)
+        self.assertIn("ROLE: strategy_contract_rewriter", backend.calls[1])
+        self.assertIn("1. First legal rule.", backend.calls[1])
+        self.assertIn("2. Second legal rule.", backend.calls[1])
 
     def test_reflection_and_rewrite_artifacts_survive_rewrite_failure(self):
         backend = ScriptedRewriteBackend((self._strategy_reflection(), "", ""))
@@ -155,6 +290,19 @@ class Phase2BPromptRewriteTests(unittest.TestCase):
             self.assertTrue((mutation_dir / "reflector_response_raw.txt").exists())
             self.assertTrue((mutation_dir / "rewriter_request.txt").exists())
             self.assertTrue((mutation_dir / "rewriter_response_raw.txt").exists())
+            self.assertEqual(
+                (mutation_dir / "rewriter_attempt_001_request.txt").read_text(encoding="utf-8"),
+                backend.calls[1],
+            )
+            retry_request = (mutation_dir / "rewriter_attempt_002_request.txt").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("non-empty prompt", retry_request)
+            self.assertEqual(retry_request, backend.calls[2])
+            self.assertGreater(
+                retry_request.rfind("non-empty prompt"),
+                retry_request.rfind("Original request:"),
+            )
             self.assertTrue((mutation_dir / "original_policy_prompt.txt").exists())
             self.assertTrue((Path(temp) / "timing.json").exists())
 

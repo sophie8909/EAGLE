@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import unittest
 
+from eagle.config import ExperimentConfig
 from evaluation.match_matrix import MatrixOpponent, build_match_matrix, canonical_evaluation_maps
+
+
+MAPS_WITH_TICK_LIMITS = [
+    {"path": "maps/8x8/basesWorkers8x8.xml", "tick_limit": 1500},
+    {"path": "maps/16x16/basesWorkers16x16.xml", "tick_limit": 3000},
+    {"path": "maps/24x24/basesWorkers24x24.xml", "tick_limit": 4000},
+]
 
 
 class EvaluationMatrixTests(unittest.TestCase):
@@ -27,6 +35,45 @@ class EvaluationMatrixTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(len(first), 36)
         self.assertEqual(first[18].opponent_id, "b")
+
+    def test_map_specific_tick_limits_are_copied_to_every_match(self):
+        matrix = build_match_matrix(
+            [MatrixOpponent("opponent")],
+            canonical_evaluation_maps(
+                ("map-a", "map-b", "map-c"),
+                tick_limits=(1500, 3000, 4000),
+            ),
+        )
+
+        self.assertEqual([item.tick_limit for item in matrix[:6]], [1500] * 6)
+        self.assertEqual([item.tick_limit for item in matrix[6:12]], [3000] * 6)
+        self.assertEqual([item.tick_limit for item in matrix[12:]], [4000] * 6)
+
+    def test_config_parses_and_serializes_map_specific_tick_limits(self):
+        config = ExperimentConfig.from_mapping({
+            "tick_limit": 999,
+            "evaluation": {"maps": MAPS_WITH_TICK_LIMITS},
+        })
+
+        config.validate()
+        self.assertEqual(config.resolved_evaluation_map_tick_limits, (1500, 3000, 4000))
+        self.assertEqual(config.to_mapping()["evaluation"]["maps"], MAPS_WITH_TICK_LIMITS)
+
+    def test_string_map_entries_keep_the_global_tick_limit_fallback(self):
+        config = ExperimentConfig.from_mapping({
+            "tick_limit": 777,
+            "evaluation": {"maps": [item["path"] for item in MAPS_WITH_TICK_LIMITS]},
+        })
+
+        self.assertEqual(config.resolved_evaluation_map_tick_limits, (777, 777, 777))
+
+    def test_nonpositive_map_tick_limit_is_rejected(self):
+        invalid_maps = [dict(item) for item in MAPS_WITH_TICK_LIMITS]
+        invalid_maps[1]["tick_limit"] = 0
+        config = ExperimentConfig.from_mapping({"evaluation": {"maps": invalid_maps}})
+
+        with self.assertRaisesRegex(ValueError, "map tick limits must be at least 1"):
+            config.validate()
 
 
 if __name__ == "__main__":

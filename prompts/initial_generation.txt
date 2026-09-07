@@ -1,1 +1,10 @@
-Generate one complete, compilable CandidateAgent.java source file. Return the entire Java file from the package declaration through the final class brace. Return raw Java only: no markdown fence, JSON wrapper, explanation, placeholder, ellipsis, or omitted section. Copy every token outside EAGLE_AGENT_STRATEGY_START/END from the canonical scaffold; only the strategy region may differ. Preserve every fixed method even when it appears unused. Implement the marked strategy region with deterministic Java and do not call network, file, subprocess, environment, or runtime LLM APIs.
+Translate the supplied policy into deterministic Java inside the editable strategy region. The separately supplied immutable scaffold, API guide, and final output contract always take priority.
+
+EAGLE_REUSABLE_RULES_START
+[core-requirement-coverage] requirement_coverage | Translate every explicit policy requirement into reachable strategy behavior.
+[core-priority-ordering] priority_ordering | Preserve stated priority and fallback ordering when multiple conditions can apply.
+[core-role-assignment] role_assignment | Keep policy-defined roles mutually exclusive within one decision cycle unless the policy explicitly allows overlap.
+[core-state-continuity] state_continuity | Implement continuous behavior as a state-based check performed on every decision cycle.
+[core-targeting-fallback] targeting_fallback | Map every conditional targeting fallback to an explicit reachable branch.
+[core-policy-grounding] policy_grounding | Use only concepts stated by the policy or exposed by the immutable API contract.
+EAGLE_REUSABLE_RULES_END

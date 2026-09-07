@@ -53,7 +53,12 @@ class Phase2AReflectionTests(unittest.TestCase):
             round_state_summary={"last_round": 90},
             behavior_summary={"attack_timing": "late"},
             game_performance=61.0,
-            latest_child_java="latest child Java",
+            latest_child_java=(
+                "FIXED_JAVA_SHOULD_NOT_BE_REVIEWED\n"
+                "// EAGLE_AGENT_STRATEGY_START\n"
+                "private void decide(AgentContext context) { // latest child Java\n}\n"
+                "// EAGLE_AGENT_STRATEGY_END\n"
+            ),
             raw_generation_response="raw response",
             validation_result={"ok": True},
             compilation_result={"ok": False, "errors": ["missing symbol"]},
@@ -84,7 +89,8 @@ class Phase2AReflectionTests(unittest.TestCase):
         prompt = build_code_reflection_prompt(self.candidate, self.context)
         for expected in (
             "Current policy prompt",
-            "Generated CandidateAgent.java",
+            "Editable CandidateAgent strategy region",
+            "Immutable scaffold/API contract",
             "Optional structural/compiler evidence",
             "Return exactly one JSON object",
             "Every value inside an alignment_review item must be one JSON string",
@@ -92,6 +98,7 @@ class Phase2AReflectionTests(unittest.TestCase):
         ):
             self.assertIn(expected, prompt)
         self.assertNotIn("Opponent summaries", prompt)
+        self.assertNotIn("FIXED_JAVA_SHOULD_NOT_BE_REVIEWED", prompt)
 
     def test_reflection_retries_invalid_output_and_records_attempts(self):
         valid = json.dumps({
@@ -110,6 +117,38 @@ class Phase2AReflectionTests(unittest.TestCase):
         self.assertEqual([attempt.attempt for attempt in result.attempts], [1, 2])
         self.assertEqual(result.attempts[0].status, "error")
         self.assertEqual(result.attempts[1].status, "success")
+        self.assertIn("previous response was rejected", backend.calls[1].lower())
+        self.assertIn("must not contain generated Java", backend.calls[1])
+        self.assertIn("request", backend.calls[1])
+        self.assertGreater(
+            backend.calls[1].rfind("must not contain generated Java"),
+            backend.calls[1].rfind("Original request:"),
+        )
+
+    def test_reflection_retry_persists_each_exact_attempt_request(self):
+        valid = json.dumps({
+            "assessment": "java_faithfully_implements_policy",
+            "alignment_review": [],
+            "required_generation_behaviors": [],
+        })
+        backend = ScriptedBackend(("not json", valid))
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            result = ReflectionStage(backend, max_attempts=2).run(
+                reflection_type="code_reflection",
+                candidate=self.candidate,
+                request="ORIGINAL REVIEW REQUEST",
+                artifact_dir=root,
+            )
+
+            self.assertTrue(result.succeeded)
+            mutation_dir = root / "mutation" / "code_reflection"
+            first = (mutation_dir / "reflector_attempt_001_request.txt").read_text()
+            second = (mutation_dir / "reflector_attempt_002_request.txt").read_text()
+            self.assertEqual(first, backend.calls[0])
+            self.assertEqual(second, backend.calls[1])
+            self.assertEqual(first, "ORIGINAL REVIEW REQUEST")
+            self.assertIn("Expecting value", second)
 
     def test_code_reflection_accepts_full_json_markdown_fence(self):
         response = "```json\n" + json.dumps({

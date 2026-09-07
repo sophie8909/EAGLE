@@ -186,7 +186,7 @@ class CanonicalRunArtifactTests(unittest.TestCase):
                 strategy_prompt="persist without changing behavior",
                 status="evaluated",
                 fitness_objectives={case: 7.5 for case in LEXICASE_CASES},
-                game_eval_result={"game_performance": 7.5, "completed_match_count": 126},
+                game_eval_result={"game_performance": 7.5, "completed_match_count": 180},
                 mutation_type="strategy",
             )
             rng = random.Random(37)
@@ -200,7 +200,7 @@ class CanonicalRunArtifactTests(unittest.TestCase):
             self.assertEqual(rng.getstate(), rng_state)
             self.assertEqual(candidate.to_json_dict(), candidate_state)
             self.assertEqual(candidate.fitness_objectives["lightrush"], 7.5)
-            self.assertEqual(candidate.game_eval_result["completed_match_count"], 126)
+            self.assertEqual(candidate.game_eval_result["completed_match_count"], 180)
 
     def test_final_population_and_manifest(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -285,7 +285,7 @@ class CanonicalRunArtifactTests(unittest.TestCase):
                 status="failed",
                 failure_reason="compilation",
                 game_eval_result={
-                    "expected_match_count": 126,
+                    "expected_match_count": 180,
                     "completed_match_count": 0,
                 },
             ),
@@ -293,8 +293,8 @@ class CanonicalRunArtifactTests(unittest.TestCase):
                 id="complete",
                 status="evaluated",
                 game_eval_result={
-                    "expected_match_count": 126,
-                    "completed_match_count": 126,
+                    "expected_match_count": 180,
+                    "completed_match_count": 180,
                 },
             ),
             Candidate(
@@ -302,16 +302,16 @@ class CanonicalRunArtifactTests(unittest.TestCase):
                 status="failed",
                 failure_reason="runtime",
                 game_eval_result={
-                    "expected_match_count": 126,
-                    "completed_match_count": 63,
+                    "expected_match_count": 180,
+                    "completed_match_count": 90,
                 },
             ),
         ]
 
         metrics = generation_metrics(4, candidates)
 
-        self.assertEqual(metrics["expected_match_count"], 378)
-        self.assertEqual(metrics["completed_match_count"], 189)
+        self.assertEqual(metrics["expected_match_count"], 540)
+        self.assertEqual(metrics["completed_match_count"], 270)
 
     def test_population_snapshot_is_compact_but_keeps_fitness_and_timing(self):
         with tempfile.TemporaryDirectory() as directory:

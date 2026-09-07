@@ -1,0 +1,19 @@
+Initial Policy Generation stage.
+
+Generate one RTS strategy for MicroRTS. This is generated policy $sample_index in a population of $population_size.
+
+Use the following domain contract as the complete game world. The policy may
+use a genuinely different strategy type, but every condition and action must be
+expressible under this contract:
+$gameplay_contract
+
+The strategy must be a concrete, actionable game-playing policy. It may use Workers, Bases, Barracks, Light, Heavy, or Ranged units; economy, production, expansion, defense, spatial control, target selection, and attack timing may be combined in any coherent way. Do not select or describe the built-in RandomAI agent, and do not output Java code.
+
+Avoid duplicating any of these already selected strategy prompts:
+$existing_strategy_prompts
+
+If a previous attempt failed validation, correct this issue: $prior_error
+
+Return only one valid JSON object with exactly this shape. Do not use Markdown
+fences or prose, and escape line breaks inside the JSON string as \n:
+{"strategy_prompt":"the complete generated RTS policy prompt"}

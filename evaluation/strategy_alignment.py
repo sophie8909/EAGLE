@@ -179,10 +179,11 @@ def build_alignment_request(
     generated_java: str,
     behavior_summary: dict[str, Any] | None,
 ) -> str:
-    from eagle.prompts import render_prompt
+    from eagle.prompts import load_prompt, render_prompt
 
     behavior = json.dumps(behavior_summary or {}, ensure_ascii=False, sort_keys=True)
     return render_prompt("strategy_alignment", {
+        "gameplay_contract": load_prompt("microrts_gameplay_contract"),
         "strategy_prompt": strategy_prompt,
         "generated_java": generated_java,
         "behavior_summary": behavior,

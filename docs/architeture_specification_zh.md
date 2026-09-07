@@ -1,6 +1,6 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-08-26 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-09-03 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
@@ -29,8 +29,8 @@ Generator 成功產生的 child Java 會成為下一代可選取的 Java compone
 辨識與排序。從既有 artifact 或 resume 載入的明確 ID 不會被重新命名。
 
 每一代依序執行 seeded lexicase parent selection、crossover、可選的 Strategy、
-Code 或 Balance mutation、完整 Java generation、validation、compilation、integration、
-126 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。Survivor
+Code 或 Prompt Compliance mutation、完整 Java generation、validation、compilation、integration、
+180 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。Survivor
 selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
 選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
 `(n + n)`。
@@ -47,27 +47,67 @@ Reflection operator mode 只有三種：
 - `aos_opponent`
 - `aos_head2head`
 
+兩種 adaptive mode 都以 mutation context 實際使用的 evidence parent 作為
+`comparison_parent_id`：Strategy 依 policy component provenance；預設模式的 Code／
+Prompt Compliance 依 generation-prompt provenance；inherited 模式的 Code／Prompt Compliance 依 Java
+component provenance。Crossover 後即使 component 來自第二個 direct parent，也不會
+再固定把 AOS reward 歸到第一個 parent。`aos_opponent` 重用一般 180 場 evaluation，
+`aos_head2head` 則對同一 comparison parent 執行額外 18 場 direct matches。
+
 Strategy Mutation 只修改 `strategy_prompt`；Code Mutation 只修改
-`generation_prompt`。Balance Reflection 只接收依 opponent、map 與 candidate
-side 匯總的 W/D/L 表，辨識弱 cell 後依序重寫兩個 prompt；兩次 rewrite 都成功才
-原子地套用，任何一步失敗都保留兩個原 prompt。三者完成後都必須重新產生完整 Java。
+`generation_prompt`。Prompt Compliance Reflection 同時取得兩個 prompt gene、
+canonical reusable rules、完整 gameplay contract 與 action/API guide，只檢查內容是否
+符合實際遊戲與生成邊界。它不接收 W/D/L、match、fitness、Java 或 compiler evidence，
+也不判斷策略強弱。Reflector 分別找出不存在的遊戲概念、不可觀察條件、非法 action／
+production、policy-specific decoder rule、錯誤 API 與 scaffold scope 違規，再依序重寫
+兩個 prompt；兩次 rewrite 都成功才原子套用，任何一步失敗都保留兩個原 prompt。
+Code Prompt Rewriter 仍只回傳 `remove_rule_ids`／`add_rules` delta，經驗證後確定性組成
+canonical `generation_prompt`，不接受未驗證的整份 replacement prompt。合法的 aggressive、
+defensive、economic 或其他策略類型都必須保留，不會因勝負或風格被改寫。
+
+所有會產生或解讀策略的 LLM 階段共用同一份不可變的
+`microrts_gameplay_contract`：包含完整 entity、production graph、合法 action 與
+可觀察 state。它允許策略大幅改成其他類型，但每個條件都必須能由遊戲 state
+觀察，每個回應都必須能用 MicroRTS 合法動作執行；不能把一般 RTS 的概念帶進
+policy。這份 contract 是固定 domain context，不是比賽 evidence；Prompt Compliance
+Reflector 與其 Strategy Rewriter 都直接使用它來修正規則違規，而不是根據勝負調整策略。
 
 Strategy Reflection 只使用 policy 與 match evidence。Match Commentator 不會收到
 Java 或 generation prompt；Coach 不會收到 Java 或 compiler diagnostics。Code
 Reflection 在預設模式比較 policy 與當前 Java phenotype；在 inherited 模式則
 比較 child 當前 policy 與 independently selected Java component。兩者皆可選用
 static/compiler evidence，但不使用 raw game logs；Code Prompt Rewriter 只收到
-原 generation prompt 與 alignment review。Generator 永遠使用兩個 prompt gene
+原 generation prompt、其 canonical reusable-rule view、alignment review 與 immutable
+API guide。Reviewer 只會看到 strategy marker 之間的可編輯 Java；固定 scaffold
+欄位與 helper 不會作為 candidate 行為證據。Generator 永遠使用兩個 prompt gene
 與固定 checked-in Java scaffold，且在 inherited 模式額外收到完整 inherited Java。
 
-Code Prompt Rewriter 固定回傳且只回傳
-`{"rewritten_prompt":"..."}`。Generation 0 依 candidate mode 分流：預設模式仍是
+Code Prompt Rewriter 固定回傳 `remove_rule_ids` 與 `add_rules`；每次 mutation 必須
+新增一條 12–240 字元的 policy-agnostic 規則，並最多移除一條既有規則。新增規則
+必須使用固定 category，不得寫入特定 strategy、unit type、Java/API symbol 或
+scaffold 修改；runtime 會產生穩定 rule ID、依序套用 delta，並確定性組成最多十條
+規則的 canonical `generation_prompt`。若 semantic validation 拒絕輸出，下一次有界
+重試會收到原 request 與精確錯誤，且失敗 delta 不會被部分套用。Legacy free-form
+prompt 可讀取，但下次成功 Code Reflection 時不會被複製進新 rule set。Generation 0 依 candidate mode 分流：預設模式仍是
 每個 seed 檔建立一個 candidate，直接載入 `initial_java_seed_path`，不呼叫
 Generator；inherited 模式必須只有一個 seed policy，將同一份 policy 與 callable
 no-op Java 複製到 `population_size` 個 genotype，並對每個 candidate 各呼叫一次
 Generator。因此 population 10 會有 10 份 request／response，也可能得到 10 份
 不同 Java。三份 `static_0826_seed_variants` config 都使用此模式，後續每代以
 `10 + 10` joint pool 做 lexicase survivor selection。
+
+新增的 `initial_population_mode: llm_generated_policies` 是另一個明確的
+generation-0 邊界：第 1 個 candidate 保留設定檔中的 Worker Rush policy，第 2–10
+個 candidate 各自以「Generate one RTS strategy」prompt 呼叫 LLM，得到 9 份不同的
+RTS policy prompt；這裡的 random 指 LLM 策略取樣，不是 MicroRTS `RandomAI` agent。
+這些初始 policy request 也包含相同 gameplay contract，因此可以產生不同策略，
+但不能描述遊戲中不存在或無法觀察的規則。
+10 個 candidate 的 inherited Java 與 generation-0 phenotype 都使用同一份 checked-in
+`java_seeds/worker_rush/CandidateAgent.java`，因此此代只改變 policy gene，不呼叫 Java Generator。
+從 generation 1 起恢復一般 inherited-Java crossover、mutation 與完整 Java generation。
+每次初始 policy 呼叫的 request、raw response、解析／重試結果與 UTC timing 都保存在
+該 candidate 的 `initialization/policy_generation/`，run `timing.jsonl` 只另存一筆
+不重複 prompt／response 的 request timing event。
 
 Callable no-op Java 保留完整 action helper API，但 `decide` 不發出 action；同一
 檔案同時是這三份設定的初始 Java component 與 immutable scaffold。空白 policy
@@ -89,7 +129,7 @@ Compile-guided decoder 只修正 phenotype 的可驗證編譯問題，不是 Cod
 guard 阻擋沒有診斷依據的大幅重寫，但此 guard 不能證明語意等價。每個通過
 validation 的完整 source 最多編譯一次，第一個編譯成功的 attempt 直接成為唯一
 canonical phenotype/classes；全部失敗時由最後一次 attempt 決定 failure stage，
-其 source 只算 generation evidence，不會偽裝成 phenotype。Integration 與 126 場
+其 source 只算 generation evidence，不會偽裝成 phenotype。Integration 與 180 場
 evaluation 只對選中的 attempt 執行一次，且 integration/runtime failure 不會觸發
 重新生成。舊設定預設仍為一次，`static_0824` 四個 production config 才明列上限
 五次。
@@ -132,9 +172,9 @@ evaluation。
 `genotype/code_generation_prompt.txt`；inherited 模式另保存
 `genotype/inherited_java.java` 與 `java_parent_id`。Generator 輸出放在
 `phenotype/CandidateAgent.java`；Code Reflection evidence 放在
-`mutation/code_reflection/`；Balance Reflection evidence 放在
-`mutation/balance_reflection/`，並保存 W/D/L table、reflector 與兩個 rewriter 的
-request/response evidence。Snapshot JSON 不重複內嵌完整 inherited Java，resume
+`mutation/code_reflection/`；Prompt Compliance Reflection evidence 放在
+`mutation/prompt_compliance_reflection/`，並保存兩個原 prompt、contract-grounded
+reflector 與兩個 rewriter 的 request/response evidence。Snapshot JSON 不重複內嵌完整 inherited Java，resume
 由 canonical genotype 檔重建。
 
 所有 executable prompt body 都放在 `prompts/`，一個 prompt 一個 UTF-8
@@ -143,14 +183,20 @@ Python 與 YAML 不再接受 inline prompt、seed template 或重複 prompt body
 
 ## Evaluation
 
-Evolution Evaluation 固定使用七個 opponent：LightRush、HeavyRush、WorkerRush、
-AllInBot、Mayari、COAC、TMA。每個可執行 candidate 使用同一份 Java source 與
-class directory，進行：
+Evolution Evaluation 固定使用十個 opponent：PassiveAI、RandomAI、
+RandomBiasedAI、LightRush、HeavyRush、WorkerRush、AllInBot、Mayari、COAC、TMA。
+每個可執行 candidate 使用同一份 Java source 與 class directory，進行：
 
-`7 opponents × 3 maps × 3 rounds × 2 sides = 126 matches`
+`10 opponents × 3 maps × 3 rounds × 2 sides = 180 matches`
 
-Fitness 是七個 maximized opponent case。失敗或 incomplete candidate 的每個
-case 都是 `-1000.0`。加權 aggregate Game Performance 只用於報表。
+每個 `evaluation.maps` 項目可以各自指定正整數 `tick_limit`；只有 path 的舊格式
+則沿用 top-level `tick_limit`。解析後的 per-map 上限會由 match matrix 帶入一般
+evaluation、AOS head-to-head 與 final test，確保同一張 map 在三條路徑使用相同上限。
+
+Fitness 是十個 maximized opponent case。失敗或 incomplete candidate 的每個
+case 都是 `-1000.0`。加權 aggregate Game Performance 以 PassiveAI、RandomAI、
+RandomBiasedAI 權重各 `0.5`、三個 rush opponent 各 `1`、其餘四個 opponent 各
+`2` 計算，固定分母為 `12.5`，且只用於報表。
 WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的重複行為
 充當 identity adapter。每代的 expected/completed match count 是所有 candidate
 的加總，而不是第一個 candidate 的值。
@@ -181,7 +227,7 @@ Alignment 記為不適用且不呼叫 LLM。
 Integration 不使用空白 state：probe 會載入真實、含雙方 base/worker 的
 `basesWorkers8x8.xml` 兩次，分別以獨立的 one-argument candidate instance 與
 獨立 GameState 呼叫 player 0／player 1，確認 `PlayerAction` 非空、integrity
-合法、可 `issueSafe` 並各 cycle 一次。這能在 126 場前攔截座標越界與跨 side
+合法、可 `issueSafe` 並各 cycle 一次。這能在 180 場前攔截座標越界與跨 side
 state 殘留等 runtime 問題；integration failure 只記錄 evidence，不會回到 decoder
 retry。
 
@@ -194,6 +240,11 @@ trace，generation 原子落盤後才清理非 survivor 的 trace。`match_log.j
 只放在 `candidates/<id>/candidate.json` 與其 stage artifact。舊的
 `resolved_config.json`、`generation_metrics.jsonl`、`final_population.json`、
 root `errors.jsonl` 與 run-v1 reader 已移除。
+
+離線分析以每個 generation artifact 中已選出的 population 作為該代 survivor
+snapshot。圖表與 per-agent／per-opponent／per-match CSV 的 `generation` 是 survivor
+所在的 snapshot 世代；candidate 自己的建立世代另存為 `birth_generation`。因此父代
+若連續存活，會在每個實際存活的世代各出現一次，不會全部被畫回出生世代。
 
 ## 執行入口
 

@@ -1,0 +1,14 @@
+EAGLE structured-role validation retry.
+
+Original request:
+$original_request
+
+Rejected response:
+$previous_response
+
+The previous response was rejected by deterministic validation:
+$validation_error
+
+Correct only the reported error while preserving valid content and following
+the original contracts and schema. Return one raw JSON object with no prose or
+Markdown.

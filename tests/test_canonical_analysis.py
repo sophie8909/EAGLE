@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -9,7 +10,7 @@ from unittest import mock
 
 import yaml
 
-from eagle.analysis.loader import load_run, resolve_explicit_run, resolve_latest_run
+from eagle.analysis.loader import RunData, load_run, resolve_explicit_run, resolve_latest_run
 from eagle.analysis import report
 from eagle.analysis.report import OUTPUT_FILES, generate_analysis
 from eagle.run_artifacts import atomic_json
@@ -81,6 +82,8 @@ class CanonicalAnalysisTests(unittest.TestCase):
             self.assertNotIn("match_results", materialized["game_eval_result"])
             self.assertEqual(materialized["code_quality_result"]["code_quality"], 75.0)
             output = generate_analysis(data, force=True)
+            summary = json.loads((output / "run_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["schema_version"], "eagle-analysis-v2")
             match_rows = (output / "match_game_performance.csv").read_text(encoding="utf-8")
             self.assertIn("101.5", match_rows)
 
@@ -164,6 +167,46 @@ class CanonicalAnalysisTests(unittest.TestCase):
             self.assertIn("candidate_id", rows)
             self.assertIn("agent-a", rows)
             self.assertIn("12.5", rows)
+
+    def test_survivor_analysis_uses_snapshot_generation_and_retains_birth_generation(self):
+        survivor = {
+            "candidate_id": "survivor-a",
+            "generation": 2,
+            "status": "evaluated",
+            "game_eval_result": {
+                "game_performance": 25.0,
+                "opponent_results": [{
+                    "opponent_id": "lightrush",
+                    "wins": 1,
+                    "draws": 0,
+                    "losses": 0,
+                    "expected_match_count": 1,
+                    "completed_match_count": 1,
+                    "match_scores": [101.0],
+                }],
+            },
+        }
+        data = RunData(
+            run_dir=Path("/unused"),
+            manifest={},
+            resolved_config={},
+            generation_metrics=[],
+            generations=[
+                {"generation": 4, "population": [survivor]},
+                {"generation": 5, "population": [survivor]},
+            ],
+            final_population=None,
+            timing=[],
+            errors=[],
+        )
+
+        for rows in (
+            report._agent_game_performance_rows(data),
+            report._agent_win_rate_rows(data),
+            report._match_game_performance_rows(data),
+        ):
+            self.assertEqual([row["generation"] for row in rows], [4, 5])
+            self.assertEqual([row["birth_generation"] for row in rows], [2, 2])
 
     def test_outputs_strategy_diversity_and_niche_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:

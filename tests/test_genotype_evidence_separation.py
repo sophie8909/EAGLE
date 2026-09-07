@@ -21,9 +21,31 @@ from eagle.strategy_reflection import (
 
 
 JAVA_SENTINEL = "PHENOTYPE_JAVA_SENTINEL"
+FIXED_JAVA_SENTINEL = "FIXED_SCAFFOLD_JAVA_SENTINEL"
 CODE_PROMPT_SENTINEL = "CODE_GENERATION_PROMPT_SENTINEL"
 GAME_LOG_SENTINEL = "RAW_GAME_LOG_SENTINEL"
 POLICY_SENTINEL = "POLICY_PROMPT_SENTINEL"
+GENERIC_RULE = "Preserve every stated prerequisite in reachable strategy behavior."
+
+
+def generated_java() -> str:
+    return (
+        "package ai.generated;\n"
+        f"// {FIXED_JAVA_SENTINEL}\n"
+        "// EAGLE_AGENT_STRATEGY_START\n"
+        f"private void decide(AgentContext context) {{ // {JAVA_SENTINEL}\n}}\n"
+        "// EAGLE_AGENT_STRATEGY_END\n"
+    )
+
+
+def code_rule_delta() -> str:
+    return json.dumps({
+        "remove_rule_ids": [],
+        "add_rules": [{
+            "category": "requirement_coverage",
+            "instruction": GENERIC_RULE,
+        }],
+    })
 
 
 class ScriptedBackend:
@@ -56,7 +78,7 @@ class GenotypeEvidenceSeparationTests(unittest.TestCase):
             generation=2,
             strategy_prompt=POLICY_SENTINEL + ": defend before expanding",
             generation_prompt=CODE_PROMPT_SENTINEL,
-            generated_java="package ai.generated; // " + JAVA_SENTINEL,
+            generated_java=generated_java(),
             status="evaluated",
             game_eval_result={
                 "game_performance": -1.0,
@@ -95,6 +117,7 @@ class GenotypeEvidenceSeparationTests(unittest.TestCase):
         prompt = build_code_reflection_prompt_bundle(candidate, context).text
         self.assertIn(POLICY_SENTINEL, prompt)
         self.assertIn(JAVA_SENTINEL, prompt)
+        self.assertNotIn(FIXED_JAVA_SENTINEL, prompt)
         self.assertNotIn(GAME_LOG_SENTINEL, prompt)
         self.assertNotIn(CODE_PROMPT_SENTINEL, prompt)
 
@@ -110,7 +133,7 @@ class GenotypeEvidenceSeparationTests(unittest.TestCase):
         context = build_reflection_context(source, generation=3, index=0, reflection_type="code")
         backend = ScriptedBackend((
             code_review(),
-            json.dumps({"rewritten_prompt": "new reusable translation instructions"}),
+            code_rule_delta(),
         ))
         mutation = PromptRewriteMutation(
             ExperimentConfig.from_mapping({"mutation_max_attempts": 1}),
@@ -170,7 +193,7 @@ Attack the enemy Base."}
         candidate = self.candidate()
         backend = ScriptedBackend((
             code_review(),
-            json.dumps({"rewritten_prompt": "new reusable translation instructions"}),
+            code_rule_delta(),
         ))
         mutation = PromptRewriteMutation(
             ExperimentConfig.from_mapping({"mutation_max_attempts": 1}),
@@ -184,7 +207,8 @@ Attack the enemy Base."}
             metadata = (root / "mutation" / "code_reflection" / "metadata.json").read_text()
             self.assertNotIn(JAVA_SENTINEL, metadata)
         self.assertEqual(result.strategy_prompt, candidate.strategy_prompt)
-        self.assertEqual(result.generation_prompt, "new reusable translation instructions")
+        self.assertIn(GENERIC_RULE, result.generation_prompt)
+        self.assertNotIn(POLICY_SENTINEL, result.generation_prompt)
 
     def test_generator_request_does_not_mutate_genotype(self) -> None:
         candidate = self.candidate()
