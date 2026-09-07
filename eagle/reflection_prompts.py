@@ -30,6 +30,15 @@ PROMPT_BUDGETS = {
     "action_api_guide": 12_000,
 }
 MICRORTS_GAMEPLAY_CONTRACT = load_prompt("microrts_gameplay_contract")
+STRUCTURAL_CODE_EVIDENCE_KEYS = (
+    "generation_failure",
+    "validation_failure",
+    "compile_success",
+    "compile_errors",
+    "compile_warnings",
+    "missing_functions",
+    "invalid_functions",
+)
 
 
 @dataclass(frozen=True)
@@ -102,6 +111,23 @@ def _editable_strategy_for_review(
         return "// Editable strategy region unavailable; use structural evidence only."
 
 
+def structural_code_evidence(
+    context: ReflectionContext,
+    *,
+    reviewed_source: str,
+) -> dict[str, object]:
+    """Return only diagnostics that describe the Java source being reviewed."""
+
+    if reviewed_source.strip() != context.candidate.generated_code.strip():
+        return {}
+    diagnostics = context.code_diagnostics.to_dict()
+    return {
+        key: diagnostics.get(key)
+        for key in STRUCTURAL_CODE_EVIDENCE_KEYS
+        if diagnostics.get(key) not in (None, (), [], {}, "")
+    }
+
+
 def _metadata(section_values: dict[str, str], omitted: list[str], truncated: list[str], text: str) -> dict[str, object]:
     return {
         "estimated_prompt_size": len(text),
@@ -142,28 +168,6 @@ def build_prompt_reflection_prompt_bundle(candidate: Candidate, context: Reflect
     context = coerce_structured_context(context, candidate)
     truncated: list[str] = []
     omitted: list[str] = []
-    all_diagnostics = context.code_diagnostics.to_dict()
-    diagnostics = {
-        key: all_diagnostics.get(key)
-        for key in (
-            "generation_failure",
-            "validation_failure",
-            "compile_success",
-            "compile_errors",
-            "compile_warnings",
-            "missing_functions",
-            "invalid_functions",
-        )
-        if all_diagnostics.get(key) not in (None, (), [], {}, "")
-    }
-    if (
-        candidate.inherited_java
-        and context.candidate.generated_code != candidate.inherited_java
-    ):
-        # A failed Java parent passes through its earlier inherited component;
-        # diagnostics from the failed attempted phenotype do not describe that
-        # fallback source and must not be presented as if they did.
-        diagnostics = {}
     # In inherited-genotype mode the child may have independently selected
     # policy, generation prompt, and Java. Review the exact child inputs;
     # diagnostics come from the selected Java parent context.
@@ -173,6 +177,10 @@ def build_prompt_reflection_prompt_bundle(candidate: Candidate, context: Reflect
         else context.candidate.strategy_prompt
     )
     reviewed_source = candidate.inherited_java or context.candidate.generated_code
+    diagnostics = structural_code_evidence(
+        context,
+        reviewed_source=reviewed_source,
+    )
     editable_strategy_java = _bounded_code(
         _editable_strategy_for_review(reviewed_source, diagnostics),
         PROMPT_BUDGETS["editable_strategy_java"],

@@ -2,14 +2,19 @@ EAGLE Code Reflection diagnosis stage.
 
 Compare the current strategy prompt with behavior reachable from the supplied parent
 CandidateAgent Java. Produce a concise conclusion before any code is revised. Do not
-optimize from wins or losses, invent strategy requirements, rewrite either prompt, or
-return Java.
+optimize from wins or losses, use game performance, opponent scores, W/D/L, match
+results, traces, logs, or aggregate fitness, invent strategy requirements, rewrite
+either prompt, or return Java.
 
 Current strategy prompt:
 $strategy_prompt
 
 Parent CandidateAgent Java:
 $parent_java
+
+Optional source-matching validation/compiler evidence (use only to diagnose why this
+exact Java source failed; an empty object means no applicable diagnostic exists):
+$structural_evidence
 
 Complete MicroRTS gameplay contract:
 $gameplay_contract

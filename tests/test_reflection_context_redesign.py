@@ -178,6 +178,26 @@ class ReflectionContextRedesignTests(unittest.TestCase):
         self.assertNotIn("FIXED_REGION_SENTINEL", prompt.text)
         self.assertTrue(prompt.metadata["estimated_prompt_size"] < 30_000)
 
+    def test_prompt_formatter_omits_diagnostics_for_mismatched_inherited_java(self):
+        source = self.candidate()
+        context = build_reflection_context(
+            source,
+            generation=5,
+            index=2,
+            reflection_type="prompt",
+        )
+        child = Candidate(
+            id="inherited-child",
+            generation=5,
+            strategy_prompt=source.strategy_prompt,
+            generation_prompt=source.generation_prompt,
+            inherited_java=source.generated_java + "\n// different inherited source",
+        )
+
+        prompt = build_prompt_reflection_prompt_bundle(child, context)
+
+        self.assertNotIn("unchecked conversion", prompt.text)
+
     def test_reflection_stage_accepts_structured_json_without_final_slice(self):
         backend = ScriptedBackend((strategy_response(),))
         request = "header\n" + ("x" * 70_000) + "\ntail"

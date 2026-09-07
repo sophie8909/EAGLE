@@ -3,19 +3,29 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from eagle.candidate import Candidate
 from eagle.code_reflection import CodeReflectionMutation
 from eagle.config import ExperimentConfig
 from eagle.evaluation import decode_validate_compile_candidate
-from eagle.reflection_context import CandidateReflectionSummary, ReflectionContext
+from eagle.reflection_context import (
+    CandidateReflectionSummary,
+    CodeDiagnostics,
+    ObjectiveSummary,
+    ReflectionContext,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PARENT_JAVA = (
     PROJECT_ROOT / "eagle" / "java_seeds" / "worker_rush" / "CandidateAgent.java"
 ).read_text(encoding="utf-8")
+COMPILER_SENTINEL = "COMPILER_DIAGNOSTIC_SENTINEL"
+VALIDATION_SENTINEL = "VALIDATION_DIAGNOSTIC_SENTINEL"
+GAME_PERFORMANCE_SENTINEL = "GAME_PERFORMANCE_SENTINEL"
+MATCH_TRACE_SENTINEL = "MATCH_TRACE_SENTINEL"
 
 
 class ScriptedJavaBackend:
@@ -98,13 +108,23 @@ def config() -> ExperimentConfig:
 
 
 def context() -> ReflectionContext:
-    return ReflectionContext(candidate=CandidateReflectionSummary(
-        candidate_id="parent",
-        strategy_prompt="Continuously produce Workers and attack the enemy Base.",
-        code_generation_prompt="unused parent prompt",
-        generated_code=PARENT_JAVA,
-        status="evaluated",
-    ))
+    return ReflectionContext(
+        candidate=CandidateReflectionSummary(
+            candidate_id="parent",
+            strategy_prompt="Continuously produce Workers and attack the enemy Base.",
+            code_generation_prompt="unused parent prompt",
+            generated_code=PARENT_JAVA,
+            status="evaluated",
+        ),
+        objectives=ObjectiveSummary(game_performance=987.654321),
+        code_diagnostics=CodeDiagnostics(
+            validation_failure=VALIDATION_SENTINEL,
+            compile_success=False,
+            compile_errors=(COMPILER_SENTINEL,),
+        ),
+        game_evidence={"summary": GAME_PERFORMANCE_SENTINEL},
+        per_match_results=({"trace": MATCH_TRACE_SENTINEL},),
+    )
 
 
 class CodeReflectionTests(unittest.TestCase):
@@ -145,13 +165,24 @@ class CodeReflectionTests(unittest.TestCase):
             self.assertEqual(backend.request_kinds, ["code_reflection"])
             self.assertEqual(len(reflector.prompts), 1)
             self.assertIn("diagnosis stage", reflector.prompts[0])
+            self.assertIn(COMPILER_SENTINEL, reflector.prompts[0])
+            self.assertIn(VALIDATION_SENTINEL, reflector.prompts[0])
             request = backend.requests[0]
             self.assertIn("Java revision stage", request)
             self.assertIn("required_code_change", request)
             self.assertIn("Add the minimal Worker attack behavior", request)
             self.assertIn(candidate.strategy_prompt, request)
             self.assertIn(PARENT_JAVA, request)
+            self.assertIn(COMPILER_SENTINEL, request)
+            self.assertIn(VALIDATION_SENTINEL, request)
             self.assertNotIn(candidate.generation_prompt, request)
+            for excluded in (
+                "987.654321",
+                GAME_PERFORMANCE_SENTINEL,
+                MATCH_TRACE_SENTINEL,
+            ):
+                self.assertNotIn(excluded, reflector.prompts[0])
+                self.assertNotIn(excluded, request)
             mutation_dir = root / candidate.id / "mutation" / "code_reflection"
             self.assertEqual(
                 (mutation_dir / "reflected_candidate.java").read_text(encoding="utf-8"),
@@ -170,6 +201,36 @@ class CodeReflectionTests(unittest.TestCase):
             self.assertEqual(conclusion["assessment"], "code_requires_revision")
             self.assertTrue((mutation_dir / "revision_request.txt").exists())
             self.assertTrue((mutation_dir / "revision_response_raw.txt").exists())
+
+    def test_code_diagnostics_are_omitted_for_a_different_java_source(self) -> None:
+        backend = ScriptedJavaBackend((PARENT_JAVA,))
+        reflector = ScriptedReflectionBackend((reflection_response(),))
+        candidate = Candidate(
+            id="child",
+            generation=1,
+            strategy_prompt="Worker Rush.",
+            generation_prompt="prompt gene",
+            inherited_java=PARENT_JAVA,
+            java_parent_id="parent",
+        )
+        original_context = context()
+        mismatched = replace(
+            original_context,
+            candidate=CandidateReflectionSummary(
+                candidate_id="other-parent",
+                strategy_prompt=original_context.candidate.strategy_prompt,
+                code_generation_prompt=original_context.candidate.code_generation_prompt,
+                generated_code=PARENT_JAVA + "\n// different source",
+                status="failed",
+            ),
+        )
+
+        CodeReflectionMutation(
+            config(), backend=backend, reflection_backend=reflector
+        ).mutate(candidate, mismatched)
+
+        self.assertNotIn(COMPILER_SENTINEL, reflector.prompts[0])
+        self.assertNotIn(COMPILER_SENTINEL, backend.requests[0])
 
     def test_failed_revision_preserves_parent_java_for_direct_evaluation(self) -> None:
         backend = ScriptedJavaBackend(("", ""))

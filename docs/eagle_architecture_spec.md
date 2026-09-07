@@ -126,18 +126,22 @@ Prompt mutation is the former Code Reflection behavior. In default mode it
 compares the source parent's policy with its Java phenotype. In inherited mode
 it compares the child's independently selected policy with its inherited Java.
 The Reviewer receives only the editable Java strategy region, the policy, the
-immutable action/API guide, and source-matching structural diagnostics. It never
-receives game logs. The Prompt Rewriter then returns one validated reusable-rule
-delta and changes only `generation_prompt`; the normal final Generator decodes
-the child from the updated prompt gene.
+immutable action/API guide, and source-matching validation/compiler diagnostics.
+It never receives game performance, opponent scores, W/D/L summaries, match
+results, traces, logs, aggregate fitness, or other gameplay evidence. The Prompt
+Rewriter then returns one validated reusable-rule delta and changes only
+`generation_prompt`; the normal final Generator decodes the child from the
+updated prompt gene.
 
 Code mutation first reflects on the selected parent Java, then revises it. The
 Reflector receives the child's `strategy_prompt`, the complete selected parent
-Java, the immutable gameplay and action/API contracts, and the canonical fixed
-scaffold, and returns a validated structured diagnosis with required changes
-and behaviors to preserve. The Java revision call receives that exact parsed
-conclusion plus the same authoritative inputs. Neither call receives match
-results, traces, fitness values, or `generation_prompt`. The revision response
+Java, the immutable gameplay and action/API contracts, the canonical fixed
+scaffold, and source-matching validation/compiler diagnostics, and returns a
+validated structured diagnosis with required changes and behaviors to preserve.
+The Java revision call receives that exact parsed conclusion plus the same
+authoritative inputs. Neither call receives game performance, opponent scores,
+W/D/L summaries, match results, traces, logs, aggregate fitness, other gameplay
+evidence, or `generation_prompt`. The revision response
 must be exactly one complete `CandidateAgent.java`; both prompt genes and the
 pre-mutation inherited Java remain unchanged. The returned source enters the
 normal validation and compilation stages directly, so a successful Code

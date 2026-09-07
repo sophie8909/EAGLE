@@ -2,8 +2,9 @@ EAGLE Code Reflection Java revision stage.
 
 Revise the supplied parent CandidateAgent Java only after applying the recorded Code
 Reflection conclusion below. This operator edits Java, not either prompt gene. Do not add
-changes that are absent from the conclusion, optimize from wins or losses, or invent
-strategy requirements.
+changes that are absent from the conclusion, optimize from wins or losses, use game
+performance, opponent scores, W/D/L, match results, traces, logs, or aggregate fitness,
+or invent strategy requirements.
 
 Current strategy prompt:
 $strategy_prompt
@@ -13,6 +14,10 @@ $reflection_conclusion
 
 Parent CandidateAgent Java:
 $parent_java
+
+Optional source-matching validation/compiler evidence (use only to correct failures in
+this exact Java source; an empty object means no applicable diagnostic exists):
+$structural_evidence
 
 Complete MicroRTS gameplay contract:
 $gameplay_contract

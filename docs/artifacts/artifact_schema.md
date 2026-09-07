@@ -194,7 +194,9 @@ Prompt Reflection evidence is stored under `mutation/prompt_reflection/`. It
 retains the exact alignment-review request/raw response, the separately bounded
 prompt-rewrite requests/raw responses, structured reusable-rule delta, attempts,
 and errors. The Reviewer sees the policy and selected parent's editable Java
-strategy region; the Rewriter deterministically changes only
+strategy region plus source-matching validation/compiler diagnostics, but no game
+performance, opponent scores, W/D/L, match, trace, log, or aggregate-fitness
+evidence. The Rewriter deterministically changes only
 `genotype/code_generation_prompt.txt`.
 
 Code Reflection evidence is stored under `mutation/code_reflection/`. It
@@ -203,7 +205,9 @@ retains `reflector_request.txt`, the raw and parsed conclusion in
 diagnosis attempt, `revision_request.txt`, every Java-revision attempt/raw
 response, `parent_candidate.java`, `reflected_candidate.java`, hashes, attempt
 timing, and terminal status. The revision request contains the exact parsed
-conclusion. A successful reflected source enters the normal generation attempt
+conclusion and the source-matching validation/compiler diagnostics supplied to
+the diagnosis; neither Code Reflection stage receives gameplay-performance
+evidence. A successful reflected source enters the normal generation attempt
 ledger as `code_reflection_output` but causes no additional final Generator LLM
 request.
 

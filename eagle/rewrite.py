@@ -29,6 +29,7 @@ from .mutation import (
     utc_now,
 )
 from .prompts import normalize_prompt
+from .reflection_prompts import structural_code_evidence
 from .reusable_generation_prompt import (
     apply_reusable_rule_delta,
     reusable_rules_json,
@@ -390,7 +391,10 @@ class PromptRewriteMutation:
                         "reviewed_inherited_java_artifact": (
                             f"candidates/{candidate.id}/genotype/inherited_java.java"
                         ),
-                        "structural_evidence": _structural_code_evidence(context),
+                        "structural_evidence": structural_code_evidence(
+                            context,
+                            reviewed_source=candidate.inherited_java,
+                        ),
                     }
                     if candidate.inherited_java
                     else {
@@ -399,7 +403,10 @@ class PromptRewriteMutation:
                         "reviewed_phenotype_artifact": (
                             f"candidates/{feedback_candidate_id}/phenotype/CandidateAgent.java"
                         ),
-                        "structural_evidence": _structural_code_evidence(context),
+                        "structural_evidence": structural_code_evidence(
+                            context,
+                            reviewed_source=context.candidate.generated_code,
+                        ),
                     }
                 )
                 if self.mutation_type == "prompt"
@@ -603,23 +610,6 @@ def _mutation_metadata_record(record: dict[str, Any]) -> dict[str, Any]:
                 if name not in {"request", "raw_response"}
             }
     return payload
-
-
-def _structural_code_evidence(context: ReflectionContext) -> dict[str, Any]:
-    diagnostics = context.code_diagnostics.to_dict()
-    return {
-        key: diagnostics.get(key)
-        for key in (
-            "generation_failure",
-            "validation_failure",
-            "compile_success",
-            "compile_errors",
-            "compile_warnings",
-            "missing_functions",
-            "invalid_functions",
-        )
-        if diagnostics.get(key) not in (None, (), [], {}, "")
-    }
 
 
 def _rewrite_artifact_dir(root: Path | None, rewrite_type: str, *, mutation_type: str | None = None) -> Path:

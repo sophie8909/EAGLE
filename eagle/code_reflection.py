@@ -25,6 +25,7 @@ from .mutation import (
 )
 from .prompts import load_prompt, render_prompt
 from .reflection_context import coerce_structured_context
+from .reflection_prompts import structural_code_evidence
 
 
 CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v2"
@@ -68,9 +69,13 @@ class CodeReflectionMutation:
             self.artifact_root / candidate.id if self.artifact_root else None
         )
         parent_java = candidate.inherited_java or context.candidate.generated_code
+        diagnostics = structural_code_evidence(
+            context,
+            reviewed_source=parent_java,
+        )
         feedback_candidate_id = context.candidate.candidate_id or candidate.id
         reflection_request = (
-            self._reflection_request(candidate, parent_java)
+            self._reflection_request(candidate, parent_java, diagnostics)
             if parent_java.strip()
             else ""
         )
@@ -94,7 +99,12 @@ class CodeReflectionMutation:
 
         reflection_conclusion = reflection.parsed_response or {}
         base_request = (
-            self._revision_request(candidate, parent_java, reflection_conclusion)
+            self._revision_request(
+                candidate,
+                parent_java,
+                reflection_conclusion,
+                diagnostics,
+            )
             if reflection.succeeded
             else ""
         )
@@ -217,8 +227,12 @@ class CodeReflectionMutation:
                     "match_results",
                     "match_traces",
                     "fitness_objectives",
+                    "game_performance",
+                    "opponent_scores",
+                    "win_draw_loss",
                     "generation_prompt",
                 ],
+                "structural_evidence": diagnostics,
             },
             "reflection": reflection.to_dict(),
             "reflection_conclusion": reflection_conclusion,
@@ -264,12 +278,22 @@ class CodeReflectionMutation:
             metadata=metadata,
         )
 
-    def _reflection_request(self, candidate: Candidate, parent_java: str) -> str:
+    def _reflection_request(
+        self,
+        candidate: Candidate,
+        parent_java: str,
+        diagnostics: dict[str, object],
+    ) -> str:
         return render_prompt(
             "code_reflection",
             {
                 "strategy_prompt": candidate.strategy_prompt,
                 "parent_java": parent_java,
+                "structural_evidence": json.dumps(
+                    diagnostics,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
                 "gameplay_contract": load_prompt("microrts_gameplay_contract"),
                 "action_api_guide": load_prompt("action_api_guide"),
                 "java_scaffold": load_java_template(
@@ -283,6 +307,7 @@ class CodeReflectionMutation:
         candidate: Candidate,
         parent_java: str,
         reflection_conclusion: dict[str, object],
+        diagnostics: dict[str, object],
     ) -> str:
         return render_prompt(
             "code_revision",
@@ -291,6 +316,11 @@ class CodeReflectionMutation:
                 "parent_java": parent_java,
                 "reflection_conclusion": json.dumps(
                     reflection_conclusion,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+                "structural_evidence": json.dumps(
+                    diagnostics,
                     ensure_ascii=False,
                     sort_keys=True,
                 ),

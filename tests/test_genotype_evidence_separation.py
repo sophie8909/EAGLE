@@ -24,6 +24,8 @@ JAVA_SENTINEL = "PHENOTYPE_JAVA_SENTINEL"
 FIXED_JAVA_SENTINEL = "FIXED_SCAFFOLD_JAVA_SENTINEL"
 CODE_PROMPT_SENTINEL = "CODE_GENERATION_PROMPT_SENTINEL"
 GAME_LOG_SENTINEL = "RAW_GAME_LOG_SENTINEL"
+GAME_PERFORMANCE_SENTINEL = "GAME_PERFORMANCE_SENTINEL"
+COMPILER_SENTINEL = "COMPILER_DIAGNOSTIC_SENTINEL"
 POLICY_SENTINEL = "POLICY_PROMPT_SENTINEL"
 GENERIC_RULE = "Preserve every stated prerequisite in reachable strategy behavior."
 
@@ -82,7 +84,18 @@ class GenotypeEvidenceSeparationTests(unittest.TestCase):
             status="evaluated",
             game_eval_result={
                 "game_performance": -1.0,
+                "opponent_results": [
+                    {
+                        "opponent_id": "secret",
+                        "opponent_name": GAME_PERFORMANCE_SENTINEL,
+                    }
+                ],
                 "match_results": [{"match_id": "m1", "raw_log": GAME_LOG_SENTINEL}],
+            },
+            code_quality_result={
+                "code_quality_breakdown": {
+                    "compiler_errors": [COMPILER_SENTINEL],
+                }
             },
         )
 
@@ -117,8 +130,10 @@ class GenotypeEvidenceSeparationTests(unittest.TestCase):
         prompt = build_prompt_reflection_prompt_bundle(candidate, context).text
         self.assertIn(POLICY_SENTINEL, prompt)
         self.assertIn(JAVA_SENTINEL, prompt)
+        self.assertIn(COMPILER_SENTINEL, prompt)
         self.assertNotIn(FIXED_JAVA_SENTINEL, prompt)
         self.assertNotIn(GAME_LOG_SENTINEL, prompt)
+        self.assertNotIn(GAME_PERFORMANCE_SENTINEL, prompt)
         self.assertNotIn(CODE_PROMPT_SENTINEL, prompt)
 
     def test_prompt_reflection_records_source_phenotype_without_previous_code_gene(self) -> None:

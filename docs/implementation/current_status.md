@@ -166,10 +166,12 @@ world.
 Reflection context construction remains shared, but each operator projects a
 strictly scoped evidence view. Strategy Reflection consumes policy plus game
 evidence and changes only policy. Prompt Reflection consumes policy plus Java
-and optional structural/compiler diagnostics, then rewrites only the
-code-generation prompt; it receives no raw game logs. Code Reflection receives
-the policy plus selected parent Java and immutable contracts, then directly
-returns corrected complete Java. Strategy-facing roles also receive the
+and optional source-matching validation/compiler diagnostics, then rewrites only
+the code-generation prompt. Code Reflection receives the policy, selected parent
+Java, immutable contracts, and the same class of source-matching diagnostics,
+then directly returns corrected complete Java. Neither Prompt nor Code Reflection
+receives game performance, opponent scores, W/D/L, match results, traces, logs,
+aggregate fitness, or other gameplay evidence. Strategy-facing roles also receive the
 immutable `microrts_gameplay_contract` as fixed domain context. It defines the
 complete entities, production relations, legal actions, and observable state,
 so a replacement may change strategy type without inventing non-game mechanics.

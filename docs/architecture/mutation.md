@@ -34,16 +34,19 @@ only `generation_prompt`:
 
 ```text
 current policy + editable parent Java strategy region + immutable API guide
++ source-matching validation/compiler diagnostics
   -> Policy-Code Alignment Reviewer -> alignment review
 current reusable rules + alignment review
   -> Prompt Rewriter -> validated reusable-rule delta
   -> replacement generation_prompt -> final Java Generator
 ```
 
-The Reviewer sees only the editable strategy region, never fixed-scaffold Java
-or raw game logs. Source-matching structural/compiler diagnostics may explain an
-implementation failure. It distinguishes policy ambiguity, Java violating a
-clear policy, and faithful implementation; it does not improve the strategy.
+The Reviewer sees only the editable strategy region, never fixed-scaffold Java.
+Source-matching validation/compiler diagnostics may explain an implementation
+failure. It receives no game performance, opponent scores, W/D/L summaries,
+match results, traces, logs, aggregate fitness, or other gameplay evidence. It
+distinguishes policy ambiguity, Java violating a clear policy, and faithful
+implementation; it does not improve the strategy.
 
 The Rewriter returns exactly `remove_rule_ids` and `add_rules`, with one compact
 policy-agnostic addition and at most one removal. Runtime validates the fixed
@@ -63,6 +66,7 @@ it from that persisted conclusion:
 ```text
 current strategy_prompt + selected parent Java
 + immutable gameplay/API contracts + canonical scaffold
++ source-matching validation/compiler diagnostics
   -> structured code diagnosis
   -> diagnosis + the same authoritative inputs
   -> complete corrected CandidateAgent.java
@@ -72,7 +76,8 @@ current strategy_prompt + selected parent Java
 The Reflector classifies whether revision is required and records concrete code
 changes plus behaviors to preserve; it never returns Java. The Java revision
 stage receives that exact parsed conclusion. Neither stage receives
-`generation_prompt`, match results, traces, fitness, or W/D/L summaries. The
+`generation_prompt`, game performance, opponent scores, W/D/L summaries, match
+results, traces, logs, aggregate fitness, or other gameplay evidence. The
 revision output must be one complete Java source. Both prompt genes and the
 pre-mutation inherited Java remain byte-identical. The output is sent directly
 to validation and compilation and is not overwritten by a final Generator

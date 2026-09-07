@@ -4,6 +4,9 @@ Compare the policy requirements only with behavior reachable from the editable s
 region. Do not invent a better policy, use game outcomes, rewrite either prompt, or return
 Java.
 
+Never use game performance, opponent scores, W/D/L, match results, traces, logs, or
+aggregate fitness. Structural/compiler evidence is the only evaluation-derived input.
+
 Current policy prompt:
 $policy_prompt
 

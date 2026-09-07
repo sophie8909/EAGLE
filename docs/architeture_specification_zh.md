@@ -55,15 +55,17 @@ component provenance。Crossover 後即使 component 來自第二個 direct pare
 `aos_head2head` 則對同一 comparison parent 執行額外 18 場 direct matches。
 
 Strategy Mutation 只修改 `strategy_prompt`。Prompt Mutation 是舊 Code Reflection
-行為：比較 policy 與父代 Java 的可編輯策略區，經 Reviewer 與 Rewriter 只修改
+行為：只用 policy、父代 Java 的可編輯策略區、不可變 API 指南，以及與該 Java
+來源完全對應的 validation／compiler 錯誤，經 Reviewer 與 Rewriter 只修改
 `generation_prompt`。Code Mutation 是舊 Compliance operator 的位置，但新行為是直接
 把選定父代 Java 修正成一份完整 `CandidateAgent.java`；兩個 prompt gene 與原始
-inherited Java input 都不變。Code Reflection 先保存結構化反思結論，再把該結論
+inherited Java input 都不變。Code Reflection 同樣只用策略、父代完整 Java 和對應的
+validation／compiler 錯誤，先保存結構化反思結論，再把該結論
 連同同一份父代 Java 與 immutable contract 交給第二次 LLM 呼叫修正程式。
 成功的 Code Reflection 直接進 validation／javac，
-不再呼叫 Generator 覆蓋結果。它不接收 reusable generation prompt、W/D/L、match、
-trace、fitness 或 compiler evidence，只接收 policy、父代 Java、不可變 gameplay/API
-contract 與 canonical scaffold。
+不再呼叫 Generator 覆蓋結果。Prompt Reflection 和 Code Reflection 都不接收
+game performance、對手分數、W/D/L、match result、trace、log、aggregate fitness
+或其他對戰表現資訊。
 
 所有會產生或解讀策略的 LLM 階段共用同一份不可變的
 `microrts_gameplay_contract`：包含完整 entity、production graph、合法 action 與
