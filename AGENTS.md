@@ -21,6 +21,19 @@ When the user asks to execute an experiment:
 
 - Prefer the existing user-visible VS Code terminal when it is accessible. If the environment cannot control that exact terminal, use a persistent local PTY and state that limitation.
 - Start the experiment and retain its terminal session and run-directory identifiers. Do not continuously stream or analyze routine progress output.
-- Check the process approximately once per hour. Check sooner only when the process reports completion, failure, or a request for user input.
+- During startup, check once every five minutes until at least one complete
+  generation provides usable timing evidence. Estimate one-generation duration
+  from committed generation timing records rather than partial terminal output;
+  prefer completed evolutionary generations over generation zero because
+  initialization has a different workload.
+- For evolutionary generations 1 through 5, check once per newly completed
+  generation and update the duration estimate from the available completed
+  generations. A time-based monitor should schedule its next check at the
+  estimated one-generation duration; if no reliable estimate exists, retain the
+  five-minute startup interval.
+- After generation 5, check approximately once per estimated five-generation
+  duration. Re-estimate when a check observes materially different completed
+  generation timings. Check sooner only when the process reports completion,
+  failure, or a request for user input.
 - When the experiment finishes, report the result in the originating task so the Codex/ChatGPT mobile app can deliver its normal completion notification. Remind the user to enable mobile notifications if delivery is not configured.
 - Create monitoring only after a concrete experiment has started; do not leave a generic idle monitor running between experiments.
