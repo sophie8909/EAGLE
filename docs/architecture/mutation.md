@@ -60,8 +60,9 @@ deterministically. A failed attempt does not partially modify the gene.
 
 ## Code Reflection
 
-Code Reflection first diagnoses the selected parent Java, then directly revises
-it from that persisted conclusion:
+Code Reflection first diagnoses the selected parent Java. Its conditional Java
+revision is deferred until every child in the generation has completed its
+assigned reflection/rewrite work:
 
 ```text
 current strategy_prompt + selected parent Java
@@ -69,6 +70,7 @@ current strategy_prompt + selected parent Java
 + source-matching validation/compiler diagnostics
   -> three-part structured diagnosis: strategy fidelity, code simplicity,
      and game compliance
+  -> generation-wide materialization boundary
   -> diagnosis + the same authoritative inputs
   -> complete corrected CandidateAgent.java
   -> validation -> javac -> integration -> evaluation
@@ -102,7 +104,9 @@ next-generation inheritable Java.
 
 ## Selection and persistence
 
-The configured static/AOS controller selects exactly one operator. Strategy uses
+Before any mutation LLM call, search constructs a complete generation plan that
+records every child's selected parents, component crossover/copy result, and
+assigned mutation. The configured static/AOS controller selects exactly one operator. Strategy uses
 policy-parent provenance. Prompt and Code use generation-prompt provenance in
 default mode and Java-parent provenance in inherited mode. This evaluated source
 parent is also the AOS `comparison_parent_id`.
@@ -137,7 +141,12 @@ Worker Rush subject. Its expected scopes are `strategy_prompt`,
 - Strategy preserves `generation_prompt` and inherited Java.
 - Prompt preserves `strategy_prompt` and inherited Java.
 - Code preserves both prompt genes and inherited Java input.
+- Every offspring assignment is complete before the first reflection/rewrite
+  request, and every reflection/rewrite is complete before Java materialization.
 - A successful Code Reflection source bypasses the final Generator.
+- Optional `generation_model` owns ordinary final Java generation, deferred
+  Code revision, and compile-guided repair; otherwise the primary `model` owns
+  those calls too.
 - Generator and Evaluation never change prompt genes or pre-generation Java.
 - Match Commentator/Coach exclude Java and generation prompts.
 - Prompt Reviewer excludes raw game logs and fixed-scaffold behavior.

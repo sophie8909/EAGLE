@@ -60,17 +60,21 @@ are not instances of the MicroRTS `RandomAI` opponent.
 
 Each later generation produces a fixed-size offspring population and performs:
 
-1. seeded lexicase parent selection;
-2. optional uniform component crossover (two prompt components, plus an
-   independent Java-component choice in `inherited_genotype` mode);
-3. optional Strategy, Prompt, or Code mutation;
-4. final complete-file Java generation for Strategy, Prompt, and unmutated
-   children; a Code Reflection child instead supplies its complete Java here;
-5. validation, compilation, integration, and evaluation;
-6. optional AOS reward collection;
-7. seeded lexicase survivor selection without replacement from the joint
+1. a complete generation plan: seeded lexicase parent selection, optional
+   uniform component crossover (two prompt components, plus an independent
+   Java-component choice in `inherited_genotype` mode), and optional Strategy,
+   Prompt, or Code mutation assignment for every offspring slot before any
+   mutation LLM call;
+2. all assigned reflection and prompt-rewrite work; Code Reflection records its
+   structured diagnosis here but does not yet revise Java;
+3. one final materialization phase: complete-file Java generation for Strategy,
+   Prompt, and unmutated children, or diagnosis-guided parent-Java revision for
+   Code Reflection children;
+4. validation, compilation, integration, and evaluation;
+5. optional AOS reward collection;
+6. seeded lexicase survivor selection without replacement from the joint
    parent-plus-offspring (`mu_plus_lambda`) pool;
-8. atomic generation persistence.
+7. atomic generation persistence.
 
 The fixed-size survivor population is selected from the joint evaluated parent
 and offspring pool. Parent and offspring candidates compete under the same
@@ -133,7 +137,8 @@ Rewriter then returns one validated reusable-rule delta and changes only
 `generation_prompt`; the normal final Generator decodes the child from the
 updated prompt gene.
 
-Code mutation first reflects on the selected parent Java, then revises it. The
+Code mutation first reflects on the selected parent Java, then defers revision
+until every child has completed its reflection/rewrite work. The
 Reflector receives the child's `strategy_prompt`, the complete selected parent
 Java, the immutable gameplay and action/API contracts, the canonical fixed
 scaffold, a concise fixed-interface and complete-unit reference, and source-matching
@@ -164,8 +169,9 @@ prompt resources but may not contain alternate executable prompt bodies.
 
 In `inherited_genotype` mode crossover/copy chooses the Java component before
 mutation. Strategy and Prompt preserve it for the final Generator. Code uses it
-as the parent source and directly produces the child's candidate Java while
-retaining the selected input as lineage evidence.
+as the parent source and directly produces the child's candidate Java during
+the common final materialization phase while retaining the selected input as
+lineage evidence.
 
 ## 7. Java generation and validation
 
@@ -180,7 +186,7 @@ shared third component and the unchanged generation-zero phenotype; policy-only
 LLM calls fill the remaining population slots, and Java decoding starts with
 generation 1.
 
-Except for Code Reflection children, final generation consumes the two prompt
+Except for Code Reflection children, final materialization consumes the two prompt
 genes plus the fixed checked-in Java scaffold/API constraints and returns
 exactly one complete Java source file. In `inherited_genotype` mode it
 additionally receives the selected inherited Java component as revision
@@ -188,6 +194,14 @@ context; default mode receives no parent Java. A Code Reflection child instead
 enters this boundary with the complete source returned by the operator. It
 never receives game logs. Raw response, extracted source, normalized source,
 attempts, model identity, errors, and timing are persisted.
+
+The required `model` section owns initialization, reflection, and prompt rewrite.
+An optional `generation_model` section may select a different GGUF/runtime
+profile for final Java generation, deferred Code Reflection revision, and
+compile-guided generation repair. The orchestrator switches the one owned
+llama.cpp runtime only at phase boundaries and restores `model` before the next
+generation's reflection work. When `generation_model` is omitted, `model` owns
+both phases.
 
 The extracted response must itself satisfy the complete-file external envelope:
 package/class/superclass, constructors, lifecycle methods, security restrictions,
@@ -387,7 +401,8 @@ The production entrypoint is:
 ```
 
 It delegates to `python -m eagle experiment`. Python owns sorted config
-discovery, model validation, llama.cpp start/reuse/switch/health checks, search,
+discovery, validation of `model` and optional `generation_model`, llama.cpp
+start/reuse/switch/health checks, search,
 resume, final test, and owned-process cleanup. An occupied foreign endpoint is
 never adopted or killed. Mock mode does not construct a runtime manager.
 

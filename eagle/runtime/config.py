@@ -136,11 +136,15 @@ class RuntimeConfig:
         )
 
 
-def runtime_config_from_experiment(config: Any) -> RuntimeConfig:
-    """Adapt the one resolved experiment model to process-layer settings."""
+def runtime_config_from_experiment(
+    config: Any,
+    *,
+    phase: str = "reflection",
+) -> RuntimeConfig:
+    """Adapt one resolved experiment phase model to process-layer settings."""
 
     project_root = Path(__file__).resolve().parents[2]
-    model = config.model
+    model = config.model_for_phase(phase)
     config.validate_runtime_files()
     assert model.path is not None and model.llama_server is not None
     slug = "".join(

@@ -166,7 +166,8 @@ def _print_non_batch_output(
 ) -> None:
     print("EAGLE experiment")
     print(f"Experiment: {config.experiment_name}")
-    print(f"Model: {config.model.name}")
+    print(f"Reflection model: {config.model.name}")
+    print(f"Generation model: {config.resolved_generation_model.name}")
     print(f"Endpoint: {config.model.base_url}")
     print(f"Survivor selection: {config.survivor_selection} lexicase")
     kind = "initial" if config.reflection_operator_mode.adaptive else "fixed"
@@ -177,6 +178,25 @@ def _print_non_batch_output(
     print(f"AOS minimum probability: {config.aos_minimum_probability:.2f}")
     print(f"run_dir={config_path}")
     print(f"completed_generation={completed_generation}")
+
+
+def _ensure_runtime_phase(
+    manager: RuntimeManager,
+    config: ExperimentConfig,
+    phase: str,
+) -> None:
+    runtime = runtime_config_from_experiment(config, phase=phase)
+    if manager.current_spec is None:
+        print(f"Runtime: starting {phase} model {runtime.llm.base_url}")
+    elif manager.current_spec == runtime.spec:
+        print(f"Runtime: reusing {phase} model server")
+    else:
+        print(f"Runtime: switching to {phase} model {runtime.llm.base_url}")
+    status = manager.ensure(runtime)
+    if status.state != "healthy":
+        raise RuntimeError(
+            f"Configured {phase} llama.cpp runtime is not healthy: {status.detail}"
+        )
 
 
 def _print_batch_header(selected: Path, total: int) -> None:
@@ -235,16 +255,21 @@ class ExperimentOrchestrator:
             manager: RuntimeManager | None = None
             try:
                 if not mock:
-                    runtime = runtime_config_from_experiment(config)
                     manager = self.runtime_factory()
-                    print(f"Runtime: starting {runtime.llm.base_url}")
-                    status = manager.ensure(runtime)
-                    if status.state != "healthy":
-                        raise RuntimeError(
-                            f"Configured llama.cpp runtime is not healthy: {status.detail}"
-                        )
+                    _ensure_runtime_phase(manager, config, "reflection")
 
-                result = self.resume_runner(None, run_dir=resume_dir, mock=mock)
+                resume_kwargs = {}
+                if not mock and config.uses_distinct_generation_model:
+                    assert manager is not None
+                    resume_kwargs["activate_model_phase"] = (
+                        lambda phase: _ensure_runtime_phase(manager, config, phase)
+                    )
+                result = self.resume_runner(
+                    None,
+                    run_dir=resume_dir,
+                    mock=mock,
+                    **resume_kwargs,
+                )
                 if not mock and not skip_final_test:
                     status = self.final_test_runner(["--run-dir", str(result.run_dir)])
                     if status:
@@ -268,7 +293,8 @@ class ExperimentOrchestrator:
             for index, resolved_path in enumerate(config_paths, start=1):
                 print(f"\n[{index}/{len(config_paths)}] {resolved_path.name}")
                 config = ExperimentConfig.from_file(resolved_path)
-                print(f"Model: {config.model.name}")
+                print(f"Reflection model: {config.model.name}")
+                print(f"Generation model: {config.resolved_generation_model.name}")
                 print(f"Survivor selection: {config.survivor_selection} lexicase")
                 print(f"Reflection operator mode: {config.reflection_operator_mode.value}")
                 config.validate()
@@ -291,26 +317,22 @@ class ExperimentOrchestrator:
                     last_result = result
                     continue
 
-                runtime = runtime_config_from_experiment(config)
                 if manager is None:
                     manager = self.runtime_factory()
-                if manager.current_spec is None:
-                    print(f"Runtime: starting {runtime.llm.base_url}")
-                elif manager.current_spec == runtime.spec:
-                    print("Runtime: reusing existing model server")
-                else:
-                    print("Runtime: switching model server")
-                    print(f"Runtime: starting {runtime.llm.base_url}")
-                status = manager.ensure(runtime)
-                if status.state != "healthy":
-                    raise RuntimeError(
-                        f"Configured llama.cpp runtime is not healthy: {status.detail}"
+                _ensure_runtime_phase(manager, config, "reflection")
+                search_kwargs = {}
+                if config.uses_distinct_generation_model:
+                    search_kwargs["activate_model_phase"] = (
+                        lambda phase, selected=config: _ensure_runtime_phase(
+                            manager, selected, phase
+                        )
                     )
                 result = self.search_runner(
                     config,
                     config_path=resolved_path,
                     mock=mock,
                     on_run_created=record_run,
+                    **search_kwargs,
                 )
                 if record_run is not None:
                     record_run(result.run_dir)
@@ -360,25 +382,22 @@ class ExperimentOrchestrator:
         last_result: SearchResult | None = None
         last_known_run: Path | None = None
 
-        def ensure_runtime(config: ExperimentConfig) -> None:
+        def ensure_runtime(config: ExperimentConfig, phase: str = "reflection") -> None:
             nonlocal manager
             if mock:
                 return
-            runtime = runtime_config_from_experiment(config)
             if manager is None:
                 manager = self.runtime_factory()
-            if manager.current_spec is None:
-                print(f"Runtime: starting {runtime.llm.base_url}")
-            elif manager.current_spec == runtime.spec:
-                print("Runtime: reusing existing model server")
-            else:
-                print("Runtime: switching model server")
-                print(f"Runtime: starting {runtime.llm.base_url}")
-            status = manager.ensure(runtime)
-            if status.state != "healthy":
-                raise RuntimeError(
-                    f"Configured llama.cpp runtime is not healthy: {status.detail}"
+            _ensure_runtime_phase(manager, config, phase)
+
+        def phase_kwargs(config: ExperimentConfig) -> dict[str, object]:
+            if mock or not config.uses_distinct_generation_model:
+                return {}
+            return {
+                "activate_model_phase": lambda phase, selected=config: ensure_runtime(
+                    selected, phase
                 )
+            }
 
         try:
             for index, resolved_path in enumerate(config_paths, start=1):
@@ -418,13 +437,19 @@ class ExperimentOrchestrator:
                             config_path=resolved_path,
                             mock=mock,
                             on_run_created=record_run,
+                            **phase_kwargs(requested),
                         )
                         record_run(result.run_dir)
                     else:
                         print(f"Status: resuming {indexed_run}")
                         if not search_complete:
                             ensure_runtime(persisted)
-                        result = self.resume_runner(None, run_dir=indexed_run, mock=mock)
+                        result = self.resume_runner(
+                            None,
+                            run_dir=indexed_run,
+                            mock=mock,
+                            **phase_kwargs(persisted),
+                        )
                 else:
                     print("Status: not started; creating a new run")
                     ensure_runtime(requested)
@@ -438,6 +463,7 @@ class ExperimentOrchestrator:
                         config_path=resolved_path,
                         mock=mock,
                         on_run_created=record_run,
+                        **phase_kwargs(requested),
                     )
                     record_run(result.run_dir)
 

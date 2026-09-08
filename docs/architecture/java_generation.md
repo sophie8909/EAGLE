@@ -1,8 +1,16 @@
 # Java generation, validation, and compilation
 
 The Generator is the normal genotype-to-phenotype decoder. A successful Code
-Reflection is the one exception: it already returns a complete revised Java
-phenotype and therefore enters validation/compilation directly.
+Reflection is the one exception: its deferred revision returns a complete Java
+phenotype and therefore enters validation/compilation directly. Both operations
+run in the final generation-wide materialization phase, after all offspring
+reflection and prompt-rewrite work has finished.
+
+`model` owns initialization plus all reflection/rewrite roles. If the optional
+`generation_model` section is configured, the experiment orchestrator switches
+the single owned llama.cpp runtime to that model for ordinary Java generation,
+Code Reflection revision, and compile-guided repair, then switches back before
+the next generation's reflection phase. Without it, `model` owns both phases.
 
 ## Exact input and output
 
@@ -66,11 +74,11 @@ and compiler evidence. Every actual post-truncation request is separately hashed
 Default-mode and `llm_generated_policies` generation zero record no Java LLM
 attempts. The latter separately records its policy-only initialization attempts.
 
-Code Reflection first sends the policy, selected parent Java, immutable gameplay
+During the pre-materialization phase, Code Reflection first sends the policy, selected parent Java, immutable gameplay
 and action/API contracts, a concise interface/unit reference, canonical scaffold,
 and source-matching validation/compiler diagnostics to a structured Reflector.
 The conclusion separately reports strategy fidelity, code simplicity, and game
-compliance. When any dimension requires correction, a separate Java revision call
+compliance. At the final materialization boundary, when any dimension requires correction, a separate Java revision call
 receives the parsed conclusion plus those same authoritative inputs; otherwise the
 parent Java is retained without that call. Neither receives the reusable generation prompt, game performance,
 opponent scores, W/D/L summaries, match results, traces, logs, aggregate fitness,

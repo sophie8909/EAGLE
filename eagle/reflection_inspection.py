@@ -30,7 +30,7 @@ from .evaluation import evaluate_population
 from .reflection_context import ReflectionContext, build_reflection_context
 from .runtime.config import runtime_config_from_experiment
 from .runtime.processes import RuntimeManager
-from .search_runtime import build_search_runtime
+from .search_runtime import build_search_runtime, preflight_llm_endpoint
 from .strategy_reflection import normalize_mutation_intent
 
 
@@ -238,6 +238,40 @@ def run_reflection_inspection(
                         context,
                         artifact_dir=trial_dir,
                     )
+                    if reflection_type == "code":
+                        if not mock and experiment.uses_distinct_generation_model:
+                            assert manager is not None
+                            status = manager.ensure(
+                                runtime_config_from_experiment(
+                                    experiment,
+                                    phase="generation",
+                                )
+                            )
+                            if status.state != "healthy":
+                                raise RuntimeError(
+                                    "Configured generation llama.cpp runtime is not "
+                                    f"healthy: {status.detail}"
+                                )
+                            preflight_llm_endpoint(runtime.generation_client)
+                        child = mutation.materialize(
+                            child,
+                            context,
+                            artifact_dir=trial_dir,
+                        )
+                        if not mock and experiment.uses_distinct_generation_model:
+                            assert manager is not None
+                            status = manager.ensure(
+                                runtime_config_from_experiment(
+                                    experiment,
+                                    phase="reflection",
+                                )
+                            )
+                            if status.state != "healthy":
+                                raise RuntimeError(
+                                    "Configured reflection llama.cpp runtime is not "
+                                    f"healthy: {status.detail}"
+                                )
+                            preflight_llm_endpoint(runtime.client)
                 summary = _write_trial_review(
                     trial_dir,
                     reflection_type=reflection_type,

@@ -117,6 +117,10 @@ class ExperimentLauncherTests(unittest.TestCase):
         def search(config, **kwargs):
             ea_calls[0] += 1
             events.append(f"ea:{config.model.name}")
+            activate_model_phase = kwargs.get("activate_model_phase")
+            if callable(activate_model_phase):
+                activate_model_phase("generation")
+                activate_model_phase("reflection")
             if ea_calls[0] == fail_on_ea_call:
                 raise RuntimeError("EA failed")
             return SearchResult(run_dir, [], None)
@@ -208,6 +212,46 @@ class ExperimentLauncherTests(unittest.TestCase):
             self.assertEqual(events.count("reuse:shared.gguf"), 2)
             self.assertEqual(events.count("stop:shared.gguf"), 1)
             self.assertEqual(events.count("ea:shared"), 3)
+
+    def test_distinct_generation_model_switches_only_at_phase_boundary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reflection_model = root / "ministral.gguf"
+            generation_model = root / "qwen.gguf"
+            reflection_model.write_bytes(b"reflection")
+            generation_model.write_bytes(b"generation")
+            path = self.config(
+                root,
+                "dual.yaml",
+                model_name="ministral",
+                model_path=reflection_model,
+            )
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload["generation_model"] = {
+                **payload["model"],
+                "name": "qwen3.5-9b",
+                "path": str(generation_model),
+            }
+            path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+            events: list[str] = []
+
+            self.orchestrator(events, root / "run").run(
+                config_path=path,
+                skip_final_test=True,
+            )
+
+            lifecycle = [
+                item for item in events
+                if item.startswith(("start:", "reuse:", "stop:"))
+            ]
+            self.assertEqual(lifecycle, [
+                "start:ministral.gguf",
+                "stop:ministral.gguf",
+                "start:qwen.gguf",
+                "stop:qwen.gguf",
+                "start:ministral.gguf",
+                "stop:ministral.gguf",
+            ])
 
     def test_runtime_sequence_a_a_b_b_a(self):
         with tempfile.TemporaryDirectory() as directory:

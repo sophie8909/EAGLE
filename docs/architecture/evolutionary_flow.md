@@ -21,18 +21,23 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 3. Store one score for each fixed opponent case: `passive`, `random`,
    `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
    `coac`, and `tma`.
-4. Select parents with seeded lexicase selection. A random case order is drawn
-   from the EA `random.Random` instance, and candidates are filtered to the
-   best score for each case until one remains.
-5. Apply crossover/copy to every active genotype component and let the
-   configured reflection-operator controller choose Strategy Reflection,
-   Prompt Reflection, or Code Reflection. Strategy changes only the policy
-   prompt. Prompt changes only the reusable generation prompt. Code first
-   records a structured diagnosis and then directly revises the selected parent
-   Java from it while preserving both prompt genes.
-6. Decode Strategy/Prompt/no-mutation children with the configured Generator.
-   Send a successful Code Reflection source directly to validation/compilation
-   without allowing the Generator to overwrite it. In either path, use the
+4. Plan the entire offspring population before any mutation LLM call. For each
+   slot, perform seeded-lexicase parent selection, assign crossover or copy for
+   every active component, and assign either Strategy, Prompt, Code, or no
+   mutation. Operator probabilities therefore describe one generation-level
+   assignment boundary rather than an interleaving of planning and LLM work.
+5. Run the assigned pre-materialization work for every child. Strategy changes
+   only the policy prompt. Prompt completes its review and reusable-generation-
+   prompt rewrite. Code records its structured diagnosis but defers the
+   conditional parent-Java revision.
+6. Enter one final materialization phase only after all children finish step 5.
+   Decode Strategy/Prompt/no-mutation children with the generation model, and
+   apply diagnosis-guided parent-Java revision to Code children with that same
+   phase's model. Send a successful Code Reflection source directly to
+   validation/compilation without allowing the ordinary Generator to overwrite
+   it. When `generation_model` is absent this is the primary `model`; when it
+   is present the owned llama.cpp runtime switches after step 5 and switches
+   back before the next generation's reflection work. In either path, use the
    structured validation/javac evidence only after a complete source fails;
    promote the first validation+compilation success, then evaluate that single
    promoted phenotype through the complete pipeline. Integration/runtime

@@ -147,12 +147,22 @@ class CodeReflectionTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            child = CodeReflectionMutation(
+            mutation = CodeReflectionMutation(
                 config(),
                 backend=backend,
                 reflection_backend=reflector,
                 artifact_root=root,
-            ).mutate(candidate, context(), artifact_dir=root / candidate.id)
+            )
+            child = mutation.mutate(candidate, context(), artifact_dir=root / candidate.id)
+
+            self.assertEqual(events, ["reflection"])
+            self.assertEqual(child.generated_java, "")
+            self.assertEqual(child.metadata["mutation"]["revision_status"], "pending")
+            child = mutation.materialize(
+                child,
+                context(),
+                artifact_dir=root / candidate.id,
+            )
 
             self.assertEqual(child.strategy_prompt, candidate.strategy_prompt)
             self.assertEqual(child.generation_prompt, candidate.generation_prompt)
@@ -197,6 +207,8 @@ class CodeReflectionTests(unittest.TestCase):
             self.assertTrue(metadata["java_changed"])
             self.assertEqual(metadata["reflection_status"], "success")
             self.assertEqual(metadata["revision_status"], "success")
+            self.assertIn("structural_evidence", metadata["evidence"])
+            self.assertIn("reflection", metadata)
             conclusion = json.loads(
                 (mutation_dir / "reflection_conclusion.json").read_text(encoding="utf-8")
             )
@@ -229,9 +241,12 @@ class CodeReflectionTests(unittest.TestCase):
             ),
         )
 
-        CodeReflectionMutation(
+        mutation = CodeReflectionMutation(
             config(), backend=backend, reflection_backend=reflector
-        ).mutate(candidate, mismatched)
+        )
+        child = mutation.mutate(candidate, mismatched)
+        self.assertEqual(backend.requests, [])
+        mutation.materialize(child, mismatched)
 
         self.assertNotIn(COMPILER_SENTINEL, reflector.prompts[0])
         self.assertNotIn(COMPILER_SENTINEL, backend.requests[0])
@@ -248,12 +263,16 @@ class CodeReflectionTests(unittest.TestCase):
             java_parent_id="parent",
         )
 
-        child = CodeReflectionMutation(
+        mutation = CodeReflectionMutation(
             config(), backend=backend, reflection_backend=reflector
-        ).mutate(
+        )
+        child = mutation.mutate(
             candidate,
             context(),
         )
+        self.assertEqual(child.generated_java, "")
+        self.assertEqual(backend.requests, [])
+        child = mutation.materialize(child, context())
 
         self.assertEqual(child.generated_java, PARENT_JAVA)
         self.assertFalse(child.metadata["mutation"]["applied"])
@@ -273,9 +292,12 @@ class CodeReflectionTests(unittest.TestCase):
             java_parent_id="parent",
         )
 
-        child = CodeReflectionMutation(
+        mutation = CodeReflectionMutation(
             config(), backend=backend, reflection_backend=reflector
-        ).mutate(candidate, context())
+        )
+        child = mutation.mutate(candidate, context())
+        self.assertEqual(child.generated_java, "")
+        child = mutation.materialize(child, context())
 
         self.assertEqual(child.generated_java, PARENT_JAVA)
         self.assertFalse(child.metadata["mutation"]["applied"])
@@ -311,9 +333,12 @@ class CodeReflectionTests(unittest.TestCase):
             java_parent_id="parent",
         )
 
-        child = CodeReflectionMutation(
+        mutation = CodeReflectionMutation(
             config(), backend=backend, reflection_backend=reflector
-        ).mutate(candidate, context())
+        )
+        child = mutation.mutate(candidate, context())
+        self.assertEqual(backend.requests, [])
+        child = mutation.materialize(child, context())
 
         conclusion = child.metadata["mutation"]["reflection_conclusion"]
         self.assertEqual(
@@ -341,9 +366,12 @@ class CodeReflectionTests(unittest.TestCase):
             java_parent_id="parent",
         )
 
-        child = CodeReflectionMutation(
+        mutation = CodeReflectionMutation(
             config(), backend=backend, reflection_backend=reflector
-        ).mutate(candidate, context())
+        )
+        child = mutation.mutate(candidate, context())
+        self.assertEqual(child.generated_java, "")
+        child = mutation.materialize(child, context())
 
         self.assertEqual(child.generated_java, PARENT_JAVA)
         self.assertEqual(backend.requests, [])

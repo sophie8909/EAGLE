@@ -265,6 +265,8 @@ Attack the nearest enemy Base."}
             config = ExperimentConfig.from_mapping(
                 {
                     "runs_dir": temp_dir,
+                    "model": {"name": "ministral"},
+                    "generation_model": {"name": "qwen3.5-9b"},
                     "candidate_java_mode": "inherited_genotype",
                     "initial_population_mode": "llm_generated_policies",
                     "population_size": 2,

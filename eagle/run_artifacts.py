@@ -43,6 +43,7 @@ def initialize_run_manifest(run_dir: Path, *, config: ExperimentConfig) -> None:
             "status": "initialized",
             "experiment_name": config.experiment_name,
             "model_name": config.model.name,
+            "generation_model_name": config.resolved_generation_model.name,
             "reflection_operator_mode": config.reflection_operator_mode.value,
             "latest_generation": None,
             "updated_at": utc_now(),

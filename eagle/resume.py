@@ -19,7 +19,12 @@ from .run_artifacts import (
     record_error_memory,
     record_generation,
 )
-from .search import SearchResult, create_offspring
+from .search import (
+    SearchResult,
+    apply_offspring_mutations,
+    materialize_code_reflections,
+    plan_offspring,
+)
 from .strategy_reflection import cleanup_retired_match_traces
 from .strategy_diversity import (
     archive_niches,
@@ -30,7 +35,7 @@ from .strategy_diversity import (
 )
 from .opponent_archive import ensure_opponent_archive, update_opponent_archive
 from .selection import best_candidate, population_signature, select_next_generation
-from .search_runtime import build_search_runtime
+from .search_runtime import build_search_runtime, preflight_llm_endpoint
 from .timing import Stopwatch, append_event, build_generation_event
 
 
@@ -40,6 +45,7 @@ def resume_search(
     config_path: Path | None = None,
     run_dir: Path,
     mock: bool = False,
+    activate_model_phase=None,
 ) -> SearchResult:
     """Continue from the last atomically recorded generation."""
 
@@ -48,7 +54,13 @@ def resume_search(
         validate_resume_config(config, persisted, mock=mock)
     config = persisted
     try:
-        return _resume_search_impl(config, config_path=config_path, run_dir=run_dir, mock=mock)
+        return _resume_search_impl(
+            config,
+            config_path=config_path,
+            run_dir=run_dir,
+            mock=mock,
+            activate_model_phase=activate_model_phase,
+        )
     except KeyboardInterrupt:
         mark_run_interrupted(run_dir)
         raise
@@ -66,7 +78,14 @@ def load_resume_config(run_dir: Path) -> ExperimentConfig:
     return ExperimentConfig.from_file(run_config_path)
 
 
-def _resume_search_impl(config: ExperimentConfig, *, config_path: Path | None, run_dir: Path, mock: bool = False) -> SearchResult:
+def _resume_search_impl(
+    config: ExperimentConfig,
+    *,
+    config_path: Path | None,
+    run_dir: Path,
+    mock: bool = False,
+    activate_model_phase=None,
+) -> SearchResult:
     config.validate()
     preflight_evaluation_opponents(config, mock=mock)
     completed_generation, population = load_resume_population(run_dir)
@@ -95,6 +114,7 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path | None, r
     )
     generation_backend = runtime.generation_backend
     shared_client = runtime.client
+    generation_client = runtime.generation_client
     mutations = runtime.mutations
     rng = random.Random(f"{config.random_seed}:{completed_generation}")
     operator_controller = runtime.operator_controller
@@ -102,18 +122,43 @@ def _resume_search_impl(config: ExperimentConfig, *, config_path: Path | None, r
     stagnation = 0
     error_memory = load_error_memory(run_dir)
     stop_reason = None
+    active_model_phase = "reflection"
+
+    def activate_phase(phase: str) -> None:
+        nonlocal active_model_phase
+        if not config.uses_distinct_generation_model or phase == active_model_phase:
+            return
+        if mock:
+            active_model_phase = phase
+            return
+        if activate_model_phase is None:
+            raise RuntimeError(
+                "A distinct generation_model requires the experiment orchestrator's "
+                "model-phase activation callback."
+            )
+        activate_model_phase(phase)
+        preflight_llm_endpoint(
+            generation_client if phase == "generation" else shared_client
+        )
+        active_model_phase = phase
+
     for generation in range(completed_generation + 1, config.generations + 1):
-        offspring = create_offspring(
+        span = Stopwatch.start()
+        activate_phase("reflection")
+        plans = plan_offspring(
             population, config=config, generation=generation, rng=rng,
             mutations=mutations, operator_controller=operator_controller,
             artifact_root=candidates_dir, error_memory=error_memory,
         )
-        span = Stopwatch.start()
+        plans = apply_offspring_mutations(plans, artifact_root=candidates_dir)
+        activate_phase("generation")
+        plans = materialize_code_reflections(plans, artifact_root=candidates_dir)
+        offspring = [plan.candidate for plan in plans]
         evaluated = evaluate_population(
             offspring, generation=generation, config=config, backend=generation_backend,
             generated_agents_dir=generated_agents_dir, classes_dir=classes_dir,
             candidates_dir=candidates_dir,
-            mock=mock, llm_client=shared_client,
+            mock=mock, llm_client=generation_client,
         )
         evaluated, rewards = operator_controller.collect_rewards(
             population,

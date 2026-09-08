@@ -21,13 +21,37 @@ conda run --no-capture-output -n eagle \
   --mock --skip-final-test
 ```
 
-The resolved `model` section selects the GGUF, llama-server executable, host, port, context size, GPU layers, threads, batch size, parallel slots, and health/startup timeouts. The orchestrator validates runtime files only outside mock mode, starts one owned process, waits for `/health` or `/v1/models`, verifies a chat completion, runs search and the production final test, and stops its owned process in `finally`.
+The resolved `model` section selects the GGUF, llama-server executable, host,
+port, context size, GPU layers, threads, batch size, parallel slots, and
+health/startup timeouts for initialization and reflection/rewrite roles. An
+optional `generation_model` section has the same shape and selects the model for
+final Java generation, deferred Code Reflection revision, and compile-guided
+repair. The orchestrator validates runtime files only outside mock mode, owns
+one process, switches that process only at generation phase boundaries, waits
+for `/health` or `/v1/models`, verifies a chat completion, runs search and the
+production final test, and stops its owned process in `finally`.
+
+```yaml
+model:
+  name: ministral3_8b
+  path: experiment_env/model/ministral3-8b-instruct-q4-k-m/Ministral-3-8B-Instruct-2512-Q4_K_M.gguf
+  llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
+  port: 8080
+generation_model:            # omit to use model for every phase
+  name: qwen3.5_9b
+  path: experiment_env/model/qwen3-5-9b-ud-q4-k-xl-q4-k-xl-bbcc0f54/model.gguf
+  llama_server: experiment_env/model/llama.cpp/llama.cpp/build-eagle/bin/llama-server
+  port: 8080
+```
 
 When a folder contains multiple YAML files, they run in filename order. Adjacent
 configs with an identical resolved model runtime reuse the already-started
 `llama-server`; the manager starts it only once, while each search still performs
 its normal LLM endpoint preflight. A changed model or server profile stops the
-owned runtime before starting the next one.
+owned runtime before starting the next one. Within a dual-model experiment,
+all offspring assignments are first fixed, all reflection/rewrite work runs on
+`model`, and only then does the runtime switch to `generation_model` for final
+materialization. It switches back before the next generation.
 
 Generation 0 is initialization. `generations: 20` therefore records generation 0 and performs evolutionary generations 1 through 20.
 
@@ -121,8 +145,8 @@ aos_minimum_probability: 0.10
 
 Strategy/Prompt/Code probabilities must sum to 1.0; they are fixed in `static`
 and initial in either AOS mode. Prompt Reflection rewrites reusable generation
-rules; Code Reflection first diagnoses and then directly revises selected parent
-Java. Every YAML creates fresh population, RNG, operator controller/AOS state,
+rules; Code Reflection diagnoses during reflection work and defers direct parent-
+Java revision to the final materialization phase. Every YAML creates fresh population, RNG, operator controller/AOS state,
 archives, IDs, and run directory; only a compatible LLM process may be reused.
 
 Historical configs without `prompt_reflection_probability` are migrated on

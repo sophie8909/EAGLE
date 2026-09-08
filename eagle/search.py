@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from generation.backend import InitialJavaSeedBackend
 
@@ -46,7 +46,7 @@ from .reflection_context import build_reflection_context
 from .timing import Stopwatch, append_event, build_generation_event, utc_now
 from .prompts import normalize_prompt
 from .strategy_reflection import cleanup_retired_match_traces, select_strategy_mutation_intent
-from .search_runtime import build_search_runtime
+from .search_runtime import build_search_runtime, preflight_llm_endpoint
 from .strategy_diversity import (
     archive_niches,
     diversity_console_summary,
@@ -72,6 +72,24 @@ class SearchResult:
     stop_reason: str | None = None
 
 
+@dataclass(frozen=True)
+class OffspringPlan:
+    """One fully assigned child before any mutation LLM call is made."""
+
+    candidate: Candidate
+    context_index: int
+    mutation_name: str | None = None
+    mutation: Any | None = None
+    mutation_context: ReflectionContext | None = None
+    mutation_intent: str | None = None
+    parent_selection_duration: float = 0.0
+    operator_id: str | None = None
+    eligible_operator_ids: tuple[str, ...] = ()
+    comparison_parent_id: str | None = None
+    operator_mode: str | None = None
+    probability_before: float | None = None
+
+
 def run_search(
     config: ExperimentConfig,
     *,
@@ -79,6 +97,7 @@ def run_search(
     mock: bool = False,
     run_id: str | None = None,
     on_run_created: Callable[[Path], None] | None = None,
+    activate_model_phase: Callable[[str], None] | None = None,
 ) -> SearchResult:
     """Run the EA and preserve the last completed generation on Ctrl-C."""
 
@@ -96,6 +115,7 @@ def run_search(
             mock=mock,
             run_id=run_id,
             on_run_created=remember_run,
+            activate_model_phase=activate_model_phase,
         )
     except KeyboardInterrupt:
         if active_run[0] is not None:
@@ -114,6 +134,7 @@ def _run_search_impl(
     mock: bool = False,
     run_id: str | None = None,
     on_run_created: Callable[[Path], None] | None = None,
+    activate_model_phase: Callable[[str], None] | None = None,
 ) -> SearchResult:
     """Run the EA lifecycle: initialize, evaluate, select, repeat, and finalize.
 
@@ -148,7 +169,28 @@ def _run_search_impl(
     )
     generation_backend = runtime.generation_backend
     shared_client = runtime.client
+    generation_client = runtime.generation_client
     operator_controller = runtime.operator_controller
+    active_model_phase = "reflection"
+
+    def activate_phase(phase: str) -> None:
+        nonlocal active_model_phase
+        if not config.uses_distinct_generation_model or phase == active_model_phase:
+            return
+        if mock:
+            active_model_phase = phase
+            return
+        if activate_model_phase is None:
+            raise RuntimeError(
+                "A distinct generation_model requires the experiment orchestrator's "
+                "model-phase activation callback."
+            )
+        activate_model_phase(phase)
+        preflight_llm_endpoint(
+            generation_client if phase == "generation" else shared_client
+        )
+        active_model_phase = phase
+
     # Initialization is followed by the same evaluation boundary used for
     # every later offspring generation.
     generation_span = Stopwatch.start()
@@ -159,20 +201,23 @@ def _run_search_impl(
         timing_logger=runtime.llm_logger,
     )
     # Generation zero enters the same evaluation boundary as every offspring so objective and failure records have one shape.
+    generation_zero_fixed_java = generation_zero_uses_fixed_java(config)
+    if not generation_zero_fixed_java:
+        activate_phase("generation")
     evaluated_population = evaluate_population(
         population,
         generation=0,
         config=config,
         backend=(
             InitialJavaSeedBackend(config.initial_java_seed_path)
-            if generation_zero_uses_fixed_java(config)
+            if generation_zero_fixed_java
             else generation_backend
         ),
         generated_agents_dir=generated_agents_dir,
         classes_dir=classes_dir,
         candidates_dir=candidates_dir,
         mock=mock,
-        llm_client=shared_client,
+        llm_client=(shared_client if generation_zero_fixed_java else generation_client),
     )
     archive_before = archive_niches(run_dir)
     update_strategy_archive(run_dir, evaluated_population)
@@ -198,14 +243,14 @@ def _run_search_impl(
     stagnation_count = 0
     completed_generation = 0
     stop_reason: str | None = None
-
     # One fixed EA step per iteration: select parents -> create offspring ->
     # evaluate offspring -> select survivors.
     # Generation 0 is initialization only; ``generations`` counts evolutionary
     # offspring generations, so generations=20 runs gen1 through gen20.
     for generation in range(1, config.generations + 1):
-        # Operators produce only child genotypes; evaluation starts at the shared boundary below.
-        offspring = create_offspring(
+        generation_span = Stopwatch.start()
+        activate_phase("reflection")
+        plans = plan_offspring(
             evaluated_population,
             config=config,
             generation=generation,
@@ -215,7 +260,10 @@ def _run_search_impl(
             artifact_root=candidates_dir,
             error_memory=error_memory,
         )
-        generation_span = Stopwatch.start()
+        plans = apply_offspring_mutations(plans, artifact_root=candidates_dir)
+        activate_phase("generation")
+        plans = materialize_code_reflections(plans, artifact_root=candidates_dir)
+        offspring = [plan.candidate for plan in plans]
         # Validation, compilation, runtime evaluation, objectives, and candidate artifacts stay centralized in evaluation.
         evaluated_offspring = evaluate_population(
             offspring,
@@ -226,7 +274,7 @@ def _run_search_impl(
             classes_dir=classes_dir,
             candidates_dir=candidates_dir,
             mock=mock,
-            llm_client=shared_client,
+            llm_client=generation_client,
         )
         evaluated_offspring, rewards = operator_controller.collect_rewards(
             evaluated_population,
@@ -327,21 +375,18 @@ def initialize_population(
     )
 
 
-def create_offspring(
+def plan_offspring(
     population: list[Candidate], *, config: ExperimentConfig, generation: int,
-    rng: random.Random, mutations: dict[str, PromptRewriteMutation],
+    rng: random.Random, mutations: dict[str, Any],
     operator_controller: ReflectionOperatorController, artifact_root: Path | None = None,
     error_memory: tuple[dict[str, object], ...] = (),
-) -> list[Candidate]:
-    """Create the next generation's genotypes without evaluating them.
+) -> list[OffspringPlan]:
+    """Assign every child's parents, crossover, and mutation before LLM work."""
 
-    Parent selection, optional component-wise crossover, and optional prompt
-    mutation happen here. Java generation, compilation, matches, and objective
-    calculation remain in :func:`evaluate_population`.
-    """
-    offspring: list[Candidate] = []
-    while len(offspring) < config.population_size:
-        context_index = len(offspring)
+    del artifact_root  # Planning is pure EA state assignment.
+    plans: list[OffspringPlan] = []
+    while len(plans) < config.population_size:
+        context_index = len(plans)
         parent_selection_started = time.monotonic()
         parent_a = select_parent(population, rng)
         parent_b = select_parent(population, rng)
@@ -393,6 +438,13 @@ def create_offspring(
             f"[gen {generation} cand {context_index + 1}/{config.population_size}] "
             f"{child.id}"
         )
+        mutation_name: str | None = None
+        mutation = None
+        mutation_context: ReflectionContext | None = None
+        mutation_intent: str | None = None
+        operator_used: str | None = None
+        eligible_operators: tuple[str, ...] = ()
+        feedback_parent: Candidate | None = None
         if rng.random() < config.mutation_rate:
             eligible_operators = (
                 (STRATEGY_REFLECTION,)
@@ -405,10 +457,6 @@ def create_offspring(
             )
             mutation_name = OPERATOR_TO_MUTATION[operator_used]
             mutation = mutations[mutation_name]
-            print(
-                f"{progress_prefix} stage=mutation status=started operator={mutation_name}",
-                flush=True,
-            )
             # Reflection evidence must describe the evaluated source of the
             # gene being mutated.  This avoids reviewing one parent's Java as
             # if it had been produced by the other parent's translation gene.
@@ -418,12 +466,9 @@ def create_offspring(
                 candidate_java_mode=config.candidate_java_mode,
                 parents=(parent_a, parent_b),
             )
-            mutation_intent = None
             if mutation_name == "strategy":
                 mutation_intent = select_strategy_mutation_intent(rng=rng)
                 child = replace(child, mutation_intent=mutation_intent, parent_strategy_niche=feedback_parent.strategy_niche)
-            mutation_started_at = utc_now()
-            mutation_started = time.monotonic()
             parent_objectives = {
                 parent.id: dict(parent.fitness_objectives)
                 for parent in (parent_a, parent_b)
@@ -446,73 +491,192 @@ def create_offspring(
                 parent_objectives=parent_objectives,
                 reference_candidates=reference_candidates,
             )
-            if mutation_name == "strategy":
-                child = mutation.mutate(
-                    child,
-                    mutation_context,
-                    artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
-                    mutation_intent=mutation_intent,
-                )
-            else:
-                child = mutation.mutate(
-                    child,
-                    mutation_context,
-                    artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
-                )
-            mutation_record = child.metadata.get("mutation") or {}
-            mutation_applied = bool(mutation_record.get("applied"))
-            mutation_error = (
-                mutation_record.get("reflection_error")
-                or mutation_record.get("rewrite_error")
-                or mutation_record.get("revision_error")
-            )
-            child = replace(child, timing={
-                **child.timing,
-                "mutation": {
-                    "operation_type": "mutation",
-                    "started_at": mutation_started_at,
-                    "finished_at": utc_now(),
-                    "generation_only_duration_seconds": max(0.0, time.monotonic() - mutation_started),
-                    "parent_selection_duration_seconds": parent_selection_duration,
-                    "status": "success" if mutation_applied else "failed",
-                    "error": mutation_error,
-                },
-            })
-            child = replace(child, metadata={
-                **child.metadata,
-                "aos": {
-                    "generation": generation,
-                    # Credit the operator against the same evaluated parent
-                    # whose component/evidence drove the mutation. Crossover
-                    # may source that parent from either direct-parent slot.
-                    "comparison_parent_id": feedback_parent.id,
-                    "offspring_id": child.id,
-                    "operator": OPERATOR_TO_MUTATION[operator_used],
-                    "operator_id": operator_used,
-                    "mode": operator_controller.mode.value,
-                    "probability_before": operator_controller.probability(operator_used),
-                    "eligible_operator_ids": list(eligible_operators),
-                },
-            })
-            mutation_status = "completed" if mutation_applied else "failed"
-            mutation_error_detail = (
-                f" error={str(mutation_error).replace(chr(10), ' ')[:300]}"
-                if mutation_error
-                else ""
-            )
-            print(
-                f"{progress_prefix} stage=mutation status={mutation_status} "
-                f"operator={mutation_name} applied={str(mutation_applied).lower()}"
-                f"{mutation_error_detail}",
-                flush=True,
-            )
-        else:
+        plans.append(OffspringPlan(
+            candidate=child,
+            context_index=context_index,
+            mutation_name=mutation_name,
+            mutation=mutation,
+            mutation_context=mutation_context,
+            mutation_intent=mutation_intent,
+            parent_selection_duration=parent_selection_duration,
+            operator_id=operator_used,
+            eligible_operator_ids=tuple(eligible_operators),
+            comparison_parent_id=None if feedback_parent is None else feedback_parent.id,
+            operator_mode=(
+                None if operator_used is None else operator_controller.mode.value
+            ),
+            probability_before=(
+                None
+                if operator_used is None
+                else operator_controller.probability(operator_used)
+            ),
+        ))
+    assignments = ", ".join(
+        f"{plan.context_index + 1}:{plan.candidate.operator}/{plan.mutation_name or 'none'}"
+        for plan in plans
+    )
+    print(
+        f"[gen {generation}] stage=offspring_plan status=completed assignments={assignments}",
+        flush=True,
+    )
+    return plans
+
+
+def apply_offspring_mutations(
+    plans: list[OffspringPlan],
+    *,
+    artifact_root: Path | None = None,
+) -> list[OffspringPlan]:
+    """Run reflection/rewrite stages after the whole generation is assigned."""
+
+    prepared: list[OffspringPlan] = []
+    for plan in plans:
+        child = plan.candidate
+        progress_prefix = (
+            f"[gen {child.generation} cand {plan.context_index + 1}/{len(plans)}] "
+            f"{child.id}"
+        )
+        if plan.mutation is None or plan.mutation_name is None:
             print(
                 f"{progress_prefix} stage=mutation status=skipped operator=none",
                 flush=True,
             )
-        offspring.append(child)
-    return offspring
+            prepared.append(plan)
+            continue
+        assert plan.mutation_context is not None
+        print(
+            f"{progress_prefix} stage=mutation status=started operator={plan.mutation_name}",
+            flush=True,
+        )
+        mutation_started_at = utc_now()
+        mutation_started = time.monotonic()
+        if plan.mutation_name == "strategy":
+            child = plan.mutation.mutate(
+                child,
+                plan.mutation_context,
+                artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
+                mutation_intent=plan.mutation_intent,
+            )
+        else:
+            child = plan.mutation.mutate(
+                child,
+                plan.mutation_context,
+                artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
+            )
+        mutation_record = child.metadata.get("mutation") or {}
+        mutation_applied = bool(mutation_record.get("applied"))
+        code_diagnosed = (
+            plan.mutation_name == "code"
+            and mutation_record.get("reflection_status") == "success"
+        )
+        mutation_error = (
+            mutation_record.get("reflection_error")
+            or mutation_record.get("rewrite_error")
+            or mutation_record.get("revision_error")
+        )
+        child = replace(child, timing={
+            **child.timing,
+            "mutation": {
+                "operation_type": "mutation",
+                "phase": "reflection_and_prompt_rewrite",
+                "started_at": mutation_started_at,
+                "finished_at": utc_now(),
+                "generation_only_duration_seconds": max(0.0, time.monotonic() - mutation_started),
+                "parent_selection_duration_seconds": plan.parent_selection_duration,
+                "status": "success" if mutation_applied or code_diagnosed else "failed",
+                "error": mutation_error,
+            },
+        })
+        child = replace(child, metadata={
+            **child.metadata,
+            "aos": {
+                "generation": child.generation,
+                "comparison_parent_id": plan.comparison_parent_id,
+                "offspring_id": child.id,
+                "operator": plan.mutation_name,
+                "operator_id": plan.operator_id,
+                "mode": plan.operator_mode,
+                "probability_before": plan.probability_before,
+                "eligible_operator_ids": list(plan.eligible_operator_ids),
+            },
+        })
+        mutation_status = "completed" if mutation_applied or code_diagnosed else "failed"
+        pending_suffix = (
+            " materialization=pending"
+            if mutation_record.get("revision_status") == "pending"
+            else ""
+        )
+        mutation_error_detail = (
+            f" error={str(mutation_error).replace(chr(10), ' ')[:300]}"
+            if mutation_error
+            else ""
+        )
+        print(
+            f"{progress_prefix} stage=mutation status={mutation_status} "
+            f"operator={plan.mutation_name} applied={str(mutation_applied).lower()}"
+            f"{pending_suffix}{mutation_error_detail}",
+            flush=True,
+        )
+        prepared.append(replace(plan, candidate=child))
+    return prepared
+
+
+def materialize_code_reflections(
+    plans: list[OffspringPlan],
+    *,
+    artifact_root: Path | None = None,
+) -> list[OffspringPlan]:
+    """Run only deferred Code Reflection revisions in the common final phase."""
+
+    materialized: list[OffspringPlan] = []
+    for plan in plans:
+        child = plan.candidate
+        if plan.mutation_name != "code" or plan.mutation is None:
+            materialized.append(plan)
+            continue
+        assert plan.mutation_context is not None
+        print(
+            f"[gen {child.generation} cand {plan.context_index + 1}/{len(plans)}] "
+            f"{child.id} stage=materialization status=started operator=code",
+            flush=True,
+        )
+        child = plan.mutation.materialize(
+            child,
+            plan.mutation_context,
+            artifact_dir=(artifact_root / child.id) if artifact_root is not None else None,
+        )
+        revision_status = (child.metadata.get("mutation") or {}).get("revision_status")
+        print(
+            f"[gen {child.generation} cand {plan.context_index + 1}/{len(plans)}] "
+            f"{child.id} stage=materialization status=completed operator=code "
+            f"revision_status={revision_status}",
+            flush=True,
+        )
+        materialized.append(replace(plan, candidate=child))
+    return materialized
+
+
+def create_offspring(
+    population: list[Candidate], *, config: ExperimentConfig, generation: int,
+    rng: random.Random, mutations: dict[str, Any],
+    operator_controller: ReflectionOperatorController, artifact_root: Path | None = None,
+    error_memory: tuple[dict[str, object], ...] = (),
+) -> list[Candidate]:
+    """Compatibility wrapper executing all three newly separated phases."""
+
+    plans = plan_offspring(
+        population,
+        config=config,
+        generation=generation,
+        rng=rng,
+        mutations=mutations,
+        operator_controller=operator_controller,
+        artifact_root=artifact_root,
+        error_memory=error_memory,
+    )
+    plans = apply_offspring_mutations(plans, artifact_root=artifact_root)
+    plans = materialize_code_reflections(plans, artifact_root=artifact_root)
+    return [plan.candidate for plan in plans]
 
 
 def parent_for_component(parent_id: str | None, parents: tuple[Candidate, Candidate]) -> Candidate:

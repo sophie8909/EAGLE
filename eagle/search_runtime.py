@@ -25,6 +25,7 @@ from .strategy_reflection import MockRoleBackend, StrategyReflectionMutation
 @dataclass(frozen=True)
 class SearchRuntime:
     client: LLMClient
+    generation_client: LLMClient
     generation_backend: Any
     initial_policy_backend: Any
     llm_logger: LLMCallLogger
@@ -51,6 +52,13 @@ def build_search_runtime(
     )
     if not mock:
         preflight_llm_endpoint(client)
+    generation_model = config.resolved_generation_model
+    generation_client = LLMClient(
+        generation_model.base_url,
+        generation_model.name,
+        temperature=config.llm_temperature,
+        max_output_tokens=config.llm_max_tokens,
+    )
     logger = LLMCallLogger(
         run_dir / "llm_logs",
         run_id=run_dir.name,
@@ -58,7 +66,7 @@ def build_search_runtime(
     )
     generation_backend = (
         MockGenerationBackend(config.agent_template_path)
-        if mock else client.generation_backend(logger=logger)
+        if mock else generation_client.generation_backend(logger=logger)
     )
     initial_policy_backend = (
         MockInitialPolicyBackend()
@@ -116,6 +124,7 @@ def build_search_runtime(
     }
     return SearchRuntime(
         client=client,
+        generation_client=generation_client,
         generation_backend=generation_backend,
         initial_policy_backend=initial_policy_backend,
         llm_logger=logger,

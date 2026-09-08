@@ -15,7 +15,9 @@ In scope:
   generation;
 - validation, compilation, integration, and the fixed ten-opponent evaluation;
 - opponent-wise fitness, seeded lexicase selection, artifacts, and analysis.
-- one resolved experiment config and one owned llama.cpp lifecycle.
+- one resolved experiment config and one owned llama.cpp lifecycle; an optional
+  second generation model may share that lifecycle through explicit phase
+  switches.
 
 Code quality, compiler output, function coverage, alignment, and match
 telemetry remain diagnostics. They are not additional evolutionary objectives.
@@ -30,15 +32,16 @@ flowchart TD
     RT --> Z["Generation 0: configured or LLM-generated policies"]
     Z --> P
     P["Evaluated population"] --> S["Seeded lexicase parent selection"]
-    S --> X["Crossover or copy"]
-    X --> M{"Mutation?"}
+    S --> X["Plan every child's parents, crossover/copy, and mutation"]
+    X --> M{"Run assigned reflection/rewrite work"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
     M -->|Prompt| PR["Prompt Reflection + prompt rewrite"]
-    M -->|Code| CR["Code Reflection: diagnosis + parent-Java revision"]
-    M -->|No| G["Final Java Generation"]
-    SR --> G
-    PR --> G
-    CR --> V
+    M -->|Code| CR["Code Reflection diagnosis"]
+    M -->|No| SW["Generation-model phase"]
+    SR --> SW
+    PR --> SW
+    CR --> SW
+    SW --> G["Final materialization: Java generation or diagnosed code revision"]
     G --> V["Validation"] --> C["Compile"] --> I["Integration"]
     I --> E["180 MicroRTS matches"]
     E --> O["10 opponent scores + reporting aggregate"]
@@ -67,10 +70,17 @@ flowchart TD
   immutable closed-world MicroRTS gameplay contract; it permits strategy
   diversity while grounding every rule in legal entities, actions, and
   observable state.
+- Every generation assigns all offspring parent, crossover/copy, and mutation
+  decisions before the first mutation LLM request. Reflection and prompt
+  rewriting then finish before a common final Java-materialization phase.
 - Prompt Reflection audits policy/Java alignment and changes only the reusable
-  generation prompt. Code Reflection first records a structured diagnosis,
-  then directly corrects the selected parent Java from that conclusion and the
-  immutable gameplay/API/scaffold context; it bypasses final generation.
+  generation prompt. Code Reflection first records a structured diagnosis;
+  its conditional Java correction is deferred to the common materialization
+  phase and bypasses the ordinary prompt-to-Java decode.
+- `model` handles initialization and reflection/rewrite work. Optional
+  `generation_model` handles final Java generation, Code Reflection revision,
+  and compile-guided generation repair; when omitted, `model` handles both
+  phases.
 - In inherited mode crossover selects policy, generation prompt, and Java
   parents independently; generated child Java becomes the inheritable Java
   component available to the next generation.

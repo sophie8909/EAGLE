@@ -1,6 +1,6 @@
 # EAGLE 架構說明（中文摘要）
 
-狀態：2026-09-07 現行 executable contract 的中文摘要。英文權威規格為
+狀態：2026-09-08 現行 executable contract 的中文摘要。英文權威規格為
 [`eagle_architecture_spec.md`](eagle_architecture_spec.md)。
 
 ## 系統定位
@@ -28,9 +28,13 @@ Generator 成功產生的 child Java 會成為下一代可選取的 Java compone
 `gen_0007_3a81c65d20bf`，讓 candidate artifact folder 可直接按 generation
 辨識與排序。從既有 artifact 或 resume 載入的明確 ID 不會被重新命名。
 
-每一代依序執行 seeded lexicase parent selection、crossover、可選的 Strategy、
-Prompt 或 Code mutation、Java generation（Code Reflection 成功時略過）、validation、compilation、integration、
-180 場 evaluation、AOS credit，以及 seeded lexicase survivor selection。Survivor
+每一代先替全部子代完成 parent selection、crossover／copy 與 Strategy／Prompt／
+Code／無 mutation 的分配，第一個 mutation LLM request 只能在整代分配完成後開始。
+接著完成所有 Strategy／Prompt 的 reflection 與 rewrite，以及 Code Reflection 的
+結構化診斷；最後才進入整代共用的 Java materialization 階段：Strategy／Prompt／
+無 mutation 走一般 Generator，Code 則依診斷決定是否直接改寫父代 Java。之後依序
+執行 validation、compilation、integration、180 場 evaluation、AOS credit，以及
+seeded lexicase survivor selection。Survivor
 selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不放回地
 選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
 `(n + n)`。
@@ -60,8 +64,9 @@ Strategy Mutation 只修改 `strategy_prompt`。Prompt Mutation 是舊 Code Refl
 `generation_prompt`。Code Mutation 是舊 Compliance operator 的位置，但新行為是直接
 把選定父代 Java 修正成一份完整 `CandidateAgent.java`；兩個 prompt gene 與原始
 inherited Java input 都不變。Code Reflection 同樣只用策略、父代完整 Java 和對應的
-validation／compiler 錯誤，先保存結構化反思結論，再把該結論
-連同同一份父代 Java 與 immutable contract 交給第二次 LLM 呼叫修正程式。
+validation／compiler 錯誤，先保存結構化反思結論；第二次 LLM 改寫不在此時立刻
+執行，而是等整代其他 reflection／rewrite 都完成後，在最後的 materialization
+階段才把該結論連同同一份父代 Java 與 immutable contract 交給模型修正程式。
 Code Reflection 的兩階段都會明確收到可用 action／lookup 介面，以及 Resource、
 Base、Barracks、Worker、Light、Heavy、Ranged 的完整列表與能力說明。反思結論分別
 回報策略忠實度、程式碼精簡度、遊戲設定相容性；只有任一項需要修正才呼叫第二次
@@ -70,6 +75,12 @@ LLM，全數通過則直接保留父代 Java。
 不再呼叫 Generator 覆蓋結果。Prompt Reflection 和 Code Reflection 都不接收
 game performance、對手分數、W/D/L、match result、trace、log、aggregate fitness
 或其他對戰表現資訊。
+
+設定中的 `model` 負責 initial policy、reflection 與 prompt rewrite。可選的
+`generation_model` 負責最後 Java generation、延後的 Code Reflection revision，
+以及 compile-guided repair；若未設定就仍由 `model` 全部處理。雙模型模式只使用
+一個受控 llama.cpp process，會在 materialization 前切到 generation model，並在
+下一代 reflection 前切回 primary model。
 
 所有會產生或解讀策略的 LLM 階段共用同一份不可變的
 `microrts_gameplay_contract`：包含完整 entity、production graph、合法 action 與

@@ -1,6 +1,6 @@
 # Architecture gaps
 
-Snapshot: 2026-09-07.
+Snapshot: 2026-09-08.
 
 The active architecture has one remaining non-blocking hardening gap.
 
@@ -13,7 +13,10 @@ artifact, runtime, prompt, and legacy-cleanup gaps are closed by the current
 source and contract tests. Prompt Reflection scopes Reviewer source to the
 editable strategy region and uses deterministic reusable-rule deltas. Code
 Reflection persists a structured diagnosis, revises parent Java from that
-conclusion, and bypasses final generation while preserving both prompt genes.
+conclusion only in the final materialization phase, and bypasses ordinary final
+generation while preserving both prompt genes. Whole-generation assignment and
+optional primary/generation-model phase switching are also implemented and
+covered by contract tests.
 These are active contracts rather than open gaps.
 Historical gap rows remain available in Git history.
 

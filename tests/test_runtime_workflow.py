@@ -105,6 +105,46 @@ class RuntimeWorkflowTests(unittest.TestCase):
                 with self.subTest(field=field):
                     self.assertNotEqual(runtime.spec, replace(runtime.spec, **{field: value}))
 
+    def test_distinct_generation_model_has_its_own_runtime_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            server = root / "llama-server"
+            server.write_text("#!/bin/sh\n", encoding="utf-8")
+            server.chmod(0o755)
+            reflection_model = root / "ministral.gguf"
+            generation_model = root / "qwen.gguf"
+            reflection_model.write_bytes(b"reflection")
+            generation_model.write_bytes(b"generation")
+            common = {
+                "llama_server": str(server),
+                "host": "127.0.0.1",
+                "port": 18080,
+            }
+            config = ExperimentConfig.from_mapping({
+                "model": {
+                    **common,
+                    "name": "ministral",
+                    "path": str(reflection_model),
+                },
+                "generation_model": {
+                    **common,
+                    "name": "qwen3.5-9b",
+                    "path": str(generation_model),
+                },
+            })
+
+            reflection = runtime_config_from_experiment(config, phase="reflection")
+            generation = runtime_config_from_experiment(config, phase="generation")
+
+            self.assertTrue(config.uses_distinct_generation_model)
+            self.assertEqual(reflection.llm.model_path, reflection_model)
+            self.assertEqual(generation.llm.model_path, generation_model)
+            self.assertNotEqual(reflection.spec, generation.spec)
+            self.assertEqual(
+                config.to_mapping()["generation_model"]["name"],
+                "qwen3.5-9b",
+            )
+
     def test_missing_model_and_non_executable_binary_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

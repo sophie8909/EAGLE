@@ -24,9 +24,17 @@ runs/<run_id>/
 └── final_test/
 ```
 
-`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete model section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda` and `candidate_java_mode`, reflection mode/probabilities, and evaluation matrix. Every resolved `evaluation.maps` entry is a `{path, tick_limit}` mapping, even when the source config used a string map path and inherited the top-level fallback. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
+`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete primary `model` section and optional `generation_model` section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda` and `candidate_java_mode`, reflection mode/probabilities, and evaluation matrix. Every resolved `evaluation.maps` entry is a `{path, tick_limit}` mapping, even when the source config used a string map path and inherited the top-level fallback. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
 
-`manifest.json` stays small: schema/run identity, timestamps, status, experiment/model/reflection identity, and `latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`; interrupted/failed records include resumability and their interruption/failure metadata without replacing the last atomic generation. It never embeds the config. `summary.json` stores completion/reporting fields, final population IDs, and a reference to the best runnable candidate in the final population; the reference is `null` when every final candidate failed. It does not copy candidate snapshots.
+`manifest.json` stays small: schema/run identity, timestamps, status,
+experiment/reflection identity, `model_name`, `generation_model_name`, and
+`latest_generation`. Terminal status is `complete`, `interrupted`, or `failed`;
+interrupted/failed records include resumability and their interruption/failure
+metadata without replacing the last atomic generation. It never embeds the
+config. `summary.json` stores completion/reporting fields, final population IDs,
+and a reference to the best runnable candidate in the final population; the
+reference is `null` when every final candidate failed. It does not copy
+candidate snapshots.
 
 `timing.jsonl` is the canonical append-only run timing stream. Archive data lives only below `archives/`.
 
@@ -212,6 +220,11 @@ Code Reflection stage receives gameplay-performance evidence. When every dimensi
 passes, revision status is `not_required` and the parent Java is preserved. A
 successful reflected source enters the normal generation attempt ledger as
 `code_reflection_output` but causes no additional final Generator LLM request.
+Between diagnosis and the generation-wide materialization phase, its schema is
+`eagle-code-reflection-v4` with `revision_status: pending`; materialization
+updates the same artifact to its terminal status without discarding the original
+diagnosis/evidence. `reflection_model` and `revision_model` separately identify
+the primary and generation-phase models.
 
 Resume rebuilds a `Candidate` from `candidate.json` plus the two prompt files,
 optional inherited Java, phenotype, evaluation, code-quality, and timing files. The loader has isolated

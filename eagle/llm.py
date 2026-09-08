@@ -1,8 +1,9 @@
 """Shared LLM configuration, transport, progress, errors, and durable logging.
 
-All EAGLE LLM roles use one endpoint/model. This module contains the shared
-infrastructure; role-specific prompts and mutation stages remain in their
-respective EA-step modules.
+EAGLE owns one endpoint process at a time and may construct separate immutable
+clients for the reflection and final-generation model phases. This module
+contains their shared infrastructure; role-specific prompts and mutation stages
+remain in their respective EA-step modules.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ class EndpointConfigError(ValueError):
 
 @dataclass(frozen=True)
 class LLMClient:
-    """One immutable OpenAI-compatible client configuration for the whole EA."""
+    """One immutable OpenAI-compatible client for an EA model phase."""
 
     base_url: str
     model: str

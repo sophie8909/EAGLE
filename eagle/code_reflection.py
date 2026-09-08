@@ -28,11 +28,11 @@ from .reflection_context import coerce_structured_context
 from .reflection_prompts import structural_code_evidence
 
 
-CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v3"
+CODE_REFLECTION_SCHEMA_VERSION = "eagle-code-reflection-v4"
 
 
 class CodeReflectionMutation:
-    """Diagnose one parent source, then revise it from that conclusion."""
+    """Diagnose first, then revise during the generation materialization phase."""
 
     mutation_type = "code"
 
@@ -98,7 +98,148 @@ class CodeReflectionMutation:
             )
 
         reflection_conclusion = reflection.parsed_response or {}
-        revision_required = _revision_required(reflection_conclusion)
+        revision_required = bool(
+            reflection.succeeded and _revision_required(reflection_conclusion)
+        )
+        revision = {
+            "stage": "code_revision",
+            "request": "",
+            "raw_response": "",
+            "status": (
+                "pending"
+                if revision_required
+                else "not_required"
+                if reflection.succeeded and not revision_required
+                else "not_run"
+            ),
+            "attempts": [],
+            "error": None,
+            "model": getattr(self.backend, "model", None),
+            "operation": getattr(self.backend, "operation", None),
+        }
+        mutation_record = {
+            "schema_version": CODE_REFLECTION_SCHEMA_VERSION,
+            "candidate_id": candidate.id,
+            "feedback_candidate_id": feedback_candidate_id,
+            "operation": "code_reflection_mutation",
+            "type": "code",
+            "applied": False,
+            "reflection_status": reflection.status,
+            "reflection_error": reflection.error,
+            "reflection_attempts": len(reflection.attempts),
+            "revision_status": revision["status"],
+            "revision_error": revision["error"],
+            "revision_attempts": 0,
+            "attempts": [],
+            "rewrite_attempts": 0,
+            "model": reflection.model,
+            "reflection_model": reflection.model,
+            "revision_model": getattr(self.backend, "model", None),
+            "reflection_operation": reflection.operation,
+            "revision_operation": getattr(self.backend, "operation", None),
+            "original_strategy_prompt": candidate.strategy_prompt,
+            "original_generation_prompt": candidate.generation_prompt,
+            "parent_java_sha256": _sha256(parent_java),
+            "reflected_java_sha256": None,
+            "java_changed": False,
+            "revision_required": revision_required,
+            "evidence": {
+                "source_candidate_id": feedback_candidate_id,
+                "source_java": (
+                    "inherited_java" if candidate.inherited_java else "parent_phenotype"
+                ),
+                "excluded_evidence": [
+                    "match_results",
+                    "match_traces",
+                    "fitness_objectives",
+                    "game_performance",
+                    "opponent_scores",
+                    "win_draw_loss",
+                    "generation_prompt",
+                ],
+                "structural_evidence": diagnostics,
+            },
+            "reflection": reflection.to_dict(),
+            "reflection_conclusion": reflection_conclusion,
+            "revision": revision,
+        }
+        timing = dict(candidate.timing)
+        timing["code_reflector_llm"] = _timing_payload(reflection.attempts)
+        history = [{
+            "reflection_type": "code",
+            "parent_candidate_id": feedback_candidate_id,
+            "analysis_summary": reflection.analysis_summary,
+            "generation_index": candidate.generation,
+        }]
+        metadata = dict(candidate.metadata)
+        metadata["mutation"] = (
+            compact_mutation_record(mutation_record)
+            if target_dir is not None and self.artifact_root is not None
+            else mutation_record
+        )
+        metadata["reflection_history"] = history
+        self._write_result(
+            target_dir,
+            request="",
+            response="",
+            parent_java=parent_java,
+            reflected_java="",
+            reflection=reflection,
+            reflection_conclusion=reflection_conclusion,
+            revision=revision,
+            metadata=mutation_record,
+        )
+        return replace(
+            candidate,
+            generated_java="",
+            mutation_type="code",
+            timing=timing,
+            metadata=metadata,
+        )
+
+    def materialize(
+        self,
+        candidate: Candidate,
+        context: ReflectionContext,
+        *,
+        artifact_dir: Path | None = None,
+    ) -> Candidate:
+        """Finish a diagnosed Code Reflection using the generation-phase model."""
+
+        context = coerce_structured_context(context, candidate)
+        target_dir = artifact_dir or (
+            self.artifact_root / candidate.id if self.artifact_root else None
+        )
+        parent_java = candidate.inherited_java or context.candidate.generated_code
+        mutation_record = dict(candidate.metadata.get("mutation") or {})
+        if target_dir is not None:
+            metadata_path = target_dir / "mutation" / "code_reflection" / "metadata.json"
+            try:
+                persisted_record = json.loads(metadata_path.read_text(encoding="utf-8"))
+            except (FileNotFoundError, OSError, json.JSONDecodeError):
+                persisted_record = None
+            if isinstance(persisted_record, dict):
+                # Candidate state is deliberately compact. Rehydrate the detailed
+                # artifact before recording the deferred revision so the original
+                # reflection evidence remains complete.
+                mutation_record = persisted_record
+        reflection_conclusion = mutation_record.get("reflection_conclusion")
+        if not isinstance(reflection_conclusion, dict) and target_dir is not None:
+            conclusion_path = (
+                target_dir / "mutation" / "code_reflection" / "reflection_conclusion.json"
+            )
+            try:
+                loaded = json.loads(conclusion_path.read_text(encoding="utf-8"))
+            except (FileNotFoundError, OSError, json.JSONDecodeError):
+                loaded = {}
+            reflection_conclusion = loaded if isinstance(loaded, dict) else {}
+        if not isinstance(reflection_conclusion, dict):
+            reflection_conclusion = {}
+        diagnostics = structural_code_evidence(context, reviewed_source=parent_java)
+        reflection_succeeded = mutation_record.get("reflection_status") == "success"
+        revision_required = bool(
+            reflection_succeeded and _revision_required(reflection_conclusion)
+        )
         base_request = (
             self._revision_request(
                 candidate,
@@ -106,7 +247,7 @@ class CodeReflectionMutation:
                 reflection_conclusion,
                 diagnostics,
             )
-            if reflection.succeeded and revision_required
+            if revision_required
             else ""
         )
         revision_attempts: list[ReflectionAttempt] = []
@@ -178,9 +319,7 @@ class CodeReflectionMutation:
                 break
             time.sleep(0)
 
-        succeeded = bool(reflection.succeeded and revision_required and reflected_java)
-        # A failed diagnosis or revision preserves and evaluates the selected parent Java;
-        # it never falls through to an unrelated fresh Generator decode.
+        succeeded = bool(revision_required and reflected_java)
         direct_java = reflected_java or parent_java
         revision = {
             "stage": "code_revision",
@@ -190,9 +329,9 @@ class CodeReflectionMutation:
                 "success"
                 if succeeded
                 else "not_required"
-                if reflection.succeeded and not revision_required
+                if reflection_succeeded and not revision_required
                 else "failed"
-                if reflection.succeeded
+                if reflection_succeeded
                 else "not_run"
             ),
             "attempts": [attempt.to_dict() for attempt in revision_attempts],
@@ -200,76 +339,34 @@ class CodeReflectionMutation:
             "model": getattr(self.backend, "model", None),
             "operation": getattr(self.backend, "operation", None),
         }
-        mutation_record = {
-            "schema_version": CODE_REFLECTION_SCHEMA_VERSION,
-            "candidate_id": candidate.id,
-            "feedback_candidate_id": feedback_candidate_id,
-            "operation": "code_reflection_mutation",
-            "type": "code",
+        mutation_record.update({
             "applied": succeeded,
-            "reflection_status": reflection.status,
-            "reflection_error": reflection.error,
-            "reflection_attempts": len(reflection.attempts),
             "revision_status": revision["status"],
             "revision_error": revision["error"],
             "revision_attempts": len(revision_attempts),
             "attempts": [attempt.to_dict() for attempt in revision_attempts],
-            "rewrite_attempts": 0,
-            "model": reflection.model or getattr(self.backend, "model", None),
-            "reflection_operation": reflection.operation,
+            "revision_model": getattr(self.backend, "model", None),
             "revision_operation": getattr(self.backend, "operation", None),
-            "original_strategy_prompt": candidate.strategy_prompt,
-            "original_generation_prompt": candidate.generation_prompt,
-            "parent_java_sha256": _sha256(parent_java),
             "reflected_java_sha256": _sha256(direct_java),
             "java_changed": bool(succeeded and direct_java != parent_java),
-            "evidence": {
-                "source_candidate_id": feedback_candidate_id,
-                "source_java": (
-                    "inherited_java" if candidate.inherited_java else "parent_phenotype"
-                ),
-                "excluded_evidence": [
-                    "match_results",
-                    "match_traces",
-                    "fitness_objectives",
-                    "game_performance",
-                    "opponent_scores",
-                    "win_draw_loss",
-                    "generation_prompt",
-                ],
-                "structural_evidence": diagnostics,
-            },
-            "reflection": reflection.to_dict(),
+            "revision_required": revision_required,
             "reflection_conclusion": reflection_conclusion,
             "revision": revision,
-        }
+        })
         timing = dict(candidate.timing)
-        timing["code_reflector_llm"] = _timing_payload(reflection.attempts)
         timing["code_revision_llm"] = _timing_payload(tuple(revision_attempts))
-        history = [{
-            "reflection_type": "code",
-            "parent_candidate_id": feedback_candidate_id,
-            "analysis_summary": reflection.analysis_summary,
-            "generation_index": candidate.generation,
-        }]
         metadata = dict(candidate.metadata)
         metadata["mutation"] = (
             compact_mutation_record(mutation_record)
             if target_dir is not None and self.artifact_root is not None
             else mutation_record
         )
-        metadata["reflection_history"] = history
-        self._write_result(
-            target_dir,
-            request=base_request,
-            response=revision_response,
-            parent_java=parent_java,
-            reflected_java=direct_java,
-            reflection=reflection,
-            reflection_conclusion=reflection_conclusion,
-            revision=revision,
-            metadata=mutation_record,
-        )
+        if target_dir is not None:
+            directory = target_dir / "mutation" / "code_reflection"
+            _write_text(directory / "revision_request.txt", base_request)
+            _write_text(directory / "revision_response_raw.txt", revision_response)
+            _write_text(directory / "reflected_candidate.java", direct_java)
+            _write_json(directory / "metadata.json", _metadata_record(mutation_record))
         return replace(
             candidate,
             generated_java=direct_java,
@@ -278,7 +375,6 @@ class CodeReflectionMutation:
                 if candidate.operator == "crossover"
                 else "mutation"
             ) if succeeded else candidate.operator,
-            mutation_type="code",
             timing=timing,
             metadata=metadata,
         )

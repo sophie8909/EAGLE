@@ -87,6 +87,13 @@ stage artifacts project the selected attempt or final failure. `child_total`
 includes `generation_llm` as well as mutation/crossover generation, validation,
 compilation, integration, and evaluation.
 
+The generation wall-clock span begins before whole-generation offspring
+planning and closes after evaluation. The candidate-local `mutation` span covers
+only the pre-materialization reflection/rewrite phase. Code diagnosis and its
+deferred Java revision remain separately attributable through
+`code_reflector_llm` and `code_revision_llm`; model-runtime switch overhead is
+included in the generation wall clock, not fabricated as a candidate request.
+
 ## LLM attempt record
 
 ```json
@@ -167,7 +174,8 @@ Candidate timing.json contains operation-specific mutation and crossover generat
 Prompt Reflection records one `reflector_llm` attempt stream and one bounded
 `rewriter_llm` stream. Code Reflection records the structured diagnosis calls
 in `code_reflector_llm` and the conclusion-guided Java-producing calls in
-`code_revision_llm`; the subsequent direct validation attempt adds no
+`code_revision_llm`. The former completes before the generation-wide
+materialization boundary and the latter runs after it; the subsequent direct validation attempt adds no
 `generation_llm` transport event unless compile repair is required. Each actual
 request emits one run-level `llm_request` event and remains candidate-owned
 under its mutation directory.

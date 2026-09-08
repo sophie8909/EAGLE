@@ -45,7 +45,7 @@ DEFAULT_UNIT_MATERIAL_VALUES = (
 
 @dataclass(frozen=True)
 class ModelConfig:
-    """The one llama.cpp model/runtime selected by an experiment."""
+    """One llama.cpp model/runtime profile selected by an experiment phase."""
 
     name: str = "unconfigured"
     path: Path | None = None
@@ -99,6 +99,7 @@ class ExperimentConfig:
     initial_policy_max_attempts: int = 3
     experiment_name: str = "eagle_experiment"
     model: ModelConfig = field(default_factory=ModelConfig)
+    generation_model: ModelConfig | None = None
     generations: int = 1
     population_size: int = 4
     mutation_max_attempts: int = 3
@@ -228,7 +229,17 @@ class ExperimentConfig:
             else DEFAULT_PROMPT_DIR / "initial_generation.txt"
         )
         generation_prompt = generation_prompt_file.read_text(encoding="utf-8").strip()
-        model = _parse_model(payload.get("model"), repository_root)
+        model = _parse_model(payload.get("model"), repository_root, field_name="model")
+        generation_model_payload = payload.get("generation_model")
+        generation_model = (
+            None
+            if generation_model_payload is None
+            else _parse_model(
+                generation_model_payload,
+                repository_root,
+                field_name="generation_model",
+            )
+        )
         llm_settings = payload.get("llm", {})
         if not isinstance(llm_settings, dict):
             raise ValueError("Experiment llm settings must be a mapping.")
@@ -317,6 +328,7 @@ class ExperimentConfig:
             initial_policy_max_attempts=int(payload.get("initial_policy_max_attempts", 3)),
             experiment_name=str(payload.get("experiment_name", "eagle_experiment")),
             model=model,
+            generation_model=generation_model,
             generations=int(payload.get("generations", 1)),
             population_size=int(payload.get("population_size", max(1, len(seed_prompts)))),
             mutation_max_attempts=int(payload.get("mutation_max_attempts", cls.mutation_max_attempts)),
@@ -374,6 +386,8 @@ class ExperimentConfig:
         if not self.experiment_name.strip():
             raise ValueError("experiment_name must not be empty.")
         self.model.validate()
+        if self.generation_model is not None:
+            self.generation_model.validate()
         if self.generations < 1:
             raise ValueError("generations must be at least 1.")
         if self.population_size < 1:
@@ -487,11 +501,13 @@ class ExperimentConfig:
         """Validate external model assets immediately before a production launch."""
 
         self.model.validate(require_files=True)
+        if self.generation_model is not None:
+            self.generation_model.validate(require_files=True)
 
     def to_mapping(self, *, mock: bool = False) -> dict[str, Any]:
         """Return the complete resolved experiment document persisted by a run."""
 
-        return {
+        mapping = {
             "schema_version": "experiment-v2",
             "experiment_name": self.experiment_name,
             "algorithm": "lexicase",
@@ -578,6 +594,9 @@ class ExperimentConfig:
             "unit_material_values": dict(self.unit_material_values),
             "stagnation_generations": self.stagnation_generations,
         }
+        if self.generation_model is not None:
+            mapping["generation_model"] = _model_mapping(self.generation_model)
+        return mapping
 
     @property
     def llm_base_url(self) -> str:
@@ -590,6 +609,23 @@ class ExperimentConfig:
     @property
     def llm_model_path(self) -> str | None:
         return None if self.model.path is None else str(self.model.path)
+
+    @property
+    def resolved_generation_model(self) -> ModelConfig:
+        """Return the final Java materialization model for this experiment."""
+
+        return self.generation_model or self.model
+
+    @property
+    def uses_distinct_generation_model(self) -> bool:
+        return self.generation_model is not None and self.generation_model != self.model
+
+    def model_for_phase(self, phase: str) -> ModelConfig:
+        if phase == "reflection":
+            return self.model
+        if phase == "generation":
+            return self.resolved_generation_model
+        raise ValueError(f"Unknown LLM model phase: {phase!r}.")
 
     @property
     def reflection_operator_settings(self) -> ReflectionOperatorSettings:
@@ -667,11 +703,16 @@ def _parse_prompt_files(
     return tuple(paths)
 
 
-def _parse_model(value: object, base_dir: Path) -> ModelConfig:
+def _parse_model(
+    value: object,
+    base_dir: Path,
+    *,
+    field_name: str = "model",
+) -> ModelConfig:
     if value is None:
         return ModelConfig()
     if not isinstance(value, dict):
-        raise ValueError("model must be a mapping.")
+        raise ValueError(f"{field_name} must be a mapping.")
 
     def path_value(key: str) -> Path | None:
         raw = value.get(key)
@@ -696,9 +737,26 @@ def _parse_model(value: object, base_dir: Path) -> ModelConfig:
             health_timeout_seconds=float(value.get("health_timeout_seconds", 5)),
         )
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"Invalid model configuration: {exc}") from exc
+        raise ValueError(f"Invalid {field_name} configuration: {exc}") from exc
     result.validate()
     return result
+
+
+def _model_mapping(model: ModelConfig) -> dict[str, object]:
+    return {
+        "name": model.name,
+        "path": None if model.path is None else str(model.path),
+        "llama_server": None if model.llama_server is None else str(model.llama_server),
+        "host": model.host,
+        "port": model.port,
+        "context_size": model.context_size,
+        "gpu_layers": model.gpu_layers,
+        "threads": model.threads,
+        "batch_size": model.batch_size,
+        "parallel": model.parallel,
+        "startup_timeout_seconds": model.startup_timeout_seconds,
+        "health_timeout_seconds": model.health_timeout_seconds,
+    }
 
 
 def _parse_evaluation_maps(

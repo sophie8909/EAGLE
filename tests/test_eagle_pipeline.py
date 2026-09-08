@@ -175,16 +175,75 @@ class EaglePipelineTests(unittest.TestCase):
             comparison_parent.id,
         )
         lines = output.getvalue().splitlines()
-        self.assertEqual(len(lines), 2)
+        self.assertEqual(len(lines), 3)
         self.assertRegex(
             lines[0],
-            r"^\[gen 7 cand 1/1\] gen_0007_[0-9a-f]{12} "
-            r"stage=mutation status=started operator=strategy$",
+            r"^\[gen 7\] stage=offspring_plan status=completed "
+            r"assignments=1:copy/strategy$",
         )
         self.assertRegex(
             lines[1],
             r"^\[gen 7 cand 1/1\] gen_0007_[0-9a-f]{12} "
+            r"stage=mutation status=started operator=strategy$",
+        )
+        self.assertRegex(
+            lines[2],
+            r"^\[gen 7 cand 1/1\] gen_0007_[0-9a-f]{12} "
             r"stage=mutation status=completed operator=strategy applied=true$",
+        )
+
+    def test_entire_generation_is_assigned_before_first_mutation_call(self) -> None:
+        events: list[str] = []
+
+        class StrategyOnlyController:
+            mode = SimpleNamespace(value="static")
+
+            @staticmethod
+            def select_operator(rng, *, eligible):
+                events.append("assigned")
+                return "strategy_reflection"
+
+            @staticmethod
+            def probability(operator):
+                return 1.0
+
+        class ObservedMutation:
+            @staticmethod
+            def mutate(candidate, context, *, artifact_dir=None, mutation_intent=None):
+                events.append("mutated")
+                return replace(
+                    candidate,
+                    mutation_type="strategy",
+                    metadata={
+                        **candidate.metadata,
+                        "mutation": {"applied": True, "type": "strategy"},
+                    },
+                )
+
+        config = ExperimentConfig.from_mapping({
+            "population_size": 3,
+            "crossover_rate": 0.0,
+            "mutation_rate": 1.0,
+        })
+        parent = Candidate(
+            id="parent",
+            strategy_prompt="worker rush",
+            generation_prompt="generate Java",
+            fitness_objectives={case: 0.0 for case in LEXICASE_CASES},
+        )
+        with redirect_stdout(StringIO()):
+            create_offspring(
+                [parent],
+                config=config,
+                generation=2,
+                rng=random.Random(9),
+                mutations={"strategy": ObservedMutation()},
+                operator_controller=StrategyOnlyController(),
+            )
+
+        self.assertEqual(
+            events,
+            ["assigned", "assigned", "assigned", "mutated", "mutated", "mutated"],
         )
 
     def test_progress_prints_matching_code_quality_total_and_components(self) -> None:

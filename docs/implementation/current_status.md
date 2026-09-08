@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-09-07. This file describes executable repository behavior.
+Snapshot: 2026-09-08. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -36,6 +36,16 @@ Snapshot: 2026-09-07. This file describes executable repository behavior.
   seeded lexicase without replacement to the joint parent-plus-offspring
   (`mu_plus_lambda`) pool until the fixed population is full; aggregate Game
   Performance and generation age are reporting-only.
+- Each evolutionary generation now fixes every offspring's parents,
+  crossover/copy result, and mutation assignment before the first mutation LLM
+  request. All Strategy/Prompt reflection and rewrite work plus Code diagnosis
+  completes before one final Java-materialization phase. Code revision is
+  deferred into that phase alongside ordinary Strategy/Prompt/no-mutation Java
+  generation.
+- The required `model` owns initialization and reflection/rewrite calls. An
+  optional `generation_model` owns final Java materialization and compile repair;
+  the experiment orchestrator switches its single owned llama.cpp process only
+  at those phase boundaries.
 - The reflection-operator controller supports exactly `static`, `aos_opponent`,
   and `aos_head2head`. Strategy/Prompt/Code probabilities mean fixed probabilities in
   static mode and initial probabilities in AOS modes. Static performs no reward
