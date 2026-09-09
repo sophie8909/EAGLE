@@ -1,0 +1,6 @@
+interface:
+  display_name: "參考圖風格簡報"
+  short_description: "Match reference visuals with editable PowerPoint slides"
+  default_prompt: "Use $reference-matched-presentations to refine this editable deck to match the supplied reference images while preserving approved content and layout."
+policy:
+  allow_implicit_invocation: true
