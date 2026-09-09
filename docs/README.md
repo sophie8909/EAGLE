@@ -1,6 +1,6 @@
 # EAGLE documentation index
 
-This directory is the implementation entry point for EAGLE (Evolutionary Algorithm for Game-playing with LLM-Enabled Agents).
+This directory is the implementation entry point for EAGLE (Evolutionary Agent Generation through LLM-guided Exploration).
 
 ## Authority and document classes
 

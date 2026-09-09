@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "eagle"
 version = "0.1.0"
-description = "Evolutionary Algorithm for Game-playing with LLM-Enabled Agents"
+description = "Evolutionary Agent Generation through LLM-guided Exploration"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
