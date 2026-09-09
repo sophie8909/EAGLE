@@ -24,6 +24,8 @@ The reusable native template is named `EAGLE` and uses the `EAGLE` master and th
 
 Never create one layout per report slide. Migrate report-specific artwork and decorative objects into native slide objects while preserving their appearance, so the gallery remains reusable.
 
+Use PowerPoint's native slide-number placeholder and `slidenum` field, enabled on the master and layouts. Never type page numbers or a fixed total such as `01 / 33` into ordinary text boxes; numbering must follow slide insertion, deletion, and reordering.
+
 ## Observed design
 
 - Warm ivory background, burgundy serif headings, restrained rose floral corner linework, fine rose rounded card borders, and ample separation between title, subtitle, and content.
