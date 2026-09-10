@@ -1,6 +1,10 @@
 # EAGLE
 
-EAGLE (Evolutionary Algorithm for Game-playing with LLM-Enabled Agents) evolves prompts that generate complete Java MicroRTS agents.
+**Evolutionary Agent Generation through LLM-guided Exploration**
+
+*Strategy, Prompt, and Code Reflection for Evolving Game-Playing Agents*
+
+EAGLE evolves prompts that generate complete Java MicroRTS agents.
 
 ## Canonical workflow
 
