@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""Fork a completed eagle-run-v2 at a generation checkpoint.
+
+The fork is deliberately self-contained: it copies the selected generation's
+survivor candidates and generation evidence, keeps only timing events through
+that generation, and leaves runtime scratch directories empty.  The source is
+never modified and an existing destination is always rejected.
+
+Usage::
+
+    scripts/fork-eagle-run SOURCE_RUN DESTINATION_RUN --generation 0 \
+        --experiment-name comparison_regenerate \
+        --parent-evaluation-mode regenerate_same_genotype
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+
+RUN_SCHEMA_VERSION = "eagle-run-v2"
+GENERATION_SCHEMA_VERSION = "eagle-generation-v3"
+FORK_SCHEMA_VERSION = "eagle-run-fork-v1"
+_SAFE_ID = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+_EMPTY_RUNTIME_DIRS = ("generated_agents", "classes", "archives", "llm_logs", "final_test")
+
+
+class ForkError(ValueError):
+    """A source or destination does not satisfy the fork contract."""
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ForkError(f"Unable to read JSON artifact {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ForkError(f"JSON artifact must contain an object: {path}")
+    return payload
+
+
+def _assert_no_symlinks(root: Path) -> None:
+    """Reject symlinks before copytree could follow one outside the run."""
+
+    for path in (root, *root.rglob("*")):
+        if path.is_symlink():
+            raise ForkError(f"Symlinks are not allowed in fork source artifacts: {path}")
+
+
+def _safe_candidate_id(value: object) -> str:
+    candidate_id = str(value or "")
+    if not candidate_id or any(character not in _SAFE_ID for character in candidate_id):
+        raise ForkError(f"Unsafe candidate id in generation snapshot: {candidate_id!r}")
+    return candidate_id
+
+
+def _resolve_paths(source: Path, destination: Path) -> tuple[Path, Path]:
+    try:
+        source_resolved = source.expanduser().resolve(strict=True)
+    except OSError as exc:
+        raise ForkError(f"Source run does not exist: {source}") from exc
+    if not source_resolved.is_dir():
+        raise ForkError(f"Source run is not a directory: {source_resolved}")
+
+    destination_resolved = destination.expanduser().resolve(strict=False)
+    if destination_resolved == Path(destination_resolved.anchor):
+        raise ForkError("Refusing to use a filesystem root as fork destination")
+    if destination_resolved.exists() or destination_resolved.is_symlink():
+        raise ForkError(f"Destination already exists; refusing to overwrite: {destination_resolved}")
+    if destination_resolved == source_resolved:
+        raise ForkError("Fork destination must differ from source run")
+    try:
+        destination_resolved.relative_to(source_resolved)
+    except ValueError:
+        pass
+    else:
+        raise ForkError("Fork destination may not be inside the source run")
+    if not destination_resolved.parent.is_dir():
+        raise ForkError(f"Destination parent must already exist: {destination_resolved.parent}")
+    return source_resolved, destination_resolved
+
+
+def _load_source_checkpoint(source: Path, generation: int) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+    manifest_path = source / "manifest.json"
+    config_path = source / "config.yaml"
+    if not manifest_path.is_file() or not config_path.is_file():
+        raise ForkError("Source run must contain manifest.json and config.yaml")
+    manifest = _read_json(manifest_path)
+    if manifest.get("schema_version") != RUN_SCHEMA_VERSION:
+        raise ForkError(f"Unsupported source manifest schema: {manifest.get('schema_version')!r}")
+    if manifest.get("status") != "complete":
+        raise ForkError("Source run must have status=complete before it can be forked")
+    latest = manifest.get("latest_generation")
+    if not isinstance(latest, int) or isinstance(latest, bool):
+        raise ForkError("Source manifest has no integer latest_generation")
+    if generation < 0 or generation > latest:
+        raise ForkError(f"Requested generation {generation} is outside source checkpoint range 0..{latest}")
+
+    snapshot_path = source / "generations" / f"generation_{generation:04d}.json"
+    policy_path = source / "generations" / f"generation_{generation:04d}_policies.jsonl"
+    snapshot = _read_json(snapshot_path)
+    if snapshot.get("schema_version") != GENERATION_SCHEMA_VERSION:
+        raise ForkError(f"Unsupported generation snapshot schema: {snapshot.get('schema_version')!r}")
+    if snapshot.get("generation") != generation:
+        raise ForkError(f"Generation snapshot has inconsistent generation: {snapshot_path}")
+    population = snapshot.get("population")
+    if not isinstance(population, list) or not population:
+        raise ForkError(f"Generation snapshot has no survivor population: {snapshot_path}")
+    candidate_ids: list[str] = []
+    for item in population:
+        if not isinstance(item, dict):
+            raise ForkError(f"Invalid population item in generation snapshot: {snapshot_path}")
+        candidate_id = _safe_candidate_id(item.get("candidate_id") or item.get("id"))
+        if candidate_id in candidate_ids:
+            raise ForkError(f"Duplicate candidate in generation snapshot: {candidate_id}")
+        candidate_ids.append(candidate_id)
+        candidate_path = source / "candidates" / candidate_id
+        if not candidate_path.is_dir() or not (candidate_path / "candidate.json").is_file():
+            raise ForkError(f"Missing canonical survivor candidate artifacts: {candidate_path}")
+        candidate_payload = _read_json(candidate_path / "candidate.json")
+        birth_generation = candidate_payload.get("generation")
+        if (
+            not isinstance(birth_generation, int)
+            or isinstance(birth_generation, bool)
+            or not 0 <= birth_generation <= generation
+        ):
+            raise ForkError(
+                "Candidate birth generation must be an integer between zero and "
+                f"the checkpoint generation ({generation}): {candidate_path}"
+            )
+    if not policy_path.is_file():
+        raise ForkError(f"Missing generation policy sidecar: {policy_path}")
+    for line_number, line in enumerate(policy_path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ForkError(f"Invalid policy sidecar JSON at line {line_number}: {policy_path}") from exc
+        if not isinstance(record, dict) or _safe_candidate_id(record.get("candidate_id")) not in candidate_ids:
+            raise ForkError(f"Policy sidecar references a non-survivor at line {line_number}: {policy_path}")
+        if record.get("generation") != generation:
+            raise ForkError(f"Policy sidecar has inconsistent generation at line {line_number}: {policy_path}")
+    return manifest, snapshot, candidate_ids
+
+
+def _load_config(source: Path, *, experiment_name: str | None, parent_evaluation_mode: str | None) -> tuple[dict[str, Any], str]:
+    path = source / "config.yaml"
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise ForkError(f"Unable to read source config: {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ForkError(f"Source config must contain a YAML mapping: {path}")
+    if experiment_name is not None:
+        if not experiment_name.strip():
+            raise ForkError("--experiment-name must not be empty")
+        payload["experiment_name"] = experiment_name
+    if parent_evaluation_mode is not None:
+        if not parent_evaluation_mode.strip():
+            raise ForkError("--parent-evaluation-mode must not be empty")
+        payload["parent_evaluation_mode"] = parent_evaluation_mode
+    return payload, yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+
+
+def _copy_timing(source: Path, destination: Path, *, generation: int, new_run_id: str, source_run_id: str) -> int:
+    source_path = source / "timing.jsonl"
+    if not source_path.is_file():
+        raise ForkError(f"Source run has no timing.jsonl: {source_path}")
+    kept = 0
+    lines: list[str] = []
+    for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ForkError(f"Invalid timing JSON at line {line_number}: {source_path}") from exc
+        if not isinstance(event, dict) or not isinstance(event.get("generation"), int):
+            raise ForkError(f"Timing event lacks an integer generation at line {line_number}: {source_path}")
+        if event["generation"] > generation:
+            continue
+        event["run_id"] = new_run_id
+        event["forked_from_run_id"] = source_run_id
+        event["fork_generation"] = generation
+        lines.append(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
+        kept += 1
+    destination.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    return kept
+
+
+def fork_run(
+    source: Path,
+    destination: Path,
+    *,
+    generation: int,
+    experiment_name: str | None = None,
+    parent_evaluation_mode: str | None = None,
+) -> Path:
+    """Create a checkpoint fork and return its destination path."""
+
+    source, destination = _resolve_paths(source, destination)
+    _assert_no_symlinks(source)
+    manifest, snapshot, candidate_ids = _load_source_checkpoint(source, generation)
+    config_payload, config_text = _load_config(
+        source,
+        experiment_name=experiment_name,
+        parent_evaluation_mode=parent_evaluation_mode,
+    )
+    source_run_id = str(manifest.get("run_id") or source.name)
+    new_run_id = destination.name
+    forked_at = _utc_now()
+
+    staging = Path(tempfile.mkdtemp(prefix=f".{new_run_id}.fork-", dir=str(destination.parent)))
+    try:
+        (staging / "generations").mkdir()
+        (staging / "candidates").mkdir()
+        for directory in _EMPTY_RUNTIME_DIRS:
+            (staging / directory).mkdir()
+
+        shutil.copy2(source / "generations" / f"generation_{generation:04d}.json", staging / "generations")
+        shutil.copy2(source / "generations" / f"generation_{generation:04d}_policies.jsonl", staging / "generations")
+        for candidate_id in candidate_ids:
+            shutil.copytree(source / "candidates" / candidate_id, staging / "candidates" / candidate_id, symlinks=False)
+        (staging / "config.yaml").write_text(config_text, encoding="utf-8")
+        timing_count = _copy_timing(
+            source,
+            staging / "timing.jsonl",
+            generation=generation,
+            new_run_id=new_run_id,
+            source_run_id=source_run_id,
+        )
+
+        new_manifest = dict(manifest)
+        new_manifest.update(
+            {
+                "run_id": new_run_id,
+                "created_at": forked_at,
+                "updated_at": forked_at,
+                "status": "interrupted",
+                "resumable": True,
+                "latest_generation": generation,
+                "forked_from_run_id": source_run_id,
+                "forked_from_generation": generation,
+                "forked_at": forked_at,
+                "experiment_name": config_payload.get("experiment_name", manifest.get("experiment_name")),
+            }
+        )
+        if "parent_evaluation_mode" in config_payload:
+            new_manifest["parent_evaluation_mode"] = config_payload["parent_evaluation_mode"]
+        (staging / "manifest.json").write_text(json.dumps(new_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        provenance = {
+            "schema_version": FORK_SCHEMA_VERSION,
+            "forked_at": forked_at,
+            "source": {
+                "run_id": source_run_id,
+                "run_dir": str(source),
+                "generation": generation,
+                "manifest_updated_at": manifest.get("updated_at"),
+            },
+            "target": {
+                "run_id": new_run_id,
+                "run_dir": str(destination),
+                "generation": generation,
+            },
+            "candidate_ids": candidate_ids,
+            "timing_events_copied": timing_count,
+            "config_overrides": {
+                "experiment_name": experiment_name,
+                "parent_evaluation_mode": parent_evaluation_mode,
+            },
+        }
+        (staging / "provenance.json").write_text(json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.replace(staging, destination)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return destination
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("source_run", type=Path, help="completed eagle-run-v2 source directory")
+    parser.add_argument("destination_run", type=Path, help="new, non-existent fork directory")
+    parser.add_argument("--generation", type=int, required=True, help="survivor generation to fork (for example, 0)")
+    parser.add_argument("--experiment-name", help="override experiment_name in the fork config")
+    parser.add_argument(
+        "--parent-evaluation-mode",
+        choices=("reuse_cached", "regenerate_same_genotype"),
+        help="override parent_evaluation_mode in the fork config",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    try:
+        destination = fork_run(
+            args.source_run,
+            args.destination_run,
+            generation=args.generation,
+            experiment_name=args.experiment_name,
+            parent_evaluation_mode=args.parent_evaluation_mode,
+        )
+    except (ForkError, OSError) as exc:
+        print(f"fork-eagle-run: error: {exc}", file=sys.stderr)
+        return 2
+    print(destination)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
