@@ -31,6 +31,7 @@ FIXED_OPPONENT_WEIGHT_SUM = OPPONENT_WEIGHT_SUM
 MU_PLUS_LAMBDA_SELECTION = "mu_plus_lambda"
 CANDIDATE_JAVA_MODES = ("generated_phenotype", "inherited_genotype")
 INITIAL_POPULATION_MODES = ("configured_seeds", "llm_generated_policies")
+PARENT_EVALUATION_MODES = ("reuse_cached", "regenerate_same_genotype")
 
 DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Resource", 0.0),
@@ -120,6 +121,9 @@ class ExperimentConfig:
     agent_template_path: Path = DEFAULT_AGENT_TEMPLATE_PATH
     initial_java_seed_path: Path = DEFAULT_INITIAL_JAVA_SEED_PATH
     candidate_java_mode: str = "generated_phenotype"
+    # ``reuse_cached`` is the canonical evolutionary protocol.  The alternate
+    # value exists only for an explicitly labelled diagnostic treatment.
+    parent_evaluation_mode: str = "reuse_cached"
     tick_limit: int = 100
     match_timeout_seconds: float = 120.0
     match_artifact_mode: str = "compact"
@@ -354,6 +358,7 @@ class ExperimentConfig:
                 DEFAULT_INITIAL_JAVA_SEED_PATH,
             ),
             candidate_java_mode=str(payload.get("candidate_java_mode", "generated_phenotype")),
+            parent_evaluation_mode=str(payload.get("parent_evaluation_mode", "reuse_cached")),
             tick_limit=tick_limit,
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
             match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
@@ -421,6 +426,22 @@ class ExperimentConfig:
             raise ValueError(
                 "candidate_java_mode must be generated_phenotype or inherited_genotype."
             )
+        if self.parent_evaluation_mode not in PARENT_EVALUATION_MODES:
+            raise ValueError(
+                "parent_evaluation_mode must be reuse_cached or "
+                "regenerate_same_genotype."
+            )
+        if self.parent_evaluation_mode == "regenerate_same_genotype":
+            if self.candidate_java_mode != "inherited_genotype":
+                raise ValueError(
+                    "parent_evaluation_mode=regenerate_same_genotype requires "
+                    "candidate_java_mode=inherited_genotype."
+                )
+            if self.reflection_operator_mode is not ReflectionOperatorMode.STATIC:
+                raise ValueError(
+                    "parent_evaluation_mode=regenerate_same_genotype requires "
+                    "reflection_operator_mode=static."
+                )
         if self.candidate_java_mode == "inherited_genotype" and len(self.seed_prompts) != 1:
             raise ValueError(
                 "candidate_java_mode=inherited_genotype requires exactly one seed_prompt_files entry."
@@ -562,6 +583,7 @@ class ExperimentConfig:
             "agent_template_path": str(self.agent_template_path.resolve()),
             "initial_java_seed_path": str(self.initial_java_seed_path.resolve()),
             "candidate_java_mode": self.candidate_java_mode,
+            "parent_evaluation_mode": self.parent_evaluation_mode,
             "tick_limit": self.tick_limit,
             "match_timeout_seconds": self.match_timeout_seconds,
             "match_artifact_mode": self.match_artifact_mode,

@@ -39,6 +39,15 @@ selection 使用 joint parent-plus-offspring 的 `(mu + lambda)` 候選池，不
 選回固定族群；父代沒有 age bonus，子代也沒有優先權。父子皆為 `n` 時即為
 `(n + n)`。
 
+`parent_evaluation_mode` 的 canonical 預設是 `reuse_cached`：父代不會在每一代
+重新生成或重新評估。`regenerate_same_genotype` 只是一個非 canonical 的診斷 treatment，
+而且只能搭配 `inherited_genotype` 與 `reflection_operator_mode: static`。它會為每個舊父代
+建立新的 ID replica，保留完全相同的 policy、generation prompt、inherited Java 與 component
+provenance，清空舊 phenotype／evaluation 狀態後重新走完整評估；survivor selection 只使用
+replica 加 offspring，絕不覆寫或直接選回舊父代。每代的
+`generation_<nnnn>_parent_rematerialization.json` 會保存 source→replica、genotype hash、
+舊／新 Java hash、fitness、status 與是否被選中，供診斷比較。
+
 `random_seed` 影響 EA 隨機、lexicase case 順序、operator、crossover、mutation
 intent 與 reflection sampling。MicroRTS match 不宣稱 seeded reproducibility；
 重複比賽只用 `round_index` 識別。

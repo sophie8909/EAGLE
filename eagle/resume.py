@@ -24,6 +24,8 @@ from .search import (
     apply_offspring_mutations,
     materialize_code_reflections,
     plan_offspring,
+    build_parent_evaluation_replicas,
+    write_parent_evaluation_sidecar,
 )
 from .strategy_reflection import cleanup_retired_match_traces
 from .strategy_diversity import (
@@ -175,25 +177,54 @@ def _resume_search_impl(
             record=aos_record,
             candidates_dir=candidates_dir,
         )
+        source_parents = list(population)
+        parent_replicas = []
+        if config.parent_evaluation_mode == "regenerate_same_genotype":
+            parent_replicas = build_parent_evaluation_replicas(
+                source_parents,
+                generation=generation,
+            )
+            parent_replicas = evaluate_population(
+                parent_replicas,
+                generation=generation,
+                config=config,
+                backend=generation_backend,
+                generated_agents_dir=generated_agents_dir,
+                classes_dir=classes_dir,
+                candidates_dir=candidates_dir,
+                mock=mock,
+                llm_client=generation_client,
+            )
+        selection_candidates = [*parent_replicas, *evaluated]
         archive_before = archive_niches(run_dir)
-        update_strategy_archive(run_dir, evaluated)
-        update_opponent_archive(run_dir, evaluated)
-        error_memory = record_error_memory(run_dir, evaluated)
+        update_strategy_archive(run_dir, selection_candidates)
+        update_opponent_archive(run_dir, selection_candidates)
+        error_memory = record_error_memory(run_dir, selection_candidates)
         append_event(
             run_dir / "timing.jsonl",
             build_generation_event(
-                run_id=run_dir.name, generation=generation, candidates=evaluated,
+                run_id=run_dir.name, generation=generation, candidates=selection_candidates,
                 span=span.finish(),
             ),
         )
-        selection_candidates = [*population, *evaluated]
         population = select_next_generation(
-            population, evaluated, population_size=config.population_size, rng=rng,
+            parent_replicas if parent_replicas else population,
+            evaluated,
+            population_size=config.population_size,
+            rng=rng,
         )
         signature = population_signature(population)
         stagnation = stagnation + 1 if signature == population_state_signature else 0
         population_state_signature = signature
         generation_diversity = generation_diversity_metrics(population, previous_archive_niches=archive_before)
+        if parent_replicas:
+            write_parent_evaluation_sidecar(
+                run_dir,
+                generation=generation,
+                source_parents=source_parents,
+                replicas=parent_replicas,
+                selected_ids={candidate.id for candidate in population},
+            )
         record_generation(
             run_dir,
             generation,
@@ -203,7 +234,7 @@ def _resume_search_impl(
         )
         cleanup_retired_match_traces(
             candidates_dir,
-            selection_candidates,
+            [*source_parents, *selection_candidates],
             surviving_candidate_ids={candidate.id for candidate in population},
         )
         print(diversity_console_summary(generation, generation_diversity), flush=True)

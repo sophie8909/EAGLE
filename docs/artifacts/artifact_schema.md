@@ -24,7 +24,7 @@ runs/<run_id>/
 └── final_test/
 ```
 
-`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete primary `model` section and optional `generation_model` section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda` and `candidate_java_mode`, reflection mode/probabilities, and evaluation matrix. Every resolved `evaluation.maps` entry is a `{path, tick_limit}` mapping, even when the source config used a string map path and inherited the top-level fallback. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
+`config.yaml` is the one immutable, fully resolved experiment definition used by runtime and search. It contains defaults, absolute runtime paths where needed, the complete primary `model` section and optional `generation_model` section, LLM behavior, EA settings including `survivor_selection: mu_plus_lambda`, `candidate_java_mode`, and `parent_evaluation_mode`, reflection mode/probabilities, and evaluation matrix. Every resolved `evaluation.maps` entry is a `{path, tick_limit}` mapping, even when the source config used a string map path and inherited the top-level fallback. New runs do not write `source_config`, `resolved_config.json`, or `prompt_snapshot.json`.
 
 `manifest.json` stays small: schema/run identity, timestamps, status,
 experiment/reflection identity, `model_name`, `generation_model_name`, and
@@ -61,6 +61,14 @@ reference to the candidate's canonical `genotype/policy_prompt.txt`. When
 known, they also reference the parent strategy prompt and the candidate's
 Strategy Reflection metadata. Full strategy text is not duplicated in this
 index.
+
+Only the non-canonical `parent_evaluation_mode: regenerate_same_genotype`
+treatment additionally writes
+`generations/generation_<nnnn>_parent_rematerialization.json`. Each record maps
+an immutable source parent to its fresh evaluation replica and includes the
+three genotype component hashes, source/new Java hashes, replica fitness and
+status, corresponding source fitness/status, direct genotype/Java-change flags,
+and survivor flag. The old parent candidate directory remains immutable.
 
 The `eagle-reflection-operator-v5` AOS record contains `mode`, probabilities before/after, nullable
 Strategy/Prompt/Code rewards, `reward_source`, operator state, and transitions.

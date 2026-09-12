@@ -88,7 +88,10 @@ includes `generation_llm` as well as mutation/crossover generation, validation,
 compilation, integration, and evaluation.
 
 The generation wall-clock span begins before whole-generation offspring
-planning and closes after evaluation. The candidate-local `mutation` span covers
+planning and closes after evaluation. In the non-canonical
+`regenerate_same_genotype` parent-evaluation treatment, it includes the normal
+evaluation of each fresh parent replica; aggregate stage durations are computed
+over the replica-plus-offspring selection pool. The candidate-local `mutation` span covers
 only the pre-materialization reflection/rewrite phase. Code diagnosis and its
 deferred Java revision remain separately attributable through
 `code_reflector_llm` and `code_revision_llm`; model-runtime switch overhead is

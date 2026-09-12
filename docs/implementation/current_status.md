@@ -36,6 +36,12 @@ Snapshot: 2026-09-08. This file describes executable repository behavior.
   seeded lexicase without replacement to the joint parent-plus-offspring
   (`mu_plus_lambda`) pool until the fixed population is full; aggregate Game
   Performance and generation age are reporting-only.
+- `parent_evaluation_mode: reuse_cached` is the canonical default and never
+  regenerates surviving parents. The non-canonical
+  `regenerate_same_genotype` diagnostic is limited to inherited Java plus
+  static reflection; it evaluates fresh-ID, same-genotype parent replicas and
+  selects from replicas plus offspring while retaining immutable source-parent
+  artifacts and a generation audit sidecar.
 - Each evolutionary generation now fixes every offspring's parents,
   crossover/copy result, and mutation assignment before the first mutation LLM
   request. All Strategy/Prompt reflection and rewrite work plus Code diagnosis

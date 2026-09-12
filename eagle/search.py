@@ -7,6 +7,7 @@ is ``run_search``.
 
 from __future__ import annotations
 
+import hashlib
 import random
 import time
 from dataclasses import dataclass, replace
@@ -32,6 +33,7 @@ from .run_artifacts import (
     mark_run_interrupted,
     record_error_memory,
     record_generation,
+    atomic_json,
 )
 from .candidate import Candidate
 from .config import ExperimentConfig
@@ -88,6 +90,103 @@ class OffspringPlan:
     comparison_parent_id: str | None = None
     operator_mode: str | None = None
     probability_before: float | None = None
+
+
+def build_parent_evaluation_replicas(
+    parents: list[Candidate],
+    *,
+    generation: int,
+) -> list[Candidate]:
+    """Create unevaluated, separately identifiable parent re-materializations.
+
+    This is intentionally a diagnostic-only construction.  A replica keeps the
+    source parent's complete pre-generation genotype and component provenance,
+    but does not inherit its phenotype, objective, failure, or artifact state.
+    """
+
+    replicas: list[Candidate] = []
+    for parent in parents:
+        replicas.append(Candidate(
+            generation=generation,
+            parent_ids=parent.parent_ids,
+            strategy_prompt=parent.strategy_prompt,
+            generation_prompt=parent.generation_prompt,
+            inherited_java=parent.inherited_java,
+            java_parent_id=parent.java_parent_id,
+            operator="experimental_parent_rematerialization",
+            mutation_type=None,
+            strategy_parent_id=parent.strategy_parent_id,
+            generation_prompt_parent_id=parent.generation_prompt_parent_id,
+            source_candidate_ids=parent.source_candidate_ids,
+            strategy_signature=dict(parent.strategy_signature),
+            strategy_niche=parent.strategy_niche,
+            metadata={
+                "experimental_parent_evaluation": {
+                    "source_parent_id": parent.id,
+                    "source_birth_generation": parent.generation,
+                },
+            },
+        ))
+    return replicas
+
+
+def write_parent_evaluation_sidecar(
+    run_dir: Path,
+    *,
+    generation: int,
+    source_parents: list[Candidate],
+    replicas: list[Candidate],
+    selected_ids: set[str],
+) -> None:
+    """Persist the source-to-replica audit trail for the diagnostic treatment."""
+
+    if len(source_parents) != len(replicas):
+        raise ValueError("Parent re-materialization source and replica counts must match.")
+
+    def digest(value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+    records = []
+    for source, replica in zip(source_parents, replicas, strict=True):
+        source_genotype_hashes = {
+            "strategy_prompt": digest(source.strategy_prompt),
+            "generation_prompt": digest(source.generation_prompt),
+            "inherited_java": digest(source.inherited_java),
+        }
+        replica_genotype_hashes = {
+            "strategy_prompt": digest(replica.strategy_prompt),
+            "generation_prompt": digest(replica.generation_prompt),
+            "inherited_java": digest(replica.inherited_java),
+        }
+        source_java_hash = digest(source.generated_java)
+        replica_java_hash = digest(replica.generated_java)
+        records.append({
+            "source_parent_id": source.id,
+            "source_birth_generation": source.generation,
+            "replica_candidate_id": replica.id,
+            "genotype_sha256": {
+                "source": source_genotype_hashes,
+                "replica": replica_genotype_hashes,
+            },
+            "genotype_hashes_match": source_genotype_hashes == replica_genotype_hashes,
+            "source_generated_java_sha256": source_java_hash,
+            "replica_generated_java_sha256": replica_java_hash,
+            "generated_java_changed": source_java_hash != replica_java_hash,
+            "source_fitness_objectives": dict(source.fitness_objectives),
+            "replica_fitness_objectives": dict(replica.fitness_objectives),
+            "source_status": source.status,
+            "replica_status": replica.status,
+            "selected": replica.id in selected_ids,
+        })
+    atomic_json(
+        run_dir / "generations" / f"generation_{generation:04d}_parent_rematerialization.json",
+        {
+            "schema_version": "eagle-parent-rematerialization-v1",
+            "generation": generation,
+            "mode": "regenerate_same_genotype",
+            "records": records,
+        },
+    )
 
 
 def run_search(
@@ -291,21 +390,39 @@ def _run_search_impl(
             record=aos_record,
             candidates_dir=candidates_dir,
         )
+        source_parents = list(evaluated_population)
+        parent_replicas: list[Candidate] = []
+        if config.parent_evaluation_mode == "regenerate_same_genotype":
+            parent_replicas = build_parent_evaluation_replicas(
+                source_parents,
+                generation=generation,
+            )
+            parent_replicas = evaluate_population(
+                parent_replicas,
+                generation=generation,
+                config=config,
+                backend=generation_backend,
+                generated_agents_dir=generated_agents_dir,
+                classes_dir=classes_dir,
+                candidates_dir=candidates_dir,
+                mock=mock,
+                llm_client=generation_client,
+            )
+        selection_candidates = [*parent_replicas, *evaluated_offspring]
         archive_before = archive_niches(run_dir)
-        update_strategy_archive(run_dir, evaluated_offspring)
-        update_opponent_archive(run_dir, evaluated_offspring)
-        error_memory = record_error_memory(run_dir, evaluated_offspring)
+        update_strategy_archive(run_dir, selection_candidates)
+        update_opponent_archive(run_dir, selection_candidates)
+        error_memory = record_error_memory(run_dir, selection_candidates)
         append_event(run_dir / "timing.jsonl", build_generation_event(
             run_id=active_run_id,
             generation=generation,
-            candidates=evaluated_offspring,
+            candidates=selection_candidates,
             span=generation_span.finish(),
         ))
         # Survival selection is the only population update boundary and consumes
         # the objectives already persisted by evaluate_population.
-        selection_candidates = [*evaluated_population, *evaluated_offspring]
         evaluated_population = select_next_generation(
-            evaluated_population,
+            parent_replicas if parent_replicas else evaluated_population,
             evaluated_offspring,
             population_size=config.population_size,
             rng=rng,
@@ -317,6 +434,14 @@ def _run_search_impl(
             population_state_signature = current_population_signature
             stagnation_count = 0
         generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
+        if parent_replicas:
+            write_parent_evaluation_sidecar(
+                run_dir,
+                generation=generation,
+                source_parents=source_parents,
+                replicas=parent_replicas,
+                selected_ids={candidate.id for candidate in evaluated_population},
+            )
         record_generation(
             run_dir,
             generation,
@@ -326,7 +451,7 @@ def _run_search_impl(
         )
         cleanup_retired_match_traces(
             candidates_dir,
-            selection_candidates,
+            [*source_parents, *selection_candidates],
             surviving_candidate_ids={candidate.id for candidate in evaluated_population},
         )
         print(diversity_console_summary(generation, generation_diversity), flush=True)

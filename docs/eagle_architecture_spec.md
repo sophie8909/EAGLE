@@ -80,6 +80,16 @@ The fixed-size survivor population is selected from the joint evaluated parent
 and offspring pool. Parent and offspring candidates compete under the same
 ten cases; aggregate Game Performance and generation age do not break ties.
 
+The canonical `parent_evaluation_mode: reuse_cached` does not regenerate or
+re-evaluate surviving parents. The explicitly non-canonical diagnostic mode
+`regenerate_same_genotype` is restricted to `inherited_genotype` and static
+reflection. After ordinary offspring evaluation, it creates a fresh-ID replica
+of each parent with byte-identical prompt and inherited-Java genotype, clears
+all phenotype/evaluation state, and runs the normal generation and evaluation
+pipeline. Survivor selection then uses replicas plus offspring and excludes the
+old parent identities. This mode measures the total effect of parent
+rematerialization plus match resampling; it is not the production protocol.
+
 ## 4. Reproducibility
 
 `random_seed` controls EA randomness, lexicase case ordering, operator choice,

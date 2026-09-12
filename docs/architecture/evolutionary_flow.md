@@ -49,7 +49,14 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
 7. From generation 1 onward, combine evaluated parents and offspring and fill
    the fixed population with seeded lexicase selection without replacement.
    This is the `(mu + lambda)` environmental-selection model; when both sets
-   have size `n`, it is the requested `(n + n)` form.
+   have size `n`, it is the requested `(n + n)` form. The canonical default
+   `parent_evaluation_mode: reuse_cached` uses the existing evaluated parents.
+   The explicitly non-canonical diagnostic treatment
+   `regenerate_same_genotype` is restricted to `inherited_genotype` plus
+   `reflection_operator_mode: static`: it evaluates one new-ID parent replica
+   per old parent, with the same complete genotype and component provenance,
+   then selects from replicas plus offspring only. It never overwrites or
+   reuses the old parent as a survivor candidate.
 8. Persist the surviving population and generation metrics.
 
 The implementation is in `eagle/search.py`, `eagle/selection.py`, and
@@ -93,6 +100,13 @@ Code use `generation_prompt_parent_id`; inherited-mode Prompt and Code use
 parent without silently assigning AOS credit to the other one.
 
 ## Archive and analysis
+
+For `regenerate_same_genotype`,
+`generations/generation_<nnnn>_parent_rematerialization.json` is the compact
+source-parent-to-replica audit sidecar. It records component genotype hashes,
+old and newly generated Java hashes, the replica fitness/status, and whether
+the replica survived. Generation archives, error memory, timing aggregation,
+and retired-trace cleanup use the actual replica-plus-offspring selection pool.
 
 `runs/<run>/archives/opponents.json` keeps one best valid representative per
 opponent case. Each generation JSON stores objective statistics for all

@@ -90,6 +90,11 @@ flowchart TD
 - Failed candidates remain available to selection with `-1000.0` case scores.
 - Survivor selection is seeded lexicase without replacement over the joint
   parent-plus-offspring (`mu_plus_lambda`) pool.
+- The canonical `parent_evaluation_mode` is `reuse_cached`: parents are not
+  regenerated between generations. `regenerate_same_genotype` is a
+  non-canonical diagnostic treatment restricted to inherited Java with static
+  reflection. It creates fresh-ID, fully evaluated parent replicas and selects
+  from those replicas plus offspring, preserving the old parent artifacts.
 - `static` uses fixed probabilities; `aos_opponent` reuses ten-opponent rank
   changes; `aos_head2head` uses a separate direct matrix. Neither reward path
   creates another objective or changes normal selection.

@@ -276,6 +276,7 @@ def compact_candidate_metadata(
         "replicate_index",
         "initial_policy_source",
         "initial_policy_sample_index",
+        "experimental_parent_evaluation",
         "failure_category",
         "failure_reason",
     ):
