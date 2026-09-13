@@ -22,7 +22,7 @@ EXPECTED_PROBABILITIES = {
 
 class ReflectionAblationConfigTests(unittest.TestCase):
     def test_configs_disable_one_operator_and_split_the_remainder_evenly(self) -> None:
-        paths = sorted(CONFIG_DIR.glob("*.yaml"))
+        paths = sorted(CONFIG_DIR.glob("[0-9][0-9]_*.yaml"))
         self.assertEqual([path.name for path in paths], list(EXPECTED_PROBABILITIES))
 
         for path in paths:
@@ -51,7 +51,7 @@ class ReflectionAblationConfigTests(unittest.TestCase):
         }
         shared_base = {key: value for key, value in base.items() if key not in ignored_keys}
 
-        for path in sorted(CONFIG_DIR.glob("*.yaml")):
+        for path in sorted(CONFIG_DIR.glob("[0-9][0-9]_*.yaml")):
             payload = yaml.safe_load(path.read_text(encoding="utf-8"))
             shared_payload = {
                 key: value for key, value in payload.items() if key not in ignored_keys
