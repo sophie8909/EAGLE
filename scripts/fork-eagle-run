@@ -10,12 +10,16 @@ Usage::
 
     scripts/fork-eagle-run SOURCE_RUN DESTINATION_RUN --generation 0 \
         --experiment-name comparison_regenerate \
-        --parent-evaluation-mode regenerate_same_genotype
+        --parent-evaluation-mode regenerate_same_genotype \
+        --strategy-reflection-probability 0.0 \
+        --prompt-reflection-probability 0.5 \
+        --code-reflection-probability 0.5
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import sys
@@ -157,7 +161,15 @@ def _load_source_checkpoint(source: Path, generation: int) -> tuple[dict[str, An
     return manifest, snapshot, candidate_ids
 
 
-def _load_config(source: Path, *, experiment_name: str | None, parent_evaluation_mode: str | None) -> tuple[dict[str, Any], str]:
+def _load_config(
+    source: Path,
+    *,
+    experiment_name: str | None,
+    parent_evaluation_mode: str | None,
+    strategy_reflection_probability: float | None,
+    prompt_reflection_probability: float | None,
+    code_reflection_probability: float | None,
+) -> tuple[dict[str, Any], str]:
     path = source / "config.yaml"
     try:
         payload = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -173,6 +185,23 @@ def _load_config(source: Path, *, experiment_name: str | None, parent_evaluation
         if not parent_evaluation_mode.strip():
             raise ForkError("--parent-evaluation-mode must not be empty")
         payload["parent_evaluation_mode"] = parent_evaluation_mode
+    probability_overrides = {
+        "strategy_reflection_probability": strategy_reflection_probability,
+        "prompt_reflection_probability": prompt_reflection_probability,
+        "code_reflection_probability": code_reflection_probability,
+    }
+    supplied_probability_count = sum(value is not None for value in probability_overrides.values())
+    if supplied_probability_count not in (0, len(probability_overrides)):
+        raise ForkError(
+            "Reflection probability overrides must provide strategy, prompt, and code together"
+        )
+    if supplied_probability_count:
+        values = tuple(float(value) for value in probability_overrides.values() if value is not None)
+        if any(not math.isfinite(value) or not 0.0 <= value <= 1.0 for value in values):
+            raise ForkError("Reflection probability overrides must be finite numbers in [0, 1]")
+        if not math.isclose(sum(values), 1.0, rel_tol=0.0, abs_tol=1e-9):
+            raise ForkError("Reflection probability overrides must sum to 1.0")
+        payload.update(probability_overrides)
     return payload, yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
 
 
@@ -209,6 +238,9 @@ def fork_run(
     generation: int,
     experiment_name: str | None = None,
     parent_evaluation_mode: str | None = None,
+    strategy_reflection_probability: float | None = None,
+    prompt_reflection_probability: float | None = None,
+    code_reflection_probability: float | None = None,
 ) -> Path:
     """Create a checkpoint fork and return its destination path."""
 
@@ -219,6 +251,9 @@ def fork_run(
         source,
         experiment_name=experiment_name,
         parent_evaluation_mode=parent_evaluation_mode,
+        strategy_reflection_probability=strategy_reflection_probability,
+        prompt_reflection_probability=prompt_reflection_probability,
+        code_reflection_probability=code_reflection_probability,
     )
     source_run_id = str(manifest.get("run_id") or source.name)
     new_run_id = destination.name
@@ -281,6 +316,9 @@ def fork_run(
             "config_overrides": {
                 "experiment_name": experiment_name,
                 "parent_evaluation_mode": parent_evaluation_mode,
+                "strategy_reflection_probability": strategy_reflection_probability,
+                "prompt_reflection_probability": prompt_reflection_probability,
+                "code_reflection_probability": code_reflection_probability,
             },
         }
         (staging / "provenance.json").write_text(json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -302,6 +340,21 @@ def _parser() -> argparse.ArgumentParser:
         choices=("reuse_cached", "regenerate_same_genotype"),
         help="override parent_evaluation_mode in the fork config",
     )
+    parser.add_argument(
+        "--strategy-reflection-probability",
+        type=float,
+        help="override Strategy Reflection probability; requires Prompt and Code overrides",
+    )
+    parser.add_argument(
+        "--prompt-reflection-probability",
+        type=float,
+        help="override Prompt Reflection probability; requires Strategy and Code overrides",
+    )
+    parser.add_argument(
+        "--code-reflection-probability",
+        type=float,
+        help="override Code Reflection probability; requires Strategy and Prompt overrides",
+    )
     return parser
 
 
@@ -314,6 +367,9 @@ def main(argv: list[str] | None = None) -> int:
             generation=args.generation,
             experiment_name=args.experiment_name,
             parent_evaluation_mode=args.parent_evaluation_mode,
+            strategy_reflection_probability=args.strategy_reflection_probability,
+            prompt_reflection_probability=args.prompt_reflection_probability,
+            code_reflection_probability=args.code_reflection_probability,
         )
     except (ForkError, OSError) as exc:
         print(f"fork-eagle-run: error: {exc}", file=sys.stderr)

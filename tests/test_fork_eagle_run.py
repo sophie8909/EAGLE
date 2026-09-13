@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 from eagle.artifacts import write_candidate_inputs, write_candidate_snapshot
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
@@ -158,6 +160,66 @@ class ForkEagleRunTests(unittest.TestCase):
                 next(candidate for candidate in population if candidate.id == "gen_0000_survivor").generation,
                 0,
             )
+
+    def test_reflection_probability_overrides_are_atomic_and_auditable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, _ = self._build_source(root)
+            destination = root / "fork-ablation"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    str(source),
+                    str(destination),
+                    "--generation",
+                    "0",
+                    "--strategy-reflection-probability",
+                    "0.0",
+                    "--prompt-reflection-probability",
+                    "0.5",
+                    "--code-reflection-probability",
+                    "0.5",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            config = yaml.safe_load((destination / "config.yaml").read_text(encoding="utf-8"))
+            self.assertEqual(config["strategy_reflection_probability"], 0.0)
+            self.assertEqual(config["prompt_reflection_probability"], 0.5)
+            self.assertEqual(config["code_reflection_probability"], 0.5)
+            provenance = json.loads((destination / "provenance.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                provenance["config_overrides"],
+                {
+                    "experiment_name": None,
+                    "parent_evaluation_mode": None,
+                    "strategy_reflection_probability": 0.0,
+                    "prompt_reflection_probability": 0.5,
+                    "code_reflection_probability": 0.5,
+                },
+            )
+
+            incomplete = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    str(source),
+                    str(root / "fork-incomplete"),
+                    "--generation",
+                    "0",
+                    "--strategy-reflection-probability",
+                    "0.0",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(incomplete.returncode, 2)
+            self.assertIn("must provide strategy, prompt, and code together", incomplete.stderr)
 
 
 if __name__ == "__main__":
