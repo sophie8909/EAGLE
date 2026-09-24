@@ -408,7 +408,12 @@ class ExperimentOrchestrator:
 
                 if indexed_run is not None:
                     persisted = load_resume_config(indexed_run)
-                    validate_resume_config(requested, persisted, mock=mock)
+                    validate_resume_config(
+                        requested,
+                        persisted,
+                        mock=mock,
+                        allow_experiment_name_alias=True,
+                    )
                     persisted.validate()
                     last_known_run = indexed_run
                     if _batch_entry_is_complete(

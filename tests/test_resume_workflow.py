@@ -8,11 +8,35 @@ from pathlib import Path
 
 from eagle.config import ExperimentConfig
 from eagle.aos import ReflectionOperatorMode
-from eagle.resume import resume_search
+from eagle.resume import resume_search, validate_resume_config
 from eagle.search import run_search
 
 
 class ResumeWorkflowTests(unittest.TestCase):
+    def test_indexed_resume_may_correct_only_the_experiment_name(self):
+        persisted = ExperimentConfig.from_mapping({
+            "experiment_name": "self_play_5x40",
+            "generations": 20,
+            "population_size": 10,
+        })
+        corrected = replace(persisted, experiment_name="self_play_10x20")
+
+        with self.assertRaisesRegex(ValueError, "experiment_name"):
+            validate_resume_config(corrected, persisted)
+
+        validate_resume_config(
+            corrected,
+            persisted,
+            allow_experiment_name_alias=True,
+        )
+
+        with self.assertRaisesRegex(ValueError, "population_size"):
+            validate_resume_config(
+                replace(corrected, population_size=5),
+                persisted,
+                allow_experiment_name_alias=True,
+            )
+
     def test_partial_run_continues_without_duplicate_generation_records(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

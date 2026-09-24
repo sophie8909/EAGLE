@@ -453,6 +453,12 @@ occurred before generation 0 was atomically recorded, folder resume starts a
 replacement run for that config and updates the index because no resumable
 population exists.
 
+The exact filename-to-run index is also the identity anchor for folder resume.
+It may therefore tolerate a corrected human-readable `experiment_name` while
+still requiring every execution-affecting config field to match the immutable
+run-local definition. Direct config-plus-run resume remains strict, including
+the experiment name.
+
 `python -m eagle analyze` and `analyze.sh` are the only offline analysis
 entrypoints. Separate `run`, `runtime`, `run.sh`, and `run_env.sh` compatibility
 surfaces are prohibited.

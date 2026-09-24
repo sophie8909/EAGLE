@@ -138,6 +138,11 @@ unindexed configs run fresh in filename order. Direct `--resume RUN_DIR` remains
 the single-run interface. Search-complete/final-test-only recovery does not start
 llama.cpp unless a later config still needs LLM work.
 
+For indexed folder resume, the exact config filename in `experiment.yaml`
+anchors run identity. A corrected display-only `experiment_name` is accepted;
+all execution-affecting fields remain strict. Direct config-plus-run resume
+continues to compare the name as well.
+
 New `eagle-run-v2` runs persist one fully resolved `config.yaml`. The root has
 only manifest/config/summary/timing plus canonical directories. Candidate,
 generation, match, archive, and config compatibility duplicates have been

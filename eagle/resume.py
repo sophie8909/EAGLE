@@ -336,9 +336,17 @@ def validate_resume_config(
     persisted: ExperimentConfig,
     *,
     mock: bool = False,
+    allow_experiment_name_alias: bool = False,
 ) -> None:
     run_mapping = persisted.to_mapping(mock=False)
     requested_mapping = config.to_mapping(mock=mock)
+    if allow_experiment_name_alias:
+        # A folder resume is already bound by the exact config-filename-to-run
+        # entry in experiment.yaml.  The human-readable experiment name is
+        # metadata and may be corrected without changing the immutable run
+        # definition used for continued execution.
+        run_mapping.pop("experiment_name", None)
+        requested_mapping.pop("experiment_name", None)
     mismatches = _mapping_differences(run_mapping, requested_mapping)
     if mismatches:
         raise ValueError("Resume config does not match the run: " + "; ".join(mismatches))

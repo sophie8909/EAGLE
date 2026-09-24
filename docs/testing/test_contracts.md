@@ -85,6 +85,8 @@ Each fixture asserts both objectives, terminal stage, retained artifacts, and ti
   missing evidence and responsibility-boundary violations.
 - Test formulas only in their canonical test module; other tests assert references/results, not copied arithmetic.
 - Unsupported run schemas must fail explicitly; no legacy reader may silently activate.
+- Indexed folder resume may accept only an `experiment_name` metadata correction;
+  direct resume and every execution-affecting config field remain strict.
 - Compact v3 analysis fixtures must prove candidate references recover
   `opponent_results.match_scores` from the canonical evaluation artifact as
   narrow per-generation violin distributions while
