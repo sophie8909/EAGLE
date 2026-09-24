@@ -67,6 +67,8 @@ from .artifacts import (
 from .candidate import Candidate, compact_candidate_metadata
 from .config import ExperimentConfig
 from .prompts import load_prompt, render_prompt
+from .self_play import expand_self_play_slots
+from .timing import append_event
 from .opponents import (
     ALLINBOT_UPSTREAM_CLASS_NAME,
     EVALUATION_ROSTER,
@@ -132,6 +134,7 @@ class BoundedGenerationResult:
     final_attempt: int
     max_attempts: int
     initial_seed_source: bool
+    source_without_generation: bool
 
     @property
     def representative_attempt(self) -> GenerationAttemptResult:
@@ -174,6 +177,9 @@ class EvaluationOpponent:
     class_name: str
     classpath_entries: tuple[Path, ...] = ()
     weight: float = 1.0
+    display_name: str | None = None
+    source_generation: int | None = None
+    source_candidate_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -213,8 +219,11 @@ def evaluate_population(
     candidates_dir: Path,
     mock: bool,
     llm_client: object | None = None,
+    run_timing_path: Path | None = None,
+    run_id: str | None = None,
+    opponent_candidates: list[Candidate] | None = None,
 ) -> list[Candidate]:
-    evaluated = []
+    prepared: list[tuple[Candidate, BoundedGenerationResult]] = []
     for index, candidate in enumerate(population):
         print(
             f"[gen {generation} cand {index + 1}/{len(population)}] "
@@ -222,6 +231,28 @@ def evaluate_population(
             flush=True,
         )
         write_candidate_inputs(candidates_dir, candidate)
+        bounded_generation = decode_validate_compile_candidate(
+            candidate,
+            config=config,
+            backend=backend,
+            generated_agents_dir=generated_agents_dir,
+            classes_dir=classes_dir,
+            mock=mock,
+            candidate_artifact_dir=candidates_dir / candidate.id,
+        )
+        prepared.append((candidate, bounded_generation))
+
+    opponent_pool = None
+    if config.evaluation_mode == "self_play":
+        opponent_pool = _build_self_play_opponents(
+            opponent_candidates if opponent_candidates is not None else population,
+            prepared=prepared,
+            config=config,
+            classes_dir=classes_dir,
+            mock=mock,
+        )
+    evaluated = []
+    for index, (candidate, bounded_generation) in enumerate(prepared):
         evaluation = evaluate_candidate(
             candidate,
             config=config,
@@ -232,11 +263,148 @@ def evaluate_population(
             mock=mock,
             llm_client=llm_client,
             ordinal=index,
+            bounded_generation=bounded_generation,
+            opponent_pool=opponent_pool,
         )
+        if run_timing_path is not None:
+            _append_match_timing_events(
+                run_timing_path,
+                run_id=run_id,
+                generation=generation,
+                candidate=evaluation.candidate,
+                matches=evaluation.match_results,
+            )
         write_candidate_artifacts(candidates_dir, evaluation)
         evaluated.append(evaluation.candidate)
         print_progress(generation=generation, index=index, population_size=len(population), evaluation=evaluation)
     return evaluated
+
+
+def _append_match_timing_events(
+    path: Path,
+    *,
+    run_id: str | None,
+    generation: int,
+    candidate: Candidate,
+    matches: list[MatchResult],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    for result in matches:
+        append_event(
+            path,
+            {
+                "event": "match",
+                "run_id": run_id,
+                "generation": generation,
+                "candidate_id": candidate.id,
+                "candidate_generation": candidate.generation,
+                "match_index": result.match_index,
+                "opponent_id": result.opponent_id,
+                "opponent_name": result.opponent_name,
+                "map_id": result.map_id,
+                "round_index": result.round_index,
+                "candidate_player": result.candidate_player,
+                "status": result.status,
+                "ok": result.ok,
+                "score": result.score,
+                "winner": result.winner,
+                "duration_seconds": float(result.duration_seconds or 0.0),
+                "started_at": result.started_at or None,
+                "finished_at": result.finished_at or None,
+                "timeout_seconds": result.timeout_seconds,
+                "failure_category": result.failure_category,
+                "failure_reason": result.failure_reason,
+                "opponent_weight": result.opponent_weight,
+                "opponent_source_generation": result.opponent_source_generation,
+                "opponent_source_candidate_id": result.opponent_source_candidate_id,
+            },
+        )
+
+
+def _build_self_play_opponents(
+    opponent_candidates: list[Candidate],
+    *,
+    prepared: list[tuple[Candidate, BoundedGenerationResult]],
+    config: ExperimentConfig,
+    classes_dir: Path,
+    mock: bool,
+) -> tuple[EvaluationOpponent, ...]:
+    """Build a stable ten-slot opponent pool from one population snapshot."""
+
+    prepared_by_id = {candidate.id: result for candidate, result in prepared}
+    available = [
+        candidate
+        for candidate in opponent_candidates
+        if (candidate.generated_java and candidate.compile_status == "success")
+        or (
+            candidate.id in prepared_by_id
+            and prepared_by_id[candidate.id].compile_result is not None
+            and prepared_by_id[candidate.id].compile_result.ok
+        )
+    ]
+    slots = expand_self_play_slots(available)
+    opponents: list[EvaluationOpponent] = []
+    for index, candidate in enumerate(slots):
+        bounded = prepared_by_id.get(candidate.id)
+        source = candidate.generated_java
+        if bounded is not None and bounded.generation.assembled_java:
+            source = bounded.generation.assembled_java
+        if not source:
+            continue
+        opponent_id = config.lexicase_case_ids[index]
+        class_name, classpath = _prepare_self_play_class(
+            candidate,
+            source=source,
+            classes_dir=classes_dir,
+            config=config,
+            mock=mock,
+        )
+        opponents.append(EvaluationOpponent(
+            opponent_id=opponent_id,
+            class_name=class_name,
+            classpath_entries=(classpath,),
+            weight=1.0,
+            display_name=f"Self-play slot {index:03d} ({candidate.id})",
+            source_generation=candidate.generation,
+            source_candidate_id=candidate.id,
+        ))
+    return tuple(opponents)
+
+
+def _prepare_self_play_class(
+    candidate: Candidate,
+    *,
+    source: str,
+    classes_dir: Path,
+    config: ExperimentConfig,
+    mock: bool,
+) -> tuple[str, Path]:
+    source_sha256 = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    suffix = hashlib.sha256(f"{candidate.id}:{source_sha256}".encode("utf-8")).hexdigest()[:12]
+    unique_class = f"CandidateAgentOpponent_{suffix}"
+    class_name = f"ai.generated.{unique_class}"
+    source_dir = classes_dir / ".self_play_sources"
+    class_dir = classes_dir / ".self_play_opponents" / f"{candidate.id}_{source_sha256[:12]}"
+    source_path = source_dir / f"{unique_class}.java"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    class_dir.parent.mkdir(parents=True, exist_ok=True)
+    if not source_path.is_file():
+        source_path.write_text(
+            re.sub(r"\bCandidateAgent\b", unique_class, source),
+            encoding="utf-8",
+        )
+    if not mock and not (class_dir / "ai" / "generated" / f"{unique_class}.class").is_file():
+        result = compile_generated_agent(
+            source_path,
+            microrts_dir=config.microrts_dir,
+            output_dir=class_dir,
+            mock=False,
+        )
+        if not result.ok:
+            raise RuntimeError(
+                f"failed to compile self-play opponent {candidate.id}: {result.stderr}"
+            )
+    return class_name, class_dir
 
 
 def decode_validate_compile_candidate(
@@ -263,18 +431,23 @@ def decode_validate_compile_candidate(
     """
 
     _validate_candidate_path_component(candidate.id)
-    initial_seed_source = getattr(backend, "operation", None) == "initial_java_seed"
+    operation = getattr(backend, "operation", None)
+    initial_seed_source = operation == "initial_java_seed"
+    source_without_generation = operation in {
+        "initial_java_seed",
+        "self_play_fitness_refresh",
+    }
     direct_code_source = (
         candidate.generated_java
         if candidate.mutation_type == "code" and candidate.generated_java
         else ""
     )
-    max_attempts = 1 if initial_seed_source else config.generation_max_attempts
+    max_attempts = 1 if source_without_generation else config.generation_max_attempts
     if max_attempts < 1:
         raise ValueError("generation_max_attempts must be at least 1.")
     base_request = (
         ""
-        if initial_seed_source
+        if source_without_generation
         else "Direct Java source from mutation/code_reflection/reflected_candidate.java"
         if direct_code_source
         else backend.authoritative_request(candidate, "CandidateAgent")
@@ -297,6 +470,11 @@ def decode_validate_compile_candidate(
     )
     _safe_remove_candidate_tree(canonical_classes, classes_dir)
     _safe_remove_candidate_tree(scratch_root, classes_dir / ".generation_attempts")
+    source_template_path: Path | None = None
+    if operation == "self_play_fitness_refresh":
+        source_template_path = generated_agents_dir / candidate.id / "self_play_source_template.java"
+        source_template_path.parent.mkdir(parents=True, exist_ok=True)
+        source_template_path.write_text(candidate.generated_java, encoding="utf-8")
     attempts: list[GenerationAttemptResult] = []
     selected_attempt: int | None = None
     repair_parent: GenerationAttemptResult | None = None
@@ -308,9 +486,9 @@ def decode_validate_compile_candidate(
                 "code_reflection_output"
                 if direct_code_source and attempt_number == 1
                 else "compile_repair"
-                if not initial_seed_source and repair_parent is not None
+                if not source_without_generation and repair_parent is not None
                 else "initial_decode_retry"
-                if not initial_seed_source and attempt_number > 1
+                if not source_without_generation and attempt_number > 1
                 else "initial_decode"
             )
             repair_evidence = (
@@ -335,7 +513,7 @@ def decode_validate_compile_candidate(
                 if candidate_artifact_dir is None
                 else candidate_artifact_dir / "generation" / "attempts" / attempt_name
             )
-            if attempt_artifact_dir is not None and not initial_seed_source:
+            if attempt_artifact_dir is not None and not source_without_generation:
                 attempt_artifact_dir.mkdir(parents=True, exist_ok=True)
                 (attempt_artifact_dir / "request.txt").write_text(request, encoding="utf-8")
                 for filename in (
@@ -363,11 +541,15 @@ def decode_validate_compile_candidate(
                 attempt_backend,
                 generated_agents_dir,
                 template_paths=JavaTemplatePaths(
-                    config.initial_java_seed_path if initial_seed_source else config.agent_template_path
+                    config.initial_java_seed_path
+                    if initial_seed_source
+                    else source_template_path
+                    if source_template_path is not None
+                    else config.agent_template_path
                 ),
                 authoritative_request=request,
                 output_dir=candidate_source_root / attempt_name,
-                attempt_artifact_dir=None if initial_seed_source else attempt_artifact_dir,
+                attempt_artifact_dir=None if source_without_generation else attempt_artifact_dir,
             )
             if request_kind == "compile_repair" and repair_parent is not None:
                 generation = _enforce_compile_repair_delta(
@@ -395,9 +577,9 @@ def decode_validate_compile_candidate(
                         repair_parent.generation.assembled_java.encode("utf-8")
                     ).hexdigest()
                 ),
-                "started_at": None if initial_seed_source else generation_started_at,
-                "finished_at": None if initial_seed_source else generation_finished_at,
-                "duration_seconds": None if initial_seed_source else generation_duration,
+                "started_at": None if source_without_generation else generation_started_at,
+                "finished_at": None if source_without_generation else generation_finished_at,
+                "duration_seconds": None if source_without_generation else generation_duration,
                 "status": (
                     "source_validated"
                     if generation.agent is not None
@@ -470,12 +652,12 @@ def decode_validate_compile_candidate(
                 write_generation_attempt_artifacts(
                     candidate_artifact_dir,
                     attempt,
-                    initial_seed_source=initial_seed_source,
+                    initial_seed_source=source_without_generation,
                 )
                 write_generation_repair_ledger(
                     candidate_artifact_dir,
                     attempts,
-                    initial_seed_source=initial_seed_source,
+                    initial_seed_source=source_without_generation,
                 )
             if selected_attempt is not None:
                 break
@@ -498,12 +680,12 @@ def decode_validate_compile_candidate(
         write_generation_attempt_artifacts(
             candidate_artifact_dir,
             attempts[-1],
-            initial_seed_source=initial_seed_source,
+            initial_seed_source=source_without_generation,
         )
         write_generation_repair_ledger(
             candidate_artifact_dir,
             attempts,
-            initial_seed_source=initial_seed_source,
+            initial_seed_source=source_without_generation,
         )
     return BoundedGenerationResult(
         attempts=tuple(attempts),
@@ -511,6 +693,7 @@ def decode_validate_compile_candidate(
         final_attempt=final_attempt,
         max_attempts=max_attempts,
         initial_seed_source=initial_seed_source,
+        source_without_generation=source_without_generation,
     )
 
 
@@ -668,6 +851,8 @@ def evaluate_candidate(
     llm_client: object | None = None,
     ordinal: int,
     match_artifacts_dir: Path | None = None,
+    bounded_generation: BoundedGenerationResult | None = None,
+    opponent_pool: tuple[EvaluationOpponent, ...] | None = None,
 ) -> CandidateEvaluation:
     """Evaluate one candidate through the canonical child pipeline.
 
@@ -687,17 +872,19 @@ def evaluate_candidate(
     # Stages 1-2 use the same bounded decoder helper as production smoke
     # checks. Only its selected (or, when exhausted, final) attempt becomes
     # the canonical phenotype and compilation evidence below.
-    bounded_generation = decode_validate_compile_candidate(
-        candidate,
-        config=config,
-        backend=backend,
-        generated_agents_dir=generated_agents_dir,
-        classes_dir=classes_dir,
-        mock=mock,
-        candidate_artifact_dir=None if match_artifacts_dir is None else match_artifacts_dir.parent,
-    )
+    if bounded_generation is None:
+        bounded_generation = decode_validate_compile_candidate(
+            candidate,
+            config=config,
+            backend=backend,
+            generated_agents_dir=generated_agents_dir,
+            classes_dir=classes_dir,
+            mock=mock,
+            candidate_artifact_dir=None if match_artifacts_dir is None else match_artifacts_dir.parent,
+        )
     generation = bounded_generation.generation
     initial_seed_source = bounded_generation.initial_seed_source
+    source_without_generation = bounded_generation.source_without_generation
     generation_attempts = bounded_generation.attempts
     representative_attempt = bounded_generation.representative_attempt
     compile_result = bounded_generation.compile_result
@@ -721,6 +908,25 @@ def evaluate_candidate(
                 else None
             ),
         }
+    elif source_without_generation:
+        source_candidate_id = (
+            candidate.metadata.get("self_play_fitness_refresh", {})
+            .get("source_parent_id")
+        )
+        source_provenance = {
+            "kind": "existing_candidate_phenotype",
+            "source_candidate_id": source_candidate_id,
+            "path": (
+                None
+                if not source_candidate_id
+                else f"../{source_candidate_id}/phenotype/CandidateAgent.java"
+            ),
+            "sha256": (
+                hashlib.sha256(generation.assembled_java.encode("utf-8")).hexdigest()
+                if generation.assembled_java
+                else None
+            ),
+        }
     elif candidate.mutation_type == "code" and candidate.generated_java:
         source_provenance = {
             "kind": "code_reflection",
@@ -737,13 +943,13 @@ def evaluate_candidate(
             else getattr(backend, "operation", None)
         ),
         "model": getattr(backend, "model", None),
-        "started_at": None if initial_seed_source else generation_attempts[0].generation_timing.get("started_at"),
-        "finished_at": None if initial_seed_source else generation_attempts[-1].generation_timing.get("finished_at"),
-        "duration_seconds": None if initial_seed_source else sum(
+        "started_at": None if source_without_generation else generation_attempts[0].generation_timing.get("started_at"),
+        "finished_at": None if source_without_generation else generation_attempts[-1].generation_timing.get("finished_at"),
+        "duration_seconds": None if source_without_generation else sum(
             float(item.generation_timing.get("duration_seconds") or 0.0)
             for item in generation_attempts
         ),
-        "attempts": [] if initial_seed_source else [
+        "attempts": [] if source_without_generation else [
             {
                 **item.generation_timing,
                 "status": "success" if item.generation.raw_llm_output else "error",
@@ -755,8 +961,8 @@ def evaluate_candidate(
             for item in generation_attempts
         ],
         "max_attempts": bounded_generation.max_attempts,
-        "selected_attempt": None if initial_seed_source else bounded_generation.selected_attempt,
-        "final_attempt": None if initial_seed_source else bounded_generation.final_attempt,
+        "selected_attempt": None if source_without_generation else bounded_generation.selected_attempt,
+        "final_attempt": None if source_without_generation else bounded_generation.final_attempt,
         "source": source_provenance,
     }
 
@@ -799,6 +1005,7 @@ def evaluate_candidate(
                 match_artifacts_dir=match_artifacts_dir,
                 mock=mock,
                 ordinal=ordinal,
+                opponent_pool=opponent_pool,
             )
         else:
             match_error = integration_result.failure_reason or "MicroRTS integration failed."
@@ -809,7 +1016,11 @@ def evaluate_candidate(
     failure_reason: str | None = None
     failure_stage: str | None = None
     completed_matches = sum(result.ok for result in matches)
-    expected_match_count = config.expected_match_count
+    expected_match_count = (
+        config.fixed_matches_per_opponent * len(opponent_pool)
+        if opponent_pool is not None
+        else config.expected_match_count
+    )
     if agent is None:
         validation_failed = bool(generation.validation_result.failed_checks)
         failure_stage = generation.failure_stage or ("validation" if validation_failed else "generation")
@@ -844,8 +1055,12 @@ def evaluate_candidate(
     objective_started = time.monotonic()
     game_metrics = compute_game_metrics(
         matches,
-        fixed_opponent_weights=dict(config.evaluation_opponents),
-        expected_match_count=config.expected_match_count,
+        fixed_opponent_weights=(
+            {item.opponent_id: item.weight for item in opponent_pool}
+            if opponent_pool is not None
+            else dict(config.evaluation_opponents)
+        ),
+        expected_match_count=expected_match_count,
         expected_matches_per_opponent=config.fixed_matches_per_opponent,
         evaluation_maps=config.evaluation_maps,
     )
@@ -892,6 +1107,11 @@ def evaluate_candidate(
         game_metrics=game_metrics,
         code_quality=quality,
         game_failure=failure_stage is not None,
+        required_cases=(
+            tuple(opponent.opponent_id for opponent in opponent_pool)
+            if opponent_pool is not None
+            else config.lexicase_case_ids
+        ),
     )
     objective_finished_at = _utc_now()
     objective_duration = max(0.0, time.monotonic() - objective_started)
@@ -924,13 +1144,36 @@ def evaluate_candidate(
         result.opponent_id: float(result.score)
         for result in game_metrics.opponent_results
     }
-    game_payload["game_performance"] = reporting_game_performance(objectives)
+    game_payload["game_performance"] = (
+        game_metrics.objective
+        if opponent_pool is not None
+        else reporting_game_performance(objectives)
+    )
     game_payload["evaluation_configuration"] = {
         "maps": list(config.evaluation_maps),
         "rounds_per_map": config.rounds_per_map,
         "swap_player_sides": config.swap_player_sides,
-        "expected_match_count": config.expected_match_count,
+        "expected_match_count": expected_match_count,
+        "mode": config.evaluation_mode,
     }
+    game_payload["fitness_case_ids"] = list(config.lexicase_case_ids)
+    if opponent_pool is not None:
+        context_rows = [
+            {
+                "slot_id": opponent.opponent_id,
+                "source_candidate_id": opponent.source_candidate_id,
+                "source_generation": opponent.source_generation,
+            }
+            for opponent in opponent_pool
+        ]
+        game_payload["evaluation_context_id"] = hashlib.sha256(
+            json.dumps(
+                context_rows,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        game_payload["evaluation_configuration"]["opponents"] = context_rows
     compact_matches = [_compact_match_result(result) for result in matches]
     # This is the hand-off consumed by the next generation's Reflection stage.
     # Keep the exact evaluated values together so mutation never reconstructs
@@ -1215,20 +1458,16 @@ def preflight_evaluation_opponents(
                 raise OpponentSetupError(f"AllInBot upstream libraries are missing: {source_lib}")
 
 
-def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int) -> tuple[list[MatchResult], str | None]:
-    """Run the complete fixed ten-opponent evaluation matrix."""
+def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config: ExperimentConfig, classes_dir: Path, match_artifacts_dir: Path | None, mock: bool, ordinal: int, opponent_pool: tuple[EvaluationOpponent, ...] | None = None) -> tuple[list[MatchResult], str | None]:
+    """Run the complete evaluation matrix against one immutable opponent pool."""
     match_results: list[MatchResult] = []
     source_hash = hash_file(agent.source_path)
     candidate_classes_dir = classes_dir / candidate.id
     class_hash = hash_class_directory(candidate_classes_dir)
     first_error: str | None = None
     try:
-        opponents = list(
-            _resolved_static_evaluation_opponents(
-                config,
-                mock=mock,
-                classes_dir=classes_dir,
-            )
+        opponents = list(opponent_pool) if opponent_pool is not None else list(
+            _resolved_static_evaluation_opponents(config, mock=mock, classes_dir=classes_dir)
         )
         matrix_opponents = tuple(
             MatrixOpponent(
@@ -1247,10 +1486,9 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
             swap_player_sides=config.swap_player_sides,
         )
         expected_matches = len(specifications)
-        if len(opponents) != len(config.evaluation_opponents):
+        if not opponents:
             return match_results, (
-                f"evaluation roster has {len(opponents)} opponents; "
-                f"expected {len(config.evaluation_opponents)}"
+                "self-play opponent pool is empty"
             )
         opponent_by_id = {item.opponent_id: item for item in opponents}
         for specification in specifications:
@@ -1260,7 +1498,10 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                     microrts_dir=config.microrts_dir, classes_dir=candidate_classes_dir,
                     agent_class=agent.qualified_class_name, opponent=opponent.class_name,
                     opponent_id=opponent.opponent_id,
-                    opponent_name=_opponent_display_name(opponent.opponent_id),
+                    opponent_name=(
+                        opponent.display_name
+                        or _opponent_display_name(opponent.opponent_id)
+                    ),
                     tick_limit=specification.tick_limit, match_index=specification.match_index,
                     match_artifacts_dir=match_artifacts_dir,
                     scoring_config=scoring_config_from_experiment(config), mock=mock,
@@ -1278,6 +1519,8 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                     map_id=specification.map_id,
                     round_index=specification.round_index,
                     opponent_weight=specification.opponent_weight,
+                    opponent_source_generation=opponent.source_generation,
+                    opponent_source_candidate_id=opponent.source_candidate_id,
                 )
             except (RuntimeError, OSError) as exc:
                 result = MatchResult(
@@ -1299,17 +1542,22 @@ def evaluate_matches(*, candidate: Candidate, agent: GeneratedJavaAgent, config:
                 result,
                 generation=candidate.generation,
                 opponent_id=opponent.opponent_id,
-                opponent_name=_opponent_display_name(opponent.opponent_id),
+                opponent_name=(
+                    opponent.display_name
+                    or _opponent_display_name(opponent.opponent_id)
+                ),
                 map_id=specification.map_id,
                 round_index=specification.round_index,
                 opponent_weight=specification.opponent_weight,
+                opponent_source_generation=opponent.source_generation,
+                opponent_source_candidate_id=opponent.source_candidate_id,
             )
             match_results.append(result)
             if not result.ok and first_error is None:
                 first_error = match_error_message(result)
     except (RuntimeError, OSError) as exc:
         return match_results, str(exc)
-    expected_matches = config.expected_match_count
+    expected_matches = config.fixed_matches_per_opponent * len(opponents)
     if len(match_results) != expected_matches:
         return match_results, f"partial evaluation: completed {len(match_results)} of {expected_matches} matches"
     return match_results, first_error

@@ -1,6 +1,6 @@
 # Architecture gaps
 
-Snapshot: 2026-09-08.
+Snapshot: 2026-09-24.
 
 The active architecture has one remaining non-blocking hardening gap.
 
@@ -16,7 +16,9 @@ Reflection persists a structured diagnosis, revises parent Java from that
 conclusion only in the final materialization phase, and bypasses ordinary final
 generation while preserving both prompt genes. Whole-generation assignment and
 optional primary/generation-model phase switching are also implemented and
-covered by contract tests.
+covered by contract tests. Explicit immutable-snapshot self-play, same-context
+parent refresh, legacy-checkpoint resume migration, and per-policy
+generation-zero Java decoding are implemented and covered as active contracts.
 These are active contracts rather than open gaps.
 Historical gap rows remain available in Git history.
 

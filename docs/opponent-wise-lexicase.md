@@ -18,6 +18,20 @@ the evolutionary case is `allinbot` in `eagle/opponents.py`.
 `PassiveAI`, `RandomAI`, and `RandomBiasedAI` are active evolutionary cases,
 using the canonical IDs `passive`, `random`, and `randombias`.
 
+## Self-play cases
+
+`evaluation.mode: self_play` replaces the fixed roster with one immutable
+snapshot context. Runnable snapshot candidates are cycled in stable order into
+`self_play_000` through `self_play_009`, all with weight `1.0`; five candidates
+therefore occupy two slots each. Each match stores its source candidate and
+generation. The snapshot refresh interval defaults to five generations.
+
+At refresh, parents receive fresh candidate identities but preserve their Java
+phenotype and make no LLM call. They are evaluated against the new snapshot
+before reflection and offspring planning. Lexicase rejects a pool unless every
+candidate has the same context ID and exact case schema. Self-play requires
+static reflection and does not update the fixed-opponent archive.
+
 ## Fitness and reporting
 
 `evaluation/objectives.py` returns a mapping with exactly the ten case IDs.
@@ -71,7 +85,8 @@ along with the aggregate and code-quality diagnostic plots.
 
 ## Removed behavior
 
-The active path does not evaluate a previous-generation EAGLE candidate, does
-not add a generation-dependent EAGLE weight, and does not use `code_quality` as
-an evolutionary objective. Legacy artifact readers are not allowed to invent
-missing opponent scores; old candidates are represented as incomplete data.
+The active path never adds a generation-dependent opponent weight and does not
+use `code_quality` as an evolutionary objective. Self-play exists only behind
+its explicit config mode and immutable snapshot contract. Legacy artifact
+readers are not allowed to invent missing scores; old candidates are
+represented as incomplete data.

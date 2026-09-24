@@ -16,6 +16,7 @@ from eagle.evaluation import (
     _prepare_worker_rush_opponent,
     _resolved_static_evaluation_opponents,
     evaluate_matches,
+    evaluate_population,
     preflight_evaluation_opponents,
 )
 from eagle.opponents import (
@@ -126,6 +127,52 @@ class Phase4RuntimeEvaluationTests(unittest.TestCase):
         self.assertEqual(Counter(item["opponent_id"] for item in persisted), expected)
         self.assertEqual(Counter(item["opponent_id"] for item in metadata), expected)
         self.assertTrue(all(item["opponent_id"] for item in persisted))
+
+    def test_run_timing_jsonl_records_match_execution_events(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_dir = root / "run"
+            candidates_dir = run_dir / "candidates"
+            candidate = Candidate(id="runtime-timing", strategy_prompt="strategy")
+            config = ExperimentConfig.from_mapping({})
+
+            def fake_match(**kwargs):
+                index = kwargs["match_index"]
+                return MatchResult(
+                    ok=True,
+                    score=100.0,
+                    command=["java"],
+                    match_index=index,
+                    opponent_id=kwargs["opponent_id"],
+                    opponent_name="fake-opponent",
+                    started_at="2026-09-20T00:00:00+00:00",
+                    finished_at="2026-09-20T00:00:00.010000+00:00",
+                    duration_seconds=0.01 + index * 0.001,
+                    status="success",
+                    raw_result={"winner": 0, "result": "p0_win", "final_tick": 100, "max_cycles": 100, "players": {"p0": {"resource_total": 50.0, "material_total": 10.0, "unit_types": {}}, "p1": {"resource_total": 40.0, "material_total": 10.0, "unit_types": {}}}},
+                )
+
+            with patch("eagle.evaluation.run_microrts_match", side_effect=fake_match):
+                evaluate_population(
+                    [candidate],
+                    generation=1,
+                    config=config,
+                    backend=__import__("generation.backend", fromlist=["MockGenerationBackend"]).MockGenerationBackend(),
+                    generated_agents_dir=run_dir / "generated_agents",
+                    classes_dir=run_dir / "classes",
+                    candidates_dir=candidates_dir,
+                    mock=True,
+                    llm_client=None,
+                    run_timing_path=run_dir / "timing.jsonl",
+                    run_id="test-run",
+                )
+
+            events = [json.loads(line) for line in (run_dir / "timing.jsonl").read_text(encoding="utf-8").splitlines()]
+            match_events = [event for event in events if event.get("event") == "match"]
+            self.assertEqual(len(match_events), config.expected_match_count)
+            self.assertTrue(all(event["candidate_id"] == "runtime-timing" for event in match_events))
+            self.assertTrue(all(event["duration_seconds"] >= 0.0 for event in match_events))
+            self.assertTrue(all(event["status"] == "success" for event in match_events))
 
     def test_real_mode_preflight_reports_missing_search_opponent(self):
         with tempfile.TemporaryDirectory() as temp_dir:

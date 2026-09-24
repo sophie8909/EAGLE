@@ -94,6 +94,20 @@ class InitialJavaSeedBackend(GenerationBackend):
             raise ValueError("The initial Java seed declares only CandidateAgent.")
         return self.source_path.read_text(encoding="utf-8")
 
+
+class ExistingJavaPhenotypeBackend(GenerationBackend):
+    """Re-evaluate an existing phenotype without invoking or repairing via an LLM."""
+
+    operation = "self_play_fitness_refresh"
+    model = None
+
+    def generate(self, candidate: Candidate, class_name: str) -> str:
+        if class_name != "CandidateAgent":
+            raise ValueError("Existing EAGLE phenotypes declare only CandidateAgent.")
+        if not candidate.generated_java:
+            raise ValueError("A self-play fitness refresh requires an existing Java phenotype.")
+        return candidate.generated_java
+
 class OpenAICompatibleGenerationBackend(GenerationBackend):
     """Small llama.cpp/OpenAI-compatible chat-completions backend."""
 

@@ -13,7 +13,7 @@ In scope:
   optionally inherited Java;
 - crossover, Strategy Reflection, Prompt Reflection, Code Reflection, and Java
   generation;
-- validation, compilation, integration, and the fixed ten-opponent evaluation;
+- validation, compilation, integration, and fixed-roster or immutable-snapshot self-play evaluation;
 - opponent-wise fitness, seeded lexicase selection, artifacts, and analysis.
 - one resolved experiment config and one owned llama.cpp lifecycle; an optional
   second generation model may share that lifecycle through explicit phase
@@ -64,8 +64,8 @@ flowchart TD
   population and performs one independent Generator call per individual under
   `configured_seeds` initialization.
 - `llm_generated_policies` keeps one configured policy, fills the other slots
-  with independent policy-only LLM calls, and evaluates the same fixed Java seed
-  for every generation-zero candidate without invoking the Java Generator.
+  with independent policy-only LLM calls, and independently generates Java for
+  every generation-zero policy. WorkerRush Java is inherited prompt context.
 - Policy generation and strategy-facing reflection/rewrite roles share one
   immutable closed-world MicroRTS gameplay contract; it permits strategy
   diversity while grounding every rule in legal entities, actions, and
@@ -84,7 +84,7 @@ flowchart TD
 - In inherited mode crossover selects policy, generation prompt, and Java
   parents independently; generated child Java becomes the inheritable Java
   component available to the next generation.
-- Fitness is the ten-case mapping in `Candidate.fitness_objectives`.
+- Fitness is the active context's ten-case mapping in `Candidate.fitness_objectives`.
 - The reporting aggregate uses fixed `0.5/1/2` weights and denominator `12.5`,
   but does not participate in lexicase case filtering.
 - Failed candidates remain available to selection with `-1000.0` case scores.
@@ -98,8 +98,9 @@ flowchart TD
 - `static` uses fixed probabilities; `aos_opponent` reuses ten-opponent rank
   changes; `aos_head2head` uses a separate direct matrix. Neither reward path
   creates another objective or changes normal selection.
-- No previous-generation EAGLE opponent or dynamic EAGLE weight exists in the
-  active path.
+- Self-play is explicit (`evaluation.mode: self_play`), snapshot-scoped, equally
+  weighted, and restricted to static reflection. Snapshot refresh creates
+  phenotype-preserving parent replicas before offspring planning and selection.
 
 See [`evolutionary_flow.md`](evolutionary_flow.md),
 [`../evaluation/evaluation_pipeline.md`](../evaluation/evaluation_pipeline.md),

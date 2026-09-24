@@ -68,7 +68,8 @@ class Candidate:
     def objective_vector(self) -> tuple[float, ...]:
         """Return the fixed opponent cases used by lexicase selection."""
 
-        return tuple(float(self.fitness_objectives.get(case, FAILED_OPPONENT_SCORE)) for case in LEXICASE_CASES)
+        cases = tuple(self.game_eval_result.get("fitness_case_ids") or LEXICASE_CASES)
+        return tuple(float(self.fitness_objectives.get(case, FAILED_OPPONENT_SCORE)) for case in cases)
 
     def generation_input(
         self,

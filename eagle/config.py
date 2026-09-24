@@ -16,7 +16,7 @@ from generation.agent_template import (
 
 from .candidate import DEFAULT_GENERATION_PROMPT
 from .aos import ReflectionOperatorMode, ReflectionOperatorSettings
-from .opponent_cases import LEXICASE_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SUM
+from .opponent_cases import LEXICASE_CASES, SELF_PLAY_CASES, OPPONENT_WEIGHTS, OPPONENT_WEIGHT_SUM
 from .prompts import DEFAULT_PROMPT_DIR, PromptTemplate
 
 
@@ -32,6 +32,7 @@ MU_PLUS_LAMBDA_SELECTION = "mu_plus_lambda"
 CANDIDATE_JAVA_MODES = ("generated_phenotype", "inherited_genotype")
 INITIAL_POPULATION_MODES = ("configured_seeds", "llm_generated_policies")
 PARENT_EVALUATION_MODES = ("reuse_cached", "regenerate_same_genotype")
+EVALUATION_MODES = ("fixed_roster", "self_play")
 
 DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Resource", 0.0),
@@ -124,6 +125,8 @@ class ExperimentConfig:
     # ``reuse_cached`` is the canonical evolutionary protocol.  The alternate
     # value exists only for an explicitly labelled diagnostic treatment.
     parent_evaluation_mode: str = "reuse_cached"
+    evaluation_mode: str = "fixed_roster"
+    self_play_refresh_interval: int = 5
     tick_limit: int = 100
     match_timeout_seconds: float = 120.0
     match_artifact_mode: str = "compact"
@@ -359,6 +362,10 @@ class ExperimentConfig:
             ),
             candidate_java_mode=str(payload.get("candidate_java_mode", "generated_phenotype")),
             parent_evaluation_mode=str(payload.get("parent_evaluation_mode", "reuse_cached")),
+            evaluation_mode=str(evaluation_settings.get("mode", "fixed_roster")),
+            self_play_refresh_interval=int(
+                evaluation_settings.get("self_play_refresh_interval", 5)
+            ),
             tick_limit=tick_limit,
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
             match_artifact_mode=str(payload.get("match_artifact_mode", "compact")),
@@ -441,6 +448,20 @@ class ExperimentConfig:
                 raise ValueError(
                     "parent_evaluation_mode=regenerate_same_genotype requires "
                     "reflection_operator_mode=static."
+                )
+        if self.evaluation_mode not in EVALUATION_MODES:
+            raise ValueError("evaluation.mode must be fixed_roster or self_play.")
+        if self.self_play_refresh_interval < 1:
+            raise ValueError("evaluation.self_play_refresh_interval must be at least 1.")
+        if self.evaluation_mode == "self_play":
+            if self.parent_evaluation_mode != "reuse_cached":
+                raise ValueError(
+                    "evaluation.mode=self_play requires parent_evaluation_mode=reuse_cached; "
+                    "snapshot refresh performs its own phenotype-preserving parent refresh."
+                )
+            if self.reflection_operator_mode is not ReflectionOperatorMode.STATIC:
+                raise ValueError(
+                    "evaluation.mode=self_play requires reflection_operator_mode=static."
                 )
         if self.candidate_java_mode == "inherited_genotype" and len(self.seed_prompts) != 1:
             raise ValueError(
@@ -588,6 +609,8 @@ class ExperimentConfig:
             "match_timeout_seconds": self.match_timeout_seconds,
             "match_artifact_mode": self.match_artifact_mode,
             "evaluation": {
+                "mode": self.evaluation_mode,
+                "self_play_refresh_interval": self.self_play_refresh_interval,
                 "maps": [
                     {"path": path, "tick_limit": tick_limit}
                     for path, tick_limit in zip(
@@ -682,6 +705,10 @@ class ExperimentConfig:
     @property
     def evaluation_opponent_ids(self) -> tuple[str, ...]:
         return tuple(item[0] for item in self.evaluation_opponents)
+
+    @property
+    def lexicase_case_ids(self) -> tuple[str, ...]:
+        return SELF_PLAY_CASES if self.evaluation_mode == "self_play" else LEXICASE_CASES
 
 
 def _parse_evaluation_opponents(value: object) -> tuple[tuple[str, float], ...]:

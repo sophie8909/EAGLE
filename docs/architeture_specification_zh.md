@@ -129,9 +129,10 @@ generation-0 邊界：第 1 個 candidate 保留設定檔中的 Worker Rush poli
 RTS policy prompt；這裡的 random 指 LLM 策略取樣，不是 MicroRTS `RandomAI` agent。
 這些初始 policy request 也包含相同 gameplay contract，因此可以產生不同策略，
 但不能描述遊戲中不存在或無法觀察的規則。
-10 個 candidate 的 inherited Java 與 generation-0 phenotype 都使用同一份 checked-in
-`java_seeds/worker_rush/CandidateAgent.java`，因此此代只改變 policy gene，不呼叫 Java Generator。
-從 generation 1 起恢復一般 inherited-Java crossover、mutation 與完整 Java generation。
+10 個 candidate 的 inherited Java 都使用同一份 checked-in
+`java_seeds/worker_rush/CandidateAgent.java`，但它只作為 Java Generator 的 prompt
+context，不是 generation-0 phenotype。每一份初始 policy 都各自呼叫 Java Generator，
+產生、驗證並編譯自己的完整 Java agent。
 每次初始 policy 呼叫的 request、raw response、解析／重試結果與 UTC timing 都保存在
 該 candidate 的 `initialization/policy_generation/`，run `timing.jsonl` 只另存一筆
 不重複 prompt／response 的 request timing event。
@@ -211,7 +212,7 @@ Python 與 YAML 不再接受 inline prompt、seed template 或重複 prompt body
 
 ## Evaluation
 
-Evolution Evaluation 固定使用十個 opponent：PassiveAI、RandomAI、
+預設 `evaluation.mode: fixed_roster` 固定使用十個 opponent：PassiveAI、RandomAI、
 RandomBiasedAI、LightRush、HeavyRush、WorkerRush、AllInBot、Mayari、COAC、TMA。
 每個可執行 candidate 使用同一份 Java source 與 class directory，進行：
 
@@ -228,6 +229,16 @@ RandomBiasedAI 權重各 `0.5`、三個 rush opponent 各 `1`、其餘四個 opp
 WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的重複行為
 充當 identity adapter。每代的 expected/completed match count 是所有 candidate
 的加總，而不是第一個 candidate 的值。
+
+明確設定 `evaluation.mode: self_play` 時，系統從可執行族群建立 immutable
+snapshot，並依穩定順序循環填入 `self_play_000` 到 `self_play_009` 十個等權重
+case；五個 candidate 會各佔兩個 slot，且保留 self-match。每逢
+`self_play_refresh_interval`，系統先建立 fresh-ID parent replica，完全沿用原 Java
+phenotype、不呼叫 LLM，再以新 snapshot 重評；只有相同 context ID 的 parent 與
+offspring 可以一起做 lexicase。Resume 會載入最後已提交 snapshot；舊 checkpoint
+若缺少 context metadata，會先做同樣的 parent refresh 遷移再繼續。Self-play
+目前要求 `reflection_operator_mode: static` 與
+`parent_evaluation_mode: reuse_cached`。
 
 AllInBot 的 preflight 仍驗證 pinned upstream 原始 class 與 JAR hash；實際 search
 與 final test 則在 candidate class tree 之外編譯 reflection-only

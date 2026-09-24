@@ -14,15 +14,16 @@ def build_objectives(
     game_metrics: GameMetrics | None,
     code_quality: CodeQualityBreakdown | None = None,
     game_failure: bool = False,
+    required_cases: tuple[str, ...] = LEXICASE_CASES,
 ) -> dict[str, float]:
     """Return one independent evolutionary score for each fixed opponent."""
 
     if game_failure or game_metrics is None:
-        return dict(FAILED_OBJECTIVES)
+        return {case: FAILED_OPPONENT_SCORE for case in required_cases}
     scores = {result.opponent_id: float(result.score) for result in game_metrics.opponent_results}
-    if any(case not in scores for case in LEXICASE_CASES):
-        return dict(FAILED_OBJECTIVES)
-    return {case: scores[case] for case in LEXICASE_CASES}
+    if any(case not in scores for case in required_cases):
+        return {case: FAILED_OPPONENT_SCORE for case in required_cases}
+    return {case: scores[case] for case in required_cases}
 
 
 def reporting_game_performance(objectives: dict[str, float]) -> float:

@@ -1,6 +1,6 @@
 # Current implementation status
 
-Snapshot: 2026-09-08. This file describes executable repository behavior.
+Snapshot: 2026-09-24. This file describes executable repository behavior.
 
 ## Active evolutionary contract
 
@@ -16,10 +16,9 @@ Snapshot: 2026-09-08. This file describes executable repository behavior.
 - `initial_population_mode: llm_generated_policies` keeps one configured policy
   and fills the remaining population slots with independent policy-only LLM
   calls. The tracked mixed config therefore produces one Worker Rush policy plus
-  nine generated RTS policy prompts, while all ten generation-zero candidates
-  directly evaluate the same Worker Rush Java seed. This does not instantiate
-  the MicroRTS `RandomAI` opponent.
-- The search roster is exactly ten fixed opponents: `passive`, `random`,
+  nine generated RTS policy prompts. Every policy independently enters the Java
+  Generator; WorkerRush Java is inherited request context, not the phenotype.
+- Default evaluation uses exactly ten fixed opponents: `passive`, `random`,
   `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
   `coac`, and `tma`.
 - Every candidate runs 180 matches: three maps × three rounds × both sides
@@ -32,6 +31,12 @@ Snapshot: 2026-09-08. This file describes executable repository behavior.
   reproducibility.
 - Candidate fitness is a ten-field opponent score mapping. Failed or
   incomplete candidates receive `-1000.0` for every case.
+- Explicit `evaluation.mode: self_play` uses immutable snapshot contexts and
+  `self_play_000`…`self_play_009` cases with uniform weights. Runnable snapshot
+  candidates cycle to fill ten slots. Refresh generations re-evaluate
+  phenotype-preserving fresh-ID parents before reflection and selection; resume
+  reloads the last committed snapshot and migrates pre-context checkpoints by
+  refreshing parents against it. This mode requires static reflection.
 - Parent selection is seeded lexicase. Survivor selection repeatedly applies
   seeded lexicase without replacement to the joint parent-plus-offspring
   (`mu_plus_lambda`) pool until the fixed population is full; aggregate Game
@@ -67,8 +72,7 @@ Snapshot: 2026-09-08. This file describes executable repository behavior.
   reporting only.
 - `code_quality` is a diagnostic and mutation-evidence signal, not an objective
   and not an AOS operator schedule.
-- Previous-generation EAGLE self-play and dynamic opponent weights are absent
-  from the active evaluation path.
+- Self-play never mutates fixed-opponent weights or the fixed-opponent archive.
 
 ## Active ownership
 
@@ -77,6 +81,7 @@ Snapshot: 2026-09-08. This file describes executable repository behavior.
 | Fixed cases and reporting weights | `eagle/opponent_cases.py` |
 | Candidate state and objective vector | `eagle/candidate.py` |
 | Evaluation orchestration | `eagle/evaluation.py` |
+| Self-play snapshots and context validation | `eagle/self_play.py` |
 | Match matrix | `evaluation/match_matrix.py` |
 | Reflection selection, reward providers, shared AOS updater | `eagle/aos.py` |
 | Head-to-head-only parent-vs-offspring evaluation | `evaluation/parent_offspring.py` |
@@ -169,9 +174,9 @@ applicable to them.
 
 The `0903_llm_initial_population` config uses the separately checked-in
 `eagle/java_seeds/worker_rush/CandidateAgent.java`. It preserves one configured Worker Rush policy,
-generates nine policy prompts through `initial_policy_generation.txt`, and skips
-the Java Generator in generation zero so all ten candidates execute identical
-Worker Rush Java. Each generated policy call owns candidate-local request, raw
+generates nine policy prompts through `initial_policy_generation.txt`, then
+generates Java independently for all ten policies with WorkerRush as inherited
+context. Each generated policy call owns candidate-local request, raw
 response, validation, retry, and timing evidence. Initial policy generation uses
 the shared immutable MicroRTS gameplay contract, allowing strategically diverse
 policies while limiting conditions, entities, and actions to the executable game

@@ -11,7 +11,7 @@ from eagle.initial_population import generation_zero_uses_fixed_java
 from eagle.llm import LLMCallLogger
 from eagle.search import initialize_population, run_search
 from generation.agent_template import JavaTemplatePaths, validate_java_template
-from generation.backend import InitialJavaSeedBackend
+from generation.backend import MockGenerationBackend
 from generation.java_agent_generator import validate_generated_java_source
 
 
@@ -138,12 +138,17 @@ class InitialPopulationGenerationTests(unittest.TestCase):
         self.assertTrue(
             all(event["operation_stage"] == "initial_policy_generation" for event in events)
         )
-        self.assertTrue(generation_zero_uses_fixed_java(config))
-        seed_backend = InitialJavaSeedBackend(config.initial_java_seed_path)
-        self.assertEqual(
-            {seed_backend.generate(candidate, "CandidateAgent") for candidate in population},
-            {worker_java},
+        self.assertFalse(generation_zero_uses_fixed_java(config))
+        generation_backend = MockGenerationBackend(config.agent_template_path)
+        generation_requests = [
+            generation_backend.authoritative_request(candidate, "CandidateAgent")
+            for candidate in population
+        ]
+        self.assertEqual(len(set(generation_requests)), len(population))
+        self.assertTrue(
+            all(candidate.strategy_prompt in request for candidate, request in zip(population, generation_requests))
         )
+        self.assertTrue(all(worker_java in request for request in generation_requests))
 
     def test_duplicate_generated_policy_is_retried_with_candidate_evidence(self) -> None:
         worker_policy = Path("seeds/worker_rush_policy.txt").read_text(encoding="utf-8").strip()
@@ -260,7 +265,7 @@ Attack the nearest enemy Base."}
         self.assertIn("commandHarvest", strategy)
         self.assertIn("commandAttack", strategy)
 
-    def test_mock_search_skips_java_generation_only_for_generation_zero(self) -> None:
+    def test_mock_search_generates_java_for_llm_policy_generation_zero(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = ExperimentConfig.from_mapping(
                 {
@@ -305,8 +310,14 @@ Attack the nearest enemy Base."}
                     "gen_0001_*/generation/attempts/attempt_001/result.json"
                 )
             )
+            generation_zero_attempts = list(
+                (result.run_dir / "candidates").glob(
+                    "gen_0000_*/generation/attempts/attempt_001/result.json"
+                )
+            )
 
-        self.assertEqual(generation_zero_operations, ["initial_java_seed"] * 2)
+        self.assertEqual(generation_zero_operations, [None] * 2)
+        self.assertEqual(len(generation_zero_attempts), 2)
         self.assertEqual(len(generation_one_results), 2)
 
 

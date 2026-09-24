@@ -1,6 +1,6 @@
 # EAGLE architecture specification
 
-Status: authoritative current contract, 2026-09-07.
+Status: authoritative current contract, 2026-09-23.
 
 This document describes executable EAGLE behavior. Historical NSGA-II,
 two-objective, seven-opponent, split-runtime, inline-prompt, and `eagle-run-v1`
@@ -12,8 +12,9 @@ EAGLE evolves prompt-defined Java MicroRTS agents offline. An LLM may generate o
 reflect on candidates before evaluation, but a running match never calls an LLM.
 Each phenotype is one complete `ai.generated.CandidateAgent` Java source file.
 
-EAGLE does not evolve patches, runtime LLM policies,
-surrogate fitness models, or previous-generation self-play opponents.
+EAGLE does not evolve patches, runtime LLM policies, or surrogate fitness
+models. Evolution evaluation is explicitly configured as either the default
+fixed roster or immutable-snapshot self-play.
 
 ## 2. Candidate model
 
@@ -52,11 +53,10 @@ same Java component and independently calls the Generator before evaluation.
 The explicit `initial_population_mode: llm_generated_policies` instead keeps
 that one configured policy as the first candidate and independently asks the
 LLM for one concrete RTS policy for every remaining population slot. Generation
-zero persists those policy-only calls, but all candidates inherit and directly
-evaluate the same configured Java seed without a Java Generator call. The
-tracked mixed initialization uses a Worker Rush policy and Worker Rush Java, so
-the generated strategies diversify only the policy gene at this boundary; they
-are not instances of the MicroRTS `RandomAI` opponent.
+zero persists those policy-only calls, then independently invokes the Java
+Generator for every candidate. The configured Worker Rush Java is inherited
+revision context in each request, not the generation-zero phenotype. Thus each
+initial policy is materialized into its own validated and compiled Java agent.
 
 Each later generation produces a fixed-size offspring population and performs:
 
@@ -191,10 +191,10 @@ Generator call. In inherited `configured_seeds` mode,
 `initial_java_seed_path` is the third pre-generation component for every
 replicated seed candidate; each candidate makes an independent bounded Generator
 call and persists normal request, raw response, attempt, validation, and
-compilation evidence. In inherited `llm_generated_policies` mode it is both the
-shared third component and the unchanged generation-zero phenotype; policy-only
-LLM calls fill the remaining population slots, and Java decoding starts with
-generation 1.
+compilation evidence. In inherited `llm_generated_policies` mode it is the
+shared third component; policy-only LLM calls fill the remaining population
+slots and every slot then performs normal bounded Java decoding in generation
+zero.
 
 Except for Code Reflection children, final materialization consumes the two prompt
 genes plus the fixed checked-in Java scaffold/API constraints and returns
@@ -238,8 +238,8 @@ validation+compilation success is the sole canonical phenotype. If all attempts
 fail, the final attempt owns the candidate failure classification and remains
 generation evidence rather than a canonical phenotype. Fixed-Java generation
 zero loads once per candidate without a Java LLM attempt; inherited
-`configured_seeds` generation zero uses the configured bounded attempt budget
-independently for every replicated candidate.
+`configured_seeds` and `llm_generated_policies` generation zero use the
+configured bounded attempt budget independently for every candidate.
 
 Validation requires:
 
@@ -289,6 +289,10 @@ matches. Integration failure does not re-enter the decoder.
 
 ## 9. Evolution evaluation
 
+`evaluation.mode` selects `fixed_roster` (default) or `self_play`. Both modes
+use ten lexicase cases and the same three-map, three-round, two-side matrix, so
+every runnable candidate has 180 matches.
+
 The fixed search roster is:
 
 1. PassiveAI
@@ -317,11 +321,25 @@ its observed raw evidence but has canonical opponent-fault fields and a neutral
 zero-score draw for candidate scoring; it is neither a candidate win nor a
 candidate runtime failure.
 
-Fitness is a maximized mapping with exactly the ten opponent IDs. Failed or
+In `self_play`, a snapshot is created from the runnable current population at
+generation zero and every `evaluation.self_play_refresh_interval` generations.
+The snapshot is immutable until the next refresh. Its runnable candidates are
+cycled in stable order into `self_play_000` through `self_play_009`; a
+five-candidate snapshot therefore gives each source two slots. Self-matches are
+retained and all self-play slots have weight `1.0`. At refresh, fresh-ID parent
+replicas preserve the existing Java phenotype without an LLM call and are
+evaluated against the new snapshot before reflection and offspring generation.
+Only refreshed parents and offspring with the same context ID may enter
+survivor lexicase. Snapshot and refresh sidecars make this transition resumable.
+Self-play currently requires `reflection_operator_mode: static` and
+`parent_evaluation_mode: reuse_cached`; the fixed-opponent archive is not
+updated by self-play runs.
+
+Fitness is a maximized mapping with exactly the active mode's ten case IDs. Failed or
 incomplete candidates receive `-1000.0` for every case. Aggregate Game
 Performance is reporting-only, using weights `0.5` for PassiveAI, RandomAI, and
 RandomBiasedAI, `1` for the three rush opponents, and `2` for AllInBot, Mayari,
-COAC, and TMA.
+COAC, and TMA in fixed-roster mode; self-play uses the unweighted mean.
 
 Code Quality is a diagnostic and mutation-evidence signal, not a selection
 objective. Successful Code Quality is:
