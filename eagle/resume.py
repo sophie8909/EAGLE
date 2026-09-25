@@ -5,7 +5,10 @@ import random
 from dataclasses import replace
 from pathlib import Path
 
+from generation.backend import ExistingJavaPhenotypeBackend
+
 from .artifacts import write_summary
+from .candidate import Candidate
 from .config import ExperimentConfig
 from .crossover import CrossoverContext
 from .evaluation import evaluate_population, preflight_evaluation_opponents
@@ -25,7 +28,9 @@ from .search import (
     materialize_code_reflections,
     plan_offspring,
     build_parent_evaluation_replicas,
+    build_self_play_fitness_refresh_replicas,
     write_parent_evaluation_sidecar,
+    write_self_play_parent_refresh_sidecar,
 )
 from .strategy_reflection import cleanup_retired_match_traces
 from .strategy_diversity import (
@@ -39,6 +44,14 @@ from .opponent_archive import ensure_opponent_archive, update_opponent_archive
 from .selection import best_candidate, population_signature, select_next_generation
 from .search_runtime import build_search_runtime, preflight_llm_endpoint
 from .timing import Stopwatch, append_event, build_generation_event
+from .self_play import (
+    assert_shared_self_play_context,
+    is_self_play_refresh,
+    load_self_play_snapshot,
+    population_matches_self_play_context,
+    runnable_self_play_candidates,
+    write_self_play_snapshot,
+)
 
 
 def resume_search(
@@ -89,7 +102,8 @@ def _resume_search_impl(
     activate_model_phase=None,
 ) -> SearchResult:
     config.validate()
-    preflight_evaluation_opponents(config, mock=mock)
+    if config.evaluation_mode == "fixed_roster":
+        preflight_evaluation_opponents(config, mock=mock)
     completed_generation, population = load_resume_population(run_dir)
     ensure_strategy_archive(run_dir)
     ensure_opponent_archive(run_dir)
@@ -97,7 +111,8 @@ def _resume_search_impl(
     # created before strategy_archive.json existed.  Older candidates retain
     # the explicit ``unknown`` fallback and are not inferred from prompt text.
     update_strategy_archive(run_dir, population)
-    update_opponent_archive(run_dir, population)
+    if config.evaluation_mode == "fixed_roster":
+        update_opponent_archive(run_dir, population)
     if completed_generation >= config.generations:
         best = best_candidate(population)
         return SearchResult(run_dir, population, best, completed_generation)
@@ -125,6 +140,15 @@ def _resume_search_impl(
     error_memory = load_error_memory(run_dir)
     stop_reason = None
     active_model_phase = "reflection"
+    self_play_opponent_snapshot = (
+        load_self_play_snapshot(
+            run_dir,
+            completed_generation=completed_generation,
+            refresh_interval=config.self_play_refresh_interval,
+        )
+        if config.evaluation_mode == "self_play"
+        else None
+    )
 
     def activate_phase(phase: str) -> None:
         nonlocal active_model_phase
@@ -146,9 +170,48 @@ def _resume_search_impl(
 
     for generation in range(completed_generation + 1, config.generations + 1):
         span = Stopwatch.start()
+        source_parents = list(population)
+        parent_replicas: list[Candidate] = []
+        snapshot_refreshed = is_self_play_refresh(config, generation)
+        context_migration_required = (
+            config.evaluation_mode == "self_play"
+            and self_play_opponent_snapshot is not None
+            and not population_matches_self_play_context(
+                source_parents,
+                self_play_opponent_snapshot,
+            )
+        )
+        if snapshot_refreshed:
+            self_play_opponent_snapshot = runnable_self_play_candidates(source_parents)
+            write_self_play_snapshot(
+                run_dir,
+                generation=generation,
+                candidates=self_play_opponent_snapshot,
+                refresh_interval=config.self_play_refresh_interval,
+            )
+        if snapshot_refreshed or context_migration_required:
+            parent_replicas = build_self_play_fitness_refresh_replicas(
+                source_parents,
+                generation=generation,
+            )
+            parent_replicas = evaluate_population(
+                parent_replicas,
+                generation=generation,
+                config=config,
+                backend=ExistingJavaPhenotypeBackend(),
+                generated_agents_dir=generated_agents_dir,
+                classes_dir=classes_dir,
+                candidates_dir=candidates_dir,
+                mock=mock,
+                llm_client=shared_client,
+                run_timing_path=run_dir / "timing.jsonl",
+                run_id=run_dir.name,
+                opponent_candidates=self_play_opponent_snapshot,
+            )
+        parents_for_generation = parent_replicas or population
         activate_phase("reflection")
         plans = plan_offspring(
-            population, config=config, generation=generation, rng=rng,
+            parents_for_generation, config=config, generation=generation, rng=rng,
             mutations=mutations, operator_controller=operator_controller,
             artifact_root=candidates_dir, error_memory=error_memory,
         )
@@ -159,11 +222,12 @@ def _resume_search_impl(
         evaluated = evaluate_population(
             offspring, generation=generation, config=config, backend=generation_backend,
             generated_agents_dir=generated_agents_dir, classes_dir=classes_dir,
-            candidates_dir=candidates_dir,
-            mock=mock, llm_client=generation_client,
+            candidates_dir=candidates_dir, mock=mock, llm_client=generation_client,
+            run_timing_path=run_dir / "timing.jsonl", run_id=run_dir.name,
+            opponent_candidates=self_play_opponent_snapshot,
         )
         evaluated, rewards = operator_controller.collect_rewards(
-            population,
+            parents_for_generation,
             evaluated,
             config=config,
             candidates_dir=candidates_dir,
@@ -177,8 +241,6 @@ def _resume_search_impl(
             record=aos_record,
             candidates_dir=candidates_dir,
         )
-        source_parents = list(population)
-        parent_replicas = []
         if config.parent_evaluation_mode == "regenerate_same_genotype":
             parent_replicas = build_parent_evaluation_replicas(
                 source_parents,
@@ -194,11 +256,19 @@ def _resume_search_impl(
                 candidates_dir=candidates_dir,
                 mock=mock,
                 llm_client=generation_client,
+                run_timing_path=run_dir / "timing.jsonl",
+                run_id=run_dir.name,
+                opponent_candidates=self_play_opponent_snapshot,
             )
         selection_candidates = [*parent_replicas, *evaluated]
+        if config.evaluation_mode == "self_play":
+            assert_shared_self_play_context(
+                [*(parent_replicas or population), *evaluated]
+            )
         archive_before = archive_niches(run_dir)
         update_strategy_archive(run_dir, selection_candidates)
-        update_opponent_archive(run_dir, selection_candidates)
+        if config.evaluation_mode == "fixed_roster":
+            update_opponent_archive(run_dir, selection_candidates)
         error_memory = record_error_memory(run_dir, selection_candidates)
         append_event(
             run_dir / "timing.jsonl",
@@ -218,13 +288,22 @@ def _resume_search_impl(
         population_state_signature = signature
         generation_diversity = generation_diversity_metrics(population, previous_archive_niches=archive_before)
         if parent_replicas:
-            write_parent_evaluation_sidecar(
-                run_dir,
-                generation=generation,
-                source_parents=source_parents,
-                replicas=parent_replicas,
-                selected_ids={candidate.id for candidate in population},
-            )
+            if snapshot_refreshed or context_migration_required:
+                write_self_play_parent_refresh_sidecar(
+                    run_dir,
+                    generation=generation,
+                    source_parents=source_parents,
+                    replicas=parent_replicas,
+                    selected_ids={candidate.id for candidate in population},
+                )
+            else:
+                write_parent_evaluation_sidecar(
+                    run_dir,
+                    generation=generation,
+                    source_parents=source_parents,
+                    replicas=parent_replicas,
+                    selected_ids={candidate.id for candidate in population},
+                )
         record_generation(
             run_dir,
             generation,
@@ -257,9 +336,17 @@ def validate_resume_config(
     persisted: ExperimentConfig,
     *,
     mock: bool = False,
+    allow_experiment_name_alias: bool = False,
 ) -> None:
     run_mapping = persisted.to_mapping(mock=False)
     requested_mapping = config.to_mapping(mock=mock)
+    if allow_experiment_name_alias:
+        # A folder resume is already bound by the exact config-filename-to-run
+        # entry in experiment.yaml.  The human-readable experiment name is
+        # metadata and may be corrected without changing the immutable run
+        # definition used for continued execution.
+        run_mapping.pop("experiment_name", None)
+        requested_mapping.pop("experiment_name", None)
     mismatches = _mapping_differences(run_mapping, requested_mapping)
     if mismatches:
         raise ValueError("Resume config does not match the run: " + "; ".join(mismatches))

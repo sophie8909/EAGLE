@@ -144,7 +144,7 @@ candidates/<candidate_id>/
 
 `candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, fitness vector, aggregate Game Performance, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
 
-For every bounded Java LLM decode, including inherited `configured_seeds`
+For every bounded Java LLM decode, including both inherited initialization modes in
 generation zero, every
 attempt owns its actual post-truncation
 request and hash, raw response, extracted/normalized source, validation,
@@ -165,9 +165,8 @@ reference, and the projected request SHA-256. Attempt class workspaces are trans
 candidate-isolated; only promoted canonical classes remain for Integration and
 matches. A partial persisted attempt is audit-only and a rerun refuses to
 overwrite it; resume starts from the last atomic generation boundary rather than
-continuing a half-decoded candidate. Default fixed-seed and inherited
-`llm_generated_policies` generation zero have no `generation/attempts/` Java LLM
-evidence.
+continuing a half-decoded candidate. Only default fixed-seed generation zero has
+no `generation/attempts/` Java LLM evidence.
 
 `extracted_candidate.java` is the normalized text extracted from the model's
 complete-file response and therefore preserves model-authored fixed-region
@@ -200,6 +199,17 @@ request/response hashes. The compact result references
 duplicating the accepted policy text. `candidate.json` identifies the policy as
 configured or LLM-generated and references the initialization result. Failed or
 interrupted attempts remain evidence even when generation zero is not committed.
+Every accepted policy then owns ordinary bounded Java-generation attempts; its
+WorkerRush `genotype/inherited_java.java` is prompt context rather than the
+phenotype.
+
+Self-play persists
+`generations/generation_<nnnn>_self_play_snapshot.json` with context ID, refresh
+interval, ordered source candidates, and ten `self_play_*` slot mappings. A
+refresh also writes `generation_<nnnn>_self_play_parent_refresh.json`, linking
+source parents to fresh replicas, Java hashes, old/new context IDs, and survivor
+status. Refresh replicas record generation operation
+`self_play_fitness_refresh`, existing-phenotype provenance, and no LLM attempts.
 
 When the policy prompt is empty, `strategy_alignment/result.json` records
 `status: not_applicable`, a null score, and no attempts; its request/raw files

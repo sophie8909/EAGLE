@@ -261,7 +261,13 @@ def generation_metrics(
     opponent_by_candidate: dict[str, Any] = {}
     opponent_values: dict[str, list[float]] = {}
     opponent_failures: dict[str, int] = {}
-    for objective_id, direction in OBJECTIVE_DIRECTIONS.items():
+    objective_ids = (
+        tuple(population[0].game_eval_result.get("fitness_case_ids") or ())
+        if population
+        else ()
+    ) or tuple(OBJECTIVE_DIRECTIONS)
+    for objective_id in objective_ids:
+        direction = "maximize"
         values = [
             float(candidate.fitness_objectives[objective_id])
             for candidate in population

@@ -17,6 +17,8 @@ LEXICASE_CASES = (
     "tma",
 )
 
+SELF_PLAY_CASES = tuple(f"self_play_{index:03d}" for index in range(10))
+
 OPPONENT_WEIGHTS = {
     "passive": 0.5,
     "random": 0.5,

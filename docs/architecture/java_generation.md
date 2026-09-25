@@ -36,19 +36,18 @@ every copy receives the complete source from `initial_java_seed_path` and makes
 its own bounded Generator call. The seed-variant configs use the callable no-op
 file as both inherited input and scaffold.
 
-Inherited `llm_generated_policies` mode is a second explicit decoder exception:
-one configured policy is retained, the LLM fills the remaining policy genes, and
-every candidate directly uses the same `initial_java_seed_path` source as its
-generation-zero phenotype. The tracked `0903_llm_initial_population` config uses
-the checked-in `java_seeds/worker_rush/CandidateAgent.java` for that source and the normal no-op
-scaffold for generation 1 onward.
+Inherited `llm_generated_policies` mode is not a decoder exception. One
+configured policy is retained, the LLM fills the remaining policy genes, and
+every candidate receives `initial_java_seed_path` as inherited revision context
+in its own generation-zero Java request. The tracked configs use WorkerRush for
+that context and the normal no-op file as the immutable generation scaffold.
 
 Default mode creates one generation-zero candidate per seed file and records
 checked-in-source evidence with no request. In inherited mode, the
 pre-generation Java input is persisted for every candidate. Only
-`configured_seeds` generation zero owns normal Java
-request/raw-response/attempt/timing evidence; `llm_generated_policies` owns
-policy-generation evidence instead.
+both inherited initialization modes own normal Java
+request/raw-response/attempt/timing evidence; `llm_generated_policies` also owns
+its preceding policy-generation evidence.
 
 The raw response is persisted before extraction. The extracted response must
 still be a structurally complete Java file. After its external envelope and
@@ -59,8 +58,8 @@ enter validation, compilation, or the phenotype. Extracted/normalized generation
 evidence remains under `generation/`; only a compilation success creates the
 canonical `phenotype/CandidateAgent.java`.
 
-For every Generator-decoded candidate, including inherited `configured_seeds`
-generation zero,
+For every Generator-decoded candidate, including both inherited generation-zero
+initialization modes,
 `generation_max_attempts` bounds compile-guided decoder
 attempts. The repository default is one so old configs and resumes retain their
 original semantics; the tracked `static_0824` production configs explicitly use
@@ -71,8 +70,15 @@ is marked `initial_decode_retry`. Once a complete source fails validation or
 same authoritative genes, immutable scaffold/API guide, the immediately previous
 complete source marked untrusted, and only that attempt's structured validation
 and compiler evidence. Every actual post-truncation request is separately hashed.
-Default-mode and `llm_generated_policies` generation zero record no Java LLM
-attempts. The latter separately records its policy-only initialization attempts.
+Only default-mode fixed-Java generation zero records no Java LLM attempts.
+`llm_generated_policies` records both policy initialization and subsequent Java
+generation attempts.
+
+A self-play fitness-refresh replica is another zero-LLM boundary: it validates
+and compiles the existing canonical phenotype against itself as scaffold, then
+reruns Integration and matches. Its generation operation is
+`self_play_fitness_refresh`, with source provenance pointing to the source
+parent phenotype and no decoder attempts.
 
 During the pre-materialization phase, Code Reflection first sends the policy, selected parent Java, immutable gameplay
 and action/API contracts, a concise interface/unit reference, canonical scaffold,

@@ -84,11 +84,25 @@ llm:
 
 Slot 1 uses the configured Worker Rush policy. Slots 2–10 are nine independent
 LLM policy samples from the “Generate one RTS strategy” prompt; they are not
-`RandomAI` agents. All ten generation-zero candidates directly use the same
-Worker Rush Java phenotype. `initial_policy_max_attempts` bounds invalid or
+`RandomAI` agents. Every policy then receives an independent Java Generator
+call; WorkerRush Java is inherited request context, not the phenotype.
+`initial_policy_max_attempts` bounds invalid or
 duplicate policy-output retries, and the role-specific temperature controls
-sampling diversity without changing EA randomness. Generation 1 resumes the
-normal inherited-Java Generator path.
+sampling diversity without changing EA randomness.
+
+To enable snapshot self-play explicitly:
+
+```yaml
+reflection_operator_mode: static
+parent_evaluation_mode: reuse_cached
+evaluation:
+  mode: self_play
+  self_play_refresh_interval: 5
+```
+
+Resume reloads the last committed snapshot. Older self-play checkpoints that
+lack context metadata are migrated by re-evaluating fresh-ID parent replicas
+against that snapshot before continuing.
 
 ## Resume
 

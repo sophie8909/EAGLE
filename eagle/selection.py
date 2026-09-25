@@ -11,12 +11,13 @@ def lexicase_select(
     population: list[Candidate],
     rng: random.Random,
     *,
-    cases: tuple[str, ...] = LEXICASE_CASES,
+    cases: tuple[str, ...] | None = None,
 ) -> Candidate:
     """Select one candidate by filtering on a seeded random case order."""
 
     if not population:
         raise ValueError("Cannot select from an empty population.")
+    cases = cases or _fitness_cases(population)
     survivors = list(population)
     for case in rng.sample(list(cases), len(cases)):
         best = max(_case_score(candidate, case) for candidate in survivors)
@@ -92,6 +93,24 @@ def population_signature(population: list[Candidate]) -> tuple[tuple[float, ...]
 
 def _case_score(candidate: Candidate, case: str) -> float:
     return float(candidate.fitness_objectives.get(case, FAILED_OPPONENT_SCORE))
+
+
+def _fitness_cases(population: list[Candidate]) -> tuple[str, ...]:
+    annotated = [
+        tuple(candidate.game_eval_result.get("fitness_case_ids") or ())
+        for candidate in population
+    ]
+    if all(cases in {(), LEXICASE_CASES} for cases in annotated):
+        # Fixed-roster checkpoints predate explicit fitness_case_ids. Mixing a
+        # legacy fixed-roster parent with a current fixed-roster offspring is
+        # safe because the schema itself is immutable.
+        return LEXICASE_CASES
+    if any(not cases for cases in annotated) or len(set(annotated)) != 1:
+        raise ValueError("Lexicase candidates do not share one fitness case schema.")
+    cases = annotated[0]
+    if any(set(candidate.fitness_objectives) != set(cases) for candidate in population):
+        raise ValueError("Lexicase candidate objectives do not match their fitness case schema.")
+    return cases
 
 
 def _reporting_game_performance(candidate: Candidate) -> float:

@@ -151,10 +151,7 @@ def initialize_population(
 def generation_zero_uses_fixed_java(config: ExperimentConfig) -> bool:
     """Return whether generation zero bypasses the Java Generator."""
 
-    return (
-        config.candidate_java_mode == "generated_phenotype"
-        or config.initial_population_mode == LLM_GENERATED_POLICIES
-    )
+    return config.candidate_java_mode == "generated_phenotype"
 
 
 def _generate_initial_policy(

@@ -92,8 +92,11 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     candidate_dir = candidates_dir / evaluation.candidate.id
     candidate_dir.mkdir(parents=True, exist_ok=True)
     write_candidate_inputs(candidates_dir, evaluation.candidate)
-    initial_seed_source = (evaluation.generation_timing or {}).get("operation") == "initial_java_seed"
-    if not initial_seed_source:
+    source_without_generation = (evaluation.generation_timing or {}).get("operation") in {
+        "initial_java_seed",
+        "self_play_fitness_refresh",
+    }
+    if not source_without_generation:
         for attempt in evaluation.generation_attempts:
             write_generation_attempt_artifacts(
                 candidate_dir,
@@ -114,7 +117,7 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
     representative_attempt_number = generation_timing.get("selected_attempt") or generation_timing.get("final_attempt")
     representative_attempt_ref = (
         None
-        if initial_seed_source or representative_attempt_number is None
+        if source_without_generation or representative_attempt_number is None
         else f"generation/attempts/attempt_{int(representative_attempt_number):03d}"
     )
     validation_payload["attempt_ref"] = representative_attempt_ref
@@ -497,7 +500,10 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
     generation_dir.mkdir(parents=True, exist_ok=True)
     result = evaluation.result
     generation_timing = evaluation.generation_timing or {}
-    initial_seed_source = generation_timing.get("operation") == "initial_java_seed"
+    source_without_generation = generation_timing.get("operation") in {
+        "initial_java_seed",
+        "self_play_fitness_refresh",
+    }
     representative_attempt = next(
         (
             item
@@ -507,14 +513,14 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         ),
         None,
     )
-    request = "" if initial_seed_source else (
+    request = "" if source_without_generation else (
         representative_attempt.request
         if representative_attempt is not None
         else evaluation.candidate.generation_input(class_name="CandidateAgent")
     )
     (generation_dir / "request.txt").write_text(request, encoding="utf-8")
     (generation_dir / "response_raw.txt").write_text(
-        "" if initial_seed_source else result.raw_llm_output or "",
+        "" if source_without_generation else result.raw_llm_output or "",
         encoding="utf-8",
     )
     (generation_dir / "extracted_candidate.java").write_text(result.extracted_code or "", encoding="utf-8")
@@ -547,24 +553,24 @@ def _write_generation_artifacts(candidate_dir: Path, evaluation: CandidateEvalua
         "final_attempt": generation_timing.get("final_attempt", 1),
         "representative_failure_attempt": (
             generation_timing.get("final_attempt")
-            if generation_timing.get("selected_attempt") is None and not initial_seed_source
+            if generation_timing.get("selected_attempt") is None and not source_without_generation
             else None
         ),
         "canonical_attempt_artifact": (
             None
-            if initial_seed_source or generation_timing.get("selected_attempt") is None
+            if source_without_generation or generation_timing.get("selected_attempt") is None
             else "generation/attempts/"
             f"attempt_{int(generation_timing['selected_attempt']):03d}"
         ),
         "representative_attempt_artifact": (
             None
-            if initial_seed_source
+            if source_without_generation
             else "generation/attempts/"
             f"attempt_{int(generation_timing.get('selected_attempt') or generation_timing.get('final_attempt') or 1):03d}"
         ),
         "request_sha256": (
             None
-            if initial_seed_source
+            if source_without_generation
             else hashlib.sha256(request.encode("utf-8")).hexdigest()
         ),
         "source": generation_timing.get("source"),
@@ -601,7 +607,7 @@ def write_summary(
         "completed_generation": completed_generation,
         "stop_reason": stop_reason,
         "population_size": config.population_size,
-        "objectives": list(OBJECTIVE_DIRECTIONS),
+        "objectives": list(config.lexicase_case_ids),
         "reporting_metrics": ["game_performance"],
         "best_candidate": None if best_candidate is None else {
             "candidate_id": best_candidate.id,

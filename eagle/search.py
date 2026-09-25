@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from generation.backend import InitialJavaSeedBackend
+from generation.backend import ExistingJavaPhenotypeBackend, InitialJavaSeedBackend
 
 from .aos import (
     OPERATOR_TO_MUTATION,
@@ -62,6 +62,12 @@ from .selection import (
     best_candidate,
     population_signature,
     select_next_generation,
+)
+from .self_play import (
+    assert_shared_self_play_context,
+    is_self_play_refresh,
+    runnable_self_play_candidates,
+    write_self_play_snapshot,
 )
 
 
@@ -128,6 +134,76 @@ def build_parent_evaluation_replicas(
             },
         ))
     return replicas
+
+
+def build_self_play_fitness_refresh_replicas(
+    parents: list[Candidate],
+    *,
+    generation: int,
+) -> list[Candidate]:
+    """Create fresh identities that preserve parent genotypes and phenotypes exactly."""
+
+    return [
+        Candidate(
+            generation=generation,
+            parent_ids=(parent.id,),
+            strategy_prompt=parent.strategy_prompt,
+            generation_prompt=parent.generation_prompt,
+            inherited_java=parent.inherited_java,
+            java_parent_id=parent.id,
+            generated_java=parent.generated_java,
+            operator="self_play_fitness_refresh",
+            mutation_type=None,
+            strategy_parent_id=parent.id,
+            generation_prompt_parent_id=parent.id,
+            source_candidate_ids=(parent.id,),
+            strategy_signature=dict(parent.strategy_signature),
+            strategy_niche=parent.strategy_niche,
+            metadata={
+                "self_play_fitness_refresh": {
+                    "source_parent_id": parent.id,
+                    "source_birth_generation": parent.generation,
+                },
+            },
+        )
+        for parent in parents
+    ]
+
+
+def write_self_play_parent_refresh_sidecar(
+    run_dir: Path,
+    *,
+    generation: int,
+    source_parents: list[Candidate],
+    replicas: list[Candidate],
+    selected_ids: set[str],
+) -> None:
+    if len(source_parents) != len(replicas):
+        raise ValueError("Self-play parent source and refresh counts must match.")
+    records = []
+    for source, replica in zip(source_parents, replicas, strict=True):
+        source_hash = hashlib.sha256(source.generated_java.encode("utf-8")).hexdigest()
+        replica_hash = hashlib.sha256(replica.generated_java.encode("utf-8")).hexdigest()
+        records.append({
+            "source_parent_id": source.id,
+            "source_birth_generation": source.generation,
+            "replica_candidate_id": replica.id,
+            "source_generated_java_sha256": source_hash,
+            "replica_generated_java_sha256": replica_hash,
+            "generated_java_preserved": source_hash == replica_hash,
+            "source_evaluation_context_id": source.game_eval_result.get("evaluation_context_id"),
+            "replica_evaluation_context_id": replica.game_eval_result.get("evaluation_context_id"),
+            "selected": replica.id in selected_ids,
+        })
+    atomic_json(
+        run_dir / "generations" / f"generation_{generation:04d}_self_play_parent_refresh.json",
+        {
+            "schema_version": "eagle-self-play-parent-refresh-v1",
+            "generation": generation,
+            "mode": "phenotype_preserving_fitness_refresh",
+            "records": records,
+        },
+    )
 
 
 def write_parent_evaluation_sidecar(
@@ -242,7 +318,8 @@ def _run_search_impl(
     artifacts are produced; this function owns population-level orchestration.
     """
     config.validate()
-    preflight_evaluation_opponents(config, mock=mock)
+    if config.evaluation_mode == "fixed_roster":
+        preflight_evaluation_opponents(config, mock=mock)
     rng = random.Random(config.random_seed)
     active_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = config.runs_dir / active_run_id
@@ -317,10 +394,13 @@ def _run_search_impl(
         candidates_dir=candidates_dir,
         mock=mock,
         llm_client=(shared_client if generation_zero_fixed_java else generation_client),
+        run_timing_path=run_dir / "timing.jsonl",
+        run_id=active_run_id,
     )
     archive_before = archive_niches(run_dir)
     update_strategy_archive(run_dir, evaluated_population)
-    update_opponent_archive(run_dir, evaluated_population)
+    if config.evaluation_mode == "fixed_roster":
+        update_opponent_archive(run_dir, evaluated_population)
     append_event(run_dir / "timing.jsonl", build_generation_event(
         run_id=active_run_id,
         generation=0,
@@ -328,6 +408,13 @@ def _run_search_impl(
         span=generation_span.finish(),
     ))
     generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
+    if config.evaluation_mode == "self_play":
+        write_self_play_snapshot(
+            run_dir,
+            generation=0,
+            candidates=evaluated_population,
+            refresh_interval=config.self_play_refresh_interval,
+        )
     record_generation(
         run_dir,
         0,
@@ -339,6 +426,11 @@ def _run_search_impl(
     error_memory = record_error_memory(run_dir, evaluated_population)
 
     population_state_signature = population_signature(evaluated_population)
+    self_play_opponent_snapshot = (
+        runnable_self_play_candidates(evaluated_population)
+        if config.evaluation_mode == "self_play"
+        else None
+    )
     stagnation_count = 0
     completed_generation = 0
     stop_reason: str | None = None
@@ -348,9 +440,39 @@ def _run_search_impl(
     # offspring generations, so generations=20 runs gen1 through gen20.
     for generation in range(1, config.generations + 1):
         generation_span = Stopwatch.start()
+        source_parents = list(evaluated_population)
+        parent_replicas: list[Candidate] = []
+        snapshot_refreshed = is_self_play_refresh(config, generation)
+        if snapshot_refreshed:
+            self_play_opponent_snapshot = runnable_self_play_candidates(source_parents)
+            write_self_play_snapshot(
+                run_dir,
+                generation=generation,
+                candidates=self_play_opponent_snapshot,
+                refresh_interval=config.self_play_refresh_interval,
+            )
+            parent_replicas = build_self_play_fitness_refresh_replicas(
+                source_parents,
+                generation=generation,
+            )
+            parent_replicas = evaluate_population(
+                parent_replicas,
+                generation=generation,
+                config=config,
+                backend=ExistingJavaPhenotypeBackend(),
+                generated_agents_dir=generated_agents_dir,
+                classes_dir=classes_dir,
+                candidates_dir=candidates_dir,
+                mock=mock,
+                llm_client=shared_client,
+                run_timing_path=run_dir / "timing.jsonl",
+                run_id=active_run_id,
+                opponent_candidates=self_play_opponent_snapshot,
+            )
+        parents_for_generation = parent_replicas or evaluated_population
         activate_phase("reflection")
         plans = plan_offspring(
-            evaluated_population,
+            parents_for_generation,
             config=config,
             generation=generation,
             rng=rng,
@@ -374,9 +496,12 @@ def _run_search_impl(
             candidates_dir=candidates_dir,
             mock=mock,
             llm_client=generation_client,
+            run_timing_path=run_dir / "timing.jsonl",
+            run_id=active_run_id,
+            opponent_candidates=self_play_opponent_snapshot,
         )
         evaluated_offspring, rewards = operator_controller.collect_rewards(
-            evaluated_population,
+            parents_for_generation,
             evaluated_offspring,
             config=config,
             candidates_dir=candidates_dir,
@@ -390,8 +515,6 @@ def _run_search_impl(
             record=aos_record,
             candidates_dir=candidates_dir,
         )
-        source_parents = list(evaluated_population)
-        parent_replicas: list[Candidate] = []
         if config.parent_evaluation_mode == "regenerate_same_genotype":
             parent_replicas = build_parent_evaluation_replicas(
                 source_parents,
@@ -407,11 +530,19 @@ def _run_search_impl(
                 candidates_dir=candidates_dir,
                 mock=mock,
                 llm_client=generation_client,
+                run_timing_path=run_dir / "timing.jsonl",
+                run_id=active_run_id,
+                opponent_candidates=self_play_opponent_snapshot,
             )
         selection_candidates = [*parent_replicas, *evaluated_offspring]
+        if config.evaluation_mode == "self_play":
+            assert_shared_self_play_context(
+                [*(parent_replicas or evaluated_population), *evaluated_offspring]
+            )
         archive_before = archive_niches(run_dir)
         update_strategy_archive(run_dir, selection_candidates)
-        update_opponent_archive(run_dir, selection_candidates)
+        if config.evaluation_mode == "fixed_roster":
+            update_opponent_archive(run_dir, selection_candidates)
         error_memory = record_error_memory(run_dir, selection_candidates)
         append_event(run_dir / "timing.jsonl", build_generation_event(
             run_id=active_run_id,
@@ -435,13 +566,22 @@ def _run_search_impl(
             stagnation_count = 0
         generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
         if parent_replicas:
-            write_parent_evaluation_sidecar(
-                run_dir,
-                generation=generation,
-                source_parents=source_parents,
-                replicas=parent_replicas,
-                selected_ids={candidate.id for candidate in evaluated_population},
-            )
+            if snapshot_refreshed:
+                write_self_play_parent_refresh_sidecar(
+                    run_dir,
+                    generation=generation,
+                    source_parents=source_parents,
+                    replicas=parent_replicas,
+                    selected_ids={candidate.id for candidate in evaluated_population},
+                )
+            else:
+                write_parent_evaluation_sidecar(
+                    run_dir,
+                    generation=generation,
+                    source_parents=source_parents,
+                    replicas=parent_replicas,
+                    selected_ids={candidate.id for candidate in evaluated_population},
+                )
         record_generation(
             run_dir,
             generation,

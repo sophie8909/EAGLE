@@ -12,8 +12,8 @@ matrix, diagnostics, objective construction, and candidate artifact writing.
 | Source validation | validated source | validation diagnostics |
 | Compilation | isolated class directory | compiler stdout/stderr and structured errors |
 | Integration | loadable MicroRTS agent | seven integration checks |
-| Match execution | 180 matches across ten opponents | retained match results and runtime failure |
-| Objective construction | ten opponent scores | ten `-1000.0` case scores on failure |
+| Match execution | 180 matches across ten active cases | retained match results and runtime failure |
+| Objective construction | ten active-case scores | ten `-1000.0` case scores on failure |
 
 `decode_validate_compile_candidate` is the single production boundary for the
 first three rows and can be called by a decoder smoke without launching
@@ -31,9 +31,10 @@ never re-enters the decoder.
 Inherited `configured_seeds` generation zero uses this same bounded decoder for
 every replicated population slot, so a population of ten records ten separate
 requests/responses and can produce ten different Java phenotypes. In inherited
-`llm_generated_policies` mode, generation zero instead uses ten policy genes but
-the same fixed Java seed for every candidate; the policy-only initialization
-calls occur before this evaluation boundary and Java generation is skipped.
+`llm_generated_policies` mode, policy-only initialization calls occur before
+this boundary, then every policy is independently decoded to Java. WorkerRush
+Java is inherited request context and is never substituted for that policy's
+generation-zero phenotype.
 Later generations pass the independently selected Java component into the base
 and compile-repair requests without mutating that stored input during evaluation.
 
@@ -46,6 +47,15 @@ before the 180-match matrix without treating an Integration failure as a decoder
 retry signal.
 
 ## Match protocol
+
+`evaluation.mode: fixed_roster` is the default protocol below. With
+`evaluation.mode: self_play`, the evaluator materializes the runnable immutable
+snapshot as ten equally weighted `self_play_000`…`self_play_009` slots. A short
+snapshot is cycled deterministically; self-matches remain valid. Every match
+records the snapshot context plus source candidate/generation. Snapshot refresh
+first re-evaluates phenotype-preserving parent replicas, so lexicase never mixes
+old-context parents with new-context offspring. Resume reloads the last
+committed snapshot sidecar.
 
 The fixed roster is defined by `eagle/opponent_cases.py` and resolved by
 `eagle/opponents.py`. Each opponent receives three configured maps, three
@@ -76,7 +86,7 @@ so an upstream defect can neither crash the JVM nor become a candidate win.
 ## Objective and diagnostics
 
 `evaluation/objectives.py` returns exactly one evolutionary score for each of
-the ten cases. `code_quality`, compiler diagnostics, function coverage,
+the active mode's ten cases. `code_quality`, compiler diagnostics, function coverage,
 strategy alignment, and runtime failure details remain in their diagnostic
 artifacts and reflection context; none is inserted into the evolutionary
 objective vector.

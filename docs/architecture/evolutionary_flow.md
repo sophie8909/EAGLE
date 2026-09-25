@@ -12,13 +12,13 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    inherited `llm_generated_policies` mode, keep the configured policy in slot
    one and fill every other slot through one policy-only LLM call. Each such
    call receives the immutable closed-world MicroRTS gameplay contract.
-2. In inherited `configured_seeds` mode, call the Generator independently for
-   every generation-zero candidate. In `llm_generated_policies` mode, directly
-   validate, compile, integrate, and evaluate the same fixed Java seed for all
-   generation-zero candidates. Later children in both modes independently
+2. In inherited `configured_seeds` and `llm_generated_policies` modes, call the
+   Generator independently for every generation-zero candidate. In the latter,
+   WorkerRush Java is inherited prompt context rather than the phenotype. Later
+   children in both modes independently
    inherit policy, generation prompt, and Java provenance before the same final
    Generator boundary.
-3. Store one score for each fixed opponent case: `passive`, `random`,
+3. In default `fixed_roster` evaluation, store one score for each opponent case: `passive`, `random`,
    `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
    `coac`, and `tma`.
 4. Plan the entire offspring population before any mutation LLM call. For each
@@ -57,7 +57,11 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    per old parent, with the same complete genotype and component provenance,
    then selects from replicas plus offspring only. It never overwrites or
    reuses the old parent as a survivor candidate.
-8. Persist the surviving population and generation metrics.
+8. In `self_play` evaluation, use one immutable ten-slot snapshot context. At
+   each configured refresh generation, phenotype-preserving fresh-ID parent
+   replicas are re-evaluated before reflection; only those replicas and
+   offspring evaluated against that same context enter selection. Persist the
+   snapshot, refresh audit sidecar, surviving population, and metrics.
 
 The implementation is in `eagle/search.py`, `eagle/selection.py`, and
 `eagle/evaluation.py`.
@@ -65,7 +69,8 @@ The implementation is in `eagle/search.py`, `eagle/selection.py`, and
 ## Objective contract
 
 `Candidate.objective_vector()` in `eagle/candidate.py` contains exactly the ten
-opponent cases. All are maximized. Missing or failed cases use `-1000.0` from
+active fitness cases. Fixed-roster IDs name static opponents; self-play IDs are
+`self_play_000` through `self_play_009`. All are maximized. Missing or failed cases use `-1000.0` from
 `eagle/opponent_cases.py`.
 
 `code_quality` is retained in `Candidate.code_quality_result` as a diagnostic
@@ -78,9 +83,10 @@ the convenient final representative only; it does not replace the ten cases.
 
 ## Evaluation matrix
 
-Each candidate runs all ten opponents over three maps, three rounds, and both
-player positions: `10 × 3 × 3 × 2 = 180` matches. There is no previous-generation
-EAGLE opponent or dynamic opponent weight.
+Each candidate runs all ten active cases over three maps, three rounds, and both
+player positions: `10 × 3 × 3 × 2 = 180` matches. Fixed-roster mode resolves the
+ten bundled opponents. Self-play mode cycles the runnable immutable snapshot
+into ten equally weighted slots; five candidates therefore appear twice.
 
 The generation-level `expected_match_count` and `completed_match_count` are sums
 over every candidate in that generation, including zero completed matches for a
@@ -108,9 +114,11 @@ old and newly generated Java hashes, the replica fitness/status, and whether
 the replica survived. Generation archives, error memory, timing aggregation,
 and retired-trace cleanup use the actual replica-plus-offspring selection pool.
 
-`runs/<run>/archives/opponents.json` keeps one best valid representative per
+In fixed-roster runs, `runs/<run>/archives/opponents.json` keeps one best valid representative per
 opponent case. Each generation JSON stores objective statistics for all
 ten cases and `opponent_scores.by_opponent` stores reporting summaries. The
+archive is intentionally not updated by self-play because those slot identities
+are snapshot-scoped.
 offline analysis writes `opponent_game_performance.csv` and one
 `game_performance_by_generation_<opponent>.png` per opponent. It also writes
 per-agent, per-opponent win-rate rows/plots and `match_game_performance.csv` for the
