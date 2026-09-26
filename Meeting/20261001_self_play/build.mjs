@@ -1,23 +1,26 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 const root=process.cwd();
 const skill=process.env.PRESENTATION_SKILL_DIR || 'C:/Users/cinna/.codex/plugins/cache/openai-primary-runtime/presentations/26.915.20218/skills/presentations';
 const runtime=process.env.CODEX_RUNTIME_DIR || 'C:/Users/cinna/.cache/codex-runtimes/codex-primary-runtime/dependencies';
 process.env.RUNTIME_NODE_MODULES=path.join(runtime,'node/node_modules');
 const build=path.join(root,'runtime/presentation1001');
-const {Presentation,PresentationFile}=await import(pathToFileURL(path.join(build,'node_modules/@oai/artifact-tool/dist/artifact_tool.mjs')).href).catch(()=>import('@oai/artifact-tool'));
+const {importRuntimeModule}=await import(pathToFileURL(path.join(skill,'container_tools/runtime_helpers.mjs')).href);
+const {Presentation,PresentationFile}=await importRuntimeModule('@oai/artifact-tool');
 const {finalizePresentation,applyPresentationChartFont}=await import(pathToFileURL(path.join(skill,'container_tools/artifact_tool_utils.mjs')).href);
 const src=await fs.readFile(path.join(root,'Meeting/20260926_self_play_comparison/self_play_comparison_presentation_content.md'),'utf8');
 const sourceSections=src.split(/\n## (?:Slide \d+｜|Appendix [ABC]｜)/).slice(1);
 const p=Presentation.create({slideSize:{width:1280,height:720}});
-const C={ink:'#172D40',muted:'#596B78',teal:'#087F8C',blue:'#315C91',gray:'#A7B0BB',light:'#F0F4F7',white:'#FFFFFF',orange:'#A35F24'};
-const F='Microsoft JhengHei';
+const C={ink:'#47171C',muted:'#423C3B',teal:'#9B7131',blue:'#47171C',gray:'#CF8792',light:'#F8EEEB',white:'#FCF8F5',orange:'#9B7131'};
+const F='Source Han Serif TW';
 const tableSlides=[],chartSlides=[];
-function text(s,t,x,y,w,h,size=26,color=C.ink,bold=false){const o=s.shapes.add({geometry:'textbox',position:{left:x,top:y,width:w,height:h},fill:'none',line:{fill:'none',width:0}});o.text=t;o.text.style={typeface:F,fontSize:size,color,bold,autoFit:'none'};return o;}
+function text(s,t,x,y,w,h,size=26,color=C.muted,bold=false){const o=s.shapes.add({geometry:'textbox',position:{left:x,top:y,width:w,height:h},fill:'none',line:{fill:'none',width:0}});o.text=t;o.text.style={typeface:F,fontSize:size,color,bold,autoFit:'none'};return o;}
 function slide(title,sub=''){const s=p.slides.add();s.background.fill=C.white;const n=p.slides.items.length;text(s,title,58,38,1164,70,40,C.ink,true);if(sub)text(s,sub,60,111,1160,45,21,C.muted);text(s,'EAGLE   2026/10/01',60,676,650,25,15,C.muted);text(s,String(n).padStart(2,'0'),1170,674,60,28,17,C.muted);s.speakerNotes.textFrame.setText('來源：Meeting/20260926_self_play_comparison/self_play_comparison_presentation_content.md\n資料截至 2026/09/26。\n\n'+sourceSections[n-1].replace(/### 建議視覺[\s\S]*?(?=###|$)/g,''));return s;}
 function takeaway(s,t,y=607){text(s,t,60,y,1150,58,25,C.teal,true);}
-function table(s,values,y=172,h=380,widths=null,size=23){const t=s.tables.add({rows:values.length,columns:values[0].length,left:60,top:y,width:1160,height:h,values,...(widths?{columnWidths:widths}:{})});t.borders.assign({fill:'#DCE3E9',width:0.6});t.cells.block({row:0,column:0,rowCount:values.length,columnCount:values[0].length}).assign({margins:{top:3,bottom:3,left:8,right:8}});for(let r=0;r<values.length;r++){t.rows[r].height=h/values.length;for(let c=0;c<values[0].length;c++){const cell=t.getCell(r,c);cell.fill=r===0?C.ink:(r%2?C.white:C.light);cell.text.style={typeface:F,fontSize:size,color:r===0?C.white:C.ink,bold:r===0,autoFit:'none'};}}tableSlides.push(p.slides.items.length);return t;}
+function table(s,values,y=172,h=380,widths=null,size=23){const t=s.tables.add({rows:values.length,columns:values[0].length,left:60,top:y,width:1160,height:h,values,...(widths?{columnWidths:widths}:{})});t.borders.assign({fill:'#DEB4BA',width:0.6});t.cells.block({row:0,column:0,rowCount:values.length,columnCount:values[0].length}).assign({margins:{top:3,bottom:3,left:8,right:8}});for(let r=0;r<values.length;r++){t.rows[r].height=h/values.length;for(let c=0;c<values[0].length;c++){const cell=t.getCell(r,c);cell.fill=r===0?C.ink:(r%2?C.white:C.light);cell.text.style={typeface:F,fontSize:size,color:r===0?C.white:C.muted,bold:r===0,autoFit:'none'};}}tableSlides.push(p.slides.items.length);return t;}
 function chart(s,categories,series,pos={left:70,top:175,width:1130,height:390},opts={}){const ch=s.charts.add('bar',{position:pos,categories,series,barOptions:{direction:'column',grouping:'clustered',gapWidth:100,...opts.barOptions},hasLegend:series.length>1,legend:{position:'bottom',textStyle:{fontSize:19,typeface:F}},chartFill:C.white,plotAreaFill:C.white,xAxis:{textStyle:{fontSize:19,typeface:F}},yAxis:{min:0,textStyle:{fontSize:18,typeface:F},...opts.yAxis},dataLabels:{showValue:true,position:'outEnd',textStyle:{fontSize:20,typeface:F},...opts.dataLabels}});applyPresentationChartFont(ch,{fontFamily:F});chartSlides.push(p.slides.items.length);return ch;}
 const names=['Fixed-roster 10×20','Self-play 10×20','Self-play 5×40'];
 let s=slide('Self-play 兩版與固定對手基準比較','10 月 1 日研究進度報告　　資料截至 2026/09/26');
@@ -36,7 +39,7 @@ text(s,'0%',850,185,345,95,67,C.gray,true);text(s,'10×20 未取得勝場',852,2
 text(s,'G17 的 Code Reflection 補上主動追擊敵人的行為。\n勝場集中在基礎對手，rush 與強對手仍是主要缺口。\n最終 4/5 candidates 同列最高 fitness，評估仍難區分策略。',62,386,1150,170,28);
 takeaway(s,'後續先建立 current-code control，再測試 fixed anchors 與獨立 holdout probes');
 s=slide('5×40 的改善包含 197 個實際勝場','三組 final test 均為 600 場，errors 均為 0');
-chart(s,names,[{name:'Win',values:[256,0,197],fill:'#9EDADD'},{name:'Draw',values:[12,151,11],fill:C.gray},{name:'Loss',values:[332,449,392],fill:'#DDE3E9'}],{left:70,top:165,width:1130,height:380},{barOptions:{direction:'bar',grouping:'stacked'},dataLabels:{position:'center'},yAxis:{max:600}});
+chart(s,names,[{name:'Win',values:[256,0,197],fill:'#C69B45'},{name:'Draw',values:[12,151,11],fill:C.gray},{name:'Loss',values:[332,449,392],fill:'#E9DADB'}],{left:70,top:165,width:1130,height:380},{barOptions:{direction:'bar',grouping:'stacked'},dataLabels:{position:'center'},yAxis:{max:600,majorUnit:100}});
 text(s,'相對 self-play 10×20：+197 勝、−140 和、−57 敗',62,548,1150,42,27);
 takeaway(s,'相對 fixed-roster：少 59 勝，勝率差 9.83 個百分點');
 s=slide('勝場差距集中在 LightRush、HeavyRush 與 COAC','每個 opponent 共 60 場；完整 W / D / L 保留於講者備註');
@@ -84,8 +87,13 @@ s=slide('附錄 C　Q&A 備答','外部勝率由 0% 提升至 32.8%，但尚未�
 const qa=[['為什麼 5×40 較好？','G17 補上主動追擊，是目前 artifact 支持的機制解釋；尚需同 seed ablation。'],['為什麼 fixed-roster 仍較好？','固定對手可能提供持續的外部能力壓力；版本差異與此解釋尚未拆開驗證。'],['可以直接比較三個 run 的 GP 嗎？','不可以。Evaluation context 與 snapshot 不同，應使用共同 final test 的 W/D/L。'],['下一個最重要的實驗？','先跑 current-code fixed-roster control，再測試 5×40 self-play 加 fixed anchors。']];
 qa.forEach((r,i)=>{text(s,r[0],62,177+i*111,1150,44,29,C.ink,true);text(s,r[1],62,222+i*111,1150,58,24,C.muted)});
 await fs.mkdir(build,{recursive:true});
-const draft=path.join(build,'candidate.pptx');
-await(await PresentationFile.exportPptx(p)).save(draft);
-for(let i=0;i<p.slides.items.length;i++){const b=await p.export({slide:p.slides.items[i],format:'png',scale:1});await fs.writeFile(path.join(build,`slide-${String(i+1).padStart(2,'0')}.png`),new Uint8Array(await b.arrayBuffer()));}
-await finalizePresentation({workspaceDir:root,candidatePath:draft,finalPath:path.join(root,'Meeting/20261001_self_play/20261001_final.pptx'),pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','12192000,6858000','--validate-bullet-geometry','--validate-heading-fit',...tableSlides.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:15,requiredNativeTableOwnerSlides:tableSlides,requiredNativeChartOwnerSlides:chartSlides,materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'design',families:[F]},verifyArtifactToolImport:true,receiptPath:path.join(build,'validation-'+Date.now()+'.json')});
-console.log('Created Meeting/20261001_self_play/20261001_final.pptx');
+await fs.mkdir(path.join(build,'output'),{recursive:true});
+const authored=path.join(build,'authored.pptx');
+const draft=path.join(build,'template-candidate.pptx');
+await(await PresentationFile.exportPptx(p)).save(authored);
+const template=path.join(root,'Meeting/template/EAGLE.potx');
+const reference=path.join(build,'EAGLE-reference.pptx');
+await fs.copyFile(template,reference);
+execFileSync(path.join(runtime,'python/python.exe'),[path.join(root,'Meeting/20261001_self_play/apply_template.py'),authored,template,draft],{stdio:'inherit'});
+const result=await finalizePresentation({workspaceDir:root,candidatePath:draft,finalPath:path.join(build,'output','EAGLE-1001-'+Date.now()+'.pptx'),pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-bullet-geometry','--validate-heading-fit',...tableSlides.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:15,requiredNativeTableOwnerSlides:tableSlides,requiredNativeChartOwnerSlides:chartSlides,materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'reference',families:[F],referencePath:reference,referenceSha256:createHash('sha256').update(await fs.readFile(reference)).digest('hex')},verifyArtifactToolImport:true,receiptPath:path.join(build,'validation-'+Date.now()+'.json')});
+console.log(JSON.stringify({finalPath:result.finalPath,receiptPath:result.receiptPath}));
