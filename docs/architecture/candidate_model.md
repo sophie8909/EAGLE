@@ -37,7 +37,7 @@ three-component genotype.
 | Variation | `operator`, `mutation_type` |
 | Component provenance | `strategy_parent_id`, `generation_prompt_parent_id`, optional `java_parent_id` |
 | State/failure | `status`, `failure_stage`, `failure_reason` |
-| Objectives/evidence | opponent fitness cases, game/code diagnostics |
+| Objectives/evidence | active-mode fitness, executable semantic signature, game/code diagnostics |
 | Persistence references | `artifacts`, `timing` |
 
 New runtime IDs use `gen_<zero-padded-generation>_<12-hex-random-suffix>`.
@@ -60,6 +60,8 @@ Explicit IDs loaded from supported artifacts remain opaque and unchanged.
 - Generator uses the canonical checked-in scaffold. Only inherited mode also
   receives the selected parent Java component.
 - Failure never erases genotype, partial phenotype, lineage, mutation evidence, or timing.
+- `semantic_signature` describes the compiled full agent on the versioned probe
+  dataset; it is distinct from prompt-derived `strategy_signature` metadata.
 
 ## Compatibility
 

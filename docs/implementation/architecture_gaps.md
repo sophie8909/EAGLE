@@ -19,6 +19,9 @@ optional primary/generation-model phase switching are also implemented and
 covered by contract tests. Explicit immutable-snapshot self-play, same-context
 parent refresh, legacy-checkpoint resume migration, and per-policy
 generation-zero Java decoding are implemented and covered as active contracts.
+Self-play scalar fitness, inclusive non-chained tolerance tiers, versioned
+map×phase behavior probes, exact semantic caching/equivalence, and offline
+semantic analysis are also implemented and covered.
 These are active contracts rather than open gaps.
 Historical gap rows remain available in Git history.
 

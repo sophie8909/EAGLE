@@ -33,7 +33,7 @@ gene or the persisted pre-generation Java input.
 
 First-class candidate state includes identity, generation, direct parents,
 operator, mutation type, component-source IDs, generated Java, validation and
-compile status, ten-case fitness, diagnostics, failure state, artifact
+compile status, active-mode fitness, executable semantic summary, diagnostics, failure state, artifact
 references, and timing.
 
 New candidate identities are generation-qualified as
@@ -60,7 +60,7 @@ initial policy is materialized into its own validated and compiled Java agent.
 
 Each later generation produces a fixed-size offspring population and performs:
 
-1. a complete generation plan: seeded lexicase parent selection, optional
+1. a complete generation plan: mode-specific parent selection, optional
    uniform component crossover (two prompt components, plus an independent
    Java-component choice in `inherited_genotype` mode), and optional Strategy,
    Prompt, or Code mutation assignment for every offspring slot before any
@@ -72,13 +72,14 @@ Each later generation produces a fixed-size offspring population and performs:
    Code Reflection children;
 4. validation, compilation, integration, and evaluation;
 5. optional AOS reward collection;
-6. seeded lexicase survivor selection without replacement from the joint
+6. mode-specific survivor selection without replacement from the joint
    parent-plus-offspring (`mu_plus_lambda`) pool;
 7. atomic generation persistence.
 
 The fixed-size survivor population is selected from the joint evaluated parent
-and offspring pool. Parent and offspring candidates compete under the same
-ten cases; aggregate Game Performance and generation age do not break ties.
+and offspring pool. Fixed roster compares the same ten cases by lexicase.
+Self-play compares scalar Game Performance and consults executable semantics
+only inside an inclusive `1.0` fitness tier. Generation age never breaks ties.
 
 The canonical `parent_evaluation_mode: reuse_cached` does not regenerate or
 re-evaluate surviving parents. The explicitly non-canonical diagnostic mode
@@ -120,7 +121,7 @@ The reflection operator is chosen by exactly one configured mode:
 
 Both adaptive modes use the same alpha-`0.20` EMA and probability-matching
 updater with the configured minimum probability floor. AOS never changes the
-ten-case lexicase fitness.
+active fitness contract; adaptive modes apply to fixed-roster lexicase runs.
 
 The adaptive comparison parent is the same evaluated candidate used to build
 the mutation context: the policy-component parent for Strategy mutation; the
@@ -290,8 +291,10 @@ matches. Integration failure does not re-enter the decoder.
 ## 9. Evolution evaluation
 
 `evaluation.mode` selects `fixed_roster` (default) or `self_play`. Both modes
-use ten lexicase cases and the same three-map, three-round, two-side matrix, so
-every runnable candidate has 180 matches.
+use the same ten-opponent-slot, three-map, three-round, two-side matrix, so every
+runnable candidate has 180 matches. Their selection objectives differ:
+fixed-roster uses ten opponent-wise lexicase cases; self-play uses only scalar
+Game Performance.
 
 The fixed search roster is:
 
@@ -330,16 +333,27 @@ retained and all self-play slots have weight `1.0`. At refresh, fresh-ID parent
 replicas preserve the existing Java phenotype without an LLM call and are
 evaluated against the new snapshot before reflection and offspring generation.
 Only refreshed parents and offspring with the same context ID may enter
-survivor lexicase. Snapshot and refresh sidecars make this transition resumable.
+survivor selection. Snapshot and refresh sidecars make this transition resumable.
 Self-play currently requires `reflection_operator_mode: static` and
 `parent_evaluation_mode: reuse_cached`; the fixed-opponent archive is not
 updated by self-play runs.
 
-Fitness is a maximized mapping with exactly the active mode's ten case IDs. Failed or
-incomplete candidates receive `-1000.0` for every case. Aggregate Game
-Performance is reporting-only, using weights `0.5` for PassiveAI, RandomAI, and
+Fixed-roster fitness is a maximized mapping with the ten opponent case IDs.
+Self-play fitness is `{game_performance: value}`; failed or incomplete
+candidates receive `-1000.0`. Fixed-roster aggregate Game Performance is
+reporting-only, using weights `0.5` for PassiveAI, RandomAI, and
 RandomBiasedAI, `1` for the three rush opponents, and `2` for AllInBot, Mayari,
-COAC, and TMA in fixed-roster mode; self-play uses the unweighted mean.
+COAC, and TMA. Self-play uses the unweighted mean as its objective.
+
+Self-play additionally enables a versioned nine-state semantic dataset:
+exactly the configured three maps at early, middle, and late trajectory phases,
+always for the configured player side. A fresh full `CandidateAgent` instance
+acts on each reloaded state. Unit actions are canonically ordered and hashed;
+semantic distance is normalized Hamming distance over the nine action hashes.
+Scores within `fitness_tie_tolerance` (default and canonical value `1.0`,
+inclusive) of a tier's maximum are equal for selection. Tiers use that maximum
+as a fixed anchor, so pairwise chaining cannot merge a worse candidate. Missing
+or incompatible signatures are fallback evidence, never maximally novel.
 
 Code Quality is a diagnostic and mutation-evidence signal, not a selection
 objective. Successful Code Quality is:

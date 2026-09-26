@@ -28,16 +28,17 @@ generation. The snapshot refresh interval defaults to five generations.
 
 At refresh, parents receive fresh candidate identities but preserve their Java
 phenotype and make no LLM call. They are evaluated against the new snapshot
-before reflection and offspring planning. Lexicase rejects a pool unless every
-candidate has the same context ID and exact case schema. Self-play requires
+before reflection and offspring planning. Selection rejects a pool unless every
+candidate has the same context ID. Self-play requires
 static reflection and does not update the fixed-opponent archive.
 
 ## Fitness and reporting
 
-`evaluation/objectives.py` returns a mapping with exactly the ten case IDs.
-This mapping is stored in `Candidate.fitness_objectives` and is the only
-selection fitness. A failed or incomplete candidate gets `-1000.0` for all
-ten cases.
+In fixed-roster mode, `evaluation/objectives.py` returns exactly the ten case
+scores, stored in `Candidate.fitness_objectives`. In self-play, those slot
+scores remain evaluation diagnostics and `Candidate.fitness_objectives` stores
+only the unweighted aggregate `game_performance`. A failed or incomplete
+self-play candidate gets `-1000.0` for that scalar objective.
 
 `eagle/opponent_cases.py:aggregate_game_performance` computes a reporting-only
 weighted mean. The weights are `0.5` for `passive`, `random`, and `randombias`,
@@ -53,11 +54,18 @@ the best score for each case, and stops when one candidate remains. There is
 no Pareto rank, crowding distance, dominance comparator, or code-quality
 tie-break in the active selection path.
 
-`select_next_generation` combines parents and offspring, then fills the fixed
+For fixed roster, `select_next_generation` combines parents and offspring, then fills the fixed
 population by repeated lexicase selection without replacement from that joint
 `mu_plus_lambda` pool. Parents receive no age bonus and offspring receive no
 preference. Aggregate Game Performance remains reporting-only and does not
 select survivors.
+
+For self-play, parent and survivor selection maximize `game_performance`.
+Candidates within `1.0` inclusive of the current tier maximum are tied. The
+anchor is not updated while forming a tier. A second parent prefers maximum
+semantic distance from the first, and a survivor boundary uses seeded
+farthest-first selection over compatible nine-probe signatures. Semantic
+evidence cannot promote a candidate from a lower fitness tier.
 
 Reflection operator selection is a separate credit path. `static` has no
 reward; `aos_opponent` compares the existing ten case W/D/L ranks with the
@@ -69,11 +77,11 @@ parent. Neither reward becomes a lexicase case.
 
 The following records are written after each generation:
 
-- `generations/generation_<n>.json`: surviving candidates and their ten
-  `fitness_objectives`;
+- `generations/generation_<n>.json`: surviving candidates, active-mode
+  `fitness_objectives`, semantic summaries, and semantic-library metrics;
 - `generations/generation_*.json`: ten objective statistics plus
   `opponent_scores.by_candidate` and `opponent_scores.by_opponent`;
-- `candidates/<id>/evaluation/objectives.json`: ten-case objective mapping;
+- `candidates/<id>/evaluation/objectives.json`: active-mode objective mapping;
 - `candidates/<id>/evaluation/game_performance.json`: aggregate reporting
   metric and detailed opponent/match summaries;
 - `archives/opponents.json`: one best valid representative per opponent case.

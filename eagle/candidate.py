@@ -43,6 +43,10 @@ class Candidate:
     game_eval_result: dict[str, Any] = field(default_factory=dict)
     code_quality_result: dict[str, Any] = field(default_factory=dict)
     fitness_objectives: dict[str, float] = field(default_factory=dict)
+    # Executable full-agent behavior over the fixed MicroRTS probe suite.
+    # ``strategy_signature`` below remains policy-text metadata and must not be
+    # used as a behavioral substitute.
+    semantic_signature: dict[str, Any] = field(default_factory=dict)
     strategy_signature: dict[str, Any] = field(default_factory=dict)
     strategy_niche: str = "unknown"
     mutation_intent: str | None = None
@@ -132,6 +136,7 @@ class Candidate:
             "game_eval_result": dict(self.game_eval_result),
             "code_quality_result": dict(self.code_quality_result),
             "fitness_objectives": dict(self.fitness_objectives),
+            "semantic_signature": dict(self.semantic_signature),
             "strategy_signature": dict(self.strategy_signature),
             "strategy_niche": self.strategy_niche,
             "mutation_intent": self.mutation_intent,
@@ -178,6 +183,7 @@ class Candidate:
             "failure_stage": self.failure_stage,
             "failure_reason": self.failure_reason,
             "fitness_objectives": dict(self.fitness_objectives),
+            "semantic_signature": dict(self.semantic_signature),
             "timing": dict(self.timing),
             "artifacts": dict(self.artifacts),
         }

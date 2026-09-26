@@ -175,6 +175,7 @@ def record_generation(
             {
                 "candidate_id": candidate.id,
                 "fitness_objectives": dict(candidate.fitness_objectives),
+                "semantic_signature": dict(candidate.semantic_signature),
                 "status": candidate.status,
             }
             for candidate in population
@@ -414,12 +415,61 @@ def generation_metrics(
             "by_candidate": opponent_by_candidate,
             "by_opponent": opponent_summary,
         },
+        "semantic_library": _semantic_library_metrics(population),
     }
     if diversity is not None:
         payload["strategy_diversity"] = dict(diversity)
     if aos is not None:
         payload["aos"] = dict(aos)
     return payload
+
+
+def _semantic_library_metrics(population: list[Candidate]) -> dict[str, Any]:
+    complete = [
+        candidate
+        for candidate in population
+        if isinstance(candidate.semantic_signature, dict)
+        and candidate.semantic_signature.get("status") == "complete"
+    ]
+
+    def equivalence(field: str, scope: str | None = None) -> dict[str, Any]:
+        groups: dict[tuple[str, str], list[str]] = {}
+        for candidate in complete:
+            signature = candidate.semantic_signature
+            value = signature.get(field)
+            hash_value = value.get(scope) if scope is not None and isinstance(value, dict) else value
+            if not isinstance(hash_value, str) or not hash_value:
+                continue
+            key = (str(signature.get("dataset_id") or ""), hash_value)
+            groups.setdefault(key, []).append(candidate.id)
+        usable = sum(len(items) for items in groups.values())
+        unique = len(groups)
+        return {
+            "usable_signature_count": usable,
+            "unique_signature_count": unique,
+            "duplicate_candidate_count": max(0, usable - unique),
+            "uniqueness_ratio": unique / usable if usable else 0.0,
+            "largest_equivalence_class": max((len(items) for items in groups.values()), default=0),
+        }
+
+    map_ids = sorted({
+        str(map_id)
+        for candidate in complete
+        for map_id in (candidate.semantic_signature.get("map_hashes") or {})
+    })
+    phases = sorted({
+        str(phase)
+        for candidate in complete
+        for phase in (candidate.semantic_signature.get("phase_hashes") or {})
+    })
+    return {
+        "candidate_count": len(population),
+        "available_signature_count": len(complete),
+        "unavailable_signature_count": len(population) - len(complete),
+        "global": equivalence("global_hash"),
+        "by_map": {map_id: equivalence("map_hashes", map_id) for map_id in map_ids},
+        "by_phase": {phase: equivalence("phase_hashes", phase) for phase in phases},
+    }
 
 
 def load_aos_state(run_dir: Path) -> dict[str, Any] | None:
@@ -531,6 +581,7 @@ def load_candidate(run_dir: Path, candidate_id: str) -> Candidate:
         game_eval_result=object_json("evaluation/game_performance.json"),
         code_quality_result=object_json("evaluation/code_quality.json"),
         fitness_objectives={str(k): float(v) for k, v in (payload.get("fitness_objectives") or {}).items()},
+        semantic_signature=dict(payload.get("semantic_signature") or {}),
         strategy_signature=dict(payload.get("strategy_signature") or {}),
         strategy_niche=str(payload.get("strategy_niche") or "unknown"),
         mutation_intent=payload.get("mutation_intent"),

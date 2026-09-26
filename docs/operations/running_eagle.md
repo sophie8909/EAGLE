@@ -56,7 +56,9 @@ materialization. It switches back before the next generation.
 Generation 0 is initialization. `generations: 20` therefore records generation 0 and performs evolutionary generations 1 through 20.
 
 The resolved config records `survivor_selection: mu_plus_lambda`. Parent and
-offspring candidates jointly enter seeded lexicase survivor selection. A config
+offspring candidates jointly enter the evaluation mode's survivor selection:
+fixed roster uses seeded lexicase, while self-play uses scalar Game Performance
+with the semantic tie-break. A config
 with three seed policies and `population_size: 3` therefore performs exact
 `3 + 3` environmental selection in every evolutionary generation.
 

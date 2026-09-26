@@ -26,14 +26,16 @@ allinbot/mayari/coac/tma = 2 each
 ```
 
 The denominator is `12.5`. The weighted mean is stored as
-`game_eval_result.game_performance` and is reporting-only. It is not an
-evolutionary objective and does not replace the ten opponent scores stored in
-`Candidate.fitness_objectives`.
+`game_eval_result.game_performance`. In fixed-roster mode it is reporting-only
+and does not replace the ten opponent scores. In self-play, the unweighted mean
+is the single evolutionary objective stored as
+`Candidate.fitness_objectives["game_performance"]`.
 
 ## Failure behavior
 
 If generation, validation, compilation, integration, runtime, or matrix
-completion fails, each of the ten opponent fitness cases is `-1000.0`. Partial
+completion fails, fixed roster assigns `-1000.0` to each opponent case and
+self-play assigns `-1000.0` to `game_performance`. Partial
 match results and failure diagnostics remain in the candidate artifacts.
 
 ## Analysis

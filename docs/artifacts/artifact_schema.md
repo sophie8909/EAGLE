@@ -19,6 +19,7 @@ runs/<run_id>/
 ├── archives/
 │   ├── strategy.json
 │   ├── opponents.json
+│   ├── semantic_signature_cache/
 │   └── error_memory.jsonl       # created when failures exist
 ├── llm_logs/
 └── final_test/
@@ -43,7 +44,7 @@ candidate snapshots.
 `generations/generation_<nnnn>.json` contains:
 
 - generation number;
-- population entries with candidate ID, status, and ten-case fitness vector;
+- population entries with candidate ID, status, active-mode fitness, and compact semantic signature;
 - best/reporting candidate ID;
 - aggregate objective, opponent, diversity, and timing-derived metrics;
 - one canonical reflection-operator/AOS generation record.
@@ -139,10 +140,11 @@ candidates/<candidate_id>/
     ├── commentary_aggregation.json
     ├── function_capability.json
     ├── code_quality.json
+    ├── semantic_signature.json
     └── objectives.json
 ```
 
-`candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, fitness vector, aggregate Game Performance, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
+`candidate.json` is the only candidate-level index. It stores identity, generation, parents/component provenance, operator, status/failure, active-mode fitness, aggregate Game Performance, compact executable semantic summary, strategy metadata, compact mutation/AOS metadata, timing summary, and relative artifact references. Full canonical probe actions remain in the run-local cache rather than the index. Large data remains in its stage owner: Java source, LLM text, compiler output, match records, and telemetry are never embedded in the index.
 
 For every bounded Java LLM decode, including both inherited initialization modes in
 generation zero, every

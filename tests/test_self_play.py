@@ -37,6 +37,10 @@ class SelfPlayTests(unittest.TestCase):
         restored = ExperimentConfig.from_mapping(config.to_mapping())
         self.assertEqual(restored.evaluation_mode, "self_play")
         self.assertEqual(restored.self_play_refresh_interval, 3)
+        self.assertEqual(restored.algorithm, "game_performance_semantic_tiebreak")
+        self.assertEqual(restored.fitness_tie_tolerance, 1.0)
+        self.assertTrue(restored.semantic_probes_enabled)
+        self.assertEqual(restored.to_mapping()["objectives"], {"game_performance": "maximize"})
         with self.assertRaisesRegex(ValueError, "reflection_operator_mode=static"):
             replace(
                 config,

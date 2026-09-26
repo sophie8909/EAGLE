@@ -128,7 +128,7 @@ def population_matches_self_play_context(
     snapshot_candidates: list[Candidate],
 ) -> bool:
     expected_context_id = self_play_context_id(snapshot_candidates)
-    expected_cases = set(SELF_PLAY_CASES)
+    expected_cases = {"game_performance"}
     return bool(candidates) and all(
         candidate.game_eval_result.get("evaluation_context_id") == expected_context_id
         and set(candidate.game_eval_result.get("fitness_case_ids") or ()) == expected_cases

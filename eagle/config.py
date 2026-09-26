@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -29,10 +30,19 @@ DEFAULT_SEED_POLICY_PATH = Path(__file__).resolve().parents[1] / "seeds" / "blan
 DEFAULT_SEARCH_OPPONENTS = tuple((case, OPPONENT_WEIGHTS[case]) for case in LEXICASE_CASES)
 FIXED_OPPONENT_WEIGHT_SUM = OPPONENT_WEIGHT_SUM
 MU_PLUS_LAMBDA_SELECTION = "mu_plus_lambda"
+LEXICASE_SELECTION = "lexicase"
+GAME_PERFORMANCE_SEMANTIC_SELECTION = "game_performance_semantic_tiebreak"
+FITNESS_TIE_TOLERANCE = 1.0
 CANDIDATE_JAVA_MODES = ("generated_phenotype", "inherited_genotype")
 INITIAL_POPULATION_MODES = ("configured_seeds", "llm_generated_policies")
 PARENT_EVALUATION_MODES = ("reuse_cached", "regenerate_same_genotype")
 EVALUATION_MODES = ("fixed_roster", "self_play")
+DEFAULT_SEMANTIC_STATE_ROOT = Path(__file__).resolve().parents[1] / "data" / "semantic_states"
+DEFAULT_SEMANTIC_REFERENCE_AGENTS = (
+    "ai.abstraction.WorkerRush",
+    "ai.abstraction.HeavyRush",
+)
+DEFAULT_SEMANTIC_PHASE_FRACTIONS = (0.10, 0.50, 0.90)
 
 DEFAULT_UNIT_MATERIAL_VALUES = (
     ("Resource", 0.0),
@@ -109,6 +119,7 @@ class ExperimentConfig:
     crossover_rate: float = 0.75
     mutation_rate: float = 0.85
     random_seed: int = 7
+    algorithm: str = LEXICASE_SELECTION
     survivor_selection: str = MU_PLUS_LAMBDA_SELECTION
     execution_mode: str = "openai"
     llm_temperature: float = 0.2
@@ -127,6 +138,13 @@ class ExperimentConfig:
     parent_evaluation_mode: str = "reuse_cached"
     evaluation_mode: str = "fixed_roster"
     self_play_refresh_interval: int = 5
+    fitness_tie_tolerance: float = FITNESS_TIE_TOLERANCE
+    semantic_probes_enabled: bool = False
+    semantic_state_root: Path = DEFAULT_SEMANTIC_STATE_ROOT
+    semantic_reference_agents: tuple[str, str] = DEFAULT_SEMANTIC_REFERENCE_AGENTS
+    semantic_probe_player_side: int = 0
+    semantic_phase_fractions: tuple[float, float, float] = DEFAULT_SEMANTIC_PHASE_FRACTIONS
+    semantic_probe_timeout_seconds: float = 120.0
     tick_limit: int = 100
     match_timeout_seconds: float = 120.0
     match_artifact_mode: str = "compact"
@@ -173,19 +191,15 @@ class ExperimentConfig:
         schema_version = payload.get("schema_version")
         if schema_version not in {None, "experiment-v1", "experiment-v2"}:
             raise ValueError(f"Unsupported experiment schema version: {schema_version!r}")
-        if payload.get("algorithm", "lexicase") != "lexicase":
-            raise ValueError("The canonical EAGLE parent-selection algorithm is lexicase.")
         survivor_selection = str(
             payload.get("survivor_selection", MU_PLUS_LAMBDA_SELECTION)
         )
         if survivor_selection != MU_PLUS_LAMBDA_SELECTION:
             raise ValueError(
-                "The canonical EAGLE survivor selection is mu_plus_lambda lexicase."
+                "The canonical EAGLE survivor selection is mu_plus_lambda."
             )
         if payload.get("application", "microrts") != "microrts":
             raise ValueError("The configured application is not supported.")
-        if payload.get("objectives", {"opponent_cases": "maximize"}) != {"opponent_cases": "maximize"}:
-            raise ValueError("The evolutionary objective contract is the ten fixed opponent cases.")
         if schema_version == "experiment-v2" and not isinstance(payload.get("model"), dict):
             raise ValueError("experiment-v2 requires a model mapping.")
         forbidden = {
@@ -259,6 +273,42 @@ class ExperimentConfig:
         evaluation_settings = payload.get("evaluation", {})
         if not isinstance(evaluation_settings, dict):
             raise ValueError("evaluation must be a mapping.")
+        evaluation_mode = str(evaluation_settings.get("mode", "fixed_roster"))
+        configured_algorithm = str(payload.get("algorithm", LEXICASE_SELECTION))
+        configured_objectives = payload.get("objectives")
+        if evaluation_mode == "self_play":
+            if configured_algorithm not in {
+                LEXICASE_SELECTION,
+                GAME_PERFORMANCE_SEMANTIC_SELECTION,
+            }:
+                raise ValueError(
+                    "Self-play uses game_performance_semantic_tiebreak selection."
+                )
+            if configured_objectives is not None and configured_objectives != {"game_performance": "maximize"} and configured_objectives != {"opponent_cases": "maximize"}:
+                raise ValueError("Self-play's only optimizer objective is game_performance.")
+            algorithm = GAME_PERFORMANCE_SEMANTIC_SELECTION
+        else:
+            if configured_algorithm != LEXICASE_SELECTION:
+                raise ValueError("Fixed-roster evaluation uses opponent-wise lexicase.")
+            if configured_objectives is not None and configured_objectives != {"opponent_cases": "maximize"}:
+                raise ValueError("Fixed-roster objectives are the canonical opponent cases.")
+            algorithm = LEXICASE_SELECTION
+        semantic_settings = evaluation_settings.get("semantic_probes", {})
+        if not isinstance(semantic_settings, dict):
+            raise ValueError("evaluation.semantic_probes must be a mapping.")
+        semantic_enabled = bool(
+            semantic_settings.get("enabled", evaluation_mode == "self_play")
+        )
+        reference_agents_value = semantic_settings.get(
+            "reference_agents", DEFAULT_SEMANTIC_REFERENCE_AGENTS
+        )
+        if not isinstance(reference_agents_value, (list, tuple)) or len(reference_agents_value) != 2:
+            raise ValueError("evaluation.semantic_probes.reference_agents must contain two Java class names.")
+        phase_fractions_value = semantic_settings.get(
+            "phase_fractions", DEFAULT_SEMANTIC_PHASE_FRACTIONS
+        )
+        if not isinstance(phase_fractions_value, (list, tuple)) or len(phase_fractions_value) != 3:
+            raise ValueError("evaluation.semantic_probes.phase_fractions must contain early, mid, and late fractions.")
         if "matches_per_candidate" in evaluation_settings:
             raise ValueError(
                 "evaluation.matches_per_candidate is derived from maps, rounds, sides, and opponents."
@@ -343,6 +393,7 @@ class ExperimentConfig:
             crossover_rate=float(payload.get("crossover_rate", 0.75)),
             mutation_rate=float(payload.get("mutation_rate", 0.85)),
             random_seed=int(payload.get("random_seed", 7)),
+            algorithm=algorithm,
             survivor_selection=survivor_selection,
             execution_mode=str(payload.get("execution_mode", "openai")),
             llm_temperature=float(llm_settings.get("temperature", 0.2)),
@@ -362,9 +413,31 @@ class ExperimentConfig:
             ),
             candidate_java_mode=str(payload.get("candidate_java_mode", "generated_phenotype")),
             parent_evaluation_mode=str(payload.get("parent_evaluation_mode", "reuse_cached")),
-            evaluation_mode=str(evaluation_settings.get("mode", "fixed_roster")),
+            evaluation_mode=evaluation_mode,
             self_play_refresh_interval=int(
                 evaluation_settings.get("self_play_refresh_interval", 5)
+            ),
+            fitness_tie_tolerance=float(
+                semantic_settings.get(
+                    "fitness_tie_tolerance",
+                    payload.get("fitness_tie_tolerance", FITNESS_TIE_TOLERANCE),
+                )
+            ),
+            semantic_probes_enabled=semantic_enabled,
+            semantic_state_root=_repository_path(
+                semantic_settings.get("state_root"),
+                DEFAULT_SEMANTIC_STATE_ROOT,
+            ),
+            semantic_reference_agents=(
+                str(reference_agents_value[0]),
+                str(reference_agents_value[1]),
+            ),
+            semantic_probe_player_side=int(
+                semantic_settings.get("player_side", 0)
+            ),
+            semantic_phase_fractions=tuple(float(value) for value in phase_fractions_value),
+            semantic_probe_timeout_seconds=float(
+                semantic_settings.get("timeout_seconds", 120.0)
             ),
             tick_limit=tick_limit,
             match_timeout_seconds=float(payload.get("match_timeout_seconds", 120.0)),
@@ -414,6 +487,15 @@ class ExperimentConfig:
             raise ValueError(
                 "survivor_selection must be the canonical mu_plus_lambda mode."
             )
+        expected_algorithm = (
+            GAME_PERFORMANCE_SEMANTIC_SELECTION
+            if self.evaluation_mode == "self_play"
+            else LEXICASE_SELECTION
+        )
+        if self.algorithm != expected_algorithm:
+            raise ValueError(
+                f"evaluation.mode={self.evaluation_mode} requires algorithm={expected_algorithm}."
+            )
         if not 0.0 <= self.crossover_rate <= 1.0:
             raise ValueError("crossover_rate must be in [0, 1].")
         if not 0.0 <= self.mutation_rate <= 1.0:
@@ -453,6 +535,28 @@ class ExperimentConfig:
             raise ValueError("evaluation.mode must be fixed_roster or self_play.")
         if self.self_play_refresh_interval < 1:
             raise ValueError("evaluation.self_play_refresh_interval must be at least 1.")
+        if not math.isfinite(self.fitness_tie_tolerance) or self.fitness_tie_tolerance < 0:
+            raise ValueError("fitness_tie_tolerance must be finite and non-negative.")
+        if self.semantic_probe_player_side not in {0, 1}:
+            raise ValueError("semantic probe player_side must be 0 or 1.")
+        if len(self.semantic_reference_agents) != 2 or any(
+            not item.strip() for item in self.semantic_reference_agents
+        ):
+            raise ValueError("semantic probes require two reference-agent class names.")
+        if (
+            len(self.semantic_phase_fractions) != 3
+            or tuple(sorted(self.semantic_phase_fractions)) != self.semantic_phase_fractions
+            or any(value <= 0.0 or value >= 1.0 for value in self.semantic_phase_fractions)
+        ):
+            raise ValueError(
+                "semantic phase fractions must be three strictly increasing values in (0, 1)."
+            )
+        if self.semantic_probe_timeout_seconds <= 0:
+            raise ValueError("semantic probe timeout_seconds must be positive.")
+        if self.evaluation_mode == "self_play" and not self.semantic_probes_enabled:
+            raise ValueError(
+                "self-play requires semantic probes for the fitness tie-break contract."
+            )
         if self.evaluation_mode == "self_play":
             if self.parent_evaluation_mode != "reuse_cached":
                 raise ValueError(
@@ -552,10 +656,14 @@ class ExperimentConfig:
         mapping = {
             "schema_version": "experiment-v2",
             "experiment_name": self.experiment_name,
-            "algorithm": "lexicase",
+            "algorithm": self.algorithm,
             "survivor_selection": self.survivor_selection,
             "application": "microrts",
-            "objectives": {"opponent_cases": "maximize"},
+            "objectives": (
+                {"game_performance": "maximize"}
+                if self.algorithm == GAME_PERFORMANCE_SEMANTIC_SELECTION
+                else {"opponent_cases": "maximize"}
+            ),
             "model": {
                 "name": self.model.name,
                 "path": None if self.model.path is None else str(self.model.path),
@@ -611,6 +719,15 @@ class ExperimentConfig:
             "evaluation": {
                 "mode": self.evaluation_mode,
                 "self_play_refresh_interval": self.self_play_refresh_interval,
+                "semantic_probes": {
+                    "enabled": self.semantic_probes_enabled,
+                    "state_root": str(self.semantic_state_root.resolve()),
+                    "reference_agents": list(self.semantic_reference_agents),
+                    "player_side": self.semantic_probe_player_side,
+                    "phase_fractions": list(self.semantic_phase_fractions),
+                    "timeout_seconds": self.semantic_probe_timeout_seconds,
+                    "fitness_tie_tolerance": self.fitness_tie_tolerance,
+                },
                 "maps": [
                     {"path": path, "tick_limit": tick_limit}
                     for path, tick_limit in zip(

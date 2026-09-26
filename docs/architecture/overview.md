@@ -14,7 +14,8 @@ In scope:
 - crossover, Strategy Reflection, Prompt Reflection, Code Reflection, and Java
   generation;
 - validation, compilation, integration, and fixed-roster or immutable-snapshot self-play evaluation;
-- opponent-wise fitness, seeded lexicase selection, artifacts, and analysis.
+- fixed-roster opponent-wise lexicase or self-play scalar Game Performance
+  selection with semantic tie-breaking, artifacts, and analysis.
 - one resolved experiment config and one owned llama.cpp lifecycle; an optional
   second generation model may share that lifecycle through explicit phase
   switches.
@@ -31,7 +32,7 @@ flowchart TD
     L --> RT["Owned llama.cpp runtime"]
     RT --> Z["Generation 0: configured or LLM-generated policies"]
     Z --> P
-    P["Evaluated population"] --> S["Seeded lexicase parent selection"]
+    P["Evaluated population"] --> S["Mode-specific parent selection"]
     S --> X["Plan every child's parents, crossover/copy, and mutation"]
     X --> M{"Run assigned reflection/rewrite work"}
     M -->|Strategy| SR["Strategy Reflection + Coach"]
@@ -51,7 +52,7 @@ flowchart TD
     R -->|aos_head2head| H["Configured parent-vs-offspring matches"]
     Q --> A["Shared EMA operator update"]
     H --> A
-    F --> N["Parent + offspring lexicase survivor selection"]
+    F --> N["Parent + offspring mode-specific survivor selection"]
     A --> N --> P
     N --> FT["Final test"]
     FT --> CL["Stop owned runtime"]
@@ -84,12 +85,17 @@ flowchart TD
 - In inherited mode crossover selects policy, generation prompt, and Java
   parents independently; generated child Java becomes the inheritable Java
   component available to the next generation.
-- Fitness is the active context's ten-case mapping in `Candidate.fitness_objectives`.
+- Fixed-roster fitness is the ten-opponent mapping in
+  `Candidate.fitness_objectives`. Self-play fitness is the single
+  `game_performance` value.
 - The reporting aggregate uses fixed `0.5/1/2` weights and denominator `12.5`,
   but does not participate in lexicase case filtering.
 - Failed candidates remain available to selection with `-1000.0` case scores.
-- Survivor selection is seeded lexicase without replacement over the joint
-  parent-plus-offspring (`mu_plus_lambda`) pool.
+- Survivor selection uses the joint parent-plus-offspring (`mu_plus_lambda`)
+  pool. Fixed roster uses seeded lexicase without replacement. Self-play forms
+  non-chained fitness tiers anchored at each current maximum; scores within
+  `1.0` inclusive are tied and exact probe-action diversity resolves any
+  boundary cut.
 - The canonical `parent_evaluation_mode` is `reuse_cached`: parents are not
   regenerated between generations. `regenerate_same_genotype` is a
   non-canonical diagnostic treatment restricted to inherited Java with static
@@ -101,6 +107,9 @@ flowchart TD
 - Self-play is explicit (`evaluation.mode: self_play`), snapshot-scoped, equally
   weighted, and restricted to static reflection. Snapshot refresh creates
   phenotype-preserving parent replicas before offspring planning and selection.
+  Every executable candidate is also measured on nine immutable semantic
+  probes (three configured maps × early/mid/late); this evidence is a
+  tie-break/diagnostic and never changes Game Performance.
 
 See [`evolutionary_flow.md`](evolutionary_flow.md),
 [`../evaluation/evaluation_pipeline.md`](../evaluation/evaluation_pipeline.md),

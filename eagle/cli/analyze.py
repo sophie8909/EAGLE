@@ -20,20 +20,39 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--match")
     parser.add_argument("--match-commentaries", action="store_true")
     parser.add_argument("--commentary", action="store_true")
+    parser.add_argument(
+        "--semantics",
+        action="store_true",
+        help="Analyze existing semantic-signature artifacts without evaluating candidates.",
+    )
+    parser.add_argument(
+        "--semantic-probe-dataset",
+        help="Optional semantic probe dataset manifest used to filter compatible signatures.",
+    )
     args = parser.parse_args(argv)
     try:
+        if args.semantic_probe_dataset and not args.semantics:
+            raise ValueError("--semantic-probe-dataset requires --semantics.")
         run_dir = resolve_latest_run(Path("runs").resolve()) if args.latest else resolve_explicit_run(args.run_dir)
         if args.agent:
             return _print_agent_game_performance(load_run(run_dir), args.agent)
         if args.candidate and (args.match_commentaries or args.commentary):
             return _print_commentary_view(run_dir, args.candidate, args.match, args.commentary)
         from eagle.analysis.report import generate_analysis
+        data = load_run(run_dir)
         print(f"Analyzing run: {run_dir}")
         output = generate_analysis(
-            load_run(run_dir),
+            data,
             output_name="analysis",
             force=args.force,
         )
+        if args.semantics:
+            from eagle.analysis.semantics import analyze_semantics
+            analyze_semantics(
+                data,
+                output_name="analysis",
+                dataset_path=args.semantic_probe_dataset,
+            )
         print(f"Analysis written to: {output}")
         return 0
     except (OSError, ValueError) as exc:

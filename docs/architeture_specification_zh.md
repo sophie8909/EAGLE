@@ -222,10 +222,11 @@ RandomBiasedAI、LightRush、HeavyRush、WorkerRush、AllInBot、Mayari、COAC�
 則沿用 top-level `tick_limit`。解析後的 per-map 上限會由 match matrix 帶入一般
 evaluation、AOS head-to-head 與 final test，確保同一張 map 在三條路徑使用相同上限。
 
-Fitness 是十個 maximized opponent case。失敗或 incomplete candidate 的每個
-case 都是 `-1000.0`。加權 aggregate Game Performance 以 PassiveAI、RandomAI、
+Fixed-roster fitness 是十個 maximized opponent case。Self-play 則只有單一
+`game_performance` objective；失敗或 incomplete candidate 的 active objective
+為 `-1000.0`。固定 roster 的加權 aggregate Game Performance 以 PassiveAI、RandomAI、
 RandomBiasedAI 權重各 `0.5`、三個 rush opponent 各 `1`、其餘四個 opponent 各
-`2` 計算，固定分母為 `12.5`，且只用於報表。
+`2` 計算，固定分母為 `12.5`，且只用於報表；self-play 的等權重平均則直接作為 fitness。
 WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的重複行為
 充當 identity adapter。每代的 expected/completed match count 是所有 candidate
 的加總，而不是第一個 candidate 的值。
@@ -235,10 +236,20 @@ snapshot，並依穩定順序循環填入 `self_play_000` 到 `self_play_009` �
 case；五個 candidate 會各佔兩個 slot，且保留 self-match。每逢
 `self_play_refresh_interval`，系統先建立 fresh-ID parent replica，完全沿用原 Java
 phenotype、不呼叫 LLM，再以新 snapshot 重評；只有相同 context ID 的 parent 與
-offspring 可以一起做 lexicase。Resume 會載入最後已提交 snapshot；舊 checkpoint
+offspring 可以一起做 selection。Self-play 以每個 tier 的最高
+`game_performance` 為固定錨點，差距小於或等於 `1.0` 視為同級，不使用鏈式比較。
+同級內 parent B 優先選擇與 parent A 語意距離最大者；survivor boundary 使用 seeded
+max-min 語意多樣性。Resume 會載入最後已提交 snapshot；舊 checkpoint
 若缺少 context metadata，會先做同樣的 parent refresh 遷移再繼續。Self-play
 目前要求 `reflection_operator_mode: static` 與
 `parent_evaluation_mode: reuse_cached`。
+
+Self-play 對每個可執行完整 `CandidateAgent` 建立行為語意簽章：三張 configured map
+各取 early／mid／late 一個可行動、非 terminal 的重載 `GameState`，共九個 probe。
+每個 probe 使用新的 agent instance，將 unit action 依 unit ID 排序並 canonicalize
+後雜湊。語意距離是九個 action hash 的 normalized Hamming distance；dataset 或 probe
+順序不相容、或缺少簽章時只能作 fallback，不能被視為最 novel。完整結果以 phenotype
+hash、dataset hash 與 normalization version 快取；probe 失敗只記 diagnostic，不改 fitness。
 
 AllInBot 的 preflight 仍驗證 pinned upstream 原始 class 與 JAR hash；實際 search
 與 final test 則在 candidate class tree 之外編譯 reflection-only

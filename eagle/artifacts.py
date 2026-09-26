@@ -159,6 +159,16 @@ def write_candidate_artifacts(candidates_dir: Path, evaluation: CandidateEvaluat
             write_json(mutation_path, _mutation_metadata_record(mutation_record))
     write_json(candidate_dir / "timing.json", evaluation.candidate.timing)
     _write_evaluation_artifacts(candidate_dir, evaluation)
+    semantic_result = evaluation.semantic_signature_result
+    if semantic_result is not None:
+        write_json(
+            candidate_dir / "evaluation" / "semantic_signature.json",
+            {
+                **semantic_result.wrapper,
+                "candidate_id": evaluation.candidate.id,
+                "timing": evaluation.candidate.timing.get("semantic_probe"),
+            },
+        )
     write_candidate_snapshot(candidates_dir, evaluation.candidate)
 
 
@@ -645,6 +655,8 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
     if candidate.inherited_java or candidate.java_parent_id is not None:
         artifact_references["inherited_java"] = "genotype/inherited_java.java"
     candidate_dir = candidates_dir / candidate.id
+    if (candidate_dir / "evaluation" / "semantic_signature.json").is_file():
+        artifact_references["semantic_signature"] = "evaluation/semantic_signature.json"
     if (candidate_dir / "phenotype" / "CandidateAgent.java").is_file():
         artifact_references["generated_java"] = "phenotype/CandidateAgent.java"
     else:
@@ -676,6 +688,7 @@ def write_candidate_snapshot(candidates_dir: Path, candidate: Candidate) -> None
         "failure_stage": candidate.failure_stage,
         "failure_reason": candidate.failure_reason,
         "fitness_objectives": dict(candidate.fitness_objectives),
+        "semantic_signature": dict(candidate.semantic_signature),
         "aggregate_game_performance": game.get("game_performance"),
         "opponent_scores": dict(game.get("opponent_scores") or {}),
         "strategy_signature": dict(candidate.strategy_signature),

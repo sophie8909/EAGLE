@@ -13,7 +13,8 @@ matrix, diagnostics, objective construction, and candidate artifact writing.
 | Compilation | isolated class directory | compiler stdout/stderr and structured errors |
 | Integration | loadable MicroRTS agent | seven integration checks |
 | Match execution | 180 matches across ten active cases | retained match results and runtime failure |
-| Objective construction | ten active-case scores | ten `-1000.0` case scores on failure |
+| Semantic probing | nine canonical action hashes in self-play | diagnostic unavailable record; fitness unchanged |
+| Objective construction | ten fixed-roster cases or one self-play Game Performance score | matching `-1000.0` fitness on failure |
 
 `decode_validate_compile_candidate` is the single production boundary for the
 first three rows and can be called by a decoder smoke without launching
@@ -53,7 +54,7 @@ retry signal.
 snapshot as ten equally weighted `self_play_000`…`self_play_009` slots. A short
 snapshot is cycled deterministically; self-matches remain valid. Every match
 records the snapshot context plus source candidate/generation. Snapshot refresh
-first re-evaluates phenotype-preserving parent replicas, so lexicase never mixes
+first re-evaluates phenotype-preserving parent replicas, so selection never mixes
 old-context parents with new-context offspring. Resume reloads the last
 committed snapshot sidecar.
 
@@ -85,8 +86,8 @@ so an upstream defect can neither crash the JVM nor become a candidate win.
 
 ## Objective and diagnostics
 
-`evaluation/objectives.py` returns exactly one evolutionary score for each of
-the active mode's ten cases. `code_quality`, compiler diagnostics, function coverage,
+`evaluation/objectives.py` returns ten scores in fixed-roster mode. Self-play
+stores only aggregate `game_performance` as fitness. `code_quality`, compiler diagnostics, function coverage,
 strategy alignment, and runtime failure details remain in their diagnostic
 artifacts and reflection context; none is inserted into the evolutionary
 objective vector.
@@ -97,7 +98,9 @@ Per-candidate evaluation artifacts include:
 
 - `evaluation/game_performance.json`: aggregate Game Performance, opponent
   score mapping, opponent summaries, map/side summaries, and match summaries;
-- `evaluation/objectives.json`: ten-case objective mapping;
+- `evaluation/objectives.json`: active-mode objective mapping;
+- `evaluation/semantic_signature.json`: candidate provenance, compatible
+  dataset identity, cache reference, global hash, and timing/status;
 - `evaluation/code_quality.json`: code-quality diagnostics;
 - `evaluation/matches.json`: compact individual match records.
 

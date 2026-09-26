@@ -52,6 +52,12 @@ This is the canonical owner of candidate and LLM-attempt timing fields. Normativ
   "validation_duration_seconds": 0.0,
   "compilation_duration_seconds": 0.0,
   "integration_duration_seconds": 0.0,
+  "semantic_probe": {
+    "duration_seconds": 0.0,
+    "status": "complete",
+    "error": null,
+    "cache_hit": false
+  },
   "strategy_alignment_llm": {
     "started_at": null,
     "finished_at": null,
@@ -80,7 +86,7 @@ and no attempts when an empty policy makes the diagnostic not applicable.
 
 Self-play fitness refresh has null Java-generation timing and an empty attempt
 list because it reuses the source parent's phenotype. Its Integration, matches,
-objectives, and per-match timing are newly recorded.
+objectives, semantic cache lookup, and per-match timing are newly recorded.
 
 For bounded Java decoding, `generation_llm.attempts` is the ordered outer
 `generation_attempt` list and includes `generation_attempt_id`, request hash,

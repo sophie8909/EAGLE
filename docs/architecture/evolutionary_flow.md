@@ -1,7 +1,8 @@
 # EAGLE evolutionary flow
 
-This document describes the active implementation. The ten opponent cases are
-the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
+This document describes the active implementation. Fixed-roster evaluation
+uses ten opponent cases. Self-play uses scalar Game Performance plus exact
+behavior signatures only when scalar fitness is tied.
 
 ## Population lifecycle
 
@@ -22,7 +23,7 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    `randombias`, `lightrush`, `heavyrush`, `workerrush`, `allinbot`, `mayari`,
    `coac`, and `tma`.
 4. Plan the entire offspring population before any mutation LLM call. For each
-   slot, perform seeded-lexicase parent selection, assign crossover or copy for
+   slot, perform the configured mode's parent selection, assign crossover or copy for
    every active component, and assign either Strategy, Prompt, Code, or no
    mutation. Operator probabilities therefore describe one generation-level
    assignment boundary rather than an interleaving of planning and LLM work.
@@ -47,7 +48,7 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    mutation-evidence parent. Both adaptive modes feed one shared
    generation-level EMA updater.
 7. From generation 1 onward, combine evaluated parents and offspring and fill
-   the fixed population with seeded lexicase selection without replacement.
+   the fixed population with mode-specific selection without replacement.
    This is the `(mu + lambda)` environmental-selection model; when both sets
    have size `n`, it is the requested `(n + n)` form. The canonical default
    `parent_evaluation_mode: reuse_cached` uses the existing evaluated parents.
@@ -61,25 +62,31 @@ the evolutionary fitness dimensions; the weighted aggregate is reporting-only.
    each configured refresh generation, phenotype-preserving fresh-ID parent
    replicas are re-evaluated before reflection; only those replicas and
    offspring evaluated against that same context enter selection. Persist the
-   snapshot, refresh audit sidecar, surviving population, and metrics.
+   snapshot, refresh audit sidecar, surviving population, and metrics. The sole
+   objective is aggregate `game_performance`. Scores whose difference from the
+   current tier maximum is at most `1.0` are tied; tiers are never formed by
+   chained pairwise comparisons. Parent B and a cut survivor tier prefer the
+   greatest compatible Hamming distance across the nine action hashes.
 
 The implementation is in `eagle/search.py`, `eagle/selection.py`, and
 `eagle/evaluation.py`.
 
 ## Objective contract
 
-`Candidate.objective_vector()` in `eagle/candidate.py` contains exactly the ten
-active fitness cases. Fixed-roster IDs name static opponents; self-play IDs are
-`self_play_000` through `self_play_009`. All are maximized. Missing or failed cases use `-1000.0` from
-`eagle/opponent_cases.py`.
+In fixed-roster mode, `Candidate.objective_vector()` contains exactly the ten
+static-opponent fitness cases and selection is seeded lexicase. In self-play,
+`Candidate.fitness_objectives` contains only `game_performance`; the ten
+`self_play_*` slot scores remain diagnostics in `game_eval_result`. Failed
+candidates use `-1000.0`.
 
 `code_quality` is retained in `Candidate.code_quality_result` as a diagnostic
 and failure/implementation signal. It is not an evolutionary objective and is
 not consulted by lexicase, survivor selection, or the opponent archive.
 
-The weighted Game Performance aggregate is calculated with the fixed weights
+Fixed-roster weighted Game Performance is calculated with the fixed weights
 in `eagle/opponent_cases.py` (weight sum `12.5`). It is used for reporting and
 the convenient final representative only; it does not replace the ten cases.
+Self-play uses its unweighted aggregate as the single objective.
 
 ## Evaluation matrix
 
@@ -119,6 +126,9 @@ opponent case. Each generation JSON stores objective statistics for all
 ten cases and `opponent_scores.by_opponent` stores reporting summaries. The
 archive is intentionally not updated by self-play because those slot identities
 are snapshot-scoped.
+`python -m eagle analyze --semantics --run-dir <run>` reads existing wrapper and
+cache artifacts without executing agents, and writes candidate/probe tables,
+global/map/phase uniqueness statistics, and exact equivalence classes.
 offline analysis writes `opponent_game_performance.csv` and one
 `game_performance_by_generation_<opponent>.png` per opponent. It also writes
 per-agent, per-opponent win-rate rows/plots and `match_game_performance.csv` for the

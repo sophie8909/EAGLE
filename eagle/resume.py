@@ -135,7 +135,10 @@ def _resume_search_impl(
     mutations = runtime.mutations
     rng = random.Random(f"{config.random_seed}:{completed_generation}")
     operator_controller = runtime.operator_controller
-    population_state_signature = population_signature(population)
+    population_state_signature = population_signature(
+        population,
+        selection_mode=config.algorithm,
+    )
     stagnation = 0
     error_memory = load_error_memory(run_dir)
     stop_reason = None
@@ -282,8 +285,13 @@ def _resume_search_impl(
             evaluated,
             population_size=config.population_size,
             rng=rng,
+            selection_mode=config.algorithm,
+            fitness_tolerance=config.fitness_tie_tolerance,
         )
-        signature = population_signature(population)
+        signature = population_signature(
+            population,
+            selection_mode=config.algorithm,
+        )
         stagnation = stagnation + 1 if signature == population_state_signature else 0
         population_state_signature = signature
         generation_diversity = generation_diversity_metrics(population, previous_archive_niches=archive_before)

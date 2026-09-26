@@ -46,6 +46,14 @@ from evaluation.strategy_alignment import (
     build_strategy_alignment_backend,
     evaluate_strategy_alignment,
 )
+from evaluation.semantic_signature import (
+    ProbeMap,
+    SemanticDataset,
+    SemanticSignatureResult,
+    ensure_semantic_dataset,
+    evaluate_semantic_signature,
+    unavailable_semantic_signature,
+)
 from generation.agent_template import (
     JavaTemplatePaths,
     extract_strategy_region,
@@ -66,6 +74,7 @@ from .artifacts import (
 )
 from .candidate import Candidate, compact_candidate_metadata
 from .config import ExperimentConfig
+from .opponent_cases import FAILED_OPPONENT_SCORE
 from .prompts import load_prompt, render_prompt
 from .self_play import expand_self_play_slots
 from .timing import append_event
@@ -105,6 +114,7 @@ class CandidateEvaluation:
     strategy_alignment_result: StrategyAlignmentResult | None = None
     generation_timing: dict[str, object] | None = None
     generation_attempts: tuple["GenerationAttemptResult", ...] = ()
+    semantic_signature_result: SemanticSignatureResult | None = None
 
 
 @dataclass(frozen=True)
@@ -223,6 +233,33 @@ def evaluate_population(
     run_id: str | None = None,
     opponent_candidates: list[Candidate] | None = None,
 ) -> list[Candidate]:
+    semantic_dataset: SemanticDataset | None = None
+    semantic_dataset_error: str | None = None
+    if config.semantic_probes_enabled and not mock:
+        try:
+            probe_maps = tuple(
+                ProbeMap(
+                    map_id=f"map_{index + 1}_{Path(path).stem}",
+                    path=path,
+                    tick_limit=tick_limit,
+                )
+                for index, (path, tick_limit) in enumerate(zip(
+                    config.evaluation_maps,
+                    config.resolved_evaluation_map_tick_limits,
+                    strict=True,
+                ))
+            )
+            semantic_dataset = ensure_semantic_dataset(
+                microrts_dir=config.microrts_dir,
+                maps=probe_maps,
+                output_root=config.semantic_state_root,
+                reference_agents=config.semantic_reference_agents,
+                player_side=config.semantic_probe_player_side,
+                phase_fractions=config.semantic_phase_fractions,
+                timeout_seconds=config.semantic_probe_timeout_seconds,
+            )
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+            semantic_dataset_error = f"{type(exc).__name__}: {exc}"
     prepared: list[tuple[Candidate, BoundedGenerationResult]] = []
     for index, candidate in enumerate(population):
         print(
@@ -265,6 +302,9 @@ def evaluate_population(
             ordinal=index,
             bounded_generation=bounded_generation,
             opponent_pool=opponent_pool,
+            semantic_dataset=semantic_dataset,
+            semantic_dataset_error=semantic_dataset_error,
+            semantic_cache_root=candidates_dir.parent / "archives" / "semantic_signature_cache",
         )
         if run_timing_path is not None:
             _append_match_timing_events(
@@ -853,6 +893,9 @@ def evaluate_candidate(
     match_artifacts_dir: Path | None = None,
     bounded_generation: BoundedGenerationResult | None = None,
     opponent_pool: tuple[EvaluationOpponent, ...] | None = None,
+    semantic_dataset: SemanticDataset | None = None,
+    semantic_dataset_error: str | None = None,
+    semantic_cache_root: Path | None = None,
 ) -> CandidateEvaluation:
     """Evaluate one candidate through the canonical child pipeline.
 
@@ -1010,6 +1053,39 @@ def evaluate_candidate(
         else:
             match_error = integration_result.failure_reason or "MicroRTS integration failed."
 
+    # Semantic probing is independent diagnostic evidence. It is deliberately
+    # excluded from failure_stage and objective construction so an unavailable
+    # probe never changes game fitness.
+    if not config.semantic_probes_enabled:
+        semantic_result = unavailable_semantic_signature("semantic probes disabled")
+    elif mock:
+        semantic_result = unavailable_semantic_signature(
+            "mock evaluation does not fabricate executable semantic evidence"
+        )
+    elif semantic_dataset_error:
+        semantic_result = unavailable_semantic_signature(semantic_dataset_error)
+    elif semantic_dataset is None:
+        semantic_result = unavailable_semantic_signature("semantic probe dataset unavailable")
+    elif not compiler.compile_success or agent is None:
+        semantic_result = unavailable_semantic_signature("compiled candidate agent unavailable")
+    elif integration_result is None or not integration_result.ok:
+        semantic_result = unavailable_semantic_signature("candidate did not pass MicroRTS integration")
+    else:
+        semantic_result = evaluate_semantic_signature(
+            candidate_id=candidate.id,
+            agent_class=agent.qualified_class_name,
+            candidate_classes_dir=classes_dir / candidate.id,
+            phenotype_sha256=hashlib.sha256(generation.assembled_java.encode("utf-8")).hexdigest(),
+            dataset=semantic_dataset,
+            microrts_dir=config.microrts_dir,
+            cache_root=(
+                semantic_cache_root
+                if semantic_cache_root is not None
+                else classes_dir.parent / "archives" / "semantic_signature_cache"
+            ),
+            timeout_seconds=config.semantic_probe_timeout_seconds,
+        )
+
     # Stage 5: classify the first blocking failure without discarding partial
     # diagnostics or successful match records.
     failure_category: str | None = None
@@ -1103,7 +1179,7 @@ def evaluate_candidate(
             strategy_regions={"candidate_generated_methods": generation.strategy_region},
             strategy_region=region_score,
         )
-    objectives = build_objectives(
+    opponent_case_scores = build_objectives(
         game_metrics=game_metrics,
         code_quality=quality,
         game_failure=failure_stage is not None,
@@ -1112,6 +1188,17 @@ def evaluate_candidate(
             if opponent_pool is not None
             else config.lexicase_case_ids
         ),
+    )
+    objectives = (
+        {
+            "game_performance": (
+                FAILED_OPPONENT_SCORE
+                if failure_stage is not None
+                else float(game_metrics.objective)
+            )
+        }
+        if config.evaluation_mode == "self_play"
+        else opponent_case_scores
     )
     objective_finished_at = _utc_now()
     objective_duration = max(0.0, time.monotonic() - objective_started)
@@ -1147,7 +1234,7 @@ def evaluate_candidate(
     game_payload["game_performance"] = (
         game_metrics.objective
         if opponent_pool is not None
-        else reporting_game_performance(objectives)
+        else reporting_game_performance(opponent_case_scores)
     )
     game_payload["evaluation_configuration"] = {
         "maps": list(config.evaluation_maps),
@@ -1156,7 +1243,11 @@ def evaluate_candidate(
         "expected_match_count": expected_match_count,
         "mode": config.evaluation_mode,
     }
-    game_payload["fitness_case_ids"] = list(config.lexicase_case_ids)
+    game_payload["fitness_case_ids"] = (
+        ["game_performance"]
+        if config.evaluation_mode == "self_play"
+        else list(config.lexicase_case_ids)
+    )
     if opponent_pool is not None:
         context_rows = [
             {
@@ -1263,6 +1354,12 @@ def evaluate_candidate(
             "status": "success",
             "error": None,
         },
+        "semantic_probe": {
+            "duration_seconds": semantic_result.duration_seconds,
+            "status": semantic_result.status,
+            "error": semantic_result.wrapper.get("failure_reason"),
+            "cache_hit": semantic_result.wrapper.get("cache_hit"),
+        },
     }
     mutation_generation = timing.get("mutation", {}).get("generation_only_duration_seconds", 0.0)
     crossover_generation = timing.get("crossover", {}).get("generation_only_duration_seconds", 0.0)
@@ -1308,6 +1405,7 @@ def evaluate_candidate(
         game_eval_result=game_payload,
         code_quality_result=quality_payload,
         fitness_objectives=objectives,
+        semantic_signature=semantic_result.summary,
         strategy_signature=dict(candidate.strategy_signature),
         strategy_niche=candidate.strategy_niche,
         mutation_intent=candidate.mutation_intent,
@@ -1370,6 +1468,7 @@ def evaluate_candidate(
         error=failure_reason,
         generation_timing=generation_timing,
         generation_attempts=generation_attempts,
+        semantic_signature_result=semantic_result,
     )
 
 
@@ -1814,7 +1913,7 @@ def print_progress(*, generation: int, index: int, population_size: int, evaluat
     print(
         f"[gen {generation} cand {index + 1}/{population_size}] "
         f"{candidate.id} status={candidate.status} "
-        f"opponent_scores={candidate.fitness_objectives} "
+        f"fitness_objectives={candidate.fitness_objectives} "
         f"{game_performance_detail} "
         f"code_quality_simplicity={quality.code_quality} "
         f"complexity_penalty={quality.complexity_penalty} "

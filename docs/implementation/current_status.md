@@ -29,18 +29,20 @@ Snapshot: 2026-09-24. This file describes executable repository behavior.
   `match_seeds` field, unread `eagle.match.seed` JVM property, and match-level
   seed artifacts are removed; MicroRTS matches do not claim seeded
   reproducibility.
-- Candidate fitness is a ten-field opponent score mapping. Failed or
-  incomplete candidates receive `-1000.0` for every case.
+- Fixed-roster candidate fitness is a ten-field opponent score mapping.
+  Self-play candidate fitness contains only `game_performance`. Failed or
+  incomplete candidates receive `-1000.0` for the active objective(s).
 - Explicit `evaluation.mode: self_play` uses immutable snapshot contexts and
   `self_play_000`…`self_play_009` cases with uniform weights. Runnable snapshot
   candidates cycle to fill ten slots. Refresh generations re-evaluate
   phenotype-preserving fresh-ID parents before reflection and selection; resume
   reloads the last committed snapshot and migrates pre-context checkpoints by
   refreshing parents against it. This mode requires static reflection.
-- Parent selection is seeded lexicase. Survivor selection repeatedly applies
-  seeded lexicase without replacement to the joint parent-plus-offspring
-  (`mu_plus_lambda`) pool until the fixed population is full; aggregate Game
-  Performance and generation age are reporting-only.
+- Fixed-roster parent/survivor selection is seeded lexicase. Self-play maximizes
+  Game Performance, treats scores within `1.0` of a tier maximum as tied, and
+  uses nine-probe full-agent behavior distance to preserve different semantics
+  inside the tied tier. Survivor selection always uses the joint
+  parent-plus-offspring (`mu_plus_lambda`) pool.
 - `parent_evaluation_mode: reuse_cached` is the canonical default and never
   regenerates surviving parents. The non-canonical
   `regenerate_same_genotype` diagnostic is limited to inherited Java plus

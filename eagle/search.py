@@ -124,6 +124,8 @@ def build_parent_evaluation_replicas(
             strategy_parent_id=parent.strategy_parent_id,
             generation_prompt_parent_id=parent.generation_prompt_parent_id,
             source_candidate_ids=parent.source_candidate_ids,
+            # Re-materialization may change the executable phenotype.
+            semantic_signature={},
             strategy_signature=dict(parent.strategy_signature),
             strategy_niche=parent.strategy_niche,
             metadata={
@@ -157,6 +159,9 @@ def build_self_play_fitness_refresh_replicas(
             strategy_parent_id=parent.id,
             generation_prompt_parent_id=parent.id,
             source_candidate_ids=(parent.id,),
+            # The refresh reuses byte-identical Java and the immutable probe
+            # suite, so its semantic evidence remains valid and cacheable.
+            semantic_signature=dict(parent.semantic_signature),
             strategy_signature=dict(parent.strategy_signature),
             strategy_niche=parent.strategy_niche,
             metadata={
@@ -425,7 +430,10 @@ def _run_search_impl(
     print(diversity_console_summary(0, generation_diversity), flush=True)
     error_memory = record_error_memory(run_dir, evaluated_population)
 
-    population_state_signature = population_signature(evaluated_population)
+    population_state_signature = population_signature(
+        evaluated_population,
+        selection_mode=config.algorithm,
+    )
     self_play_opponent_snapshot = (
         runnable_self_play_candidates(evaluated_population)
         if config.evaluation_mode == "self_play"
@@ -557,8 +565,13 @@ def _run_search_impl(
             evaluated_offspring,
             population_size=config.population_size,
             rng=rng,
+            selection_mode=config.algorithm,
+            fitness_tolerance=config.fitness_tie_tolerance,
         )
-        current_population_signature = population_signature(evaluated_population)
+        current_population_signature = population_signature(
+            evaluated_population,
+            selection_mode=config.algorithm,
+        )
         if current_population_signature == population_state_signature:
             stagnation_count += 1
         else:
@@ -653,8 +666,19 @@ def plan_offspring(
     while len(plans) < config.population_size:
         context_index = len(plans)
         parent_selection_started = time.monotonic()
-        parent_a = select_parent(population, rng)
-        parent_b = select_parent(population, rng)
+        parent_a = select_parent(
+            population,
+            rng,
+            selection_mode=config.algorithm,
+            fitness_tolerance=config.fitness_tie_tolerance,
+        )
+        parent_b = select_parent(
+            population,
+            rng,
+            selection_mode=config.algorithm,
+            fitness_tolerance=config.fitness_tie_tolerance,
+            semantic_reference=parent_a,
+        )
         parent_selection_duration = max(0.0, time.monotonic() - parent_selection_started)
         if len(population) > 1 and rng.random() < config.crossover_rate:
             crossover_started_at = utc_now()
