@@ -80,7 +80,7 @@ Resolved config：`/home/mhlab/EAGLE/runs/20260928_115653_334420/config.yaml`
 - `20260923_134743_200030`：目前 self-play 10×20 comparison 的 legacy baseline。
 - model parameter audit 與 seed comparison 明確引用的 historical control runs。
 
-本次已完成盤點；以下 raw run 已列為刪除候選，但因目錄合計約 70 GB、且刪除不可復原，需在執行前由使用者確認這份精確清單：
+本次已依使用者確認刪除以下 21 個 raw run，合計約 70 GB；09/24 以前仍作為 control、baseline、seed/model audit 或現行比較依據的 run 均保留：
 
 ```text
 20260811_145941_699720  20260812_153827_980509  20260813_134047_831263
@@ -92,7 +92,7 @@ Resolved config：`/home/mhlab/EAGLE/runs/20260928_115653_334420/config.yaml`
 20260921_120920_977136  20260922_115743_497216  20260923_133624_926898
 ```
 
-在確認前不刪除；Notion 頁面與本分析已保留整理後的歷史索引與候選清單。
+刪除後已核對：上述 21 個目錄均不存在，保留清單與目標 run 均仍可讀取；Notion 頁面同步記錄清理完成與保留原則。
 
 ## Sources
 
