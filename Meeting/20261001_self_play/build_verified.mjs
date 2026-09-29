@@ -27,10 +27,10 @@ function chart(s,categories,series,pos={left:70,top:175,width:1130,height:390},o
 let s=slide('EAGLE 實驗比較與結果校核','研究會議｜實驗資料截至 2026/09/29','來源：Meeting/20261001/README.md；Notion MicroRTS EAGLE 實驗資料庫。');
 text(s,'Self-play 結果、歷史對照與缺漏實驗',62,210,1120,78,42,C.ink,true);
 text(s,'所有結果先按 run ID、resolved config 與共同 600 場 final test 校核',64,310,1110,50,26,C.body);
-text(s,'涵蓋 09/07–09/29 分析文件與 Notion 0924 後 4 次 self-play runs',64,375,1110,40,22,C.body);
+text(s,'涵蓋 09/07–09/29 分析文件與 Notion 0924 後 3 次單一 game_performance 目標 self-play runs',64,375,1110,40,22,C.body);
 
 s=slide('原草稿需更新的數字與比較口徑','舊版資料仍有參考價值，但不能當作最新 10×20 結果','Meeting/20261001_self_play/20261001_palette.pptx；Meeting/20261001/README.md；Notion 0925–0927 pages.');
-table(s,[['校核項目','校正後口徑'],['0923 10×20 與 0927 10×20','不同 run。0927 semantic tie-break 為 0/444/156/0 W/L/D/E；舊 0923 為 0/449/151/0。'],['0925 5×40 identity','以 config 與 run ID 判斷；manifest experiment_name 誤寫為 self_play_10x20。'],['比分順序','全簡報統一使用 W/L/D/E；不得混用 W/D/L。'],['fitness 比較','Self-play snapshot 每 5 代換對手 context；跨 snapshot/run 不直接比較 GP。'],['因果結論','舊草稿的 5×40 優勢是觀察結果；selection 版本、refresh hash 漂移與 repository revision 仍是混淆因子。']],180,350,[300,860],20);
+table(s,[['校核項目','校正後口徑'],['0923 10×20 與 0927 10×20','不同 run。0927 semantic tie-break 為 0/444/156/0 W/L/D/E；舊 0923 為 0/449/151/0。'],['0925 5×40 evaluation','舊 lexicase 對 10 個 self-play snapshot opponents；不是單一 game_performance 目標，排除主表。'],['單一目標範圍','0926–0927 三組只有 game_performance 數值目標；semantic tie-break 有使用、但只在 fitness 差距 ≤1.0 時決勝。'],['比分順序','全簡報統一使用 W/L/D/E；不得混用 W/D/L。'],['fitness 比較','Self-play snapshot 每 5 代換對手 context；跨 snapshot/run 不直接比較 GP。']],180,350,[300,860],20);
 
 takeaway(s,'外部泛化統一看共同 600 場 fixed-roster final test 的 W/L/D/E');
 
@@ -59,9 +59,10 @@ table(s,[['可確認','仍不能確認'],['Strategy / Prompt / Code Reflection �
 text(s,'09/08 版本加入 generation-wide materialization 與可選 generation_model，模型比較之後才能維持相同 20×10 搜尋條件。',62,502,1135,55,20,C.body);
 takeaway(s,'operator schedule 的效果尚無乾淨、足量的單因子對照');
 
-s=slide('0924 後 self-play 四組 run','Notion 記錄與本地 README 的 run ID、配置和 final test 相符','本地 Meeting/20261001/README.md；Notion：0925 5×40、0926 10×10、0926 5×20、0927 10×20 pages.');
-table(s,[['Run / protocol','Gen × pop','FFE','Final test W/L/D/E'],['0925 5×40 legacy lexicase','40 × 5','200','197 / 392 / 11 / 0'],['0926 10×10 semantic tie-break','10 × 10','100','257 / 321 / 22 / 0'],['0926 5×20 semantic tie-break','20 × 5','100','0 / 388 / 212 / 0'],['0927 10×20 semantic tie-break','20 × 10','200','0 / 444 / 156 / 0']],178,340,[390,220,150,400],20);
-text(s,'四組都完成 600 場 final test，Integration 7/7，match errors = 0。10×10 的 final test wins 最高：257/600（42.83%）。',62,542,1140,42,20,C.body);
+s=slide('0924 後單一目標 self-play：三組 run','semantic tie-break 有使用，但不是第二個目標；只列 game_performance 作 selection objective','本地 Meeting/20261001/README.md；Notion 0926 10×10、0926 5×20、0927 10×20 pages.');
+table(s,[['Run','Gen × pop','FFE','Search best GP¹','固定對手 final test W/L/D/E'],['0926 10×10（semantic tie-break）','10 × 10','100','0.666667','257 / 321 / 22 / 0'],['0926 5×20（semantic tie-break）','20 × 5','100','1.326067','0 / 388 / 212 / 0'],['0927 10×20（semantic tie-break）','20 × 10','200','1.263534','0 / 444 / 156 / 0']],178,335,[285,145,90,175,465],19);
+text(s,'三組 final test 都完成 600 場、Integration 7/7、match errors = 0。¹ Search GP 是各 run 當時 self-play snapshot 下的分數；snapshot 不同，分數不可跨 run 當作同尺度排名。',62,530,1140,55,19,C.body);
+takeaway(s,'同一張表並列 self-play selection 訊號與固定對手實戰結果',610);
 
 s=slide('100 FFE：10×10 明顯優於 5×20，但只有單次觀察','兩組使用 semantic tie-break、相同 9 個 semantic probes 與 600 場 final test','Meeting/20261001/analysis_md/20260928_self_play_10x10_vs_5x20.md；Notion 0926 pages.');
 chart(s,['10×10','5×20'],[{name:'Wins',values:[257,0],fill:palette.chart.win},{name:'Draws',values:[22,212],fill:palette.chart.draw},{name:'Losses',values:[321,388],fill:palette.chart.loss}],{left:80,top:175,width:1080,height:365},{barOptions:{grouping:'stacked'},dataLabels:{position:'center'},yAxis:{max:600,majorUnit:100}});
@@ -72,41 +73,41 @@ s=slide('100 FFE：差異涵蓋多數對手，不只單一 matchup','每個對�
 table(s,[['Opponent','10×10 wins','5×20 wins'],['PassiveAI / RandomAI','60 / 60','0 / 0'],['RandomBiasedAI','46','0'],['LightRush / HeavyRush','20 / 30','0 / 0'],['WorkerRush / AllInBot','10 / 10','0 / 0'],['Mayari / COAC','11 / 10','0 / 0'],['TMA','0','0'],['Map wins: 8×8 / 16×16 / 24×24','130 / 77 / 50','0 / 0 / 0']],180,360,[430,365,365],20);
 text(s,'10×10 勝率隨地圖放大下降：65.0% → 38.5% → 25.0%；5×20 三張圖均無勝場。',62,558,1140,40,20,C.body);
 
-s=slide('200 FFE：缺少 5×40 semantic-tie-break run','這組缺漏讓 10×20 vs 5×40 的配置比較暫時不成立','Notion 0925 / 0927 pages；configs/experiments/0929/README.md.');
-table(s,[['已有實驗','配置','協定','W/L/D/E'],['0927 run 20260928_115653_334420','10×20, 200 FFE','semantic tie-break','0 / 444 / 156 / 0'],['0925 run 20260925_134245_911171','5×40, 200 FFE','legacy lexicase','197 / 392 / 11 / 0'],['0929 待跑 config','5×40, 200 FFE','semantic tie-break','待測']],180,290,[315,205,330,310],20);
-text(s,'0925 legacy 5×40 和 0927 semantic 10×20 不能當作只改人口／世代的對照，selection protocol 不同。',62,504,1135,55,21,C.body);
-takeaway(s,'新增的 5×40 semantic config 同時補齊 FFE allocation 與 selection-method 配對');
+s=slide('200 FFE：5×40 semantic run 尚未執行','0929 config 補齊單一目標 self-play allocation arm；semantic tie-break 僅為近似同分判定','Notion 0927 page；configs/experiments/0929/README.md.');
+table(s,[['比較問題','已有實驗','0929 補缺','目前狀態'],['allocation：10×20 vs 5×40','0927 semantic 10×20','single-GP semantic 5×40','5×40 尚無結果'],['evaluation context：10×20','0927 single-GP self-play','fixed-opponent control','control config 待跑']],180,285,[300,330,330,200],20);
+text(s,'0925 legacy lexicase 也是 self-play（10 個 snapshot opponents），排除於單一目標主表。兩個 0929 config 分別補 5×40 單一目標 allocation 與 10×20 固定對手 evaluation control。',62,500,1135,58,20,C.body);
+takeaway(s,'兩個缺漏 arm 都已放入 0929 config 資料夾');
 
-s=slide('同為 10×20 的兩次 self-play 結果不能合併','舊草稿 0/151/449 是 0923 run，不是 0927 semantic-tie-break run','Meeting/20261001/analysis_md/20260923_self_play_20x10.md；Notion 0927 Self-play 10×20 page.');
-table(s,[['Run','Search protocol','Final test W/L/D/E','Refresh audit'],['0923 20260923_134743_200030','較早 self-play protocol','0 / 449 / 151 / 0','舊版分析資料'],['0927 20260928_115653_334420','semantic tie-break','0 / 444 / 156 / 0','14/50 Java hashes preserved']],180,240,[340,330,300,190],20);
-text(s,'表現差異可描述，不能只歸因於 semantic tie-break：source revision、refresh Java 漂移、候選 failures 和 initial population 都不同。',62,472,1135,60,21,C.body);
-takeaway(s,'保留 run ID，避免以相同 10×20 標籤覆蓋不同協定');
+s=slide('固定對手組 vs self-play：10×20 歷史對照與待補控制','兩個已完成 run 同為 10×20 / 200 FFE；舊 fixed-roster run 來自較早版本','Meeting/20261001/analysis_md/20260926_self_play_comparison.md；Notion 0927 10×20 page；configs/experiments/0929/fixed_opponent_10x20_control.yaml.');
+table(s,[['Arm','搜尋期 evaluation','目標口徑','FFE','固定對手 final test W/L/D/E'],['09/11 固定對手 baseline','10 個固定 opponents','opponent_cases；較早 repository state','200','256 / 332 / 12 / 0'],['09/27 self-play run','10 個 snapshot slots','單一 game_performance；semantic tie-break ≤1.0','200','0 / 444 / 156 / 0'],['0929 matched rerun','固定 opponent cases','opponent_cases；沿用 baseline 參數','200','待跑']],180,260,[250,230,360,80,240],17);
+text(s,'歷史數字可並列，但不是乾淨因果估計。0929 control 固定 10×20、模型、prompt、地圖與 offspring 預算；要做同版本單因子對照，需在同一 source revision 重跑兩種 evaluation。',62,470,1135,66,19,C.body);
+takeaway(s,'舊版固定對手組勝 256 場；0927 self-play 在共同 final test 勝 0 場');
 
 s=slide('Semantic tie-break 有界：只保留同 fitness tier 的行為差異','tie-break 無法跨過 fitness 差距補回已消失的語意多樣性','Meeting/20261001/analysis_md/20260928_self_play_10x10_vs_5x20.md；Notion 0926 pages.');
 table(s,[['觀察','10×10','5×20'],['Final unique semantic signatures','1 / 10','2 / 5'],['最高 tier 的候選池','多代只有 1 種語意','G8 曾有 10 種，末代剩 2 種'],['Final self-play W/D/L','60 / 60 / 60','0 / 180 / 0'],['Fixed-roster wins','257','0']],180,285,[390,385,385],21);
 text(s,'9 個 fixed probe states 只描述局部 action semantics，無法單獨保證整場比賽會進攻、追擊或結束。',62,500,1135,50,21,C.body);
 
-s=slide('Refresh Java 漂移與 candidate failures 是主要有效性風險','所有 4 個 Notion runs 的 final tests 無 match errors；演化路徑仍有紀錄完整性 caveat','Notion 0925–0927 pages；Meeting/20261001/analysis_md/20260928_self_play_10x10_vs_5x20.md.');
-table(s,[['Run','Refresh records','Java hash 保留','Candidate failures'],['0925 5×40 legacy','40','14/40','2 / 245'],['0926 10×10 semantic','20','5/20','5 / 130'],['0926 5×20 semantic','25','8/25','3 / 130'],['0927 10×20 semantic','50','14/50','28 / 260']],180,300,[330,240,270,320],21);
-text(s,'0927 的 28 failures：validation 19、generation 7、compilation 2。0926 5×20 多出 generation 4 migration refresh。',62,512,1135,50,20,C.body);
+s=slide('三組單一目標 runs：refresh 漂移與 candidate failures','final test 無 match errors；演化路徑仍有紀錄完整性 caveat','Notion 0926–0927 pages；Meeting/20261001/analysis_md/20260928_self_play_10x10_vs_5x20.md.');
+table(s,[['Run','Refresh records','Java hash 保留','Candidate failures'],['0926 10×10 semantic','20','5/20','5 / 130'],['0926 5×20 semantic','25','8/25','3 / 130'],['0927 10×20 semantic','50','14/50','28 / 260']],180,300,[330,240,270,320],21);
+text(s,'0927 的 28 failures：validation 19、generation 7、compilation 2。0926 5×20 多出 generation 4 migration refresh。semantic 只做 tie resolution，非第二 objective。',62,512,1135,50,19,C.body);
 takeaway(s,'固定對手 final test 可讀作實際策略結果；演化機制歸因需先修正 refresh invariant');
 
-s=slide('整體結果：高 FFE 或較多世代沒有保證更強','本批四組單次 runs 中，10×10 的共同外部測試勝場最多','Notion MicroRTS EAGLE runs dated 2026-09-25 to 2026-09-28.');
-chart(s,['0925 5×40 legacy','0926 10×10 sem.','0926 5×20 sem.','0927 10×20 sem.'],[{name:'Wins',values:[197,257,0,0],fill:palette.chart.win},{name:'Draws',values:[11,22,212,156],fill:palette.chart.draw},{name:'Losses',values:[392,321,388,444],fill:palette.chart.loss}],{left:70,top:170,width:1140,height:370},{barOptions:{grouping:'stacked'},dataLabels:{position:'center'},yAxis:{max:600,majorUnit:100}});
-text(s,'Observed ordering: 10×10 > legacy 5×40 > semantic 5×20 ≈ semantic 10×20 by wins. Protocol and refresh differences prevent ranking config effects.',62,565,1140,35,18,C.body);
-takeaway(s,'優先以 10×10 作可重現的近期戰力基準，先釐清 phenotype-preserving refresh');
+s=slide('三組單一目標結果：同 FFE 內差距仍很大','只有 10×10 與 5×20 同為 100 FFE；200 FFE 的 5×40 arm 尚待跑','Notion 0926–0927 Self-play runs.');
+chart(s,['0926 10×10','0926 5×20','0927 10×20'],[{name:'Wins',values:[257,0,0],fill:palette.chart.win},{name:'Draws',values:[22,212,156],fill:palette.chart.draw},{name:'Losses',values:[321,388,444],fill:palette.chart.loss}],{left:70,top:170,width:1140,height:370},{barOptions:{grouping:'stacked'},dataLabels:{position:'center'},yAxis:{max:600,majorUnit:100}});
+text(s,'Fixed-roster results are outcomes against the common opponent group; they do not equal the self-play Game Performance objective. Cross-FFE results are descriptive only.',62,565,1140,35,18,C.body);
+takeaway(s,'10×10 是目前固定對手測試勝場最高的 single-objective run');
 
 s=slide('0929 實驗矩陣：缺漏 arm 與可回答問題','新增參數只定義待跑條件，尚未聲稱已有實驗結果','configs/experiments/0929/README.md; self_play_5x40_semantic_tiebreak.yaml.');
-table(s,[['比較組','已存在','0929 補缺','單一問題'],['100 FFE allocation','10×10 vs 5×20 semantic','已各跑一次；重跑需修 refresh','族群深度配置'],['200 FFE allocation','10×20 semantic','5×40 semantic','族群深度配置'],['5×40 selection','legacy lexicase','semantic tie-break','selection protocol']],180,260,[300,340,330,190],19);
+table(s,[['比較組','已存在','0929 補缺','單一問題'],['100 FFE allocation','10×10 vs 5×20 semantic','已各跑一次；重跑需修 refresh','族群深度配置'],['200 FFE allocation','10×20 semantic','5×40 semantic','族群深度配置'],['evaluation context at 10×20','0927 self-play GP','0929 fixed opponent cases','搜尋期評估方式']],180,260,[300,340,330,190],19);
 text(s,'每個新 run 固定模型、seed prompt、地圖、mutation、refresh 間隔與 final-test roster；固定同一初始族群 artifact 後再做多個獨立 replicates。',62,477,1140,70,20,C.body);
-takeaway(s,'0929 新增 config 可同時作為兩個 200 FFE 配對的共用對照組');
+takeaway(s,'0929 新增 config 分別補齊 200 FFE allocation 與 fixed-opponent evaluation control');
 
 s=slide('新增 config 的參數與預期控制條件','config 源自 semantic 10×20；僅更改 experiment name、generations 和 population size','configs/experiments/0929/self_play_5x40_semantic_tiebreak.yaml；對照 configs/experiments/0926_self_play_sent/self_play_10x20.yaml.');
-table(s,[['參數','0929 設定'],['Algorithm / tie-break','game_performance_semantic_tiebreak；fitness tie tolerance 1.0'],['Generations × population','40 × 5 = 200 regular offspring'],['Model / EA seed','ministral3_8b / 7'],['Self-play refresh','每 5 代；10 個 self-play slots 沿用源 config'],['Semantic probes','3 maps × early/mid/late = 9 states'],['Maps / rounds / sides','8×8、16×16、24×24；3 rounds；swap sides'],['Mutation / crossover','0.33 / 0.33 / 0.34；0.75 / 1.0']],178,335,[360,800],19);
+table(s,[['參數','0929 設定'],['Objective / semantic tie-break','game_performance 單一目標；tie ≤1.0 使用 semantic probes 決勝'],['Generations × population','40 × 5 = 200 regular offspring'],['Model / EA seed','ministral3_8b / 7'],['Self-play refresh','每 5 代；10 個 self-play slots 沿用源 config'],['Semantic probes','3 maps × early/mid/late = 9 states'],['Maps / rounds / sides','8×8、16×16、24×24；3 rounds；swap sides'],['Mutation / crossover','0.33 / 0.33 / 0.34；0.75 / 1.0']],178,335,[360,800],19);
 text(s,'FFE 同額指 offspring 數；gen0、refresh replicas 和 retries 另計。執行前先確保 refresh 不會重生或改寫 Java phenotype。',62,548,1140,46,19,C.body);
 
 s=slide('來源與數據限制','以 canonical run artifacts 為優先；本次可用的 0924 後彙整為 Notion page + meeting snapshot','Notion database MicroRTS EAGLE; Meeting/20261001/README.md and analysis_md/*.md.');
-table(s,[['來源組','納入文件／記錄'],['Self-play','Notion 0925、0926 10×10、0926 5×20、0927 10×20；README.md 與 3 份 self-play analysis'],['Earlier controlled studies','09/07 reflection、09/10 model、09/12 initialization、09/14 parent regeneration'],['Cross-cutting','experiment_results_after_0907.md；version_summary_after_0907.md；model_parameter_audit.md'],['Limit','本地 runs 資料夾未提供 0925–0927 原始 run artifacts；近期細節以 Notion page 和同步的 analysis_md 為證據。']],180,300,[340,820],19);
+table(s,[['來源組','納入文件／記錄'],['Single-objective 主分析','Notion 0926 10×10、0926 5×20、0927 10×20；README.md 與 self-play analysis'],['evaluation-mode control','09/11 fixed-roster 10×20 歷史 run；0929 同設定重跑 config 待執行'],['Earlier controlled studies','09/07 reflection、09/10 model、09/12 initialization、09/14 parent regeneration'],['Limit','0929 5×40 與 fixed-opponent control configs 尚未執行；無新結果。近期細節以 Notion page 和 analysis_md 為證據。']],180,300,[340,820],19);
 text(s,'Notion sources: https://app.notion.com/p/3eac9b9735d9810d87b4ce89769bd4b6 ; https://app.notion.com/p/3eac9b9735d981f78c00e9a7706af646 ; https://app.notion.com/p/3eac9b9735d98115b78be874b606a195 ; https://app.notion.com/p/3eac9b9735d981518b7cf0dfe691ade7',62,515,1150,62,14,C.body);
 
 await fs.mkdir(build,{recursive:true});
@@ -118,7 +119,8 @@ const template=path.join(root,'Meeting/template/EAGLE.potx');
 const reference=path.join(build,'EAGLE-reference.pptx');
 await fs.copyFile(template,reference);
 execFileSync(path.join(runtime,'python/python.exe'),[path.join(root,'Meeting/20261001_self_play/apply_template.py'),authored,template,draft],{stdio:'inherit'});
-const finalPath=path.join(output,'20261001_verified.pptx');
-try{await fs.access(finalPath);throw new Error(`Refusing to overwrite ${finalPath}`);}catch(e){if(e.code!=='ENOENT')throw e;}
-const result=await finalizePresentation({workspaceDir:root,candidatePath:draft,finalPath,pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-heading-fit',...tableSlides.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:18,requiredNativeTableOwnerSlides:tableSlides,requiredNativeChartOwnerSlides:chartSlides,materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'reference',families:[F],referencePath:reference,referenceSha256:createHash('sha256').update(await fs.readFile(reference)).digest('hex')},verifyArtifactToolImport:true,receiptPath:path.join(validation,'20261001_verified.validation.json')});
-console.log(JSON.stringify({finalPath:result.finalPath,receiptPath:result.receiptPath,slides:p.slides.items.length,tables:tableSlides,charts:chartSlides}));
+const finalPath=path.join(build,'20261001_verified_finalized_rev2.pptx');
+const result=await finalizePresentation({workspaceDir:root,candidatePath:draft,finalPath,pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-heading-fit',...tableSlides.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:18,requiredNativeTableOwnerSlides:tableSlides,requiredNativeChartOwnerSlides:chartSlides,materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'reference',families:[F],referencePath:reference,referenceSha256:createHash('sha256').update(await fs.readFile(reference)).digest('hex')},verifyArtifactToolImport:true,receiptPath:path.join(validation,'20261001_verified_revision2.validation.json')});
+const published=path.join(output,'20261001_verified.pptx');
+await fs.copyFile(result.finalPath,published);
+console.log(JSON.stringify({finalPath:published,validatedCandidate:result.finalPath,receiptPath:result.receiptPath,slides:p.slides.items.length,tables:tableSlides,charts:chartSlides}));
