@@ -48,3 +48,13 @@ Official Flaticon Uicons, regular rounded outline family:
 Check current package contents and terms before use. In the observed package, the regular-rounded icons were supplied as a font plus CSS mappings. Glyph outlines were converted to native PowerPoint paths, keeping them editable and independent of an installed icon font. SVG sources may be simpler when provided. Include the required credit, for example `Uicons by Flaticon · flaticon.com/uicons`, visibly without colliding with the footer or floral corners.
 
 The rejected direction was rose-and-gold engraved compass, parchment/quill, and heraldic shield illustrations with wreaths. Their color palette matched, but their texture, detail, and form did not. Do not reuse them as the reference style.
+
+## EAGLE report color roles (0917 reference)
+
+For later EAGLE meeting reports, use `Meeting/20260917.pptx` for color application and `Meeting/template/EAGLE.palette.json` as the shared values. The 0830 images remain historical references.
+
+- Table headers: dusty blush `#DEB4BA` with charcoal `#423C3B` text. Body rows: ivory `#FCF8F5`; selected rows only: pale gold `#FAEDC6`. Avoid dark burgundy header blocks or alternating pink body rows.
+- Titles, key numbers and takeaway sentences: burgundy `#47171C`; ordinary body: charcoal `#423C3B`. Do not recolor takeaway sentences brown/gold.
+- Chart comparisons: rose `#CF8792` and burgundy `#47171C`, with muted rose `#CF9BA5` for an additional series. Keep series identity consistent within a comparison.
+- `EAGLE.potx` stores these chart theme accents, a native default table style, and a sample table showing ordinary and highlighted rows. Preserve the existing 12 layouts, background, serif font, and automatic page numbers.
+- Authoring scripts must read the shared palette instead of adding a separate hard-coded palette.

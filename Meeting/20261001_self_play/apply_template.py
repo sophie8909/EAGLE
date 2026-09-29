@@ -88,6 +88,12 @@ def main(authored,template,output):
   title,subtitle=texts(shapes[0]),texts(shapes[1])
   for shape in shapes[:4]: tree.remove(shape)
   for item in list(tree)[2:]: resize(item)
+  for table in tree.findall('.//a:tbl',NS):
+   props=table.find('a:tblPr',NS)
+   if props is None: props=E.Element('{'+A+'}tblPr');table.insert(0,props)
+   props.set('firstRow','1');props.set('bandRow','0')
+   for oldstyle in props.findall('a:tableStyleId',NS):props.remove(oldstyle)
+   E.SubElement(props,'{'+A+'}tableStyleId').text=xml(tpl['ppt/tableStyles.xml']).get('def')
   layout=xml(tpl[f'ppt/slideLayouts/slideLayout{layouts[i-1]}.xml'])
   maxid=max(int(e.get('id')) for e in tree.iter('{'+P+'}cNvPr'))+1
   # Keep the template title geometry, fitting long research headings locally.

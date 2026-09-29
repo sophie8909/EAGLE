@@ -1,0 +1,30 @@
+{
+  "reference": "Meeting/20260917.pptx",
+  "referenceSha256": "21be6c71b85d6ca808fe290da2016b02b6f5a104b3a2a6e3985bc3b53118899b",
+  "font": "Source Han Serif TW",
+  "background": "#FCF8F5",
+  "heading": "#47171C",
+  "body": "#423C3B",
+  "rose": "#CF8792",
+  "border": "#DEB4BA",
+  "highlight": "#FAEDC6",
+  "gold": "#C69B45",
+  "table": {
+    "headerFill": "#DEB4BA",
+    "headerText": "#423C3B",
+    "bodyFill": "#FCF8F5",
+    "bodyText": "#423C3B",
+    "highlightFill": "#FAEDC6",
+    "border": "#423C3B"
+  },
+  "chart": {
+    "series": [
+      "#CF8792",
+      "#47171C",
+      "#CF9BA5"
+    ],
+    "win": "#CF8792",
+    "draw": "#FAEDC6",
+    "loss": "#DEB4BA"
+  }
+}
