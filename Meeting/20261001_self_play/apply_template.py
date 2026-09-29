@@ -77,7 +77,7 @@ def main(authored,template,output):
  source_rels=xml(src['ppt/_rels/presentation.xml.rels'])
  source_pres=xml(src['ppt/presentation.xml'])
  source_map={r.get('Id'):r for r in source_rels}
- layouts=[9,9,3,10,10,10,9,9,9,9,10,3,9,9,3]
+ layouts=[9,9,10,3,10,10,9,10,10,3,10,10,3,10,10,9,10,10]
  for i,oldid in enumerate(source_pres.find('p:sldIdLst',NS),1):
   rid='rIdReportSlide'+str(i);r=copy.deepcopy(source_map[oldid.get('{'+R+'}id')]);r.set('Id',rid);rels.append(r)
   E.SubElement(ids,'{'+P+'}sldId',{'id':str(255+i),'{'+R+'}id':rid})
@@ -127,11 +127,11 @@ def main(authored,template,output):
  out['[Content_Types].xml']=dump(ct)
  for n in tpl:
   if n.startswith(('ppt/slideMasters/','ppt/slideLayouts/','ppt/theme/','ppt/media/')):assert out[n]==tpl[n],n
- assert len(ids)==15
+ assert len(ids)==len(source_pres.find("p:sldIdLst",NS))
  assert len([n for n in out if re.fullmatch(r'ppt/slideLayouts/slideLayout\d+\.xml',n)])==12
  for n in copied:
   if n.startswith('ppt/notesSlides/'):assert out[n]==src[n],n
  with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as z:
   for n,b in out.items():z.writestr(n,b)
- print('Applied exact EAGLE template: 15 slides, 12 preserved layouts, native slide numbering')
+ print(f'Applied exact EAGLE template: {len(ids)} slides, 12 preserved layouts, native slide numbering')
 if __name__=='__main__':main(*map(Path,sys.argv[1:]))
