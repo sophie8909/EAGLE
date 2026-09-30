@@ -47,6 +47,7 @@ stagnation_generations: 25
 evaluation:
   mode: self_play
   self_play_refresh_interval: 5
+  self_play_opponent_library_capacity: 50
   maps:
     - {path: maps/8x8/basesWorkers8x8.xml, tick_limit: 1500}
     - {path: maps/16x16/basesWorkers16x16.xml, tick_limit: 3000}

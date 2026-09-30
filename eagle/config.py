@@ -138,6 +138,7 @@ class ExperimentConfig:
     parent_evaluation_mode: str = "reuse_cached"
     evaluation_mode: str = "fixed_roster"
     self_play_refresh_interval: int = 5
+    self_play_opponent_library_capacity: int = 50
     fitness_tie_tolerance: float = FITNESS_TIE_TOLERANCE
     semantic_probes_enabled: bool = False
     semantic_state_root: Path = DEFAULT_SEMANTIC_STATE_ROOT
@@ -417,6 +418,9 @@ class ExperimentConfig:
             self_play_refresh_interval=int(
                 evaluation_settings.get("self_play_refresh_interval", 5)
             ),
+            self_play_opponent_library_capacity=int(
+                evaluation_settings.get("self_play_opponent_library_capacity", 50)
+            ),
             fitness_tie_tolerance=float(
                 semantic_settings.get(
                     "fitness_tie_tolerance",
@@ -535,6 +539,10 @@ class ExperimentConfig:
             raise ValueError("evaluation.mode must be fixed_roster or self_play.")
         if self.self_play_refresh_interval < 1:
             raise ValueError("evaluation.self_play_refresh_interval must be at least 1.")
+        if self.self_play_opponent_library_capacity < 1:
+            raise ValueError(
+                "evaluation.self_play_opponent_library_capacity must be at least 1."
+            )
         if not math.isfinite(self.fitness_tie_tolerance) or self.fitness_tie_tolerance < 0:
             raise ValueError("fitness_tie_tolerance must be finite and non-negative.")
         if self.semantic_probe_player_side not in {0, 1}:
@@ -719,6 +727,7 @@ class ExperimentConfig:
             "evaluation": {
                 "mode": self.evaluation_mode,
                 "self_play_refresh_interval": self.self_play_refresh_interval,
+                "self_play_opponent_library_capacity": self.self_play_opponent_library_capacity,
                 "semantic_probes": {
                     "enabled": self.semantic_probes_enabled,
                     "state_root": str(self.semantic_state_root.resolve()),

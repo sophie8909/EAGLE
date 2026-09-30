@@ -58,7 +58,12 @@ def self_play_context_id(candidates: list[Candidate]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def update_self_play_opponent_library(run_dir: Path, candidates: list[Candidate]) -> None:
+def update_self_play_opponent_library(
+    run_dir: Path,
+    candidates: list[Candidate],
+    *,
+    capacity: int,
+) -> None:
     """Append newly runnable phenotypes to the run-local opponent library.
 
     Candidate artifacts remain the sole Java-source owner.  The library stores
@@ -95,6 +100,10 @@ def update_self_play_opponent_library(run_dir: Path, candidates: list[Candidate]
             ).hexdigest(),
         })
         known_ids.add(candidate.id)
+    if capacity < 1:
+        raise ValueError("Self-play opponent library capacity must be at least 1.")
+    if len(entries) > capacity:
+        del entries[:len(entries) - capacity]
     atomic_json(path, payload)
 
 

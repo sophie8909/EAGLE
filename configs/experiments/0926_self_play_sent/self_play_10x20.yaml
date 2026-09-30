@@ -47,6 +47,7 @@ stagnation_generations: 25
 evaluation:
   mode: self_play
   self_play_refresh_interval: 5
+  self_play_opponent_library_capacity: 50
   semantic_probes:
     enabled: true
     fitness_tie_tolerance: 1.0

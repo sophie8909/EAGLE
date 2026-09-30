@@ -220,6 +220,10 @@ fresh replicas, Java hashes, old/new context IDs, and survivor status. Refresh
 replicas record generation operation `self_play_fitness_refresh`,
 existing-phenotype provenance, and no LLM attempts.
 
+The resolved `evaluation.self_play_opponent_library_capacity` bounds this
+archive; FIFO eviction removes only the oldest library references and never a
+candidate artifact.
+
 When the policy prompt is empty, `strategy_alignment/result.json` records
 `status: not_applicable`, a null score, and no attempts; its request/raw files
 are empty. This is distinct from an Alignment blocked by an earlier evaluation

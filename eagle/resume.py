@@ -186,7 +186,11 @@ def _resume_search_impl(
             )
         )
         if snapshot_refreshed:
-            update_self_play_opponent_library(run_dir, source_parents)
+            update_self_play_opponent_library(
+                run_dir,
+                source_parents,
+                capacity=config.self_play_opponent_library_capacity,
+            )
             self_play_opponent_snapshot = select_self_play_library_candidates(
                 run_dir,
                 generation=generation,

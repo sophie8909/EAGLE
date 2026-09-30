@@ -247,6 +247,8 @@ library；舊 checkpoint
 若缺少 context metadata，會先做同樣的 parent refresh 遷移再繼續。Self-play
 目前要求 `reflection_operator_mode: static` 與
 `parent_evaluation_mode: reuse_cached`。
+`evaluation.self_play_opponent_library_capacity` 控制 library 保留數量；超過時以
+FIFO 移除最舊 reference，不會刪除 candidate artifact。
 
 Self-play 對每個可執行完整 `CandidateAgent` 建立行為語意簽章：三張 configured map
 各取 early／mid／late 一個可行動、非 terminal 的重載 `GameState`，共九個 probe。

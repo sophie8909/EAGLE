@@ -415,7 +415,11 @@ def _run_search_impl(
     ))
     generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
     if config.evaluation_mode == "self_play":
-        update_self_play_opponent_library(run_dir, evaluated_population)
+        update_self_play_opponent_library(
+            run_dir,
+            evaluated_population,
+            capacity=config.self_play_opponent_library_capacity,
+        )
         self_play_opponent_snapshot = select_self_play_library_candidates(
             run_dir,
             generation=0,
@@ -463,7 +467,11 @@ def _run_search_impl(
         parent_replicas: list[Candidate] = []
         snapshot_refreshed = is_self_play_refresh(config, generation)
         if snapshot_refreshed:
-            update_self_play_opponent_library(run_dir, source_parents)
+            update_self_play_opponent_library(
+                run_dir,
+                source_parents,
+                capacity=config.self_play_opponent_library_capacity,
+            )
             self_play_opponent_snapshot = select_self_play_library_candidates(
                 run_dir,
                 generation=generation,

@@ -340,6 +340,9 @@ call and are evaluated against the new context before reflection and offspring
 generation. Only refreshed parents and offspring with the same context ID may
 enter survivor selection. Library, context, and refresh sidecars make this
 transition resumable.
+`evaluation.self_play_opponent_library_capacity` bounds retained entries; when
+the library exceeds that capacity, the oldest entries are removed before active
+context selection.
 Self-play currently requires `reflection_operator_mode: static` and
 `parent_evaluation_mode: reuse_cached`; the fixed-opponent archive is not
 updated by self-play runs.

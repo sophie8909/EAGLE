@@ -33,12 +33,17 @@ class SelfPlayTests(unittest.TestCase):
         self.assertEqual(ExperimentConfig.from_mapping({}).evaluation_mode, "fixed_roster")
         config = ExperimentConfig.from_mapping({
             "reflection_operator_mode": "static",
-            "evaluation": {"mode": "self_play", "self_play_refresh_interval": 3},
+            "evaluation": {
+                "mode": "self_play",
+                "self_play_refresh_interval": 3,
+                "self_play_opponent_library_capacity": 10,
+            },
         })
         config.validate()
         restored = ExperimentConfig.from_mapping(config.to_mapping())
         self.assertEqual(restored.evaluation_mode, "self_play")
         self.assertEqual(restored.self_play_refresh_interval, 3)
+        self.assertEqual(restored.self_play_opponent_library_capacity, 10)
         self.assertEqual(restored.algorithm, "game_performance_semantic_tiebreak")
         self.assertEqual(restored.fitness_tie_tolerance, 1.0)
         self.assertTrue(restored.semantic_probes_enabled)
@@ -48,6 +53,8 @@ class SelfPlayTests(unittest.TestCase):
                 config,
                 reflection_operator_mode=ReflectionOperatorMode.AOS_HEAD2HEAD,
             ).validate()
+        with self.assertRaisesRegex(ValueError, "opponent_library_capacity"):
+            replace(config, self_play_opponent_library_capacity=0).validate()
 
     def test_opponent_library_persists_order_and_refresh_snapshot_uses_it(self) -> None:
         candidates = [
@@ -71,14 +78,14 @@ class SelfPlayTests(unittest.TestCase):
                 )
                 write_candidate_snapshot(root / "candidates", candidate)
 
-            update_self_play_opponent_library(root, candidates)
+            update_self_play_opponent_library(root, candidates, capacity=10)
             # Repeat additions must keep the original append order and never
             # duplicate a runnable phenotype in the managed library.
-            update_self_play_opponent_library(root, candidates[5:])
+            update_self_play_opponent_library(root, candidates[5:], capacity=10)
             library = json.loads((root / "archives" / "self_play_opponents.json").read_text())
             self.assertEqual(
                 [entry["candidate_id"] for entry in library["opponents"]],
-                [candidate.id for candidate in candidates],
+                [candidate.id for candidate in candidates[2:]],
             )
 
             selected = select_self_play_library_candidates(
@@ -91,7 +98,7 @@ class SelfPlayTests(unittest.TestCase):
             # current parent population.
             self.assertEqual(
                 [candidate.id for candidate in selected],
-                ["candidate-10", "candidate-11", *[f"candidate-{index}" for index in range(8)]],
+                [f"candidate-{index}" for index in range(2, 12)],
             )
             write_self_play_snapshot(
                 root,
