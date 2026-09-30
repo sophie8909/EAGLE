@@ -92,7 +92,7 @@ call; WorkerRush Java is inherited request context, not the phenotype.
 duplicate policy-output retries, and the role-specific temperature controls
 sampling diversity without changing EA randomness.
 
-To enable snapshot self-play explicitly:
+To enable managed opponent-library self-play explicitly:
 
 ```yaml
 reflection_operator_mode: static
@@ -100,11 +100,14 @@ parent_evaluation_mode: reuse_cached
 evaluation:
   mode: self_play
   self_play_refresh_interval: 5
+  self_play_opponent_library_capacity: 50
 ```
 
-Resume reloads the last committed snapshot. Older self-play checkpoints that
-lack context metadata are migrated by re-evaluating fresh-ID parent replicas
-against that snapshot before continuing.
+The library is seeded at generation zero and admits runnable current parents at
+each refresh boundary. It deterministically rotates the next active snapshot
+every five generations. Resume reloads the last committed snapshot; older
+self-play checkpoints that lack context metadata are migrated by re-evaluating
+fresh-ID parent replicas against that snapshot before continuing.
 
 ## Resume
 

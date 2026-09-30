@@ -104,9 +104,12 @@ flowchart TD
 - `static` uses fixed probabilities; `aos_opponent` reuses ten-opponent rank
   changes; `aos_head2head` uses a separate direct matrix. Neither reward path
   creates another objective or changes normal selection.
-- Self-play is explicit (`evaluation.mode: self_play`), snapshot-scoped, equally
-  weighted, and restricted to static reflection. Snapshot refresh creates
-  phenotype-preserving parent replicas before offspring planning and selection.
+- Self-play is explicit (`evaluation.mode: self_play`), managed by a bounded
+  cross-generation opponent library, equally weighted, and restricted to static
+  reflection. Every configured refresh boundary (five generations by default)
+  rotates the next immutable context from that library; the changed context
+  creates phenotype-preserving parent replicas before offspring planning and
+  selection.
   Every executable candidate is also measured on nine immutable semantic
   probes (three configured maps × early/mid/late); this evidence is a
   tie-break/diagnostic and never changes Game Performance.

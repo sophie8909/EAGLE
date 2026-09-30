@@ -205,13 +205,24 @@ Every accepted policy then owns ordinary bounded Java-generation attempts; its
 WorkerRush `genotype/inherited_java.java` is prompt context rather than the
 phenotype.
 
-Self-play persists
-`generations/generation_<nnnn>_self_play_snapshot.json` with context ID, refresh
-interval, ordered source candidates, and ten `self_play_*` slot mappings. A
-refresh also writes `generation_<nnnn>_self_play_parent_refresh.json`, linking
-source parents to fresh replicas, Java hashes, old/new context IDs, and survivor
-status. Refresh replicas record generation operation
-`self_play_fitness_refresh`, existing-phenotype provenance, and no LLM attempts.
+Self-play persists a run-local opponent library at
+`archives/self_play_opponents.json`. Its versioned entries contain candidate
+IDs, birth generations, and generated-Java SHA-256 references; candidate
+artifacts remain the sole Java-source owner. Each generation-zero or refresh
+boundary writes `generations/generation_<nnnn>_self_play_snapshot.json`, which
+records the active context ID, refresh interval, selected library sources, a
+pointer to the library, and ten `self_play_*` slot mappings. Resume loads the
+latest committed snapshot and resolves its immutable candidate references; the
+mutable library is consulted only when a later refresh selects the next context.
+A refresh also writes
+`generation_<nnnn>_self_play_parent_refresh.json`, linking source parents to
+fresh replicas, Java hashes, old/new context IDs, and survivor status. Refresh
+replicas record generation operation `self_play_fitness_refresh`,
+existing-phenotype provenance, and no LLM attempts.
+
+The resolved `evaluation.self_play_opponent_library_capacity` bounds this
+archive; FIFO eviction removes only the oldest library references and never a
+candidate artifact.
 
 When the policy prompt is empty, `strategy_alignment/result.json` records
 `status: not_applicable`, a null score, and no attempts; its request/raw files

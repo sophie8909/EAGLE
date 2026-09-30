@@ -49,7 +49,8 @@ from .self_play import (
     is_self_play_refresh,
     load_self_play_snapshot,
     population_matches_self_play_context,
-    runnable_self_play_candidates,
+    select_self_play_library_candidates,
+    update_self_play_opponent_library,
     write_self_play_snapshot,
 )
 
@@ -185,7 +186,16 @@ def _resume_search_impl(
             )
         )
         if snapshot_refreshed:
-            self_play_opponent_snapshot = runnable_self_play_candidates(source_parents)
+            update_self_play_opponent_library(
+                run_dir,
+                source_parents,
+                capacity=config.self_play_opponent_library_capacity,
+            )
+            self_play_opponent_snapshot = select_self_play_library_candidates(
+                run_dir,
+                generation=generation,
+                refresh_interval=config.self_play_refresh_interval,
+            )
             write_self_play_snapshot(
                 run_dir,
                 generation=generation,

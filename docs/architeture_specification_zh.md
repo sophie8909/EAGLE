@@ -231,18 +231,24 @@ WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的�
 充當 identity adapter。每代的 expected/completed match count 是所有 candidate
 的加總，而不是第一個 candidate 的值。
 
-明確設定 `evaluation.mode: self_play` 時，系統從可執行族群建立 immutable
-snapshot，並依穩定順序循環填入 `self_play_000` 到 `self_play_009` 十個等權重
-case；五個 candidate 會各佔兩個 slot，且保留 self-match。每逢
-`self_play_refresh_interval`，系統先建立 fresh-ID parent replica，完全沿用原 Java
-phenotype、不呼叫 LLM，再以新 snapshot 重評；只有相同 context ID 的 parent 與
+明確設定 `evaluation.mode: self_play` 時，系統維護一個 run-local、可持久化的
+opponent library。Generation 0 先把可執行 candidate 放入 library；之後只在
+`self_play_refresh_interval` 的刷新邊界更新（最小版本固定為每五代一次），把新
+的可執行 candidate 合併進 library，再依穩定順序從 library 選出 immutable
+十-slot context，循環填入 `self_play_000` 到 `self_play_009` 十個等權重 case。
+因此五個被選中的 candidate 會各佔兩個 slot，且保留 self-match；非刷新代沿用
+同一 context。每逢刷新，系統先建立 fresh-ID parent replica，完全沿用原 Java
+phenotype、不呼叫 LLM，再以新 context 重評；只有相同 context ID 的 parent 與
 offspring 可以一起做 selection。Self-play 以每個 tier 的最高
 `game_performance` 為固定錨點，差距小於或等於 `1.0` 視為同級，不使用鏈式比較。
 同級內 parent B 優先選擇與 parent A 語意距離最大者；survivor boundary 使用 seeded
-max-min 語意多樣性。Resume 會載入最後已提交 snapshot；舊 checkpoint
+max-min 語意多樣性。Resume 會載入最後已提交的 context，並在下一個刷新邊界讀取
+library；舊 checkpoint
 若缺少 context metadata，會先做同樣的 parent refresh 遷移再繼續。Self-play
 目前要求 `reflection_operator_mode: static` 與
 `parent_evaluation_mode: reuse_cached`。
+`evaluation.self_play_opponent_library_capacity` 控制 library 保留數量；超過時以
+FIFO 移除最舊 reference，不會刪除 candidate artifact。
 
 Self-play 對每個可執行完整 `CandidateAgent` 建立行為語意簽章：三張 configured map
 各取 early／mid／late 一個可行動、非 terminal 的重載 `GameState`，共九個 probe。

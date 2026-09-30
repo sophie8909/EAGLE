@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 from eagle.aos import ReflectionOperatorMode
+from eagle.artifacts import write_candidate_inputs, write_candidate_snapshot
 from eagle.candidate import Candidate
 from eagle.config import ExperimentConfig
 from eagle.opponent_cases import SELF_PLAY_CASES
@@ -21,7 +22,8 @@ from eagle.search import (
 from eagle.resume import resume_search
 from eagle.self_play import (
     assert_shared_self_play_context,
-    expand_self_play_slots,
+    select_self_play_library_candidates,
+    update_self_play_opponent_library,
     write_self_play_snapshot,
 )
 
@@ -31,12 +33,17 @@ class SelfPlayTests(unittest.TestCase):
         self.assertEqual(ExperimentConfig.from_mapping({}).evaluation_mode, "fixed_roster")
         config = ExperimentConfig.from_mapping({
             "reflection_operator_mode": "static",
-            "evaluation": {"mode": "self_play", "self_play_refresh_interval": 3},
+            "evaluation": {
+                "mode": "self_play",
+                "self_play_refresh_interval": 3,
+                "self_play_opponent_library_capacity": 10,
+            },
         })
         config.validate()
         restored = ExperimentConfig.from_mapping(config.to_mapping())
         self.assertEqual(restored.evaluation_mode, "self_play")
         self.assertEqual(restored.self_play_refresh_interval, 3)
+        self.assertEqual(restored.self_play_opponent_library_capacity, 10)
         self.assertEqual(restored.algorithm, "game_performance_semantic_tiebreak")
         self.assertEqual(restored.fitness_tie_tolerance, 1.0)
         self.assertTrue(restored.semantic_probes_enabled)
@@ -46,8 +53,10 @@ class SelfPlayTests(unittest.TestCase):
                 config,
                 reflection_operator_mode=ReflectionOperatorMode.AOS_HEAD2HEAD,
             ).validate()
+        with self.assertRaisesRegex(ValueError, "opponent_library_capacity"):
+            replace(config, self_play_opponent_library_capacity=0).validate()
 
-    def test_five_candidate_snapshot_cycles_into_ten_explicit_slots(self) -> None:
+    def test_opponent_library_persists_order_and_refresh_snapshot_uses_it(self) -> None:
         candidates = [
             Candidate(
                 id=f"candidate-{index}",
@@ -55,17 +64,46 @@ class SelfPlayTests(unittest.TestCase):
                 generated_java="complete Java",
                 compile_status="success",
             )
-            for index in range(5)
+            for index in range(12)
         ]
-        slots = expand_self_play_slots(candidates)
-        self.assertEqual([candidate.id for candidate in slots[:5]], [candidate.id for candidate in candidates])
-        self.assertEqual([candidate.id for candidate in slots[5:]], [candidate.id for candidate in candidates])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            for candidate in candidates:
+                write_candidate_inputs(root / "candidates", candidate)
+                phenotype = root / "candidates" / candidate.id / "phenotype"
+                phenotype.mkdir(parents=True)
+                (phenotype / "CandidateAgent.java").write_text(
+                    candidate.generated_java,
+                    encoding="utf-8",
+                )
+                write_candidate_snapshot(root / "candidates", candidate)
+
+            update_self_play_opponent_library(root, candidates, capacity=10)
+            # Repeat additions must keep the original append order and never
+            # duplicate a runnable phenotype in the managed library.
+            update_self_play_opponent_library(root, candidates[5:], capacity=10)
+            library = json.loads((root / "archives" / "self_play_opponents.json").read_text())
+            self.assertEqual(
+                [entry["candidate_id"] for entry in library["opponents"]],
+                [candidate.id for candidate in candidates[2:]],
+            )
+
+            selected = select_self_play_library_candidates(
+                root,
+                generation=5,
+                refresh_interval=5,
+            )
+            # At the first five-generation refresh, round-robin selects from
+            # the persisted library rather than replacing the context from a
+            # current parent population.
+            self.assertEqual(
+                [candidate.id for candidate in selected],
+                [f"candidate-{index}" for index in range(2, 12)],
+            )
             write_self_play_snapshot(
                 root,
                 generation=5,
-                candidates=candidates,
+                candidates=selected,
                 refresh_interval=5,
             )
             payload = json.loads(
@@ -74,8 +112,13 @@ class SelfPlayTests(unittest.TestCase):
         self.assertEqual([slot["slot_id"] for slot in payload["slots"]], list(SELF_PLAY_CASES))
         self.assertEqual(len(payload["slots"]), 10)
         self.assertEqual(
-            [slot["source_candidate_id"] for slot in payload["slots"][:5]],
-            [candidate.id for candidate in candidates],
+            payload["source_candidate_ids"],
+            [candidate.id for candidate in selected],
+        )
+        self.assertEqual(payload["opponent_library"]["path"], "archives/self_play_opponents.json")
+        self.assertEqual(
+            [slot["source_candidate_id"] for slot in payload["slots"]],
+            [candidate.id for candidate in selected],
         )
 
     def test_context_guard_rejects_stale_parent_fitness(self) -> None:
@@ -152,6 +195,46 @@ class SelfPlayTests(unittest.TestCase):
             if item["operation"] == "self_play_fitness_refresh"
         ]
         self.assertTrue(all(item["attempts"] == [] for item in fixed_sources))
+
+    def test_five_generation_refresh_selects_persisted_library_context(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = replace(
+                ExperimentConfig.from_mapping({
+                    "generations": 5,
+                    "population_size": 1,
+                    "execution_mode": "mock",
+                    "mutation_rate": 0.0,
+                    "crossover_rate": 0.0,
+                    "reflection_operator_mode": "static",
+                    "evaluation": {
+                        "mode": "self_play",
+                        "self_play_refresh_interval": 5,
+                    },
+                }),
+                runs_dir=Path(directory) / "runs",
+            )
+            result = run_search(config, mock=True, run_id="self-play-library-refresh")
+            library = json.loads(
+                (result.run_dir / "archives" / "self_play_opponents.json").read_text()
+            )
+            snapshot = json.loads(
+                (result.run_dir / "generations" / "generation_0005_self_play_snapshot.json").read_text()
+            )
+            previous_population = json.loads(
+                (result.run_dir / "generations" / "generation_0004.json").read_text()
+            )
+            expected = select_self_play_library_candidates(
+                result.run_dir,
+                generation=5,
+                refresh_interval=5,
+            )
+
+        library_ids = {entry["candidate_id"] for entry in library["opponents"]}
+        active_ids = snapshot["source_candidate_ids"]
+        self.assertTrue(set(active_ids).issubset(library_ids))
+        self.assertEqual(active_ids, [candidate.id for candidate in expected])
+        self.assertEqual(snapshot["schema_version"], "eagle-self-play-snapshot-v2")
+        self.assertTrue(previous_population["population"])
 
     def test_resume_migrates_legacy_parent_fitness_to_active_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
