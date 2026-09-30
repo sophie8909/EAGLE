@@ -94,7 +94,8 @@ def main(authored,template,output):
    props.set('firstRow','1');props.set('bandRow','0')
    for oldstyle in props.findall('a:tableStyleId',NS):props.remove(oldstyle)
    E.SubElement(props,'{'+A+'}tableStyleId').text=xml(tpl['ppt/tableStyles.xml']).get('def')
-  layout=xml(tpl[f'ppt/slideLayouts/slideLayout{layouts[i-1]}.xml'])
+  layout_id=layouts[min(i-1,len(layouts)-1)]
+  layout=xml(tpl[f'ppt/slideLayouts/slideLayout{layout_id}.xml'])
   maxid=max(int(e.get('id')) for e in tree.iter('{'+P+'}cNvPr'))+1
   # Keep the template title geometry, fitting long research headings locally.
   units=sum(1 if ord(c)>255 else .55 for c in title)
@@ -107,7 +108,7 @@ def main(authored,template,output):
   tree.append(num);out[part]=dump(s)
   rp=f'ppt/slides/_rels/slide{i}.xml.rels';rs=xml(out[rp])
   for r in rs:
-   if r.get('Type','').endswith('/slideLayout'): r.set('Target',f'../slideLayouts/slideLayout{layouts[i-1]}.xml')
+   if r.get('Type','').endswith('/slideLayout'): r.set('Target',f'../slideLayouts/slideLayout{layout_id}.xml')
   out[rp]=dump(rs)
  for n in copied:
   if '/charts/' in n and n.endswith('.xml'):

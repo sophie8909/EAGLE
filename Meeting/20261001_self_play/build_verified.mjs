@@ -59,11 +59,20 @@ table(s,[['可確認','仍不能確認'],['Strategy / Prompt / Code Reflection �
 text(s,'09/08 版本加入 generation-wide materialization 與可選 generation_model，模型比較之後才能維持相同 20×10 搜尋條件。',62,502,1135,55,20,C.body);
 takeaway(s,'operator schedule 的效果尚無乾淨、足量的單因子對照');
 
-s=slide('0924 後單一目標 self-play：三組 run','semantic tie-break 有使用，但不是第二個目標；只列 game_performance 作 selection objective','本地 Meeting/20261001/README.md；Notion 0926 10×10、0926 5×20、0927 10×20 pages.');
+s=slide('0924 後單一目標 self-play：三組 run','semantic tie-break 有使用，但不是第二個目標；只列 game_performance 作 selection objective','本地 Meeting/20261001/README.md；Notion 0926 10×10、0926 5×20、0927 10×20 pages；EAGLE 實驗整理 2026-09-29：https://app.notion.com/p/3eac9b9735d981d08651cdb192122d79.');
 table(s,[['Run','Gen × pop','FFE','Search best GP¹','固定對手 final test W/L/D/E'],['0926 10×10（semantic tie-break）','10 × 10','100','0.666667','257 / 321 / 22 / 0'],['0926 5×20（semantic tie-break）','20 × 5','100','1.326067','0 / 388 / 212 / 0'],['0927 10×20（semantic tie-break）','20 × 10','200','1.263534','0 / 444 / 156 / 0']],178,335,[285,145,90,175,465],19);
 text(s,'三組 final test 都完成 600 場、Integration 7/7、match errors = 0。¹ Search GP 是各 run 當時 self-play snapshot 下的分數；snapshot 不同，分數不可跨 run 當作同尺度排名。',62,530,1140,55,19,C.body);
 takeaway(s,'同一張表並列 self-play selection 訊號與固定對手實戰結果',610);
 
+s=slide('0927 10×20：semantic tie-break 的實際變更','相對 0923 legacy self-play；保留主要搜尋條件，只更改 evaluation selection protocol','Notion EAGLE 實驗整理｜2026-09-29：https://app.notion.com/p/3eac9b9735d981d08651cdb192122d79；configs/experiments/0927/self_play_10x20.yaml.');
+table(s,[['項目','0923 legacy self-play','0927 run'],['保留條件','20×10、模型、refresh 間隔、初始化、inherited genotype、static reflection、seed、地圖','同左'],['Selection algorithm','lexicase','game_performance_semantic_tiebreak'],['唯一數值目標','10 個 opponent_cases','game_performance scalar'],['語意資訊','無 probes','3 張地圖 × early/mid/late，共 9 個 states'],['Tie handling','無 semantic tie-break','fitness 差距 ≤1.0 的 inclusive tier 內依 semantic signature 決勝'],['Parent evaluation mode','歷史 run 設定','resolved config 記錄 reuse_cached']],175,365,[300,420,440],18);
+text(s,'0927 best search Game Performance = 1.263534；該 best candidate 的 180 場 self-play 全為和局，正 fitness 來自 shaping，而非勝局。',62,560,1138,45,19,C.body);
+takeaway(s,'semantic signature 是平手規則；selection objective 只有 game_performance',612);
+
+s=slide('0927 run 診斷：失敗、refresh 與對手結果','600 場 fixed-roster final test：0 勝、444 敗、156 和；Integration 7/7，match errors = 0','Notion EAGLE 實驗整理｜2026-09-29：https://app.notion.com/p/3eac9b9735d981d08651cdb192122d79；run 20260928_115653_334420.');
+table(s,[['診斷面向','結果'],['Candidate records','260 筆：evaluated 232、failed 28（validation 19、generation 7、compilation 2）'],['Refresh Java preservation','5 個 boundary 共 50 筆；14/50 保留相同 Java hash，36 筆 generated_java_preserved=false'],['Semantic diversity','Final 4/10 signatures；G5、G10、G15 各 1/10，G20 回升至 4/10'],['Generation timing','約 23.106 小時（generation timing records 加總）'],['Self-play 對手別 W/L/D','PassiveAI 0/0/60；RandomAI 0/2/58；RandomBiasedAI 0/22/38；其餘 7 個對手各 0/60/0']],175,350,[330,830],19);
+text(s,'Refresh contract caveat 會影響演化路徑解讀；final-test 結果仍是共同固定對手組的實際對戰結果。',62,548,1135,44,20,C.body);
+takeaway(s,'高 search GP 沒有轉成固定對手勝局；refresh 尚有 36/50 次 Java 漂移',612);
 s=slide('100 FFE：10×10 明顯優於 5×20，但只有單次觀察','兩組使用 semantic tie-break、相同 9 個 semantic probes 與 600 場 final test','Meeting/20261001/analysis_md/20260928_self_play_10x10_vs_5x20.md；Notion 0926 pages.');
 chart(s,['10×10','5×20'],[{name:'Wins',values:[257,0],fill:palette.chart.win},{name:'Draws',values:[22,212],fill:palette.chart.draw},{name:'Losses',values:[321,388],fill:palette.chart.loss}],{left:80,top:175,width:1080,height:365},{barOptions:{grouping:'stacked'},dataLabels:{position:'center'},yAxis:{max:600,majorUnit:100}});
 text(s,'10×10：42.83% 勝率；5×20：0% 勝率。5×20 搜尋期 180 場全和，正 GP 來自資源／兵力 shaping。',62,555,1145,42,21,C.body);
@@ -107,7 +116,7 @@ table(s,[['參數','0929 設定'],['Objective / semantic tie-break','game_perfor
 text(s,'FFE 同額指 offspring 數；gen0、refresh replicas 和 retries 另計。執行前先確保 refresh 不會重生或改寫 Java phenotype。',62,548,1140,46,19,C.body);
 
 s=slide('來源與數據限制','以 canonical run artifacts 為優先；本次可用的 0924 後彙整為 Notion page + meeting snapshot','Notion database MicroRTS EAGLE; Meeting/20261001/README.md and analysis_md/*.md.');
-table(s,[['來源組','納入文件／記錄'],['Single-objective 主分析','Notion 0926 10×10、0926 5×20、0927 10×20；README.md 與 self-play analysis'],['evaluation-mode control','09/11 fixed-roster 10×20 歷史 run；0929 同設定重跑 config 待執行'],['Earlier controlled studies','09/07 reflection、09/10 model、09/12 initialization、09/14 parent regeneration'],['Limit','0929 5×40 與 fixed-opponent control configs 尚未執行；無新結果。近期細節以 Notion page 和 analysis_md 為證據。']],180,300,[340,820],19);
+table(s,[['來源組','納入文件／記錄'],['Single-objective 主分析','Notion 0926 10×10、0926 5×20、0927 10×20；09/29 整理頁補充 run delta、candidate、refresh 與 opponent evidence'],['evaluation-mode control','09/11 fixed-roster 10×20 歷史 run；0929 同設定重跑 config 待執行'],['Earlier controlled studies','09/07 reflection、09/10 model、09/12 initialization、09/14 parent regeneration'],['Pre-0924 artifact cleanup','依確認刪除 21 個未引用且非 control 的 raw runs（約 70 GB）；control、baseline、seed/model audit 與現行比較資料保留'],['Limit','0929 5×40 與 fixed-opponent control configs 尚未執行；近期細節以 Notion 09/29 page 和 analysis_md 為證據。']],180,300,[340,820],19);
 text(s,'Notion sources: https://app.notion.com/p/3eac9b9735d9810d87b4ce89769bd4b6 ; https://app.notion.com/p/3eac9b9735d981f78c00e9a7706af646 ; https://app.notion.com/p/3eac9b9735d98115b78be874b606a195 ; https://app.notion.com/p/3eac9b9735d981518b7cf0dfe691ade7',62,515,1150,62,14,C.body);
 
 await fs.mkdir(build,{recursive:true});
@@ -119,8 +128,8 @@ const template=path.join(root,'Meeting/template/EAGLE.potx');
 const reference=path.join(build,'EAGLE-reference.pptx');
 await fs.copyFile(template,reference);
 execFileSync(path.join(runtime,'python/python.exe'),[path.join(root,'Meeting/20261001_self_play/apply_template.py'),authored,template,draft],{stdio:'inherit'});
-const finalPath=path.join(build,'20261001_verified_finalized_rev2.pptx');
-const result=await finalizePresentation({workspaceDir:root,candidatePath:draft,finalPath,pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-heading-fit',...tableSlides.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:18,requiredNativeTableOwnerSlides:tableSlides,requiredNativeChartOwnerSlides:chartSlides,materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'reference',families:[F],referencePath:reference,referenceSha256:createHash('sha256').update(await fs.readFile(reference)).digest('hex')},verifyArtifactToolImport:true,receiptPath:path.join(validation,'20261001_verified_revision2.validation.json')});
+const finalPath=path.join(build,'20261001_verified_finalized_rev4.pptx');
+const result=await finalizePresentation({workspaceDir:root,candidatePath:draft,finalPath,pythonExecutable:path.join(runtime,'python/python.exe'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15925800,8963025','--validate-heading-fit',...tableSlides.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:20,requiredNativeTableOwnerSlides:tableSlides,requiredNativeChartOwnerSlides:chartSlides,materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'reference',families:[F],referencePath:reference,referenceSha256:createHash('sha256').update(await fs.readFile(reference)).digest('hex')},verifyArtifactToolImport:true,receiptPath:path.join(validation,'20261001_verified_revision4.validation.json')});
 const published=path.join(output,'20261001_verified.pptx');
 await fs.copyFile(result.finalPath,published);
 console.log(JSON.stringify({finalPath:published,validatedCandidate:result.finalPath,receiptPath:result.receiptPath,slides:p.slides.items.length,tables:tableSlides,charts:chartSlides}));
