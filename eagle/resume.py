@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -46,11 +47,14 @@ from .search_runtime import build_search_runtime, preflight_llm_endpoint
 from .timing import Stopwatch, append_event, build_generation_event
 from .self_play import (
     assert_shared_self_play_context,
-    is_self_play_refresh,
+    initialize_opponent_library,
+    load_opponent_library,
+    load_self_play_context,
     load_self_play_snapshot,
     population_matches_self_play_context,
-    runnable_self_play_candidates,
-    write_self_play_snapshot,
+    resolve_opponent_library_candidates,
+    select_helpful_opponents,
+    update_and_select_opponent_library,
 )
 
 
@@ -143,15 +147,45 @@ def _resume_search_impl(
     error_memory = load_error_memory(run_dir)
     stop_reason = None
     active_model_phase = "reflection"
-    self_play_opponent_snapshot = (
-        load_self_play_snapshot(
+    if config.evaluation_mode == "self_play":
+        opponent_library = load_opponent_library(
             run_dir,
-            completed_generation=completed_generation,
-            refresh_interval=config.self_play_refresh_interval,
+            generation=completed_generation,
         )
-        if config.evaluation_mode == "self_play"
-        else None
-    )
+        if opponent_library is None:
+            legacy_snapshot = None
+            try:
+                legacy_snapshot = load_self_play_snapshot(
+                    run_dir,
+                    completed_generation=completed_generation,
+                    refresh_interval=config.self_play_refresh_interval,
+                )
+            except (OSError, ValueError, json.JSONDecodeError):
+                pass
+            opponent_library, self_play_opponent_snapshot = initialize_opponent_library(
+                run_dir,
+                generation=completed_generation,
+                candidates=[*(legacy_snapshot or ()), *population],
+                capacity=config.self_play_library_capacity,
+            )
+        else:
+            active_entries = select_helpful_opponents(opponent_library)
+            self_play_opponent_snapshot = resolve_opponent_library_candidates(
+                run_dir,
+                active_entries,
+                candidates=population,
+            )
+            if not self_play_opponent_snapshot:
+                raise ValueError("Persisted self-play library has no runnable active opponent.")
+            persisted_context = load_self_play_context(
+                run_dir,
+                generation=completed_generation,
+            )
+            if persisted_context is not None:
+                self_play_opponent_snapshot = persisted_context
+    else:
+        opponent_library = None
+        self_play_opponent_snapshot = None
 
     def activate_phase(phase: str) -> None:
         nonlocal active_model_phase
@@ -175,24 +209,11 @@ def _resume_search_impl(
         span = Stopwatch.start()
         source_parents = list(population)
         parent_replicas: list[Candidate] = []
-        snapshot_refreshed = is_self_play_refresh(config, generation)
-        context_migration_required = (
-            config.evaluation_mode == "self_play"
-            and self_play_opponent_snapshot is not None
-            and not population_matches_self_play_context(
-                source_parents,
-                self_play_opponent_snapshot,
-            )
+        context_migration_required = config.evaluation_mode == "self_play" and not population_matches_self_play_context(
+            source_parents,
+            self_play_opponent_snapshot,
         )
-        if snapshot_refreshed:
-            self_play_opponent_snapshot = runnable_self_play_candidates(source_parents)
-            write_self_play_snapshot(
-                run_dir,
-                generation=generation,
-                candidates=self_play_opponent_snapshot,
-                refresh_interval=config.self_play_refresh_interval,
-            )
-        if snapshot_refreshed or context_migration_required:
+        if context_migration_required:
             parent_replicas = build_self_play_fitness_refresh_replicas(
                 source_parents,
                 generation=generation,
@@ -296,7 +317,7 @@ def _resume_search_impl(
         population_state_signature = signature
         generation_diversity = generation_diversity_metrics(population, previous_archive_niches=archive_before)
         if parent_replicas:
-            if snapshot_refreshed or context_migration_required:
+            if config.evaluation_mode == "self_play" and context_migration_required:
                 write_self_play_parent_refresh_sidecar(
                     run_dir,
                     generation=generation,
@@ -312,6 +333,14 @@ def _resume_search_impl(
                     replicas=parent_replicas,
                     selected_ids={candidate.id for candidate in population},
                 )
+        if config.evaluation_mode == "self_play":
+            opponent_library, self_play_opponent_snapshot = update_and_select_opponent_library(
+                run_dir,
+                generation=generation,
+                existing=opponent_library or [],
+                evaluated_candidates=selection_candidates,
+                capacity=config.self_play_library_capacity,
+            )
         record_generation(
             run_dir,
             generation,

@@ -231,16 +231,19 @@ WorkerRush 使用 vendored 的 upstream 實作，不再以繼承 LightRush 的�
 充當 identity adapter。每代的 expected/completed match count 是所有 candidate
 的加總，而不是第一個 candidate 的值。
 
-明確設定 `evaluation.mode: self_play` 時，系統從可執行族群建立 immutable
-snapshot，並依穩定順序循環填入 `self_play_000` 到 `self_play_009` 十個等權重
-case；五個 candidate 會各佔兩個 slot，且保留 self-match。每逢
-`self_play_refresh_interval`，系統先建立 fresh-ID parent replica，完全沿用原 Java
-phenotype、不呼叫 LLM，再以新 snapshot 重評；只有相同 context ID 的 parent 與
+明確設定 `evaluation.mode: self_play` 時，系統從可執行族群建立有容量上限的跨代
+opponent library；每個已提交 generation 都會 admission runnable phenotype、累積
+sampled opponent score，並由 `helpful_v1` 選出下一個 immutable context。尚未取樣的
+opponent 優先探索，已有樣本且平均分數最接近 draw 的 opponent 優先保留。選出的
+candidate 依穩定順序循環填入 `self_play_000` 到 `self_play_009` 十個等權重 case，
+並保留 self-match。這是受 2L 啟發的第一版 selector，不宣稱完整實作 PPSRO/2L。
+若下一代 context ID 改變，系統才建立 fresh-ID parent replica，完全沿用原 Java
+phenotype、不呼叫 LLM，再以新 context 重評；只有相同 context ID 的 parent 與
 offspring 可以一起做 selection。Self-play 以每個 tier 的最高
 `game_performance` 為固定錨點，差距小於或等於 `1.0` 視為同級，不使用鏈式比較。
 同級內 parent B 優先選擇與 parent A 語意距離最大者；survivor boundary 使用 seeded
-max-min 語意多樣性。Resume 會載入最後已提交 snapshot；舊 checkpoint
-若缺少 context metadata，會先做同樣的 parent refresh 遷移再繼續。Self-play
+max-min 語意多樣性。Resume 會載入最後已提交的 library/context sidecar；舊 checkpoint
+若缺少新 metadata，會從當代族群建立 library，並在需要時做 parent refresh 遷移再繼續。Self-play
 目前要求 `reflection_operator_mode: static` 與
 `parent_evaluation_mode: reuse_cached`。
 

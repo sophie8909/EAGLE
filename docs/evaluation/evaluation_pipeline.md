@@ -50,13 +50,14 @@ retry signal.
 ## Match protocol
 
 `evaluation.mode: fixed_roster` is the default protocol below. With
-`evaluation.mode: self_play`, the evaluator materializes the runnable immutable
-snapshot as ten equally weighted `self_play_000`…`self_play_009` slots. A short
-snapshot is cycled deterministically; self-matches remain valid. Every match
-records the snapshot context plus source candidate/generation. Snapshot refresh
-first re-evaluates phenotype-preserving parent replicas, so selection never mixes
-old-context parents with new-context offspring. Resume reloads the last
-committed snapshot sidecar.
+`evaluation.mode: self_play`, the evaluator materializes the selected runnable
+opponent-library context as ten equally weighted `self_play_000`…`self_play_009`
+slots. A short context is cycled deterministically; self-matches remain valid.
+Every match records the context plus source candidate/generation. The library
+is updated after each committed generation; when its selected context changes,
+the evaluator first re-evaluates phenotype-preserving parent replicas, so
+selection never mixes old-context parents with new-context offspring. Resume
+reloads the generation-scoped library/context sidecars.
 
 The fixed roster is defined by `eagle/opponent_cases.py` and resolved by
 `eagle/opponents.py`. Each opponent receives three configured maps, three

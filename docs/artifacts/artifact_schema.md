@@ -206,12 +206,17 @@ WorkerRush `genotype/inherited_java.java` is prompt context rather than the
 phenotype.
 
 Self-play persists
-`generations/generation_<nnnn>_self_play_snapshot.json` with context ID, refresh
-interval, ordered source candidates, and ten `self_play_*` slot mappings. A
-refresh also writes `generation_<nnnn>_self_play_parent_refresh.json`, linking
-source parents to fresh replicas, Java hashes, old/new context IDs, and survivor
+`generations/generation_<nnnn>_self_play_library.json` with a versioned bounded
+entry list, Java hashes, sample statistics, capacity, and selector identity.
+The paired
+`generations/generation_<nnnn>_self_play_context.json` records the selected
+source candidates, ten slot mappings, and context hash for the next generation.
+When that context differs from cached parent evidence,
+`generation_<nnnn>_self_play_parent_refresh.json` links source parents to
+phenotype-preserving replicas, Java hashes, old/new context IDs, and survivor
 status. Refresh replicas record generation operation
 `self_play_fitness_refresh`, existing-phenotype provenance, and no LLM attempts.
+Legacy snapshot sidecars are read only as migration input.
 
 When the policy prompt is empty, `strategy_alignment/result.json` records
 `status: not_applicable`, a null score, and no attempts; its request/raw files

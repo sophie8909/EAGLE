@@ -137,7 +137,10 @@ class ExperimentConfig:
     # value exists only for an explicitly labelled diagnostic treatment.
     parent_evaluation_mode: str = "reuse_cached"
     evaluation_mode: str = "fixed_roster"
+    # Retained as a read-only compatibility field for older run configs.  The
+    # self-play path now manages a library and does not refresh on an interval.
     self_play_refresh_interval: int = 5
+    self_play_library_capacity: int = 50
     fitness_tie_tolerance: float = FITNESS_TIE_TOLERANCE
     semantic_probes_enabled: bool = False
     semantic_state_root: Path = DEFAULT_SEMANTIC_STATE_ROOT
@@ -417,6 +420,9 @@ class ExperimentConfig:
             self_play_refresh_interval=int(
                 evaluation_settings.get("self_play_refresh_interval", 5)
             ),
+            self_play_library_capacity=int(
+                evaluation_settings.get("self_play_library_capacity", 50)
+            ),
             fitness_tie_tolerance=float(
                 semantic_settings.get(
                     "fitness_tie_tolerance",
@@ -535,6 +541,8 @@ class ExperimentConfig:
             raise ValueError("evaluation.mode must be fixed_roster or self_play.")
         if self.self_play_refresh_interval < 1:
             raise ValueError("evaluation.self_play_refresh_interval must be at least 1.")
+        if self.self_play_library_capacity < 1:
+            raise ValueError("evaluation.self_play_library_capacity must be at least 1.")
         if not math.isfinite(self.fitness_tie_tolerance) or self.fitness_tie_tolerance < 0:
             raise ValueError("fitness_tie_tolerance must be finite and non-negative.")
         if self.semantic_probe_player_side not in {0, 1}:
@@ -561,7 +569,8 @@ class ExperimentConfig:
             if self.parent_evaluation_mode != "reuse_cached":
                 raise ValueError(
                     "evaluation.mode=self_play requires parent_evaluation_mode=reuse_cached; "
-                    "snapshot refresh performs its own phenotype-preserving parent refresh."
+                    "the opponent library performs phenotype-preserving parent refresh "
+                    "when its active context changes."
                 )
             if self.reflection_operator_mode is not ReflectionOperatorMode.STATIC:
                 raise ValueError(
@@ -718,7 +727,11 @@ class ExperimentConfig:
             "match_artifact_mode": self.match_artifact_mode,
             "evaluation": {
                 "mode": self.evaluation_mode,
+                # Compatibility-only field. Self-play no longer performs
+                # interval-based snapshot replacement; the library selector
+                # updates at each committed generation.
                 "self_play_refresh_interval": self.self_play_refresh_interval,
+                "self_play_library_capacity": self.self_play_library_capacity,
                 "semantic_probes": {
                     "enabled": self.semantic_probes_enabled,
                     "state_root": str(self.semantic_state_root.resolve()),

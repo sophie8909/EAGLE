@@ -58,15 +58,19 @@ behavior signatures only when scalar fitness is tied.
    per old parent, with the same complete genotype and component provenance,
    then selects from replicas plus offspring only. It never overwrites or
    reuses the old parent as a survivor candidate.
-8. In `self_play` evaluation, use one immutable ten-slot snapshot context. At
-   each configured refresh generation, phenotype-preserving fresh-ID parent
-   replicas are re-evaluated before reflection; only those replicas and
-   offspring evaluated against that same context enter selection. Persist the
-   snapshot, refresh audit sidecar, surviving population, and metrics. The sole
-   objective is aggregate `game_performance`. Scores whose difference from the
-   current tier maximum is at most `1.0` are tied; tiers are never formed by
-   chained pairwise comparisons. Parent B and a cut survivor tier prefer the
-   greatest compatible Hamming distance across the nine action hashes.
+8. In `self_play` evaluation, manage a bounded cross-generation opponent
+   library. After each committed generation, admit runnable evaluated
+   phenotypes, update their sampled score statistics, and use the deterministic
+   `helpful_v1` selector to choose the next immutable ten-slot context. Unseen
+   entries are explored first, then entries closest to draw. If the context ID
+   changes, phenotype-preserving fresh-ID parent replicas are re-evaluated before
+   reflection; only replicas and offspring evaluated against that same context
+   enter selection. Persist the library, next context, refresh audit sidecar,
+   surviving population, and metrics. The sole objective is aggregate
+   `game_performance`. Scores whose difference from the current tier maximum is
+   at most `1.0` are tied; tiers are never formed by chained pairwise
+   comparisons. Parent B and a cut survivor tier prefer the greatest compatible
+   Hamming distance across the nine action hashes.
 
 The implementation is in `eagle/search.py`, `eagle/selection.py`, and
 `eagle/evaluation.py`.
@@ -92,8 +96,9 @@ Self-play uses its unweighted aggregate as the single objective.
 
 Each candidate runs all ten active cases over three maps, three rounds, and both
 player positions: `10 × 3 × 3 × 2 = 180` matches. Fixed-roster mode resolves the
-ten bundled opponents. Self-play mode cycles the runnable immutable snapshot
-into ten equally weighted slots; five candidates therefore appear twice.
+ten bundled opponents. Self-play mode cycles the runnable candidates selected by
+the managed opponent library into ten equally weighted slots; a short library
+context is repeated deterministically.
 
 The generation-level `expected_match_count` and `completed_match_count` are sums
 over every candidate in that generation, including zero completed matches for a
@@ -121,11 +126,11 @@ old and newly generated Java hashes, the replica fitness/status, and whether
 the replica survived. Generation archives, error memory, timing aggregation,
 and retired-trace cleanup use the actual replica-plus-offspring selection pool.
 
-In fixed-roster runs, `runs/<run>/archives/opponents.json` keeps one best valid representative per
-opponent case. Each generation JSON stores objective statistics for all
-ten cases and `opponent_scores.by_opponent` stores reporting summaries. The
-archive is intentionally not updated by self-play because those slot identities
-are snapshot-scoped.
+In fixed-roster runs, `runs/<run>/archives/opponents.json` keeps one best valid
+representative per opponent case. Self-play instead writes generation-scoped
+`self_play_library.json` and `self_play_context.json` sidecars; the fixed-roster
+archive remains untouched. Each generation JSON stores objective statistics and
+`opponent_scores.by_opponent` reporting summaries.
 `python -m eagle analyze --semantics --run-dir <run>` reads existing wrapper and
 cache artifacts without executing agents, and writes candidate/probe tables,
 global/map/phase uniqueness statistics, and exact equivalence classes.

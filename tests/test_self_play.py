@@ -20,8 +20,12 @@ from eagle.search import (
 )
 from eagle.resume import resume_search
 from eagle.self_play import (
+    HELPFUL_SELECTOR_VERSION,
+    admit_opponent_library,
     assert_shared_self_play_context,
     expand_self_play_slots,
+    select_helpful_opponents,
+    update_opponent_library_scores,
     write_self_play_snapshot,
 )
 
@@ -31,12 +35,17 @@ class SelfPlayTests(unittest.TestCase):
         self.assertEqual(ExperimentConfig.from_mapping({}).evaluation_mode, "fixed_roster")
         config = ExperimentConfig.from_mapping({
             "reflection_operator_mode": "static",
-            "evaluation": {"mode": "self_play", "self_play_refresh_interval": 3},
+            "evaluation": {
+                "mode": "self_play",
+                "self_play_refresh_interval": 3,
+                "self_play_library_capacity": 12,
+            },
         })
         config.validate()
         restored = ExperimentConfig.from_mapping(config.to_mapping())
         self.assertEqual(restored.evaluation_mode, "self_play")
         self.assertEqual(restored.self_play_refresh_interval, 3)
+        self.assertEqual(restored.self_play_library_capacity, 12)
         self.assertEqual(restored.algorithm, "game_performance_semantic_tiebreak")
         self.assertEqual(restored.fitness_tie_tolerance, 1.0)
         self.assertTrue(restored.semantic_probes_enabled)
@@ -127,8 +136,11 @@ class SelfPlayTests(unittest.TestCase):
                 runs_dir=Path(directory) / "runs",
             )
             result = run_search(config, mock=True, run_id="self-play-refresh")
-            sidecar = json.loads(
-                (result.run_dir / "generations" / "generation_0001_self_play_parent_refresh.json").read_text()
+            library = json.loads(
+                (result.run_dir / "generations" / "generation_0001_self_play_library.json").read_text()
+            )
+            context = json.loads(
+                (result.run_dir / "generations" / "generation_0001_self_play_context.json").read_text()
             )
             contexts = {
                 candidate.game_eval_result["evaluation_context_id"]
@@ -142,16 +154,54 @@ class SelfPlayTests(unittest.TestCase):
             refresh_results = [json.loads(path.read_text()) for path in refresh_result_paths]
 
         self.assertEqual(len(contexts), 1)
-        self.assertTrue(sidecar["records"])
-        self.assertTrue(all(record["generated_java_preserved"] for record in sidecar["records"]))
-        self.assertTrue(
+        self.assertEqual(library["selector"], HELPFUL_SELECTOR_VERSION)
+        self.assertTrue(library["entries"])
+        self.assertTrue(context["context_id"])
+        self.assertTrue(context["active_candidate_ids"])
+        self.assertFalse(
             any(item["operation"] == "self_play_fitness_refresh" for item in refresh_results)
         )
-        fixed_sources = [
-            item for item in refresh_results
-            if item["operation"] == "self_play_fitness_refresh"
-        ]
-        self.assertTrue(all(item["attempts"] == [] for item in fixed_sources))
+
+    def test_helpful_selector_explores_then_prefers_draw_proximity(self) -> None:
+        entries = admit_opponent_library(
+            (),
+            [
+                Candidate(id="unseen", generated_java="unseen", compile_status="success"),
+                Candidate(id="close", generated_java="close", compile_status="success"),
+                Candidate(id="easy", generated_java="easy", compile_status="success"),
+            ],
+            generation=2,
+            capacity=10,
+        )
+        by_id = {item["candidate_id"]: item for item in entries}
+        by_id["close"]["sample_count"] = 2
+        by_id["close"]["mean_score"] = 0.5
+        by_id["easy"]["sample_count"] = 2
+        by_id["easy"]["mean_score"] = 100.0
+        selected = select_helpful_opponents(entries, active_count=3)
+        self.assertEqual([item["candidate_id"] for item in selected], ["unseen", "close", "easy"])
+
+    def test_library_accumulates_scores_by_source_candidate(self) -> None:
+        entries = [{
+            "candidate_id": "opponent",
+            "sample_count": 1,
+            "mean_score": 10.0,
+        }]
+        evaluated = Candidate(
+            id="evaluated",
+            game_eval_result={
+                "opponent_scores": {"self_play_000": -10.0},
+                "evaluation_configuration": {
+                    "opponents": [{
+                        "slot_id": "self_play_000",
+                        "source_candidate_id": "opponent",
+                    }],
+                },
+            },
+        )
+        updated = update_opponent_library_scores(entries, [evaluated])[0]
+        self.assertEqual(updated["sample_count"], 2)
+        self.assertEqual(updated["mean_score"], 0.0)
 
     def test_resume_migrates_legacy_parent_fitness_to_active_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

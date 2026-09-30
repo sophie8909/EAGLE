@@ -324,19 +324,26 @@ its observed raw evidence but has canonical opponent-fault fields and a neutral
 zero-score draw for candidate scoring; it is neither a candidate win nor a
 candidate runtime failure.
 
-In `self_play`, a snapshot is created from the runnable current population at
-generation zero and every `evaluation.self_play_refresh_interval` generations.
-The snapshot is immutable until the next refresh. Its runnable candidates are
-cycled in stable order into `self_play_000` through `self_play_009`; a
-five-candidate snapshot therefore gives each source two slots. Self-matches are
-retained and all self-play slots have weight `1.0`. At refresh, fresh-ID parent
-replicas preserve the existing Java phenotype without an LLM call and are
-evaluated against the new snapshot before reflection and offspring generation.
-Only refreshed parents and offspring with the same context ID may enter
-survivor selection. Snapshot and refresh sidecars make this transition resumable.
-Self-play currently requires `reflection_operator_mode: static` and
-`parent_evaluation_mode: reuse_cached`; the fixed-opponent archive is not
-updated by self-play runs.
+In `self_play`, generation zero seeds a bounded opponent library from the
+runnable population. After every committed generation, successful phenotypes
+from the evaluated selection pool are admitted (duplicate Java hashes are
+collapsed), per-opponent sample statistics are updated, and the deterministic
+`helpful_v1` selector chooses the next active context. Unseen library members
+are explored first; sampled members closest to draw are preferred. The chosen
+members are cycled in stable order into `self_play_000` through
+`self_play_009`; self-matches are retained and all slots have weight `1.0`.
+This is a 2L-inspired helpful-opponent approximation, not a claim to implement
+the paper's full PPSRO/2L algorithm.
+
+The active context is immutable for one evolutionary generation. If the next
+library selection changes its context ID, fresh-ID parent replicas preserve the
+existing Java phenotype without an LLM call and are evaluated against the new
+context before reflection and offspring generation. Only candidates with the
+same context ID enter survivor selection. Generation-scoped library and context
+sidecars make this transition resumable; old five-generation refresh fields are
+accepted only for config compatibility and no longer control behavior.
+Self-play requires `reflection_operator_mode: static` and
+`parent_evaluation_mode: reuse_cached`.
 
 Fixed-roster fitness is a maximized mapping with the ten opponent case IDs.
 Self-play fitness is `{game_performance: value}`; failed or incomplete

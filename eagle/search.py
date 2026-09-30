@@ -65,9 +65,9 @@ from .selection import (
 )
 from .self_play import (
     assert_shared_self_play_context,
-    is_self_play_refresh,
-    runnable_self_play_candidates,
-    write_self_play_snapshot,
+    initialize_opponent_library,
+    population_matches_self_play_context,
+    update_and_select_opponent_library,
 )
 
 
@@ -414,12 +414,15 @@ def _run_search_impl(
     ))
     generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
     if config.evaluation_mode == "self_play":
-        write_self_play_snapshot(
+        opponent_library, self_play_opponent_snapshot = initialize_opponent_library(
             run_dir,
             generation=0,
             candidates=evaluated_population,
-            refresh_interval=config.self_play_refresh_interval,
+            capacity=config.self_play_library_capacity,
         )
+    else:
+        opponent_library = None
+        self_play_opponent_snapshot = None
     record_generation(
         run_dir,
         0,
@@ -434,11 +437,6 @@ def _run_search_impl(
         evaluated_population,
         selection_mode=config.algorithm,
     )
-    self_play_opponent_snapshot = (
-        runnable_self_play_candidates(evaluated_population)
-        if config.evaluation_mode == "self_play"
-        else None
-    )
     stagnation_count = 0
     completed_generation = 0
     stop_reason: str | None = None
@@ -450,15 +448,13 @@ def _run_search_impl(
         generation_span = Stopwatch.start()
         source_parents = list(evaluated_population)
         parent_replicas: list[Candidate] = []
-        snapshot_refreshed = is_self_play_refresh(config, generation)
-        if snapshot_refreshed:
-            self_play_opponent_snapshot = runnable_self_play_candidates(source_parents)
-            write_self_play_snapshot(
-                run_dir,
-                generation=generation,
-                candidates=self_play_opponent_snapshot,
-                refresh_interval=config.self_play_refresh_interval,
+        context_changed = False
+        if config.evaluation_mode == "self_play":
+            context_changed = not population_matches_self_play_context(
+                source_parents,
+                self_play_opponent_snapshot,
             )
+        if context_changed:
             parent_replicas = build_self_play_fitness_refresh_replicas(
                 source_parents,
                 generation=generation,
@@ -579,7 +575,7 @@ def _run_search_impl(
             stagnation_count = 0
         generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
         if parent_replicas:
-            if snapshot_refreshed:
+            if config.evaluation_mode == "self_play" and context_changed:
                 write_self_play_parent_refresh_sidecar(
                     run_dir,
                     generation=generation,
@@ -595,6 +591,14 @@ def _run_search_impl(
                     replicas=parent_replicas,
                     selected_ids={candidate.id for candidate in evaluated_population},
                 )
+        if config.evaluation_mode == "self_play":
+            opponent_library, self_play_opponent_snapshot = update_and_select_opponent_library(
+                run_dir,
+                generation=generation,
+                existing=opponent_library or [],
+                evaluated_candidates=selection_candidates,
+                capacity=config.self_play_library_capacity,
+            )
         record_generation(
             run_dir,
             generation,
