@@ -20,17 +20,20 @@ using the canonical IDs `passive`, `random`, and `randombias`.
 
 ## Self-play cases
 
-`evaluation.mode: self_play` replaces the fixed roster with one immutable
-snapshot context. Runnable snapshot candidates are cycled in stable order into
-`self_play_000` through `self_play_009`, all with weight `1.0`; five candidates
-therefore occupy two slots each. Each match stores its source candidate and
-generation. The snapshot refresh interval defaults to five generations.
+`evaluation.mode: self_play` uses a bounded cross-generation opponent library.
+Generation zero seeds the library; every configured refresh boundary appends
+runnable current parents, FIFO-evicts entries beyond
+`self_play_opponent_library_capacity`, and deterministically rotates up to ten
+stored phenotypes into the next immutable context. The selected candidates are
+cycled in stable order into `self_play_000` through `self_play_009`, all with
+weight `1.0`; self-matches remain valid. The refresh interval defaults to five
+generations.
 
-At refresh, parents receive fresh candidate identities but preserve their Java
-phenotype and make no LLM call. They are evaluated against the new snapshot
-before reflection and offspring planning. Selection rejects a pool unless every
-candidate has the same context ID. Self-play requires
-static reflection and does not update the fixed-opponent archive.
+At refresh, parents receive fresh identities but preserve their Java phenotype
+and make no LLM call. They are evaluated against the new context before
+reflection and offspring planning. Selection rejects a pool unless every
+candidate has the same context ID. Self-play requires static reflection and
+does not update the fixed-opponent archive.
 
 ## Fitness and reporting
 
@@ -81,6 +84,9 @@ The following records are written after each generation:
   `fitness_objectives`, semantic summaries, and semantic-library metrics;
 - `generations/generation_*.json`: ten objective statistics plus
   `opponent_scores.by_candidate` and `opponent_scores.by_opponent`;
+- `archives/self_play_opponents.json`: bounded library entries and Java hashes;
+- `generations/generation_<n>_self_play_snapshot.json`: active context, library
+  provenance, ten slots, and context hash;
 - `candidates/<id>/evaluation/objectives.json`: active-mode objective mapping;
 - `candidates/<id>/evaluation/game_performance.json`: aggregate reporting
   metric and detailed opponent/match summaries;
@@ -95,6 +101,6 @@ along with the aggregate and code-quality diagnostic plots.
 
 The active path never adds a generation-dependent opponent weight and does not
 use `code_quality` as an evolutionary objective. Self-play exists only behind
-its explicit config mode and immutable snapshot contract. Legacy artifact
+its explicit config mode and immutable library-context contract. Legacy artifact
 readers are not allowed to invent missing scores; old candidates are
 represented as incomplete data.
