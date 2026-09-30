@@ -32,12 +32,14 @@ Snapshot: 2026-09-24. This file describes executable repository behavior.
 - Fixed-roster candidate fitness is a ten-field opponent score mapping.
   Self-play candidate fitness contains only `game_performance`. Failed or
   incomplete candidates receive `-1000.0` for the active objective(s).
-- Explicit `evaluation.mode: self_play` uses immutable snapshot contexts and
-  `self_play_000`…`self_play_009` cases with uniform weights. Runnable snapshot
-  candidates cycle to fill ten slots. Refresh generations re-evaluate
-  phenotype-preserving fresh-ID parents before reflection and selection; resume
-  reloads the last committed snapshot and migrates pre-context checkpoints by
-  refreshing parents against it. This mode requires static reflection.
+- Explicit `evaluation.mode: self_play` uses a persisted opponent library plus
+  immutable snapshot contexts and `self_play_000`…`self_play_009` cases with
+  uniform weights. The library is seeded at generation zero and updated at the
+  five-generation refresh boundary; selected runnable library entries cycle to
+  fill ten slots. Refresh generations re-evaluate phenotype-preserving fresh-ID
+  parents before reflection and selection; resume reloads the last committed
+  context and migrates pre-context checkpoints by refreshing
+  parents against it. This mode requires static reflection.
 - Fixed-roster parent/survivor selection is seeded lexicase. Self-play maximizes
   Game Performance, treats scores within `1.0` of a tier maximum as tied, and
   uses nine-probe full-agent behavior distance to preserve different semantics
@@ -83,7 +85,7 @@ Snapshot: 2026-09-24. This file describes executable repository behavior.
 | Fixed cases and reporting weights | `eagle/opponent_cases.py` |
 | Candidate state and objective vector | `eagle/candidate.py` |
 | Evaluation orchestration | `eagle/evaluation.py` |
-| Self-play snapshots and context validation | `eagle/self_play.py` |
+| Self-play opponent library, snapshots, and context validation | `eagle/self_play.py` |
 | Match matrix | `evaluation/match_matrix.py` |
 | Reflection selection, reward providers, shared AOS updater | `eagle/aos.py` |
 | Head-to-head-only parent-vs-offspring evaluation | `evaluation/parent_offspring.py` |

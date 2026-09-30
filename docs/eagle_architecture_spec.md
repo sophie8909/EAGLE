@@ -324,16 +324,22 @@ its observed raw evidence but has canonical opponent-fault fields and a neutral
 zero-score draw for candidate scoring; it is neither a candidate win nor a
 candidate runtime failure.
 
-In `self_play`, a snapshot is created from the runnable current population at
-generation zero and every `evaluation.self_play_refresh_interval` generations.
-The snapshot is immutable until the next refresh. Its runnable candidates are
-cycled in stable order into `self_play_000` through `self_play_009`; a
-five-candidate snapshot therefore gives each source two slots. Self-matches are
-retained and all self-play slots have weight `1.0`. At refresh, fresh-ID parent
-replicas preserve the existing Java phenotype without an LLM call and are
-evaluated against the new snapshot before reflection and offspring generation.
-Only refreshed parents and offspring with the same context ID may enter
-survivor selection. Snapshot and refresh sidecars make this transition resumable.
+In `self_play`, the run owns a persisted opponent library. The library is
+seeded from the runnable current population at generation zero and is updated
+only at each `evaluation.self_play_refresh_interval` generation (the supported
+minimal protocol uses five generations). At an update, newly runnable
+candidates are merged into the library and a deterministic stable-order
+selection from the library materializes the immutable ten-slot context. The
+library, rather than the current population alone, is therefore the source of
+the next opponent snapshot. Between refreshes the active context is unchanged.
+Its selected candidates are cycled in stable order into `self_play_000` through
+`self_play_009`; a five-candidate context therefore gives each source two slots.
+Self-matches are retained and all self-play slots have weight `1.0`. At refresh,
+fresh-ID parent replicas preserve the existing Java phenotype without an LLM
+call and are evaluated against the new context before reflection and offspring
+generation. Only refreshed parents and offspring with the same context ID may
+enter survivor selection. Library, context, and refresh sidecars make this
+transition resumable.
 Self-play currently requires `reflection_operator_mode: static` and
 `parent_evaluation_mode: reuse_cached`; the fixed-opponent archive is not
 updated by self-play runs.

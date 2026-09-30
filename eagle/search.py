@@ -66,7 +66,8 @@ from .selection import (
 from .self_play import (
     assert_shared_self_play_context,
     is_self_play_refresh,
-    runnable_self_play_candidates,
+    select_self_play_library_candidates,
+    update_self_play_opponent_library,
     write_self_play_snapshot,
 )
 
@@ -414,10 +415,16 @@ def _run_search_impl(
     ))
     generation_diversity = generation_diversity_metrics(evaluated_population, previous_archive_niches=archive_before)
     if config.evaluation_mode == "self_play":
+        update_self_play_opponent_library(run_dir, evaluated_population)
+        self_play_opponent_snapshot = select_self_play_library_candidates(
+            run_dir,
+            generation=0,
+            refresh_interval=config.self_play_refresh_interval,
+        )
         write_self_play_snapshot(
             run_dir,
             generation=0,
-            candidates=evaluated_population,
+            candidates=self_play_opponent_snapshot,
             refresh_interval=config.self_play_refresh_interval,
         )
     record_generation(
@@ -435,7 +442,11 @@ def _run_search_impl(
         selection_mode=config.algorithm,
     )
     self_play_opponent_snapshot = (
-        runnable_self_play_candidates(evaluated_population)
+        select_self_play_library_candidates(
+            run_dir,
+            generation=0,
+            refresh_interval=config.self_play_refresh_interval,
+        )
         if config.evaluation_mode == "self_play"
         else None
     )
@@ -452,7 +463,12 @@ def _run_search_impl(
         parent_replicas: list[Candidate] = []
         snapshot_refreshed = is_self_play_refresh(config, generation)
         if snapshot_refreshed:
-            self_play_opponent_snapshot = runnable_self_play_candidates(source_parents)
+            update_self_play_opponent_library(run_dir, source_parents)
+            self_play_opponent_snapshot = select_self_play_library_candidates(
+                run_dir,
+                generation=generation,
+                refresh_interval=config.self_play_refresh_interval,
+            )
             write_self_play_snapshot(
                 run_dir,
                 generation=generation,

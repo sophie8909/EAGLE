@@ -58,15 +58,19 @@ behavior signatures only when scalar fitness is tied.
    per old parent, with the same complete genotype and component provenance,
    then selects from replicas plus offspring only. It never overwrites or
    reuses the old parent as a survivor candidate.
-8. In `self_play` evaluation, use one immutable ten-slot snapshot context. At
-   each configured refresh generation, phenotype-preserving fresh-ID parent
-   replicas are re-evaluated before reflection; only those replicas and
-   offspring evaluated against that same context enter selection. Persist the
-   snapshot, refresh audit sidecar, surviving population, and metrics. The sole
-   objective is aggregate `game_performance`. Scores whose difference from the
-   current tier maximum is at most `1.0` are tied; tiers are never formed by
-   chained pairwise comparisons. Parent B and a cut survivor tier prefer the
-   greatest compatible Hamming distance across the nine action hashes.
+8. In `self_play` evaluation, maintain a persisted opponent library and one
+   immutable ten-slot active context. Seed and update the library only at each
+   configured refresh generation (five generations in the minimal protocol),
+   merge newly runnable candidates, and deterministically select the next active
+   context from the library. Between refreshes, keep the context unchanged. At
+   refresh, phenotype-preserving fresh-ID parent replicas are re-evaluated
+   before reflection; only those replicas and offspring evaluated against that
+   same context enter selection. Persist the library, active context, refresh
+   audit sidecar, surviving population, and metrics. The sole objective is
+   aggregate `game_performance`. Scores whose difference from the current tier
+   maximum is at most `1.0` are tied; tiers are never formed by chained
+   pairwise comparisons. Parent B and a cut survivor tier prefer the greatest
+   compatible Hamming distance across the nine action hashes.
 
 The implementation is in `eagle/search.py`, `eagle/selection.py`, and
 `eagle/evaluation.py`.
@@ -92,8 +96,9 @@ Self-play uses its unweighted aggregate as the single objective.
 
 Each candidate runs all ten active cases over three maps, three rounds, and both
 player positions: `10 × 3 × 3 × 2 = 180` matches. Fixed-roster mode resolves the
-ten bundled opponents. Self-play mode cycles the runnable immutable snapshot
-into ten equally weighted slots; five candidates therefore appear twice.
+ten bundled opponents. Self-play mode cycles the selected runnable entries from
+the immutable opponent-library context into ten equally weighted slots; five
+selected candidates therefore appear twice.
 
 The generation-level `expected_match_count` and `completed_match_count` are sums
 over every candidate in that generation, including zero completed matches for a

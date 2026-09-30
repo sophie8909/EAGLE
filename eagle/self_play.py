@@ -1,4 +1,4 @@
-"""Immutable self-play snapshot and fitness-context helpers."""
+"""Managed self-play opponent-library and immutable-context helpers."""
 
 from __future__ import annotations
 
@@ -12,7 +12,10 @@ from .opponent_cases import SELF_PLAY_CASES
 from .run_artifacts import atomic_json
 
 
-SNAPSHOT_SCHEMA_VERSION = "eagle-self-play-snapshot-v1"
+SNAPSHOT_SCHEMA_VERSION = "eagle-self-play-snapshot-v2"
+LEGACY_SNAPSHOT_SCHEMA_VERSION = "eagle-self-play-snapshot-v1"
+OPPONENT_LIBRARY_SCHEMA_VERSION = "eagle-self-play-opponent-library-v1"
+OPPONENT_LIBRARY_PATH = Path("archives/self_play_opponents.json")
 
 
 def is_self_play_refresh(config: ExperimentConfig, generation: int) -> bool:
@@ -55,6 +58,95 @@ def self_play_context_id(candidates: list[Candidate]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def update_self_play_opponent_library(run_dir: Path, candidates: list[Candidate]) -> None:
+    """Append newly runnable phenotypes to the run-local opponent library.
+
+    Candidate artifacts remain the sole Java-source owner.  The library stores
+    immutable references only, which lets an old phenotype remain available as
+    an opponent without copying executable source into a second artifact tree.
+    """
+
+    path = run_dir / OPPONENT_LIBRARY_PATH
+    if path.is_file():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Self-play opponent library is missing or invalid: {path}") from exc
+        if payload.get("schema_version") != OPPONENT_LIBRARY_SCHEMA_VERSION:
+            raise ValueError(f"Unsupported self-play opponent library schema: {path}")
+    else:
+        payload = {
+            "schema_version": OPPONENT_LIBRARY_SCHEMA_VERSION,
+            "opponents": [],
+        }
+
+    entries = payload.get("opponents")
+    if not isinstance(entries, list):
+        raise ValueError(f"Self-play opponent library has invalid entries: {path}")
+    known_ids = {str(entry.get("candidate_id") or "") for entry in entries if isinstance(entry, dict)}
+    for candidate in runnable_self_play_candidates(candidates):
+        if candidate.id in known_ids:
+            continue
+        entries.append({
+            "candidate_id": candidate.id,
+            "generation": candidate.generation,
+            "generated_java_sha256": hashlib.sha256(
+                candidate.generated_java.encode("utf-8")
+            ).hexdigest(),
+        })
+        known_ids.add(candidate.id)
+    atomic_json(path, payload)
+
+
+def select_self_play_library_candidates(
+    run_dir: Path,
+    *,
+    generation: int,
+    refresh_interval: int,
+) -> list[Candidate]:
+    """Choose one deterministic active context from the managed library.
+
+    The first implementation intentionally preserves the existing refresh
+    cadence: it rotates up to ten stored phenotypes once per refresh epoch.
+    This is a library replacement, not a per-generation helpful-opponent
+    scheduler.
+    """
+
+    path = run_dir / OPPONENT_LIBRARY_PATH
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Self-play opponent library is missing or invalid: {path}") from exc
+    if payload.get("schema_version") != OPPONENT_LIBRARY_SCHEMA_VERSION:
+        raise ValueError(f"Unsupported self-play opponent library schema: {path}")
+    entries = payload.get("opponents")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError(f"Self-play opponent library has no opponents: {path}")
+
+    from .run_artifacts import load_candidate
+
+    candidates: list[Candidate] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError(f"Self-play opponent library has an invalid entry: {path}")
+        candidate_id = str(entry.get("candidate_id") or "")
+        if not candidate_id:
+            raise ValueError(f"Self-play opponent library has an entry without candidate_id: {path}")
+        candidate = load_candidate(run_dir, candidate_id)
+        expected_hash = str(entry.get("generated_java_sha256") or "")
+        actual_hash = hashlib.sha256(candidate.generated_java.encode("utf-8")).hexdigest()
+        if not expected_hash or actual_hash != expected_hash:
+            raise ValueError(
+                f"Self-play opponent library Java hash does not match candidate artifacts: {path}"
+            )
+        candidates.append(candidate)
+    candidates = runnable_self_play_candidates(candidates)
+    source_count = min(len(candidates), len(SELF_PLAY_CASES))
+    epoch = generation // refresh_interval
+    start = (epoch * source_count) % len(candidates)
+    return [candidates[(start + index) % len(candidates)] for index in range(source_count)]
+
+
 def write_self_play_snapshot(
     run_dir: Path,
     *,
@@ -71,6 +163,10 @@ def write_self_play_snapshot(
             "generation": generation,
             "refresh_interval": refresh_interval,
             "context_id": self_play_context_id(candidates),
+            "opponent_library": {
+                "schema_version": OPPONENT_LIBRARY_SCHEMA_VERSION,
+                "path": str(OPPONENT_LIBRARY_PATH),
+            },
             "source_candidate_ids": [candidate.id for candidate in candidates],
             "slots": [
                 {
@@ -96,7 +192,10 @@ def load_self_play_snapshot(
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"Self-play resume snapshot is missing or invalid: {path}") from exc
-    if payload.get("schema_version") != SNAPSHOT_SCHEMA_VERSION:
+    if payload.get("schema_version") not in {
+        LEGACY_SNAPSHOT_SCHEMA_VERSION,
+        SNAPSHOT_SCHEMA_VERSION,
+    }:
         raise ValueError(f"Unsupported self-play snapshot schema: {path}")
     if int(payload.get("refresh_interval", 0)) != refresh_interval:
         raise ValueError("Self-play snapshot refresh interval does not match the run config.")
